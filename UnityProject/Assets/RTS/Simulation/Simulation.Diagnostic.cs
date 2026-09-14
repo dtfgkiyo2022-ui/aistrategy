@@ -1,4 +1,7 @@
+﻿using System;
+using System.Globalization;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using Rts.Contracts;
 
@@ -6,113 +9,68 @@ namespace Rts.Simulation
 {
     public sealed partial class Simulation
     {
-        /// <summary>
-        /// Temporary week-one diagnostic schema 1, not the Issue #9 replay format/hash.
-        /// Little-endian primitives, byte enums/bools, uint counts, UTF-8 strings.
-        /// Includes immutable config, tombstones, cooldowns, policies and contact allocation.
-        /// Scratch buffers and derived frames/traversals are deliberately excluded.
-        /// </summary>
+        private byte[] configurationHash;
+        /// <summary>Schema 1: ordered named fields, typed LE values. No derived frames or scratch buffers.</summary>
         public DiagnosticState CaptureDiagnostic()
         {
-            using (var stream = new MemoryStream())
-            using (var writer = new BinaryWriter(stream, Encoding.UTF8, true))
+            if(configurationHash==null)
+                using(var sha=SHA256.Create()) configurationHash=sha.ComputeHash(ScenarioBinary.Encode(world.Config));
+            using(var s=new MemoryStream())
+            using(var w=new StateWriter(s))
             {
-                writer.Write(1U);
-                WriteConfig(writer);
-                writer.Write(world.Tick);
-                writer.Write(world.Result.HasEnded); writer.Write(world.Result.WinnerFactionId);
-                writer.Write(world.Result.IsDraw); writer.Write(world.Result.IsFault); writer.Write(world.Result.IsUndecided);
-                writer.Write(world.NextSoldierId); writer.Write(world.NextArmyId); writer.Write(world.NextCoreId);
-                writer.Write(world.NextOutpostId); writer.Write(world.NextFactionId); writer.Write(world.InputCursor);
-                writer.Write(world.CombatRandom.State); writer.Write(world.CombatRandom.CallCount);
-                writer.Write(world.AiRandom.State); writer.Write(world.AiRandom.CallCount);
-                writer.Write((uint)world.Soldiers.Length);
-                foreach (int i in world.SoldierTraversal)
+                w.Write(1U);
+                w.Text("Rules.Version",ScenarioBinary.RulesVersion); w.Blob("Config.Hash",configurationHash);
+                w.Value("Tick",world.Tick); w.Value("Result.HasEnded",world.Result.HasEnded); w.Value("Result.WinnerFactionId",world.Result.WinnerFactionId);
+                w.Value("Result.IsDraw",world.Result.IsDraw); w.Value("Result.IsFault",world.Result.IsFault); w.Value("Result.IsUndecided",world.Result.IsUndecided);
+                w.Value("NextSoldierId",world.NextSoldierId); w.Value("NextArmyId",world.NextArmyId); w.Value("NextCoreId",world.NextCoreId); w.Value("NextOutpostId",world.NextOutpostId); w.Value("NextFactionId",world.NextFactionId);
+                w.Value("CombatRandom.State",world.CombatRandom.State); w.Value("CombatRandom.CallCount",world.CombatRandom.CallCount);
+                w.Value("AiRandom.State",world.AiRandom.State); w.Value("AiRandom.CallCount",world.AiRandom.CallCount);
+                w.Value("Soldiers.Count",(uint)world.Soldiers.Length);
+                foreach(var p in world.Soldiers)
                 {
-                    var s = world.Soldiers[i];
-                    writer.Write(s.Initial.Id); writer.Write(s.Initial.FactionId); writer.Write(s.Initial.ArmyId);
-                    writer.Write((byte)s.Initial.Kind); writer.Write(s.Alive); WritePoint(writer, s.Position);
-                    writer.Write(s.Hp); writer.Write(s.TargetKind); writer.Write(s.TargetId); writer.Write(s.NextAttackTick);
-                    WritePoint(writer, s.MoveGoal); writer.Write(s.StepDistance.Raw);
-                    writer.Write(s.IsMoving); writer.Write(s.IsAttacking); writer.Write(s.IsRetreating);
+                    string n="Soldiers["+p.Initial.Id.ToString(CultureInfo.InvariantCulture)+"].";
+                    w.Value(n+"Id",p.Initial.Id); w.Value(n+"FactionId",p.Initial.FactionId); w.Value(n+"ArmyId",p.Initial.ArmyId); w.Value(n+"Kind",(byte)p.Initial.Kind);
+                    w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
+                    w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
+                    w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
+                    // Parameters are immutable copies of Config; serialize explicitly to detect accidental divergence too.
+                    w.Value(n+"Parameters.Kind",(byte)p.Parameters.Kind); w.Value(n+"Parameters.Hp",p.Parameters.Hp); w.Value(n+"Parameters.Damage",p.Parameters.Damage);
+                    w.Value(n+"Parameters.AttackIntervalTicks",p.Parameters.AttackIntervalTicks); w.Value(n+"Parameters.Speed.Raw",p.Parameters.Speed.Raw); w.Value(n+"Parameters.Vision.Raw",p.Parameters.Vision.Raw); w.Value(n+"Parameters.Range.Raw",p.Parameters.Range.Raw);
                 }
-                writer.Write((uint)world.Armies.Length);
-                foreach (int i in world.ArmyTraversal)
-                {
-                    var a = world.Armies[i];
-                    writer.Write(a.Definition.Id); WriteIds(writer, a.SoldierIds);
-                    writer.Write((byte)a.Policy); WriteGoal(writer, a.Goal); writer.Write(a.CommandId);
-                    writer.Write(a.AcceptedTick); writer.Write(a.ApplyTick);
-                }
-                writer.Write((uint)world.Cores.Length);
-                foreach (var f in world.Factions)
-                {
-                    var c = world.Cores[f.CoreId - 1];
-                    writer.Write(c.Definition.Id); writer.Write(c.Hp);
-                }
-                writer.Write((uint)world.Factions.Length);
-                foreach (var f in world.Factions)
-                {
-                    writer.Write(f.Id); writer.Write(f.CoreId); writer.Write(f.AliveCount); WriteIds(writer, f.ArmyIds);
-                    writer.Write(f.NextContactId);
-                    writer.Write((uint)world.Soldiers.Length);
-                    foreach (int i in world.SoldierTraversal)
-                    { writer.Write(world.Soldiers[i].Initial.Id); writer.Write(f.ContactIds[i]); }
-                }
-                writer.Flush();
-                return new DiagnosticState(world.Tick, stream.ToArray());
+                w.Value("Armies.Count",(uint)world.Armies.Length);
+                foreach(var a in world.Armies) { string n="Armies["+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",a.Definition.Id); w.Ids(n+"SoldierIds",a.SoldierIds); }
+                // Outposts have no mutable capture state in week one; definitions are covered by Config.Hash.
+                w.Value("Outposts.Count",(uint)world.Config.Outposts.Length);
+                w.Value("Cores.Count",(uint)world.Cores.Length);
+                foreach(var c in world.Cores) { string n="Cores["+c.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",c.Definition.Id); w.Value(n+"Hp",c.Hp); }
+                w.Value("Factions.Count",(uint)world.Factions.Length);
+                foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds); }
+                w.Value("Inputs.Cursor",world.InputCursor);
+                // Active policies are keyed by army, ordered by ApplyTick then LogIndex then army ID.
+                var orders=(ArmyState[])world.Armies.Clone();
+                Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });
+                foreach(var a in orders) { string n="Commands[Army="+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Policy",(byte)a.Policy); w.Goal(n+"Goal",a.Goal); w.Value(n+"CommandId",a.CommandId); w.Value(n+"AcceptedTick",a.AcceptedTick); w.Value(n+"ApplyTick",a.ApplyTick); w.Value(n+"LogIndex",a.LogIndex); }
+                foreach(var f in world.Factions) { string n="Observations["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds); }
+                w.Value("AiMemory.Count",0U);
+                return new DiagnosticState(world.Tick,s.ToArray());
             }
         }
-
-        private void WriteConfig(BinaryWriter w)
+        private sealed class StateWriter : BinaryWriter
         {
-            var c = world.Config;
-            w.Write(c.SchemaVersion); WriteString(w, c.ScenarioId); w.Write(c.Seed);
-            w.Write(c.TickRateHz); w.Write(c.VerificationTickLimit);
-            var m = c.Map;
-            w.Write(m.WidthMeters); w.Write(m.HeightMeters); w.Write(m.CellSizeMeters);
-            w.Write(m.WidthCells); w.Write(m.HeightCells); w.Write(m.DefaultPassable);
-            w.Write((uint)m.BlockedCellIds.Length);
-            foreach (int id in m.BlockedCellIds) w.Write(id);
-            var r = c.Rules;
-            w.Write(r.FactionCap); w.Write(r.CoreRadius.Raw); w.Write(r.OwnedObjectiveVision.Raw); w.Write(r.CaptureRadius.Raw);
-            w.Write(r.CaptureDurationTicks); w.Write(r.CoreReinforcementIntervalTicks); w.Write(r.OutpostReinforcementIntervalTicks);
-            w.Write((uint)c.UnitParameters.Length);
-            foreach (var p in c.UnitParameters)
-            {
-                w.Write((byte)p.Kind); w.Write(p.Hp); w.Write(p.Speed.Raw); w.Write(p.Vision.Raw);
-                w.Write(p.Range.Raw); w.Write(p.Damage); w.Write(p.AttackIntervalTicks);
-            }
-            w.Write((uint)c.Factions.Length);
-            foreach (var f in c.Factions) { w.Write(f.Id); w.Write(f.CoreId); WriteIds(w, f.ArmyIds); }
-            w.Write((uint)c.Armies.Length);
-            foreach (int i in world.ArmyTraversal)
-            {
-                var a = c.Armies[i];
-                w.Write(a.Id); w.Write(a.FactionId); WriteString(w, a.Role); w.Write(a.Capacity); WriteGoal(w, a.HomeObjective);
-            }
-            w.Write((uint)c.Soldiers.Length);
-            foreach (int i in world.SoldierTraversal)
-            {
-                var s = c.Soldiers[i];
-                w.Write(s.Id); w.Write(s.FactionId); w.Write(s.ArmyId); w.Write((byte)s.Kind);
-                w.Write(s.Alive); WritePoint(w, s.Position); w.Write(s.Hp);
-            }
-            w.Write((uint)c.Cores.Length);
-            foreach (var f in c.Factions)
-            {
-                var core = c.Cores[f.CoreId - 1];
-                w.Write(core.Id); w.Write(core.FactionId); WritePoint(w, core.Position); w.Write(core.Hp);
-            }
-            w.Write((uint)c.Outposts.Length);
-            foreach (var o in c.Outposts) { w.Write(o.Id); WritePoint(w, o.Position); w.Write(o.OwnerFactionId); }
+            public StateWriter(Stream s):base(s,Encoding.UTF8,true) { }
+            private void Name(string n,byte type) { RawText(n); Write(type); }
+            private void RawText(string v) { var b=Encoding.UTF8.GetBytes(v); Write((uint)b.Length); Write(b); }
+            public void Value(string n,byte v) { Name(n,1); Write(v); }
+            public void Value(string n,bool v) { Name(n,2); Write(v); }
+            public void Value(string n,int v) { Name(n,3); Write(v); }
+            public void Value(string n,uint v) { Name(n,4); Write(v); }
+            public void Value(string n,long v) { Name(n,5); Write(v); }
+            public void Value(string n,ulong v) { Name(n,6); Write(v); }
+            public void Text(string n,string v) { Name(n,7); RawText(v); }
+            public void Blob(string n,byte[] v) { Name(n,8); Write((uint)v.Length); Write(v); }
+            public void Point(string n,SimPoint p) { Value(n+".X.Raw",p.X.Raw); Value(n+".Z.Raw",p.Z.Raw); }
+            public void Goal(string n,PolicyGoal g) { Value(n+".Kind",(byte)g.Kind); Value(n+".Id",g.Id); Point(n+".Point",g.Point); }
+            public void Ids(string n,uint[] ids) { Value(n+".Count",(uint)ids.Length); for(int i=0;i<ids.Length;i++)Value(n+"["+i.ToString(CultureInfo.InvariantCulture)+"]",ids[i]); }
         }
-
-        private static void WritePoint(BinaryWriter w, SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
-        private static void WriteGoal(BinaryWriter w, PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); WritePoint(w, g.Point); }
-        private static void WriteIds(BinaryWriter w, uint[] ids)
-        { w.Write((uint)ids.Length); foreach (uint id in ids) w.Write(id); }
-        private static void WriteString(BinaryWriter w, string value)
-        { byte[] bytes = Encoding.UTF8.GetBytes(value); w.Write((uint)bytes.Length); w.Write(bytes); }
     }
 }

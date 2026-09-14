@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Rts.Core/Rts.Core.csproj" /></ItemGroup>
+  <!-- Hash the sources shipped with this binary, even if the checkout is subsequently edited. -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../UnityProject/Assets/RTS/Contracts/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Contracts/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../UnityProject/Assets/RTS/Decision/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Decision/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../UnityProject/Assets/RTS/Simulation/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Simulation/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../UnityProject/Assets/RTS/Replay/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Replay/%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../../UnityProject/Assets/RTS/Application/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Application/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

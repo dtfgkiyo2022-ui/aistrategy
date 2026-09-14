@@ -1,0 +1,15 @@
+﻿[
+  {
+    "logIndex": 1, "kind": 2, "acceptedTick": 39, "applyTick": 40,
+    "requestId": 1, "issuerSequence": 1,
+    "orders": [{
+      "commandId": 1, "batchId": 0, "source": 1,
+      "target": { "factionId": 1, "kind": 2, "id": 1 },
+      "kind": 3, "goal": { "kind": 0, "id": 0, "point": { "x": 0, "z": 0 } },
+      "priority": 50, "allowedLoss": { "permille": 300 },
+      "end": { "kind": 1, "tick": 0 }, "reservePermille": 0,
+      "targetRevision": 0, "parents": [], "observedTick": 39,
+      "expiration": { "validUntilTick": 36000, "maxObservationAgeTicks": 240, "flags": 0 }
+    }]
+  }
+]

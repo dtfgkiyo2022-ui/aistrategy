@@ -25,3 +25,20 @@ jobs:
           global-json-file: global.json
       - name: Build and test
         run: dotnet test Headless/Rts.Headless.slnx --configuration Release
+      - name: Record replay
+        run: dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- record --scenario TestData/week1-10v10.json --out run.rtsreplay --ticks 1200 --inputs TestData/week1-inputs.json
+      - name: Replay in process A
+        run: dotnet run --project Headless/Rts.Headless.Cli --configuration Release --no-build -- replay --in run.rtsreplay --hash-out a.hashes --dump-dir diag-a
+      - name: Replay in process B
+        run: dotnet run --project Headless/Rts.Headless.Cli --configuration Release --no-build -- replay --in run.rtsreplay --hash-out b.hashes --dump-dir diag-b
+      - name: Compare all ticks
+        run: dotnet run --project Headless/Rts.Headless.Cli --configuration Release --no-build -- compare --left a.hashes --right b.hashes --replay run.rtsreplay
+      - name: Preserve replay diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: replay-${{ matrix.os }}
+          path: |
+            run.rtsreplay
+            *.hashes*
+            diag-*/

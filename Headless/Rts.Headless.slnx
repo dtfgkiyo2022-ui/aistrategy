@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="Rts.Core/Rts.Core.csproj" />
   <Project Path="Rts.Core.Tests/Rts.Core.Tests.csproj" />
+  <Project Path="Rts.Headless.Cli/Rts.Headless.Cli.csproj" />
 </Solution>

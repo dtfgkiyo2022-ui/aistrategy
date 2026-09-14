@@ -91,6 +91,7 @@ namespace Rts.Simulation
                     a.Policy = order.Kind;
                     a.Goal = order.Goal;
                     a.CommandId = order.CommandId;
+                    a.LogIndex = input.LogIndex;
                     a.AcceptedTick = input.AcceptedTick;
                     a.ApplyTick = input.ApplyTick;
                 }
