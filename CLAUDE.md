@@ -43,6 +43,8 @@ Claude Code はこのファイルのルールを必ず守ってください。
 
 ## テスト
 
+- Headless は `Headless/Rts.Core.Tests/Rts.Core.Tests.csproj` の `Compile` 許可リストに列挙した Unity 非依存テストだけをリンクする。追加時は UnityEngine／UnityEditor に依存しないことを確認し、このリストにも追加する。
+- リポジトリ直下で `dotnet test Headless/Rts.Headless.slnx --configuration Release` を実行する（SDK は直下の `global.json` で固定）。
 - Simulation 系の変更には EditMode テストか Headless のテストを必ず付ける。
 - 決定論テスト（同じ入力で全 tick のハッシュが一致すること）を壊す変更はマージしない。
 - 表示の確認は、手順と期待する見え方を PR に書く。
