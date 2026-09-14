@@ -1,0 +1,18 @@
+{
+  "name": "Rts.Application",
+  "rootNamespace": "Rts.Application",
+  "references": [
+    "Rts.Contracts",
+    "Rts.Simulation",
+    "Rts.Replay"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

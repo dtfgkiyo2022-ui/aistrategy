@@ -1,0 +1,17 @@
+{
+  "name": "Rts.Simulation",
+  "rootNamespace": "Rts.Simulation",
+  "references": [
+    "Rts.Contracts",
+    "Rts.Decision"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

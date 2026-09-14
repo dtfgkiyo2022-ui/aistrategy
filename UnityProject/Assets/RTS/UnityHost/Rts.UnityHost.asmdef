@@ -1,0 +1,18 @@
+{
+  "name": "Rts.UnityHost",
+  "rootNamespace": "Rts.UnityHost",
+  "references": [
+    "Rts.Application",
+    "Rts.Presentation",
+    "Rts.Contracts"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
