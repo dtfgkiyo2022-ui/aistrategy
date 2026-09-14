@@ -1,0 +1,31 @@
+{
+  "name": "Rts.Tests.EditMode",
+  "rootNamespace": "Rts.Tests.EditMode",
+  "references": [
+    "Rts.Contracts",
+    "Rts.Decision",
+    "Rts.Simulation",
+    "Rts.Replay",
+    "Rts.Application",
+    "Rts.Presentation",
+    "Rts.UnityHost",
+    "Rts.Editor",
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

@@ -1,0 +1,16 @@
+{
+  "name": "Rts.Decision",
+  "rootNamespace": "Rts.Decision",
+  "references": [
+    "Rts.Contracts"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

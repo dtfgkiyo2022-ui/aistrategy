@@ -1,0 +1,65 @@
+# Normalize text to LF, including C#, JSON, YAML and Markdown.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Unity Smart Merge driver must be configured in each developer's Git config.
+*.unity text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.asset text merge=unityyamlmerge eol=lf
+*.mat text merge=unityyamlmerge eol=lf
+*.anim text merge=unityyamlmerge eol=lf
+*.controller text merge=unityyamlmerge eol=lf
+*.overrideController text merge=unityyamlmerge eol=lf
+*.meta text merge=unityyamlmerge eol=lf
+*.playable text merge=unityyamlmerge eol=lf
+*.mask text merge=unityyamlmerge eol=lf
+*.renderTexture text merge=unityyamlmerge eol=lf
+*.physicMaterial text merge=unityyamlmerge eol=lf
+*.physicsMaterial2D text merge=unityyamlmerge eol=lf
+*.terrainlayer text merge=unityyamlmerge eol=lf
+*.lighting text merge=unityyamlmerge eol=lf
+*.shadervariants text merge=unityyamlmerge eol=lf
+# Binary source assets (Git LFS)
+*.png filter=lfs diff=lfs merge=lfs -text !eol
+*.jpg filter=lfs diff=lfs merge=lfs -text !eol
+*.jpeg filter=lfs diff=lfs merge=lfs -text !eol
+*.gif filter=lfs diff=lfs merge=lfs -text !eol
+*.bmp filter=lfs diff=lfs merge=lfs -text !eol
+*.tga filter=lfs diff=lfs merge=lfs -text !eol
+*.tif filter=lfs diff=lfs merge=lfs -text !eol
+*.tiff filter=lfs diff=lfs merge=lfs -text !eol
+*.psd filter=lfs diff=lfs merge=lfs -text !eol
+*.psb filter=lfs diff=lfs merge=lfs -text !eol
+*.exr filter=lfs diff=lfs merge=lfs -text !eol
+*.hdr filter=lfs diff=lfs merge=lfs -text !eol
+*.dds filter=lfs diff=lfs merge=lfs -text !eol
+*.webp filter=lfs diff=lfs merge=lfs -text !eol
+*.wav filter=lfs diff=lfs merge=lfs -text !eol
+*.mp3 filter=lfs diff=lfs merge=lfs -text !eol
+*.ogg filter=lfs diff=lfs merge=lfs -text !eol
+*.aif filter=lfs diff=lfs merge=lfs -text !eol
+*.aiff filter=lfs diff=lfs merge=lfs -text !eol
+*.flac filter=lfs diff=lfs merge=lfs -text !eol
+*.m4a filter=lfs diff=lfs merge=lfs -text !eol
+*.fbx filter=lfs diff=lfs merge=lfs -text !eol
+*.obj filter=lfs diff=lfs merge=lfs -text !eol
+*.blend filter=lfs diff=lfs merge=lfs -text !eol
+*.max filter=lfs diff=lfs merge=lfs -text !eol
+*.ma filter=lfs diff=lfs merge=lfs -text !eol
+*.mb filter=lfs diff=lfs merge=lfs -text !eol
+*.3ds filter=lfs diff=lfs merge=lfs -text !eol
+*.dae filter=lfs diff=lfs merge=lfs -text !eol
+*.gltf filter=lfs diff=lfs merge=lfs -text !eol
+*.glb filter=lfs diff=lfs merge=lfs -text !eol
+*.mp4 filter=lfs diff=lfs merge=lfs -text !eol
+*.mov filter=lfs diff=lfs merge=lfs -text !eol
+*.avi filter=lfs diff=lfs merge=lfs -text !eol
+*.webm filter=lfs diff=lfs merge=lfs -text !eol
+*.mkv filter=lfs diff=lfs merge=lfs -text !eol
+*.mpeg filter=lfs diff=lfs merge=lfs -text !eol
+*.mpg filter=lfs diff=lfs merge=lfs -text !eol
+*.ttf filter=lfs diff=lfs merge=lfs -text !eol
+*.otf filter=lfs diff=lfs merge=lfs -text !eol
+*.woff filter=lfs diff=lfs merge=lfs -text !eol
+*.woff2 filter=lfs diff=lfs merge=lfs -text !eol
+*.unitypackage filter=lfs diff=lfs merge=lfs -text !eol
