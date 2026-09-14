@@ -1,0 +1,429 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "week1-10v10",
+  "seed": 0,
+  "tickRateHz": 20,
+  "verificationTickLimit": 36000,
+  "map": {
+    "widthMeters": 256,
+    "heightMeters": 128,
+    "cellSizeMeters": 2,
+    "widthCells": 128,
+    "heightCells": 64,
+    "defaultPassable": true,
+    "blockedCellIds": []
+  },
+  "rules": {
+    "factionCap": 40,
+    "coreRadiusMeters": 4,
+    "ownedObjectiveVisionMeters": 24,
+    "captureRadiusMeters": 8,
+    "captureDurationTicks": 200,
+    "coreReinforcementIntervalTicks": 100,
+    "outpostReinforcementIntervalTicks": 200
+  },
+  "unitParameters": [
+    {
+      "kind": 1,
+      "hp": 100,
+      "speedMetersPerSecond": 2,
+      "visionMeters": 20,
+      "rangeMeters": 2,
+      "damage": 10,
+      "attackIntervalTicks": 20
+    },
+    {
+      "kind": 2,
+      "hp": 40,
+      "speedMetersPerSecond": 4,
+      "visionMeters": 32,
+      "rangeMeters": 2,
+      "damage": 2,
+      "attackIntervalTicks": 20
+    }
+  ],
+  "factions": [
+    {
+      "id": 1,
+      "coreId": 1,
+      "armyIds": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "id": 2,
+      "coreId": 2,
+      "armyIds": [
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  ],
+  "cores": [
+    {
+      "id": 1,
+      "factionId": 1,
+      "positionMeters": {
+        "x": 24,
+        "z": 64
+      },
+      "hp": 3000
+    },
+    {
+      "id": 2,
+      "factionId": 2,
+      "positionMeters": {
+        "x": 232,
+        "z": 64
+      },
+      "hp": 3000
+    }
+  ],
+  "outposts": [
+    {
+      "id": 1,
+      "positionMeters": {
+        "x": 128,
+        "z": 96
+      },
+      "ownerFactionId": 0
+    },
+    {
+      "id": 2,
+      "positionMeters": {
+        "x": 128,
+        "z": 32
+      },
+      "ownerFactionId": 0
+    }
+  ],
+  "armies": [
+    {
+      "id": 1,
+      "factionId": 1,
+      "role": "north",
+      "capacity": 16,
+      "homeObjective": {
+        "kind": 3,
+        "id": 1
+      }
+    },
+    {
+      "id": 2,
+      "factionId": 1,
+      "role": "south",
+      "capacity": 16,
+      "homeObjective": {
+        "kind": 3,
+        "id": 1
+      }
+    },
+    {
+      "id": 3,
+      "factionId": 1,
+      "role": "reserve",
+      "capacity": 6,
+      "homeObjective": {
+        "kind": 3,
+        "id": 1
+      }
+    },
+    {
+      "id": 4,
+      "factionId": 1,
+      "role": "scout",
+      "capacity": 2,
+      "homeObjective": {
+        "kind": 3,
+        "id": 1
+      }
+    },
+    {
+      "id": 5,
+      "factionId": 2,
+      "role": "north",
+      "capacity": 16,
+      "homeObjective": {
+        "kind": 3,
+        "id": 2
+      }
+    },
+    {
+      "id": 6,
+      "factionId": 2,
+      "role": "south",
+      "capacity": 16,
+      "homeObjective": {
+        "kind": 3,
+        "id": 2
+      }
+    },
+    {
+      "id": 7,
+      "factionId": 2,
+      "role": "reserve",
+      "capacity": 6,
+      "homeObjective": {
+        "kind": 3,
+        "id": 2
+      }
+    },
+    {
+      "id": 8,
+      "factionId": 2,
+      "role": "scout",
+      "capacity": 2,
+      "homeObjective": {
+        "kind": 3,
+        "id": 2
+      }
+    }
+  ],
+  "soldiers": [
+    {
+      "id": 1,
+      "factionId": 1,
+      "armyId": 1,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 24,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 2,
+      "factionId": 1,
+      "armyId": 1,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 25,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 3,
+      "factionId": 1,
+      "armyId": 1,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 26,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 4,
+      "factionId": 1,
+      "armyId": 1,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 27,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 5,
+      "factionId": 1,
+      "armyId": 2,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 24,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 6,
+      "factionId": 1,
+      "armyId": 2,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 25,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 7,
+      "factionId": 1,
+      "armyId": 2,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 26,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 8,
+      "factionId": 1,
+      "armyId": 2,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 27,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 9,
+      "factionId": 1,
+      "armyId": 3,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 24,
+        "z": 64
+      },
+      "hp": 100
+    },
+    {
+      "id": 10,
+      "factionId": 1,
+      "armyId": 4,
+      "kind": 2,
+      "alive": true,
+      "positionMeters": {
+        "x": 28,
+        "z": 64
+      },
+      "hp": 40
+    },
+    {
+      "id": 11,
+      "factionId": 2,
+      "armyId": 5,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 232,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 12,
+      "factionId": 2,
+      "armyId": 5,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 231,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 13,
+      "factionId": 2,
+      "armyId": 5,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 230,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 14,
+      "factionId": 2,
+      "armyId": 5,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 229,
+        "z": 96
+      },
+      "hp": 100
+    },
+    {
+      "id": 15,
+      "factionId": 2,
+      "armyId": 6,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 232,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 16,
+      "factionId": 2,
+      "armyId": 6,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 231,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 17,
+      "factionId": 2,
+      "armyId": 6,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 230,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 18,
+      "factionId": 2,
+      "armyId": 6,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 229,
+        "z": 32
+      },
+      "hp": 100
+    },
+    {
+      "id": 19,
+      "factionId": 2,
+      "armyId": 7,
+      "kind": 1,
+      "alive": true,
+      "positionMeters": {
+        "x": 232,
+        "z": 64
+      },
+      "hp": 100
+    },
+    {
+      "id": 20,
+      "factionId": 2,
+      "armyId": 8,
+      "kind": 2,
+      "alive": true,
+      "positionMeters": {
+        "x": 228,
+        "z": 64
+      },
+      "hp": 40
+    }
+  ]
+}
