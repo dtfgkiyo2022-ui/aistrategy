@@ -25,6 +25,8 @@ namespace Rts.Contracts
     {
         ulong Submit(UserPolicyIntent intent);
         void Cancel(ulong requestId);
+        /// <summary>Queues a non-human policy as an ordinary logged proposal.</summary>
+        ulong Propose(uint faction, ulong sequence, IReadOnlyList<PolicyOrder> orders, long applyTick);
     }
 
     public interface IFrameSource

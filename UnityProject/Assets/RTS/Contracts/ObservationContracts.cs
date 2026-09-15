@@ -54,6 +54,8 @@ namespace Rts.Contracts
         public int EstimateMin { get; }
         public int EstimateMax { get; }
         public bool IsCurrentlyVisible { get; }
+        // Aggregate coverage lists observed individual ContactIds only, never hidden army members.
+        public IReadOnlyList<uint> CoveredContactIds { get; }
 
         public EnemyContact(
             uint contactId,
@@ -61,7 +63,7 @@ namespace Rts.Contracts
             long lastSeenTick,
             int estimateMin,
             int estimateMax,
-            bool isCurrentlyVisible)
+            bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null)
         {
             ContactId = contactId;
             LastPosition = lastPosition;
@@ -69,6 +71,7 @@ namespace Rts.Contracts
             EstimateMin = estimateMin;
             EstimateMax = estimateMax;
             IsCurrentlyVisible = isCurrentlyVisible;
+            CoveredContactIds = ContractList.Copy(coveredContactIds ?? Array.Empty<uint>());
         }
     }
 

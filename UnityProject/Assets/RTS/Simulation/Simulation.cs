@@ -74,7 +74,7 @@ namespace Rts.Simulation
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
                 uint faction = s.Initial.FactionId;
-                var observation = frames[faction - 1].Observation;
+                var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
                 bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
                 var mission = ArmyGoal(a);
@@ -260,8 +260,8 @@ namespace Rts.Simulation
                         outpost.OwnerFactionId, false, 0, world.Tick, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks));
                 foreach (var command in commandStates)
                     if (command.Order.Target.FactionId == f)
-                        commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind,
-                            command.Status, command.AcceptedTick, command.ApplyTick, command.Reason));
+                        commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind, command.Order.Goal,
+                            command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Order.Source));
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,

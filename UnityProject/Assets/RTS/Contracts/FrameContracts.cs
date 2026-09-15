@@ -130,27 +130,33 @@ namespace Rts.Contracts
         public ulong CommandId { get; }
         public ScopeKey Target { get; }
         public PolicyKind Kind { get; }
+        public PolicyGoal Goal { get; }
         public CommandStatus Status { get; }
         public long AcceptedTick { get; }
         public long ApplyTick { get; }
         public ReasonCode Reason { get; }
+        public CommandSource Source { get; }
 
         public CommandView(
             ulong commandId,
             ScopeKey target,
             PolicyKind kind,
+            PolicyGoal goal,
             CommandStatus status,
             long acceptedTick,
             long applyTick,
-            ReasonCode reason)
+            ReasonCode reason,
+            CommandSource source = CommandSource.Human)
         {
             CommandId = commandId;
             Target = target;
             Kind = kind;
+            Goal = goal;
             Status = status;
             AcceptedTick = acceptedTick;
             ApplyTick = applyTick;
             Reason = reason;
+            Source = source;
         }
     }
     /// <summary>Cell index is z * map width + x.</summary>

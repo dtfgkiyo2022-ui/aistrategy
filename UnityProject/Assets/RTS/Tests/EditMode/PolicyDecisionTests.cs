@@ -51,24 +51,24 @@ namespace Rts.Tests.EditMode
             Assert.That(result.Take(3).All(a => a.Goal.Kind == GoalKind.Core && a.Goal.Id == 1),Is.True);
         }
         [Test]
-        public void ReserveRoundsUpWholeArmiesBeforeGuardAndFocus()
+        public void DefaultReserveDoesNotRoundUpLargeArmyBeforeFocus()
         {
             var o = Observation(); var result = Allocate(o,200,policy:PolicyKind.Focus);
             Assert.That(result[2].Assignment,Is.EqualTo(AssignmentKind.Reserve));
-            Assert.That(result[0].Assignment,Is.EqualTo(AssignmentKind.Reserve));
-            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
-            Assert.That(result[1].Goal.Id,Is.EqualTo(1),"Scarce guards protect the first objective even if their original home differs.");
+            Assert.That(result[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
+            // Focus armies are considered only after the actual reserve constraint is met.
+            Assert.That(result[1].Assignment,Is.Not.EqualTo(AssignmentKind.Guard));
             Assert.That(result[3].Goal.Id,Is.EqualTo(2));
         }
         [Test]
-        public void AllowAbandonReleasesOnlyMinimumGuardAndFocusRetainsOtherGuard()
+        public void FocusDoesNotCreateGuardsWithoutAnOccupationThreat()
         {
             var o = Observation(); var before = Allocate(o,0,policy:PolicyKind.Focus);
             var after = Allocate(o,0,new uint[]{1},PolicyKind.Focus);
-            Assert.That(before[0].Assignment,Is.EqualTo(AssignmentKind.Guard));
+            Assert.That(before[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(after[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(after[0].Goal.Id,Is.EqualTo(2));
-            Assert.That(after[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
+            Assert.That(after[1].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(o.Objectives[2].OwnerFactionId,Is.EqualTo(1));
         }
         [Test]
@@ -227,18 +227,54 @@ namespace Rts.Tests.EditMode
         public void PresetsAreOrdinaryLoggedPoliciesWithDifferentAllocations()
         {
             var s=WeekTwoScenario.Create(); var maintain=new Battle(s); var concentrate=new Battle(s);
-            var a=PolicyPresets.InitialInputs(s,"maintain"); var b=PolicyPresets.InitialInputs(s,"concentrate");
+            var a=PolicyPresets.RecordedInputs(s,"none","maintain",2200); var b=PolicyPresets.RecordedInputs(s,"none","concentrate",2200);
+            var acceptedMaintain=new System.Collections.Generic.HashSet<ulong>();
+            var acceptedConcentrate=new System.Collections.Generic.HashSet<ulong>();
             for(int t=1;t<=2200;t++)
-            { maintain.Step(t,a.Where(i=>i.AcceptedTick==t-1).ToArray()); concentrate.Step(t,b.Where(i=>i.AcceptedTick==t-1).ToArray()); }
-            Assert.That(maintain.Capture(2).Commands.All(c=>c.Status==CommandStatus.Executing || c.Status==CommandStatus.Completed),Is.True);
-            Assert.That(concentrate.Capture(2).Commands.All(c=>c.Status==CommandStatus.Executing || c.Status==CommandStatus.Completed),Is.True);
+            {
+                maintain.Step(t,a.Where(i=>i.ApplyTick==t).ToArray()); concentrate.Step(t,b.Where(i=>i.ApplyTick==t).ToArray());
+                foreach(var c in maintain.Capture(2).Commands.Where(c=>c.Status==CommandStatus.Executing)) acceptedMaintain.Add(c.CommandId);
+                foreach(var c in concentrate.Capture(2).Commands.Where(c=>c.Status==CommandStatus.Executing)) acceptedConcentrate.Add(c.CommandId);
+            }
+            AssertDoctrineProposalsWereAccepted(maintain.Capture(2),acceptedMaintain);
+            AssertDoctrineProposalsWereAccepted(concentrate.Capture(2),acceptedConcentrate);
             Assert.That(maintain.Capture(2).Observation.OwnArmies.Select(v=>v.Position),Is.Not.EqualTo(concentrate.Capture(2).Observation.OwnArmies.Select(v=>v.Position)));
-            Assert.That(maintain.Capture(2).Objectives.Where(o=>o.Kind==GoalKind.Outpost).Select(o=>o.OwnerFactionId),Is.Not.EqualTo(concentrate.Capture(2).Objectives.Where(o=>o.Kind==GoalKind.Outpost).Select(o=>o.OwnerFactionId)));
+            // Both can own north at this tick. 9.2 distinguishes their response to capture,
+            // not a guaranteed difference in the battle's territorial outcome.
+            var defense=maintain.Capture(2).Commands.Single(c=>c.Kind==PolicyKind.Defend && c.Status==CommandStatus.Executing);
+            Assert.That(defense.Goal.Kind,Is.EqualTo(GoalKind.Outpost));
+            Assert.That(maintain.Capture(2).Objectives.Single(o=>o.Kind==defense.Goal.Kind && o.Id==defense.Goal.Id).OwnerFactionId,Is.EqualTo(2));
+            Assert.That(concentrate.Capture(2).Commands.Any(c=>c.Kind==PolicyKind.Focus && c.Goal.Kind==GoalKind.Outpost &&
+                c.Status==CommandStatus.Completed && c.Reason==ReasonCode.None),Is.True);
+            var attack=concentrate.Capture(2).Commands.Single(c=>c.Kind==PolicyKind.Focus && c.Status==CommandStatus.Executing);
+            Assert.That(attack.Goal.Kind,Is.EqualTo(GoalKind.Core));
+            Assert.That(concentrate.Capture(2).Objectives.Single(o=>o.Kind==attack.Goal.Kind && o.Id==attack.Goal.Id).OwnerFactionId,Is.EqualTo(1));
+        }
+        private static void AssertDoctrineProposalsWereAccepted(FactionFrame frame, System.Collections.Generic.HashSet<ulong> accepted)
+        {
+            var doctrine = frame.Commands.Where(c => c.Source == CommandSource.Doctrine).ToArray();
+            Assert.That(doctrine,Is.Not.Empty);
+            foreach(var c in doctrine)
+            {
+                string detail="faction="+frame.FactionId+" command="+c.CommandId+" target="+c.Target.Kind+":"+c.Target.Id+
+                    " kind="+c.Kind+" status="+c.Status+" reason="+c.Reason;
+                Assert.That(accepted,Does.Contain(c.CommandId),detail);
+                Assert.That(c.Reason,Is.Not.EqualTo(ReasonCode.StaleVersion),detail);
+                // 8.1/8.2: a successfully applied policy can later be replaced on overlapping armies.
+                bool replaced=c.Status==CommandStatus.Cancelled && c.Reason==ReasonCode.Superseded &&
+                    doctrine.Any(next=>next.CommandId>c.CommandId && next.Kind==c.Kind && accepted.Contains(next.CommandId));
+                bool lost=c.Kind==PolicyKind.Defend && c.Status==CommandStatus.Expired && c.Reason==ReasonCode.OwnershipChanged &&
+                    frame.Objectives.Any(o=>o.Kind==c.Goal.Kind && o.Id==c.Goal.Id && o.IsOwnerKnown && o.OwnerFactionId!=frame.FactionId);
+                Assert.That(c.Status==CommandStatus.Executing || c.Status==CommandStatus.Completed || replaced || lost,Is.True,detail);
+            }
         }
         [Test]
         public void AbandonMidMatchChangesAssignmentsWithoutDestroyingAssets()
         {
             var s=WeekTwoScenario.Create(); s.Outposts[0].OwnerFactionId=1; s.Outposts[1].OwnerFactionId=1;
+            // A nearby enemy makes the automatic garrison requirement observable; without a
+            // threat, 9.2 deliberately leaves owned outposts unguarded.
+            s.Soldiers[20].Position=P(128,96); s.UnitParameters[0].Damage=s.UnitParameters[1].Damage=0;
             var auto=new Battle(s); var abandon=new Battle(s);
             var reserve=Order(1,1,ScopeKind.All,0,PolicyKind.MaintainReserve,reserve:0);
             CommandTestInput.Step(auto,1,new[]{reserve}); CommandTestInput.Step(abandon,1,new[]{reserve});
@@ -295,11 +331,18 @@ namespace Rts.Tests.EditMode
             s.Soldiers=new[] {
                 new SoldierDefinition {Id=1,FactionId=1,ArmyId=1,Kind=UnitKind.Infantry,Alive=true,Hp=10,Position=P(100,64)},
                 new SoldierDefinition {Id=2,FactionId=1,ArmyId=1,Kind=UnitKind.Infantry,Alive=true,Hp=100,Position=P(100,64)},
-                new SoldierDefinition {Id=3,FactionId=2,ArmyId=5,Kind=UnitKind.Infantry,Alive=true,Hp=100,Position=P(102,64)} };
-            // Hold this enemy in place so the surviving defender can reach its core.
+                new SoldierDefinition {Id=3,FactionId=2,ArmyId=5,Kind=UnitKind.Infantry,Alive=true,Hp=100,Position=P(101,64)} };
+            // Both defenders start inside their hold areas and strictly inside attack range.
+            // Pin the enemy to its core so it cannot pursue the returning survivor.
+            s.Outposts[0].Position=P(100,64);
+            s.Cores[1].Position=P(101,64);
             s.UnitParameters[0].Range=Fix64.FromInt(2);
             var sim=new Battle(s);
-            CommandTestInput.Step(sim,1,new[]{Order(1,1,ScopeKind.Army,1,PolicyKind.Defend,G(1),500)});
+            Assert.That(sim.Capture(1).AliveCount,Is.EqualTo(2));
+            CommandTestInput.Step(sim,1,new[]{Order(1,1,ScopeKind.Army,1,PolicyKind.Defend,G(1),500),
+                Order(1,2,ScopeKind.Army,5,PolicyKind.Defend,new PolicyGoal(GoalKind.Core,2,default))});
+            Assert.That(sim.Capture(1).AliveCount,Is.EqualTo(1));
+            Assert.That(Field(sim,"CommandStates[101].Armies[1].N0"),Is.EqualTo("2"));
             Assert.That(Field(sim,"CommandStates[101].Armies[1].Deaths"),Is.EqualTo("1"));
             Assert.That(Field(sim,"CommandStates[101].Armies[1].Returning"),Is.EqualTo("1"));
             sim.Step(2,None);
@@ -331,13 +374,12 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
-        public void AlertBreaksGuardAllocationTieBeforeOutpostId()
+        public void AlertAloneDoesNotCreateAGuard()
         {
             var o=Observation(); var input=Inputs(o);
             var result=PolicyDecision.Allocate(o,20,input,200,Array.Empty<uint>(),
                 new[]{new AttackMemory {OutpostId=2,AlertUntilTick=600}},Array.Empty<PolicyOrder>(),out _);
-            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
-            Assert.That(result[1].Goal.Id,Is.EqualTo(2));
+            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Advance));
         }
 
         [Test]

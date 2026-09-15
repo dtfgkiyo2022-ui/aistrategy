@@ -4,6 +4,7 @@ using System.Reflection;
 using NUnit.Framework;
 using Rts.Contracts;
 using Rts.Replay;
+using Rts.Decision;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
 
@@ -264,15 +265,30 @@ namespace Rts.Tests.EditMode
             var sim = new Battle(s);
             var soldiers = States(sim, "Soldiers");
             var position = soldiers.GetValue(0).GetType().GetField("Position", Hidden);
+            var initial = sim.Capture(1).Observation.OwnArmies.ToArray();
             for (int tick = 0; tick <= 1000; tick++)
             {
                 if (tick > 0) CommandTestInput.Step(sim, tick, None);
+                soldiers = States(sim, "Soldiers"); // Reinforcements can replace the backing array.
                 for (int i = 0; i < soldiers.Length; i++)
-                    Assert.That(grid.IsPassable(grid.Cell((SimPoint)position.GetValue(soldiers.GetValue(i)))), Is.True, "tick=" + tick + " id=" + (i + 1));
+                {
+                    var soldier = soldiers.GetValue(i);
+                    if (((SoldierDefinition)soldier.GetType().GetField("Initial", Hidden).GetValue(soldier)).Id == 0) continue;
+                    Assert.That(grid.IsPassable(grid.Cell((SimPoint)position.GetValue(soldier))), Is.True, "tick=" + tick + " id=" + (i + 1));
+                }
                 Assert.That(sim.Capture(1).Result.IsFault, Is.False);
             }
-            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.X, Is.GreaterThan(Fix64.FromInt(80)));
-            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.Z, Is.LessThan(Fix64.FromInt(40)));
+            var offense = ((FactionOffenseMemory[])typeof(Battle).GetField("offenseMemory", Hidden).GetValue(sim))[0];
+            Assert.That(offense.Phase, Is.EqualTo(OffensivePhase.Gathering));
+            foreach (uint id in new uint[] { 1, 2 })
+            {
+                Assert.That(offense.PlannedArmyIds, Does.Contain(id));
+                var army = sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == id);
+                int before = grid.FindPath(grid.Cell(initial.Single(a => a.Id == id).Position), offense.RallyPoint).Length;
+                int after = grid.FindPath(grid.Cell(army.Position), offense.RallyPoint).Length;
+                Assert.That(after, Is.GreaterThan(0), "Rally must remain reachable for army=" + id);
+                Assert.That(after, Is.LessThan(before), "Must advance along the road toward the assigned rally (9.2), army=" + id);
+            }
             Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 3).Position.X, Is.LessThan(Fix64.FromInt(32)));
         }
 
