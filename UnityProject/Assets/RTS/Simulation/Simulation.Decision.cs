@@ -112,8 +112,9 @@ namespace Rts.Simulation
                 w.Value(n + "Returning", a.Decision.Returning); w.Value(n + "InferiorSince", a.Decision.InferiorSince);
                 w.Value(n + "HoldUntilTick", a.Decision.HoldUntilTick); w.Ids(n + "StartIds", a.AutoStartIds ?? Array.Empty<uint>());
             }
-            foreach (var s in world.Soldiers)
+            for (int i = 0; i < world.SoldierCount; i++)
             {
+                var s = world.Soldiers[i];
                 string n = "Ai.Soldiers[" + s.Initial.Id.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Pursuit.Active", s.Pursuit.Active); w.Value(n + "Pursuit.Returning", s.Pursuit.Returning);
                 w.Point(n + "Pursuit.Start", s.Pursuit.Start); w.Point(n + "Pursuit.Mission", s.Pursuit.Mission);

@@ -10,8 +10,9 @@ namespace Rts.Simulation
     public sealed partial class Simulation : ISimulation
     {
         private readonly WorldState world;
-        private readonly SimPoint[] nextPositions;
-        private readonly long[] soldierDamage, coreDamage;
+        private SimPoint[] nextPositions;
+        private long[] soldierDamage;
+        private readonly long[] coreDamage;
         private readonly FactionFrame[] frames = new FactionFrame[2];
         private readonly FogView fog;
 
@@ -169,10 +170,10 @@ namespace Rts.Simulation
                 if (o.CapturingFaction != challenger) { o.CapturingFaction = challenger; o.CaptureTicks = 0; }
                 o.CaptureTicks++;
                 if (o.CaptureTicks >= world.Config.Rules.CaptureDurationTicks)
-                { o.OwnerFactionId = challenger; o.CapturingFaction = 0; o.CaptureTicks = 0; }
+                { o.OwnerFactionId = challenger; o.CapturingFaction = 0; o.CaptureTicks = 0;
+                    o.NextReinforcementTick = checked(world.Tick + world.Config.Rules.OutpostReinforcementIntervalTicks); }
             }
         }
-        private void Reinforce() { /* TODO: new soldiers do not act in their birth tick. */ }
 
         private void UpdateObservations()
         {
@@ -270,10 +271,13 @@ namespace Rts.Simulation
                 foreach (var e in commandEvents)
                     if ((e.AudienceMask & (1 << ((int)f - 1))) != 0)
                         visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind, e.AudienceMask,
-                            e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
+                            e.Kind == EventKind.Reinforcement && world.Soldiers[e.SubjectId - 1].Initial.FactionId != f
+                                ? world.Factions[f - 1].ContactIds[e.SubjectId - 1] : e.SubjectId,
+                            e.CommandId, e.Position, e.Value, e.Reason));
                 foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
-                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents, fog, world.Result);
+                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents, fog, world.Result,
+                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f));
             }
         }
 

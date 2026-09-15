@@ -39,12 +39,14 @@ namespace Rts.Simulation
         internal OutpostDefinition Definition;
         internal uint OwnerFactionId, CapturingFaction;
         internal int CaptureTicks;
+        internal long NextReinforcementTick;
     }
 
     internal struct CoreState
     {
         internal CoreDefinition Definition;
         internal int Hp;
+        internal long NextReinforcementTick;
     }
 
     internal struct FactionState
@@ -59,16 +61,18 @@ namespace Rts.Simulation
     internal sealed class WorldState
     {
         internal readonly ScenarioDefinition Config;
-        internal readonly SoldierState[] Soldiers;
+        internal SoldierState[] Soldiers;
         internal readonly ArmyState[] Armies;
         internal readonly CoreState[] Cores;
         internal readonly OutpostState[] Outposts;
         internal readonly GridMap Map;
         internal readonly FactionState[] Factions;
-        internal readonly int[] SoldierTraversal;
+        internal int[] SoldierTraversal;
         internal readonly int[] ArmyTraversal;
         internal readonly SplitMix64 CombatRandom, AiRandom;
-        internal readonly uint NextSoldierId, NextArmyId, NextCoreId, NextOutpostId, NextFactionId;
+        internal uint NextSoldierId;
+        internal int SoldierCount => checked((int)(NextSoldierId - 1));
+        internal readonly uint NextArmyId, NextCoreId, NextOutpostId, NextFactionId;
         internal long Tick;
         internal ulong InputCursor;
         internal MatchResult Result;
@@ -79,7 +83,8 @@ namespace Rts.Simulation
             Map = new GridMap(Config.Map);
             Outposts = new OutpostState[Config.Outposts.Length];
             for (int i = 0; i < Outposts.Length; i++)
-                Outposts[i] = new OutpostState { Definition = Config.Outposts[i], OwnerFactionId = Config.Outposts[i].OwnerFactionId };
+                Outposts[i] = new OutpostState { Definition = Config.Outposts[i], OwnerFactionId = Config.Outposts[i].OwnerFactionId,
+                    NextReinforcementTick = Config.Outposts[i].OwnerFactionId == 0 ? 0 : Config.Rules.OutpostReinforcementIntervalTicks };
             CombatRandom = new SplitMix64(Config.Seed);
             AiRandom = new SplitMix64(Config.Seed);
             Soldiers = new SoldierState[Config.Soldiers.Length];
@@ -92,7 +97,7 @@ namespace Rts.Simulation
             NextOutpostId = checked((uint)Config.Outposts.Length + 1);
             NextFactionId = 3;
             for (int i = 0; i < Cores.Length; i++)
-                Cores[i] = new CoreState { Definition = Config.Cores[i], Hp = Config.Cores[i].Hp };
+                Cores[i] = new CoreState { Definition = Config.Cores[i], Hp = Config.Cores[i].Hp, NextReinforcementTick = Config.Rules.CoreReinforcementIntervalTicks };
             for (int i = 0; i < Soldiers.Length; i++)
             {
                 var d = Config.Soldiers[i];

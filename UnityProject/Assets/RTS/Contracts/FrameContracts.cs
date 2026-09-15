@@ -14,6 +14,9 @@ namespace Rts.Contracts
         public IReadOnlyList<GameEvent> Events { get; }
         public FogView Fog { get; }
         public MatchResult Result { get; }
+        public int AliveCount { get; }
+        public int FactionCap { get; }
+        public IReadOnlyList<ReinforcementView> Reinforcements { get; }
 
         public FactionFrame(
             long tick,
@@ -23,7 +26,10 @@ namespace Rts.Contracts
             IReadOnlyList<CommandView> commands,
             IReadOnlyList<GameEvent> events,
             FogView fog,
-            MatchResult result)
+            MatchResult result,
+            int aliveCount = 0,
+            int factionCap = 0,
+            IReadOnlyList<ReinforcementView> reinforcements = null)
         {
             Tick = tick;
             FactionId = factionId;
@@ -33,7 +39,20 @@ namespace Rts.Contracts
             Events = ContractList.Copy(events);
             Fog = fog;
             Result = result;
+            AliveCount = aliveCount;
+            FactionCap = factionCap;
+            Reinforcements = ContractList.Copy(reinforcements ?? Array.Empty<ReinforcementView>());
         }
+    }
+
+    /// <summary>Own living core / owned outpost schedule. Discarded attempts still advance the clock.</summary>
+    public readonly struct ReinforcementView
+    {
+        public GoalKind Kind { get; }
+        public uint Id { get; }
+        public long TicksRemaining { get; }
+        public ReinforcementView(GoalKind kind, uint id, long ticksRemaining)
+        { Kind = kind; Id = id; TicksRemaining = ticksRemaining; }
     }
 
     public readonly struct GameEvent
