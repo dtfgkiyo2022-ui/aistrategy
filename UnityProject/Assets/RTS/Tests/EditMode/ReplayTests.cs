@@ -151,5 +151,28 @@ namespace Rts.Tests.EditMode
             var other=new Battle(WeekOneScenario.Create()); battle.Step(1,Array.Empty<ScheduledInput>()); other.Step(1,Array.Empty<ScheduledInput>());
             Assert.That(battle.CaptureDiagnostic().CanonicalState,Is.EqualTo(other.CaptureDiagnostic().CanonicalState));
         }
+        [TestCase(2U)] [TestCase(3U)]
+        public void OlderReplayHeadersRemainReadableWithoutAiProvider(uint schema)
+        {
+            byte[] current = Record(10); byte[] header;
+            using (var reader = new ReplayReader(new MemoryStream(current)))
+            {
+                var h = reader.Header;
+                header = ReplayBinary.Pack(w => {
+                    ReplayBinary.Text(w, h.RulesVersion); w.Write(h.TickRateHz); w.Write(h.Seed); w.Write(h.TickLimit);
+                    w.Write((uint)h.Scenario.Length); w.Write(h.Scenario);
+                    ReplayBinary.Text(w, h.Build.Commit); w.Write(h.Build.Dirty); ReplayBinary.Text(w, h.Build.SourceHash);
+                    ReplayBinary.Text(w, h.Build.EditorVersion); ReplayBinary.Text(w, h.Build.Backend); ReplayBinary.Text(w, h.Build.PackageLockHash);
+                    if (schema >= 3) { ReplayBinary.Text(w, h.WestPreset); ReplayBinary.Text(w, h.EastPreset); }
+                });
+            }
+            byte[] old = ReplayBinary.Pack(w => {
+                w.Write(current.Take(8).ToArray()); w.Write(schema); w.Write((uint)header.Length); w.Write(header);
+                w.Write(current.Skip(16 + BitConverter.ToInt32(current, 12)).ToArray());
+            });
+            using (var reader = new ReplayReader(new MemoryStream(old)))
+            { Assert.That(reader.Header.AiDelayTicks, Is.EqualTo(-1)); Assert.That(reader.Header.AiProfile, Is.EqualTo("default")); }
+            Assert.That(ReplayRunner.Replay(new MemoryStream(old), Build()).FirstMismatchTick, Is.Null);
+        }
     }
 }

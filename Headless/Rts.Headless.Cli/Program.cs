@@ -134,7 +134,7 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
             if(args[0]=="record")
@@ -143,13 +143,22 @@ internal static class Program
                 var inputs=options.TryGetValue("--inputs",out var path)?JsonSerializer.Deserialize<ScheduledInput[]>(File.ReadAllText(path),JsonInput.Options) ?? throw new InvalidDataException("Null inputs."):Array.Empty<ScheduledInput>();
                 if (options.ContainsKey("--enemy-preset") && options.ContainsKey("--east-preset")) throw new InvalidDataException("--enemy-preset is an alias for --east-preset; use only one.");
                 string eastPreset = options.TryGetValue("--east-preset", out var east) ? east : options.GetValueOrDefault("--enemy-preset");
+                var aiProfile = AiTimingProfile.Parse(options.GetValueOrDefault("--ai-profile") ?? "default");
+                int aiDelay = options.TryGetValue("--ai-delay", out var delay) ? int.Parse(delay, System.Globalization.CultureInfo.InvariantCulture) : -1;
+                if (options.ContainsKey("--ai-profile") && aiDelay == -1) throw new InvalidDataException("--ai-profile requires --ai-delay.");
+                if (options.ContainsKey("--ai-delay"))
+                {
+                    if (inputs.Length != 0 || options.ContainsKey("--west-preset") || eastPreset != null)
+                        throw new InvalidDataException("--ai-delay runs autonomous auto vs auto; use without inputs or presets.");
+                    inputs = PolicyPresets.DelayedInputs(scenario, long.Parse(Required("--ticks"), System.Globalization.CultureInfo.InvariantCulture), aiDelay, aiProfile);
+                }
                 if (options.ContainsKey("--west-preset") || eastPreset != null)
                 {
                     if (inputs.Length != 0) throw new InvalidDataException("Use either presets or --inputs; preset proposals can also be included in an input log.");
                     inputs = PolicyPresets.RecordedInputs(scenario, options.GetValueOrDefault("--west-preset") ?? "none", eastPreset ?? "none", long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture));
                 }
                 long ticks=long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture);
-                using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build,null,options.GetValueOrDefault("--west-preset") ?? "none",eastPreset ?? "none");
+                using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build,null,options.GetValueOrDefault("--west-preset") ?? "none",eastPreset ?? "none",aiDelay,aiProfile.Name);
                 Console.WriteLine("Recorded S0..S"+result.LastTick); return result.IsFault?4:0;
             }
             if(args[0]=="replay")return Replay(Required("--in"),Required("--hash-out"),options.GetValueOrDefault("--dump-dir"),build,options.ContainsKey("--allow-build-mismatch"));
