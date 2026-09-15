@@ -17,6 +17,7 @@
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DeterminismSourceTests.cs" Link="Tests/DeterminismSourceTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ContractsTests.cs" Link="Tests/ContractsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Fix64Tests.cs" Link="Tests/Fix64Tests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/SplitMix64Tests.cs" Link="Tests/SplitMix64Tests.cs" />

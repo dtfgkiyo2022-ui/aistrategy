@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -13,12 +15,110 @@ namespace Rts.Tests.EditMode
         [Serializable]
         private sealed class AssemblyDefinition
         {
+            public string name = "";
             public string[] references = Array.Empty<string>();
             public bool noEngineReferences = false;
             public bool autoReferenced = false;
             public bool overrideReferences = false;
             public string[] precompiledReferences = Array.Empty<string>();
             public bool allowUnsafeCode = false;
+        }
+
+        // Design chapter 2. Editor can use the seven runtime assemblies; tests also use Editor.
+        private static readonly Dictionary<string, string[]> AllowedReferences = new Dictionary<string, string[]>
+        {
+            ["Contracts"] = Array.Empty<string>(),
+            ["Decision"] = new[] { "Rts.Contracts" },
+            ["Simulation"] = new[] { "Rts.Contracts", "Rts.Decision" },
+            ["Replay"] = new[] { "Rts.Contracts" },
+            ["Application"] = new[] { "Rts.Contracts", "Rts.Simulation", "Rts.Replay" },
+            ["Presentation"] = new[] { "Rts.Contracts" },
+            ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts" },
+            ["Editor"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
+                "Rts.Application", "Rts.Presentation", "Rts.UnityHost" },
+            ["Tests.EditMode"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
+                "Rts.Application", "Rts.Presentation", "Rts.UnityHost", "Rts.Editor" }
+        };
+
+        private static AssemblyDefinition ReadDefinition(string name)
+        {
+            string folder = name.Replace('.', Path.DirectorySeparatorChar);
+            return JsonUtility.FromJson<AssemblyDefinition>(File.ReadAllText(
+                Path.Combine(UnityEngine.Application.dataPath, "RTS", folder, "Rts." + name + ".asmdef")));
+        }
+
+        [TestCaseSource(nameof(AssemblyNames))]
+        public void AllAssembliesRespectTheReferenceAllowlist(string name)
+        {
+            var definition = ReadDefinition(name);
+            Assert.That(definition.name, Is.EqualTo("Rts." + name));
+            foreach (string rawReference in definition.references)
+            {
+                string reference = rawReference;
+                if (reference.StartsWith("GUID:", StringComparison.Ordinal))
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(reference.Substring(5));
+                    Assert.That(File.Exists(path), Is.True, "Unresolved asmdef reference: " + reference);
+                    reference = JsonUtility.FromJson<AssemblyDefinition>(File.ReadAllText(path)).name;
+                }
+                if (reference.StartsWith("Rts.", StringComparison.Ordinal))
+                    Assert.That(AllowedReferences[name], Does.Contain(reference), "Rts." + name + " -> " + reference);
+                else
+                {
+                    // Package references are explicit too: an unknown assembly must not bypass the table.
+                    string[] packages = name == "Editor"
+                        ? new[] { "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime" }
+                        : name == "Tests.EditMode" ? new[] { "UnityEngine.TestRunner", "UnityEditor.TestRunner" }
+                        : Array.Empty<string>();
+                    Assert.That(packages, Does.Contain(reference), "Rts." + name + " -> " + reference);
+                }
+            }
+        }
+
+        private static IEnumerable<string> AssemblyNames => AllowedReferences.Keys;
+
+        [Test]
+        public void DecisionCannotReferenceSimulationAndPresentationCanOnlyReferenceContracts()
+        {
+            Assert.That(AllowedReferences["Decision"], Does.Not.Contain("Rts.Simulation"));
+            Assert.That(ReadDefinition("Decision").references, Does.Not.Contain("Rts.Simulation"));
+            Assert.That(AllowedReferences["Presentation"], Is.EqualTo(new[] { "Rts.Contracts" }));
+            Assert.That(ReadDefinition("Presentation").references, Is.SubsetOf(new[] { "Rts.Contracts" }));
+        }
+
+        [TestCase("Contracts")]
+        [TestCase("Decision")]
+        [TestCase("Simulation")]
+        [TestCase("Replay")]
+        [TestCase("Application")]
+        public void PureAssembliesHaveNoTransitiveUnityDependency(string name)
+        {
+            var root = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "Rts." + name);
+            CheckDependencies(root, root.GetName().Name, new HashSet<string>(StringComparer.Ordinal));
+        }
+
+        private static void CheckDependencies(Assembly assembly, string chain, HashSet<string> visited)
+        {
+            if (!visited.Add(assembly.FullName)) return;
+            foreach (var reference in assembly.GetReferencedAssemblies())
+            {
+                string nextChain = chain + " -> " + reference.Name;
+                Assert.That(reference.Name.StartsWith("UnityEngine", StringComparison.Ordinal)
+                    || reference.Name.StartsWith("UnityEditor", StringComparison.Ordinal), Is.False, nextChain);
+                // Validate each project edge, not the root's direct allowlist (Simulation -> Decision is legal).
+                if (assembly.GetName().Name.StartsWith("Rts.", StringComparison.Ordinal)
+                    && reference.Name.StartsWith("Rts.", StringComparison.Ordinal))
+                    Assert.That(AllowedReferences[assembly.GetName().Name.Substring(4)],
+                        Does.Contain(reference.Name), nextChain);
+                Assembly dependency;
+                try { dependency = Assembly.Load(reference); }
+                catch (Exception error)
+                {
+                    Assert.Fail("Cannot inspect dependency: " + nextChain + "\n" + error);
+                    return;
+                }
+                CheckDependencies(dependency, nextChain, visited);
+            }
         }
 
         [TestCase("Contracts", new string[0])]
