@@ -20,6 +20,14 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void RouteEndpointsDoNotScaleRadiusWithSegmentLength()
+        {
+            Assert.That(PolicyDecision.NearRoute(P(-25), new[] { P(0), P(100) }, 24), Is.False);
+            Assert.That(PolicyDecision.NearRoute(P(125), new[] { P(0), P(100) }, 24), Is.False);
+            Assert.That(PolicyDecision.NearRoute(P(-24), new[] { P(0), P(100) }, 24), Is.True);
+        }
+
+        [Test]
         public void RouteThreatCountsAContactBesideThePolylineButNotBesideTheGoalOnly()
         {
             var o = Observation(20, P(20, 20));

@@ -21,16 +21,21 @@ namespace Rts.Decision
         }
         public static PolicyGoal Core(FactionObservation o, bool own)
         { var c = o.Objectives.First(v => v.Kind == GoalKind.Core && (v.OwnerFactionId == o.FactionId) == own); return new PolicyGoal(c.Kind, c.Id, default); }
+        public static IEnumerable<EnemyContact> CountableContacts(FactionObservation o)
+        {
+            var covered = new HashSet<uint>(o.Contacts.SelectMany(c => c.CoveredContactIds ?? Array.Empty<uint>()));
+            return o.Contacts.Where(c => !covered.Contains(c.ContactId)).GroupBy(c => c.ContactId).Select(g => g.First());
+        }
         public static int Estimate(FactionObservation o, SimPoint point)
         {
             int count = 0;
-            foreach (var c in o.Contacts.OrderBy(c => c.ContactId))
-                if (Within(c.LastPosition, point, 24)) count = checked(count + (c.EstimateMax < 0 || o.Tick - c.LastSeenTick > 600 ? 10 : c.EstimateMax));
+            foreach (var c in CountableContacts(o).OrderBy(c => c.ContactId))
+                if (Within(c.LastPosition, point, 24)) count = checked(count + (c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax));
             return count;
         }
         public static AttackMemory ObserveAttack(FactionObservation o, KnownObjective objective, AttackMemory memory)
         {
-            bool visible = o.VisibleEnemies.Any(e => Within(e.Position, objective.Position, 24));
+            bool visible = o.VisibleEnemies.Any(e => e.Kind == (byte)UnitKind.Infantry && Within(e.Position, objective.Position, 24));
             memory.OutpostId = objective.Id;
             if (visible)
             {
@@ -47,10 +52,10 @@ namespace Rts.Decision
         private static bool Locked(ArmyDecisionInput a) => a.Policy.Kind == PolicyKind.Retreat || a.Policy.Kind == PolicyKind.Defend || a.Policy.Kind == PolicyKind.Scout;
         private static int Route(ArmyDecisionInput a, PolicyGoal goal) => a.Routes.Where(r => r.Goal.Kind == goal.Kind && r.Goal.Id == goal.Id).Select(r => r.Distance).DefaultIfEmpty(int.MaxValue).First();
         private static bool Same(PolicyGoal a, PolicyGoal b) => a.Kind == b.Kind && a.Id == b.Id;
-        private static int ContactEstimate(FactionObservation o, EnemyContact c) => c.EstimateMax < 0 || o.Tick - c.LastSeenTick > 600 ? 10 : c.EstimateMax;
+        private static int ContactEstimate(FactionObservation o, EnemyContact c) => c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax;
 
         // Squared distance to a segment, kept entirely in fixed-point integer arithmetic.
-        private static bool NearRoute(SimPoint point, IReadOnlyList<SimPoint> cells, int meters)
+        public static bool NearRoute(SimPoint point, IReadOnlyList<SimPoint> cells, int meters)
         {
             if (cells == null || cells.Count == 0) return false;
             BigInteger radius = new BigInteger(Fix64.FromInt(meters).Raw); radius *= radius;
@@ -64,8 +69,8 @@ namespace Rts.Decision
                 else
                 {
                     BigInteger dot = ux * dx + uz * dz;
-                    if (dot <= 0) cross = ux * ux + uz * uz;
-                    else if (dot >= length) { BigInteger vx = px - bx, vz = pz - bz; cross = vx * vx + vz * vz; }
+                    if (dot <= 0) { if (ux * ux + uz * uz <= radius) return true; continue; }
+                    else if (dot >= length) { BigInteger vx = px - bx, vz = pz - bz; if (vx * vx + vz * vz <= radius) return true; continue; }
                     else cross = (ux * ux + uz * uz) * length - dot * dot;
                     if (cross <= radius * length) return true;
                 }
@@ -75,7 +80,7 @@ namespace Rts.Decision
         private static int RouteEstimate(FactionObservation o, ObjectiveRoute route, KnownObjective goal)
         {
             int count = 0;
-            foreach (var c in o.Contacts.OrderBy(c => c.ContactId))
+            foreach (var c in CountableContacts(o).OrderBy(c => c.ContactId))
                 if (NearRoute(c.LastPosition, route.Cells, 24)) count = checked(count + ContactEstimate(o, c));
             // No current/valid contact around an unobserved objective is a warning assumption, not an observation.
             bool unknown = goal.Kind == GoalKind.Outpost ? !goal.IsOwnerKnown : goal.Kind == GoalKind.Core && !goal.IsHpKnown;
@@ -112,8 +117,9 @@ namespace Rts.Decision
         public static ArmyDecisionMemory[] Allocate(FactionObservation observation, long tick,
             IReadOnlyList<ArmyDecisionInput> inputs, ushort reservePermille, IReadOnlyList<uint> abandoned,
             IReadOnlyList<AttackMemory> attacks, IReadOnlyList<PolicyOrder> guardPriorities, out int reserveShortfall,
-            IReadOnlyList<ContactApproachMemory> approaches = null)
+            IReadOnlyList<ContactApproachMemory> approaches = null, IReadOnlyList<uint> committedReserves = null, bool coordinated = false)
         {
+            committedReserves = committedReserves ?? Array.Empty<uint>();
             var armies = inputs.OrderBy(a => a.Army.Id).ToArray();
             var result = armies.Select(a => a.Memory).ToArray();
             var used = new bool[armies.Length];
@@ -133,9 +139,9 @@ namespace Rts.Decision
             if (danger > 0)
             {
                 int defenders = armies.Where(Locked).Where(a => a.Policy.Kind == PolicyKind.Defend && a.Policy.Goal.Kind == core.Kind && a.Policy.Goal.Id == core.Id).Sum(a => a.Army.AliveCount);
-                foreach (int i in candidates.Where(i => armies[i].Army.Kind != UnitKind.Scout).OrderBy(i => armies[i].IsReserveRole ? 0 : 1).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
+                foreach (int i in candidates.Where(i => armies[i].Army.Kind != UnitKind.Scout).OrderBy(i => committedReserves.Contains(armies[i].Army.Id) ? 0 : armies[i].IsReserveRole ? 1 : 2).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
                 {
-                    if (defenders >= danger && held >= target) break;
+                    if (defenders >= danger && held >= target && !committedReserves.Contains(armies[i].Army.Id)) break;
                     used[i] = true; result[i].Assignment = AssignmentKind.CoreDefense; result[i].Goal = core;
                     defenders += armies[i].Army.AliveCount; held += armies[i].Army.AliveCount;
                 }
@@ -144,6 +150,7 @@ namespace Rts.Decision
                 .OrderBy(i => armies[i].IsReserveRole ? 0 : 1).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
             {
                 if (held >= target) break;
+                if (!humanReserve && committedReserves.Contains(armies[i].Army.Id)) continue;
                 int need = target - held;
                 // The default auto reserve may leave a large army free for offense.  Explicit human
                 // MaintainReserve remains an unconditional lower-bound guarantee.
@@ -171,6 +178,7 @@ namespace Rts.Decision
             {
                 var a = armies[i];
                 if (a.Policy.Kind == PolicyKind.Focus) result[i].Goal = a.Policy.Goal;
+                else if (coordinated) { result[i].Assignment = AssignmentKind.Advance; }
                 else
                 {
                     // Retain a still-valid auto target for 600 ticks.  It is intentionally not renewed.

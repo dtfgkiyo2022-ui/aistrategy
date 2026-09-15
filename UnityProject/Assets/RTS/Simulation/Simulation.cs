@@ -74,7 +74,7 @@ namespace Rts.Simulation
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
                 uint faction = s.Initial.FactionId;
-                var observation = frames[faction - 1].Observation;
+                var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
                 bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
                 var mission = ArmyGoal(a);

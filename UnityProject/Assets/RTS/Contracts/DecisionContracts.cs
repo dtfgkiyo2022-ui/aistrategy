@@ -11,11 +11,12 @@ namespace Rts.Contracts
         public PolicyGoal Goal;
         public bool Returning;
         public long InferiorSince, HoldUntilTick;
+        public int InferiorTicks;
         // Auto-offense is stateful: keeping a target must not silently refresh its timer.
         public long OffensiveSince, SuppressUntilTick;
         public PolicyGoal SuppressedGoal;
         public ArmyDecisionMemory(AssignmentKind assignment, PolicyGoal goal, bool returning, long inferiorSince, long holdUntilTick)
-        { Assignment = assignment; Goal = goal; Returning = returning; InferiorSince = inferiorSince; HoldUntilTick = holdUntilTick;
+        { Assignment = assignment; Goal = goal; Returning = returning; InferiorSince = inferiorSince; HoldUntilTick = holdUntilTick; InferiorTicks = 0;
             OffensiveSince = 0; SuppressUntilTick = 0; SuppressedGoal = default; }
     }
 
@@ -41,6 +42,7 @@ namespace Rts.Contracts
         public OffensivePhase Phase;
         public SimPoint RallyPoint;
         public long StartedTick, MoveDeadlineTick, GatheredTick, MaintainedSinceTick;
+        public long ReleasedTick = -1;
         public IReadOnlyList<uint> PlannedArmyIds = System.Array.Empty<uint>();
         public IReadOnlyList<uint> JoiningArmyIds = System.Array.Empty<uint>();
         public IReadOnlyList<uint> AdvancingArmyIds = System.Array.Empty<uint>();
