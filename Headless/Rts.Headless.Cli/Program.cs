@@ -134,17 +134,21 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs","--enemy-preset"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
             if(args[0]=="record")
             {
                 var scenario=JsonInput.Scenario(Required("--scenario"));
                 var inputs=options.TryGetValue("--inputs",out var path)?JsonSerializer.Deserialize<ScheduledInput[]>(File.ReadAllText(path),JsonInput.Options) ?? throw new InvalidDataException("Null inputs."):Array.Empty<ScheduledInput>();
-                if (options.TryGetValue("--enemy-preset", out var preset))
+                if (options.ContainsKey("--enemy-preset") && options.ContainsKey("--east-preset")) throw new InvalidDataException("--enemy-preset is an alias for --east-preset; use only one.");
+                string eastPreset = options.TryGetValue("--east-preset", out var east) ? east : options.GetValueOrDefault("--enemy-preset");
+                if (options.ContainsKey("--west-preset") || eastPreset != null)
                 {
-                    if (inputs.Length != 0) throw new InvalidDataException("Use either --enemy-preset or --inputs; preset proposals can also be included in an input log.");
-                    inputs = PolicyPresets.InitialInputs(scenario, preset);
+                    if (inputs.Length != 0) throw new InvalidDataException("Use either presets or --inputs; preset proposals can also be included in an input log.");
+                    inputs = (options.TryGetValue("--west-preset", out var west) ? PolicyPresets.InitialInputs(scenario, west, 1) : Array.Empty<ScheduledInput>())
+                        .Concat(eastPreset != null ? PolicyPresets.InitialInputs(scenario, eastPreset, 2) : Array.Empty<ScheduledInput>())
+                        .OrderBy(i => i.AcceptedTick).ThenBy(i => i.LogIndex).ToArray();
                 }
                 long ticks=long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture);
                 using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build);

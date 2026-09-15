@@ -51,24 +51,24 @@ namespace Rts.Tests.EditMode
             Assert.That(result.Take(3).All(a => a.Goal.Kind == GoalKind.Core && a.Goal.Id == 1),Is.True);
         }
         [Test]
-        public void ReserveRoundsUpWholeArmiesBeforeGuardAndFocus()
+        public void DefaultReserveDoesNotRoundUpLargeArmyBeforeFocus()
         {
             var o = Observation(); var result = Allocate(o,200,policy:PolicyKind.Focus);
             Assert.That(result[2].Assignment,Is.EqualTo(AssignmentKind.Reserve));
-            Assert.That(result[0].Assignment,Is.EqualTo(AssignmentKind.Reserve));
-            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
-            Assert.That(result[1].Goal.Id,Is.EqualTo(1),"Scarce guards protect the first objective even if their original home differs.");
+            Assert.That(result[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
+            // Focus armies are considered only after the actual reserve constraint is met.
+            Assert.That(result[1].Assignment,Is.Not.EqualTo(AssignmentKind.Guard));
             Assert.That(result[3].Goal.Id,Is.EqualTo(2));
         }
         [Test]
-        public void AllowAbandonReleasesOnlyMinimumGuardAndFocusRetainsOtherGuard()
+        public void FocusDoesNotCreateGuardsWithoutAnOccupationThreat()
         {
             var o = Observation(); var before = Allocate(o,0,policy:PolicyKind.Focus);
             var after = Allocate(o,0,new uint[]{1},PolicyKind.Focus);
-            Assert.That(before[0].Assignment,Is.EqualTo(AssignmentKind.Guard));
+            Assert.That(before[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(after[0].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(after[0].Goal.Id,Is.EqualTo(2));
-            Assert.That(after[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
+            Assert.That(after[1].Assignment,Is.EqualTo(AssignmentKind.Advance));
             Assert.That(o.Objectives[2].OwnerFactionId,Is.EqualTo(1));
         }
         [Test]
@@ -331,13 +331,12 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
-        public void AlertBreaksGuardAllocationTieBeforeOutpostId()
+        public void AlertAloneDoesNotCreateAGuard()
         {
             var o=Observation(); var input=Inputs(o);
             var result=PolicyDecision.Allocate(o,20,input,200,Array.Empty<uint>(),
                 new[]{new AttackMemory {OutpostId=2,AlertUntilTick=600}},Array.Empty<PolicyOrder>(),out _);
-            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Guard));
-            Assert.That(result[1].Goal.Id,Is.EqualTo(2));
+            Assert.That(result[1].Assignment,Is.EqualTo(AssignmentKind.Advance));
         }
 
         [Test]

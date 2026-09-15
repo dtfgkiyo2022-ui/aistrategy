@@ -11,9 +11,43 @@ namespace Rts.Contracts
         public PolicyGoal Goal;
         public bool Returning;
         public long InferiorSince, HoldUntilTick;
+        // Auto-offense is stateful: keeping a target must not silently refresh its timer.
+        public long OffensiveSince, SuppressUntilTick;
+        public PolicyGoal SuppressedGoal;
         public ArmyDecisionMemory(AssignmentKind assignment, PolicyGoal goal, bool returning, long inferiorSince, long holdUntilTick)
-        { Assignment = assignment; Goal = goal; Returning = returning; InferiorSince = inferiorSince; HoldUntilTick = holdUntilTick; }
+        { Assignment = assignment; Goal = goal; Returning = returning; InferiorSince = inferiorSince; HoldUntilTick = holdUntilTick;
+            OffensiveSince = 0; SuppressUntilTick = 0; SuppressedGoal = default; }
     }
+
+    /// <summary>Observation-derived approach state.  It deliberately contains no enemy world state.</summary>
+    public struct ContactApproachMemory
+    {
+        public uint ContactId;
+        public uint ObjectiveId;
+        public SimPoint PreviousPosition;
+        public long PreviousDistance;
+        public long LastSeenTick;
+        public long ThreatUntilTick;
+        public bool HasPrevious;
+    }
+
+    public enum OffensivePhase : byte { Idle = 0, Gathering = 1, WaitingToAdvance = 2, Advancing = 3 }
+
+    /// <summary>Faction-owned, observation-only state for one coordinated auto offensive.</summary>
+    public sealed class FactionOffenseMemory
+    {
+        public ulong Id;
+        public PolicyGoal Goal;
+        public OffensivePhase Phase;
+        public SimPoint RallyPoint;
+        public long StartedTick, MoveDeadlineTick, GatheredTick, MaintainedSinceTick;
+        public IReadOnlyList<uint> PlannedArmyIds = System.Array.Empty<uint>();
+        public IReadOnlyList<uint> JoiningArmyIds = System.Array.Empty<uint>();
+        public IReadOnlyList<uint> AdvancingArmyIds = System.Array.Empty<uint>();
+        public IReadOnlyList<uint> CommittedReserveArmyIds = System.Array.Empty<uint>();
+        public IReadOnlyList<SuppressedGoalMemory> SuppressedGoals = System.Array.Empty<SuppressedGoalMemory>();
+    }
+    public struct SuppressedGoalMemory { public PolicyGoal Goal; public long UntilTick; }
 
     public struct PursuitMemory
     {
@@ -33,7 +67,20 @@ namespace Rts.Contracts
     {
         public PolicyGoal Goal { get; }
         public int Distance { get; }
-        public ObjectiveRoute(PolicyGoal goal, int distance) { Goal = goal; Distance = distance; }
+        /// <summary>Centres of the A* cells, in travel order.  Empty means unreachable.</summary>
+        public IReadOnlyList<SimPoint> Cells { get; }
+        public ObjectiveRoute(PolicyGoal goal, int distance, IReadOnlyList<SimPoint> cells = null)
+        { Goal = goal; Distance = distance; Cells = ContractList.Copy(cells ?? System.Array.Empty<SimPoint>()); }
+    }
+
+    /// <summary>A bounded, observation-only A* measurement for an approaching visible contact.</summary>
+    public readonly struct ContactApproachRoute
+    {
+        public uint ContactId { get; }
+        public uint ObjectiveId { get; }
+        public int Distance { get; }
+        public ContactApproachRoute(uint contactId, uint objectiveId, int distance)
+        { ContactId = contactId; ObjectiveId = objectiveId; Distance = distance; }
     }
 
     public sealed class ArmyDecisionInput
