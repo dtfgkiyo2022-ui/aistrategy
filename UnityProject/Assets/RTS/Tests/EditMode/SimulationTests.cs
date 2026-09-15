@@ -212,7 +212,7 @@ namespace Rts.Tests.EditMode
         {
             var a = new Battle(WeekOneScenario.Create());
             var b = new Battle(WeekOneScenario.Create());
-            Assert.That(a.CaptureDiagnostic().CanonicalState, Is.EqualTo(b.CaptureDiagnostic().CanonicalState));
+            CommandTestInput.AssertCanonicalEqual(a.CaptureDiagnostic(),b.CaptureDiagnostic());
             for (int tick = 1; tick <= 2000; tick++)
             {
                 ScheduledInput[] inputs = tick == 200 ? new[] { Input(tick, 1, 1, PolicyKind.Retreat) }
@@ -222,7 +222,7 @@ namespace Rts.Tests.EditMode
                 CommandTestInput.Step(a, tick, inputs);
                 a.Capture(2); a.Capture(1); // Capture frequency/order must have no effect.
                 CommandTestInput.Step(b, tick, inputs);
-                Assert.That(a.CaptureDiagnostic().CanonicalState, Is.EqualTo(b.CaptureDiagnostic().CanonicalState), "tick " + tick);
+                CommandTestInput.AssertCanonicalEqual(a.CaptureDiagnostic(),b.CaptureDiagnostic(),"tick "+tick);
             }
         }
 

@@ -96,7 +96,18 @@ namespace Rts.Simulation
             public void Goal(string n,PolicyGoal g) { Value(n+".Kind",(byte)g.Kind); Value(n+".Id",g.Id); Point(n+".Point",g.Point); }
             public void Ids(string n,uint[] ids) => Ids(n,ids,ids.Length);
             public void Ids(string n,uint[] ids,int count) { Value(n+".Count",(uint)count); for(int i=0;i<count;i++)Value(n+"["+i.ToString(CultureInfo.InvariantCulture)+"]",ids[i]); }
-            public void Bools(string n,bool[] values) { Value(n+".Count",(uint)values.Length); for(int i=0;i<values.Length;i++) Value(n+"["+i.ToString(CultureInfo.InvariantCulture)+"]",values[i]); }
+            public void Bools(string n,bool[] values)
+            {
+                Value(n+".Count",(uint)values.Length);
+                for(int wordIndex=0;wordIndex<(values.Length+63)/64;wordIndex++)
+                {
+                    ulong word=0;
+                    int first=wordIndex*64;
+                    int count=Math.Min(64,values.Length-first);
+                    for(int bit=0;bit<count;bit++) if(values[first+bit]) word|=1UL<<bit;
+                    Value(n+".Words["+wordIndex.ToString(CultureInfo.InvariantCulture)+"]",word);
+                }
+            }
         }
     }
 }

@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
 using Rts.Contracts;
+using Rts.Replay;
 using Battle = Rts.Simulation.Simulation;
 
 namespace Rts.Tests.EditMode
@@ -26,6 +29,15 @@ namespace Rts.Tests.EditMode
                 inputs.Add(new ScheduledInput(++index, InputKind.Resolve, tick - 1, tick, id, id, new[] { Order(revision + 1) }));
             }
             sim.Step(tick, inputs);
+        }
+
+        internal static void AssertCanonicalEqual(DiagnosticState expected, DiagnosticState actual, string context = null)
+        {
+            byte[] expectedBytes=expected.CanonicalState.ToArray();
+            byte[] actualBytes=actual.CanonicalState.ToArray();
+            if(expectedBytes.SequenceEqual(actualBytes)) return;
+            var difference=DiagnosticComparison.First(expected,actual);
+            Assert.Fail((context==null ? string.Empty : context+" ")+(difference==null ? "canonical-state bytes differ" : difference.ToString()));
         }
     }
 }

@@ -198,7 +198,7 @@ namespace Rts.Tests.EditMode
             {
                 cache.Clear(); order.Clear();
                 a.Step(t,Array.Empty<ScheduledInput>()); b.Step(t,Array.Empty<ScheduledInput>());
-                Assert.That(a.CaptureDiagnostic().CanonicalState,Is.EqualTo(b.CaptureDiagnostic().CanonicalState),"tick="+t);
+                CommandTestInput.AssertCanonicalEqual(a.CaptureDiagnostic(),b.CaptureDiagnostic(),"tick="+t);
             }
         }
     }
