@@ -359,5 +359,32 @@ namespace Rts.Tests.EditMode
                 }
             }
         }
+        [TestCase(0, 40)]
+        [TestCase(60, 61)]
+        [TestCase(200, 201)]
+        public void DelayedInterpretedReplyUsesRequestTickForApplyTick(int delay, long expectedApply)
+        {
+            var sim = new Battle(Frozen());
+            var provider = new DelayedPolicyProvider(delay, r => new[] {
+                new PolicyOrder(999, 999, CommandSource.Human, r.Scope, r.Kind, r.Goal, 50, new LossBudget(1000),
+                    new EndCondition(EndKind.UntilReplaced, 0), 0, 0, Array.Empty<PolicyVersion>(), r.StartedTick,
+                    new Expiration(long.MaxValue, DelayedPolicyProvider.DefaultMaxObservationAgeTicks, ExpireFlags.None)) });
+            var gateway = new CommandGateway(sim, provider);
+            gateway.SubmitInterpreted(Intent(North, 1));
+            for (long i = 0; i <= delay; i++) gateway.Step();
+            Assert.That(gateway.Inputs.Last(v => v.Kind == InputKind.Resolve).ApplyTick, Is.EqualTo(expectedApply));
+        }
+        [Test]
+        public void DelayedReplyPastDeadlineIsLoggedOnceAndNeverCarriedForward()
+        {
+            var sim = new Battle(Frozen());
+            var provider = new DelayedPolicyProvider(400, r => Array.Empty<PolicyOrder>());
+            var gateway = new CommandGateway(sim, provider);
+            gateway.SubmitInterpreted(Intent(North, 1));
+            for (int i = 0; i <= 401; i++) gateway.Step();
+            Assert.That(gateway.Inputs.Count(v => v.Kind == InputKind.Resolve), Is.EqualTo(1));
+            Assert.That(gateway.Inputs.Last().ResolutionReason, Is.EqualTo(ReasonCode.Deadline));
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Expired));
+        }
     }
 }

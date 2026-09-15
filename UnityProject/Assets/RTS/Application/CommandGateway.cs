@@ -33,14 +33,16 @@ namespace Rts.Application
             internal ReasonCode Reason;
         }
         private readonly Battle simulation;
+        private readonly IPolicyProvider provider;
         private readonly List<Request> requests = new List<Request>();
         private readonly List<Arrival> arrivals = new List<Arrival>();
         private readonly List<ScheduledInput> log = new List<ScheduledInput>();
         private ulong nextRequest = 1, nextCommand = 1, nextBatch = 1, nextLog = 1;
         private long tick;
-        public CommandGateway(Battle simulation)
+        public CommandGateway(Battle simulation, IPolicyProvider provider = null)
         {
             this.simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
+            this.provider = provider;
             tick = simulation.Capture(1).Tick;
             if (tick != 0) throw new ArgumentException("Attach the gateway at S0.", nameof(simulation));
         }
@@ -79,6 +81,16 @@ namespace Rts.Application
             }).ToArray();
             requests.Add(r);
             arrivals.Add(new Arrival { Request = r, Kind = InputKind.Reserve, Tick = tick, Sequence = r.Sequence });
+            if (!direct && provider != null)
+            {
+                var frame = simulation.Capture(faction);
+                var observation = frame.Observation;
+                // PolicyRequest owns immutable DTO lists, and DelayedPolicyProvider takes a second copy.
+                provider.Request(new PolicyRequest(r.Id, faction, intents[0].Target, tick,
+                    new FactionObservation(observation.FactionId, observation.Tick, observation.OwnArmies.ToArray(),
+                        observation.VisibleEnemies.ToArray(), observation.Contacts.ToArray(), observation.Objectives.ToArray()),
+                    simulation.Versions(intents[0].Target).ToArray(), r.Deadline, intents[0].Kind, intents[0].Goal));
+            }
             return r.Id;
         }
         public void Cancel(ulong requestId)
@@ -108,6 +120,8 @@ namespace Rts.Application
         }
         public IReadOnlyList<ScheduledInput> Step()
         {
+            if (provider != null)
+                foreach (var reply in provider.Poll(tick)) Resolve(reply);
             long next = checked(tick + 1);
             var inputs = new List<ScheduledInput>();
             var reserved = new List<Request>();
@@ -127,7 +141,10 @@ namespace Rts.Application
                 else
                 {
                     ReasonCode reason = a.Reason;
-                    if (!r.Reserved || a.Orders.Length != r.Orders.Length) reason = ReasonCode.InvalidPayload;
+                    // A zero-delay reply can arrive in the same host tick as Reserve.  The input
+                    // ordering below puts Reserve first, so it receives the same confirmed token.
+                    bool reservesNow = arrivals.Any(v => v.Request == r && v.Kind == InputKind.Reserve);
+                    if (reason == ReasonCode.None && ((!r.Reserved && !reservesNow) || a.Orders.Length != r.Orders.Length)) reason = ReasonCode.InvalidPayload;
                     var orders = reason != ReasonCode.None ? Array.Empty<PolicyOrder>() : a.Orders.Select((o, i) =>
                         Copy(o, r.Orders[i].CommandId, r.Batch, r.Orders[i].TargetRevision, r.Orders[i].Parents)).ToArray();
                     Add(inputs, InputKind.Resolve, a.Tick, Math.Max(checked(r.ReceivedTick + 40), next), r, orders, reason);
