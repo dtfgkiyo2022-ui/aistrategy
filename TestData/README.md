@@ -42,3 +42,24 @@ IDは種類ごとのuintで0は無効（中立所有者・セルIDは例外）�
 
 シナリオの読込み・記録・再生は [Headless CLI README](../Headless/Rts.Headless.Cli/README.md) を参照してください。
 `week1-inputs.json` は40tickに軍団1を撤退させる確定入力列です。数値enumと全PolicyOrderフィールドを記述しています。
+
+## 2週目の2経路・40人シナリオ
+
+`week2-2routes.json` は北道z=[88,104)、南道z=[24,40)、接続路x=[16,32)・[224,240)のセル中心判定で、通行不可セルIDを全て明示しています。各陣営は北8・南8・予備2・偵察2、兵士IDは1〜40。配置は設計書5.1章の生成結果を保存し、CLIと再生は保存済みの座標を使います。純C#の `WeekTwoScenario.Create()` も同じ定義を生成します。
+
+北・南軍団のHomeObjectiveは担当拠点（GoalKind.Outpost=2）、予備・偵察は自コアです。仮AIは北・南の道を敵側接続路まで進んでから敵コアへ向かいます。予備は自コア付近で待機し、偵察は自側の北道へ出てから敵側へ前進します。本格AI・増援・霧は後続Issueの範囲です。
+
+軍団で経路とカーソルを共有し、全生存兵が各隊列目標の0.1m以内に入ると次セルへ進みます。隊列番号は初期兵士ID順で固定し、死亡で詰め直しません。通行不可または直線で壁をまたぐ隊列目標は経路セル中心へ縮めます。道のない目標や分断された目標は到達可能なセル中心との距離二乗→セルIDで代替し、Pointの4m・Outpostの占領半径・Coreの射程＋半径を満たせなければImpossible/NoPathとして停止します。境界での移動停止は通行可能側に留めます（正方向は境界の1 Raw手前）。
+
+占領開始tickを1として200tick連続で所有が変わり、完了時は進捗と挑戦者を0に戻します。所有者だけが範囲内にいる間も進捗は0です。表示は `FactionFrame.Objectives`（`Observation.Objectives`と同じ不変リスト）のOwnerFactionId・CapturingFactionId・CaptureTicks・CaptureDurationTicksを参照します。現在は既存の全可視観測を継続しています。
+
+ルール版は `week2-1`。シナリオ／再生バイナリの構造は変更していませんが、旧ルールで記録した再生はルール版不一致として拒否します。1週目のJSONは引き続き記録・再生でき、全セル通行可時の直進移動を維持します。
+
+出力先ディレクトリを用意して、リポジトリ直下で次をそれぞれ別プロセスとして実行します。
+
+```powershell
+dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- record --scenario TestData/week2-2routes.json --out run.rtsreplay --ticks 4000
+dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- replay --in run.rtsreplay --hash-out a.hashes
+dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- replay --in run.rtsreplay --hash-out b.hashes
+dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- compare --left a.hashes --right b.hashes --replay run.rtsreplay
+```

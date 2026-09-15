@@ -1,4 +1,4 @@
-﻿# Headless 記録・再生 CLI（1週目）
+# Headless 記録・再生 CLI
 
 リポジトリ内から .NET 10 SDK で実行します。Unity は不要です。
 
@@ -18,7 +18,7 @@ dotnet run --project Headless/Rts.Headless.Cli -c Release --no-build -- compare 
 [完全な例](../../TestData/week1-inputs.json) は40tickで陣営1・軍団1を撤退させます。
 トップレベルは `ScheduledInput` の配列。各要素に logIndex (uint64)、kind (byte)、acceptedTick / applyTick (int64)、requestId / issuerSequence (uint64)、orders 配列を指定します。orders は Contracts の PolicyOrder と同じ名前・数値enumで全フィールドを表します。parents は `{ "scope": {"factionId":1,"kind":1,"id":0}, "revision":1 }` の配列です。入力は ApplyTick→LogIndex に整列し、LogIndex重複と範囲外tickを拒否します。
 
-1週目の Simulation が実行するのは **Resolve=2 / Proposal=4、軍団単位の Focus=1 / Retreat=3** です。Focusのgoalは Point=1 または敵 Core=3。Reserve=1 / Cancel=3 もバイナリcodecは全フィールドを往復できますが、実行は既存Simulationの制限に従って拒否します。予約・拒否理由の新しい状態機械は後続Issueの範囲です。未対応の制御入力を黙って捨てることはありません。
+Simulation が実行するのは **Resolve=2 / Proposal=4、軍団単位の Focus=1 / Retreat=3** です。Focusのgoalは Point=1、Outpost=2 または敵 Core=3。Reserve=1 / Cancel=3 もバイナリcodecは全フィールドを往復できますが、実行は既存Simulationの制限に従って拒否します。予約・拒否理由の新しい状態機械は後続Issueの範囲です。未対応の制御入力を黙って捨てることはありません。
 
 座標 `point: {"x":80,"z":64}` は整数メートルです。シナリオは既存 `TestData/week1-10v10.json` 形式です。固定小数点の入力は整数のほか `{"raw":5242880}` または `{"numerator":3,"denominator":2}` を許可します。分数はBigIntegerで計算しゼロ方向に切り捨てます。小数JSON数値・float/double経由の変換は使いません。
 
@@ -44,10 +44,16 @@ ScenarioBinaryは schemaVersion、scenarioId、seed、tickRate、verificationTic
 
 正規状態schema=1は uint32版の後に、名前（uint32 UTF-8長＋本文）、byte型タグ、値を順に書きます。タグ1=byte、2=bool、3=int32、4=uint32、5=int64、6=uint64、7=文字列、8=uint32長付きバイト列。名前もハッシュに含めます。
 
-設定/ルール→tick/勝敗→次ID→乱数状態/回数→ID順の兵士→軍団→拠点→コア→陣営→入力カーソル/命令→接触対応→AIメモリの順です。命令はApplyTick→LogIndex→軍団ID。兵士には墓石、攻撃次tick、移動目標、移動量、撤退等のフラグ、兵種パラメータを含めます。Immutableな初期定義はConfig.Hashで覆います。1週目の拠点は静的、独立したAIメモリは空です。全可視観測・フレーム・索引・ダメージ集計バッファは状態から再構築するため除外します。将来の霧・占領・予約状態追加時は正規状態schemaとrulesの互換性を見直します。
+設定/ルール→tick/勝敗→次ID→乱数状態/回数→ID順の兵士→軍団→拠点→コア→陣営→入力カーソル/命令→接触対応→AIメモリの順です。命令はApplyTick→LogIndex→軍団ID。兵士には墓石、攻撃次tick、移動目標、移動量、撤退等のフラグ、兵種パラメータを含めます。Immutableな初期定義はConfig.Hashで覆います。独立したAIメモリは空です。全可視観測・フレーム・索引・ダメージ集計バッファは状態から再構築するため除外します。将来の霧・予約状態追加時は正規状態schemaとrulesの互換性を見直します。
 
 `.hashes` はUTF-8 JSON Lines。先頭にschemaVersion / ReplayHash / ReplayPath / Build、以降にTick / StateHash / EventHash。対応する `.hashes.states` は各tickの int64 tick、uint32長、正規状態を保存します。**比較時には両ファイルを一緒に運びます**。全tickの診断を保存するためディスク量はtick数に比例します。`--dump-dir` は追加で100tickごとのバイナリと読みやすいテキストを出力します。
 
 compareは最初の不一致/欠落tickを見つけ、元の再生ファイルが利用可能な両実行を先頭からそのtickまで再実行します。`<left>.diff/` にt−1/tの再実行結果と両実行の保存済み診断を出し、最初の異なるフィールドパスと左右の整数/Raw値、両ビルド、入力カーソル、乱数状態を表示します。元ファイルが移動した場合は `--replay` を指紋一致で代用できます。診断側のSHAは各hashes値と照合します。過去のビルドを再実行できなくても、保存された当tickの左右の状態があれば比較できます。状態がなければ不足を明記し、値をハッシュから捏造しません。
 
 EventHashは1週目の公開済み終端イベント列を明示的にハッシュ化します。通常戦闘イベント・フェーズ別ハッシュ・不完全ファイルの部分診断再生は今回追加していません。終了欠落は常にコード3です。
+
+## 2経路マップ
+
+同じrecordコマンドのシナリオを `TestData/week2-2routes.json` にすると40人・2経路・占領ありで実行できます。配置・移動・占領の規則と実行例は [TestData README](../../TestData/README.md) を参照してください。FocusのgoalにOutpost=2も指定できます。ルール版はweek2-1で、旧week1-1再生は版不一致として拒否します。1週目のJSONの再記録は引き続き可能です。
+
+正規状態には軍団のPath（セル列）・PathCursor・PathGoal・HasPathGoal・PathImpossible・AutoStage、および拠点のOwnerFactionId・CapturingFaction・CaptureTicksを追加しています。正規状態のフィールド表現はschema=1を継続し、ルール版で互換性を区別します。

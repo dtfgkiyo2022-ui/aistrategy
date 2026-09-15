@@ -9,6 +9,7 @@ namespace Rts.Contracts
         public uint FactionId { get; }
         public IReadOnlyList<RenderUnit> Units { get; }
         public FactionObservation Observation { get; }
+        public IReadOnlyList<KnownObjective> Objectives => Observation.Objectives;
         public IReadOnlyList<CommandView> Commands { get; }
         public IReadOnlyList<GameEvent> Events { get; }
         public FogView Fog { get; }

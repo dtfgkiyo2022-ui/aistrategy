@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
@@ -38,9 +38,19 @@ namespace Rts.Simulation
                     w.Value(n+"Parameters.AttackIntervalTicks",p.Parameters.AttackIntervalTicks); w.Value(n+"Parameters.Speed.Raw",p.Parameters.Speed.Raw); w.Value(n+"Parameters.Vision.Raw",p.Parameters.Vision.Raw); w.Value(n+"Parameters.Range.Raw",p.Parameters.Range.Raw);
                 }
                 w.Value("Armies.Count",(uint)world.Armies.Length);
-                foreach(var a in world.Armies) { string n="Armies["+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",a.Definition.Id); w.Ids(n+"SoldierIds",a.SoldierIds); }
-                // Outposts have no mutable capture state in week one; definitions are covered by Config.Hash.
-                w.Value("Outposts.Count",(uint)world.Config.Outposts.Length);
+                foreach(var a in world.Armies) { string n="Armies["+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",a.Definition.Id); w.Ids(n+"SoldierIds",a.SoldierIds);
+                    w.Value(n+"Path.Count", (uint)a.Path.Length);
+                    for (int i = 0; i < a.Path.Length; i++) w.Value(n+"Path["+i.ToString(CultureInfo.InvariantCulture)+"]", a.Path[i]);
+                    w.Value(n+"PathCursor",a.PathCursor); w.Value(n+"AutoStage",a.AutoStage);
+                    w.Point(n+"PathGoal",a.PathGoal); w.Value(n+"HasPathGoal",a.HasPathGoal); w.Value(n+"PathImpossible",a.PathImpossible);
+                }
+                // Immutable definitions (including formation slots and roles) are covered by Config.Hash.
+                w.Value("Outposts.Count",(uint)world.Outposts.Length);
+                foreach(var o in world.Outposts) {
+                    string n="Outposts["+o.Definition.Id.ToString(CultureInfo.InvariantCulture)+"].";
+                    w.Value(n+"Id",o.Definition.Id); w.Value(n+"OwnerFactionId",o.OwnerFactionId);
+                    w.Value(n+"CapturingFaction",o.CapturingFaction); w.Value(n+"CaptureTicks",o.CaptureTicks);
+                }
                 w.Value("Cores.Count",(uint)world.Cores.Length);
                 foreach(var c in world.Cores) { string n="Cores["+c.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",c.Definition.Id); w.Value(n+"Hp",c.Hp); }
                 w.Value("Factions.Count",(uint)world.Factions.Length);

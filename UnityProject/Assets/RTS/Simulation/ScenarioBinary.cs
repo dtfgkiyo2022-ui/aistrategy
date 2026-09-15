@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text;
 using Rts.Contracts;
@@ -8,7 +8,7 @@ namespace Rts.Simulation
     /// <summary>Explicit week-one scenario binary schema. Also canonicalizes authoring enumeration order.</summary>
     public static class ScenarioBinary
     {
-        public const string RulesVersion = "week1-1";
+        public const string RulesVersion = "week2-1";
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;

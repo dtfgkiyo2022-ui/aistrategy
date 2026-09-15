@@ -110,6 +110,10 @@ namespace Rts.Contracts
         public int Hp { get; }
         public long LastSeenTick { get; }
 
+        public uint CapturingFactionId { get; }
+        public int CaptureTicks { get; }
+        public int CaptureDurationTicks { get; }
+
         public KnownObjective(
             GoalKind kind,
             uint id,
@@ -119,7 +123,15 @@ namespace Rts.Contracts
             bool isHpKnown,
             int hp,
             long lastSeenTick)
+            : this(kind, id, position, isOwnerKnown, ownerFactionId, isHpKnown, hp, lastSeenTick, 0, 0, 0) { }
+
+        public KnownObjective(GoalKind kind, uint id, SimPoint position, bool isOwnerKnown,
+            uint ownerFactionId, bool isHpKnown, int hp, long lastSeenTick,
+            uint capturingFactionId, int captureTicks, int captureDurationTicks)
         {
+            CapturingFactionId = capturingFactionId;
+            CaptureTicks = captureTicks;
+            CaptureDurationTicks = captureDurationTicks;
             Kind = kind;
             Id = id;
             Position = position;
