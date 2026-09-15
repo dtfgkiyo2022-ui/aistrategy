@@ -14,7 +14,6 @@ namespace Rts.Simulation
         private long[] soldierDamage;
         private readonly long[] coreDamage;
         private readonly FactionFrame[] frames = new FactionFrame[2];
-        private readonly FogView fog;
 
         public Simulation(ScenarioDefinition scenario)
         {
@@ -22,9 +21,7 @@ namespace Rts.Simulation
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
-            var cells = new bool[checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells)];
-            Array.Fill(cells, true);
-            fog = new FogView(cells, cells);
+            UpdateVisibility();
             UpdateObservations();
             ResolveVictory();
             PublishFrames();
@@ -46,10 +43,12 @@ namespace Rts.Simulation
                 ComposePolicies();
                 GenerateIntents();
                 Move();
+                UpdateVisibility(); // movement has completed; combat sees this same tick's visibility.
                 Attack();
                 ResolveDeaths();
                 CaptureOutposts();
                 Reinforce();
+                UpdateVisibility(); // Ownership, deaths and newborns also change the published view.
                 UpdateObservations();
                 FinishCommands();
                 ComposePolicies();
@@ -80,10 +79,23 @@ namespace Rts.Simulation
                 var mission = ArmyGoal(a);
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
                     s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
-                var intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                ArmyIntent intent;
+                if (s.Initial.Kind == UnitKind.Scout && a.Policy == PolicyKind.Scout && !returning)
+                {
+                    bool seesEnemy = PolicyDecision.ScoutSeesEnemy(observation, s.Position, s.Parameters.Vision);
+                    if (seesEnemy) s.Pursuit.Returning = true;
+
+                    if (s.Pursuit.Returning)
+                    {
+                        var away = PolicyDecision.ScoutReturn(observation, s.Position, home, s.StepDistance);
+                        intent = new ArmyIntent(a.Definition.Id, away, 0, default, true);
+                    }
+                    else intent = new ArmyIntent(a.Definition.Id, mission, 0, default, false);
+                }
+                else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
                 s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
-                if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout)
-                    s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal);
+                if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
+                    s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal, s.StepDistance);
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
 
@@ -125,14 +137,14 @@ namespace Rts.Simulation
                 if (s.TargetKind == 1)
                 {
                     var enemy = world.Soldiers[target];
-                    if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
+                    if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
                     soldierDamage[target] = checked(soldierDamage[target] + s.Parameters.Damage);
                 }
                 else
                 {
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
-                        || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
+                        || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
                     coreDamage[target] = checked(coreDamage[target] + s.Parameters.Damage);
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
@@ -150,7 +162,13 @@ namespace Rts.Simulation
         private void ResolveDeaths()
         {
             foreach (int i in world.SoldierTraversal)
-                if (world.Soldiers[i].Hp == 0) world.Soldiers[i].Alive = false;
+                if (world.Soldiers[i].Alive && world.Soldiers[i].Hp == 0)
+                {
+                    for (uint f = 1; f <= 2; f++)
+                        if (world.Soldiers[i].Initial.FactionId != f && IsVisibleTo(f, world.Soldiers[i].Position))
+                            world.Factions[f - 1].ContactIds[i] = 0;
+                    world.Soldiers[i].Alive = false;
+                }
         }
 
         private void CaptureOutposts()
@@ -177,7 +195,6 @@ namespace Rts.Simulation
 
         private void UpdateObservations()
         {
-            // No fog in week one. Allocate here (including S0), never from Capture.
             for (int f = 0; f < world.Factions.Length; f++)
             {
                 ref var faction = ref world.Factions[f];
@@ -185,16 +202,62 @@ namespace Rts.Simulation
                 foreach (int i in world.SoldierTraversal)
                 {
                     var s = world.Soldiers[i];
-                    if (!s.Alive) continue;
-                    if (s.Initial.FactionId == faction.Id) faction.AliveCount++;
-                    else if (faction.ContactIds[i] == 0)
+                    if (s.Alive && s.Initial.FactionId == faction.Id) faction.AliveCount++;
+                    if (s.Initial.FactionId == faction.Id) continue;
+                    bool visible = IsVisibleTo(faction.Id, s.Position);
+                    if (s.Alive && visible)
                     {
-                        faction.ContactIds[i] = faction.NextContactId;
-                        faction.NextContactId = checked(faction.NextContactId + 1);
+                        if (faction.ContactIds[i] == 0) { faction.ContactIds[i] = faction.NextContactId; faction.NextContactId = checked(faction.NextContactId + 1); }
+                        faction.ContactPositions[i] = s.Position;
+                        faction.ContactLastSeenTicks[i] = world.Tick;
+                        faction.ContactAbsent[i] = false;
                     }
+                    else if (faction.ContactIds[i] != 0 && IsVisibleTo(faction.Id, faction.ContactPositions[i]))
+                        faction.ContactAbsent[i] = true;
                 }
+                UpdateArmyContacts(ref faction);
             }
-            // TODO: replace all-visible observation with the visibility/memory phase.
+        }
+
+        private void UpdateVisibility()
+        {
+            for (int f = 0; f < world.Factions.Length; f++)
+            {
+                ref var faction = ref world.Factions[f];
+                Array.Clear(faction.VisibleCells, 0, faction.VisibleCells.Length);
+                foreach (int i in world.SoldierTraversal)
+                {
+                    var s = world.Soldiers[i];
+                    if (s.Alive && s.Initial.FactionId == faction.Id) Reveal(faction.VisibleCells, s.Position, s.Parameters.Vision);
+                }
+                var core = world.Cores[faction.CoreId - 1];
+                if (core.Hp > 0) Reveal(faction.VisibleCells, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision);
+                for (int i = 0; i < world.Outposts.Length; i++)
+                    if (world.Outposts[i].OwnerFactionId == faction.Id) Reveal(faction.VisibleCells, world.Outposts[i].Definition.Position, world.Config.Rules.OwnedObjectiveVision);
+                for (int i = 0; i < faction.VisibleCells.Length; i++) if (faction.VisibleCells[i]) faction.ExploredCells[i] = true;
+            }
+        }
+
+        private void Reveal(bool[] visible, SimPoint source, Fix64 radius)
+        {
+            long squared = checked(radius.Raw * radius.Raw);
+            long cellRaw = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
+            int minX = Math.Max(0, checked((int)((source.X.Raw - radius.Raw) / cellRaw) - 2));
+            int maxX = Math.Min(world.Config.Map.WidthCells - 1, checked((int)((source.X.Raw + radius.Raw) / cellRaw) + 2));
+            int minZ = Math.Max(0, checked((int)((source.Z.Raw - radius.Raw) / cellRaw) - 2));
+            int maxZ = Math.Min(world.Config.Map.HeightCells - 1, checked((int)((source.Z.Raw + radius.Raw) / cellRaw) + 2));
+            for (int z = minZ; z <= maxZ; z++) for (int x = minX; x <= maxX; x++)
+            {
+                int cell = z * world.Config.Map.WidthCells + x;
+                var center = world.Map.Center(cell);
+                long dx = checked(source.X.Raw - center.X.Raw), dz = checked(source.Z.Raw - center.Z.Raw);
+                if (checked(dx * dx + dz * dz) <= squared) visible[cell] = true;
+            }
+        }
+        private bool IsVisibleTo(uint faction, SimPoint point)
+        {
+            int cell = world.Map.Cell(point);
+            return cell >= 0 && cell < world.Factions[faction - 1].VisibleCells.Length && world.Factions[faction - 1].VisibleCells[cell];
         }
 
         private void ResolveVictory()
@@ -225,13 +288,14 @@ namespace Rts.Simulation
                     var s = world.Soldiers[i];
                     if (!s.Alive) continue;
                     bool own = s.Initial.FactionId == f;
+                    if (!own && !IsVisibleTo(f, s.Position)) continue;
                     uint id = own ? s.Initial.Id : world.Factions[f - 1].ContactIds[i];
                     units.Add(new RenderUnit(id, own, s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
                         own && s.IsRetreating, own, own ? s.Hp : 0));
                     if (!own)
                     {
                         enemies.Add(new VisibleEnemy(id, s.Position, (byte)s.Initial.Kind));
-                        contacts.Add(new EnemyContact(id, s.Position, world.Tick, 1, 1, true));
+                        contacts.Add(Contact(f, i, true));
                     }
                 }
                 foreach (uint id in world.Factions[f - 1].ArmyIds)
@@ -252,12 +316,13 @@ namespace Rts.Simulation
                 foreach (var faction in world.Factions)
                 {
                     var core = world.Cores[faction.CoreId - 1];
-                    objectives.Add(new KnownObjective(GoalKind.Core, core.Definition.Id, core.Definition.Position,
-                        true, core.Definition.FactionId, true, core.Hp, world.Tick));
+                    objectives.Add(Objective(f, GoalKind.Core, core.Definition.Id, core.Definition.Position, core.Definition.FactionId, core.Hp, 0, 0, 0));
                 }
-                foreach (var outpost in world.Outposts)
-                    objectives.Add(new KnownObjective(GoalKind.Outpost, outpost.Definition.Id, outpost.Definition.Position, true,
-                        outpost.OwnerFactionId, false, 0, world.Tick, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks));
+                for (int oi = 0; oi < world.Outposts.Length; oi++) { var outpost = world.Outposts[oi];
+                    objectives.Add(Objective(f, GoalKind.Outpost, outpost.Definition.Id, outpost.Definition.Position, outpost.OwnerFactionId, 0, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks)); }
+                for (int i = 0; i < world.SoldierCount; i++)
+                    if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
+                AddArmyContacts(f, contacts);
                 foreach (var command in commandStates)
                     if (command.Order.Target.FactionId == f)
                         commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind, command.Order.Goal,
@@ -270,15 +335,89 @@ namespace Rts.Simulation
                 var visibleEvents = new List<GameEvent>();
                 foreach (var e in commandEvents)
                     if ((e.AudienceMask & (1 << ((int)f - 1))) != 0)
-                        visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind, e.AudienceMask,
+                        // The recipient must not learn whether the other faction also saw this event.
+                        visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind, (byte)(1 << ((int)f - 1)),
                             e.Kind == EventKind.Reinforcement && world.Soldiers[e.SubjectId - 1].Initial.FactionId != f
                                 ? world.Factions[f - 1].ContactIds[e.SubjectId - 1] : e.SubjectId,
                             e.CommandId, e.Position, e.Value, e.Reason));
                 foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
-                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents, fog, world.Result,
+                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents,
+                    new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f));
             }
+        }
+
+        private void UpdateArmyContacts(ref FactionState faction)
+        {
+            foreach (int armyIndex in world.ArmyTraversal)
+            {
+                var army = world.Armies[armyIndex];
+                if (army.Definition.FactionId == faction.Id) continue;
+                ref var memory = ref faction.ArmyContacts[armyIndex];
+                var covered = new List<uint>();
+                int visible = 0;
+                SimPoint position = default;
+                foreach (uint id in army.SoldierIds)
+                {
+                    int i = checked((int)id - 1);
+                    uint contact = faction.ContactIds[i];
+                    if (contact == 0) continue;
+                    covered.Add(contact); // Only previously observed individuals, including frozen contacts.
+                    if (!world.Soldiers[i].Alive || !IsVisibleTo(faction.Id, world.Soldiers[i].Position)) continue;
+                    if (visible++ == 0) position = faction.ContactPositions[i];
+                }
+                memory.Visible = visible > 0;
+                if (visible > 0)
+                {
+                    if (memory.Id == 0) { memory.Id = faction.NextArmyContactId; faction.NextArmyContactId = checked(faction.NextArmyContactId + 1); }
+                    memory.Position = position;
+                    memory.LastSeenTick = world.Tick;
+                    memory.Max = checked(((visible + 4) / 5) * 5);
+                    memory.Min = memory.Max - 4;
+                    memory.Absent = false;
+                    memory.Covered = covered.ToArray();
+                }
+                else if (memory.Id != 0)
+                {
+                    // Removal is justified only when every remembered individual was visibly killed.
+                    if (covered.Count == 0) { memory = default; continue; }
+                    if (IsVisibleTo(faction.Id, memory.Position)) memory.Absent = true;
+                }
+            }
+        }
+
+        private void AddArmyContacts(uint faction, List<EnemyContact> contacts)
+        {
+            foreach (var memory in world.Factions[faction - 1].ArmyContacts)
+            {
+                if (memory.Id == 0) continue;
+                long age = world.Tick - memory.LastSeenTick;
+                bool unknown = !memory.Visible && age >= 600;
+                contacts.Add(new EnemyContact(memory.Id, memory.Position, memory.LastSeenTick,
+                    unknown ? -1 : memory.Min, unknown ? -1 : memory.Max, memory.Visible,
+                    memory.Covered, !memory.Visible && age >= 200, unknown, 10, memory.Absent, true));
+            }
+            contacts.Sort((a, b) => { int c = a.IsArmyContact.CompareTo(b.IsArmyContact); return c != 0 ? c : a.ContactId.CompareTo(b.ContactId); });
+        }
+
+        private EnemyContact Contact(uint factionId, int soldierIndex, bool visible)
+        {
+            ref var f = ref world.Factions[factionId - 1];
+            long age = world.Tick - f.ContactLastSeenTicks[soldierIndex];
+            bool unknown = !visible && age >= 600;
+            return new EnemyContact(f.ContactIds[soldierIndex], f.ContactPositions[soldierIndex], f.ContactLastSeenTicks[soldierIndex],
+                unknown ? -1 : 1, unknown ? -1 : 1, visible, null, !visible && age >= 200, unknown, 10, f.ContactAbsent[soldierIndex]);
+        }
+        private KnownObjective Objective(uint factionId, GoalKind kind, uint id, SimPoint position, uint owner, int hp, uint capturing, int captureTicks, int duration)
+        {
+            ref var f = ref world.Factions[factionId - 1]; int index = kind == GoalKind.Core ? checked((int)id - 1) : world.Cores.Length + checked((int)id - 1);
+            bool own = owner == factionId; bool visible = own || IsVisibleTo(factionId, position);
+            ref var memory = ref f.Objectives[index];
+            if (kind == GoalKind.Core) { memory.OwnerKnown = true; memory.OwnerFactionId = owner; }
+            if (visible) { memory.OwnerKnown = true; memory.OwnerFactionId = owner; memory.HpKnown = kind == GoalKind.Core; memory.Hp = hp; memory.LastSeenTick = world.Tick; }
+            return new KnownObjective(kind, id, position, memory.OwnerKnown, memory.OwnerFactionId, memory.HpKnown, memory.Hp, memory.LastSeenTick,
+                visible ? capturing : 0, visible ? captureTicks : 0, visible ? duration : 0);
         }
 
         private static bool SamePoint(SimPoint a, SimPoint b) => a.X == b.X && a.Z == b.Z;

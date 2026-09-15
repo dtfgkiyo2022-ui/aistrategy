@@ -54,8 +54,19 @@ namespace Rts.Contracts
         public int EstimateMin { get; }
         public int EstimateMax { get; }
         public bool IsCurrentlyVisible { get; }
+        /// <summary>Last observation is at least 200 ticks old.</summary>
+        public bool IsUncertain { get; }
+        /// <summary>Last observation is at least 600 ticks old; EstimateMin/Max are -1.</summary>
+        public bool IsStrengthUnknown { get; }
+        /// <summary>Doctrine-only conservative value. It is not an observed estimate.</summary>
+        public int AssumedStrength { get; }
+        /// <summary>The last observed position was revisited and had no matching enemy; this is not confirmed destruction.</summary>
+        public bool IsAbsentAtLastPosition { get; }
         // Aggregate coverage lists observed individual ContactIds only, never hidden army members.
         public IReadOnlyList<uint> CoveredContactIds { get; }
+
+        /// <summary>True for an aggregate; ContactId then belongs to a separate observer-local sequence.</summary>
+        public bool IsArmyContact { get; }
 
         public EnemyContact(
             uint contactId,
@@ -63,7 +74,9 @@ namespace Rts.Contracts
             long lastSeenTick,
             int estimateMin,
             int estimateMax,
-            bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null)
+            bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null,
+            bool isUncertain = false, bool isStrengthUnknown = false, int assumedStrength = 10,
+            bool isAbsentAtLastPosition = false, bool isArmyContact = false)
         {
             ContactId = contactId;
             LastPosition = lastPosition;
@@ -72,6 +85,11 @@ namespace Rts.Contracts
             EstimateMax = estimateMax;
             IsCurrentlyVisible = isCurrentlyVisible;
             CoveredContactIds = ContractList.Copy(coveredContactIds ?? Array.Empty<uint>());
+            IsUncertain = isUncertain;
+            IsStrengthUnknown = isStrengthUnknown;
+            AssumedStrength = assumedStrength;
+            IsAbsentAtLastPosition = isAbsentAtLastPosition;
+            IsArmyContact = isArmyContact;
         }
     }
 

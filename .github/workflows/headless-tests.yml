@@ -12,7 +12,7 @@ jobs:
   test:
     name: Headless (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -24,7 +24,7 @@ jobs:
         with:
           global-json-file: global.json
       - name: Build and test
-        run: dotnet test Headless/Rts.Headless.slnx --configuration Release
+        run: dotnet test Headless/Rts.Headless.slnx --configuration Release --logger "console;verbosity=normal" --blame-hang-timeout 15m
       - name: Record replay
         run: dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- record --scenario TestData/week1-10v10.json --out run.rtsreplay --ticks 1200 --inputs TestData/week1-inputs.json
       - name: Replay in process A

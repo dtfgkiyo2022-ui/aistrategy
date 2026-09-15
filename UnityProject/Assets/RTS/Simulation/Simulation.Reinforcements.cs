@@ -71,9 +71,9 @@ namespace Rts.Simulation
             foreach (int a in world.ArmyTraversal)
                 foreach (uint id in world.Armies[a].SoldierIds) traversal.Add(checked((int)id - 1));
             world.SoldierTraversal = traversal.ToArray();
-            // All cells are currently visible. The observer's own/contact ID is selected when publishing.
+            // Only observers who can see the spawn receive the event.
             commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.Reinforcement,
-                3, nextId - 1, 0, origin, 1, ReasonCode.None));
+                (byte)((faction == 1 || IsVisibleTo(1, position) ? 1 : 0) | (faction == 2 || IsVisibleTo(2, position) ? 2 : 0)), nextId - 1, 0, origin, 1, ReasonCode.None));
         }
 
         private void EnsureSoldierCapacity(int required)
@@ -84,7 +84,13 @@ namespace Rts.Simulation
             if (nextPositions.Length < capacity) Array.Resize(ref nextPositions, capacity);
             if (soldierDamage.Length < capacity) Array.Resize(ref soldierDamage, capacity);
             for (int f = 0; f < world.Factions.Length; f++)
-                if (world.Factions[f].ContactIds.Length < capacity) Array.Resize(ref world.Factions[f].ContactIds, capacity);
+            {
+                ref var observer = ref world.Factions[f];
+                if (observer.ContactIds.Length < capacity) Array.Resize(ref observer.ContactIds, capacity);
+                if (observer.ContactPositions.Length < capacity) Array.Resize(ref observer.ContactPositions, capacity);
+                if (observer.ContactLastSeenTicks.Length < capacity) Array.Resize(ref observer.ContactLastSeenTicks, capacity);
+                if (observer.ContactAbsent.Length < capacity) Array.Resize(ref observer.ContactAbsent, capacity);
+            }
         }
 
         private IReadOnlyList<ReinforcementView> ReinforcementViews(uint faction)

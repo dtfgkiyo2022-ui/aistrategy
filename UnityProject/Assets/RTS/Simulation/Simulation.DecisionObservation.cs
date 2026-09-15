@@ -7,35 +7,13 @@ namespace Rts.Simulation
 {
     public sealed partial class Simulation
     {
-        // Decision's observation boundary. The prototype rendering frame remains omniscient;
-        // neither strategic nor tactical decisions consume that enemy/objective list directly.
+        // Decision receives a new immutable DTO snapshot; it never receives WorldState or a query delegate.
         private readonly FactionObservation[] decisionObservations = new FactionObservation[2];
         private FactionObservation ObserveForDecision(uint faction)
         {
             var frame = frames[faction - 1].Observation;
-            var previous = decisionObservations[faction - 1];
-            var sensors = world.Soldiers.Take(world.SoldierCount).Where(s => s.Alive && s.Initial.FactionId == faction)
-                .Select(s => (Position: s.Position, Radius: s.Parameters.Vision)).ToList();
-            sensors.AddRange(world.Cores.Where(c => c.Definition.FactionId == faction && c.Hp > 0).Select(c => (c.Definition.Position, world.Config.Rules.OwnedObjectiveVision)));
-            sensors.AddRange(world.Outposts.Where(p => p.OwnerFactionId == faction).Select(p => (p.Definition.Position, world.Config.Rules.OwnedObjectiveVision)));
-            bool Visible(SimPoint p) => sensors.Any(s => InRange(s.Position, world.Map.Center(world.Map.Cell(p)), s.Radius));
-            var enemies = frame.VisibleEnemies.Where(e => Visible(e.Position)).ToArray();
-            var contacts = new List<EnemyContact>();
-            if (previous != null)
-                foreach (var contact in previous.Contacts)
-                    if (!enemies.Any(e => e.ContactId == contact.ContactId) && !Visible(contact.LastPosition))
-                        contacts.Add(new EnemyContact(contact.ContactId, contact.LastPosition, contact.LastSeenTick, contact.EstimateMin, contact.EstimateMax, false, contact.CoveredContactIds));
-            contacts.AddRange(frame.Contacts.Where(c => enemies.Any(e => e.ContactId == c.ContactId)));
-            var objectives = frame.Objectives.Select(g => {
-                bool own = g.OwnerFactionId == faction;
-                if (own || Visible(g.Position)) return g;
-                var old = previous == null ? default : previous.Objectives.FirstOrDefault(x => x.Kind == g.Kind && x.Id == g.Id);
-                if (old.Kind == g.Kind && old.Id == g.Id && old.OwnerFactionId != faction) return old;
-                // Core affiliation and all objective positions are public map data; enemy HP/ownership are not.
-                return new KnownObjective(g.Kind, g.Id, g.Position, g.Kind == GoalKind.Core, g.Kind == GoalKind.Core ? g.OwnerFactionId : 0, false, 0, frame.Tick);
-            }).ToArray();
-            return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick, frame.OwnArmies, enemies,
-                contacts.OrderBy(c => c.ContactId).ToArray(), objectives);
+            return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick,
+                frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives);
         }
         private void WriteDecisionObservation(StateWriter w, int faction, string prefix)
         {
@@ -48,6 +26,7 @@ namespace Rts.Simulation
             {
                 var c = o.Contacts[i]; string p = prefix + "Contacts[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "].";
                 w.Value(p + "Id", c.ContactId); w.Point(p + "Position", c.LastPosition); w.Value(p + "LastSeenTick", c.LastSeenTick);
+                w.Value(p + "ArmyContact", c.IsArmyContact); w.Value(p + "Uncertain", c.IsUncertain); w.Value(p + "Unknown", c.IsStrengthUnknown); w.Value(p + "Assumed", c.AssumedStrength); w.Value(p + "Absent", c.IsAbsentAtLastPosition);
                 w.Value(p + "Min", c.EstimateMin); w.Value(p + "Max", c.EstimateMax); w.Value(p + "Visible", c.IsCurrentlyVisible);
                 w.Ids(p + "Covered", (c.CoveredContactIds ?? Array.Empty<uint>()).ToArray());
             }
