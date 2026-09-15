@@ -69,7 +69,7 @@ namespace Rts.Simulation
             if (!ValidScope(s)) return Array.Empty<uint>();
             return world.Armies.Where(a => a.Definition.FactionId == s.FactionId &&
                 (s.Kind == ScopeKind.All || s.Kind == ScopeKind.Army && a.Definition.Id == s.Id ||
-                 s.Kind == ScopeKind.Outpost && (a.Definition.HomeObjective.Kind == GoalKind.Outpost && a.Definition.HomeObjective.Id == s.Id || a.Goal.Kind == GoalKind.Outpost && a.Goal.Id == s.Id)))
+                 s.Kind == ScopeKind.Outpost && (a.Definition.HomeObjective.Kind == GoalKind.Outpost && a.Definition.HomeObjective.Id == s.Id || a.Goal.Kind == GoalKind.Outpost && a.Goal.Id == s.Id || a.Decision.Goal.Kind == GoalKind.Outpost && a.Decision.Goal.Id == s.Id)))
                 .Select(a => a.Definition.Id).OrderBy(id => id).ToArray();
         }
         private bool Overlap(CommandState a, PolicyOrder b)
@@ -90,6 +90,12 @@ namespace Rts.Simulation
             {
                 var armyScope = new ScopeKey(scope.FactionId, ScopeKind.Army, id);
                 if (!scopes.Contains(armyScope)) scopes.Add(armyScope);
+                var mission = world.Armies[id - 1].Decision.Goal;
+                if (mission.Kind == GoalKind.Outpost)
+                {
+                    var missionScope = new ScopeKey(scope.FactionId, ScopeKind.Outpost, mission.Id);
+                    if (!scopes.Contains(missionScope)) scopes.Add(missionScope);
+                }
                 foreach (var c in commandStates)
                     if (!Terminal(c) && c.Status == CommandStatus.Executing && c.Order.Target.Kind == ScopeKind.Outpost &&
                         c.Armies.Any(a => a.ArmyId == id && a.Active) && !scopes.Contains(c.Order.Target)) scopes.Add(c.Order.Target);
@@ -170,7 +176,12 @@ namespace Rts.Simulation
             if (Terminal(c)) return;
             bool waiting = c.Status != CommandStatus.Executing;
             c.Status = status; c.Reason = reason;
-            foreach (var a in c.Armies) a.Active = false;
+            foreach (var a in c.Armies)
+            {
+                a.Active = false;
+                if (!waiting && Combat(c.Order))
+                    world.Armies[a.ArmyId - 1].AutoStartIds = world.Armies[a.ArmyId - 1].SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
+            }
             if (c.Acquired && ValidScope(c.Order.Target))
             {
                 // A superseded token still releases a revision, but must not revoke its human successor.
@@ -303,7 +314,6 @@ namespace Rts.Simulation
                 var soldiers = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).ToArray();
                 if (soldiers.Length == 0) return ReasonCode.EmptyArmy;
                 any = true;
-                if (o.Kind != PolicyKind.Focus && o.Kind != PolicyKind.Retreat) continue;
                 var goal = Destination(o);
                 var radius = o.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius :
                     o.Goal.Kind == GoalKind.Core && o.Kind == PolicyKind.Focus ? world.Config.Rules.CoreRadius + world.Soldiers[soldiers[0] - 1].Parameters.Range : Fix64.FromInt(4);
@@ -364,6 +374,11 @@ namespace Rts.Simulation
             {
                 uint[] ids = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).OrderBy(s => s).ToArray();
                 
+                if (Combat(o))
+                {
+                    world.Armies[id - 1].Decision.Returning = false;
+                    world.Armies[id - 1].Decision.InferiorSince = 0;
+                }
                 c.Armies.Add(new ArmyExecution { ArmyId = id, StartIds = ids, N0 = ids.Length });
             }
             Notice(c, ReasonCode.None);
@@ -375,7 +390,7 @@ namespace Rts.Simulation
             {
                 uint armyId = world.Armies[index].Definition.Id;
                 var selected = commandStates.Where(c => c.Status == CommandStatus.Executing &&
-                    (c.Order.Kind == PolicyKind.Focus || c.Order.Kind == PolicyKind.Retreat) && c.Armies.Any(e => e.ArmyId == armyId && e.Active && !e.Finished))
+                    Combat(c.Order) && c.Armies.Any(e => e.ArmyId == armyId && e.Active && !e.Finished))
                     .OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 ref var a = ref world.Armies[index];
                 var policy = selected == null ? (lossReturns.Contains(armyId) ? PolicyKind.Retreat : (PolicyKind)0) : selected.Order.Kind;
@@ -400,7 +415,9 @@ namespace Rts.Simulation
             {
                 var army = world.Armies[id - 1];
                 var goal = world.Cores[world.Factions[army.Definition.FactionId - 1].CoreId - 1].Definition.Position;
-                return army.SoldierIds.Where(s => world.Soldiers[s - 1].Alive).All(s => InRange(world.Soldiers[s - 1].Position, goal, Fix64.FromInt(4)));
+                bool arrived = army.SoldierIds.Where(s => world.Soldiers[s - 1].Alive).All(s => InRange(world.Soldiers[s - 1].Position, goal, Fix64.FromInt(4)));
+                if (arrived) HoldArmy(id);
+                return arrived;
             });
             foreach (var c in commandStates)
             {
@@ -413,6 +430,7 @@ namespace Rts.Simulation
                 bool complete = true, loss = false;
                 foreach (var a in c.Armies.Where(a => a.Active))
                 {
+                    if (a.Finished) continue;
                     a.Deaths = a.StartIds.Count(id => !world.Soldiers[id - 1].Alive);
                     var live = world.Armies[a.ArmyId - 1].SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
                     if (Combat(c.Order) && live.Length == 0)
@@ -423,19 +441,21 @@ namespace Rts.Simulation
                     }
                     bool reached = a.N0 > 0 && 1000L * a.Deaths >= (long)c.Order.AllowedLoss.Permille * a.N0;
                     loss |= reached;
-                    if (reached && (c.Order.Kind == PolicyKind.Focus || c.Order.Kind == PolicyKind.Retreat) && c.Order.End.Kind != EndKind.LossReached) a.Returning = true;
+                    if (reached && Combat(c.Order) && c.Order.End.Kind != EndKind.LossReached) a.Returning = true;
                     var goal = a.Returning ? world.Cores[world.Factions[c.Order.Target.FactionId - 1].CoreId - 1].Definition.Position : Destination(c.Order);
                     bool arrived = live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, goal, Fix64.FromInt(4)));
                     a.Finished = a.Returning ? arrived : c.Order.End.Kind == EndKind.Arrived ? arrived :
                         c.Order.End.Kind == EndKind.AtTick ? world.Tick >= c.Order.End.Tick :
                         c.Order.End.Kind == EndKind.LossReached ? reached :
-                        c.Order.End.Kind == EndKind.ObjectiveOwned && c.Order.Goal.Kind == GoalKind.Outpost && world.Outposts[c.Order.Goal.Id - 1].OwnerFactionId == c.Order.Target.FactionId;
+                        (c.Order.End.Kind == EndKind.ObjectiveOwned || c.Order.Kind == PolicyKind.Focus) && c.Order.Goal.Kind == GoalKind.Outpost && world.Outposts[c.Order.Goal.Id - 1].OwnerFactionId == c.Order.Target.FactionId;
                     if (a.Finished && reached && c.Order.End.Kind == EndKind.LossReached &&
-                        (c.Order.Kind == PolicyKind.Focus || c.Order.Kind == PolicyKind.Retreat) && !lossReturns.Contains(a.ArmyId)) lossReturns.Add(a.ArmyId);
+                        Combat(c.Order) && !lossReturns.Contains(a.ArmyId)) lossReturns.Add(a.ArmyId);
+                    if (a.Finished && (a.Returning || c.Order.Kind == PolicyKind.Retreat))
+                        HoldArmy(a.ArmyId);
                     complete &= a.Finished;
                 }
                 if (c.Armies.Any(a => a.Failed) && c.Armies.All(a => a.Failed || !a.Active || a.Finished)) EndCommand(c, CommandStatus.Impossible, ReasonCode.EmptyArmy);
-                else if ((c.Armies.Count != 0 && complete) || c.Order.End.Kind == EndKind.AtTick && world.Tick >= c.Order.End.Tick)
+                else if ((c.Armies.Count != 0 && complete) || c.Order.End.Kind == EndKind.AtTick && world.Tick >= c.Order.End.Tick && !c.Armies.Any(a => a.Returning && !a.Finished))
                     EndCommand(c, CommandStatus.Completed, loss ? ReasonCode.LossLimit : ReasonCode.None);
             }
         }

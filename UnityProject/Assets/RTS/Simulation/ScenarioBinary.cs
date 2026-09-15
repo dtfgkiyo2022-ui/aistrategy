@@ -8,7 +8,7 @@ namespace Rts.Simulation
     /// <summary>Explicit week-one scenario binary schema. Also canonicalizes authoring enumeration order.</summary>
     public static class ScenarioBinary
     {
-        public const string RulesVersion = "week2-command-2";
+        public const string RulesVersion = "week2-policy-3";
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;

@@ -11,6 +11,7 @@ namespace Rts.Simulation
         internal int Hp;
         internal bool Alive, IsMoving, IsAttacking, IsRetreating;
         internal long NextAttackTick;
+        internal PursuitMemory Pursuit;
         internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core
         internal uint TargetId;
         internal UnitParameters Parameters;
@@ -20,6 +21,8 @@ namespace Rts.Simulation
     internal struct ArmyState
     {
         internal ArmyDefinition Definition;
+        internal ArmyDecisionMemory Decision;
+        internal uint[] AutoStartIds;
         internal uint[] SoldierIds;
         internal int[] Path;
         internal int PathCursor, AutoStage;
@@ -109,7 +112,7 @@ namespace Rts.Simulation
                     var ids = new System.Collections.Generic.List<uint>();
                     for (int i = 0; i < Soldiers.Length; i++)
                         if (Soldiers[i].Initial.ArmyId == id) { ids.Add((uint)i + 1); soldiers.Add(i); }
-                    Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), Path = Array.Empty<int>() };
+                    Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), AutoStartIds = ids.FindAll(id => Soldiers[id - 1].Alive).ToArray(), Path = Array.Empty<int>() };
                     armies.Add((int)id - 1);
                 }
             }

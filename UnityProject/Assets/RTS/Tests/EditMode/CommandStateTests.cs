@@ -180,12 +180,12 @@ namespace Rts.Tests.EditMode
             Assert.That(h.View(a).Status, Is.EqualTo(CommandStatus.Cancelled)); Assert.That(h.View(b).Status, Is.EqualTo(CommandStatus.Cancelled));
         }
         [TestCase(PolicyKind.AllowAbandon)] [TestCase(PolicyKind.MaintainReserve)] [TestCase(PolicyKind.Defend)] [TestCase(PolicyKind.Scout)]
-        public void DeferredTacticsPoliciesAreHeldWithoutReplacingMovement(PolicyKind kind)
+        public void CatalogPoliciesAreHeldAndMovementPoliciesAreComposed(PolicyKind kind)
         {
             var h = new Harness(); var scope = kind == PolicyKind.AllowAbandon ? Outpost : kind == PolicyKind.MaintainReserve ? All : kind == PolicyKind.Scout ? new ScopeKey(1, ScopeKind.Army, 4) : North;
             var o = h.Human(scope, kind);
             Assert.That(h.View(o).Status, Is.EqualTo(CommandStatus.Executing));
-            Assert.That(h.Field("Commands[Army=1].Policy"), Is.EqualTo("0"));
+            Assert.That(h.Field("Commands[Army=1].Policy"), Is.EqualTo(kind == PolicyKind.Defend ? "5" : "0"));
         }
         [Test]
         public void AllDeadIsImpossibleRatherThanVacuousArrival()

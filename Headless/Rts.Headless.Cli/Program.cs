@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -134,13 +134,18 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "record"=>new[]{"--scenario","--out","--ticks","--inputs","--enemy-preset"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
             if(args[0]=="record")
             {
                 var scenario=JsonInput.Scenario(Required("--scenario"));
                 var inputs=options.TryGetValue("--inputs",out var path)?JsonSerializer.Deserialize<ScheduledInput[]>(File.ReadAllText(path),JsonInput.Options) ?? throw new InvalidDataException("Null inputs."):Array.Empty<ScheduledInput>();
+                if (options.TryGetValue("--enemy-preset", out var preset))
+                {
+                    if (inputs.Length != 0) throw new InvalidDataException("Use either --enemy-preset or --inputs; preset proposals can also be included in an input log.");
+                    inputs = PolicyPresets.InitialInputs(scenario, preset);
+                }
                 long ticks=long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture);
                 using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build);
                 Console.WriteLine("Recorded S0..S"+result.LastTick); return result.IsFault?4:0;

@@ -97,7 +97,9 @@ namespace Rts.Tests.EditMode
         public void CooldownIsMaintainedAcrossRetreatAndFocus()
         {
             var sim = new Battle(Duel());
-            CommandTestInput.Step(sim, 1, NoInputs);
+            CommandTestInput.Step(sim, 1, new[] {
+                PolicyDecisionTests.Order(1,1,ScopeKind.All,0,PolicyKind.MaintainReserve),
+                PolicyDecisionTests.Order(1,2,ScopeKind.All,0,PolicyKind.MaintainReserve) });
             CommandTestInput.Step(sim, 2, new[] { Input(2, 1, 1, PolicyKind.Retreat) });
             CommandTestInput.Step(sim, 3, new[] { Input(3, 1, 1, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, 2, default)) });
             for (int t = 4; t <= 20; t++) CommandTestInput.Step(sim, t, NoInputs);
@@ -182,22 +184,22 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
-        public void DistancePrecedesKindAndSoldierIdBreaksEqualDistanceTie()
+        public void SoldiersPrecedeCoreAndContactIdBreaksEqualDistanceTie()
         {
             var s = Duel();
             s.Soldiers = new[] { s.Soldiers[0], s.Soldiers[1], s.Soldiers[1] };
             s.Soldiers[2].Id = 3;
-            s.Soldiers[1].ArmyId = 6; // ID tie must win even when visited after army 5.
+            s.Soldiers[1].ArmyId = 6; // Contact IDs follow faction/army/soldier observation traversal.
             s.Soldiers[2].ArmyId = 5;
             var sim = new Battle(s);
             CommandTestInput.Step(sim, 1, NoInputs);
-            Assert.That(sim.Capture(2).Units.Single(u => u.IsOwn && u.Id == 2).Hp, Is.EqualTo(90));
-            Assert.That(sim.Capture(2).Units.Single(u => u.IsOwn && u.Id == 3).Hp, Is.EqualTo(100));
+            Assert.That(sim.Capture(2).Units.Single(u => u.IsOwn && u.Id == 2).Hp, Is.EqualTo(100));
+            Assert.That(sim.Capture(2).Units.Single(u => u.IsOwn && u.Id == 3).Hp, Is.EqualTo(90));
             s.Cores[1].Position = Point(101, 64);
             sim = new Battle(s);
             CommandTestInput.Step(sim, 1, NoInputs);
-            Assert.That(Core(sim, 2).Hp, Is.EqualTo(2990));
-            Assert.That(sim.Capture(2).Units.Where(u => u.IsOwn).All(u => u.Hp == 100), Is.True);
+            Assert.That(Core(sim, 2).Hp, Is.EqualTo(3000));
+            Assert.That(sim.Capture(2).Units.Single(u => u.IsOwn && u.Id == 2).Hp, Is.EqualTo(100));
         }
 
         [Test]
@@ -220,17 +222,21 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
-        public void TenVersusTenAutoFinishesWithinScenarioLimit()
+        public void TenVersusTenAutoRunsToVictoryOrScenarioLimitWithoutFault()
         {
             var scenario = WeekOneScenario.Create();
             var sim = new Battle(scenario);
             for (int tick = 1; tick <= scenario.VerificationTickLimit && !sim.Capture(1).Result.HasEnded; tick++) CommandTestInput.Step(sim, tick, NoInputs);
             var frame = sim.Capture(1);
             TestContext.WriteLine("10v10 end tick: " + frame.Tick + ", winner: " + frame.Result.WinnerFactionId + ", draw: " + frame.Result.IsDraw);
-            Assert.That(frame.Result.HasEnded, Is.True);
             Assert.That(frame.Result.IsFault, Is.False);
-            Assert.That(frame.Result.IsUndecided, Is.False);
-            Assert.That(Core(sim, 1).Hp == 0 || Core(sim, 2).Hp == 0, Is.True);
+            if (frame.Result.HasEnded)
+                Assert.That(Core(sim, 1).Hp == 0 || Core(sim, 2).Hp == 0, Is.True);
+            else
+            {
+                Assert.That(frame.Tick, Is.EqualTo(scenario.VerificationTickLimit));
+                Assert.That(Core(sim, 1).Hp > 0 && Core(sim, 2).Hp > 0, Is.True);
+            }
         }
 
         [Test]

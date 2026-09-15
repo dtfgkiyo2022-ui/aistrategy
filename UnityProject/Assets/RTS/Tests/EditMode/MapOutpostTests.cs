@@ -126,7 +126,10 @@ namespace Rts.Tests.EditMode
         {
             var s = CaptureScenario(140); s.Soldiers[0].Hp = 10; s.UnitParameters[0].Damage = 10;
             var sim = new Battle(s);
-            CommandTestInput.Step(sim, 1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
+            CommandTestInput.Step(sim, 1, new[] {
+                PolicyDecisionTests.Order(1,1,ScopeKind.All,0,PolicyKind.MaintainReserve),
+                PolicyDecisionTests.Order(1,2,ScopeKind.All,0,PolicyKind.MaintainReserve),
+                Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
                 Focus(1, 2, 5, new PolicyGoal(GoalKind.Outpost, 1, default)) });
             bool westProgress = false, switched = false;
             for (int t = 2; t <= 250; t++)
@@ -142,15 +145,22 @@ namespace Rts.Tests.EditMode
         [Test]
         public void ArmyPathsReachEnemyCoreThroughBothTurns()
         {
-            var s = WeekTwoScenario.Create();
-            s.UnitParameters[0].Damage = s.UnitParameters[1].Damage = 0;
-            var sim = new Battle(s); Step(sim, 1, 4500);
             foreach (uint faction in new uint[] { 1, 2 })
-                foreach (var a in sim.Capture(faction).Observation.OwnArmies.Where(a => a.Id % 4 != 3))
+            {
+                var s = WeekTwoScenario.Create();
+                s.UnitParameters[0].Damage = s.UnitParameters[1].Damage = 0;
+                s.Soldiers = s.Soldiers.Where(p => p.FactionId == faction).ToArray();
+                for (int i = 0; i < s.Soldiers.Length; i++) s.Soldiers[i].Id = (uint)i + 1;
+                var sim = new Battle(s);
+                CommandTestInput.Step(sim, 1, new[] { PolicyDecisionTests.Order(1, faction, ScopeKind.All, 0, PolicyKind.MaintainReserve) });
+                CommandTestInput.Step(sim, 2, new[] { PolicyDecisionTests.Order(2, faction, ScopeKind.All, 0, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, 3-faction, default)) });
+                Step(sim, 3, 4500);
+                foreach (var a in sim.Capture(faction).Observation.OwnArmies)
                 {
                     Assert.That(Math.Abs(a.Position.X.Raw - Fix64.FromInt(faction == 1 ? 232 : 24).Raw), Is.LessThan(Fix64.FromInt(6).Raw), "army " + a.Id);
                     Assert.That(Math.Abs(a.Position.Z.Raw - Fix64.FromInt(64).Raw), Is.LessThan(Fix64.FromInt(6).Raw), "army " + a.Id);
                 }
+            }
         }
 
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -186,12 +196,12 @@ namespace Rts.Tests.EditMode
         [Test]
         public void UnchangedGoalReusesOneArmyPathAndFrameAliasIsImmutable()
         {
-            var sim = new Battle(WeekTwoScenario.Create()); CommandTestInput.Step(sim, 1, None);
+            var sim = new Battle(WeekTwoScenario.Create()); Step(sim, 1, 20);
             var armies = States(sim, "Armies"); var field = armies.GetValue(0).GetType().GetField("Path", Hidden);
             object path = field.GetValue(armies.GetValue(0));
-            Step(sim, 2, 50);
+            Step(sim, 21, 50);
             Assert.That(field.GetValue(armies.GetValue(0)), Is.SameAs(path));
-            CommandTestInput.Step(sim, 51, new[] { Focus(51, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)) });
+            CommandTestInput.Step(sim, 51, new[] { PolicyDecisionTests.Order(51, 1, ScopeKind.Army, 1, PolicyKind.Defend, new PolicyGoal(GoalKind.Outpost, 1, default)) });
             Assert.That(field.GetValue(armies.GetValue(0)), Is.Not.SameAs(path));
             var frame = sim.Capture(1);
             Assert.That(frame.Objectives, Is.SameAs(frame.Observation.Objectives));
@@ -259,7 +269,7 @@ namespace Rts.Tests.EditMode
                     Assert.That(grid.IsPassable(grid.Cell((SimPoint)position.GetValue(soldiers.GetValue(i)))), Is.True, "tick=" + tick + " id=" + (i + 1));
                 Assert.That(sim.Capture(1).Result.IsFault, Is.False);
             }
-            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 1).Position.X, Is.GreaterThan(Fix64.FromInt(80)));
+            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.X, Is.GreaterThan(Fix64.FromInt(80)));
             Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.Z, Is.LessThan(Fix64.FromInt(40)));
             Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 3).Position.X, Is.LessThan(Fix64.FromInt(32)));
         }

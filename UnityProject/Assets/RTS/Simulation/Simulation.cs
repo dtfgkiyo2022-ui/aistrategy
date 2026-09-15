@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
+using Rts.Decision;
 
 namespace Rts.Simulation
 {
@@ -40,6 +41,8 @@ namespace Rts.Simulation
                 ApplyInputs(inputs);
                 ApplyPendingCommands();
                 ComposePolicies();
+                DecideArmies();
+                ComposePolicies();
                 GenerateIntents();
                 Move();
                 Attack();
@@ -69,37 +72,21 @@ namespace Rts.Simulation
                 s.TargetId = 0;
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
-                s.IsRetreating = a.Policy == PolicyKind.Retreat;
                 uint faction = s.Initial.FactionId;
-                uint coreId = world.Factions[s.IsRetreating ? faction - 1 : 2 - faction].CoreId;
-                s.MoveGoal = world.Cores[coreId - 1].Definition.Position;
-                if (a.Policy == PolicyKind.Focus || s.IsRetreating && a.Goal.Kind != GoalKind.None)
-                    s.MoveGoal = GoalPosition(a.Goal);
-                if (s.IsRetreating) continue;
-
-                // Candidates come from the previous tick's faction observation, never enemy HP/policies.
                 var observation = frames[faction - 1].Observation;
-                BigInteger best = 0;
-                foreach (var enemy in observation.VisibleEnemies)
-                {
-                    uint id = InternalSoldierId(faction, enemy.ContactId);
-                    Consider(ref s, enemy.Position, s.Parameters.Range, 1, id, ref best);
-                }
-                foreach (var objective in observation.Objectives)
-                    if (objective.Kind == GoalKind.Core && objective.OwnerFactionId != faction && objective.Hp > 0)
-                        Consider(ref s, objective.Position, s.Parameters.Range + world.Config.Rules.CoreRadius, 2, objective.Id, ref best);
-            }
-        }
+                var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+                bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
+                var mission = ArmyGoal(a);
+                var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
+                    s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
+                var intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
+                if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout)
+                    s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal);
+                if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
+                else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
 
-        private static void Consider(ref SoldierState s, SimPoint position, Fix64 range, byte kind, uint id, ref BigInteger best)
-        {
-            BigInteger distance = DistanceSquared(s.Position, position);
-            if (distance > new BigInteger(range.Raw) * range.Raw) return;
-            if (s.TargetKind != 0 && (distance > best || (distance == best
-                && (kind > s.TargetKind || (kind == s.TargetKind && id >= s.TargetId))))) return;
-            best = distance;
-            s.TargetKind = kind;
-            s.TargetId = id;
+            }
         }
 
         private uint InternalSoldierId(uint faction, uint contactId)
