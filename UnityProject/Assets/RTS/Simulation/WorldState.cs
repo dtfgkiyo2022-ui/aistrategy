@@ -60,6 +60,19 @@ namespace Rts.Simulation
         internal int AliveCount;
         internal uint NextContactId;
         internal uint[] ContactIds; // soldier ID - 1 -> local contact ID; never exported
+        internal SimPoint[] ContactPositions;
+        internal long[] ContactLastSeenTicks;
+        internal bool[] ContactAbsent;
+        internal bool[] VisibleCells, ExploredCells;
+        internal ObjectiveMemory[] Objectives;
+    }
+
+    internal struct ObjectiveMemory
+    {
+        internal bool OwnerKnown, HpKnown;
+        internal uint OwnerFactionId;
+        internal int Hp;
+        internal long LastSeenTick;
     }
 
     internal sealed class WorldState
@@ -114,8 +127,12 @@ namespace Rts.Simulation
             for (int f = 0; f < 2; f++)
             {
                 var d = Config.Factions[f];
+                int cellCount = checked(Config.Map.WidthCells * Config.Map.HeightCells);
                 Factions[f] = new FactionState { Id = d.Id, CoreId = d.CoreId, ArmyIds = d.ArmyIds,
-                    ContactIds = new uint[Soldiers.Length], NextContactId = 1 };
+                    ContactIds = new uint[Soldiers.Length], ContactPositions = new SimPoint[Soldiers.Length],
+                    ContactLastSeenTicks = new long[Soldiers.Length], ContactAbsent = new bool[Soldiers.Length],
+                    VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
+                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1 };
                 foreach (uint id in d.ArmyIds)
                 {
                     var ids = new System.Collections.Generic.List<uint>();

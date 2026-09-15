@@ -54,6 +54,14 @@ namespace Rts.Contracts
         public int EstimateMin { get; }
         public int EstimateMax { get; }
         public bool IsCurrentlyVisible { get; }
+        /// <summary>Last observation is older than 200 ticks.</summary>
+        public bool IsUncertain { get; }
+        /// <summary>Last observation is older than 600 ticks; EstimateMin/Max are -1.</summary>
+        public bool IsStrengthUnknown { get; }
+        /// <summary>Doctrine-only conservative value. It is not an observed estimate.</summary>
+        public int AssumedStrength { get; }
+        /// <summary>The last observed position is currently visible and has no matching enemy.</summary>
+        public bool IsAbsentAtLastPosition { get; }
         // Aggregate coverage lists observed individual ContactIds only, never hidden army members.
         public IReadOnlyList<uint> CoveredContactIds { get; }
 
@@ -63,7 +71,9 @@ namespace Rts.Contracts
             long lastSeenTick,
             int estimateMin,
             int estimateMax,
-            bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null)
+            bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null,
+            bool isUncertain = false, bool isStrengthUnknown = false, int assumedStrength = 10,
+            bool isAbsentAtLastPosition = false)
         {
             ContactId = contactId;
             LastPosition = lastPosition;
@@ -72,6 +82,10 @@ namespace Rts.Contracts
             EstimateMax = estimateMax;
             IsCurrentlyVisible = isCurrentlyVisible;
             CoveredContactIds = ContractList.Copy(coveredContactIds ?? Array.Empty<uint>());
+            IsUncertain = isUncertain;
+            IsStrengthUnknown = isStrengthUnknown;
+            AssumedStrength = assumedStrength;
+            IsAbsentAtLastPosition = isAbsentAtLastPosition;
         }
     }
 
