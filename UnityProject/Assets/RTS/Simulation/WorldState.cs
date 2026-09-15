@@ -23,7 +23,7 @@ namespace Rts.Simulation
         internal uint[] SoldierIds;
         internal PolicyKind Policy;
         internal PolicyGoal Goal;
-        internal ulong CommandId;
+        internal ulong CommandId, LogIndex;
         internal long AcceptedTick, ApplyTick;
     }
 
