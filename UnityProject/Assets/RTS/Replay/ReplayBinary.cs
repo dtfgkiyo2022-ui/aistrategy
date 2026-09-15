@@ -38,8 +38,9 @@ namespace Rts.Replay
         public long TickLimit;
         public byte[] Scenario=Array.Empty<byte>();
         public BuildIdentity Build=new BuildIdentity();
-        internal byte[] Encode()=>ReplayBinary.Pack(w=> { ReplayBinary.Text(w,RulesVersion); w.Write(TickRateHz); w.Write(Seed); w.Write(TickLimit); w.Write((uint)Scenario.Length); w.Write(Scenario); Build.Write(w); });
-        internal static ReplayHeader Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>new ReplayHeader { RulesVersion=ReplayBinary.Text(r),TickRateHz=r.ReadInt32(),Seed=r.ReadUInt64(),TickLimit=r.ReadInt64(),Scenario=ReplayBinary.Bytes(r,ReplayBinary.Count(r,ReplayBinary.MaxRecord)),Build=BuildIdentity.Read(r) });
+        public string WestPreset="none", EastPreset="none";
+        internal byte[] Encode()=>ReplayBinary.Pack(w=> { ReplayBinary.Text(w,RulesVersion); w.Write(TickRateHz); w.Write(Seed); w.Write(TickLimit); w.Write((uint)Scenario.Length); w.Write(Scenario); Build.Write(w); ReplayBinary.Text(w,WestPreset); ReplayBinary.Text(w,EastPreset); });
+        internal static ReplayHeader Decode(byte[] b,uint schema)=>ReplayBinary.Unpack(b,r=>new ReplayHeader { RulesVersion=ReplayBinary.Text(r),TickRateHz=r.ReadInt32(),Seed=r.ReadUInt64(),TickLimit=r.ReadInt64(),Scenario=ReplayBinary.Bytes(r,ReplayBinary.Count(r,ReplayBinary.MaxRecord)),Build=BuildIdentity.Read(r),WestPreset=schema>=3?ReplayBinary.Text(r):"none",EastPreset=schema>=3?ReplayBinary.Text(r):"none" });
     }
     public enum ReplayRecordKind:byte { Input=1, TickHash=2, DiagnosticCheckpoint=3, End=4, CommandResults=5 }
     public sealed class ReplayRecord
@@ -58,7 +59,7 @@ namespace Rts.Replay
         {
             writer=new BinaryWriter(stream,Encoding.UTF8,true);
             byte[] b=header.Encode(); if(b.Length>ReplayBinary.MaxRecord)throw new InvalidDataException("Header size.");
-            writer.Write(Encoding.ASCII.GetBytes("RTSRPL01")); writer.Write(2U); writer.Write((uint)b.Length); writer.Write(b);
+            writer.Write(Encoding.ASCII.GetBytes("RTSRPL01")); writer.Write(3U); writer.Write((uint)b.Length); writer.Write(b);
         }
         public void Write(ReplayRecord record)
         {
@@ -79,8 +80,8 @@ namespace Rts.Replay
         {
             reader=new BinaryReader(stream,Encoding.UTF8,true);
             if(!ReplayBinary.Bytes(reader,8).SequenceEqual(Encoding.ASCII.GetBytes("RTSRPL01")))throw new InvalidDataException("Replay Magic mismatch.");
-            if(reader.ReadUInt32()!=2)throw new InvalidDataException("Unknown replay schemaVersion.");
-            Header=ReplayHeader.Decode(ReplayBinary.Bytes(reader,ReplayBinary.Count(reader,ReplayBinary.MaxRecord)));
+            uint schema=reader.ReadUInt32(); if(schema!=2 && schema!=3)throw new InvalidDataException("Unknown replay schemaVersion.");
+            Header=ReplayHeader.Decode(ReplayBinary.Bytes(reader,ReplayBinary.Count(reader,ReplayBinary.MaxRecord)),schema);
             if(Header.TickRateHz<=0 || Header.TickLimit<0 || Header.TickLimit>10000000)throw new InvalidDataException("Header tick limits.");
         }
         public ReplayRecord Read()

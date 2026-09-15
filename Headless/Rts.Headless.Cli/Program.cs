@@ -146,12 +146,10 @@ internal static class Program
                 if (options.ContainsKey("--west-preset") || eastPreset != null)
                 {
                     if (inputs.Length != 0) throw new InvalidDataException("Use either presets or --inputs; preset proposals can also be included in an input log.");
-                    inputs = (options.TryGetValue("--west-preset", out var west) ? PolicyPresets.InitialInputs(scenario, west, 1) : Array.Empty<ScheduledInput>())
-                        .Concat(eastPreset != null ? PolicyPresets.InitialInputs(scenario, eastPreset, 2) : Array.Empty<ScheduledInput>())
-                        .OrderBy(i => i.AcceptedTick).ThenBy(i => i.LogIndex).ToArray();
+                    inputs = PolicyPresets.RecordedInputs(scenario, options.GetValueOrDefault("--west-preset") ?? "none", eastPreset ?? "none", long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture));
                 }
                 long ticks=long.Parse(Required("--ticks"),System.Globalization.CultureInfo.InvariantCulture);
-                using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build);
+                using var output=File.Create(Required("--out")); var result=ReplayRunner.Record(output,scenario,inputs,ticks,build,null,options.GetValueOrDefault("--west-preset") ?? "none",eastPreset ?? "none");
                 Console.WriteLine("Recorded S0..S"+result.LastTick); return result.IsFault?4:0;
             }
             if(args[0]=="replay")return Replay(Required("--in"),Required("--hash-out"),options.GetValueOrDefault("--dump-dir"),build,options.ContainsKey("--allow-build-mismatch"));
