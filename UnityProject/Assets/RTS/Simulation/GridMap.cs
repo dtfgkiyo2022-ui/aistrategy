@@ -11,6 +11,53 @@ namespace Rts.Simulation
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
+        // Derived from immutable terrain only. FIFO eviction changes cost, never route choices.
+        private readonly Dictionary<int, int[]> routes = new Dictionary<int, int[]>();
+        private readonly Queue<int> routeOrder = new Queue<int>();
+        public int[] SharedRoute(int start, SimPoint goal)
+        {
+            if (!IsPassable(start)) return Array.Empty<int>();
+            int target = Cell(goal);
+            if (!IsPassable(target))
+            {
+                target = -1;
+                BigInteger best = 0;
+                for (int i = 0; i < passable.Length; i++)
+                    if (passable[i])
+                    {
+                        var d = Distance(Center(i), goal);
+                        if (target < 0 || d < best) { target = i; best = d; }
+                    }
+            }
+            if (target < 0) return Array.Empty<int>();
+            if (!routes.TryGetValue(target, out var next))
+            {
+                // One reverse BFS per destination, shared by all soldiers. At most 8192 cells.
+                next = new int[passable.Length]; Array.Fill(next, -1);
+                var queue = new int[passable.Length]; int head = 0, tail = 0;
+                queue[tail++] = target; next[target] = target;
+                while (head < tail)
+                {
+                    int id = queue[head++], x = id % width, z = id / width;
+                    Visit(z + 1 < height ? id + width : -1, id);
+                    Visit(x + 1 < width ? id + 1 : -1, id);
+                    Visit(z > 0 ? id - width : -1, id);
+                    Visit(x > 0 ? id - 1 : -1, id);
+                }
+                void Visit(int cell, int parent)
+                {
+                    if (!IsPassable(cell) || next[cell] >= 0) return;
+                    next[cell] = parent; queue[tail++] = cell;
+                }
+                if (routeOrder.Count == 16) routes.Remove(routeOrder.Dequeue());
+                routes.Add(target, next); routeOrder.Enqueue(target);
+            }
+            if (next[start] < 0) return Array.Empty<int>();
+            var path = new List<int>();
+            for (int cell = start; ; cell = next[cell])
+            { path.Add(cell); if (cell == target) break; }
+            return path.ToArray();
+        }
         public GridMap(MapDefinition map)
         {
             width = map.WidthCells; height = map.HeightCells;
