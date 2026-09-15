@@ -16,6 +16,10 @@ namespace Rts.Simulation
         internal uint TargetId;
         internal UnitParameters Parameters;
         internal Fix64 StepDistance;
+        internal bool Joining, TacticalRoute;
+        internal int[] LocalPath;
+        internal int LocalCursor, JoinCursor;
+        internal SimPoint LocalGoal;
     }
 
     internal struct ArmyState
