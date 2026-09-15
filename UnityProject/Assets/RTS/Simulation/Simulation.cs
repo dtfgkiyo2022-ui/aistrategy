@@ -72,9 +72,10 @@ namespace Rts.Simulation
                     if (order.Kind != PolicyKind.Focus) throw new ArgumentException("Unsupported week-one policy.", nameof(inputs));
                     if (order.Goal.Kind == GoalKind.Point)
                         WorldState.ValidatePoint(order.Goal.Point, world.Config.Map);
+                    else if (order.Goal.Kind == GoalKind.Outpost && order.Goal.Id > 0 && order.Goal.Id <= world.Outposts.Length) { }
                     else if (order.Goal.Kind != GoalKind.Core || order.Goal.Id == 0 || order.Goal.Id > world.Cores.Length
                         || world.Cores[order.Goal.Id - 1].Definition.FactionId == order.Target.FactionId)
-                        throw new ArgumentException("Focus requires a point or enemy core.", nameof(inputs));
+                        throw new ArgumentException("Focus requires a point, outpost or enemy core.", nameof(inputs));
                 }
             }
         }
@@ -88,6 +89,8 @@ namespace Rts.Simulation
                 foreach (var order in input.Orders)
                 {
                     ref var a = ref world.Armies[order.Target.Id - 1];
+                    if (a.Policy != order.Kind || a.Goal.Kind != order.Goal.Kind || a.Goal.Id != order.Goal.Id || !SamePoint(a.Goal.Point, order.Goal.Point))
+                        a.HasPathGoal = false;
                     a.Policy = order.Kind;
                     a.Goal = order.Goal;
                     a.CommandId = order.CommandId;
@@ -113,7 +116,7 @@ namespace Rts.Simulation
                 uint coreId = world.Factions[s.IsRetreating ? faction - 1 : 2 - faction].CoreId;
                 s.MoveGoal = world.Cores[coreId - 1].Definition.Position;
                 if (a.Policy == PolicyKind.Focus)
-                    s.MoveGoal = a.Goal.Kind == GoalKind.Point ? a.Goal.Point : world.Cores[a.Goal.Id - 1].Definition.Position;
+                    s.MoveGoal = GoalPosition(a.Goal);
                 if (s.IsRetreating) continue;
 
                 // Candidates come from the previous tick's faction observation, never enemy HP/policies.
@@ -150,10 +153,11 @@ namespace Rts.Simulation
 
         private void Move()
         {
+            if (world.Config.Map.BlockedCellIds.Length != 0 || !world.Config.Map.DefaultPassable) PrepareArmyPaths();
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                nextPositions[i] = s.Alive ? FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance) : s.Position;
+                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance)) : s.Position;
             }
             foreach (int i in world.SoldierTraversal)
             {
@@ -203,7 +207,26 @@ namespace Rts.Simulation
                 if (world.Soldiers[i].Hp == 0) world.Soldiers[i].Alive = false;
         }
 
-        private void CaptureOutposts() { /* TODO: capture after deaths, in the later objective issue. */ }
+        private void CaptureOutposts()
+        {
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                ref var o = ref world.Outposts[i];
+                int mask = 0;
+                foreach (int soldier in world.SoldierTraversal)
+                {
+                    var s = world.Soldiers[soldier];
+                    if (s.Alive && s.Initial.Kind == UnitKind.Infantry && InRange(s.Position, o.Definition.Position, world.Config.Rules.CaptureRadius))
+                        mask |= 1 << ((int)s.Initial.FactionId - 1);
+                }
+                uint challenger = mask == 1 ? 1U : mask == 2 ? 2U : 0U;
+                if (challenger == 0 || challenger == o.OwnerFactionId) { o.CapturingFaction = 0; o.CaptureTicks = 0; continue; }
+                if (o.CapturingFaction != challenger) { o.CapturingFaction = challenger; o.CaptureTicks = 0; }
+                o.CaptureTicks++;
+                if (o.CaptureTicks >= world.Config.Rules.CaptureDurationTicks)
+                { o.OwnerFactionId = challenger; o.CapturingFaction = 0; o.CaptureTicks = 0; }
+            }
+        }
         private void Reinforce() { /* TODO: new soldiers do not act in their birth tick. */ }
 
         private void UpdateObservations()
@@ -279,7 +302,7 @@ namespace Rts.Simulation
                     }
                     armies.Add(new OwnArmyView(id, f, kind, position, count, a.Definition.HomeObjective));
                     if (a.Policy != 0) commands.Add(new CommandView(a.CommandId, new ScopeKey(f, ScopeKind.Army, id),
-                        a.Policy, CommandStatus.Executing, a.AcceptedTick, a.ApplyTick, ReasonCode.None));
+                        a.Policy, a.PathImpossible ? CommandStatus.Impossible : CommandStatus.Executing, a.AcceptedTick, a.ApplyTick, a.PathImpossible ? ReasonCode.NoPath : ReasonCode.None));
                 }
                 foreach (var faction in world.Factions)
                 {
@@ -287,9 +310,9 @@ namespace Rts.Simulation
                     objectives.Add(new KnownObjective(GoalKind.Core, core.Definition.Id, core.Definition.Position,
                         true, core.Definition.FactionId, true, core.Hp, world.Tick));
                 }
-                foreach (var outpost in world.Config.Outposts)
-                    objectives.Add(new KnownObjective(GoalKind.Outpost, outpost.Id, outpost.Position, true,
-                        outpost.OwnerFactionId, false, 0, world.Tick));
+                foreach (var outpost in world.Outposts)
+                    objectives.Add(new KnownObjective(GoalKind.Outpost, outpost.Definition.Id, outpost.Definition.Position, true,
+                        outpost.OwnerFactionId, false, 0, world.Tick, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks));
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,

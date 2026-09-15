@@ -21,10 +21,21 @@ namespace Rts.Simulation
     {
         internal ArmyDefinition Definition;
         internal uint[] SoldierIds;
+        internal int[] Path;
+        internal int PathCursor, AutoStage;
+        internal SimPoint PathGoal;
+        internal bool HasPathGoal, PathImpossible;
         internal PolicyKind Policy;
         internal PolicyGoal Goal;
         internal ulong CommandId, LogIndex;
         internal long AcceptedTick, ApplyTick;
+    }
+
+    internal struct OutpostState
+    {
+        internal OutpostDefinition Definition;
+        internal uint OwnerFactionId, CapturingFaction;
+        internal int CaptureTicks;
     }
 
     internal struct CoreState
@@ -48,6 +59,8 @@ namespace Rts.Simulation
         internal readonly SoldierState[] Soldiers;
         internal readonly ArmyState[] Armies;
         internal readonly CoreState[] Cores;
+        internal readonly OutpostState[] Outposts;
+        internal readonly GridMap Map;
         internal readonly FactionState[] Factions;
         internal readonly int[] SoldierTraversal;
         internal readonly int[] ArmyTraversal;
@@ -60,6 +73,10 @@ namespace Rts.Simulation
         internal WorldState(ScenarioDefinition source)
         {
             Config = CopyAndValidate(source);
+            Map = new GridMap(Config.Map);
+            Outposts = new OutpostState[Config.Outposts.Length];
+            for (int i = 0; i < Outposts.Length; i++)
+                Outposts[i] = new OutpostState { Definition = Config.Outposts[i], OwnerFactionId = Config.Outposts[i].OwnerFactionId };
             CombatRandom = new SplitMix64(Config.Seed);
             AiRandom = new SplitMix64(Config.Seed);
             Soldiers = new SoldierState[Config.Soldiers.Length];
@@ -92,7 +109,7 @@ namespace Rts.Simulation
                     var ids = new System.Collections.Generic.List<uint>();
                     for (int i = 0; i < Soldiers.Length; i++)
                         if (Soldiers[i].Initial.ArmyId == id) { ids.Add((uint)i + 1); soldiers.Add(i); }
-                    Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray() };
+                    Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), Path = Array.Empty<int>() };
                     armies.Add((int)id - 1);
                 }
             }
@@ -110,7 +127,10 @@ namespace Rts.Simulation
                 && m.CellSizeMeters > 0 && m.WidthCells > 0 && m.HeightCells > 0
                 && (long)m.WidthCells * m.CellSizeMeters == m.WidthMeters
                 && (long)m.HeightCells * m.CellSizeMeters == m.HeightMeters, "Invalid map dimensions.");
-            Require(m.DefaultPassable && m.BlockedCellIds != null && m.BlockedCellIds.Length == 0, "Week one requires an entirely passable map.");
+            Require(m.BlockedCellIds != null && (long)m.WidthCells * m.HeightCells <= 8192, "Invalid grid.");
+            var blocked = Copy(m.BlockedCellIds); Array.Sort(blocked);
+            for (int i = 0; i < blocked.Length; i++)
+                Require(blocked[i] >= 0 && blocked[i] < m.WidthCells * m.HeightCells && (i == 0 || blocked[i] != blocked[i - 1]), "Invalid blocked cell.");
             var r = s.Rules;
             Require(r.FactionCap > 0 && r.CoreRadius.Raw >= 0 && r.CoreRadius <= Fix64.FromInt(1024)
                 && r.OwnedObjectiveVision.Raw >= 0 && r.CaptureRadius.Raw >= 0
@@ -119,7 +139,7 @@ namespace Rts.Simulation
             var c = new ScenarioDefinition { SchemaVersion = s.SchemaVersion, ScenarioId = s.ScenarioId, Seed = s.Seed,
                 TickRateHz = s.TickRateHz, VerificationTickLimit = s.VerificationTickLimit,
                 Map = new MapDefinition { WidthMeters = m.WidthMeters, HeightMeters = m.HeightMeters,
-                    CellSizeMeters = m.CellSizeMeters, WidthCells = m.WidthCells, HeightCells = m.HeightCells },
+                    CellSizeMeters = m.CellSizeMeters, WidthCells = m.WidthCells, HeightCells = m.HeightCells, DefaultPassable = m.DefaultPassable, BlockedCellIds = blocked },
                 Rules = new RuleDefinition { FactionCap = r.FactionCap, CoreRadius = r.CoreRadius,
                     OwnedObjectiveVision = r.OwnedObjectiveVision, CaptureRadius = r.CaptureRadius,
                     CaptureDurationTicks = r.CaptureDurationTicks, CoreReinforcementIntervalTicks = r.CoreReinforcementIntervalTicks,
@@ -173,9 +193,11 @@ namespace Rts.Simulation
             {
                 var d = c.Armies[i];
                 Require(d.Id == i + 1 && assigned[i] && d.Role != null && d.Capacity > 0
-                    && d.HomeObjective.Kind == GoalKind.Core && d.HomeObjective.Id == c.Factions[d.FactionId - 1].CoreId,
+                    && ((d.HomeObjective.Kind == GoalKind.Core && d.HomeObjective.Id == c.Factions[d.FactionId - 1].CoreId)
+                    || (d.HomeObjective.Kind == GoalKind.Outpost && d.HomeObjective.Id > 0 && d.HomeObjective.Id <= c.Outposts.Length)),
                     "Invalid week-one army.");
             }
+            var grid = new GridMap(c.Map);
             var armyCounts = new int[c.Armies.Length];
             var factionCounts = new int[2];
             for (int i = 0; i < c.Soldiers.Length; i++)
@@ -186,6 +208,7 @@ namespace Rts.Simulation
                 var p = Array.Find(c.UnitParameters, value => value.Kind == d.Kind);
                 Require(p.Hp > 0 && d.Hp >= 0 && d.Hp <= p.Hp && d.Alive == (d.Hp > 0), "Invalid soldier HP or kind.");
                 ValidatePoint(d.Position, c.Map);
+                Require(grid.IsPassable(grid.Cell(d.Position)), "Soldier starts outside passable terrain.");
                 if (d.Alive)
                 {
                     Require(++armyCounts[d.ArmyId - 1] <= c.Armies[d.ArmyId - 1].Capacity

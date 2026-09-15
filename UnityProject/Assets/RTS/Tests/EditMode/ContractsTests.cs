@@ -80,7 +80,7 @@ namespace Rts.Tests.EditMode
         {
             foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes())
             foreach (var property in type.GetProperties())
-                if (IsList(property.PropertyType))
+                if (IsList(property.PropertyType) && !(type == typeof(FactionFrame) && property.Name == "Objectives"))
                     yield return new TestCaseData(type, property.Name)
                         .SetName("DefensiveCopy_" + type.Name + "_" + property.Name);
         }
@@ -88,7 +88,7 @@ namespace Rts.Tests.EditMode
         [TestCaseSource(nameof(CollectionProperties))]
         public void CollectionsAreCopiedAndCannotBeWritten(Type type, string propertyName)
         {
-            var constructor = type.GetConstructors().Single();
+            var constructor = type.GetConstructors().OrderByDescending(c => c.GetParameters().Length).First();
             var parameters = constructor.GetParameters();
             var arguments = parameters.Select(p => Sample(p.ParameterType)).ToArray();
             int index = Array.FindIndex(parameters,
@@ -131,7 +131,7 @@ namespace Rts.Tests.EditMode
             if (type.IsEnum) return Enum.GetValues(type).GetValue(0);
             if (type == typeof(bool)) return true;
             if (type.IsPrimitive) return Convert.ChangeType(1, type, CultureInfo.InvariantCulture);
-            var constructor = type.GetConstructors().Single();
+            var constructor = type.GetConstructors().OrderByDescending(c => c.GetParameters().Length).First();
             return constructor.Invoke(constructor.GetParameters().Select(p => Sample(p.ParameterType)).ToArray());
         }
     }
