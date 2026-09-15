@@ -17,6 +17,7 @@
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ReinforcementTests.cs" Link="Tests/ReinforcementTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DeterminismSourceTests.cs" Link="Tests/DeterminismSourceTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CommandStateTests.cs" Link="Tests/CommandStateTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CommandTestInput.cs" Link="Tests/CommandTestInput.cs" />

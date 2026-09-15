@@ -200,7 +200,9 @@ namespace Rts.Tests.EditMode
         [Test]
         public void StartIdsAndDenominatorDoNotGrowWithReinforcement()
         {
-            var h = new Harness(); var o = h.Human(North, end: EndKind.LossReached, loss: 500);
+            var scenario = Frozen();
+            scenario.Armies[2].Capacity = 2; // Core fallback fills north after its reserve is full.
+            var h = new Harness(scenario); var o = h.Human(North, end: EndKind.LossReached, loss: 500);
             string prefix = "CommandStates[" + o.CommandId + "].Armies[1].";
             int n0 = int.Parse(h.Field(prefix + "N0"));
             const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -208,8 +210,9 @@ namespace Rts.Tests.EditMode
             var armies = (Array)world.GetType().GetField("Armies", flags).GetValue(world);
             object army = armies.GetValue(0); var idsField = army.GetType().GetField("SoldierIds", flags);
             uint[] ids = (uint[])idsField.GetValue(army);
-            var other = armies.GetValue(1); uint[] reinforcement = (uint[])idsField.GetValue(other);
-            idsField.SetValue(army, ids.Concat(reinforcement).ToArray()); armies.SetValue(army, 0);
+            h.Until(100);
+            Assert.That(h.Sim.Capture(1).Events.Any(e => e.Kind == EventKind.Reinforcement), Is.True);
+            Assert.That(((uint[])idsField.GetValue(armies.GetValue(0))).Length, Is.EqualTo(ids.Length + 1));
             var soldiers = (Array)world.GetType().GetField("Soldiers", flags).GetValue(world);
             for (int i=0;i<(n0+1)/2;i++)
             {

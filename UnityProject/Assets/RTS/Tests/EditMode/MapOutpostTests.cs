@@ -25,6 +25,7 @@ namespace Rts.Tests.EditMode
         {
             var s = WeekTwoScenario.Create();
             s.UnitParameters[0].Damage = 0;
+            s.Rules.CoreReinforcementIntervalTicks = s.Rules.OutpostReinforcementIntervalTicks = int.MaxValue;
             s.Soldiers = new[] { s.Soldiers[0], s.Soldiers[20] };
             s.Soldiers[0].Position = P(128, 96);
             s.Soldiers[1].Id = 2; s.Soldiers[1].Position = P(enemyX, 96);
@@ -149,6 +150,7 @@ namespace Rts.Tests.EditMode
             {
                 var s = WeekTwoScenario.Create();
                 s.UnitParameters[0].Damage = s.UnitParameters[1].Damage = 0;
+                s.Rules.CoreReinforcementIntervalTicks = s.Rules.OutpostReinforcementIntervalTicks = int.MaxValue;
                 s.Soldiers = s.Soldiers.Where(p => p.FactionId == faction).ToArray();
                 for (int i = 0; i < s.Soldiers.Length; i++) s.Soldiers[i].Id = (uint)i + 1;
                 var sim = new Battle(s);

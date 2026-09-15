@@ -25,9 +25,10 @@ namespace Rts.Simulation
                 w.Value("NextSoldierId",world.NextSoldierId); w.Value("NextArmyId",world.NextArmyId); w.Value("NextCoreId",world.NextCoreId); w.Value("NextOutpostId",world.NextOutpostId); w.Value("NextFactionId",world.NextFactionId);
                 w.Value("CombatRandom.State",world.CombatRandom.State); w.Value("CombatRandom.CallCount",world.CombatRandom.CallCount);
                 w.Value("AiRandom.State",world.AiRandom.State); w.Value("AiRandom.CallCount",world.AiRandom.CallCount);
-                w.Value("Soldiers.Count",(uint)world.Soldiers.Length);
-                foreach(var p in world.Soldiers)
+                w.Value("Soldiers.Count",(uint)world.SoldierCount);
+                for (int i = 0; i < world.SoldierCount; i++)
                 {
+                    var p = world.Soldiers[i];
                     string n="Soldiers["+p.Initial.Id.ToString(CultureInfo.InvariantCulture)+"].";
                     w.Value(n+"Id",p.Initial.Id); w.Value(n+"FactionId",p.Initial.FactionId); w.Value(n+"ArmyId",p.Initial.ArmyId); w.Value(n+"Kind",(byte)p.Initial.Kind);
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
@@ -49,10 +50,10 @@ namespace Rts.Simulation
                 foreach(var o in world.Outposts) {
                     string n="Outposts["+o.Definition.Id.ToString(CultureInfo.InvariantCulture)+"].";
                     w.Value(n+"Id",o.Definition.Id); w.Value(n+"OwnerFactionId",o.OwnerFactionId);
-                    w.Value(n+"CapturingFaction",o.CapturingFaction); w.Value(n+"CaptureTicks",o.CaptureTicks);
+                    w.Value(n+"CapturingFaction",o.CapturingFaction); w.Value(n+"CaptureTicks",o.CaptureTicks); w.Value(n+"NextReinforcementTick",o.NextReinforcementTick);
                 }
                 w.Value("Cores.Count",(uint)world.Cores.Length);
-                foreach(var c in world.Cores) { string n="Cores["+c.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",c.Definition.Id); w.Value(n+"Hp",c.Hp); }
+                foreach(var c in world.Cores) { string n="Cores["+c.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",c.Definition.Id); w.Value(n+"Hp",c.Hp); w.Value(n+"NextReinforcementTick",c.NextReinforcementTick); }
                 w.Value("Factions.Count",(uint)world.Factions.Length);
                 foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds); }
                 w.Value("Inputs.Cursor",world.InputCursor);
@@ -61,7 +62,7 @@ namespace Rts.Simulation
                 var orders=(ArmyState[])world.Armies.Clone();
                 Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });
                 foreach(var a in orders) { string n="Commands[Army="+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Policy",(byte)a.Policy); w.Goal(n+"Goal",a.Goal); w.Value(n+"CommandId",a.CommandId); w.Value(n+"AcceptedTick",a.AcceptedTick); w.Value(n+"ApplyTick",a.ApplyTick); w.Value(n+"LogIndex",a.LogIndex); }
-                foreach(var f in world.Factions) { string n="Observations["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds); }
+                foreach(var f in world.Factions) { string n="Observations["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds,world.SoldierCount); }
                 WriteDecision(w);
                 return new DiagnosticState(world.Tick,s.ToArray());
             }
@@ -81,7 +82,8 @@ namespace Rts.Simulation
             public void Blob(string n,byte[] v) { Name(n,8); Write((uint)v.Length); Write(v); }
             public void Point(string n,SimPoint p) { Value(n+".X.Raw",p.X.Raw); Value(n+".Z.Raw",p.Z.Raw); }
             public void Goal(string n,PolicyGoal g) { Value(n+".Kind",(byte)g.Kind); Value(n+".Id",g.Id); Point(n+".Point",g.Point); }
-            public void Ids(string n,uint[] ids) { Value(n+".Count",(uint)ids.Length); for(int i=0;i<ids.Length;i++)Value(n+"["+i.ToString(CultureInfo.InvariantCulture)+"]",ids[i]); }
+            public void Ids(string n,uint[] ids) => Ids(n,ids,ids.Length);
+            public void Ids(string n,uint[] ids,int count) { Value(n+".Count",(uint)count); for(int i=0;i<count;i++)Value(n+"["+i.ToString(CultureInfo.InvariantCulture)+"]",ids[i]); }
         }
     }
 }
