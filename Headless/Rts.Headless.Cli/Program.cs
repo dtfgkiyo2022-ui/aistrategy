@@ -24,6 +24,10 @@ internal static class JsonInput
         o.Converters.Add(new ValueConverter<EndCondition>(e=>new EndCondition(Get<EndKind>(e,"kind",o),Get<long>(e,"tick",o))));
         o.Converters.Add(new ValueConverter<PolicyVersion>(e=>new PolicyVersion(Get<ScopeKey>(e,"scope",o),Get<ulong>(e,"revision",o))));
         o.Converters.Add(new ValueConverter<Expiration>(e=>new Expiration(Get<long>(e,"validUntilTick",o),Get<int>(e,"maxObservationAgeTicks",o),Get<ExpireFlags>(e,"flags",o))));
+        o.Converters.Add(new ValueConverter<ScheduledInput>(e => new ScheduledInput(
+            Get<ulong>(e,"logIndex",o), Get<InputKind>(e,"kind",o), Get<long>(e,"acceptedTick",o), Get<long>(e,"applyTick",o),
+            Get<ulong>(e,"requestId",o), Get<ulong>(e,"issuerSequence",o), Get<PolicyOrder[]>(e,"orders",o),
+            e.TryGetProperty("deadlineTick",out var deadline) ? deadline.GetInt64() : long.MaxValue, Get<ReasonCode>(e,"resolutionReason",o))));
         return o;
     }
     private static T Get<T>(JsonElement e,string name,JsonSerializerOptions o)=>e.TryGetProperty(name,out var value)?value.Deserialize<T>(o):default;

@@ -38,9 +38,9 @@ namespace Rts.Tests.EditMode
         {
             foreach(InputKind kind in Enum.GetValues(typeof(InputKind)))
             {
-                var source=Input(2); var input=new ScheduledInput(source.LogIndex,kind,source.AcceptedTick,source.ApplyTick,source.RequestId,source.IssuerSequence,source.Orders);
+                var source=Input(2); var input=new ScheduledInput(source.LogIndex,kind,source.AcceptedTick,source.ApplyTick,source.RequestId,source.IssuerSequence,source.Orders,123,ReasonCode.Deadline);
                 var bytes=InputBinary.Encode(input); var copy=InputBinary.Decode(bytes);
-                Assert.That(InputBinary.Encode(copy),Is.EqualTo(bytes)); Assert.That(copy.Kind,Is.EqualTo(kind)); Assert.That(copy.Orders[0].Parents[0].Revision,Is.EqualTo(3)); Assert.That(copy.Orders[0].Expiration.Flags,Is.EqualTo(ExpireFlags.SubjectGone|ExpireFlags.ObservationTooOld));
+                Assert.That(InputBinary.Encode(copy),Is.EqualTo(bytes)); Assert.That(copy.Kind,Is.EqualTo(kind)); Assert.That(copy.DeadlineTick,Is.EqualTo(123)); Assert.That(copy.ResolutionReason,Is.EqualTo(ReasonCode.Deadline)); Assert.That(copy.Orders[0].Parents[0].Revision,Is.EqualTo(3)); Assert.That(copy.Orders[0].Expiration.Flags,Is.EqualTo(ExpireFlags.SubjectGone|ExpireFlags.ObservationTooOld));
             }
         }
         [TestCase("NextAttackTick",123L)]

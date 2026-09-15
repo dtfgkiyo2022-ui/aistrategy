@@ -25,9 +25,9 @@ namespace Rts.Application
             if(source==null)throw new InvalidDataException("Missing input collection.");
             var supplied=source.ToArray();
             if(supplied.Any(v=>v==null || v.Orders.Any(o=>o==null)))throw new InvalidDataException("Null input/order.");
-            var inputs=supplied.OrderBy(v=>v.ApplyTick).ThenBy(v=>v.LogIndex).ToArray();
+            var inputs=supplied.OrderBy(v=>v.AcceptedTick).ThenBy(v=>v.LogIndex).ToArray();
             var indices=new HashSet<ulong>();
-            foreach(var i in inputs) if(i.ApplyTick<1 || i.ApplyTick>ticks || !indices.Add(i.LogIndex))throw new InvalidDataException("Input tick or duplicate LogIndex.");
+            foreach(var i in inputs) if(i.AcceptedTick<0 || i.AcceptedTick>=ticks || i.ApplyTick<=i.AcceptedTick || !indices.Add(i.LogIndex))throw new InvalidDataException("Input tick or duplicate LogIndex.");
             var header=new ReplayHeader { RulesVersion=ScenarioBinary.RulesVersion,TickRateHz=scenario.TickRateHz,Seed=scenario.Seed,TickLimit=ticks,Scenario=bytes,Build=build };
             using(var writer=new ReplayWriter(output,header))
             {
@@ -35,14 +35,15 @@ namespace Rts.Application
                 for(long tick=0;tick<=ticks;tick++)
                 {
                     var batch=new List<ScheduledInput>();
-                    while(cursor<inputs.Length && inputs[cursor].ApplyTick==tick)
+                    while(cursor<inputs.Length && inputs[cursor].AcceptedTick+1==tick)
                     {
                         var input=inputs[cursor++]; byte[] payload=InputBinary.Encode(input); InputBinary.Decode(payload);
                         writer.Write(new ReplayRecord(ReplayRecordKind.Input,tick,input.LogIndex,payload)); batch.Add(input); lastIndex=input.LogIndex;
                     }
                     if(tick>0)sim.Step(tick,batch);
-                    var state=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(state.CanonicalState), events=DiagnosticComparison.EventHash(sim.Capture(1));
+                    var state=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(state.CanonicalState), events=ReplayBinary.Hash(DiagnosticComparison.EventHash(sim.Capture(1)).Concat(DiagnosticComparison.EventHash(sim.Capture(2))));
                     writer.Write(new ReplayRecord(ReplayRecordKind.TickHash,tick,lastIndex,hash.Concat(events).ToArray()));
+                    writer.Write(new ReplayRecord(ReplayRecordKind.CommandResults,tick,lastIndex,CommandResults(sim)));
                     if(tick%100==0)writer.Write(new ReplayRecord(ReplayRecordKind.DiagnosticCheckpoint,tick,lastIndex,state.CanonicalState.ToArray()));
                     capture?.Invoke(state,hash,events); outcome.LastTick=tick; outcome.IsFault=sim.Capture(1).Result.IsFault;
                     if(sim.Capture(1).Result.HasEnded)break;
@@ -51,6 +52,22 @@ namespace Rts.Application
                 return outcome;
             }
         }
+        private static byte[] CommandResults(Battle sim) => ReplayBinary.Pack(w =>
+        {
+            for(uint faction=1;faction<=2;faction++)
+            {
+                var frame=sim.Capture(faction);
+                w.Write((uint)frame.Commands.Count);
+                foreach(var c in frame.Commands)
+                {
+                    w.Write(c.CommandId); w.Write(sim.ExecutionRevision(c.CommandId)); w.Write((byte)c.Status); w.Write((byte)c.Reason);
+                    w.Write(c.AcceptedTick); w.Write(c.ApplyTick);
+                }
+                w.Write((uint)frame.Events.Count);
+                foreach(var e in frame.Events)
+                { w.Write(e.CommandId); w.Write((byte)e.Kind); w.Write(e.Value); w.Write((byte)e.Reason); }
+            }
+        });
         public static ReplayOutcome Replay(Stream input,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,bool allowBuildMismatch=false)
         {
             using(var reader=new ReplayReader(input))
@@ -61,27 +78,34 @@ namespace Rts.Application
                 var scenario=ScenarioBinary.Decode(h.Scenario);
                 if(scenario.Seed!=h.Seed || scenario.TickRateHz!=h.TickRateHz || h.TickLimit>scenario.VerificationTickLimit)throw new InvalidDataException("Scenario/header mismatch.");
                 var sim=new Battle(scenario); var result=new ReplayOutcome(); var batch=new List<ScheduledInput>(); var indices=new HashSet<ulong>();
-                long nextTick=0; ulong lastIndex=0; bool checkpointDue=false; bool terminal=false; DiagnosticState lastState=null;
+                long nextTick=0; ulong lastIndex=0; bool resultsDue=false; bool checkpointDue=false; bool terminal=false; DiagnosticState lastState=null;
                 while(true)
                 {
                     var r=reader.Read();
                     if(r==null)throw new InvalidDataException("Missing End.");
-                    if(checkpointDue && r.Kind!=ReplayRecordKind.DiagnosticCheckpoint)throw new InvalidDataException("Missing diagnostic checkpoint.");
+                    if(resultsDue && r.Kind!=ReplayRecordKind.CommandResults)throw new InvalidDataException("Missing command results.");
+                    if(!resultsDue && checkpointDue && r.Kind!=ReplayRecordKind.DiagnosticCheckpoint)throw new InvalidDataException("Missing diagnostic checkpoint.");
                     if(r.Kind==ReplayRecordKind.Input)
                     {
                         if(terminal || r.Tick!=nextTick || nextTick==0)throw new InvalidDataException("Input record order.");
                         var v=InputBinary.Decode(r.Payload);
-                        if(v.ApplyTick!=r.Tick || v.LogIndex!=r.LogIndex || !indices.Add(v.LogIndex) || (batch.Count>0 && batch[batch.Count-1].LogIndex>=v.LogIndex))throw new InvalidDataException("Input identity/order.");
+                        if(v.AcceptedTick+1!=r.Tick || v.LogIndex!=r.LogIndex || !indices.Add(v.LogIndex) || (batch.Count>0 && batch[batch.Count-1].LogIndex>=v.LogIndex))throw new InvalidDataException("Input identity/order.");
                         batch.Add(v); lastIndex=v.LogIndex;
                     }
                     else if(r.Kind==ReplayRecordKind.TickHash)
                     {
                         if(terminal || r.Tick!=nextTick || r.LogIndex!=lastIndex || r.Payload.Length!=64)throw new InvalidDataException("TickHash order/size.");
                         if(nextTick>0)sim.Step(nextTick,batch); batch.Clear();
-                        lastState=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(lastState.CanonicalState), events=DiagnosticComparison.EventHash(sim.Capture(1));
+                        lastState=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(lastState.CanonicalState), events=ReplayBinary.Hash(DiagnosticComparison.EventHash(sim.Capture(1)).Concat(DiagnosticComparison.EventHash(sim.Capture(2))));
                         if(!r.Payload.SequenceEqual(hash.Concat(events)) && !result.FirstMismatchTick.HasValue)result.FirstMismatchTick=nextTick;
                         capture?.Invoke(lastState,hash,events); result.LastTick=nextTick; result.IsFault=sim.Capture(1).Result.IsFault;
-                        checkpointDue=nextTick%100==0; terminal=sim.Capture(1).Result.HasEnded; nextTick++;
+                        resultsDue=true; checkpointDue=nextTick%100==0; terminal=sim.Capture(1).Result.HasEnded; nextTick++;
+                    }
+                    else if(r.Kind==ReplayRecordKind.CommandResults)
+                    {
+                        if(!resultsDue || r.Tick!=nextTick-1 || r.LogIndex!=lastIndex)throw new InvalidDataException("Command results order.");
+                        if(!r.Payload.SequenceEqual(CommandResults(sim)) && !result.FirstMismatchTick.HasValue)result.FirstMismatchTick=r.Tick;
+                        resultsDue=false;
                     }
                     else if(r.Kind==ReplayRecordKind.DiagnosticCheckpoint)
                     {

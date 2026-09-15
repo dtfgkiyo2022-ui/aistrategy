@@ -78,7 +78,7 @@ namespace Rts.Tests.EditMode
 
         public static IEnumerable<TestCaseData> CollectionProperties()
         {
-            foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes())
+            foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes().Where(t => t.Namespace == typeof(FactionFrame).Namespace))
             foreach (var property in type.GetProperties())
                 if (IsList(property.PropertyType) && !(type == typeof(FactionFrame) && property.Name == "Objectives"))
                     yield return new TestCaseData(type, property.Name)

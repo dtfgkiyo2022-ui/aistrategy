@@ -30,7 +30,7 @@ namespace Rts.Tests.EditMode
             s.Soldiers[1].Id = 2; s.Soldiers[1].Position = P(enemyX, 96);
             return s;
         }
-        private static void Step(Battle sim, int from, int to) { for (int t = from; t <= to; t++) sim.Step(t, None); }
+        private static void Step(Battle sim, int from, int to) { for (int t = from; t <= to; t++) CommandTestInput.Step(sim, t, None); }
 
         [Test]
         public void Exactly200TicksAndSnapshotCopies()
@@ -40,7 +40,7 @@ namespace Rts.Tests.EditMode
             var before = Outpost(sim);
             Assert.That(before.OwnerFactionId, Is.Zero); Assert.That(before.CaptureTicks, Is.EqualTo(199));
             Assert.That(before.CapturingFactionId, Is.EqualTo(1)); Assert.That(before.CaptureDurationTicks, Is.EqualTo(200));
-            sim.Step(200, None);
+            CommandTestInput.Step(sim, 200, None);
             Assert.That(Outpost(sim).OwnerFactionId, Is.EqualTo(1)); Assert.That(Outpost(sim).CaptureTicks, Is.Zero);
             Assert.That(before.CaptureTicks, Is.EqualTo(199));
             Step(sim, 201, 500); Assert.That(sim.Capture(1).Units.Count, Is.EqualTo(2), "No reinforcement.");
@@ -50,12 +50,12 @@ namespace Rts.Tests.EditMode
         public void OpponentEnteringResetsProgress()
         {
             var sim = new Battle(CaptureScenario());
-            sim.Step(1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
+            CommandTestInput.Step(sim, 1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
                 Focus(1, 2, 5, new PolicyGoal(GoalKind.Outpost, 1, default)) });
             bool progressing = false, contested = false;
             for (int t = 2; t <= 240; t++)
             {
-                sim.Step(t, None); var o = Outpost(sim);
+                CommandTestInput.Step(sim, t, None); var o = Outpost(sim);
                 if (o.CaptureTicks > 0) progressing = true;
                 if (progressing && o.CaptureTicks == 0 && o.OwnerFactionId == 0) { contested = true; break; }
             }
@@ -68,7 +68,7 @@ namespace Rts.Tests.EditMode
             var s = CaptureScenario(); s.Soldiers = new[] { s.Soldiers[0] };
             var sim = new Battle(s); Step(sim, 1, 30);
             Assert.That(Outpost(sim).CaptureTicks, Is.GreaterThan(0));
-            sim.Step(31, new[] { Focus(31, 1, 1, new PolicyGoal(GoalKind.Point, 0, P(160, 96))) });
+            CommandTestInput.Step(sim, 31, new[] { Focus(31, 1, 1, new PolicyGoal(GoalKind.Point, 0, P(160, 96))) });
             Step(sim, 32, 180);
             Assert.That(Outpost(sim).CaptureTicks, Is.Zero); Assert.That(Outpost(sim).CapturingFactionId, Is.Zero);
         }
@@ -92,10 +92,10 @@ namespace Rts.Tests.EditMode
             s.Soldiers[1].Id = 2; s.Soldiers[0].Position = s.Soldiers[1].Position = P(136, 96);
             var sim = new Battle(s); Step(sim, 1, 199);
             Assert.That(Outpost(sim).CaptureTicks, Is.EqualTo(199));
-            sim.Step(200, None); Assert.That(Outpost(sim).OwnerFactionId, Is.EqualTo(1));
+            CommandTestInput.Step(sim, 200, None); Assert.That(Outpost(sim).OwnerFactionId, Is.EqualTo(1));
             s.Soldiers = new[] { s.Soldiers[0] };
             s.Soldiers[0].Position = new SimPoint(Fix64.FromRaw(Fix64.FromInt(136).Raw + 1), Fix64.FromInt(96));
-            sim = new Battle(s); sim.Step(1, None); Assert.That(Outpost(sim).CaptureTicks, Is.Zero);
+            sim = new Battle(s); CommandTestInput.Step(sim, 1, None); Assert.That(Outpost(sim).CaptureTicks, Is.Zero);
         }
 
         [TestCase(true)]
@@ -115,7 +115,7 @@ namespace Rts.Tests.EditMode
             var s = CaptureScenario(); s.UnitParameters[0].Speed = Fix64.FromInt(0);
             s.Soldiers[1].Position = P(128, 96); s.Soldiers[0].Hp = 10;
             s.UnitParameters[0].Damage = 10;
-            var sim = new Battle(s); sim.Step(1, None);
+            var sim = new Battle(s); CommandTestInput.Step(sim, 1, None);
             Assert.That(Outpost(sim).CapturingFactionId, Is.EqualTo(2));
             Assert.That(Outpost(sim).CaptureTicks, Is.EqualTo(1));
             Step(sim, 2, 200); Assert.That(Outpost(sim).OwnerFactionId, Is.EqualTo(2));
@@ -126,12 +126,12 @@ namespace Rts.Tests.EditMode
         {
             var s = CaptureScenario(140); s.Soldiers[0].Hp = 10; s.UnitParameters[0].Damage = 10;
             var sim = new Battle(s);
-            sim.Step(1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
+            CommandTestInput.Step(sim, 1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)),
                 Focus(1, 2, 5, new PolicyGoal(GoalKind.Outpost, 1, default)) });
             bool westProgress = false, switched = false;
             for (int t = 2; t <= 250; t++)
             {
-                sim.Step(t, None); var o = Outpost(sim);
+                CommandTestInput.Step(sim, t, None); var o = Outpost(sim);
                 if (o.CapturingFactionId == 1) westProgress = true;
                 if (o.CapturingFactionId == 2)
                 { Assert.That(o.CaptureTicks, Is.EqualTo(1)); switched = true; break; }
@@ -163,7 +163,7 @@ namespace Rts.Tests.EditMode
         [Test]
         public void EveryNewMutableFieldChangesCanonicalState()
         {
-            var sim = new Battle(WeekTwoScenario.Create()); sim.Step(1, None);
+            var sim = new Battle(WeekTwoScenario.Create()); CommandTestInput.Step(sim, 1, None);
             string[] armyFields = { "Path", "PathCursor", "AutoStage", "PathGoal", "HasPathGoal", "PathImpossible" };
             string[] outpostFields = { "OwnerFactionId", "CapturingFaction", "CaptureTicks" };
             foreach (string group in new[] { "Armies", "Outposts" })
@@ -186,12 +186,12 @@ namespace Rts.Tests.EditMode
         [Test]
         public void UnchangedGoalReusesOneArmyPathAndFrameAliasIsImmutable()
         {
-            var sim = new Battle(WeekTwoScenario.Create()); sim.Step(1, None);
+            var sim = new Battle(WeekTwoScenario.Create()); CommandTestInput.Step(sim, 1, None);
             var armies = States(sim, "Armies"); var field = armies.GetValue(0).GetType().GetField("Path", Hidden);
             object path = field.GetValue(armies.GetValue(0));
             Step(sim, 2, 50);
             Assert.That(field.GetValue(armies.GetValue(0)), Is.SameAs(path));
-            sim.Step(51, new[] { Focus(51, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)) });
+            CommandTestInput.Step(sim, 51, new[] { Focus(51, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)) });
             Assert.That(field.GetValue(armies.GetValue(0)), Is.Not.SameAs(path));
             var frame = sim.Capture(1);
             Assert.That(frame.Objectives, Is.SameAs(frame.Observation.Objectives));
@@ -238,11 +238,11 @@ namespace Rts.Tests.EditMode
         public void UnreachablePointIsImpossibleAndOutpostCanBeFocused()
         {
             var sim = new Battle(WeekTwoScenario.Create());
-            sim.Step(1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Point, 0, P(128, 64))) });
-            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Impossible));
-            Assert.That(sim.Capture(1).Commands.Single().Reason, Is.EqualTo(ReasonCode.NoPath));
-            sim.Step(2, new[] { Focus(2, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)) });
-            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Executing));
+            CommandTestInput.Step(sim, 1, new[] { Focus(1, 1, 1, new PolicyGoal(GoalKind.Point, 0, P(128, 64))) });
+            Assert.That(sim.Capture(1).Commands.Last().Status, Is.EqualTo(CommandStatus.Impossible));
+            Assert.That(sim.Capture(1).Commands.Last().Reason, Is.EqualTo(ReasonCode.NoPath));
+            CommandTestInput.Step(sim, 2, new[] { Focus(2, 1, 1, new PolicyGoal(GoalKind.Outpost, 1, default)) });
+            Assert.That(sim.Capture(1).Commands.Last().Status, Is.EqualTo(CommandStatus.Executing));
         }
 
         [Test]
@@ -254,7 +254,7 @@ namespace Rts.Tests.EditMode
             var position = soldiers.GetValue(0).GetType().GetField("Position", Hidden);
             for (int tick = 0; tick <= 1000; tick++)
             {
-                if (tick > 0) sim.Step(tick, None);
+                if (tick > 0) CommandTestInput.Step(sim, tick, None);
                 for (int i = 0; i < soldiers.Length; i++)
                     Assert.That(grid.IsPassable(grid.Cell((SimPoint)position.GetValue(soldiers.GetValue(i)))), Is.True, "tick=" + tick + " id=" + (i + 1));
                 Assert.That(sim.Capture(1).Result.IsFault, Is.False);

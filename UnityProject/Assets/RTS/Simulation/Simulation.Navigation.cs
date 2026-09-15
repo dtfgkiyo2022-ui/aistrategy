@@ -15,6 +15,7 @@ namespace Rts.Simulation
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
             var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);
+            if (a.Policy == PolicyKind.Retreat && a.Goal.Kind != GoalKind.None) return GoalPosition(a.Goal);
             if (a.Policy == PolicyKind.Retreat || a.Definition.Role == "reserve") return own;
             bool scout = a.Definition.Role == "scout";
             if (scout && a.AutoStage == 0) return new SimPoint(own.X, Fix64.FromInt(96));

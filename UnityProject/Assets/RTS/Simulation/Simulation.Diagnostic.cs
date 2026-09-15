@@ -56,6 +56,7 @@ namespace Rts.Simulation
                 w.Value("Factions.Count",(uint)world.Factions.Length);
                 foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds); }
                 w.Value("Inputs.Cursor",world.InputCursor);
+                WriteCommands(w);
                 // Active policies are keyed by army, ordered by ApplyTick then LogIndex then army ID.
                 var orders=(ArmyState[])world.Armies.Clone();
                 Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });
