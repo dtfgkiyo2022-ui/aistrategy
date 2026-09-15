@@ -38,7 +38,8 @@ namespace Rts.Tests.EditMode
         [Test]
         public void CorePeriodFirstTickFramesAndObserverContactIds()
         {
-            var sim = new Battle(Frozen());
+            var s = Frozen(); s.Rules.OwnedObjectiveVision = Fix64.FromInt(512);
+            var sim = new Battle(s);
             Assert.That(sim.Capture(1).Reinforcements.Single().TicksRemaining, Is.EqualTo(100));
             Until(sim, 99); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("41"));
             var previous = sim.Capture(1);
@@ -58,7 +59,7 @@ namespace Rts.Tests.EditMode
         [Test]
         public void CaptureStartsClockAndRecaptureResetsIt()
         {
-            var s = Frozen(); s.Soldiers[0].Position = P(128, 96);
+            var s = Frozen(); s.Rules.OwnedObjectiveVision = Fix64.FromInt(512); s.Soldiers[0].Position = P(128, 96);
             var sim = new Battle(s); Until(sim, 199);
             Assert.That(Field(sim, "Outposts[1].NextReinforcementTick"), Is.EqualTo("0"));
             Until(sim, 200); Assert.That(Field(sim, "Outposts[1].NextReinforcementTick"), Is.EqualTo("400"));
@@ -113,7 +114,7 @@ namespace Rts.Tests.EditMode
         [Test]
         public void SameTickFactionCoreAndOutpostIdOrderCompetesForLastSlot()
         {
-            var s = Frozen(); s.Rules.FactionCap = 21;
+            var s = Frozen(); s.Rules.OwnedObjectiveVision = Fix64.FromInt(512); s.Rules.FactionCap = 21;
             s.Rules.CoreReinforcementIntervalTicks = 200;
             s.Outposts[0].OwnerFactionId = s.Outposts[1].OwnerFactionId = 1;
             var sim = new Battle(s); Until(sim, 200);
@@ -226,7 +227,7 @@ namespace Rts.Tests.EditMode
             Assert.That(DiagnosticComparison.First(initial,sim.CaptureDiagnostic()), Is.Not.Null);
             world.GetType().GetField("NextSoldierId",Hidden).SetValue(world,41U);
             Until(sim,99); Set(sim,"Cores",0,"Hp",0); Until(sim,100);
-            Assert.That(Births(sim).Select(e => e.Position), Is.EqualTo(new[] { P(232,64) }));
+            Assert.That(Births(sim, 2).Select(e => e.Position), Is.EqualTo(new[] { P(232,64) }));
             Assert.That(sim.Capture(1).Reinforcements.Any(r => r.Kind == GoalKind.Core), Is.False);
         }
     }

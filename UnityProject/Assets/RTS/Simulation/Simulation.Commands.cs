@@ -400,6 +400,8 @@ namespace Rts.Simulation
                 {
                     a.HasPathGoal = false;
                 }
+                if (a.CommandId != (selected?.Order.CommandId ?? 0) && (a.Policy == PolicyKind.Scout || policy == PolicyKind.Scout))
+                    foreach (uint soldier in a.SoldierIds) world.Soldiers[soldier - 1].Pursuit = default;
                 a.Policy = policy; a.Goal = goal;
                 a.CommandId = selected?.Order.CommandId ?? 0; a.LogIndex = selected?.LogIndex ?? 0;
                 a.AcceptedTick = selected?.AcceptedTick ?? 0; a.ApplyTick = selected?.ApplyTick ?? 0;
@@ -438,7 +440,8 @@ namespace Rts.Simulation
                     bool reached = a.N0 > 0 && 1000L * a.Deaths >= (long)c.Order.AllowedLoss.Permille * a.N0;
                     loss |= reached;
                     if (reached && Combat(c.Order) && c.Order.End.Kind != EndKind.LossReached) a.Returning = true;
-                    var goal = a.Returning ? world.Cores[world.Factions[c.Order.Target.FactionId - 1].CoreId - 1].Definition.Position : Destination(c.Order);
+                    var scoutReturning = c.Order.Kind == PolicyKind.Scout && live.Any(id => world.Soldiers[id - 1].Pursuit.Returning);
+                    var goal = a.Returning || scoutReturning ? world.Cores[world.Factions[c.Order.Target.FactionId - 1].CoreId - 1].Definition.Position : Destination(c.Order);
                     bool arrived = live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, goal, Fix64.FromInt(4)));
                     a.Finished = a.Returning ? arrived : c.Order.End.Kind == EndKind.Arrived ? arrived :
                         c.Order.End.Kind == EndKind.AtTick ? world.Tick >= c.Order.End.Tick :

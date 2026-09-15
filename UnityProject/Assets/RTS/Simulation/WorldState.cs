@@ -59,12 +59,24 @@ namespace Rts.Simulation
         internal uint[] ArmyIds;
         internal int AliveCount;
         internal uint NextContactId;
+        internal uint NextArmyContactId;
+        internal ArmyContactMemory[] ArmyContacts;
         internal uint[] ContactIds; // soldier ID - 1 -> local contact ID; never exported
         internal SimPoint[] ContactPositions;
         internal long[] ContactLastSeenTicks;
         internal bool[] ContactAbsent;
         internal bool[] VisibleCells, ExploredCells;
         internal ObjectiveMemory[] Objectives;
+    }
+
+    internal struct ArmyContactMemory
+    {
+        internal uint Id;
+        internal SimPoint Position;
+        internal long LastSeenTick;
+        internal int Min, Max;
+        internal bool Visible, Absent;
+        internal uint[] Covered;
     }
 
     internal struct ObjectiveMemory
@@ -132,7 +144,7 @@ namespace Rts.Simulation
                     ContactIds = new uint[Soldiers.Length], ContactPositions = new SimPoint[Soldiers.Length],
                     ContactLastSeenTicks = new long[Soldiers.Length], ContactAbsent = new bool[Soldiers.Length],
                     VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
-                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1 };
+                    Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
                     var ids = new System.Collections.Generic.List<uint>();

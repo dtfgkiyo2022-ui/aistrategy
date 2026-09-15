@@ -26,6 +26,7 @@ namespace Rts.Simulation
             {
                 var c = o.Contacts[i]; string p = prefix + "Contacts[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "].";
                 w.Value(p + "Id", c.ContactId); w.Point(p + "Position", c.LastPosition); w.Value(p + "LastSeenTick", c.LastSeenTick);
+                w.Value(p + "ArmyContact", c.IsArmyContact); w.Value(p + "Uncertain", c.IsUncertain); w.Value(p + "Unknown", c.IsStrengthUnknown); w.Value(p + "Assumed", c.AssumedStrength); w.Value(p + "Absent", c.IsAbsentAtLastPosition);
                 w.Value(p + "Min", c.EstimateMin); w.Value(p + "Max", c.EstimateMax); w.Value(p + "Visible", c.IsCurrentlyVisible);
                 w.Ids(p + "Covered", (c.CoveredContactIds ?? Array.Empty<uint>()).ToArray());
             }

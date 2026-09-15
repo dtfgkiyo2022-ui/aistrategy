@@ -24,7 +24,7 @@ namespace Rts.Decision
         public static IEnumerable<EnemyContact> CountableContacts(FactionObservation o)
         {
             var covered = new HashSet<uint>(o.Contacts.SelectMany(c => c.CoveredContactIds ?? Array.Empty<uint>()));
-            return o.Contacts.Where(c => !covered.Contains(c.ContactId)).GroupBy(c => c.ContactId).Select(g => g.First());
+            return o.Contacts.Where(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0 || !covered.Contains(c.ContactId))).GroupBy(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0, c.ContactId)).Select(g => g.First());
         }
         public static int Estimate(FactionObservation o, SimPoint point)
         {
@@ -93,11 +93,11 @@ namespace Rts.Decision
             IReadOnlyList<ContactApproachRoute> routes)
         {
             // A contact can be a tombstone for a while, but approach memory must not be one.
-            var contacts = new HashSet<uint>(o.Contacts.Select(c => c.ContactId));
+            var contacts = new HashSet<uint>(o.Contacts.Where(c => !c.IsArmyContact).Select(c => c.ContactId));
             var result = old.Where(m => contacts.Contains(m.ContactId) && o.Tick - m.LastSeenTick <= 600)
                 .OrderBy(m => m.ContactId).ThenBy(m => m.ObjectiveId).ToList();
             foreach (var post in o.Objectives.Where(x => x.Kind == GoalKind.Outpost).OrderBy(x => x.Id))
-            foreach (var c in o.Contacts.Where(c => c.IsCurrentlyVisible && o.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
+            foreach (var c in o.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && o.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
             {
                 int ix = result.FindIndex(m => m.ContactId == c.ContactId && m.ObjectiveId == post.Id);
                 var m = ix < 0 ? new ContactApproachMemory { ContactId = c.ContactId, ObjectiveId = post.Id } : result[ix];
@@ -274,9 +274,9 @@ namespace Rts.Decision
             if (pursuit.Active) { pursuit.Active = false; pursuit.Returning = true; return new ArmyIntent(input.ArmyId, pursuit.Mission, 0, default, false); }
             return new ArmyIntent(input.ArmyId, (defend || reserve) && Within(position, anchor, 8) ? position : mission, 0, default, false);
         }
-        public static SimPoint ScoutReturn(FactionObservation o, SimPoint position, SimPoint home)
+        public static SimPoint ScoutReturn(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance = default)
         {
-            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, 12)).OrderBy(e => Distance(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
+            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance)).OrderBy(e => Distance(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
             if (enemy.Length == 0) return home;
             var e = enemy[0].Position;
             long dx = checked(position.X.Raw - e.X.Raw), dz = checked(position.Z.Raw - e.Z.Raw);

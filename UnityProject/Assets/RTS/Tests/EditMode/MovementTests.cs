@@ -129,17 +129,19 @@ namespace Rts.Tests.EditMode
                         soldiers.All(soldier=>Within(Field<SimPoint>(soldier,"Position"),destination,Fix64.FromInt(policy==PolicyKind.Defend?8:4)));
                     // OwnArmy.Position is the first living soldier: it can already be holding while
                     // reinforcements are still approaching. Count actual movement outside the hold area.
-                    bool missionProgress=(policy==PolicyKind.Retreat || policy==PolicyKind.Defend) &&
+                    // Automatic returning uses Decision.Returning rather than a human Retreat policy.
+                    bool missionProgress=(policy==PolicyKind.Retreat || policy==PolicyKind.Defend || decision.Returning) &&
                         soldiers.Any(soldier=>Field<bool>(soldier,"IsMoving") && !Within(Field<SimPoint>(soldier,"Position"),destination,Fix64.FromInt(policy==PolicyKind.Defend?8:4)));
                     bool enemy=sim.Capture(3-f).Units.Where(u=>u.IsOwn).Any(u=>Within(a.Position,u.Position,Fix64.FromInt(24)));
                     bool unchanged=a.Position.X==previous[i].X && a.Position.Z==previous[i].Z && cursor==cursors[i];
                     stopped[i]=!hold && !atMission && !missionProgress && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
-                    Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id+" policy="+Field<PolicyKind>(state,"Policy")+" goal="+Field<PolicyGoal>(state,"Goal").Kind+":"+Field<PolicyGoal>(state,"Goal").Id+" pos="+a.Position.X+","+a.Position.Z+" pathGoal="+Field<SimPoint>(state,"PathGoal").X+","+Field<SimPoint>(state,"PathGoal").Z+" assignment="+decision.Assignment);
+                    Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id+" policy="+Field<PolicyKind>(state,"Policy")+" goal="+Field<PolicyGoal>(state,"Goal").Kind+":"+Field<PolicyGoal>(state,"Goal").Id+" pos="+a.Position.X+","+a.Position.Z+" pathGoal="+Field<SimPoint>(state,"PathGoal").X+","+Field<SimPoint>(state,"PathGoal").Z+" assignment="+decision.Assignment+" returning="+decision.Returning+" phase="+offense.Phase+" decisionGoal="+decision.Goal.Kind+":"+decision.Goal.Id+" actualTick="+sim.Capture(1).Tick+" ended="+sim.Capture(1).Result.HasEnded);
                     previous[i]=a.Position; cursors[i]=cursor;
                 }
                 }
                 if(gateway!=null) { west.Step(sim.Capture(1)); east.Step(sim.Capture(2)); }
             }
+            TestContext.WriteLine(preset + " last simulated tick=" + sim.Capture(1).Tick + " ended=" + sim.Capture(1).Result.HasEnded);
         }
         [Test]
         public void LocalNavigationStateIsCanonical()

@@ -118,9 +118,9 @@ namespace Rts.Tests.EditMode
             s.Soldiers[1].Position = P(128, 96); s.Soldiers[0].Hp = 10;
             s.UnitParameters[0].Damage = 10;
             var sim = new Battle(s); CommandTestInput.Step(sim, 1, None);
-            Assert.That(Outpost(sim).CapturingFactionId, Is.EqualTo(2));
-            Assert.That(Outpost(sim).CaptureTicks, Is.EqualTo(1));
-            Step(sim, 2, 200); Assert.That(Outpost(sim).OwnerFactionId, Is.EqualTo(2));
+            Assert.That(sim.Capture(2).Objectives.Single(o => o.Kind == GoalKind.Outpost && o.Id == 1).CapturingFactionId, Is.EqualTo(2));
+            Assert.That(sim.Capture(2).Objectives.Single(o => o.Kind == GoalKind.Outpost && o.Id == 1).CaptureTicks, Is.EqualTo(1));
+            Step(sim, 2, 200); Assert.That(sim.Capture(2).Objectives.Single(o => o.Kind == GoalKind.Outpost && o.Id == 1).OwnerFactionId, Is.EqualTo(2));
         }
 
         [Test]
@@ -136,7 +136,7 @@ namespace Rts.Tests.EditMode
             bool westProgress = false, switched = false;
             for (int t = 2; t <= 250; t++)
             {
-                CommandTestInput.Step(sim, t, None); var o = Outpost(sim);
+                CommandTestInput.Step(sim, t, None); var o = sim.Capture(2).Objectives.Single(v => v.Kind == GoalKind.Outpost && v.Id == 1);
                 if (o.CapturingFactionId == 1) westProgress = true;
                 if (o.CapturingFactionId == 2)
                 { Assert.That(o.CaptureTicks, Is.EqualTo(1)); switched = true; break; }

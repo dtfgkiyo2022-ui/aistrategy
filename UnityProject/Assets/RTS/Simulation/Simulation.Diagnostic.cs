@@ -69,7 +69,11 @@ namespace Rts.Simulation
                 var orders=(ArmyState[])world.Armies.Clone();
                 Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });
                 foreach(var a in orders) { string n="Commands[Army="+a.Definition.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Policy",(byte)a.Policy); w.Goal(n+"Goal",a.Goal); w.Value(n+"CommandId",a.CommandId); w.Value(n+"AcceptedTick",a.AcceptedTick); w.Value(n+"ApplyTick",a.ApplyTick); w.Value(n+"LogIndex",a.LogIndex); }
-                foreach(var f in world.Factions) { string n="Observations["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds,world.SoldierCount);
+                foreach(var f in world.Factions) { string n="Observations["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"NextArmyContactId",f.NextArmyContactId);
+                    for (int i = 0; i < f.ArmyContacts.Length; i++) { var m = f.ArmyContacts[i]; string a = n+"ArmyContacts["+i.ToString(CultureInfo.InvariantCulture)+"].";
+                        w.Value(a+"Id",m.Id); w.Point(a+"Position",m.Position); w.Value(a+"LastSeenTick",m.LastSeenTick);
+                        w.Value(a+"Min",m.Min); w.Value(a+"Max",m.Max); w.Value(a+"Visible",m.Visible); w.Value(a+"Absent",m.Absent); w.Ids(a+"Covered",m.Covered ?? Array.Empty<uint>()); }
+                    w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds,world.SoldierCount);
                     for(int i=0;i<world.SoldierCount;i++) { string c=n+"Contacts["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Point(c+"Position",f.ContactPositions[i]); w.Value(c+"LastSeenTick",f.ContactLastSeenTicks[i]); w.Value(c+"Absent",f.ContactAbsent[i]); } }
                 WriteDecision(w);
                 return new DiagnosticState(world.Tick,s.ToArray());

@@ -46,7 +46,7 @@ namespace Rts.Simulation
                 // A* is invoked only for the finite visible-infantry × outpost set on this tick.
                 var approachRoutes = new List<ContactApproachRoute>();
                 foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
-                foreach (var contact in observation.Contacts.Where(c => c.IsCurrentlyVisible && observation.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
+                foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && observation.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
                 {
                     var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position);
                     int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
@@ -59,10 +59,7 @@ namespace Rts.Simulation
                 {
                     ref var a = ref world.Armies[view.Id - 1];
                     if (a.AutoStartIds == null) a.AutoStartIds = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
-                    foreach (var c in commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Kind == PolicyKind.Scout))
-                        foreach (var execution in c.Armies.Where(e => e.ArmyId == view.Id && e.Active && !e.Finished))
-                            if (a.SoldierIds.Any(id => world.Soldiers[id - 1].Alive &&
-                                PolicyDecision.ScoutSeesEnemy(observation, world.Soldiers[id - 1].Position, world.Soldiers[id - 1].Parameters.Vision))) execution.Returning = true;
+
                 }
 
                 var inputs = new List<ArmyDecisionInput>();
