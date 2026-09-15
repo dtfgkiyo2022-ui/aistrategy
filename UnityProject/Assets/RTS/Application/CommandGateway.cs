@@ -8,6 +8,11 @@ using Battle = Rts.Simulation.Simulation;
 
 namespace Rts.Application
 {
+    /// <summary>Faction-local policy versions for doctrine generators; no world or enemy state is exposed.</summary>
+    public interface IFactionPolicyVersions
+    {
+        IReadOnlyList<PolicyVersion> Versions(ScopeKey scope);
+    }
     /// <summary>Tick driven command boundary. Call Submit/Cancel between Step calls on the host thread.</summary>
     public sealed class CommandGateway : ICommandPort
     {
@@ -40,6 +45,21 @@ namespace Rts.Application
             if (tick != 0) throw new ArgumentException("Attach the gateway at S0.", nameof(simulation));
         }
         public IReadOnlyList<ScheduledInput> Inputs => Array.AsReadOnly(log.ToArray());
+        internal IFactionPolicyVersions FactionVersions(uint faction)
+        {
+            if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
+            return new FactionVersionReader(simulation, faction);
+        }
+        private sealed class FactionVersionReader : IFactionPolicyVersions
+        {
+            private readonly Battle simulation; private readonly uint faction;
+            internal FactionVersionReader(Battle simulation, uint faction) { this.simulation = simulation; this.faction = faction; }
+            public IReadOnlyList<PolicyVersion> Versions(ScopeKey scope)
+            {
+                if (scope.FactionId != faction) throw new ArgumentException("Doctrine may only read its own faction versions.", nameof(scope));
+                return simulation.Versions(scope);
+            }
+        }
         public ulong Submit(UserPolicyIntent intent) => SubmitBatch(new[] { intent });
         public ulong SubmitBatch(IReadOnlyList<UserPolicyIntent> intents) => Enqueue(intents, true, 240);
         public ulong SubmitInterpreted(UserPolicyIntent intent, int deadlineTicks = 240) => Enqueue(new[] { intent }, false, deadlineTicks);

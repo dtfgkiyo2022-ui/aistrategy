@@ -41,12 +41,12 @@ namespace Rts.Tests.EditMode
         public void SimultaneousLethalHitsLeaveBothSoldiersDead()
         {
             var sim = new Battle(Duel(10, 10));
-            int length = sim.CaptureDiagnostic().CanonicalState.Count;
+            int retainedBefore = RetainedSoldierAndContactFields(sim);
             CommandTestInput.Step(sim, 1, NoInputs);
             Assert.That(sim.Capture(1).Units, Is.Empty);
             Assert.That(sim.Capture(2).Units, Is.Empty);
             Assert.That(sim.Capture(1).Observation.OwnArmies.All(a => a.AliveCount == 0), Is.True);
-            Assert.That(sim.CaptureDiagnostic().CanonicalState.Count, Is.EqualTo(length), "Tombstone slots and contact allocations are retained.");
+            Assert.That(RetainedSoldierAndContactFields(sim), Is.EqualTo(retainedBefore), "Tombstone slots and contact allocations are retained.");
         }
 
         [TestCase(0, 90)]
@@ -153,11 +153,16 @@ namespace Rts.Tests.EditMode
             s.UnitParameters[0].Speed = Fix64.FromInt(2);
             s.Soldiers[1].Position = new SimPoint(Fix64.FromRaw(Fix64.FromInt(102).Raw + 1), Fix64.FromInt(64));
             var sim = new Battle(s);
-            CommandTestInput.Step(sim, 1, NoInputs);
+            CommandTestInput.Step(sim, 1, new[] {
+                Input(1, 1, 1, PolicyKind.Focus, new PolicyGoal(GoalKind.Point, 0, Point(100, 64))),
+                Input(1, 2, 5, PolicyKind.Focus, new PolicyGoal(GoalKind.Point, 0, Point(100, 64)), 2) });
             Assert.That(Hp(sim, 1), Is.EqualTo(100));
             CommandTestInput.Step(sim, 2, NoInputs);
             Assert.That(Hp(sim, 1), Is.EqualTo(90));
         }
+
+        private static int RetainedSoldierAndContactFields(Battle sim) => Rts.Replay.DiagnosticComparison.Fields(sim.CaptureDiagnostic())
+            .Count(field => field.Key.StartsWith("Soldiers[", StringComparison.Ordinal) || field.Key.Contains("ContactIds"));
 
         [Test]
         public void TargetMovingOutOfRangeIsNotHit()

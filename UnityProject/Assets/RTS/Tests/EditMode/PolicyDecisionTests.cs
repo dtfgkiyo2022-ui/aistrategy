@@ -227,18 +227,28 @@ namespace Rts.Tests.EditMode
         public void PresetsAreOrdinaryLoggedPoliciesWithDifferentAllocations()
         {
             var s=WeekTwoScenario.Create(); var maintain=new Battle(s); var concentrate=new Battle(s);
-            var a=PolicyPresets.InitialInputs(s,"maintain"); var b=PolicyPresets.InitialInputs(s,"concentrate");
+            var a=PolicyPresets.RecordedInputs(s,"none","maintain",2200); var b=PolicyPresets.RecordedInputs(s,"none","concentrate",2200);
             for(int t=1;t<=2200;t++)
-            { maintain.Step(t,a.Where(i=>i.AcceptedTick==t-1).ToArray()); concentrate.Step(t,b.Where(i=>i.AcceptedTick==t-1).ToArray()); }
-            Assert.That(maintain.Capture(2).Commands.All(c=>c.Status==CommandStatus.Executing || c.Status==CommandStatus.Completed),Is.True);
-            Assert.That(concentrate.Capture(2).Commands.All(c=>c.Status==CommandStatus.Executing || c.Status==CommandStatus.Completed),Is.True);
+            { maintain.Step(t,a.Where(i=>i.ApplyTick==t).ToArray()); concentrate.Step(t,b.Where(i=>i.ApplyTick==t).ToArray()); }
+            Assert.That(LatestDoctrineProposalsAreAccepted(maintain.Capture(2).Commands), Is.True);
+            Assert.That(LatestDoctrineProposalsAreAccepted(concentrate.Capture(2).Commands), Is.True);
             Assert.That(maintain.Capture(2).Observation.OwnArmies.Select(v=>v.Position),Is.Not.EqualTo(concentrate.Capture(2).Observation.OwnArmies.Select(v=>v.Position)));
             Assert.That(maintain.Capture(2).Objectives.Where(o=>o.Kind==GoalKind.Outpost).Select(o=>o.OwnerFactionId),Is.Not.EqualTo(concentrate.Capture(2).Objectives.Where(o=>o.Kind==GoalKind.Outpost).Select(o=>o.OwnerFactionId)));
+        }
+        private static bool LatestDoctrineProposalsAreAccepted(System.Collections.Generic.IReadOnlyList<CommandView> commands)
+        {
+            var doctrine = commands.Where(c => c.Source == CommandSource.Doctrine).ToArray();
+            return doctrine.Length > 0 && doctrine.GroupBy(c => new { c.Target, c.Kind, c.Goal })
+                .Select(g => g.OrderBy(c => c.CommandId).Last())
+                .All(c => c.Status == CommandStatus.Executing || c.Status == CommandStatus.Completed);
         }
         [Test]
         public void AbandonMidMatchChangesAssignmentsWithoutDestroyingAssets()
         {
             var s=WeekTwoScenario.Create(); s.Outposts[0].OwnerFactionId=1; s.Outposts[1].OwnerFactionId=1;
+            // A nearby enemy makes the automatic garrison requirement observable; without a
+            // threat, 9.2 deliberately leaves owned outposts unguarded.
+            s.Soldiers[20].Position=P(128,96); s.UnitParameters[0].Damage=s.UnitParameters[1].Damage=0;
             var auto=new Battle(s); var abandon=new Battle(s);
             var reserve=Order(1,1,ScopeKind.All,0,PolicyKind.MaintainReserve,reserve:0);
             CommandTestInput.Step(auto,1,new[]{reserve}); CommandTestInput.Step(abandon,1,new[]{reserve});
@@ -300,12 +310,13 @@ namespace Rts.Tests.EditMode
             s.UnitParameters[0].Range=Fix64.FromInt(2);
             var sim=new Battle(s);
             CommandTestInput.Step(sim,1,new[]{Order(1,1,ScopeKind.Army,1,PolicyKind.Defend,G(1),500)});
+            sim.Step(2,None);
             Assert.That(Field(sim,"CommandStates[101].Armies[1].Deaths"),Is.EqualTo("1"));
             Assert.That(Field(sim,"CommandStates[101].Armies[1].Returning"),Is.EqualTo("1"));
-            sim.Step(2,None);
+            sim.Step(3,None);
             Assert.That(sim.Capture(1).Units.Single(u=>u.IsOwn).IsRetreating,Is.True);
             Assert.That(sim.Capture(1).Units.Single(u=>u.IsOwn).IsAttacking,Is.False);
-            Run(sim,3,1500);
+            Run(sim,4,1500);
             Assert.That(sim.Capture(1).Commands.Single().Status,Is.EqualTo(CommandStatus.Completed));
         }
 

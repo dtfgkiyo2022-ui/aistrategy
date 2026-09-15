@@ -138,7 +138,9 @@ namespace Rts.Tests.EditMode
             Assert.That(newborn.IsMoving || newborn.IsAttacking, Is.False);
             Assert.That(Field(sim, "Outposts[1].CaptureTicks"), Is.EqualTo("0"));
             Until(sim, 101); Assert.That(Field(sim, "Outposts[1].CaptureTicks"), Is.EqualTo("1"));
-            Until(sim, 102);
+            // Allocation runs every 20 ticks (9.2), so the newborn waits through the
+            // spawning tick and the next allocation boundary before receiving movement.
+            Until(sim, 120);
             Assert.That(sim.Capture(1).Units.Single(u => u.IsOwn).IsMoving, Is.True);
         }
 

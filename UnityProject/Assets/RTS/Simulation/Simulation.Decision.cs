@@ -110,7 +110,6 @@ namespace Rts.Simulation
                     if (old.Goal.Kind != a.Decision.Goal.Kind || old.Goal.Id != a.Decision.Goal.Id || !SamePoint(old.Goal.Point, a.Decision.Goal.Point) || old.Returning != a.Decision.Returning || old.Assignment != a.Decision.Assignment)
                     {
                         a.HasPathGoal = false;
-                        Advance(new ScopeKey(f, ScopeKind.Army, a.Definition.Id), 0);
                     }
                 }
             }

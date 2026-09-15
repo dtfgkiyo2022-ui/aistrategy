@@ -35,7 +35,7 @@ namespace Rts.Application
         }
 
         public static PresetController CreateController(string preset, uint faction, ICommandPort port)
-            => new PresetController(preset, faction, port);
+            => new PresetController(preset, faction, port, (port as CommandGateway)?.FactionVersions(faction));
 
         /// <summary>Runs the recording-only proposal generator. Replay receives only its returned log.</summary>
         public static ScheduledInput[] RecordedInputs(ScenarioDefinition scenario, string westPreset, string eastPreset, long ticks)
@@ -64,28 +64,27 @@ namespace Rts.Application
         private readonly string preset;
         private readonly uint faction;
         private readonly ICommandPort port;
+        private readonly IFactionPolicyVersions versions;
         private ulong sequence = 1;
         private ulong northFocusCommandId;
         private bool concentrated;
+        private int initialRetries, secondRetries;
+        private ulong lastRetriedStale;
         private readonly Dictionary<uint, ulong> defendCommands = new Dictionary<uint, ulong>();
+        private readonly Dictionary<uint, int> defendStaleRetries = new Dictionary<uint, int>();
 
-        public PresetController(string preset, uint faction, ICommandPort port)
+        public PresetController(string preset, uint faction, ICommandPort port, IFactionPolicyVersions versionReader = null)
         {
             if (preset != "none" && preset != "maintain" && preset != "concentrate" && preset != "maintain-legacy") throw new ArgumentException("Preset must be none, maintain, maintain-legacy or concentrate.", nameof(preset));
             if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
             this.preset = preset; this.faction = faction; this.port = port ?? throw new ArgumentNullException(nameof(port));
+            versions = versionReader ?? port as IFactionPolicyVersions;
         }
 
         public void Initialize()
         {
             if (preset == "none") return;
-            if (preset == "maintain" || preset == "maintain-legacy")
-                Propose(0, new[] { Order(All, PolicyKind.MaintainReserve, default, preset == "maintain" ? (ushort)100 : (ushort)200, EndKind.UntilReplaced, ExpireFlags.None) });
-            else
-                Propose(0, new[] {
-                    Order(All, PolicyKind.MaintainReserve, default, 0, EndKind.UntilReplaced, ExpireFlags.None),
-                    Order(All, PolicyKind.Focus, new PolicyGoal(GoalKind.Outpost, 1, default), 0, EndKind.ObjectiveOwned, ExpireFlags.None),
-                    Order(new ScopeKey(faction, ScopeKind.Outpost, 2), PolicyKind.AllowAbandon, default, 0, EndKind.UntilReplaced, ExpireFlags.None) });
+            ProposeInitial(0);
         }
 
         public void Step(FactionFrame frame)
@@ -93,6 +92,7 @@ namespace Rts.Application
             if (frame == null || frame.FactionId != faction) throw new ArgumentException("Wrong faction frame.", nameof(frame));
             if (preset == "none") return;
             LearnCommandIds(frame);
+            RetryStale(frame);
             if (preset == "maintain") Maintain(frame);
             else if (preset == "concentrate") Concentrate(frame);
         }
@@ -101,8 +101,12 @@ namespace Rts.Application
         {
             foreach (var objective in frame.Objectives.Where(v => v.Kind == GoalKind.Outpost && v.IsOwnerKnown).OrderBy(v => v.Id))
             {
-                if (objective.OwnerFactionId != faction) { defendCommands.Remove(objective.Id); continue; }
-                if (defendCommands.TryGetValue(objective.Id, out ulong id) && frame.Commands.Any(c => c.CommandId == id && c.Status < CommandStatus.Completed)) continue;
+                if (objective.OwnerFactionId != faction) { defendCommands.Remove(objective.Id); defendStaleRetries.Remove(objective.Id); continue; }
+                // A proposal is not visible in the frame until the gateway has applied it.  Keep
+                // the zero entry during that interval (and after a rejection/terminal result):
+                // maintain renews Defend on ownership reacquisition, not on every tick that an
+                // earlier request is absent from the frame.
+                if (defendCommands.ContainsKey(objective.Id)) continue;
                 Propose(frame.Tick, new[] { Order(new ScopeKey(faction, ScopeKind.Outpost, objective.Id), PolicyKind.Defend,
                     new PolicyGoal(GoalKind.Outpost, objective.Id, default), 0, EndKind.UntilReplaced, ExpireFlags.OwnershipChanged) });
                 defendCommands[objective.Id] = 0; // replaced by the deterministic command id when it reaches the frame
@@ -115,10 +119,42 @@ namespace Rts.Application
             var focus = frame.Commands.FirstOrDefault(c => c.CommandId == northFocusCommandId);
             if (focus.CommandId == 0 || focus.Status != CommandStatus.Completed || focus.Reason != ReasonCode.None) return;
             concentrated = true;
+            ProposeSecond(frame.Tick);
+        }
+
+        private void ProposeInitial(long tick, bool retry = false)
+        {
+            if (retry) initialRetries++;
+            if (preset == "maintain" || preset == "maintain-legacy")
+                Propose(tick, new[] { Order(All, PolicyKind.MaintainReserve, default, preset == "maintain" ? (ushort)100 : (ushort)200, EndKind.UntilReplaced, ExpireFlags.None) });
+            else
+                // The two All orders acquire their common revision atomically.
+                Propose(tick, new[] {
+                    Order(All, PolicyKind.MaintainReserve, default, 0, EndKind.UntilReplaced, ExpireFlags.None),
+                    Order(All, PolicyKind.Focus, new PolicyGoal(GoalKind.Outpost, 1, default), 0, EndKind.ObjectiveOwned, ExpireFlags.None),
+                    Order(new ScopeKey(faction, ScopeKind.Outpost, 2), PolicyKind.AllowAbandon, default, 0, EndKind.UntilReplaced, ExpireFlags.None) });
+        }
+
+        private void ProposeSecond(long tick, bool retry = false)
+        {
+            if (retry) secondRetries++;
             uint enemyCore = faction == 1 ? 2U : 1U;
-            Propose(frame.Tick, new[] {
+            Propose(tick, new[] {
                 Order(new ScopeKey(faction, ScopeKind.Outpost, 1), PolicyKind.AllowAbandon, default, 0, EndKind.UntilReplaced, ExpireFlags.None),
                 Order(All, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, enemyCore, default), 0, EndKind.UntilReplaced, ExpireFlags.None) });
+        }
+
+        private void RetryStale(FactionFrame frame)
+        {
+            var stale = frame.Commands.Where(c => c.Source == CommandSource.Doctrine && c.Status == CommandStatus.Expired && c.Reason == ReasonCode.StaleVersion && c.CommandId > lastRetriedStale)
+                .OrderBy(c => c.CommandId).LastOrDefault();
+            if (stale.CommandId == 0) return;
+            lastRetriedStale = stale.CommandId;
+            if ((stale.Kind == PolicyKind.MaintainReserve || stale.Kind == PolicyKind.Focus && stale.Goal.Kind == GoalKind.Outpost ||
+                    stale.Kind == PolicyKind.AllowAbandon && stale.Target.Equals(new ScopeKey(faction, ScopeKind.Outpost, 2))) && initialRetries < 3)
+            { northFocusCommandId = 0; ProposeInitial(frame.Tick, true); }
+            else if (stale.Kind == PolicyKind.Focus && stale.Goal.Kind == GoalKind.Core && secondRetries < 3)
+            { concentrated = false; ProposeSecond(frame.Tick, true); }
         }
 
         private void LearnCommandIds(FactionFrame frame)
@@ -135,13 +171,36 @@ namespace Rts.Application
                     .OrderByDescending(c => c.CommandId).FirstOrDefault();
                 if (defend.CommandId != 0) defendCommands[id] = defend.CommandId;
             }
+            foreach (uint id in defendCommands.Where(p => p.Value != 0).Select(p => p.Key).ToArray())
+            {
+                var defend = frame.Commands.FirstOrDefault(c => c.CommandId == defendCommands[id]);
+                if (defend.Status == CommandStatus.Executing)
+                {
+                    defendStaleRetries[id] = 0;
+                    continue;
+                }
+                if (defend.Status == CommandStatus.Expired && defend.Reason == ReasonCode.StaleVersion)
+                {
+                    int retries = defendStaleRetries.TryGetValue(id, out var value) ? value : 0;
+                    if (retries < 3)
+                    {
+                        defendStaleRetries[id] = retries + 1;
+                        defendCommands.Remove(id);
+                    }
+                }
+            }
         }
 
         private ScopeKey All => new ScopeKey(faction, ScopeKind.All, 0);
         private void Propose(long tick, IReadOnlyList<PolicyOrder> orders)
         {
-            var observed = orders.Select(o => new PolicyOrder(o.CommandId, o.BatchId, o.Source, o.Target, o.Kind, o.Goal, o.Priority,
-                o.AllowedLoss, o.End, o.ReservePermille, o.TargetRevision, o.Parents, tick, o.Expiration)).ToArray();
+            var observed = orders.Select(o =>
+            {
+                var snapshot = versions == null ? Array.Empty<PolicyVersion>() : versions.Versions(o.Target).ToArray();
+                ulong revision = snapshot.Length == 0 ? 0 : snapshot.Single(v => v.Scope.Equals(o.Target)).Revision;
+                return new PolicyOrder(o.CommandId, o.BatchId, o.Source, o.Target, o.Kind, o.Goal, o.Priority,
+                    o.AllowedLoss, o.End, o.ReservePermille, revision, snapshot.Where(v => !v.Scope.Equals(o.Target)).ToArray(), tick, o.Expiration);
+            }).ToArray();
             port.Propose(faction, sequence++, observed, checked(tick + 1));
         }
         private PolicyOrder Order(ScopeKey target, PolicyKind kind, PolicyGoal goal, ushort reserve, EndKind end, ExpireFlags flags)

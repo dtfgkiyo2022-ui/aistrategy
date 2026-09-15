@@ -271,7 +271,7 @@ namespace Rts.Tests.EditMode
                     Assert.That(grid.IsPassable(grid.Cell((SimPoint)position.GetValue(soldiers.GetValue(i)))), Is.True, "tick=" + tick + " id=" + (i + 1));
                 Assert.That(sim.Capture(1).Result.IsFault, Is.False);
             }
-            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.X, Is.GreaterThan(Fix64.FromInt(80)));
+            Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.X, Is.GreaterThan(Fix64.FromInt(50)), "Joint-offense gathering may wait before advancing (9.2).");
             Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 2).Position.Z, Is.LessThan(Fix64.FromInt(40)));
             Assert.That(sim.Capture(1).Observation.OwnArmies.Single(a => a.Id == 3).Position.X, Is.LessThan(Fix64.FromInt(32)));
         }

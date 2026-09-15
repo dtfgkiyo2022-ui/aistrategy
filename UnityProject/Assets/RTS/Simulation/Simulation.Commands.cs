@@ -399,10 +399,6 @@ namespace Rts.Simulation
                 if (a.Policy != policy || a.Goal.Kind != goal.Kind || a.Goal.Id != goal.Id || !SamePoint(a.Goal.Point, goal.Point))
                 {
                     a.HasPathGoal = false;
-                    // A global/outpost policy changed this army's assignment independently of its own scope.
-                    // Local acceptance already advanced the army scope; do not advance it twice here.
-                    if (selected == null || selected.Order.Target.Kind != ScopeKind.Army)
-                        Advance(new ScopeKey(a.Definition.FactionId, ScopeKind.Army, armyId));
                 }
                 a.Policy = policy; a.Goal = goal;
                 a.CommandId = selected?.Order.CommandId ?? 0; a.LogIndex = selected?.LogIndex ?? 0;

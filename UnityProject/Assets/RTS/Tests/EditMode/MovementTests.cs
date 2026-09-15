@@ -7,6 +7,7 @@ using Rts.Contracts;
 using Rts.Simulation;
 using Rts.Application;
 using Rts.Replay;
+using Rts.Decision;
 using Battle = Rts.Simulation.Simulation;
 
 namespace Rts.Tests.EditMode
@@ -17,6 +18,7 @@ namespace Rts.Tests.EditMode
         private static SimPoint P(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
         private static bool Within(SimPoint a, SimPoint b, Fix64 r) => FixMath.CompareDistanceSquared(a.X.Raw-b.X.Raw,a.Z.Raw-b.Z.Raw,r.Raw)<=0;
         private static object World(Battle sim) => typeof(Battle).GetField("world", Hidden).GetValue(sim);
+        private static FactionOffenseMemory[] Offenses(Battle sim) => (FactionOffenseMemory[])typeof(Battle).GetField("offenseMemory", Hidden).GetValue(sim);
         private static Array States(Battle sim, string name) => (Array)World(sim).GetType().GetField(name, Hidden).GetValue(World(sim));
         private static T Field<T>(object state, string name) => (T)state.GetType().GetField(name, Hidden).GetValue(state);
         private static void Set(object state, string name, object value) => state.GetType().GetField(name, Hidden).SetValue(state, value);
@@ -93,12 +95,22 @@ namespace Rts.Tests.EditMode
         public void NoReachableArmyStallsFor600TicksWithoutNearbyEnemies(string preset)
         {
             var s=WeekTwoScenario.Create(); var sim=new Battle(s); var map=new GridMap(s.Map);
-            var inputs=preset=="auto"?Array.Empty<ScheduledInput>():PolicyPresets.InitialInputs(s,preset);
+            CommandGateway gateway=null; PresetController west=null, east=null;
+            if(preset!="auto")
+            {
+                gateway=new CommandGateway(sim); west=PolicyPresets.CreateController(preset,1,gateway); east=PolicyPresets.CreateController(preset,2,gateway);
+                west.Initialize(); east.Initialize();
+            }
             var previous=new SimPoint[8]; var cursors=new int[8]; var stopped=new int[8];
             for(int t=1;t<=5000;t++)
             {
-                sim.Step(t,inputs.Where(i=>i.AcceptedTick+1==t).ToArray()); Safe(sim,map,t);
+                if(gateway==null) sim.Step(t,Array.Empty<ScheduledInput>()); else gateway.Step();
+                Safe(sim,map,t);
                 foreach(uint f in new uint[]{1,2})
+                {
+                var offense=Offenses(sim)[f-1];
+                bool offenseWaiting=offense.Phase==OffensivePhase.WaitingToAdvance;
+                if(offenseWaiting) Assert.That(t-offense.GatheredTick,Is.LessThan(600),"waiting deadline faction="+f+" tick="+t);
                 foreach(var a in sim.Capture(f).Observation.OwnArmies)
                 {
                     if(a.AliveCount==0) continue;
@@ -108,10 +120,12 @@ namespace Rts.Tests.EditMode
                     bool hold=decision.Assignment==AssignmentKind.Guard || decision.Assignment==AssignmentKind.Reserve || decision.Assignment==AssignmentKind.CoreDefense;
                     bool enemy=sim.Capture(3-f).Units.Where(u=>u.IsOwn).Any(u=>Within(a.Position,u.Position,Fix64.FromInt(24)));
                     bool unchanged=a.Position.X==previous[i].X && a.Position.Z==previous[i].Z && cursor==cursors[i];
-                    stopped[i]=!hold && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
+                    stopped[i]=!hold && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
                     Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id);
                     previous[i]=a.Position; cursors[i]=cursor;
                 }
+                }
+                if(gateway!=null) { west.Step(sim.Capture(1)); east.Step(sim.Capture(2)); }
             }
         }
         [Test]
