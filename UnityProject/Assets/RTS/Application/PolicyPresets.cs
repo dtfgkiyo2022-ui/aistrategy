@@ -197,7 +197,10 @@ namespace Rts.Application
             var observed = orders.Select(o =>
             {
                 var snapshot = versions == null ? Array.Empty<PolicyVersion>() : versions.Versions(o.Target).ToArray();
-                ulong revision = snapshot.Length == 0 ? 0 : snapshot.Single(v => v.Scope.Equals(o.Target)).Revision;
+                var targets = snapshot.Where(v => v.Scope.Equals(o.Target)).ToArray();
+                if (snapshot.Length != 0 && targets.Length != 1)
+                    throw new InvalidOperationException("Expected exactly one target policy version.");
+                ulong revision = snapshot.Length == 0 ? 0 : targets[0].Revision;
                 return new PolicyOrder(o.CommandId, o.BatchId, o.Source, o.Target, o.Kind, o.Goal, o.Priority,
                     o.AllowedLoss, o.End, o.ReservePermille, revision, snapshot.Where(v => !v.Scope.Equals(o.Target)).ToArray(), tick, o.Expiration);
             }).ToArray();

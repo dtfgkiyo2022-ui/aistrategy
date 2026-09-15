@@ -118,10 +118,23 @@ namespace Rts.Tests.EditMode
                     int cursor=Field<int>(state,"PathCursor");
                     var decision=Field<ArmyDecisionMemory>(state,"Decision");
                     bool hold=decision.Assignment==AssignmentKind.Guard || decision.Assignment==AssignmentKind.Reserve || decision.Assignment==AssignmentKind.CoreDefense;
+                    var policy=Field<PolicyKind>(state,"Policy");
+                    var soldiers=Field<uint[]>(state,"SoldierIds").Select(id=>States(sim,"Soldiers").GetValue((int)id-1))
+                        .Where(soldier=>Field<bool>(soldier,"Alive")).ToArray();
+                    var destination=Field<SimPoint>(state,"PathGoal");
+                    // Explicit defense is not represented by AssignmentKind.Guard (9.1/9.2).
+                    // Require every living soldier to have reached the actual mission's hold area.
+                    bool atMission=Field<bool>(state,"HasPathGoal") && soldiers.Length>0 &&
+                        (policy==PolicyKind.Defend || policy==PolicyKind.Retreat) &&
+                        soldiers.All(soldier=>Within(Field<SimPoint>(soldier,"Position"),destination,Fix64.FromInt(policy==PolicyKind.Defend?8:4)));
+                    // OwnArmy.Position is the first living soldier: it can already be holding while
+                    // reinforcements are still approaching. Count actual movement outside the hold area.
+                    bool missionProgress=(policy==PolicyKind.Retreat || policy==PolicyKind.Defend) &&
+                        soldiers.Any(soldier=>Field<bool>(soldier,"IsMoving") && !Within(Field<SimPoint>(soldier,"Position"),destination,Fix64.FromInt(policy==PolicyKind.Defend?8:4)));
                     bool enemy=sim.Capture(3-f).Units.Where(u=>u.IsOwn).Any(u=>Within(a.Position,u.Position,Fix64.FromInt(24)));
                     bool unchanged=a.Position.X==previous[i].X && a.Position.Z==previous[i].Z && cursor==cursors[i];
-                    stopped[i]=!hold && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
-                    Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id);
+                    stopped[i]=!hold && !atMission && !missionProgress && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
+                    Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id+" policy="+Field<PolicyKind>(state,"Policy")+" goal="+Field<PolicyGoal>(state,"Goal").Kind+":"+Field<PolicyGoal>(state,"Goal").Id+" pos="+a.Position.X+","+a.Position.Z+" pathGoal="+Field<SimPoint>(state,"PathGoal").X+","+Field<SimPoint>(state,"PathGoal").Z+" assignment="+decision.Assignment);
                     previous[i]=a.Position; cursors[i]=cursor;
                 }
                 }

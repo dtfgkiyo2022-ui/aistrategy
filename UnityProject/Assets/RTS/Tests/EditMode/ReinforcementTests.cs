@@ -4,6 +4,7 @@ using System.Reflection;
 using NUnit.Framework;
 using Rts.Contracts;
 using Rts.Replay;
+using Rts.Decision;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
 
@@ -138,10 +139,18 @@ namespace Rts.Tests.EditMode
             Assert.That(newborn.IsMoving || newborn.IsAttacking, Is.False);
             Assert.That(Field(sim, "Outposts[1].CaptureTicks"), Is.EqualTo("0"));
             Until(sim, 101); Assert.That(Field(sim, "Outposts[1].CaptureTicks"), Is.EqualTo("1"));
-            // Allocation runs every 20 ticks (9.2), so the newborn waits through the
-            // spawning tick and the next allocation boundary before receiving movement.
+            // The only infantry is correctly held as reserve at the next allocation (9.2).
             Until(sim, 120);
+            Assert.That(Field(sim, "Ai.Armies[3].Assignment"), Is.EqualTo(((byte)AssignmentKind.Reserve).ToString()));
+            Assert.That(sim.Capture(1).Units.Single(u => u.IsOwn).IsMoving, Is.False);
+            // Give it an explicit distant defense mission: it must now leave the spawn cell.
+            CommandTestInput.Step(sim, 121, new[] { PolicyDecisionTests.Order(121, 1, ScopeKind.Army, 3,
+                PolicyKind.Defend, new PolicyGoal(GoalKind.Outpost, 2, default)) });
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Executing));
+            // The first navigation tick consumes the path's start-cell center.
+            Until(sim, 122);
             Assert.That(sim.Capture(1).Units.Single(u => u.IsOwn).IsMoving, Is.True);
+            Assert.That(sim.Capture(1).Units.Single(u => u.IsOwn).Position, Is.Not.EqualTo(newborn.Position));
         }
 
         [Test]
