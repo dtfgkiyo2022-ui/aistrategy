@@ -386,5 +386,196 @@ namespace Rts.Tests.EditMode
             Assert.That(gateway.Inputs.Last().ResolutionReason, Is.EqualTo(ReasonCode.Deadline));
             Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Expired));
         }
+        private static PolicyOrder ReplyOrder(PolicyRequest r) => new PolicyOrder(999, 999, CommandSource.Human,
+            r.Scope, r.Kind, r.Goal, 50, new LossBudget(1000), new EndCondition(EndKind.UntilReplaced, 0),
+            0, 999, Array.Empty<PolicyVersion>(), 999, new Expiration(long.MaxValue, 0, ExpireFlags.None));
+
+        [Test]
+        public void LongProfileAppliesTwentySecondReplyAt401()
+        {
+            var sim = new Battle(Frozen());
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(400, r => new[] { ReplyOrder(r) }, AiTimingProfile.Long));
+            g.SubmitInterpreted(Intent(North, 1));
+            for (int i = 0; i < 401; i++) g.Step();
+            var input = g.Inputs.Single(i => i.Kind == InputKind.Resolve);
+            Assert.That(input.DeadlineTick, Is.EqualTo(500));
+            Assert.That(input.ApplyTick, Is.EqualTo(401));
+            Assert.That(input.Orders.Single().ObservedTick, Is.Zero);
+            Assert.That(input.Orders.Single().Expiration.MaxObservationAgeTicks, Is.EqualTo(500));
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Executing));
+        }
+        [Test]
+        public void DelayedObservationExpiresUsingSimulationAgeCheck()
+        {
+            var sim = new Battle(Frozen());
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(400, r => new[] { ReplyOrder(r) }));
+            g.SubmitInterpreted(Intent(North, 1), 500); // independent override isolates the observation check
+            for (int i = 0; i < 401; i++) g.Step();
+            Assert.That(g.Inputs.Last().Orders.Single().Expiration.MaxObservationAgeTicks, Is.EqualTo(240));
+            Assert.That(sim.Capture(1).Commands.Single().Reason, Is.EqualTo(ReasonCode.ObservationTooOld));
+        }
+        [TestCase(false)]
+        [TestCase(true)]
+        public void DelayedReplyCannotReplaceLaterDirectHumanOrder(bool autonomous)
+        {
+            var sim = new Battle(Frozen());
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(200, r => new[] { ReplyOrder(r) }));
+            if (autonomous) g.EnableAutonomous(Intent(North, 1)); else g.SubmitInterpreted(Intent(North, 1));
+            for (int i = 0; i < 10; i++) g.Step();
+            g.Submit(new UserPolicyIntent(2, North, PolicyKind.Defend, Goal(2), 50, new LossBudget(1000),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (int i = 10; i < 230; i++) g.Step();
+            var human = sim.Capture(1).Commands.Single(c => c.Kind == PolicyKind.Defend);
+            Assert.That(human.Status, Is.EqualTo(CommandStatus.Executing));
+            Assert.That(human.Goal.Id, Is.EqualTo(2));
+            Assert.That(sim.Capture(1).Commands.Any(c => c.Kind == PolicyKind.Focus && c.Status == CommandStatus.Executing), Is.False);
+            if (autonomous) Assert.That(g.Inputs.Any(i => i.ResolutionReason == ReasonCode.StaleVersion), Is.True);
+            else Assert.That(sim.Capture(1).Commands.First().Status, Is.EqualTo(CommandStatus.Cancelled));
+        }
+        [TestCase(200, CommandStatus.Executing)]
+        [TestCase(199, CommandStatus.Expired)]
+        public void DelayedDeadlineIncludesReplyOnDeadlineOnly(int deadline, CommandStatus expected)
+        {
+            var sim = new Battle(Frozen());
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(200, r => new[] { ReplyOrder(r) }));
+            g.SubmitInterpreted(Intent(North, 1), deadline);
+            for (int i = 0; i < 201; i++) g.Step();
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(expected));
+            Assert.That(g.Inputs.Last().ResolutionReason, Is.EqualTo(deadline == 200 ? ReasonCode.None : ReasonCode.Deadline));
+        }
+        [Test]
+        public void DelayedReplyFreezesObservationAndDiagnosticIncludesQueuedContents()
+        {
+            var sim = new Battle(WeekTwoScenario.Create()); int calls = 0;
+            SimPoint initial = default;
+            var provider = new DelayedPolicyProvider(60, r => {
+                calls++; initial = r.Observation.OwnArmies.First().Position;
+                var o = ReplyOrder(r);
+                return new[] { new PolicyOrder(0, 0, o.Source, o.Target, o.Kind, new PolicyGoal(GoalKind.Point, 0, initial),
+                    o.Priority, o.AllowedLoss, o.End, 0, 0, o.Parents, 0, o.Expiration) };
+            });
+            var g = new CommandGateway(sim, provider); g.SubmitInterpreted(Intent(North, 1));
+            byte[] queued = g.CaptureDiagnostic();
+            var other = new CommandGateway(new Battle(WeekTwoScenario.Create()), new DelayedPolicyProvider(60, r => new[] { ReplyOrder(r) }));
+            other.SubmitInterpreted(Intent(North, 1));
+            Assert.That(queued, Is.Not.EqualTo(other.CaptureDiagnostic()));
+            for (int i = 0; i < 61; i++) g.Step();
+            Assert.That(calls, Is.EqualTo(1));
+            Assert.That(sim.Capture(1).Observation.OwnArmies.First().Position, Is.Not.EqualTo(initial));
+            Assert.That(g.Inputs.Last().Orders.Single().Goal.Point, Is.EqualTo(initial));
+        }
+        [Test]
+        public void AutonomousHasOnePendingTargetAndRetriesChangedVersionsOnNextDecision()
+        {
+            var sim = new Battle(Frozen()); var requests = new List<PolicyRequest>();
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(200, r => { requests.Add(r); return new[] { ReplyOrder(r) }; }));
+            g.EnableAutonomous(Intent(North, 1));
+            for (int i = 0; i < 45; i++) g.Step();
+            Assert.That(requests.Count, Is.EqualTo(1));
+            g.Submit(Intent(All, 2)); g.Step(); // parent revision changes at S46
+            for (int i = 46; i < 60; i++) g.Step();
+            Assert.That(requests.Count, Is.EqualTo(1));
+            g.Step();
+            Assert.That(requests.Select(r => r.StartedTick), Is.EqualTo(new long[] { 0, 60 }));
+            Assert.That(requests[1].Versions.Single(v => v.Scope.Equals(All)).Revision, Is.EqualTo(sim.Revision(All)));
+            for (int i = 61; i < 201; i++) g.Step();
+            Assert.That(g.Inputs.Count(i => i.ResolutionReason == ReasonCode.StaleVersion), Is.EqualTo(1));
+            Assert.That(g.Inputs.Where(i => i.Kind == InputKind.Proposal).All(i => i.Orders.Count == 0), Is.True);
+        }
+        [TestCase(0, "long")] [TestCase(60, "long")] [TestCase(200, "long")] [TestCase(400, "long")] [TestCase(400, "default")]
+        public void AutonomousAutoVsAutoContinuesAcrossRepeatedDelays(int delay, string profile)
+        {
+            var scenario = WeekTwoScenario.Create();
+            var inputs = PolicyPresets.DelayedInputs(scenario, 1500, delay, AiTimingProfile.Parse(profile));
+            var sim = new Battle(scenario);
+            for (int tick = 1; tick <= 1500; tick++)
+            {
+                sim.Step(tick, inputs.Where(i => i.AcceptedTick == tick - 1).ToArray());
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "tick " + tick);
+                Assert.That(sim.Capture(1).Result.HasEnded, Is.False, "tick " + tick);
+            }
+            if (profile == "default")
+            {
+                Assert.That(inputs.Count(i => i.ResolutionReason == ReasonCode.Deadline), Is.GreaterThanOrEqualTo(6));
+                Assert.That(inputs.SelectMany(i => i.Orders), Is.Empty);
+            }
+            else Assert.That(inputs.Count(i => i.Orders.Count > 0), Is.GreaterThanOrEqualTo(6));
+            Assert.That(inputs.SelectMany(i => i.Orders).All(o => o.Source == CommandSource.Ai), Is.True);
+        }
+        [Test]
+        public void DelayedRecordingReplaysAllLiveHashesWithoutProviderOrDuplicateInputs()
+        {
+            var scenario = Frozen(); var sim = new Battle(scenario);
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(400, r => new[] { ReplyOrder(r) }, AiTimingProfile.Long));
+            g.EnableAutonomous(Intent(North, 1));
+            var hashes = new List<byte[]> { ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState) };
+            for (int i = 0; i < 850; i++) { g.Step(); hashes.Add(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState)); }
+            var build = new BuildIdentity { SourceHash = "delayed" };
+            using (var stream = new MemoryStream())
+            {
+                int n = 0;
+                ReplayRunner.Record(stream, scenario, g.Inputs, 850, build, (s,h,e) => Assert.That(h, Is.EqualTo(hashes[n++])), aiDelayTicks:400, aiProfile:"long");
+                Assert.That(n, Is.EqualTo(851)); stream.Position = 0;
+                using (var reader = new ReplayReader(stream))
+                {
+                    Assert.That(reader.Header.AiDelayTicks, Is.EqualTo(400)); Assert.That(reader.Header.AiProfile, Is.EqualTo("long"));
+                    var ids = new List<ulong>(); ReplayRecord record;
+                    while ((record = reader.Read()) != null) if (record.Kind == ReplayRecordKind.Input) ids.Add(record.LogIndex);
+                    Assert.That(ids.Count, Is.EqualTo(g.Inputs.Count)); Assert.That(ids.Distinct().Count(), Is.EqualTo(ids.Count));
+                }
+                stream.Position = 0; n = 0;
+                var result = ReplayRunner.Replay(stream, build, (s,h,e) => Assert.That(h, Is.EqualTo(hashes[n++])));
+                Assert.That(result.FirstMismatchTick, Is.Null); Assert.That(n, Is.EqualTo(851));
+            }
+        }
+        [TestCase(0, 40)] [TestCase(60, 61)] [TestCase(200, 201)] [TestCase(400, 401)]
+        public void AutonomousProposalUsesRequestVersionsAndTransmission(int delay, int apply)
+        {
+            var sim = new Battle(Frozen()); PolicyRequest request = null;
+            var g = new CommandGateway(sim, new DelayedPolicyProvider(delay, r => {
+                request = r; return new[] { ReplyOrder(r) }; }, AiTimingProfile.Long));
+            g.EnableAutonomous(Intent(North, 1));
+            for (int i = 0; i <= delay; i++) g.Step();
+            var proposal = g.Inputs.First(i => i.Kind == InputKind.Proposal);
+            Assert.That(g.Inputs.Any(i => i.Kind == InputKind.Reserve), Is.False);
+            Assert.That(proposal.ApplyTick, Is.EqualTo(apply));
+            var order = proposal.Orders.Single();
+            Assert.That(order.Source, Is.EqualTo(CommandSource.Ai));
+            Assert.That(order.TargetRevision, Is.EqualTo(request.Versions.Single(v => v.Scope.Equals(North)).Revision));
+            Assert.That(order.Parents.Select(v => v.Revision), Is.EqualTo(request.Versions.Where(v => !v.Scope.Equals(North)).Select(v => v.Revision)));
+            Assert.That(order.ObservedTick, Is.EqualTo(request.StartedTick));
+            Assert.That(order.Expiration.MaxObservationAgeTicks, Is.EqualTo(500));
+        }
+        [Test]
+        public void CancellationAppliesNextTickWithoutResettingPhysicalStateOrWaits()
+        {
+            var sim = new Battle(Frozen()); var g = new CommandGateway(sim);
+            ulong id = g.Submit(Intent(North, 1));
+            for (int i = 0; i < 40; i++) g.Step();
+            const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
+            var world = typeof(Battle).GetField("world", flags).GetValue(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", flags).GetValue(world);
+            object soldier = soldiers.GetValue(0);
+            soldier.GetType().GetField("NextAttackTick", flags).SetValue(soldier, 999L);
+            soldier.GetType().GetField("Hp", flags).SetValue(soldier, 17);
+            soldiers.SetValue(soldier, 0);
+            var armies = (Array)world.GetType().GetField("Armies", flags).GetValue(world);
+            object army = armies.GetValue(0); var decisionField = army.GetType().GetField("Decision", flags);
+            object decision = decisionField.GetValue(army);
+            decision.GetType().GetField("HoldUntilTick").SetValue(decision, 888L);
+            decisionField.SetValue(army, decision); armies.SetValue(army, 0);
+            var before = DiagnosticComparison.Fields(sim.CaptureDiagnostic());
+            g.Cancel(id);
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Executing));
+            g.Step();
+            Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Cancelled));
+            Assert.That(g.Inputs.Last().ApplyTick, Is.EqualTo(41));
+            var after = DiagnosticComparison.Fields(sim.CaptureDiagnostic());
+            foreach (var field in before.Where(f => f.Key.StartsWith("Soldiers[1].Position") ||
+                f.Key == "Soldiers[1].Hp" || f.Key == "Soldiers[1].NextAttackTick" || f.Key == "Ai.Armies[1].HoldUntilTick"))
+                Assert.That(after.Single(f => f.Key == field.Key).Value, Is.EqualTo(field.Value), field.Key);
+            Assert.That(after.Single(f => f.Key == "Soldiers[1].NextAttackTick").Value, Is.EqualTo("999"));
+            Assert.That(after.Single(f => f.Key == "Ai.Armies[1].HoldUntilTick").Value, Is.EqualTo("888"));
+        }
     }
 }

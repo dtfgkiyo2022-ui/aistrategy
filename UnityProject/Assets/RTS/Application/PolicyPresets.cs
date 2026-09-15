@@ -34,6 +34,24 @@ namespace Rts.Application
             return result.ToArray();
         }
 
+        /// <summary>Recording-only autonomous upper policies; tactical auto allocation still runs in Simulation.</summary>
+        public static ScheduledInput[] DelayedInputs(ScenarioDefinition scenario, long ticks, int delay, AiTimingProfile profile)
+        {
+            if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new ArgumentOutOfRangeException(nameof(ticks));
+            var sim = new Simulation.Simulation(scenario);
+            var provider = new DelayedPolicyProvider(delay, r => new[] {
+                new PolicyOrder(0, 0, CommandSource.Ai, r.Scope, r.Kind, r.Goal, 50, new LossBudget(300),
+                    new EndCondition(EndKind.UntilReplaced, 0), 100, 0, Array.Empty<PolicyVersion>(), r.StartedTick,
+                    new Expiration(long.MaxValue, 0, ExpireFlags.None)) }, profile);
+            var gateway = new CommandGateway(sim, provider);
+            for (uint faction = 1; faction <= 2; faction++)
+                gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(faction, ScopeKind.All, 0),
+                    PolicyKind.MaintainReserve, default, 50, new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0),
+                    100, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (long i = 0; i < ticks && !sim.Capture(1).Result.HasEnded; i++) gateway.Step();
+            return gateway.Inputs.ToArray();
+        }
+
         public static PresetController CreateController(string preset, uint faction, ICommandPort port)
             => new PresetController(preset, faction, port, (port as CommandGateway)?.FactionVersions(faction));
 

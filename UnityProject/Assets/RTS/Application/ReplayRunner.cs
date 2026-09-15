@@ -17,7 +17,7 @@ namespace Rts.Application
     }
     public static class ReplayRunner
     {
-        public static ReplayOutcome Record(Stream output,ScenarioDefinition scenario,IEnumerable<ScheduledInput> source,long ticks,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,string westPreset="none",string eastPreset="none")
+        public static ReplayOutcome Record(Stream output,ScenarioDefinition scenario,IEnumerable<ScheduledInput> source,long ticks,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,string westPreset="none",string eastPreset="none",int aiDelayTicks=-1,string aiProfile="default")
         {
             if(ticks<0 || ticks>10000000 || ticks>scenario.VerificationTickLimit)throw new InvalidDataException("Tick limit outside scenario verification range.");
             // Canonical copy prevents caller mutation; future inputs stay outside Simulation and its hash.
@@ -28,7 +28,7 @@ namespace Rts.Application
             var inputs=supplied.OrderBy(v=>v.AcceptedTick).ThenBy(v=>v.LogIndex).ToArray();
             var indices=new HashSet<ulong>();
             foreach(var i in inputs) if(i.AcceptedTick<0 || i.AcceptedTick>=ticks || i.ApplyTick<=i.AcceptedTick || !indices.Add(i.LogIndex))throw new InvalidDataException("Input tick or duplicate LogIndex.");
-            var header=new ReplayHeader { RulesVersion=ScenarioBinary.RulesVersion,TickRateHz=scenario.TickRateHz,Seed=scenario.Seed,TickLimit=ticks,Scenario=bytes,Build=build,WestPreset=westPreset,EastPreset=eastPreset };
+            var header=new ReplayHeader { RulesVersion=ScenarioBinary.RulesVersion,TickRateHz=scenario.TickRateHz,Seed=scenario.Seed,TickLimit=ticks,Scenario=bytes,Build=build,WestPreset=westPreset,EastPreset=eastPreset,AiDelayTicks=aiDelayTicks,AiProfile=aiProfile };
             using(var writer=new ReplayWriter(output,header))
             {
                 int cursor=0; ulong lastIndex=0; var outcome=new ReplayOutcome();
