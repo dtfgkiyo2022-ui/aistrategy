@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
+using Rts.Decision;
 
 namespace Rts.Simulation
 {
@@ -36,7 +37,12 @@ namespace Rts.Simulation
             try
             {
                 world.Tick = tick;
+                commandEvents.Clear();
                 ApplyInputs(inputs);
+                ApplyPendingCommands();
+                ComposePolicies();
+                DecideArmies();
+                ComposePolicies();
                 GenerateIntents();
                 Move();
                 Attack();
@@ -44,6 +50,8 @@ namespace Rts.Simulation
                 CaptureOutposts();
                 Reinforce();
                 UpdateObservations();
+                FinishCommands();
+                ComposePolicies();
                 ResolveVictory();
             }
             catch (ArithmeticException)
@@ -52,53 +60,6 @@ namespace Rts.Simulation
                 world.Result = new MatchResult(true, 0, false, true, false);
             }
             PublishFrames();
-        }
-
-        private void ValidateInputs(long tick, IReadOnlyList<ScheduledInput> inputs)
-        {
-            if (inputs == null) throw new ArgumentNullException(nameof(inputs));
-            foreach (var input in inputs)
-            {
-                if (input == null || input.ApplyTick != tick || input.AcceptedTick < 0 || input.AcceptedTick > tick
-                    || (input.Kind != InputKind.Resolve && input.Kind != InputKind.Proposal))
-                    throw new ArgumentException("Pass only resolved/proposed orders for this tick; scheduling is owned by the caller.", nameof(inputs));
-                foreach (var order in input.Orders)
-                {
-                    if (order == null || order.Target.Kind != ScopeKind.Army || order.Target.Id == 0
-                        || order.Target.Id > world.Armies.Length
-                        || world.Armies[order.Target.Id - 1].Definition.FactionId != order.Target.FactionId)
-                        throw new ArgumentException("Invalid army order.", nameof(inputs));
-                    if (order.Kind == PolicyKind.Retreat) continue;
-                    if (order.Kind != PolicyKind.Focus) throw new ArgumentException("Unsupported week-one policy.", nameof(inputs));
-                    if (order.Goal.Kind == GoalKind.Point)
-                        WorldState.ValidatePoint(order.Goal.Point, world.Config.Map);
-                    else if (order.Goal.Kind == GoalKind.Outpost && order.Goal.Id > 0 && order.Goal.Id <= world.Outposts.Length) { }
-                    else if (order.Goal.Kind != GoalKind.Core || order.Goal.Id == 0 || order.Goal.Id > world.Cores.Length
-                        || world.Cores[order.Goal.Id - 1].Definition.FactionId == order.Target.FactionId)
-                        throw new ArgumentException("Focus requires a point, outpost or enemy core.", nameof(inputs));
-                }
-            }
-        }
-
-        private void ApplyInputs(IReadOnlyList<ScheduledInput> inputs)
-        {
-            // Issue #16 owns reservations, revisions, batches and transitions. Preserve received order here.
-            foreach (var input in inputs)
-            {
-                world.InputCursor = input.LogIndex;
-                foreach (var order in input.Orders)
-                {
-                    ref var a = ref world.Armies[order.Target.Id - 1];
-                    if (a.Policy != order.Kind || a.Goal.Kind != order.Goal.Kind || a.Goal.Id != order.Goal.Id || !SamePoint(a.Goal.Point, order.Goal.Point))
-                        a.HasPathGoal = false;
-                    a.Policy = order.Kind;
-                    a.Goal = order.Goal;
-                    a.CommandId = order.CommandId;
-                    a.LogIndex = input.LogIndex;
-                    a.AcceptedTick = input.AcceptedTick;
-                    a.ApplyTick = input.ApplyTick;
-                }
-            }
         }
 
         private void GenerateIntents()
@@ -111,37 +72,21 @@ namespace Rts.Simulation
                 s.TargetId = 0;
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
-                s.IsRetreating = a.Policy == PolicyKind.Retreat;
                 uint faction = s.Initial.FactionId;
-                uint coreId = world.Factions[s.IsRetreating ? faction - 1 : 2 - faction].CoreId;
-                s.MoveGoal = world.Cores[coreId - 1].Definition.Position;
-                if (a.Policy == PolicyKind.Focus)
-                    s.MoveGoal = GoalPosition(a.Goal);
-                if (s.IsRetreating) continue;
-
-                // Candidates come from the previous tick's faction observation, never enemy HP/policies.
                 var observation = frames[faction - 1].Observation;
-                BigInteger best = 0;
-                foreach (var enemy in observation.VisibleEnemies)
-                {
-                    uint id = InternalSoldierId(faction, enemy.ContactId);
-                    Consider(ref s, enemy.Position, s.Parameters.Range, 1, id, ref best);
-                }
-                foreach (var objective in observation.Objectives)
-                    if (objective.Kind == GoalKind.Core && objective.OwnerFactionId != faction && objective.Hp > 0)
-                        Consider(ref s, objective.Position, s.Parameters.Range + world.Config.Rules.CoreRadius, 2, objective.Id, ref best);
-            }
-        }
+                var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+                bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
+                var mission = ArmyGoal(a);
+                var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
+                    s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
+                var intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
+                if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout)
+                    s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal);
+                if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
+                else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
 
-        private static void Consider(ref SoldierState s, SimPoint position, Fix64 range, byte kind, uint id, ref BigInteger best)
-        {
-            BigInteger distance = DistanceSquared(s.Position, position);
-            if (distance > new BigInteger(range.Raw) * range.Raw) return;
-            if (s.TargetKind != 0 && (distance > best || (distance == best
-                && (kind > s.TargetKind || (kind == s.TargetKind && id >= s.TargetId))))) return;
-            best = distance;
-            s.TargetKind = kind;
-            s.TargetId = id;
+            }
         }
 
         private uint InternalSoldierId(uint faction, uint contactId)
@@ -301,8 +246,7 @@ namespace Rts.Simulation
                         if (count++ == 0) { position = s.Position; kind = s.Initial.Kind; }
                     }
                     armies.Add(new OwnArmyView(id, f, kind, position, count, a.Definition.HomeObjective));
-                    if (a.Policy != 0) commands.Add(new CommandView(a.CommandId, new ScopeKey(f, ScopeKind.Army, id),
-                        a.Policy, a.PathImpossible ? CommandStatus.Impossible : CommandStatus.Executing, a.AcceptedTick, a.ApplyTick, a.PathImpossible ? ReasonCode.NoPath : ReasonCode.None));
+
                 }
                 foreach (var faction in world.Factions)
                 {
@@ -313,12 +257,23 @@ namespace Rts.Simulation
                 foreach (var outpost in world.Outposts)
                     objectives.Add(new KnownObjective(GoalKind.Outpost, outpost.Definition.Id, outpost.Definition.Position, true,
                         outpost.OwnerFactionId, false, 0, world.Tick, outpost.CapturingFaction, outpost.CaptureTicks, world.Config.Rules.CaptureDurationTicks));
+                foreach (var command in commandStates)
+                    if (command.Order.Target.FactionId == f)
+                        commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind,
+                            command.Status, command.AcceptedTick, command.ApplyTick, command.Reason));
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
                     world.Result.IsFault ? EventKind.Fault : EventKind.MatchEnded, 3, 0, 0, default,
                     (int)world.Result.WinnerFactionId, ReasonCode.None) } : Array.Empty<GameEvent>();
-                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, events, fog, world.Result);
+                var visibleEvents = new List<GameEvent>();
+                foreach (var e in commandEvents)
+                    if ((e.AudienceMask & (1 << ((int)f - 1))) != 0)
+                        visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind, e.AudienceMask,
+                            e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
+                foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
+                    e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
+                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents, fog, world.Result);
             }
         }
 

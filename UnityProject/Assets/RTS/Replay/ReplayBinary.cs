@@ -41,7 +41,7 @@ namespace Rts.Replay
         internal byte[] Encode()=>ReplayBinary.Pack(w=> { ReplayBinary.Text(w,RulesVersion); w.Write(TickRateHz); w.Write(Seed); w.Write(TickLimit); w.Write((uint)Scenario.Length); w.Write(Scenario); Build.Write(w); });
         internal static ReplayHeader Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>new ReplayHeader { RulesVersion=ReplayBinary.Text(r),TickRateHz=r.ReadInt32(),Seed=r.ReadUInt64(),TickLimit=r.ReadInt64(),Scenario=ReplayBinary.Bytes(r,ReplayBinary.Count(r,ReplayBinary.MaxRecord)),Build=BuildIdentity.Read(r) });
     }
-    public enum ReplayRecordKind:byte { Input=1, TickHash=2, DiagnosticCheckpoint=3, End=4 }
+    public enum ReplayRecordKind:byte { Input=1, TickHash=2, DiagnosticCheckpoint=3, End=4, CommandResults=5 }
     public sealed class ReplayRecord
     {
         public ReplayRecordKind Kind { get; }
@@ -58,7 +58,7 @@ namespace Rts.Replay
         {
             writer=new BinaryWriter(stream,Encoding.UTF8,true);
             byte[] b=header.Encode(); if(b.Length>ReplayBinary.MaxRecord)throw new InvalidDataException("Header size.");
-            writer.Write(Encoding.ASCII.GetBytes("RTSRPL01")); writer.Write(1U); writer.Write((uint)b.Length); writer.Write(b);
+            writer.Write(Encoding.ASCII.GetBytes("RTSRPL01")); writer.Write(2U); writer.Write((uint)b.Length); writer.Write(b);
         }
         public void Write(ReplayRecord record)
         {
@@ -79,7 +79,7 @@ namespace Rts.Replay
         {
             reader=new BinaryReader(stream,Encoding.UTF8,true);
             if(!ReplayBinary.Bytes(reader,8).SequenceEqual(Encoding.ASCII.GetBytes("RTSRPL01")))throw new InvalidDataException("Replay Magic mismatch.");
-            if(reader.ReadUInt32()!=1)throw new InvalidDataException("Unknown replay schemaVersion.");
+            if(reader.ReadUInt32()!=2)throw new InvalidDataException("Unknown replay schemaVersion.");
             Header=ReplayHeader.Decode(ReplayBinary.Bytes(reader,ReplayBinary.Count(reader,ReplayBinary.MaxRecord)));
             if(Header.TickRateHz<=0 || Header.TickLimit<0 || Header.TickLimit>10000000)throw new InvalidDataException("Header tick limits.");
         }
@@ -101,7 +101,7 @@ namespace Rts.Replay
     {
         public static byte[] Encode(ScheduledInput v)=>ReplayBinary.Pack(w=>
         {
-            w.Write(v.LogIndex); w.Write((byte)v.Kind); w.Write(v.AcceptedTick); w.Write(v.ApplyTick); w.Write(v.RequestId); w.Write(v.IssuerSequence); w.Write((uint)v.Orders.Count);
+            w.Write(v.LogIndex); w.Write((byte)v.Kind); w.Write(v.AcceptedTick); w.Write(v.ApplyTick); w.Write(v.RequestId); w.Write(v.IssuerSequence); w.Write(v.DeadlineTick); w.Write((byte)v.ResolutionReason); w.Write((uint)v.Orders.Count);
             foreach(var o in v.Orders)
             {
                 w.Write(o.CommandId); w.Write(o.BatchId); w.Write((byte)o.Source); Scope(w,o.Target); w.Write((byte)o.Kind); Goal(w,o.Goal); w.Write(o.Priority);
@@ -114,6 +114,7 @@ namespace Rts.Replay
         {
             ulong index=r.ReadUInt64(); var kind=ReplayBinary.Enum<InputKind>(r); long accepted=r.ReadInt64(), apply=r.ReadInt64(); ulong request=r.ReadUInt64(), sequence=r.ReadUInt64();
             if(accepted<0 || apply<=0 || accepted>apply)throw new InvalidDataException("Input ticks.");
+            long deadline=r.ReadInt64(); var resolution=ReplayBinary.Enum<ReasonCode>(r);
             var orders=new PolicyOrder[ReplayBinary.Count(r)];
             for(int i=0;i<orders.Length;i++)
             {
@@ -124,7 +125,7 @@ namespace Rts.Replay
                 if(loss>1000 || reserve>1000 || flags>7)throw new InvalidDataException("Order range.");
                 orders[i]=new PolicyOrder(command,batch,source,target,policy,goal,priority,new LossBudget(loss),end,reserve,revision,parents,observed,new Expiration(valid,age,(ExpireFlags)flags));
             }
-            return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders);
+            return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });
         private static void Scope(BinaryWriter w,ScopeKey s) { w.Write(s.FactionId); w.Write((byte)s.Kind); w.Write(s.Id); }
         private static ScopeKey Scope(BinaryReader r)=>new ScopeKey(r.ReadUInt32(),ReplayBinary.Enum<ScopeKind>(r),r.ReadUInt32());

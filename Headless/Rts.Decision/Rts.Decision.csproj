@@ -8,10 +8,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../UnityProject/Assets/RTS/Decision/**/*.cs" />
     <ProjectReference Include="../Rts.Contracts/Rts.Contracts.csproj" />
-    <ProjectReference Include="../Rts.Decision/Rts.Decision.csproj" />
-    <Compile Include="../../UnityProject/Assets/RTS/Simulation/**/*.cs" Link="Simulation/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../../UnityProject/Assets/RTS/Replay/**/*.cs" Link="Replay/%(RecursiveDir)%(Filename)%(Extension)" />
-    <Compile Include="../../UnityProject/Assets/RTS/Application/**/*.cs" Link="Application/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

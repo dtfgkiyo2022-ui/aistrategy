@@ -19,8 +19,8 @@ namespace Rts.Tests.EditMode
         [TestCase(typeof(ExpireFlags), "None=0,SubjectGone=1,OwnershipChanged=2,ObservationTooOld=4")]
         [TestCase(typeof(InputKind), "Reserve=1,Resolve=2,Cancel=3,Proposal=4")]
         [TestCase(typeof(UnitKind), "Infantry=1,Scout=2")]
-        [TestCase(typeof(EventKind), "CommandChanged=1,MoveStarted=2,Attack=3,Death=4,Capture=5,Reinforcement=6,ContactChanged=7,MatchEnded=8,Fault=9")]
-        [TestCase(typeof(ReasonCode), "None=0,Superseded=1,UserCancelled=2,Deadline=3,StaleVersion=4,InvalidPayload=5,SubjectGone=6,OwnershipChanged=7,NoPath=8,EmptyArmy=9,ObservationTooOld=10,LossLimit=11")]
+        [TestCase(typeof(EventKind), "CommandChanged=1,MoveStarted=2,Attack=3,Death=4,Capture=5,Reinforcement=6,ContactChanged=7,MatchEnded=8,Fault=9,AiReport=10")]
+        [TestCase(typeof(ReasonCode), "None=0,Superseded=1,UserCancelled=2,Deadline=3,StaleVersion=4,InvalidPayload=5,SubjectGone=6,OwnershipChanged=7,NoPath=8,EmptyArmy=9,ObservationTooOld=10,LossLimit=11,ReserveShortfall=12")]
         public void WireValuesAreFixed(Type type, string expected)
         {
             Assert.That(Enum.GetUnderlyingType(type), Is.EqualTo(typeof(byte)));
@@ -78,7 +78,7 @@ namespace Rts.Tests.EditMode
 
         public static IEnumerable<TestCaseData> CollectionProperties()
         {
-            foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes())
+            foreach (var type in typeof(FactionFrame).Assembly.GetExportedTypes().Where(t => t.Namespace == typeof(FactionFrame).Namespace))
             foreach (var property in type.GetProperties())
                 if (IsList(property.PropertyType) && !(type == typeof(FactionFrame) && property.Name == "Objectives"))
                     yield return new TestCaseData(type, property.Name)

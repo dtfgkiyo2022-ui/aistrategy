@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Rts.Contracts
 {
-    public readonly struct ScopeKey
+    public readonly struct ScopeKey : IEquatable<ScopeKey>
     {
         public uint FactionId { get; }
         public ScopeKind Kind { get; }
@@ -18,6 +18,10 @@ namespace Rts.Contracts
             Kind = kind;
             Id = id;
         }
+        public bool Equals(ScopeKey other) => FactionId == other.FactionId && Kind == other.Kind && Id == other.Id;
+        public override bool Equals(object obj) => obj is ScopeKey other && Equals(other);
+        public override int GetHashCode() => unchecked((int)(FactionId * 397U ^ (uint)Kind * 31U ^ Id));
+
     }
 
     public readonly struct PolicyVersion
@@ -145,6 +149,9 @@ namespace Rts.Contracts
 
     public sealed class ScheduledInput
     {
+        // Separate interpretation deadline and provider failure from policy expiration.
+        public long DeadlineTick { get; }
+        public ReasonCode ResolutionReason { get; }
         public ulong LogIndex { get; }
         public InputKind Kind { get; }
         public long AcceptedTick { get; }
@@ -161,7 +168,14 @@ namespace Rts.Contracts
             ulong requestId,
             ulong issuerSequence,
             IReadOnlyList<PolicyOrder> orders)
+            : this(logIndex, kind, acceptedTick, applyTick, requestId, issuerSequence, orders, long.MaxValue, ReasonCode.None) { }
+
+        public ScheduledInput(ulong logIndex, InputKind kind, long acceptedTick, long applyTick,
+            ulong requestId, ulong issuerSequence, IReadOnlyList<PolicyOrder> orders,
+            long deadlineTick, ReasonCode resolutionReason)
         {
+            DeadlineTick = deadlineTick;
+            ResolutionReason = resolutionReason;
             LogIndex = logIndex;
             Kind = kind;
             AcceptedTick = acceptedTick;

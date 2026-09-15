@@ -13,13 +13,13 @@ namespace Rts.Simulation
         {
             uint faction = a.Definition.FactionId;
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-            var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+            if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
+            if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
+            if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
+            if (a.Decision.Assignment != AssignmentKind.Advance && a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);
-            if (a.Policy == PolicyKind.Retreat || a.Definition.Role == "reserve") return own;
-            bool scout = a.Definition.Role == "scout";
-            if (scout && a.AutoStage == 0) return new SimPoint(own.X, Fix64.FromInt(96));
-            if (a.AutoStage < (scout ? 2 : 1)) return new SimPoint(enemy.X, Fix64.FromInt(a.Definition.Role == "south" ? 32 : 96));
-            return enemy;
+            if (a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
+            return world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
         }
 
         private void PrepareArmyPaths()
@@ -54,13 +54,15 @@ namespace Rts.Simulation
                     // Formation slots are fixed by initial soldier ID, including tombstones.
                     var target = new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
                     if (!world.Map.IsPassable(world.Map.Cell(target)) || !SamePoint(world.Map.ClipMove(soldier.Position, target), target)) target = center;
+                    if (!SamePoint(soldier.MoveGoal, goal)) continue;
+                    if (a.PathCursor == a.Path.Length - 1) target = goal;
                     soldier.MoveGoal = target;
                     if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10))) arrived = false;
                 }
                 if (arrived)
                 {
                     if (a.PathCursor + 1 < a.Path.Length) a.PathCursor++;
-                    else if (a.Policy == 0 && a.Definition.Role != "reserve" && a.AutoStage < (a.Definition.Role == "scout" ? 2 : 1)) a.AutoStage++;
+
                 }
             }
         }
