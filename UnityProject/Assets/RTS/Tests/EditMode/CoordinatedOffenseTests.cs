@@ -204,6 +204,40 @@ namespace Rts.Tests.EditMode
             Assert.That(m[0].Returning, Is.True, "Reinforcements do not dilute the initial-ID loss budget");
         }
         [Test]
+        public void FogAutoVersusAutoCompletesGatheringAndEntersAdvancing()
+        {
+            var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create());
+            var previous = Rts.Replay.DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value);
+            for (int tick = 1; tick <= 2000; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "tick " + tick);
+                var current = Rts.Replay.DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value);
+                const string prefix = "Ai.Factions[1].Offense.";
+                if (current[prefix + "Phase"] == ((byte)OffensivePhase.Advancing).ToString())
+                {
+                    Assert.That(previous[prefix + "Phase"], Is.EqualTo(((byte)OffensivePhase.Gathering).ToString()));
+                    var rally = new SimPoint(Fix64.FromRaw(long.Parse(previous[prefix + "RallyPoint.X.Raw"])), Fix64.FromRaw(long.Parse(previous[prefix + "RallyPoint.Z.Raw"])));
+                    int planned = int.Parse(previous[prefix + "Planned.Count"]);
+                    Assert.That(planned, Is.GreaterThan(0));
+                    for (int i = 0; i < planned; i++)
+                    {
+                        string army = previous[prefix + "Planned[" + i + "]"];
+                        var members = previous.Where(p => p.Key.StartsWith("Soldiers[") && p.Key.EndsWith(".ArmyId") && p.Value == army)
+                            .Select(p => p.Key.Substring(0, p.Key.Length - "ArmyId".Length)).Where(p => previous[p + "Alive"] == "1").ToArray();
+                        int near = members.Count(p => PolicyDecision.Within(new SimPoint(Fix64.FromRaw(long.Parse(previous[p + "Position.X.Raw"])), Fix64.FromRaw(long.Parse(previous[p + "Position.Z.Raw"]))), rally, 12));
+                        Assert.That(near * 2, Is.GreaterThan(members.Length), "Every planned army must actually have a majority at the rally before the transition.");
+                    }
+                    Assert.That(long.Parse(current[prefix + "GatheredTick"]), Is.EqualTo(tick));
+                    Assert.That(int.Parse(current[prefix + "Advancing.Count"]), Is.EqualTo(planned));
+                    TestContext.WriteLine("First west advance tick: " + tick);
+                    return;
+                }
+                previous = current;
+            }
+            Assert.Fail("Fog auto versus auto did not complete gathering and advance within 2000 ticks.");
+        }
+        [Test]
         public void CanonicalStateIncludesEveryOffenseCollectionAndArmyCounter()
         {
             var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create()); sim.Step(1, Array.Empty<ScheduledInput>());

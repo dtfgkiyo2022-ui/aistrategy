@@ -144,7 +144,7 @@ namespace Rts.Decision
                 int need = target - held;
                 // The default auto reserve may leave a large army free for offense.  Explicit human
                 // MaintainReserve remains an unconditional lower-bound guarantee.
-                if (!humanReserve && reservePermille != 0 && !armies[i].IsReserveRole && 2L * need < armies[i].Army.AliveCount) continue;
+                if (!humanReserve && 2L * need < armies[i].Army.AliveCount) continue;
                 used[i] = true; result[i].Assignment = AssignmentKind.Reserve; result[i].Goal = core; held += armies[i].Army.AliveCount;
             }
             reserveShortfall = Math.Max(0, target - held);

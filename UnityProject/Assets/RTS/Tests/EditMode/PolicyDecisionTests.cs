@@ -61,6 +61,21 @@ namespace Rts.Tests.EditMode
             Assert.That(result[3].Goal.Id,Is.EqualTo(2));
         }
         [Test]
+        public void DefaultReserveAppliesShortfallRuleToReserveRoleAndContinuesToSmallerArmy()
+        {
+            var original = Observation(20, owned: false);
+            var armies = new[] {
+                new OwnArmyView(1, 1, UnitKind.Infantry, P(40), 2, G(1)),
+                new OwnArmyView(2, 1, UnitKind.Infantry, P(48), 12, G(2)),
+                new OwnArmyView(3, 1, UnitKind.Infantry, P(24), 6, default) };
+            var observation = new FactionObservation(1, 20, armies, original.VisibleEnemies, original.Contacts, original.Objectives);
+            var result = PolicyDecision.Allocate(observation, 20, Inputs(observation), 100,
+                Array.Empty<uint>(), Array.Empty<AttackMemory>(), Array.Empty<PolicyOrder>(), out int shortage, coordinated: true);
+            Assert.That(result[2].Assignment, Is.EqualTo(AssignmentKind.Advance), "A reserve role orders candidates; it does not exempt the candidate from 2d < n.");
+            Assert.That(result[0].Assignment, Is.EqualTo(AssignmentKind.Reserve), "Continue examining smaller candidates after skipping the reserve-role army.");
+            Assert.That(shortage, Is.Zero);
+        }
+        [Test]
         public void FocusDoesNotCreateGuardsWithoutAnOccupationThreat()
         {
             var o = Observation(); var before = Allocate(o,0,policy:PolicyKind.Focus);
