@@ -37,6 +37,8 @@ namespace Rts.Simulation
         public Fix64 CaptureRadius = Fix64.FromInt(8);
         public int CaptureDurationTicks = 200;
         public int CoreReinforcementIntervalTicks = 100, OutpostReinforcementIntervalTicks = 200;
+        public int OccupationThreatMemoryTicks = 200;
+        public ushort DefaultReservePermille = 100;
     }
 
     public struct UnitParameters
