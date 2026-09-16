@@ -8,6 +8,7 @@ namespace Rts.Simulation
     /// <summary>Immutable integer grid and deterministic, bounded army path search.</summary>
     public sealed class GridMap
     {
+        internal Action<string, bool> Measure;
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
@@ -15,6 +16,12 @@ namespace Rts.Simulation
         private readonly Dictionary<int, int[]> routes = new Dictionary<int, int[]>();
         private readonly Queue<int> routeOrder = new Queue<int>();
         public int[] SharedRoute(int start, SimPoint goal)
+        {
+            Measure?.Invoke("Pathfinding", true);
+            try { return SharedRouteCore(start, goal); }
+            finally { Measure?.Invoke("Pathfinding", false); }
+        }
+        private int[] SharedRouteCore(int start, SimPoint goal)
         {
             if (!IsPassable(start)) return Array.Empty<int>();
             int target = Cell(goal);
@@ -75,6 +82,12 @@ namespace Rts.Simulation
         public SimPoint Center(int cell) => new SimPoint(Fix64.FromRaw(cell % width * size + size / 2), Fix64.FromRaw(cell / width * size + size / 2));
         private int H(int a, int b) => Math.Abs(a % width - b % width) + Math.Abs(a / width - b / width);
         public int[] FindPath(int start, SimPoint goal)
+        {
+            Measure?.Invoke("Pathfinding", true);
+            try { return FindPathCore(start, goal); }
+            finally { Measure?.Invoke("Pathfinding", false); }
+        }
+        private int[] FindPathCore(int start, SimPoint goal)
         {
             if (!IsPassable(start)) return Array.Empty<int>();
             int target = Cell(goal);

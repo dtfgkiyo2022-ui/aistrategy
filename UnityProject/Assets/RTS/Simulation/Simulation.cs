@@ -15,9 +15,14 @@ namespace Rts.Simulation
         private readonly long[] coreDamage;
         private readonly FactionFrame[] frames = new FactionFrame[2];
 
-        public Simulation(ScenarioDefinition scenario)
+        private readonly Action<string, bool> measure;
+
+        // Diagnostic observer only; never read back into simulation decisions or canonical state.
+        public Simulation(ScenarioDefinition scenario, Action<string, bool> measure = null)
         {
+            this.measure = measure;
             world = new WorldState(scenario);
+            world.Map.Measure = measure;
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
@@ -36,30 +41,31 @@ namespace Rts.Simulation
             {
                 world.Tick = tick;
                 commandEvents.Clear();
-                ApplyInputs(inputs);
-                ApplyPendingCommands();
-                ComposePolicies();
-                DecideArmies();
-                ComposePolicies();
-                GenerateIntents();
-                Move();
-                UpdateVisibility(); // movement has completed; combat sees this same tick's visibility.
-                Attack();
-                ResolveDeaths();
-                CaptureOutposts();
-                Reinforce();
-                UpdateVisibility(); // Ownership, deaths and newborns also change the published view.
-                UpdateObservations();
-                FinishCommands();
-                ComposePolicies();
-                ResolveVictory();
+                Phase("Commands", () => { ApplyInputs(inputs); ApplyPendingCommands(); ComposePolicies(); });
+                Phase("AI", DecideArmies);
+                Phase("Commands", ComposePolicies);
+                Phase("EnemySearchCombat", GenerateIntents);
+                Phase("Movement", Move);
+                Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
+                Phase("EnemySearchCombat", () => { Attack(); ResolveDeaths(); });
+                Phase("ObjectivesReinforcements", () => { CaptureOutposts(); Reinforce(); });
+                Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
+                Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
+                Phase("ObjectivesReinforcements", ResolveVictory);
             }
             catch (ArithmeticException)
             {
                 // A failed tick is diagnostic-only and terminal; it is never a victory or draw.
                 world.Result = new MatchResult(true, 0, false, true, false);
             }
-            PublishFrames();
+            Phase("Frames", PublishFrames);
+        }
+
+        private void Phase(string name, Action action)
+        {
+            measure?.Invoke(name, true);
+            try { action(); }
+            finally { measure?.Invoke(name, false); }
         }
 
         private void GenerateIntents()
