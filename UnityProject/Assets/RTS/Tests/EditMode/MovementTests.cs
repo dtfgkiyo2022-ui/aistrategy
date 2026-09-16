@@ -132,9 +132,17 @@ namespace Rts.Tests.EditMode
                     // Automatic returning uses Decision.Returning rather than a human Retreat policy.
                     bool missionProgress=(policy==PolicyKind.Retreat || policy==PolicyKind.Defend || decision.Returning) &&
                         soldiers.Any(soldier=>Field<bool>(soldier,"IsMoving") && !Within(Field<SimPoint>(soldier,"Position"),destination,Fix64.FromInt(policy==PolicyKind.Defend?8:4)));
+                    // An arrived participant waits for the other planned armies (9.2).
+                    // Prove actual arrival and bound that wait by the travel deadline;
+                    // merely being in Gathering must not hide an en-route movement stall.
+                    bool gatheredArmy=offense.Phase==OffensivePhase.Gathering && !decision.Returning &&
+                        offense.PlannedArmyIds.Contains(a.Id) && decision.Goal.Kind==GoalKind.Point &&
+                        decision.Goal.Point.Equals(offense.RallyPoint) &&
+                        soldiers.Count(soldier=>Within(Field<SimPoint>(soldier,"Position"),offense.RallyPoint,Fix64.FromInt(Rts.Decision.OffenseDecision.RallyRadiusMeters)))*2>soldiers.Length;
+                    if(gatheredArmy) Assert.That(t,Is.LessThanOrEqualTo(offense.MoveDeadlineTick),"arrived army waiting past travel deadline army="+a.Id);
                     bool enemy=sim.Capture(3-f).Units.Where(u=>u.IsOwn).Any(u=>Within(a.Position,u.Position,Fix64.FromInt(24)));
                     bool unchanged=a.Position.X==previous[i].X && a.Position.Z==previous[i].Z && cursor==cursors[i];
-                    stopped[i]=!hold && !atMission && !missionProgress && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
+                    stopped[i]=!hold && !atMission && !missionProgress && !gatheredArmy && !offenseWaiting && !enemy && !Field<bool>(state,"PathImpossible") && unchanged ? stopped[i]+1:0;
                     Assert.That(stopped[i],Is.LessThan(600),preset+" tick="+t+" army="+a.Id+" policy="+Field<PolicyKind>(state,"Policy")+" goal="+Field<PolicyGoal>(state,"Goal").Kind+":"+Field<PolicyGoal>(state,"Goal").Id+" pos="+a.Position.X+","+a.Position.Z+" pathGoal="+Field<SimPoint>(state,"PathGoal").X+","+Field<SimPoint>(state,"PathGoal").Z+" assignment="+decision.Assignment+" returning="+decision.Returning+" phase="+offense.Phase+" decisionGoal="+decision.Goal.Kind+":"+decision.Goal.Id+" actualTick="+sim.Capture(1).Tick+" ended="+sim.Capture(1).Result.HasEnded);
                     previous[i]=a.Position; cursors[i]=cursor;
                 }

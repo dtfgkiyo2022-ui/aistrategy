@@ -49,9 +49,17 @@ namespace Rts.Tests.EditMode
         public void RallyUsesCumulativeMetersAndBacksAwayFromVisibleEnemiesOnly()
         {
             var path = Enumerable.Range(0, 26).Select(i => P(i * 4)).ToArray();
-            Assert.That(OffenseDecision.Rally(O(), path), Is.EqualTo(P(60)));
-            Assert.That(OffenseDecision.Rally(O(20, 1, P(60), true), path), Is.EqualTo(P(32)));
-            Assert.That(OffenseDecision.Rally(O(20, 1, P(60), false), path), Is.EqualTo(P(60)));
+            var nominal = OffenseDecision.Rally(O(), path);
+            int index = Array.IndexOf(path, nominal);
+            Assert.That(index, Is.GreaterThanOrEqualTo(0).And.LessThan(path.Length - 1));
+            Assert.That(OffenseDecision.Length(path.Skip(index).ToArray()), Is.GreaterThanOrEqualTo(Fix64.FromInt(OffenseDecision.RallyDistanceMeters).Raw));
+            Assert.That(OffenseDecision.Length(path.Skip(index + 1).ToArray()), Is.LessThan(Fix64.FromInt(OffenseDecision.RallyDistanceMeters).Raw), "Use the first cell crossing the distance from the target");
+            var safe = OffenseDecision.Rally(O(20, 1, nominal, true), path);
+            int safeIndex = Array.IndexOf(path, safe);
+            Assert.That(safeIndex, Is.LessThan(index));
+            Assert.That(PolicyDecision.Within(safe, nominal, 24), Is.False);
+            Assert.That(PolicyDecision.Within(path[safeIndex + 1], nominal, 24), Is.True, "Stop at the first safe cell, not an arbitrary farther cell");
+            Assert.That(OffenseDecision.Rally(O(20, 1, nominal, false), path), Is.EqualTo(nominal));
             Assert.That(OffenseDecision.Rally(O(), new[] { P(0), P(20) }), Is.EqualTo(P(0)));
             Assert.That(OffenseDecision.TryRally(O(20, 1, P(0), true), new[] { P(0), P(20) }, out _), Is.False);
             Assert.That(OffenseDecision.Rally(O(), new[] { P(0), P(30), P(30, 30), P(60, 30) }), Is.EqualTo(P(30)));
@@ -94,6 +102,20 @@ namespace Rts.Tests.EditMode
             Update(s, own, m, 21, 4); Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Gathering));
             s.PlannedArmyIds = new uint[] { 1 }; Update(s, own, m, 22, 5); Assert.That(s.Phase, Is.EqualTo(OffensivePhase.WaitingToAdvance));
             Update(s, own, m, 40, 4, true); Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Advancing)); Assert.That(s.AdvancingArmyIds, Is.EqualTo(new uint[] { 1 }));
+        }
+        [Test]
+        public void GatheringRadiusBoundaryStillRequiresStrictMajority()
+        {
+            var boundary = P(60 + OffenseDecision.RallyRadiusMeters);
+            var outside = P(61 + OffenseDecision.RallyRadiusMeters);
+            var own = new[] { new OffenseArmyInput(1, new[] { boundary, boundary, outside, outside }, 1, false, false) };
+            var m = new ArmyDecisionMemory[1]; var s = Gathering(1);
+            Update(s, own, m, 20);
+            Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Gathering), "Exactly half is not a majority");
+            own[0] = new OffenseArmyInput(1, new[] { boundary, boundary, boundary, outside }, 1, false, false);
+            Update(s, own, m, 21);
+            Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Advancing), "The radius boundary is included");
+            Assert.That(s.AdvancingArmyIds, Is.EqualTo(new uint[] { 1 }));
         }
         [TestCase(false, false, true)]
         [TestCase(true, false, false)]
@@ -167,6 +189,43 @@ namespace Rts.Tests.EditMode
             Update(s, own, m, 40, allocation: true); Assert.That(s.Phase, Is.Not.EqualTo(OffensivePhase.Idle));
         }
         [Test]
+        public void AdvanceGetsFullMinimumCommitmentAfterLongGatheringThenComparesAgain()
+        {
+            var own = new[] { Army(1, 6, 60) }; var m = new ArmyDecisionMemory[1]; var s = Gathering(1);
+            Update(s, own, m, 1425);
+            Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Advancing));
+            Assert.That(s.MaintainedSinceTick, Is.EqualTo(1425));
+            var alternativeGoal = new PolicyGoal(GoalKind.Outpost, 2, default);
+            var goals = Objectives.Concat(new[] { new KnownObjective(GoalKind.Outpost, 2, P(60, 100), true, 0, false, 0, 1500) }).ToArray();
+            var alternative = new OffenseRouteInput(alternativeGoal, P(60), new[] { P(60), P(60, 100) },
+                new[] { new ObjectiveRoute(new PolicyGoal(GoalKind.Point, 1, default), 0, new[] { P(60) }) });
+            foreach (long tick in new long[] { 1500, 2020, 2040 })
+            {
+                var o = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(),
+                    new[] { new EnemyContact(1, P(100), tick, 5, 5, false) }, goals);
+                Assert.That(OffenseDecision.Estimate(o, alternative, new uint[] { 1 }), Is.LessThan(OffenseDecision.Estimate(o, Route(own), new uint[] { 1 })));
+                OffenseDecision.Update(o, tick, s, Inputs(own, m), own, m, new[] { Route(own), alternative }, true, false, Home);
+                if (tick < 1425 + 600)
+                {
+                    Assert.That(s.Goal, Is.EqualTo(Goal));
+                    Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Advancing));
+                    Assert.That(s.MaintainedSinceTick, Is.EqualTo(1425), "Allocation must not renew the timer");
+                }
+                else Assert.That(s.Goal, Is.EqualTo(alternativeGoal), "Compare again after the minimum, even during advance");
+            }
+        }
+        [Test]
+        public void OwnershipEndsAdvanceEvenWithinItsMinimumCommitment()
+        {
+            var own = new[] { Army(1, 6, 60) }; var m = new ArmyDecisionMemory[1]; var s = Gathering(1);
+            Update(s, own, m, 1425);
+            var goals = Objectives; goals[2] = new KnownObjective(GoalKind.Outpost, 1, P(100), true, 1, false, 0, 1426);
+            var o = new FactionObservation(1, 1426, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), goals);
+            Update(s, own, m, 1426, observation: o);
+            Assert.That(s.Phase, Is.EqualTo(OffensivePhase.Idle));
+            Assert.That(s.ReleasedTick, Is.EqualTo(1426));
+        }
+        [Test]
         public void SameTargetAfterMinimumPreservesIdentityAndTimersAndSuppressionWaits()
         {
             var own = new[] { Army(1, 4, 60) }; var m = new ArmyDecisionMemory[1]; var s = Gathering(1); s.Phase = OffensivePhase.Advancing; s.AdvancingArmyIds = new uint[] { 1 };
@@ -225,7 +284,7 @@ namespace Rts.Tests.EditMode
                         string army = previous[prefix + "Planned[" + i + "]"];
                         var members = previous.Where(p => p.Key.StartsWith("Soldiers[") && p.Key.EndsWith(".ArmyId") && p.Value == army)
                             .Select(p => p.Key.Substring(0, p.Key.Length - "ArmyId".Length)).Where(p => previous[p + "Alive"] == "1").ToArray();
-                        int near = members.Count(p => PolicyDecision.Within(new SimPoint(Fix64.FromRaw(long.Parse(previous[p + "Position.X.Raw"])), Fix64.FromRaw(long.Parse(previous[p + "Position.Z.Raw"]))), rally, 12));
+                        int near = members.Count(p => PolicyDecision.Within(new SimPoint(Fix64.FromRaw(long.Parse(previous[p + "Position.X.Raw"])), Fix64.FromRaw(long.Parse(previous[p + "Position.Z.Raw"]))), rally, OffenseDecision.RallyRadiusMeters));
                         Assert.That(near * 2, Is.GreaterThan(members.Length), "Every planned army must actually have a majority at the rally before the transition.");
                     }
                     Assert.That(long.Parse(current[prefix + "GatheredTick"]), Is.EqualTo(tick));

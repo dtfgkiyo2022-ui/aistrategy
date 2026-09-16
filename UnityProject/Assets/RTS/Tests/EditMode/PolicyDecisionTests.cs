@@ -241,29 +241,41 @@ namespace Rts.Tests.EditMode
         [Test]
         public void PresetsAreOrdinaryLoggedPoliciesWithDifferentAllocations()
         {
-            var s=WeekTwoScenario.Create(); var maintain=new Battle(s); var concentrate=new Battle(s);
+            var s=WeekTwoScenario.Create();
+            // Start from the same owned-objective state so this tests the presets' response
+            // through ordinary logged inputs, independently of who wins a contested capture.
+            s.Outposts[0].OwnerFactionId = 2;
+            var maintain=new Battle(s); var concentrate=new Battle(s);
             var a=PolicyPresets.RecordedInputs(s,"none","maintain",2200); var b=PolicyPresets.RecordedInputs(s,"none","concentrate",2200);
             var acceptedMaintain=new System.Collections.Generic.HashSet<ulong>();
             var acceptedConcentrate=new System.Collections.Generic.HashSet<ulong>();
+            FactionFrame defending = null, attackingCore = null;
             for(int t=1;t<=2200;t++)
             {
                 maintain.Step(t,a.Where(i=>i.ApplyTick==t).ToArray()); concentrate.Step(t,b.Where(i=>i.ApplyTick==t).ToArray());
-                foreach(var c in maintain.Capture(2).Commands.Where(c=>c.Status==CommandStatus.Executing)) acceptedMaintain.Add(c.CommandId);
-                foreach(var c in concentrate.Capture(2).Commands.Where(c=>c.Status==CommandStatus.Executing)) acceptedConcentrate.Add(c.CommandId);
+                // Executing and Completed can both occur in one tick for an already owned goal.
+                // Require the execution event, rather than inferring acceptance from the final status.
+                foreach(var e in maintain.Capture(2).Events.Where(e=>e.Kind==EventKind.CommandChanged && e.Value==(int)CommandStatus.Executing)) acceptedMaintain.Add(e.CommandId);
+                foreach(var e in concentrate.Capture(2).Events.Where(e=>e.Kind==EventKind.CommandChanged && e.Value==(int)CommandStatus.Executing)) acceptedConcentrate.Add(e.CommandId);
+                var maintainFrame = maintain.Capture(2); var concentrateFrame = concentrate.Capture(2);
+                if (defending == null && maintainFrame.Commands.Any(c => c.Kind == PolicyKind.Defend && c.Status == CommandStatus.Executing)) defending = maintainFrame;
+                if (attackingCore == null && concentrateFrame.Commands.Any(c => c.Kind == PolicyKind.Focus && c.Goal.Kind == GoalKind.Core && c.Status == CommandStatus.Executing)) attackingCore = concentrateFrame;
             }
             AssertDoctrineProposalsWereAccepted(maintain.Capture(2),acceptedMaintain);
             AssertDoctrineProposalsWereAccepted(concentrate.Capture(2),acceptedConcentrate);
             Assert.That(maintain.Capture(2).Observation.OwnArmies.Select(v=>v.Position),Is.Not.EqualTo(concentrate.Capture(2).Observation.OwnArmies.Select(v=>v.Position)));
-            // Both can own north at this tick. 9.2 distinguishes their response to capture,
-            // not a guaranteed difference in the battle's territorial outcome.
-            var defense=maintain.Capture(2).Commands.Single(c=>c.Kind==PolicyKind.Defend && c.Status==CommandStatus.Executing);
+            // Verify the actual policy response when it executes. Subsequent combat may
+            // end that policy or change ownership before the final observation.
+            Assert.That(defending, Is.Not.Null, "Maintain must actually execute Defend after capture");
+            Assert.That(attackingCore, Is.Not.Null, "Concentrate must actually execute its second-stage Focus");
+            var defense=defending.Commands.Single(c=>c.Kind==PolicyKind.Defend && c.Status==CommandStatus.Executing);
             Assert.That(defense.Goal.Kind,Is.EqualTo(GoalKind.Outpost));
-            Assert.That(maintain.Capture(2).Objectives.Single(o=>o.Kind==defense.Goal.Kind && o.Id==defense.Goal.Id).OwnerFactionId,Is.EqualTo(2));
-            Assert.That(concentrate.Capture(2).Commands.Any(c=>c.Kind==PolicyKind.Focus && c.Goal.Kind==GoalKind.Outpost &&
+            Assert.That(defending.Objectives.Single(o=>o.Kind==defense.Goal.Kind && o.Id==defense.Goal.Id).OwnerFactionId,Is.EqualTo(2));
+            Assert.That(attackingCore.Commands.Any(c=>c.Kind==PolicyKind.Focus && c.Goal.Kind==GoalKind.Outpost &&
                 c.Status==CommandStatus.Completed && c.Reason==ReasonCode.None),Is.True);
-            var attack=concentrate.Capture(2).Commands.Single(c=>c.Kind==PolicyKind.Focus && c.Status==CommandStatus.Executing);
+            var attack=attackingCore.Commands.Single(c=>c.Kind==PolicyKind.Focus && c.Status==CommandStatus.Executing);
             Assert.That(attack.Goal.Kind,Is.EqualTo(GoalKind.Core));
-            Assert.That(concentrate.Capture(2).Objectives.Single(o=>o.Kind==attack.Goal.Kind && o.Id==attack.Goal.Id).OwnerFactionId,Is.EqualTo(1));
+            Assert.That(attackingCore.Objectives.Single(o=>o.Kind==attack.Goal.Kind && o.Id==attack.Goal.Id).OwnerFactionId,Is.EqualTo(1));
         }
         private static void AssertDoctrineProposalsWereAccepted(FactionFrame frame, System.Collections.Generic.HashSet<ulong> accepted)
         {
