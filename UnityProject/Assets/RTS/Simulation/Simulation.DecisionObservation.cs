@@ -13,7 +13,7 @@ namespace Rts.Simulation
         {
             var frame = frames[faction - 1].Observation;
             return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick,
-                frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives);
+                frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives, frame.EnemyFactionCap);
         }
         private void WriteDecisionObservation(StateWriter w, int faction, string prefix)
         {

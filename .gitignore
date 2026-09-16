@@ -33,3 +33,4 @@
 # .NET (Issue #5)
 /Headless/**/bin/
 /Headless/**/obj/
+/bin-verify/

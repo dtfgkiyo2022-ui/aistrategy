@@ -333,7 +333,7 @@ namespace Rts.Simulation
                     if (command.Order.Target.FactionId == f)
                         commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind, command.Order.Goal,
                             command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Order.Source));
-                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives);
+                var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
                     world.Result.IsFault ? EventKind.Fault : EventKind.MatchEnded, 3, 0, 0, default,

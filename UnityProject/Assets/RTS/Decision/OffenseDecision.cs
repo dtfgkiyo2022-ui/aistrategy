@@ -7,6 +7,9 @@ namespace Rts.Decision
 {
     public static class OffenseDecision
     {
+        public const int RallyDistanceMeters = 40;
+        // Chapter 9.2 comparison value: require a tighter group before advancing.
+        public const int RallyRadiusMeters = 8;
         private static bool Same(PolicyGoal a, PolicyGoal b) => a.Kind == b.Kind && a.Id == b.Id;
         public static long Length(IReadOnlyList<SimPoint> cells)
         {
@@ -24,7 +27,7 @@ namespace Rts.Decision
             rally = default;
             if (corePath.Count == 0) return false;
             int cursor = corePath.Count - 1; long distance = 0;
-            while (cursor > 0 && distance < Fix64.FromInt(40).Raw)
+            while (cursor > 0 && distance < Fix64.FromInt(RallyDistanceMeters).Raw)
             { distance += (long)FixMath.IntegerSqrt(PolicyDecision.Distance(corePath[cursor], corePath[cursor - 1])); cursor--; }
             while (cursor > 0 && o.VisibleEnemies.Any(e => PolicyDecision.Within(e.Position, corePath[cursor], 24))) cursor--;
             rally = corePath[cursor];
@@ -35,16 +38,11 @@ namespace Rts.Decision
         {
             var ids = new HashSet<uint>(armies);
             var paths = route.ToRally.Where(r => ids.Contains(r.Goal.Id)).Select(r => r.Cells).Concat(new[] { route.ToTarget }).ToArray();
-            int count = PolicyDecision.CountableContacts(o)
-                .Where(c => paths.Any(p => PolicyDecision.NearRoute(c.LastPosition, p, 24)))
-                .Sum(c => c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax);
             var goal = o.Objectives.FirstOrDefault(g => Same(new PolicyGoal(g.Kind, g.Id, default), route.Goal));
-            bool unknown = (goal.Kind == GoalKind.Outpost ? !goal.IsOwnerKnown : !goal.IsHpKnown) || o.Tick - goal.LastSeenTick >= 600;
-            if (unknown && !o.Contacts.Any(c => PolicyDecision.Within(c.LastPosition, goal.Position, 24))) count += 10;
-            return count;
+            return EnemyStrengthEstimate.InRegion(o, point => paths.Any(p => PolicyDecision.NearRoute(point, p, 24)), goal);
         }
         private static int Near(OffenseArmyInput a, SimPoint point, int radius) => a.Soldiers.Count(p => PolicyDecision.Within(p, point, radius));
-        private static bool Arrived(OffenseArmyInput a, SimPoint point) => a.Soldiers.Count > 0 && Near(a, point, 12) * 2 > a.Soldiers.Count;
+        private static bool Arrived(OffenseArmyInput a, SimPoint point) => a.Soldiers.Count > 0 && Near(a, point, RallyRadiusMeters) * 2 > a.Soldiers.Count;
         private static uint[] Ordered(IEnumerable<uint> ids) => ids.Distinct().OrderBy(id => id).ToArray();
         public static PolicyGoal WaitGoal(FactionObservation o, IReadOnlyList<OffenseRouteInput> routes)
             => routes.Where(r => r.Goal.Kind == GoalKind.Outpost && o.Objectives.Any(g => g.Kind == GoalKind.Outpost && g.Id == r.Goal.Id && g.IsOwnerKnown && g.OwnerFactionId == o.FactionId))
@@ -149,7 +147,14 @@ namespace Rts.Decision
                     int near = own.Where(a => ids.Contains(a.ArmyId) && !s.JoiningArmyIds.Contains(a.ArmyId)).Sum(a => Near(a, s.RallyPoint, 24));
                     int enemies = Estimate(o, route, ids);
                     if (near > 0 && near * 2L >= enemies)
-                    { s.Phase = OffensivePhase.Advancing; s.AdvancingArmyIds = Ordered(own.Where(a => ids.Contains(a.ArmyId) && !s.JoiningArmyIds.Contains(a.ArmyId) && Near(a, s.RallyPoint, 24) > 0).Select(a => a.ArmyId)); s.PlannedArmyIds = Ordered(s.PlannedArmyIds.Except(s.AdvancingArmyIds)); }
+                    {
+                        // Travel to the rally must not consume the advance's minimum commitment.
+                        // Renew only on this phase transition, never on a same-target comparison.
+                        s.MaintainedSinceTick = tick;
+                        s.Phase = OffensivePhase.Advancing;
+                        s.AdvancingArmyIds = Ordered(own.Where(a => ids.Contains(a.ArmyId) && !s.JoiningArmyIds.Contains(a.ArmyId) && Near(a, s.RallyPoint, 24) > 0).Select(a => a.ArmyId));
+                        s.PlannedArmyIds = Ordered(s.PlannedArmyIds.Except(s.AdvancingArmyIds));
+                    }
                     else if (!humanReserve && !o.VisibleEnemies.Any(e => PolicyDecision.Within(e.Position, PolicyDecision.Position(o, PolicyDecision.Core(o, true)), 24)))
                     {
                         var reserves = Enumerable.Range(0, inputs.Count).Where(i => inputs[i].Policy.Kind == 0 && inputs[i].Army.Kind == UnitKind.Infantry && !result[i].Returning && tick >= result[i].HoldUntilTick && result[i].Assignment == AssignmentKind.Reserve && own[i].Soldiers.Count > 0 && Reachable(route, new[] { inputs[i].Army.Id })).ToArray();
