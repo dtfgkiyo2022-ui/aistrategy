@@ -176,7 +176,8 @@ namespace Rts.Simulation
             Require(r.FactionCap > 0 && r.CoreRadius.Raw >= 0 && r.CoreRadius <= Fix64.FromInt(1024)
                 && r.OwnedObjectiveVision.Raw >= 0 && r.CaptureRadius.Raw >= 0
                 && r.CaptureDurationTicks > 0 && r.CoreReinforcementIntervalTicks > 0
-                && r.OutpostReinforcementIntervalTicks > 0, "Invalid rules.");
+                && r.OutpostReinforcementIntervalTicks > 0 && r.OccupationThreatMemoryTicks >= 0
+                && r.DefaultReservePermille <= 1000, "Invalid rules.");
             var c = new ScenarioDefinition { SchemaVersion = s.SchemaVersion, ScenarioId = s.ScenarioId, Seed = s.Seed,
                 TickRateHz = s.TickRateHz, VerificationTickLimit = s.VerificationTickLimit,
                 Map = new MapDefinition { WidthMeters = m.WidthMeters, HeightMeters = m.HeightMeters,
@@ -184,7 +185,9 @@ namespace Rts.Simulation
                 Rules = new RuleDefinition { FactionCap = r.FactionCap, CoreRadius = r.CoreRadius,
                     OwnedObjectiveVision = r.OwnedObjectiveVision, CaptureRadius = r.CaptureRadius,
                     CaptureDurationTicks = r.CaptureDurationTicks, CoreReinforcementIntervalTicks = r.CoreReinforcementIntervalTicks,
-                    OutpostReinforcementIntervalTicks = r.OutpostReinforcementIntervalTicks },
+                    OutpostReinforcementIntervalTicks = r.OutpostReinforcementIntervalTicks,
+                    OccupationThreatMemoryTicks = r.OccupationThreatMemoryTicks,
+                    DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers) };
             // Definitions may arrive in any enumeration order; IDs are explicit and contiguous.

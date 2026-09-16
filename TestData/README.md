@@ -22,6 +22,7 @@
 | `rules.coreRadiusMeters`, `ownedObjectiveVisionMeters` | コア半径4m、所有拠点・生存コアの視界24m |
 | `rules.captureRadiusMeters`, `captureDurationTicks` | 占領半径8m、継続200tick |
 | `rules.coreReinforcementIntervalTicks`, `outpostReinforcementIntervalTicks` | 歩兵1人の増援間隔100/200tick |
+| `rules.occupationThreatMemoryTicks`, `defaultReservePermille` | 占領脅威の記憶（既定200tick、0以上）／お任せの既定予備（既定100‰、0〜1000）。明示したMaintainReserve命令を優先 |
 | `unitParameters` | 兵種ごとの `kind`, `hp`, `speedMetersPerSecond`, `visionMeters`, `rangeMeters`, `damage`, `attackIntervalTicks` |
 | `factions` | 陣営の `id`, `coreId`, `armyIds` |
 | `cores` | コアの `id`, `factionId`, `positionMeters`, `hp`（初期3000） |
@@ -67,3 +68,4 @@ dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- compar
 ## 3週目の規模計測
 
 `week3-20.json` は2経路・各陣営4/4/1/1の20人設定。`week3-80.json` は同じマップ・配置規則で各陣営16/16/6/2の80体設定。40人設定は `week2-2routes.json` を使用し、いずれも陣営上限40・検証上限36000tick。
+`week2-2routes-core6000.json` は `week2-2routes.json` の両コアHPだけを3000から6000に変更した比較用シナリオです。

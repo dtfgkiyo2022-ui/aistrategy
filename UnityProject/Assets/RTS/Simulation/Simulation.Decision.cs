@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
                     approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
                 }
-                approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes);
+                approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes, world.Config.Rules.OccupationThreatMemoryTicks);
                 foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
                     attackMemory[f - 1][post.Id - 1] = PolicyDecision.ObserveAttack(observation, post, attackMemory[f - 1][post.Id - 1]);
                 foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
@@ -78,7 +78,7 @@ namespace Rts.Simulation
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }
                 var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).ToArray();
-                ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty((ushort)100).First();
+                ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty(world.Config.Rules.DefaultReservePermille).First();
                 var abandoned = policies.Where(c => c.Order.Kind == PolicyKind.AllowAbandon).Select(c => c.Order.Target.Id).OrderBy(id => id).ToArray();
                 var own = inputs.Select(i => {
                     var a = world.Armies[i.Army.Id - 1];

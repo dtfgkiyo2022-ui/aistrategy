@@ -78,6 +78,8 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll bench 
 
 ## analyze: バランス指標
 
+シナリオJSONの `rules.occupationThreatMemoryTicks`（既定200）と `rules.defaultReservePermille`（既定100）で比較値を指定できます。JSON schemaは1を維持します。ScenarioBinaryは既定値なら従来のv1をそのまま書き、異なる場合はv2としてrulesの末尾にint32の記憶tick・uint16の予備‰を追加します。読み込みはv1（200／100を補完）とv2の両方に対応します。外側の再生schema=4、rulesVersion、正規状態の形式は変更せず、比較値は既存のConfig.Hashに含まれます。旧ビルドはシナリオv2を拒否します。
+
 ```powershell
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyze --in D:/rts-verify/59/none.rtsreplay --out D:/rts-verify/59/none.indicators.json
 # ファイルを書けない環境ではメモリ内に通常形式で記録し、独立したSimulationで全tick再生する

@@ -80,7 +80,7 @@ namespace Rts.Decision
         public static ContactApproachMemory[] UpdateApproaches(FactionObservation o, IReadOnlyList<ContactApproachMemory> old)
             => UpdateApproaches(o, old, Array.Empty<ContactApproachRoute>());
         public static ContactApproachMemory[] UpdateApproaches(FactionObservation o, IReadOnlyList<ContactApproachMemory> old,
-            IReadOnlyList<ContactApproachRoute> routes)
+            IReadOnlyList<ContactApproachRoute> routes, int occupationThreatMemoryTicks = 200)
         {
             // A contact can be a tombstone for a while, but approach memory must not be one.
             var contacts = new HashSet<uint>(o.Contacts.Where(c => !c.IsArmyContact).Select(c => c.ContactId));
@@ -97,7 +97,7 @@ namespace Rts.Decision
                     // The first observation establishes a baseline.  A later increase explicitly
                     // cancels the approach; only a decrease while inside 60 m creates a threat.
                     if (m.HasPrevious && distance > m.PreviousDistance) m.ThreatUntilTick = 0;
-                    else if (m.HasPrevious && distance < m.PreviousDistance && distance <= 60) m.ThreatUntilTick = checked(o.Tick + 200);
+                    else if (m.HasPrevious && distance < m.PreviousDistance && distance <= 60) m.ThreatUntilTick = checked(o.Tick + occupationThreatMemoryTicks);
                     m.PreviousPosition = c.LastPosition; m.PreviousDistance = distance; m.LastSeenTick = o.Tick; m.HasPrevious = true;
                 }
                 if (ix < 0) result.Add(m); else result[ix] = m;
