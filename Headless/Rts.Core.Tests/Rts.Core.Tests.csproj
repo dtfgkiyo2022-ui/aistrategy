@@ -17,6 +17,7 @@
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/EnemyStrengthEstimateTests.cs" Link="Tests/EnemyStrengthEstimateTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ScaleTests.cs" Link="Tests/ScaleTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/FogObservationTests.cs" Link="Tests/FogObservationTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/MovementTests.cs" Link="Tests/MovementTests.cs" />

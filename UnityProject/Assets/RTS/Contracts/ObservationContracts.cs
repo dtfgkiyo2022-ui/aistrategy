@@ -7,6 +7,8 @@ namespace Rts.Contracts
     {
         public uint FactionId { get; }
         public long Tick { get; }
+        /// <summary>Public scenario rule, not the enemy's actual or unobserved population.</summary>
+        public int EnemyFactionCap { get; }
         public IReadOnlyList<OwnArmyView> OwnArmies { get; }
         public IReadOnlyList<VisibleEnemy> VisibleEnemies { get; }
         public IReadOnlyList<EnemyContact> Contacts { get; }
@@ -18,10 +20,12 @@ namespace Rts.Contracts
             IReadOnlyList<OwnArmyView> ownArmies,
             IReadOnlyList<VisibleEnemy> visibleEnemies,
             IReadOnlyList<EnemyContact> contacts,
-            IReadOnlyList<KnownObjective> objectives)
+            IReadOnlyList<KnownObjective> objectives,
+            int enemyFactionCap = 40)
         {
             FactionId = factionId;
             Tick = tick;
+            EnemyFactionCap = enemyFactionCap;
             OwnArmies = ContractList.Copy(ownArmies);
             VisibleEnemies = ContractList.Copy(visibleEnemies);
             Contacts = ContractList.Copy(contacts);

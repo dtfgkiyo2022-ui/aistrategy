@@ -23,16 +23,12 @@ namespace Rts.Decision
         { var c = o.Objectives.First(v => v.Kind == GoalKind.Core && (v.OwnerFactionId == o.FactionId) == own); return new PolicyGoal(c.Kind, c.Id, default); }
         public static IEnumerable<EnemyContact> CountableContacts(FactionObservation o)
         {
-            var covered = new HashSet<uint>(o.Contacts.SelectMany(c => c.CoveredContactIds ?? Array.Empty<uint>()));
-            return o.Contacts.Where(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0 || !covered.Contains(c.ContactId))).GroupBy(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0, c.ContactId)).Select(g => g.First());
+            var present = o.Contacts.Where(c => !c.IsAbsentAtLastPosition).ToArray();
+            var covered = new HashSet<uint>(present.SelectMany(c => c.CoveredContactIds ?? Array.Empty<uint>()));
+            return present.Where(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0 || !covered.Contains(c.ContactId))).GroupBy(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0, c.ContactId)).Select(g => g.First());
         }
         public static int Estimate(FactionObservation o, SimPoint point)
-        {
-            int count = 0;
-            foreach (var c in CountableContacts(o).OrderBy(c => c.ContactId))
-                if (Within(c.LastPosition, point, 24)) count = checked(count + (c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax));
-            return count;
-        }
+            => EnemyStrengthEstimate.InRegion(o, p => Within(p, point, 24));
         public static AttackMemory ObserveAttack(FactionObservation o, KnownObjective objective, AttackMemory memory)
         {
             bool visible = o.VisibleEnemies.Any(e => e.Kind == (byte)UnitKind.Infantry && Within(e.Position, objective.Position, 24));
@@ -52,7 +48,6 @@ namespace Rts.Decision
         private static bool Locked(ArmyDecisionInput a) => a.Policy.Kind == PolicyKind.Retreat || a.Policy.Kind == PolicyKind.Defend || a.Policy.Kind == PolicyKind.Scout;
         private static int Route(ArmyDecisionInput a, PolicyGoal goal) => a.Routes.Where(r => r.Goal.Kind == goal.Kind && r.Goal.Id == goal.Id).Select(r => r.Distance).DefaultIfEmpty(int.MaxValue).First();
         private static bool Same(PolicyGoal a, PolicyGoal b) => a.Kind == b.Kind && a.Id == b.Id;
-        private static int ContactEstimate(FactionObservation o, EnemyContact c) => c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax;
 
         // Squared distance to a segment, kept entirely in fixed-point integer arithmetic.
         public static bool NearRoute(SimPoint point, IReadOnlyList<SimPoint> cells, int meters)
@@ -79,12 +74,7 @@ namespace Rts.Decision
         }
         private static int RouteEstimate(FactionObservation o, ObjectiveRoute route, KnownObjective goal)
         {
-            int count = 0;
-            foreach (var c in CountableContacts(o).OrderBy(c => c.ContactId))
-                if (NearRoute(c.LastPosition, route.Cells, 24)) count = checked(count + ContactEstimate(o, c));
-            // No current/valid contact around an unobserved objective is a warning assumption, not an observation.
-            bool unknown = goal.Kind == GoalKind.Outpost ? !goal.IsOwnerKnown : goal.Kind == GoalKind.Core && !goal.IsHpKnown;
-            return unknown && count == 0 ? checked(count + 10) : count;
+            return EnemyStrengthEstimate.InRegion(o, p => NearRoute(p, route.Cells, 24), goal);
         }
 
         public static ContactApproachMemory[] UpdateApproaches(FactionObservation o, IReadOnlyList<ContactApproachMemory> old)

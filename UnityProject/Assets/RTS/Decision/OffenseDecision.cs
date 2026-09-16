@@ -35,13 +35,8 @@ namespace Rts.Decision
         {
             var ids = new HashSet<uint>(armies);
             var paths = route.ToRally.Where(r => ids.Contains(r.Goal.Id)).Select(r => r.Cells).Concat(new[] { route.ToTarget }).ToArray();
-            int count = PolicyDecision.CountableContacts(o)
-                .Where(c => paths.Any(p => PolicyDecision.NearRoute(c.LastPosition, p, 24)))
-                .Sum(c => c.EstimateMax < 0 || o.Tick - c.LastSeenTick >= 600 ? 10 : c.EstimateMax);
             var goal = o.Objectives.FirstOrDefault(g => Same(new PolicyGoal(g.Kind, g.Id, default), route.Goal));
-            bool unknown = (goal.Kind == GoalKind.Outpost ? !goal.IsOwnerKnown : !goal.IsHpKnown) || o.Tick - goal.LastSeenTick >= 600;
-            if (unknown && !o.Contacts.Any(c => PolicyDecision.Within(c.LastPosition, goal.Position, 24))) count += 10;
-            return count;
+            return EnemyStrengthEstimate.InRegion(o, point => paths.Any(p => PolicyDecision.NearRoute(point, p, 24)), goal);
         }
         private static int Near(OffenseArmyInput a, SimPoint point, int radius) => a.Soldiers.Count(p => PolicyDecision.Within(p, point, radius));
         private static bool Arrived(OffenseArmyInput a, SimPoint point) => a.Soldiers.Count > 0 && Near(a, point, 12) * 2 > a.Soldiers.Count;
