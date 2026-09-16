@@ -14,6 +14,8 @@
     <PackageReference Include="NUnit" Version="3.14.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" PrivateAssets="all" />
     <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />
+    <ProjectReference Include="../Rts.Headless.Cli/Rts.Headless.Cli.csproj" />
+    <Compile Include="IndicatorTests.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
