@@ -19,9 +19,22 @@ namespace Rts.Application
     {
         public static ReplayOutcome Record(Stream output,ScenarioDefinition scenario,IEnumerable<ScheduledInput> source,long ticks,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,string westPreset="none",string eastPreset="none",int aiDelayTicks=-1,string aiProfile="default")
         {
+            if (output == null) throw new ArgumentNullException(nameof(output));
+            return Run(output, scenario, source, ticks, build, capture, westPreset, eastPreset, aiDelayTicks, aiProfile, null);
+        }
+
+        /// <summary>Same tick/hash pipeline as Record; null output disables replay serialization and I/O.</summary>
+        public static ReplayOutcome Benchmark(Stream output, ScenarioDefinition scenario, IEnumerable<ScheduledInput> source,
+            long ticks, BuildIdentity build, Action<string, bool> measure, Action<DiagnosticState, byte[], byte[]> capture = null)
+            => Run(output, scenario, source, ticks, build, capture, "none", "none", -1, "default", measure);
+
+        private static ReplayOutcome Run(Stream output, ScenarioDefinition scenario, IEnumerable<ScheduledInput> source,
+            long ticks, BuildIdentity build, Action<DiagnosticState, byte[], byte[]> capture,
+            string westPreset, string eastPreset, int aiDelayTicks, string aiProfile, Action<string, bool> measure)
+        {
             if(ticks<0 || ticks>10000000 || ticks>scenario.VerificationTickLimit)throw new InvalidDataException("Tick limit outside scenario verification range.");
             // Canonical copy prevents caller mutation; future inputs stay outside Simulation and its hash.
-            byte[] bytes=ScenarioBinary.Encode(scenario); var sim=new Battle(ScenarioBinary.Decode(bytes));
+            byte[] bytes=ScenarioBinary.Encode(scenario); var sim=new Battle(ScenarioBinary.Decode(bytes), measure);
             if(source==null)throw new InvalidDataException("Missing input collection.");
             var supplied=source.ToArray();
             if(supplied.Any(v=>v==null || v.Orders.Any(o=>o==null)))throw new InvalidDataException("Null input/order.");
@@ -29,26 +42,37 @@ namespace Rts.Application
             var indices=new HashSet<ulong>();
             foreach(var i in inputs) if(i.AcceptedTick<0 || i.AcceptedTick>=ticks || i.ApplyTick<=i.AcceptedTick || !indices.Add(i.LogIndex))throw new InvalidDataException("Input tick or duplicate LogIndex.");
             var header=new ReplayHeader { RulesVersion=ScenarioBinary.RulesVersion,TickRateHz=scenario.TickRateHz,Seed=scenario.Seed,TickLimit=ticks,Scenario=bytes,Build=build,WestPreset=westPreset,EastPreset=eastPreset,AiDelayTicks=aiDelayTicks,AiProfile=aiProfile };
-            using(var writer=new ReplayWriter(output,header))
+            using(var writer=output == null ? null : new ReplayWriter(output,header))
             {
                 int cursor=0; ulong lastIndex=0; var outcome=new ReplayOutcome();
                 for(long tick=0;tick<=ticks;tick++)
                 {
+                    if (tick > 0) measure?.Invoke("Tick", true);
                     var batch=new List<ScheduledInput>();
                     while(cursor<inputs.Length && inputs[cursor].AcceptedTick+1==tick)
                     {
                         var input=inputs[cursor++]; byte[] payload=InputBinary.Encode(input); InputBinary.Decode(payload);
-                        writer.Write(new ReplayRecord(ReplayRecordKind.Input,tick,input.LogIndex,payload)); batch.Add(input); lastIndex=input.LogIndex;
+                        measure?.Invoke("ReplayIO", true);
+                        writer?.Write(new ReplayRecord(ReplayRecordKind.Input,tick,input.LogIndex,payload));
+                        measure?.Invoke("ReplayIO", false); batch.Add(input); lastIndex=input.LogIndex;
                     }
                     if(tick>0)sim.Step(tick,batch);
+                    measure?.Invoke("Canonical", true);
                     var state=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(state.CanonicalState), events=ReplayBinary.Hash(DiagnosticComparison.EventHash(sim.Capture(1)).Concat(DiagnosticComparison.EventHash(sim.Capture(2))));
+                    measure?.Invoke("Canonical", false);
+                    if (writer != null)
+                    {
+                    measure?.Invoke("ReplayIO", true);
                     writer.Write(new ReplayRecord(ReplayRecordKind.TickHash,tick,lastIndex,hash.Concat(events).ToArray()));
                     writer.Write(new ReplayRecord(ReplayRecordKind.CommandResults,tick,lastIndex,CommandResults(sim)));
                     if(tick%100==0)writer.Write(new ReplayRecord(ReplayRecordKind.DiagnosticCheckpoint,tick,lastIndex,state.CanonicalState.ToArray()));
+                    measure?.Invoke("ReplayIO", false);
+                    }
+                    if (tick > 0) measure?.Invoke("Tick", false);
                     capture?.Invoke(state,hash,events); outcome.LastTick=tick; outcome.IsFault=sim.Capture(1).Result.IsFault;
                     if(sim.Capture(1).Result.HasEnded)break;
                 }
-                writer.Write(new ReplayRecord(ReplayRecordKind.End,outcome.LastTick,lastIndex,ReplayBinary.Pack(w=>w.Write(outcome.IsFault))));
+                writer?.Write(new ReplayRecord(ReplayRecordKind.End,outcome.LastTick,lastIndex,ReplayBinary.Pack(w=>w.Write(outcome.IsFault))));
                 return outcome;
             }
         }

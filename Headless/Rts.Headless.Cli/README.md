@@ -57,3 +57,21 @@ EventHashは1週目の公開済み終端イベント列を明示的にハッシ�
 同じrecordコマンドのシナリオを `TestData/week2-2routes.json` にすると40人・2経路・占領ありで実行できます。配置・移動・占領の規則と実行例は [TestData README](../../TestData/README.md) を参照してください。FocusのgoalにOutpost=2も指定できます。ルール版はweek2-1で、旧week1-1再生は版不一致として拒否します。1週目のJSONの再記録は引き続き可能です。
 
 正規状態には軍団のPath（セル列）・PathCursor・PathGoal・HasPathGoal・PathImpossible・AutoStage、および拠点のOwnerFactionId・CapturingFaction・CaptureTicksを追加しています。正規状態のフィールド表現はschema=1を継続し、ルール版で互換性を区別します。
+
+## bench: tick時間の計測
+
+ビルドを先に完了し、他のビルド・テストを停止してから実行します。
+
+```powershell
+dotnet build Headless/Rts.Headless.slnx --configuration Release
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll bench --scenario TestData/week3-80.json --ticks 20000 --warmup 200 --out D:/rts-verify/24/release-80.json
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll bench --scenario TestData/week3-80.json --ticks 20000 --warmup 200 --record D:/rts-verify/24/release-80.rtsreplay --out D:/rts-verify/24/release-80-record.json
+```
+
+出力先ディレクトリは事前に作成します。`--out` 省略時は標準出力だけにJSONを出します。`--record <file>` で実際のreplay書き出しを有効化し、省略時はファイル生成・replayレコード組立を行いません。両モードとも毎tickの正規状態とStateHash/EventHashを計算します。`--inputs <file>` はrecordと同じ入力JSONです。
+
+`--ticks` は1〜シナリオ検証上限、`--warmup` は0〜シナリオ検証上限（既定200）。warmupは別インスタンスで実行し、その後S0から改めて指定tick数を測ります。S0は統計から除外し、終了した場合はそのtickまで。兵数は初期人数であり、通常の増援・死亡は継続します。
+
+`Compute` はtick処理と正規状態・ハッシュ計算、`ReplayIO` はreplayレコード組立・書き出し区間、`TickWithIO` は両者を含むtick時間です。平均、nearest-rank方式のp50/p95/p99、最大、合計をミリ秒で出します。`WallTotalMs` は初期化、S0、ヘッダー・End、最終flush/closeも含み、warmup・結果JSON保存は除外します。通常のバッファ付きファイルI/Oであり、tickごとのディスク同期完了時間ではありません。
+
+段階ごとの値は排他的時間です。経路探索は呼出元AI・移動時間から差し引き、同一tickの複数呼出しを合計します。詳細と実測結果は [performance.md](../../docs/performance.md) を参照してください。計測値はCLI側だけで保持し、Simulationには時間値を返しません。Contractsと正規状態の形式は変更しません。

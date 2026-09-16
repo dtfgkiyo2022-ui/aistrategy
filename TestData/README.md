@@ -63,3 +63,7 @@ dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- replay
 dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- replay --in run.rtsreplay --hash-out b.hashes
 dotnet run --project Headless/Rts.Headless.Cli --configuration Release -- compare --left a.hashes --right b.hashes --replay run.rtsreplay
 ```
+
+## 3週目の規模計測
+
+`week3-20.json` は2経路・各陣営4/4/1/1の20人設定。`week3-80.json` は同じマップ・配置規則で各陣営16/16/6/2の80体設定。40人設定は `week2-2routes.json` を使用し、いずれも陣営上限40・検証上限36000tick。
