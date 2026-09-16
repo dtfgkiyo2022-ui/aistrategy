@@ -75,3 +75,27 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll bench 
 `Compute` はtick処理と正規状態・ハッシュ計算、`ReplayIO` はreplayレコード組立・書き出し区間、`TickWithIO` は両者を含むtick時間です。平均、nearest-rank方式のp50/p95/p99、最大、合計をミリ秒で出します。`WallTotalMs` は初期化、S0、ヘッダー・End、最終flush/closeも含み、warmup・結果JSON保存は除外します。通常のバッファ付きファイルI/Oであり、tickごとのディスク同期完了時間ではありません。
 
 段階ごとの値は排他的時間です。経路探索は呼出元AI・移動時間から差し引き、同一tickの複数呼出しを合計します。詳細と実測結果は [performance.md](../../docs/performance.md) を参照してください。計測値はCLI側だけで保持し、Simulationには時間値を返しません。Contractsと正規状態の形式は変更しません。
+
+## analyze: バランス指標
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyze --in D:/rts-verify/59/none.rtsreplay --out D:/rts-verify/59/none.indicators.json
+# ファイルを書けない環境ではメモリ内に通常形式で記録し、独立したSimulationで全tick再生する
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyze --scenario TestData/week2-2routes.json --ticks 20000 --east-preset maintain
+```
+
+`--out` 省略時はJSONを標準出力へ出します。`--in` と `--scenario` は排他です。シナリオ指定時は `--ticks` が必須で、`--west-preset` / `--east-preset` はrecordと同じ4種（既定none）です。既存記録の意図的なビルド間互換検証には `--allow-build-mismatch` が使えます。
+
+計測はCLIの `IndicatorCounter` が既存の `DiagnosticComparison.Fields` を毎tick読みます。Simulation・Contracts・正規状態・再生形式・既定値は変更しません。通常のReplayRunnerで記録内のStateHash/EventHash・命令結果・チェックポイントも照合し、`FirstMismatchTick` を出します。終了コードは一致0、不一致2、形式不正3、Fault4です。`.hashes.states` は生成しません。
+
+集計の定義：
+
+- S0は初期値のみ。時間はS1〜最終tickの更新後状態を1tickずつ数え、終了tickを含みます（拠点ごとの中立＋西＋東の合計＝LastTick）。陣営1が西、2が東です。
+- コアHPがS0より初めて低下したtickをFirstCoreHitTickに記録します。EndTickは実際にHasEndedになったtickのみで、上限未決着はnullです。Resultは破壊コアID／Draw／Undecided／Faultを区別します。
+- 集合失敗は前tickがGatheringまたはWaitingToAdvanceで、その攻勢がIdleになったか、攻勢Idが変わった回数です。目標取得・配分による解除も含み、600tick待機失敗だけの値ではありません。Gatheringのまま終了した未解除攻勢は数えません。
+- AdvancesはGathering／WaitingToAdvanceからAdvancingになった各tickの、進撃軍団に所属する全生存兵数です。集合半径内の人数ではありません。同一攻勢の再集合後の再進撃も数え、途中合流だけでは加算しません。同tickで新攻勢が進撃まで進んだ場合も記録します。合計は延べ人数、平均の分母は進撃回数です。
+- Retriesは以前解除されたことのある同じGoal.Kind＋Goal.Idで新しい攻勢が作成された回数です。直前以外の解除目標も対象とし、同じIdの再集合・比較は数えません。Offensesに作成・解除のtickと目標を残します。
+- 守備時間はAssignmentがGuard／Reserve／CoreDefenseの軍団tickです。軍団別内訳と陣営合計を出します。人数重み付けはせず、死亡・帰還中や人間命令下でも診断のAssignmentをそのまま数えます。そのため、人間Defendの実拘束時間すべてを表すものではありません。
+- 拠点は中立0・西1・東2の所有tick数と所有変更履歴を記録します。
+- FirstCoreHit／Finalは生存数・軍団別生存数とAssignment・コアHP・所有者を記録します。CoreDefenseAliveはコア防衛に割り当てられた軍団の生存兵数であり、物理的にコアに到着した人数ではありません。初回被弾の次tick以降の増援数・死亡数・CoreDefenseへの配分変更回数も陣営別に記録します。
+- PhaseTicks、ReserveShortfallTicks、解除時の帰還軍団数・劣勢40tick到達軍団数・除外目標数は、未決着の原因調査用です。解除理由そのものは診断にないため、これらだけで原因を断定しません。
