@@ -72,6 +72,13 @@ namespace Rts.Contracts
         /// <summary>True for an aggregate; ContactId then belongs to a separate observer-local sequence.</summary>
         public bool IsArmyContact { get; }
 
+        /// <summary>
+        /// An immobile core guard (Sentry). It is observed and can be attacked like any soldier,
+        /// but it is deliberately excluded from every estimated enemy headcount: counting it would
+        /// make the advance test of 9.2 unsatisfiable for an enemy-core goal.
+        /// </summary>
+        public bool IsFixedDefense { get; }
+
         public EnemyContact(
             uint contactId,
             SimPoint lastPosition,
@@ -80,8 +87,9 @@ namespace Rts.Contracts
             int estimateMax,
             bool isCurrentlyVisible, IReadOnlyList<uint> coveredContactIds = null,
             bool isUncertain = false, bool isStrengthUnknown = false, int assumedStrength = 10,
-            bool isAbsentAtLastPosition = false, bool isArmyContact = false)
+            bool isAbsentAtLastPosition = false, bool isArmyContact = false, bool isFixedDefense = false)
         {
+            IsFixedDefense = isFixedDefense;
             ContactId = contactId;
             LastPosition = lastPosition;
             LastSeenTick = lastSeenTick;

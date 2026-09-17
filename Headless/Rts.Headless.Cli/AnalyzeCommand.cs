@@ -127,8 +127,14 @@ internal sealed class IndicatorCounter
         var owners = outposts.ToDictionary(o => o, o => (uint)N(d, $"Outposts[{o}].OwnerFactionId"));
         var armyAlive = Entities(d, "Armies").ToDictionary(a => a, a => soldiers.Count(s => N(d, $"Soldiers[{s}].ArmyId") == a && N(d, $"Soldiers[{s}].Alive") != 0));
         var assignments = armyAlive.Keys.ToDictionary(a => a, a => ((AssignmentKind)N(d, $"Ai.Armies[{a}].Assignment")).ToString());
+        // A sentry army is pinned to CoreDefense for the whole match, so counting it would add a
+        // constant 2 to every "soldiers tied to core defence" figure and hide the rescue timing
+        // that 9.2 is measuring. Tombstones still identify the army once its sentries are dead.
+        var sentryArmies = new HashSet<uint>(armyAlive.Keys.Where(a =>
+            soldiers.Any(s => N(d, $"Soldiers[{s}].ArmyId") == a && N(d, $"Soldiers[{s}].Kind") == (byte)UnitKind.Sentry)));
         // Core coordinates are immutable and not in diagnostics; count actual CoreDefense assignees instead of inferring positions.
-        var defenseAlive = factions.ToDictionary(f => f, f => Ids(d, $"Factions[{f}].ArmyIds").Where(a => assignments[a] == "CoreDefense").Sum(a => armyAlive[a]));
+        var defenseAlive = factions.ToDictionary(f => f, f => Ids(d, $"Factions[{f}].ArmyIds")
+            .Where(a => !sentryArmies.Contains(a) && assignments[a] == "CoreDefense").Sum(a => armyAlive[a]));
         var snapshot = new BattleSnapshot(tick, alive, hp, owners, defenseAlive, armyAlive, assignments);
         if (tick == 0) foreach (var c in cores) initialHp[c] = hp[c];
         if (Report.FirstCoreHitTick == null && cores.Any(c => hp[c] < initialHp[c]))

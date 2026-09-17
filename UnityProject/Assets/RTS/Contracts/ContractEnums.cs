@@ -47,7 +47,9 @@ namespace Rts.Contracts
     }
 
     // UnitKind has no assigned numbers in chapter 5; these are the initial contract values.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2 }
+    // Sentry is the immobile core guard of 5.1: it never moves, is never allocated, and is
+    // never counted in the faction cap or in an enemy strength estimate.
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Sentry = 3 }
 
     public enum EventKind : byte
     {

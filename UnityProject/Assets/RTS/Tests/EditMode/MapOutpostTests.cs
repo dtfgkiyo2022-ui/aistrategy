@@ -158,7 +158,8 @@ namespace Rts.Tests.EditMode
                 CommandTestInput.Step(sim, 1, new[] { PolicyDecisionTests.Order(1, faction, ScopeKind.All, 0, PolicyKind.MaintainReserve) });
                 CommandTestInput.Step(sim, 2, new[] { PolicyDecisionTests.Order(2, faction, ScopeKind.All, 0, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, 3-faction, default)) });
                 Step(sim, 3, 4500);
-                foreach (var a in sim.Capture(faction).Observation.OwnArmies)
+                // Sentries hold their own core and are outside every order, so they never travel.
+                foreach (var a in sim.Capture(faction).Observation.OwnArmies.Where(a => a.Kind != UnitKind.Sentry))
                 {
                     Assert.That(Math.Abs(a.Position.X.Raw - Fix64.FromInt(faction == 1 ? 232 : 24).Raw), Is.LessThan(Fix64.FromInt(6).Raw), "army " + a.Id);
                     Assert.That(Math.Abs(a.Position.Z.Raw - Fix64.FromInt(64).Raw), Is.LessThan(Fix64.FromInt(6).Raw), "army " + a.Id);
@@ -296,7 +297,7 @@ namespace Rts.Tests.EditMode
         public void ScenarioBinaryPreservesGridAndExplicitFortySoldiers()
         {
             var s = WeekTwoScenario.Create(); var copy = ScenarioBinary.Decode(ScenarioBinary.Encode(s));
-            Assert.That(copy.Soldiers.Length, Is.EqualTo(40));
+            Assert.That(copy.Soldiers.Length, Is.EqualTo(44), "40 infantry/scouts plus the four sentries of 5.1.");
             Assert.That(copy.Map.BlockedCellIds, Is.EqualTo(s.Map.BlockedCellIds));
             Assert.That(copy.Soldiers.Select(p => p.Position), Is.EqualTo(s.Soldiers.Select(p => p.Position)));
             var grid = new GridMap(copy.Map);

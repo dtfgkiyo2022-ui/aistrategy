@@ -208,7 +208,9 @@ namespace Rts.Simulation
                 foreach (int i in world.SoldierTraversal)
                 {
                     var s = world.Soldiers[i];
-                    if (s.Alive && s.Initial.FactionId == faction.Id) faction.AliveCount++;
+                    // A sentry holds no faction-cap slot, so it is not part of the reported strength
+                    // either: AliveCount and FactionCap must describe the same set of soldiers.
+                    if (s.Alive && s.Initial.FactionId == faction.Id && s.Initial.Kind != UnitKind.Sentry) faction.AliveCount++;
                     if (s.Initial.FactionId == faction.Id) continue;
                     bool visible = IsVisibleTo(faction.Id, s.Position);
                     if (s.Alive && visible)
@@ -309,7 +311,10 @@ namespace Rts.Simulation
                     var a = world.Armies[id - 1];
                     int count = 0;
                     SimPoint position = world.Cores[world.Factions[f - 1].CoreId - 1].Definition.Position;
-                    UnitKind kind = a.Definition.Role == "scout" ? UnitKind.Scout : UnitKind.Infantry;
+                    // The army kind drives 9.2 allocation, so an emptied sentry army must not
+                    // fall back to Infantry and become an offensive candidate.
+                    UnitKind kind = a.Definition.Role == "scout" ? UnitKind.Scout
+                        : a.Definition.Role == WorldState.SentryRole ? UnitKind.Sentry : UnitKind.Infantry;
                     foreach (uint soldierId in a.SoldierIds)
                     {
                         var s = world.Soldiers[soldierId - 1];
@@ -360,6 +365,8 @@ namespace Rts.Simulation
             {
                 var army = world.Armies[armyIndex];
                 if (army.Definition.FactionId == faction.Id) continue;
+                // A sentry army never becomes an aggregate contact: aggregates exist only to be counted.
+                if (army.Definition.Role == WorldState.SentryRole) continue;
                 ref var memory = ref faction.ArmyContacts[armyIndex];
                 var covered = new List<uint>();
                 int visible = 0;
@@ -412,8 +419,11 @@ namespace Rts.Simulation
             ref var f = ref world.Factions[factionId - 1];
             long age = world.Tick - f.ContactLastSeenTicks[soldierIndex];
             bool unknown = !visible && age >= 600;
+            // The contact itself must exist (Tactics resolves a target through it); only the
+            // headcount estimate ignores a sentry.
             return new EnemyContact(f.ContactIds[soldierIndex], f.ContactPositions[soldierIndex], f.ContactLastSeenTicks[soldierIndex],
-                unknown ? -1 : 1, unknown ? -1 : 1, visible, null, !visible && age >= 200, unknown, 10, f.ContactAbsent[soldierIndex]);
+                unknown ? -1 : 1, unknown ? -1 : 1, visible, null, !visible && age >= 200, unknown, 10, f.ContactAbsent[soldierIndex],
+                false, world.Soldiers[soldierIndex].Initial.Kind == UnitKind.Sentry);
         }
         private KnownObjective Objective(uint factionId, GoalKind kind, uint id, SimPoint position, uint owner, int hp, uint capturing, int captureTicks, int duration)
         {

@@ -30,14 +30,17 @@ namespace Rts.Simulation
         {
             int alive = 0;
             foreach (int i in world.SoldierTraversal)
-                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) alive++;
+                // Sentries never occupy a faction-cap slot, so they never cost the faction a reinforcement.
+                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction
+                    && world.Soldiers[i].Initial.Kind != UnitKind.Sentry) alive++;
             if (alive >= world.Config.Rules.FactionCap) return;
             uint army = 0;
             for (int priority = 0; priority < 3 && army == 0; priority++)
                 foreach (uint id in world.Factions[faction - 1].ArmyIds)
                 {
                     var a = world.Armies[id - 1];
-                    if (a.Definition.Role == "scout") continue;
+                    // Scout and sentry slots never receive infantry; a dead sentry is not replaced.
+                    if (a.Definition.Role == "scout" || a.Definition.Role == WorldState.SentryRole) continue;
                     var home = a.Definition.HomeObjective;
                     int rank = home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
                     if (rank != priority) continue;

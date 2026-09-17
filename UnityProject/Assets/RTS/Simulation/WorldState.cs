@@ -89,6 +89,8 @@ namespace Rts.Simulation
 
     internal sealed class WorldState
     {
+        /// <summary>Role name of the immobile core guard armies (5.1). Never allocated, never reinforced.</summary>
+        internal const string SentryRole = "sentry";
         internal readonly ScenarioDefinition Config;
         internal SoldierState[] Soldiers;
         internal readonly ArmyState[] Armies;
@@ -150,7 +152,12 @@ namespace Rts.Simulation
                     var ids = new System.Collections.Generic.List<uint>();
                     for (int i = 0; i < Soldiers.Length; i++)
                         if (Soldiers[i].Initial.ArmyId == id) { ids.Add((uint)i + 1); soldiers.Add(i); }
-                    Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), AutoStartIds = ids.FindAll(id => Soldiers[id - 1].Alive).ToArray(), Path = Array.Empty<int>() };
+                    var army = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), AutoStartIds = ids.FindAll(v => Soldiers[v - 1].Alive).ToArray(), Path = Array.Empty<int>() };
+                    // A sentry army is never allocated; pin it to its own core from S0 so that no
+                    // tick before the first allocation sees it advancing on the enemy core.
+                    if (army.Definition.Role == SentryRole)
+                    { army.Decision.Assignment = AssignmentKind.CoreDefense; army.Decision.Goal = new PolicyGoal(GoalKind.Core, d.CoreId, default); }
+                    Armies[id - 1] = army;
                     armies.Add((int)id - 1);
                 }
             }
@@ -201,7 +208,7 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Sentry) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
@@ -255,8 +262,10 @@ namespace Rts.Simulation
                 Require(grid.IsPassable(grid.Cell(d.Position)), "Soldier starts outside passable terrain.");
                 if (d.Alive)
                 {
+                    // Sentries occupy an army slot but never a faction-cap slot: they must not
+                    // reduce the reinforcements the faction receives (5.1).
                     Require(++armyCounts[d.ArmyId - 1] <= c.Armies[d.ArmyId - 1].Capacity
-                        && ++factionCounts[d.FactionId - 1] <= r.FactionCap, "Initial capacity exceeded.");
+                        && (d.Kind == UnitKind.Sentry || ++factionCounts[d.FactionId - 1] <= r.FactionCap), "Initial capacity exceeded.");
                 }
             }
             return c;

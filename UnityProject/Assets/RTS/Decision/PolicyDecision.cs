@@ -23,7 +23,9 @@ namespace Rts.Decision
         { var c = o.Objectives.First(v => v.Kind == GoalKind.Core && (v.OwnerFactionId == o.FactionId) == own); return new PolicyGoal(c.Kind, c.Id, default); }
         public static IEnumerable<EnemyContact> CountableContacts(FactionObservation o)
         {
-            var present = o.Contacts.Where(c => !c.IsAbsentAtLastPosition).ToArray();
+            // Fixed defences are visible and attackable but never counted: including them would
+            // make "attackers x2 >= estimate" unsatisfiable in front of an enemy core (#49).
+            var present = o.Contacts.Where(c => !c.IsAbsentAtLastPosition && !c.IsFixedDefense).ToArray();
             var covered = new HashSet<uint>(present.SelectMany(c => c.CoveredContactIds ?? Array.Empty<uint>()));
             return present.Where(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0 || !covered.Contains(c.ContactId))).GroupBy(c => (c.IsArmyContact || c.CoveredContactIds.Count != 0, c.ContactId)).Select(g => g.First());
         }
@@ -46,6 +48,9 @@ namespace Rts.Decision
             return memory;
         }
         private static bool Locked(ArmyDecisionInput a) => a.Policy.Kind == PolicyKind.Retreat || a.Policy.Kind == PolicyKind.Defend || a.Policy.Kind == PolicyKind.Scout;
+        /// <summary>An immobile core guard: outside every allocation, offensive and retreat rule.</summary>
+        private static bool Fixed(ArmyDecisionInput a) => a.Army.Kind == UnitKind.Sentry;
+        private static bool Allocatable(ArmyDecisionInput a) => a.Army.Kind != UnitKind.Scout && !Fixed(a);
         private static int Route(ArmyDecisionInput a, PolicyGoal goal) => a.Routes.Where(r => r.Goal.Kind == goal.Kind && r.Goal.Id == goal.Id).Select(r => r.Distance).DefaultIfEmpty(int.MaxValue).First();
         private static bool Same(PolicyGoal a, PolicyGoal b) => a.Kind == b.Kind && a.Id == b.Id;
 
@@ -114,7 +119,7 @@ namespace Rts.Decision
             var result = armies.Select(a => a.Memory).ToArray();
             var used = new bool[armies.Length];
             var core = Core(observation, true); var home = Position(observation, core);
-            int total = armies.Sum(a => a.Army.AliveCount), held = 0;
+            int total = armies.Where(a => !Fixed(a)).Sum(a => a.Army.AliveCount), held = 0;
             bool humanReserve = guardPriorities.Any(p => p.Kind == PolicyKind.MaintainReserve && p.Source == CommandSource.Human);
             int target = checked((int)((total * (long)reservePermille + 999) / 1000));
             var candidates = Enumerable.Range(0, armies.Length).Where(i => armies[i].Army.AliveCount > 0 && !Locked(armies[i]) &&
@@ -124,19 +129,22 @@ namespace Rts.Decision
                 used[i] = !candidates.Contains(i);
                 if (!used[i]) { result[i].Assignment = AssignmentKind.Advance; result[i].Goal = default; }
             }
+            // Sentries hold their own core unconditionally and take part in no step below.
+            for (int i = 0; i < armies.Length; i++)
+                if (Fixed(armies[i])) { used[i] = true; result[i].Assignment = AssignmentKind.CoreDefense; result[i].Goal = core; }
             // Core emergencies precede reserve and outpost allocations. Focus permits this reassignment.
             int danger = observation.VisibleEnemies.Any(e => Within(e.Position, home, 24)) ? Math.Max(1, Estimate(observation, home)) : 0;
             if (danger > 0)
             {
                 int defenders = armies.Where(Locked).Where(a => a.Policy.Kind == PolicyKind.Defend && a.Policy.Goal.Kind == core.Kind && a.Policy.Goal.Id == core.Id).Sum(a => a.Army.AliveCount);
-                foreach (int i in candidates.Where(i => armies[i].Army.Kind != UnitKind.Scout).OrderBy(i => committedReserves.Contains(armies[i].Army.Id) ? 0 : armies[i].IsReserveRole ? 1 : 2).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
+                foreach (int i in candidates.Where(i => Allocatable(armies[i])).OrderBy(i => committedReserves.Contains(armies[i].Army.Id) ? 0 : armies[i].IsReserveRole ? 1 : 2).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
                 {
                     if (defenders >= danger && held >= target && !committedReserves.Contains(armies[i].Army.Id)) break;
                     used[i] = true; result[i].Assignment = AssignmentKind.CoreDefense; result[i].Goal = core;
                     defenders += armies[i].Army.AliveCount; held += armies[i].Army.AliveCount;
                 }
             }
-            foreach (int i in candidates.Where(i => !used[i] && armies[i].Army.Kind != UnitKind.Scout)
+            foreach (int i in candidates.Where(i => !used[i] && Allocatable(armies[i]))
                 .OrderBy(i => armies[i].IsReserveRole ? 0 : 1).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
             {
                 if (held >= target) break;
@@ -157,8 +165,8 @@ namespace Rts.Decision
             foreach (var post in posts)
             {
                 if (armies.Any(a => a.Army.AliveCount > 0 && a.Policy.Kind == PolicyKind.Defend && a.Policy.Goal.Kind == post.Kind && a.Policy.Goal.Id == post.Id)) continue;
-                int i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout && armies[j].Army.HomeObjective.Kind == post.Kind && armies[j].Army.HomeObjective.Id == post.Id).DefaultIfEmpty(-1).First();
-                if (i < 0) i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout)
+                int i = candidates.Where(j => !used[j] && Allocatable(armies[j]) && armies[j].Army.HomeObjective.Kind == post.Kind && armies[j].Army.HomeObjective.Id == post.Id).DefaultIfEmpty(-1).First();
+                if (i < 0) i = candidates.Where(j => !used[j] && Allocatable(armies[j]))
                     .OrderBy(j => Route(armies[j], new PolicyGoal(post.Kind, post.Id, default)))
                     .ThenBy(j => armies[j].Army.Id).DefaultIfEmpty(-1).First();
                 if (i < 0) continue;
@@ -202,6 +210,8 @@ namespace Rts.Decision
         public static ArmyDecisionMemory AssessRetreat(FactionObservation o, OwnArmyView army, PolicyView policy,
             ArmyDecisionMemory memory, long tick, bool lossReached, bool homeArrived)
         {
+            // A sentry cannot leave its core, so it is never part of an inferiority retreat.
+            if (army.Kind == UnitKind.Sentry) { memory.InferiorSince = 0; return memory; }
             if (memory.Returning)
             {
                 if (homeArrived)
