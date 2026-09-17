@@ -41,18 +41,19 @@ namespace Rts.Tests.EditMode
             var s = Frozen(); s.Rules.OwnedObjectiveVision = Fix64.FromInt(512);
             var sim = new Battle(s);
             Assert.That(sim.Capture(1).Reinforcements.Single().TicksRemaining, Is.EqualTo(100));
-            Until(sim, 99); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("41"));
+            Until(sim, 99); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("45"));
             var previous = sim.Capture(1);
             Until(sim, 100);
-            Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("43"));
+            Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("47"));
             Assert.That(Births(sim).Select(e => e.Position.X), Is.EqualTo(new[] { Fix64.FromInt(24), Fix64.FromInt(232) }));
-            Assert.That(Births(sim)[0].SubjectId, Is.EqualTo(41));
+            Assert.That(Births(sim)[0].SubjectId, Is.EqualTo(45));
             Assert.That(Births(sim, 2)[0].SubjectId, Is.EqualTo(sim.Capture(2).Units.Single(u => !u.IsOwn && u.Position.Equals(P(23, 63))).Id));
+            // AliveCount excludes sentries so that it describes the same set as FactionCap.
             Assert.That(sim.Capture(1).AliveCount, Is.EqualTo(21)); Assert.That(sim.Capture(1).FactionCap, Is.EqualTo(40));
             Assert.That(previous.AliveCount, Is.EqualTo(20));
             Assert.That(previous.Reinforcements.Single().TicksRemaining, Is.EqualTo(1));
-            Until(sim, 199); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("43"));
-            Until(sim, 200); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("45"));
+            Until(sim, 199); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("47"));
+            Until(sim, 200); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("49"));
             Assert.That(Field(sim, "Cores[1].NextReinforcementTick"), Is.EqualTo("300"));
         }
 
@@ -81,11 +82,11 @@ namespace Rts.Tests.EditMode
         {
             var s = Frozen(); s.Rules.FactionCap = 20;
             var sim = new Battle(s); Until(sim, 100);
-            Assert.That(Births(sim), Is.Empty); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("41"));
-            Kill(sim, 0); Until(sim, 199); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("41"));
+            Assert.That(Births(sim), Is.Empty); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("45"));
+            Kill(sim, 0); Until(sim, 199); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("45"));
             Until(sim, 200); Assert.That(Births(sim).Length, Is.EqualTo(1));
             Set(sim, "Soldiers", 1, "Hp", 0); // ResolveDeaths before the due reinforcement.
-            Until(sim, 300); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("43"));
+            Until(sim, 300); Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("47"));
             Assert.That(sim.Capture(1).AliveCount, Is.EqualTo(20));
         }
 
@@ -105,10 +106,10 @@ namespace Rts.Tests.EditMode
             if (expected == 0)
             {
                 Assert.That(Births(sim), Is.Empty); Kill(sim, 0); Until(sim, 399);
-                Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("41"));
-                Until(sim, 400); Assert.That(Field(sim, "Soldiers[41].ArmyId"), Is.EqualTo("1"));
+                Assert.That(Field(sim, "NextSoldierId"), Is.EqualTo("45"));
+                Until(sim, 400); Assert.That(Field(sim, "Soldiers[45].ArmyId"), Is.EqualTo("1"));
             }
-            else Assert.That(Field(sim, "Soldiers[41].ArmyId"), Is.EqualTo(expected.ToString()));
+            else Assert.That(Field(sim, "Soldiers[45].ArmyId"), Is.EqualTo(expected.ToString()));
         }
 
         [Test]
@@ -182,19 +183,25 @@ namespace Rts.Tests.EditMode
         public void TombstonesAndDoubledCapacityDoNotChangeCanonicalState()
         {
             var sim = new Battle(Frozen()); Kill(sim, 0); Until(sim, 100);
-            Assert.That(States(sim, "Soldiers").Length, Is.EqualTo(80));
+            Assert.That(States(sim, "Soldiers").Length, Is.EqualTo(88));
             Assert.That(Field(sim, "Soldiers[1].Alive"), Is.EqualTo("0"));
-            Assert.That(Field(sim, "Soldiers[41].Id"), Is.EqualTo("41"));
-            Assert.That(Field(sim, "Soldiers.Count"), Is.EqualTo("42"));
+            Assert.That(Field(sim, "Soldiers[45].Id"), Is.EqualTo("45"));
+            Assert.That(Field(sim, "Soldiers.Count"), Is.EqualTo("46"));
             var before = sim.CaptureDiagnostic();
-            typeof(Battle).GetMethod("EnsureSoldierCapacity", Hidden).Invoke(sim, new object[] { 81 });
-            Assert.That(States(sim, "Soldiers").Length, Is.EqualTo(160));
+            typeof(Battle).GetMethod("EnsureSoldierCapacity", Hidden).Invoke(sim, new object[] { 89 });
+            Assert.That(States(sim, "Soldiers").Length, Is.EqualTo(176));
             Assert.That(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState.ToArray()), Is.EqualTo(ReplayBinary.Hash(before.CanonicalState.ToArray())));
             var other = new Battle(Frozen()); Kill(other, 0); Until(other, 100);
             Until(sim, 300); Until(other, 300);
             Assert.That(DiagnosticComparison.First(sim.CaptureDiagnostic(), other.CaptureDiagnostic()), Is.Null);
             var traversal = (int[])States(sim, "SoldierTraversal");
-            Assert.That(traversal.Select(i => Field(sim, "Soldiers[" + (i+1) + "].ArmyId")), Is.Ordered);
+            var fields = DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value);
+            int Value(int i, string name) => int.Parse(fields["Soldiers[" + (i + 1) + "]." + name]);
+            // Traversal is grouped by faction, then by army ID ascending within that faction.
+            // Sentry armies are appended (9/10), so the sequence is no longer globally ascending.
+            Assert.That(traversal.Select(i => Value(i, "FactionId")), Is.Ordered);
+            foreach (int faction in new[] { 1, 2 })
+                Assert.That(traversal.Where(i => Value(i, "FactionId") == faction).Select(i => Value(i, "ArmyId")), Is.Ordered);
         }
 
         [Test]
@@ -223,9 +230,9 @@ namespace Rts.Tests.EditMode
             Set(sim,"Outposts",0,"NextReinforcementTick",200L);
             Assert.That(DiagnosticComparison.First(initial,sim.CaptureDiagnostic()), Is.Not.Null);
             Set(sim,"Outposts",0,"NextReinforcementTick",0L);
-            var world = World(sim); world.GetType().GetField("NextSoldierId",Hidden).SetValue(world,40U);
+            var world = World(sim); world.GetType().GetField("NextSoldierId",Hidden).SetValue(world,44U);
             Assert.That(DiagnosticComparison.First(initial,sim.CaptureDiagnostic()), Is.Not.Null);
-            world.GetType().GetField("NextSoldierId",Hidden).SetValue(world,41U);
+            world.GetType().GetField("NextSoldierId",Hidden).SetValue(world,45U);
             Until(sim,99); Set(sim,"Cores",0,"Hp",0); Until(sim,100);
             Assert.That(Births(sim, 2).Select(e => e.Position), Is.EqualTo(new[] { P(232,64) }));
             Assert.That(sim.Capture(1).Reinforcements.Any(r => r.Kind == GoalKind.Core), Is.False);

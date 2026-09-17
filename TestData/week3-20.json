@@ -5417,6 +5417,15 @@
       "rangeMeters": 2,
       "damage": 2,
       "attackIntervalTicks": 20
+    },
+    {
+      "kind": 3,
+      "hp": 800,
+      "speedMetersPerSecond": 0,
+      "visionMeters": 24,
+      "rangeMeters": 8,
+      "damage": 40,
+      "attackIntervalTicks": 20
     }
   ],
   "factions": [
@@ -5427,7 +5436,8 @@
         1,
         2,
         3,
-        4
+        4,
+        9
       ]
     },
     {
@@ -5437,7 +5447,8 @@
         5,
         6,
         7,
-        8
+        8,
+        10
       ]
     }
   ],
@@ -5570,6 +5581,26 @@
       "id": 8,
       "factionId": 2,
       "role": "scout",
+      "capacity": 2,
+      "homeObjective": {
+        "kind": 3,
+        "id": 2
+      }
+    },
+    {
+      "id": 9,
+      "factionId": 1,
+      "role": "sentry",
+      "capacity": 2,
+      "homeObjective": {
+        "kind": 3,
+        "id": 1
+      }
+    },
+    {
+      "id": 10,
+      "factionId": 2,
+      "role": "sentry",
       "capacity": 2,
       "homeObjective": {
         "kind": 3,
@@ -5817,6 +5848,54 @@
         "z": 64
       },
       "hp": 40
+    },
+    {
+      "id": 21,
+      "factionId": 1,
+      "armyId": 9,
+      "kind": 3,
+      "alive": true,
+      "positionMeters": {
+        "x": 30,
+        "z": 60
+      },
+      "hp": 800
+    },
+    {
+      "id": 22,
+      "factionId": 1,
+      "armyId": 9,
+      "kind": 3,
+      "alive": true,
+      "positionMeters": {
+        "x": 30,
+        "z": 68
+      },
+      "hp": 800
+    },
+    {
+      "id": 23,
+      "factionId": 2,
+      "armyId": 10,
+      "kind": 3,
+      "alive": true,
+      "positionMeters": {
+        "x": 226,
+        "z": 60
+      },
+      "hp": 800
+    },
+    {
+      "id": 24,
+      "factionId": 2,
+      "armyId": 10,
+      "kind": 3,
+      "alive": true,
+      "positionMeters": {
+        "x": 226,
+        "z": 68
+      },
+      "hp": 800
     }
   ]
 }

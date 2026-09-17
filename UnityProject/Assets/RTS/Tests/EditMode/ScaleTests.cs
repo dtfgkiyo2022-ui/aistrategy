@@ -51,15 +51,15 @@ namespace Rts.Tests.EditMode
         {
             var s = Load(total); var sim = new Battle(s);
             int[] counts = total == 20 ? new[] { 4, 4, 1, 1 } : new[] { 16, 16, 6, 2 };
-            Assert.That(s.Soldiers.Length, Is.EqualTo(total));
-            Assert.That(s.Armies.Length, Is.EqualTo(8));
+            Assert.That(s.Soldiers.Length, Is.EqualTo(total + 4), "Four sentries are appended after the listed soldiers.");
+            Assert.That(s.Armies.Length, Is.EqualTo(10));
             Assert.That(s.Rules.FactionCap, Is.EqualTo(40));
             Assert.That(s.VerificationTickLimit, Is.EqualTo(36000));
             Assert.That(s.Map.BlockedCellIds, Is.EqualTo(WeekTwoScenario.Create().Map.BlockedCellIds));
             uint id = 1;
             for (uint f = 1; f <= 2; f++)
             {
-                Assert.That(s.Soldiers.Count(p => p.FactionId == f), Is.EqualTo(total / 2));
+                Assert.That(s.Soldiers.Count(p => p.FactionId == f), Is.EqualTo(total / 2 + 2));
                 for (int a = 0; a < 4; a++)
                 {
                     uint army = (f - 1) * 4 + (uint)a + 1;
@@ -77,6 +77,13 @@ namespace Rts.Tests.EditMode
                     }
                 }
             }
+            // Sentries are appended so that no existing soldier or army ID shifts.
+            var sentries = s.Soldiers.Skip(total).ToArray();
+            Assert.That(sentries.Select(p => p.Id), Is.EqualTo(Enumerable.Range(total + 1, 4).Select(v => (uint)v)));
+            Assert.That(sentries.Select(p => p.Kind), Is.All.EqualTo(UnitKind.Sentry));
+            Assert.That(sentries.Select(p => p.ArmyId), Is.EqualTo(new uint[] { 9, 9, 10, 10 }));
+            Assert.That(sentries.Select(p => p.Hp), Is.All.EqualTo(800));
+            Assert.That(s.Factions.Select(v => v.ArmyIds.Last()), Is.EqualTo(new uint[] { 9, 10 }));
             Assert.That(sim.Capture(1).Result.IsFault, Is.False);
         }
         [Test]

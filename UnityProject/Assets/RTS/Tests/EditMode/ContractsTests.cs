@@ -18,7 +18,7 @@ namespace Rts.Tests.EditMode
         [TestCase(typeof(EndKind), "UntilReplaced=1,Arrived=2,ObjectiveOwned=3,AtTick=4,LossReached=5")]
         [TestCase(typeof(ExpireFlags), "None=0,SubjectGone=1,OwnershipChanged=2,ObservationTooOld=4")]
         [TestCase(typeof(InputKind), "Reserve=1,Resolve=2,Cancel=3,Proposal=4")]
-        [TestCase(typeof(UnitKind), "Infantry=1,Scout=2")]
+        [TestCase(typeof(UnitKind), "Infantry=1,Scout=2,Sentry=3")]
         [TestCase(typeof(EventKind), "CommandChanged=1,MoveStarted=2,Attack=3,Death=4,Capture=5,Reinforcement=6,ContactChanged=7,MatchEnded=8,Fault=9,AiReport=10")]
         [TestCase(typeof(ReasonCode), "None=0,Superseded=1,UserCancelled=2,Deadline=3,StaleVersion=4,InvalidPayload=5,SubjectGone=6,OwnershipChanged=7,NoPath=8,EmptyArmy=9,ObservationTooOld=10,LossLimit=11,ReserveShortfall=12")]
         public void WireValuesAreFixed(Type type, string expected)

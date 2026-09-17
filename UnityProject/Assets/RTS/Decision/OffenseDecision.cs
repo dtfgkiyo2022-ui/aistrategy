@@ -63,6 +63,8 @@ namespace Rts.Decision
             for (int i = 0; i < inputs.Count; i++)
             {
                 var a = own[i]; var m = result[i];
+                // Sentries are outside the coordinated offence: never advancing, never retreating.
+                if (inputs[i].Army.Kind == UnitKind.Sentry) { m.InferiorTicks = 0; m.InferiorSince = 0; result[i] = m; continue; }
                 if (m.Returning)
                 {
                     if (a.HomeArrived) { m.Returning = false; m.HoldUntilTick = tick + 60; m.InferiorTicks = 0; m.InferiorSince = 0; m.Assignment = AssignmentKind.Reserve; m.Goal = PolicyDecision.Core(o, true); }

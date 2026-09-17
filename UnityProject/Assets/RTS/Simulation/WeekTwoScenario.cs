@@ -19,7 +19,7 @@ namespace Rts.Simulation
                         || (mx >= 16 && mx < 32) || (mx >= 224 && mx < 240))) blocked.Add(z * 128 + x);
                 }
             s.Map.BlockedCellIds = blocked.ToArray();
-            s.Soldiers = new SoldierDefinition[40];
+            s.Soldiers = new SoldierDefinition[44];
             int[] counts = { 8, 8, 2, 2 }, zs = { 96, 32, 64, 64 };
             uint id = 1;
             for (uint f = 1; f <= 2; f++)
@@ -35,6 +35,14 @@ namespace Rts.Simulation
                             Position = new SimPoint(Fix64.FromInt(f == 1 ? x : 256 - x), Fix64.FromInt(zs[a] + i / 4)) };
                         id++;
                     }
+                }
+            // Sentries are appended (41..44) so that no existing soldier ID shifts.
+            for (uint f = 1; f <= 2; f++)
+                for (int i = 0; i < 2; i++)
+                {
+                    s.Soldiers[id - 1] = new SoldierDefinition { Id = id, FactionId = f, ArmyId = 8 + f,
+                        Kind = UnitKind.Sentry, Alive = true, Hp = 800, Position = WeekOneScenario.SentryPosition(f, i) };
+                    id++;
                 }
             return s;
         }

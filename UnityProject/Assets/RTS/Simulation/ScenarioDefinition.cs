@@ -96,10 +96,13 @@ namespace Rts.Simulation
                     new UnitParameters { Kind = UnitKind.Infantry, Hp = 100, Speed = Fix64.FromInt(2),
                         Vision = Fix64.FromInt(20), Range = Fix64.FromInt(2), Damage = 10, AttackIntervalTicks = 20 },
                     new UnitParameters { Kind = UnitKind.Scout, Hp = 40, Speed = Fix64.FromInt(4),
-                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20 }
+                        Vision = Fix64.FromInt(32), Range = Fix64.FromInt(2), Damage = 2, AttackIntervalTicks = 20 },
+                    // Immobile core guard (5.1). Speed 0 makes StepDistance 0; movement itself is unchanged.
+                    new UnitParameters { Kind = UnitKind.Sentry, Hp = 800, Speed = Fix64.FromInt(0),
+                        Vision = Fix64.FromInt(24), Range = Fix64.FromInt(8), Damage = 40, AttackIntervalTicks = 20 }
                 },
                 Factions = new FactionDefinition[2], Cores = new CoreDefinition[2],
-                Armies = new ArmyDefinition[8], Soldiers = new SoldierDefinition[20],
+                Armies = new ArmyDefinition[10], Soldiers = new SoldierDefinition[24],
                 Outposts = new[]
                 {
                     new OutpostDefinition { Id = 1, Position = Point(128, 96) },
@@ -111,14 +114,18 @@ namespace Rts.Simulation
             for (uint f = 1; f <= 2; f++)
             {
                 uint firstArmy = (f - 1) * 4 + 1;
+                // Sentry armies are appended (9 and 10) so that no existing army ID shifts.
+                uint sentryArmy = 8 + f;
                 s.Factions[f - 1] = new FactionDefinition { Id = f, CoreId = f,
-                    ArmyIds = new[] { firstArmy, firstArmy + 1, firstArmy + 2, firstArmy + 3 } };
+                    ArmyIds = new[] { firstArmy, firstArmy + 1, firstArmy + 2, firstArmy + 3, sentryArmy } };
                 s.Cores[f - 1] = new CoreDefinition { Id = f, FactionId = f,
                     Position = Point(f == 1 ? 24 : 232, 64), Hp = 3000 };
                 for (int a = 0; a < 4; a++)
                     s.Armies[firstArmy - 1 + a] = new ArmyDefinition { Id = firstArmy + (uint)a,
                         FactionId = f, Role = roles[a], Capacity = capacities[a],
                         HomeObjective = new PolicyGoal(GoalKind.Core, f, default) };
+                s.Armies[sentryArmy - 1] = new ArmyDefinition { Id = sentryArmy, FactionId = f,
+                    Role = "sentry", Capacity = 2, HomeObjective = new PolicyGoal(GoalKind.Core, f, default) };
                 for (int i = 0; i < 10; i++)
                 {
                     int a = i < 8 ? i / 4 : i - 6;
@@ -129,9 +136,23 @@ namespace Rts.Simulation
                         Alive = true, Position = Point(f == 1 ? x : 256 - x, i < 4 ? 96 : i < 8 ? 32 : 64),
                         Hp = i == 9 ? 40 : 100 };
                 }
+                for (int i = 0; i < 2; i++)
+                {
+                    uint id = 20 + (f - 1) * 2 + (uint)i + 1; // Appended: 21/22 west, 23/24 east.
+                    s.Soldiers[id - 1] = new SoldierDefinition { Id = id, FactionId = f, ArmyId = sentryArmy,
+                        Kind = UnitKind.Sentry, Alive = true, Position = SentryPosition(f, i), Hp = 800 };
+                }
             }
             return s;
         }
+
+        /// <summary>
+        /// The two sentries stand in front of their core, on the enemy side. x is 30/226 rather
+        /// than the 8 m point 32/224 because cell (32,z) is off-road on the 2-route map of 5.1;
+        /// 30/226 is the nearest passable column and stays within 8 m of the core centre.
+        /// </summary>
+        internal static SimPoint SentryPosition(uint faction, int index)
+            => Point(faction == 1 ? 30 : 226, index == 0 ? 60 : 68);
 
         private static SimPoint Point(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
     }

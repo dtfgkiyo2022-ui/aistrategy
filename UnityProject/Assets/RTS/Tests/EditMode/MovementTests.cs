@@ -101,7 +101,8 @@ namespace Rts.Tests.EditMode
                 gateway=new CommandGateway(sim); west=PolicyPresets.CreateController(preset,1,gateway); east=PolicyPresets.CreateController(preset,2,gateway);
                 west.Initialize(); east.Initialize();
             }
-            var previous=new SimPoint[8]; var cursors=new int[8]; var stopped=new int[8];
+            // Indexed by army ID - 1, so this must cover the appended sentry armies (9/10) too.
+            var previous=new SimPoint[s.Armies.Length]; var cursors=new int[s.Armies.Length]; var stopped=new int[s.Armies.Length];
             for(int t=1;t<=5000;t++)
             {
                 if(gateway==null) sim.Step(t,Array.Empty<ScheduledInput>()); else gateway.Step();

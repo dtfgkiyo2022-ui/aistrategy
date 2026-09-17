@@ -63,11 +63,14 @@ namespace Rts.Simulation
         private static int Field(PolicyKind kind) => kind == PolicyKind.MaintainReserve ? 2 : kind == PolicyKind.AllowAbandon ? 3 : 1;
         private bool ValidScope(ScopeKey s) => s.FactionId >= 1 && s.FactionId <= 2 &&
             (s.Kind == ScopeKind.All ? s.Id == 0 : s.Kind == ScopeKind.Army ? s.Id > 0 && s.Id <= world.Armies.Length && world.Armies[s.Id - 1].Definition.FactionId == s.FactionId
+                // A human order aimed at a sentry army is rejected as impossible (9.2).
+                && world.Armies[s.Id - 1].Definition.Role != WorldState.SentryRole
             : s.Kind == ScopeKind.Outpost && s.Id > 0 && s.Id <= world.Outposts.Length);
         private uint[] Affected(ScopeKey s)
         {
             if (!ValidScope(s)) return Array.Empty<uint>();
-            return world.Armies.Where(a => a.Definition.FactionId == s.FactionId &&
+            // An All-scope or outpost-scope order never reaches a sentry army either.
+            return world.Armies.Where(a => a.Definition.FactionId == s.FactionId && a.Definition.Role != WorldState.SentryRole &&
                 (s.Kind == ScopeKind.All || s.Kind == ScopeKind.Army && a.Definition.Id == s.Id ||
                  s.Kind == ScopeKind.Outpost && (a.Definition.HomeObjective.Kind == GoalKind.Outpost && a.Definition.HomeObjective.Id == s.Id || a.Goal.Kind == GoalKind.Outpost && a.Goal.Id == s.Id || a.Decision.Goal.Kind == GoalKind.Outpost && a.Decision.Goal.Id == s.Id)))
                 .Select(a => a.Definition.Id).OrderBy(id => id).ToArray();

@@ -34,3 +34,6 @@
 /Headless/**/bin/
 /Headless/**/obj/
 /bin-verify/
+
+# テスト実行の出力
+/Headless/**/TestResults/
