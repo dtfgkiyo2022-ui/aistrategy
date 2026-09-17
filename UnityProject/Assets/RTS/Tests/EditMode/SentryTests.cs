@@ -187,5 +187,36 @@ namespace Rts.Tests.EditMode
             Assert.That(PolicyDecision.Estimate(counted, P(226, 64)), Is.GreaterThan(0),
                 "An ordinary enemy in the same place is still counted.");
         }
+
+        /// <summary>
+        /// Regression for the pursuit trap: an enemy inside the 24 m core leash but outside the
+        /// sentry's 8 m range used to start a pursuit, which flipped to "returning" after 60 ticks
+        /// and never cleared, because an immobile unit can never travel back within 1 m of its
+        /// mission. The sentry then stopped selecting targets for the rest of the match.
+        /// </summary>
+        [Test]
+        public void OutOfRangeEnemyNeverTrapsASentryInThePursuitCycle()
+        {
+            // 8.94 m from the sentry (outside its 8 m range), 14 m from the core (inside the leash).
+            var s = Isolated(Sentry(1, 1, P(30, 60)), Infantry(2, 2, P(38, 64)));
+            s.UnitParameters[0].Speed = Fix64.FromInt(0); // Hold the enemy at that distance.
+            var sim = new Battle(s);
+            for (long tick = 1; tick <= 200; tick++)
+            {
+                CommandTestInput.Step(sim, tick, None);
+                var d = Fields(sim);
+                string context = "tick=" + tick;
+                Assert.That(d["Ai.Soldiers[1].Pursuit.Active"], Is.EqualTo("0"), context);
+                Assert.That(d["Ai.Soldiers[1].Pursuit.Returning"], Is.EqualTo("0"), context);
+                Assert.That(d["Soldiers[1].Position.X.Raw"], Is.EqualTo(Raw(30)), context);
+            }
+            // Still able to fire the moment something does enter range.
+            var closer = Isolated(Sentry(1, 1, P(30, 60)), Infantry(2, 2, P(38, 64)), Infantry(3, 2, P(30, 64)));
+            closer.UnitParameters[0].Speed = Fix64.FromInt(0);
+            var engaged = new Battle(closer);
+            Until(engaged, 100);
+            Assert.That(int.Parse(Field(engaged, "Soldiers[3].Hp"), CultureInfo.InvariantCulture), Is.LessThan(100),
+                "A sentry held by a distant enemy must still shoot one that is in range.");
+        }
     }
 }

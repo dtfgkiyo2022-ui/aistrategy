@@ -239,6 +239,10 @@ namespace Rts.Decision
             if (pursuit.Active || pursuit.Returning) pursuit.Mission = mission;
             if (input.Returning || input.Policy == PolicyKind.Retreat)
             { pursuit = default; return new ArmyIntent(input.ArmyId, mission, 0, default, true); }
+            // An immobile soldier can never reach its mission again, so the return leg below would
+            // never complete and it would stop choosing targets permanently.  Keep it out of the
+            // cycle entirely; it holds its post and fires at whatever enters range.
+            if (input.Immobile) pursuit = default;
             if (pursuit.Returning)
             {
                 if (!Within(position, pursuit.Mission, 1)) return new ArmyIntent(input.ArmyId, pursuit.Mission, 0, default, false);
@@ -266,7 +270,7 @@ namespace Rts.Decision
                 Within(position, c.Position, input.Range + input.CoreRadius) && (!defend && !reserve || Within(c.Position, anchor, leash)))
                 .OrderBy(c => Distance(position, c.Position)).ThenBy(c => c.Id).ToArray();
             if (core.Length > 0) return new ArmyIntent(input.ArmyId, mission, 0, new PolicyGoal(GoalKind.Core, core[0].Id, default), false);
-            if (visible.Length > 0)
+            if (visible.Length > 0 && !input.Immobile)
             {
                 if (!pursuit.Active) { pursuit.Active = true; pursuit.Start = position; pursuit.StartTick = input.Tick; pursuit.Mission = mission; }
                 return new ArmyIntent(input.ArmyId, FixMath.MoveTowards(pursuit.Start, visible[0].Position, Fix64.FromInt(12)), 0, default, false);

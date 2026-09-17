@@ -109,9 +109,17 @@ namespace Rts.Contracts
         public PolicyKind Policy { get; }
         public AssignmentKind Assignment { get; }
         public bool Returning { get; }
+        /// <summary>
+        /// The soldier cannot move at all (speed 0). Such a unit must never join the pursuit
+        /// cycle: it could never travel back to its mission, so it would stop selecting targets
+        /// for the rest of the match.
+        /// </summary>
+        public bool Immobile { get; }
         public TacticalInput(uint armyId, long tick, SimPoint position, SimPoint mission, SimPoint home,
-            Fix64 range, Fix64 coreRadius, PolicyKind policy, AssignmentKind assignment, bool returning)
+            Fix64 range, Fix64 coreRadius, PolicyKind policy, AssignmentKind assignment, bool returning,
+            bool immobile = false)
         { ArmyId = armyId; Tick = tick; Position = position; Mission = mission; Home = home;
-            Range = range; CoreRadius = coreRadius; Policy = policy; Assignment = assignment; Returning = returning; }
+            Range = range; CoreRadius = coreRadius; Policy = policy; Assignment = assignment; Returning = returning;
+            Immobile = immobile; }
     }
 }

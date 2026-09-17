@@ -84,7 +84,8 @@ namespace Rts.Simulation
                 bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
                 var mission = ArmyGoal(a);
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
-                    s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
+                    s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning,
+                    s.StepDistance.Raw == 0);
                 ArmyIntent intent;
                 if (s.Initial.Kind == UnitKind.Scout && a.Policy == PolicyKind.Scout && !returning)
                 {
