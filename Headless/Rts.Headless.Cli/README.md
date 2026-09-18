@@ -101,3 +101,31 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyz
 - 拠点は中立0・西1・東2の所有tick数と所有変更履歴を記録します。
 - FirstCoreHit／Finalは生存数・軍団別生存数とAssignment・コアHP・所有者を記録します。CoreDefenseAliveはコア防衛に割り当てられた軍団の生存兵数であり、物理的にコアに到着した人数ではありません。初回被弾の次tick以降の増援数・死亡数・CoreDefenseへの配分変更回数も陣営別に記録します。
 - PhaseTicks、ReserveShortfallTicks、解除時の帰還軍団数・劣勢40tick到達軍団数・除外目標数は、未決着の原因調査用です。解除理由そのものは診断にないため、これらだけで原因を断定しません。
+
+## grace: 判断猶予の測定
+
+技術設計11章の判断猶予です。同じ命令1件を受付tick R を変えて先頭（tick 0）から何度も再生し、成功述語を満たす R の集合と最終成功tickを出します。**成功が R について単調とは仮定しないため、途中で失敗しても走査を打ち切りません。**
+
+```powershell
+dotnet build Headless/Rts.Headless.slnx --configuration Release
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace --scenario TestData/week2-2routes.json --ticks 3000 --faction 1 --criterion reinforcement --outpost 1 --observed-tick 0 --order-kind Defend --order-scope Outpost --order-scope-id 1 --order-goal Outpost --order-goal-id 1 --min-r 1 --max-r 41 --r-step 20 --out D:/rts-verify/29/reinforcement.json
+```
+
+オプション：`--scenario`（必須）、`--ticks`（1実行のtick上限。既定はシナリオのverificationTickLimit）、`--faction`（既定1）、`--criterion`（`core-defense` / `retreat` / `reinforcement` / `diversion`、既定core-defense）、`--army`（retreat用）、`--outpost`（reinforcement・diversion用）、`--observed-tick`（初観測tick。猶予の起点で、呼び出し側が与える入力です）、`--min-r`（既定1）、`--max-r`（既定は`--ticks`）、`--r-step`（既定1）、`--input-delay`（既定60）、`--out`。命令の中身は `--order-kind`（PolicyKind名、既定Defend）、`--order-scope`（All/Army/Outpost、既定All）、`--order-scope-id`、`--order-goal`（None/Point/Outpost/Core）、`--order-goal-id`、`--reserve-permille` で指定します。命令は測定側が毎回 Reserve+Resolve の組に合成し、CommandId・TargetRevision・ObservedTick を実行ごとに付け直します。
+
+出力は `Immediate`（受付tick R でそのまま適用）と `Delayed`（理解・入力時間として **R + 60 tick** で適用。R自体は操作側の時計のまま記録）の2件です。各件に成功・失敗・未評価・未適用のR一覧、`LastSuccessTick`、`GraceTicks`（＝最終成功tick − 初観測tick）、`Verdict` が入ります。
+
+- `Grace`：成功Rが1つ以上ある。`GraceTicks` が猶予です。
+- `NoGrace`（猶予なし）：適用できたRがすべて判定済みの失敗。
+- `Unevaluated`（未評価）：未判定のRが残る、または上限を越えて命令が適用されなかった（`NotAppliedTicks`）。
+
+成功述語の判定基準：
+
+- **コア防衛**：測定陣営のコアが破壊されなければ成功。破壊（相手勝利または両者コア0の引分け）が唯一の失敗で、上限まで無事なら成功です。「上限内で破壊を回避できた」という意味で、勝利ではありません。
+- **撤退**：指定軍団の生存者 × 2 ≧ 開始時人数なら成功（丸めを避けた50%以上。8人なら4人、5人なら3人）。増援で補充され得るため、途中では判定せず実行終了時の人数で決めます。
+- **増援**：拠点の所有者が敵になった時点で失敗。敵所有でないまま自陣営の歩兵が占領半径内に入った時点で成功（防衛到着）。どちらも起きないまま上限に達したら未評価です（争われなかっただけでは「間に合った」と言えないため）。拠点が中立で始まる既存シナリオを許容し、開始時点で敵所有の場合だけ引数エラーにします。
+- **陽動対応**：指定拠点とコアの**両方**を失ったときだけ失敗。どちらかを保持していれば成功です。
+
+拠点の所有者は「所有陣営は自拠点を常に視認できる」性質を使い、各陣営のフレームが自分の所有だと申告したかどうかで判定します（敗れた側の古い記憶を排除するため）。
+
+実行時間は「1実行のtick数 × Rの候補数 × 2（即時・+60）」に比例します。week2-2routes（40人・経路探索あり）で概ね 7ms/tick 程度のため、R を1tick刻みで上限まで全探索すると実用的でない場合があります。`--max-r` と `--r-step` で候補を絞れます。終了コードは正常出力0（猶予あり・なし・未評価いずれも0）、形式・引数エラー3、Fault等の異常4です。`analyze` と違いハッシュ計算・ファイルI/Oの再生経路は通らず、Simulationを直接回します。
