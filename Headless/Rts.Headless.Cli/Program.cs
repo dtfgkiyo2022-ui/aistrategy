@@ -125,7 +125,7 @@ internal static class Program
     {
         try
         {
-            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze.");
+            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze, grace.");
             var options=new Dictionary<string,string>(StringComparer.Ordinal);
             for(int i=1;i<args.Length;i++)
             {
@@ -134,11 +134,12 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset"}, "bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs"},"record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--min-r","--max-r","--r-step","--input-delay"}, "bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs"},"record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
             if(args[0]=="bench") return BenchmarkCommand.Run(options, build);
             if(args[0]=="analyze") return AnalyzeCommand.Run(options, build);
+            if(args[0]=="grace") return GraceCommand.Run(options, build);
             if(args[0]=="record")
             {
                 var scenario=JsonInput.Scenario(Required("--scenario"));
