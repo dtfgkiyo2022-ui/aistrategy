@@ -34,3 +34,9 @@
 /Headless/**/bin/
 /Headless/**/obj/
 /bin-verify/
+
+# Claude Code の作業用 worktree
+/.claude/worktrees/
+
+# テスト実行の出力
+/Headless/**/TestResults/
