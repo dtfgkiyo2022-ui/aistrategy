@@ -90,7 +90,6 @@ namespace Rts.Editor
 
             var root = new GameObject("Battlefield");
             var view = root.AddComponent<BattlefieldView>();
-            view.SetTerrain(MockTerrain.Create());
             var host = root.AddComponent<MockBattlefieldHost>();
             var selector = root.AddComponent<BattlefieldSelector>();
             var panel = root.AddComponent<CommandPanel>();

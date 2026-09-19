@@ -32,15 +32,10 @@ namespace Rts.UnityHost
                 new KnownObjective(GoalKind.Core, 1, Point(24000, 64000), true, 1, true, hp, tick),
                 new KnownObjective(GoalKind.Core, 2, Point(232000, 64000), true, 2, true, CoreMaxHp, tick),
             };
-            objectives.Add(new KnownObjective(GoalKind.Outpost, 1, Point(128000, 96000), true, 1, false, 0, tick, 0, 0, 0));
-            long phase = tick % 400;
-            objectives.Add(new KnownObjective(GoalKind.Outpost, 2, Point(128000, 32000), true, 0, false, 0, tick, 2, (int)(phase / 2), 200));
             var armies = new List<OwnArmyView>
             {
                 new OwnArmyView(1, 1, UnitKind.Infantry, Point(30000 + Bounce(tick * MillimetersPerTick), 47500), 5, default(PolicyGoal)),
                 new OwnArmyView(2, 1, UnitKind.Infantry, Point(30000 + Bounce(tick * MillimetersPerTick), 62500), 5, default(PolicyGoal)),
-                new OwnArmyView(3, 1, UnitKind.Infantry, Point(28000, 64000), 2, default(PolicyGoal)),
-                new OwnArmyView(4, 1, UnitKind.Scout, Point(60000 + Bounce(tick * MillimetersPerTick * 2), 64000), 1, default(PolicyGoal)),
             };
             var observation = new FactionObservation(factionId, tick,
                 armies, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives);

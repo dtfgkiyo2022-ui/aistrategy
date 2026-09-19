@@ -14,7 +14,6 @@ namespace Rts.UnityHost
 
         private void Start()
         {
-            view.SetTerrain(MockTerrain.Create());
             view.Push(source.Latest(1));
             panel.Bind(new MockCommandPort(), 1, 1, view);
         }
