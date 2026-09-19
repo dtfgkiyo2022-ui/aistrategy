@@ -14,7 +14,11 @@ namespace Rts.Application
         /// <summary>One order at tick 0 (keep a 30% reserve), then hands off.</summary>
         StartOnly = 1,
         /// <summary>The same start order, then a second order the tick the first enemy contact is reported.</summary>
-        Change = 2
+        Change = 2,
+        /// <summary>The start order, then at the first contact every army focuses on the enemy core.</summary>
+        Push = 3,
+        /// <summary>The start order, then at the first contact the north and south armies each focus on their own outpost.</summary>
+        Secure = 4
     }
 
     public sealed class InterventionCommandOutcome
@@ -82,11 +86,20 @@ namespace Rts.Application
                 var west = sim.Capture(1);
                 if (west.Result.HasEnded) break;
                 if (result.FirstContactTick < 0 && west.Observation.Contacts.Count > 0) result.FirstContactTick = west.Tick;
-                if (style == InterventionStyle.Change && !changed && result.FirstContactTick >= 0)
+                if (style >= InterventionStyle.Change && !changed && result.FirstContactTick >= 0)
                 {
                     changed = true;
-                    send(ReserveIntent(sequence++, 500));
-                    send(DefendCoreIntent(sequence++, scenario));
+                    if (style == InterventionStyle.Change)
+                    {
+                        send(ReserveIntent(sequence++, 500));
+                        send(DefendCoreIntent(sequence++, scenario));
+                    }
+                    else if (style == InterventionStyle.Push) send(PushIntent(sequence++, scenario));
+                    else
+                    {
+                        send(SecureIntent(sequence++, scenario, 0));
+                        send(SecureIntent(sequence++, scenario, 1));
+                    }
                 }
                 east.Step(sim.Capture(2));
             }
@@ -113,6 +126,23 @@ namespace Rts.Application
         private static UserPolicyIntent ReserveIntent(ulong sequence, ushort permille) => new UserPolicyIntent(sequence,
             new ScopeKey(1, ScopeKind.All, 0), PolicyKind.MaintainReserve, default, 50, new LossBudget(300),
             new EndCondition(EndKind.UntilReplaced, 0), permille, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
+
+        private static UserPolicyIntent PushIntent(ulong sequence, ScenarioDefinition scenario)
+        {
+            uint enemyCore = scenario.Factions.First(f => f.Id == 2).CoreId;
+            return new UserPolicyIntent(sequence, new ScopeKey(1, ScopeKind.All, 0), PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Core, enemyCore, default), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
+        }
+
+        // The first two western armies (north, south) each take the outpost they are homed on.
+        private static UserPolicyIntent SecureIntent(ulong sequence, ScenarioDefinition scenario, int index)
+        {
+            var army = scenario.Armies.Where(a => a.FactionId == 1).OrderBy(a => a.Id).Skip(index).First();
+            return new UserPolicyIntent(sequence, new ScopeKey(1, ScopeKind.Army, army.Id), PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Outpost, army.HomeObjective.Id, default), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
+        }
 
         // The reserve army defends the own core; armies are numbered per faction, the reserve is the third of the west.
         private static UserPolicyIntent DefendCoreIntent(ulong sequence, ScenarioDefinition scenario)
