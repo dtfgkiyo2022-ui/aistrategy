@@ -267,7 +267,7 @@ namespace Rts.Editor
             var selectorSerialized = new SerializedObject(selector);
             selectorSerialized.FindProperty("view").objectReferenceValue = view;
             selectorSerialized.FindProperty("panel").objectReferenceValue = panel;
-            if (live)
+            if (live || replay)
             {
                 var timeline = root.AddComponent<TimelinePanel>();
                 var timelineSerialized = new SerializedObject(timeline);
