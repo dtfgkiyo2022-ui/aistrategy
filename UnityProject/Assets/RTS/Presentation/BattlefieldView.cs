@@ -37,6 +37,11 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
         private readonly Dictionary<uint, Visual> outposts = new Dictionary<uint, Visual>();
         private GameObject selectionRing;
+        private FactionFrame latestFrame;
+        private sealed class Arrow { public LineRenderer Line; public uint ArmyId; public Vector3 Goal; }
+        private readonly Dictionary<ulong, Arrow> arrows = new Dictionary<ulong, Arrow>();
+
+        public FactionFrame LatestFrame { get { return latestFrame; } }
         private GameObject terrainObject;
         private SelectionTarget selected = SelectionTarget.None;
         private float sinceUpdate;
@@ -55,6 +60,7 @@ namespace Rts.Presentation
             float best = radiusPixels * radiusPixels;
             foreach (var pair in armies) Consider(camera, screenPoint, pair.Value, SelectionKind.Army, pair.Key, ref best, ref target);
             foreach (var pair in cores) Consider(camera, screenPoint, pair.Value, SelectionKind.Core, pair.Key, ref best, ref target);
+            foreach (var pair in outposts) Consider(camera, screenPoint, pair.Value, SelectionKind.Outpost, pair.Key, ref best, ref target);
             return target.Kind != SelectionKind.None;
         }
 
@@ -64,6 +70,8 @@ namespace Rts.Presentation
             {
                 case SelectionKind.Army:
                     return "Selected: Army " + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? " (alive " + alive + ")" : "");
+                case SelectionKind.Outpost:
+                    return "Selected: Outpost " + selected.Id;
                 case SelectionKind.Core:
                     return "Selected: Core " + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? " (HP " + hp + ")" : "");
                 default:
@@ -105,7 +113,7 @@ namespace Rts.Presentation
         private void PlaceSelectionRing()
         {
             if (selectionRing == null || selected.Kind == SelectionKind.None) return;
-            var map = selected.Kind == SelectionKind.Core ? cores : armies;
+            var map = selected.Kind == SelectionKind.Core ? cores : selected.Kind == SelectionKind.Outpost ? outposts : armies;
             if (!map.TryGetValue(selected.Id, out var visual)) { selectionRing.SetActive(false); return; }
             selectionRing.SetActive(true);
             var position = visual.Object.transform.position;
@@ -119,6 +127,8 @@ namespace Rts.Presentation
             SyncCores(frame);
             SyncArmies(frame);
             SyncOutposts(frame);
+            latestFrame = frame;
+            SyncArrows(frame);
             Apply(0f);
         }
 
@@ -131,6 +141,14 @@ namespace Rts.Presentation
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
             foreach (var visual in armies.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
+            foreach (var arrow in arrows.Values)
+            {
+                if (!armies.TryGetValue(arrow.ArmyId, out var army)) { arrow.Line.enabled = false; continue; }
+                arrow.Line.enabled = true;
+                var start = army.Object.transform.position;
+                arrow.Line.SetPosition(0, new Vector3(start.x, 1.2f, start.z));
+                arrow.Line.SetPosition(1, arrow.Goal);
+            }
             PlaceSelectionRing();
             var camera = Camera.main;
             if (camera == null) return;
@@ -338,6 +356,56 @@ namespace Rts.Presentation
                 visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(FactionColor(objective.CapturingFactionId));
             }
         }
+
+        private bool TryGoalPosition(PolicyGoal goal, FactionFrame frame, out Vector3 position)
+        {
+            position = default(Vector3);
+            if (goal.Kind == GoalKind.Point) { position = ToWorld(goal.Point, 1.2f); return true; }
+            var wanted = goal.Kind == GoalKind.Core ? GoalKind.Core : GoalKind.Outpost;
+            if (goal.Kind != GoalKind.Core && goal.Kind != GoalKind.Outpost) return false;
+            foreach (var objective in frame.Objectives)
+                if (objective.Kind == wanted && objective.Id == goal.Id) { position = ToWorld(objective.Position, 1.2f); return true; }
+            return false;
+        }
+
+        private void SyncArrows(FactionFrame frame)
+        {
+            var live = new HashSet<ulong>();
+            foreach (var command in frame.Commands)
+            {
+                bool active = command.Status == CommandStatus.Executing || command.Status == CommandStatus.Pending;
+                if (!active || command.Target.Kind != ScopeKind.Army) continue;
+                if (!TryGoalPosition(command.Goal, frame, out var goal)) continue;
+                live.Add(command.CommandId);
+                if (!arrows.TryGetValue(command.CommandId, out var arrow))
+                {
+                    var go = new GameObject("Arrow_" + command.CommandId);
+                    go.transform.SetParent(transform, false);
+                    var line = go.AddComponent<LineRenderer>();
+                    line.positionCount = 2;
+                    line.useWorldSpace = true;
+                    line.widthMultiplier = 1.6f;
+                    line.widthCurve = new AnimationCurve(new Keyframe(0f, 0.3f), new Keyframe(0.85f, 0.3f), new Keyframe(0.86f, 1.2f), new Keyframe(1f, 0f));
+                    line.numCapVertices = 0;
+                    line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    arrow = new Arrow { Line = line, ArmyId = command.Target.Id };
+                    arrows.Add(command.CommandId, arrow);
+                }
+                arrow.Goal = goal;
+                arrow.Line.sharedMaterial = PresentationMaterials.GetUnlit(command.Status == CommandStatus.Pending ? new Color(1f, 0.85f, 0.2f) : new Color(1f, 1f, 1f));
+            }
+
+            scratchIds.Clear();
+            foreach (var pair in arrows)
+                if (!live.Contains(pair.Key)) scratchIds.Add(pair.Key);
+            foreach (var id in scratchIds)
+            {
+                Discard(arrows[id].Line.gameObject);
+                arrows.Remove(id);
+            }
+        }
+
+        private readonly List<ulong> scratchIds = new List<ulong>();
 
         private void FaceCamera(Camera camera)
         {

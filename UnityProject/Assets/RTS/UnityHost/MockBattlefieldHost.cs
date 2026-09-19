@@ -10,13 +10,15 @@ namespace Rts.UnityHost
         [SerializeField] private CommandPanel panel;
 
         private readonly MockFrameSource source = new MockFrameSource();
+        private readonly MockCommandPort port = new MockCommandPort();
         private float accumulated;
 
         private void Start()
         {
+            source.CommandProvider = port.Views;
             view.SetTerrain(MockTerrain.Create());
             view.Push(source.Latest(1));
-            panel.Bind(new MockCommandPort(), 1, 1, view);
+            panel.Bind(port, 1, 1, view);
         }
 
         private void Update()
@@ -26,6 +28,7 @@ namespace Rts.UnityHost
             {
                 accumulated -= BattlefieldView.TickSeconds;
                 source.Advance();
+                port.SetTick(source.Tick);
                 view.Push(source.Latest(1));
             }
         }
