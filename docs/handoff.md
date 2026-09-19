@@ -31,7 +31,8 @@
 
 ### ブランチと PR
 
-- `main` は `3e8e20f`（PR #64「このメモ自体」・PR #65「判断猶予測定」のマージ済み）
+- `main` は `69c6906`（PR #68〜#72＝表示側の #11・#12・#13・#18・#19 まで含む。最新は `git log --oneline -3 origin/main` で確認）
+- **GitHub Actions が課金／利用上限で動かない**（2026-09-19 に発覚。PR #70〜#72 のCIがジョブ起動前に失敗）。Billing & plans の設定はオーナーにしか直せない。復旧するまでは、マージ前に手元で `dotnet test Headless/Rts.Headless.slnx --configuration Release` を実行して代替した（main 最新で 355 件合格）。復旧したらこの行を消す
 - **PR #62（draft、未マージ）**：コア前の守衛（Sentry）。ブランチ `a/59-sentry`。**保留中**（→「4. 保留した実験」、状況は変わらず）
 - ローカルのブランチは `main`・`a/59-sentry` のみ。作業用 worktree は片付け済み
 
@@ -52,7 +53,14 @@
 
 ### 段階の進み具合（ROADMAP.md）
 
-段階0〜3 の A 担当（シミュレーション）の実装はおおむね完了し、段階4 に入っています。B 担当（表示・UI）は相方が進めています。
+段階0〜3 の A 担当（シミュレーション）の実装はおおむね完了し、段階4 に入っています。
+
+**B 担当（表示・UI）**は相方が進める前提でしたが、相方のブランチは未pushだったため、2026-09-19 にオーナーの依頼でオーナー側 Claude Code が #11・#12・#13・#18・#19 を先に実装してマージした（相方の作業と重ならないことを確認済み）。すべて**仮データ（モック）で表示**していて、実際の Simulation とはまだつないでいない。
+- 場所：`Presentation/`（BattlefieldView・BattlefieldCamera・BattlefieldSelector・CommandPanel・GroundPointQuantizer・TerrainMap・PresentationMaterials）、`UnityHost/`（MockFrameSource・MockCommandPort・MockBattlefieldHost・MockTerrain）、`Editor/MockBattlefieldSceneBuilder.cs`、シーン `Scenes/MockBattlefield.unity`、Blender で作った仮モデル `Models/Placeholder/*.fbx`（生成スクリプト `Tools/blender/make_placeholders.py`）
+- 見た目の確認は Unity をバッチ実行して撮影画像で行った（手順は前アカウントのメモリではなく `memory/unity-blender-batch-tools.md`）。**未確認**：実際に再生ボタンで動かした操作感、IMGUI（ボタン・状態一覧）の見た目、実際の Simulation とつないだときの挙動
+- 未着手の B 担当：#25（霧・推定兵力）、#26（遅延・予約・増援の表示）、#30・#31（段階4の時系列表示・手動検証）。#27・#32 は相方との共同
+- 相方へ：進捗をまだ伝えていない。相方が着手する前に「#11・#12・#13・#18・#19 はマージ済み」と伝えるのを忘れないこと
+- Unity 公式プラグイン（skills 29個）はカードを出したが、有効になったかは未確認。Blender 5.2.2 は `D:/Program Files (x86)/Blender/` にある
 
 ### 開いている Issue（A 担当と共同のもの）
 
