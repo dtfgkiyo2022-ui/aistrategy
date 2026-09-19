@@ -17,6 +17,14 @@ namespace Rts.Simulation
 
         private readonly Action<string, bool> measure;
 
+        /// <summary>
+        /// Debug re-run only (chapter 13.3): receives the phase ordinal, its name and the SHA-256 of the canonical
+        /// state at the end of each phase. Never read back into simulation decisions or canonical state.
+        /// </summary>
+        public Action<int, string, byte[]> PhaseHashObserver { get; set; }
+
+        private int phaseOrdinal;
+
         // Diagnostic observer only; never read back into simulation decisions or canonical state.
         public Simulation(ScenarioDefinition scenario, Action<string, bool> measure = null)
         {
@@ -40,6 +48,7 @@ namespace Rts.Simulation
             try
             {
                 world.Tick = tick;
+                phaseOrdinal = 0;
                 commandEvents.Clear();
                 Phase("Commands", () => { ApplyInputs(inputs); ApplyPendingCommands(); ComposePolicies(); });
                 Phase("AI", DecideArmies);
@@ -66,6 +75,15 @@ namespace Rts.Simulation
             measure?.Invoke(name, true);
             try { action(); }
             finally { measure?.Invoke(name, false); }
+            if (PhaseHashObserver != null)
+            {
+                phaseOrdinal++;
+                var state = CaptureDiagnostic().CanonicalState;
+                var bytes = new byte[state.Count];
+                for (int i = 0; i < bytes.Length; i++) bytes[i] = state[i];
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                    PhaseHashObserver(phaseOrdinal, name, sha.ComputeHash(bytes));
+            }
         }
 
         private void GenerateIntents()
