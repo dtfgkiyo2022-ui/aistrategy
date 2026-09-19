@@ -1,4 +1,5 @@
 using System.IO;
+using Rts.Contracts;
 using Rts.Presentation;
 using Rts.UnityHost;
 using UnityEditor;
@@ -59,6 +60,21 @@ namespace Rts.Editor
             bool q4 = Rts.Presentation.GroundPointQuantizer.TryQuantize(255.9999f, 127.9999f, 256f, 128f, out _);
             Debug.Log("[MockBattlefield] Quantize ok=" + q1 + " raw=" + qp1.X.Raw + "/" + qp1.Z.Raw + " nan=" + q2 + " neg=" + q3 + " edge=" + q4);
             Render(Path.Combine(outDir, "selected_army.png"));
+            var port = new MockCommandPort();
+            source.CommandProvider = port.Views;
+            port.SetTick(source.Tick);
+            UserPolicyIntent Attack(ulong seq, uint army, int x) => new UserPolicyIntent(seq, new ScopeKey(1, ScopeKind.Army, army), PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Point, 0, new SimPoint(Fix64.FromInt(x), Fix64.FromInt(96))), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
+            port.Submit(Attack(1, 1, 180));
+            port.Submit(Attack(2, 2, 230));
+            for (int i = 0; i < 30; i++) { source.Advance(); port.SetTick(source.Tick); }
+            foreach (var v in port.Views()) Debug.Log("[MockBattlefield] Cmd age30 #" + v.CommandId + " " + v.Status + " " + v.Reason);
+            for (int i = 0; i < 50; i++) { source.Advance(); port.SetTick(source.Tick); }
+            view.Push(source.Latest(1));
+            foreach (var v in port.Views()) Debug.Log("[MockBattlefield] Cmd age80 #" + v.CommandId + " " + v.Status + " " + v.Reason);
+            view.Apply(1f);
+            Render(Path.Combine(outDir, "arrows.png"));
             for (int i = 0; i < 2600; i++) source.Advance();
             view.Push(source.Latest(1));
             view.Apply(1f);

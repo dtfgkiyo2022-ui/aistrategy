@@ -14,6 +14,10 @@ namespace Rts.UnityHost
 
         private long tick;
 
+        public Func<IReadOnlyList<CommandView>> CommandProvider { get; set; }
+
+        public long Tick { get { return tick; } }
+
         public void Advance() { tick++; }
 
         public FactionFrame Latest(uint factionId)
@@ -45,7 +49,7 @@ namespace Rts.UnityHost
             var observation = new FactionObservation(factionId, tick,
                 armies, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives);
             return new FactionFrame(tick, factionId, units, observation,
-                Array.Empty<CommandView>(), Array.Empty<GameEvent>(),
+                CommandProvider != null ? CommandProvider() : Array.Empty<CommandView>(), Array.Empty<GameEvent>(),
                 new FogView(Array.Empty<bool>(), Array.Empty<bool>()), default(MatchResult));
         }
 
