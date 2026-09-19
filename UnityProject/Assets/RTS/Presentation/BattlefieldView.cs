@@ -37,6 +37,11 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
         private readonly Dictionary<uint, Visual> outposts = new Dictionary<uint, Visual>();
         private GameObject selectionRing;
+        private Texture2D fogTexture;
+        private int fogWidth;
+        private int fogHeight;
+        private readonly Dictionary<ulong, GameObject> ghosts = new Dictionary<ulong, GameObject>();
+        private readonly List<ulong> scratchGhostIds = new List<ulong>();
         private FactionFrame latestFrame;
         private sealed class Arrow { public LineRenderer Line; public uint ArmyId; public Vector3 Goal; }
         private readonly Dictionary<ulong, Arrow> arrows = new Dictionary<ulong, Arrow>();
@@ -117,7 +122,7 @@ namespace Rts.Presentation
             if (!map.TryGetValue(selected.Id, out var visual)) { selectionRing.SetActive(false); return; }
             selectionRing.SetActive(true);
             var position = visual.Object.transform.position;
-            selectionRing.transform.position = new Vector3(position.x, 0.05f, position.z);
+            selectionRing.transform.position = new Vector3(position.x, 0.08f, position.z);
         }
 
         public void Push(FactionFrame frame)
@@ -128,6 +133,8 @@ namespace Rts.Presentation
             SyncArmies(frame);
             SyncOutposts(frame);
             latestFrame = frame;
+            SyncFog(frame);
+            SyncGhosts(frame);
             SyncArrows(frame);
             Apply(0f);
         }
@@ -279,6 +286,25 @@ namespace Rts.Presentation
                     pixels[z * terrain.WidthCells + x] = terrain.IsBlocked(x, z) ? wall : open;
             texture.SetPixels(pixels);
             texture.Apply();
+            fogWidth = terrain.WidthCells;
+            fogHeight = terrain.HeightCells;
+            var oldFog = transform.Find("Fog");
+            if (oldFog != null) Discard(oldFog.gameObject);
+            fogTexture = new Texture2D(fogWidth, fogHeight, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var fogObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            fogObject.name = "Fog";
+            fogObject.transform.SetParent(transform, false);
+            fogObject.transform.position = new Vector3(terrain.WidthCells * terrain.CellSizeMeters / 2f, 0.03f, terrain.HeightCells * terrain.CellSizeMeters / 2f);
+            fogObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            fogObject.transform.localScale = new Vector3(terrain.WidthCells * terrain.CellSizeMeters, terrain.HeightCells * terrain.CellSizeMeters, 1f);
+            Discard(fogObject.GetComponent<Collider>());
+            var fogMaterial = new Material(Shader.Find("Sprites/Default"));
+            fogMaterial.mainTexture = fogTexture;
+            fogObject.GetComponent<Renderer>().sharedMaterial = fogMaterial;
 
             var terrainObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
             terrainObject.name = "Terrain";
@@ -354,6 +380,101 @@ namespace Rts.Presentation
                 visual.HpFill.localScale = new Vector3(width * ratio, 1.2f, 1f);
                 visual.HpFill.localPosition = new Vector3(-width * (1f - ratio) / 2f, 0f, -0.01f);
                 visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(FactionColor(objective.CapturingFactionId));
+            }
+        }
+
+        private void SyncFog(FactionFrame frame)
+        {
+            if (fogTexture == null || frame.Fog == null) return;
+            var visible = frame.Fog.VisibleCells;
+            var explored = frame.Fog.ExploredCells;
+            int count = fogWidth * fogHeight;
+            if (visible.Count != count || explored.Count != count) return;
+            var pixels = new Color[count];
+            var unexplored = new Color(0f, 0f, 0f, 0.82f);
+            var remembered = new Color(0f, 0f, 0f, 0.42f);
+            for (int i = 0; i < count; i++)
+                pixels[i] = visible[i] ? Color.clear : explored[i] ? remembered : unexplored;
+            fogTexture.SetPixels(pixels);
+            fogTexture.Apply();
+        }
+
+        private static ulong ContactKey(EnemyContact contact)
+        {
+            return contact.ContactId | (contact.IsArmyContact ? 1UL << 32 : 0UL);
+        }
+
+        private void SyncGhosts(FactionFrame frame)
+        {
+            var live = new HashSet<ulong>();
+            foreach (var contact in frame.Observation.Contacts)
+            {
+                if (contact.IsArmyContact || contact.IsCurrentlyVisible) continue;
+                ulong key = ContactKey(contact);
+                live.Add(key);
+                if (!ghosts.TryGetValue(key, out var ghost))
+                {
+                    ghost = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    ghost.name = "Ghost_" + contact.ContactId;
+                    ghost.transform.SetParent(transform, false);
+                    ghost.transform.localScale = new Vector3(2f, 2f, 2f);
+                    Discard(ghost.GetComponent<Collider>());
+                    ghost.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.75f, 0.45f, 0.42f));
+                    ghosts.Add(key, ghost);
+                }
+                ghost.transform.position = ToWorld(contact.LastPosition, 1f);
+            }
+            scratchGhostIds.Clear();
+            foreach (var pair in ghosts)
+                if (!live.Contains(pair.Key)) scratchGhostIds.Add(pair.Key);
+            foreach (var id in scratchGhostIds)
+            {
+                Discard(ghosts[id]);
+                ghosts.Remove(id);
+            }
+        }
+
+        public int EnemyVisualCount
+        {
+            get
+            {
+                int count = 0;
+                foreach (var visual in units.Values)
+                    if (visual.Object.name.StartsWith("Enemy_")) count++;
+                return count;
+            }
+        }
+
+        public List<KeyValuePair<Vector3, string>> BuildContactLabels()
+        {
+            var labels = new List<KeyValuePair<Vector3, string>>();
+            if (latestFrame == null) return labels;
+            foreach (var contact in latestFrame.Observation.Contacts)
+            {
+                long seconds = (latestFrame.Tick - contact.LastSeenTick) / 20;
+                string text;
+                if (contact.IsArmyContact)
+                    text = "~" + contact.EstimateMax + " in sight (army total unknown)";
+                else if (contact.IsCurrentlyVisible)
+                    continue;
+                else if (contact.IsStrengthUnknown)
+                    text = "strength unknown (" + seconds + "s ago)";
+                else
+                    text = "~" + contact.EstimateMax + " (" + seconds + "s ago)" + (contact.IsUncertain ? "?" : "") + (contact.IsAbsentAtLastPosition ? " absent" : "");
+                labels.Add(new KeyValuePair<Vector3, string>(ToWorld(contact.LastPosition, 3f), text));
+            }
+            return labels;
+        }
+
+        private void OnGUI()
+        {
+            var camera = Camera.main;
+            if (camera == null) return;
+            foreach (var label in BuildContactLabels())
+            {
+                var screen = camera.WorldToScreenPoint(label.Key);
+                if (screen.z <= 0f) continue;
+                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 10f, 220f, 22f), label.Value);
             }
         }
 

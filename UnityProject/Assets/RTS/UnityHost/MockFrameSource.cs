@@ -11,8 +11,15 @@ namespace Rts.UnityHost
         private const long MillimetersPerTick = 100;
         private const long TravelMillimeters = 90000;
         private const int CoreMaxHp = 3000;
+        private const int WidthCells = 128;
+        private const int HeightCells = 64;
+        private const long CellMillimeters = 2000;
+        private const long UnitVisionMillimeters = 20000;
+        private const long ObjectiveVisionMillimeters = 24000;
 
         private long tick;
+        private readonly bool[] explored = new bool[WidthCells * HeightCells];
+        private readonly Dictionary<uint, long[]> lastSeen = new Dictionary<uint, long[]>();
 
         public Func<IReadOnlyList<CommandView>> CommandProvider { get; set; }
 
@@ -22,13 +29,61 @@ namespace Rts.UnityHost
 
         public FactionFrame Latest(uint factionId)
         {
-            var units = new List<RenderUnit>();
+            long travel = Bounce(tick * MillimetersPerTick);
+            var own = new List<RenderUnit>();
+            var enemyPositions = new List<KeyValuePair<uint, long[]>>();
             for (uint i = 0; i < UnitsPerSide; i++)
             {
-                units.Add(Unit(1 + i, true, 30000 + Bounce(tick * MillimetersPerTick), 40000 + i * 5000));
-                units.Add(Unit(101 + i, false, 226000 - Bounce(tick * MillimetersPerTick), 40000 + i * 5000));
+                own.Add(Unit(1 + i, true, 30000 + travel, 40000 + i * 5000));
+                enemyPositions.Add(new KeyValuePair<uint, long[]>(101 + i, new[] { 226000 - travel, 40000 + i * 5000L }));
             }
-            units.Add(new RenderUnit(200, true, UnitKind.Scout, Point(60000 + Bounce(tick * MillimetersPerTick * 2), 64000), true, false, false, true, 40));
+            long scoutX = 60000 + Bounce(tick * MillimetersPerTick * 2);
+            own.Add(new RenderUnit(200, true, UnitKind.Scout, Point(scoutX, 64000), true, false, false, true, 40));
+
+            // Vision: own units, the own core, and owned outposts. Enemies are only visible inside these cells.
+            var sources = new List<long[]>();
+            foreach (var u in own) sources.Add(new[] { u.Position.X.Raw * 1000 / 65536, u.Position.Z.Raw * 1000 / 65536, UnitVisionMillimeters });
+            sources.Add(new[] { 24000L, 64000L, ObjectiveVisionMillimeters });
+            sources.Add(new[] { 128000L, 96000L, ObjectiveVisionMillimeters });
+            var visible = new bool[WidthCells * HeightCells];
+            foreach (var s in sources)
+            {
+                long r2 = s[2] * s[2];
+                for (int cz = 0; cz < HeightCells; cz++)
+                    for (int cx = 0; cx < WidthCells; cx++)
+                    {
+                        long dx = (cx * CellMillimeters + CellMillimeters / 2) - s[0];
+                        long dz = (cz * CellMillimeters + CellMillimeters / 2) - s[1];
+                        if (dx * dx + dz * dz <= r2) visible[cz * WidthCells + cx] = true;
+                    }
+            }
+            for (int i = 0; i < visible.Length; i++) if (visible[i]) explored[i] = true;
+
+            var units = new List<RenderUnit>(own);
+            int visibleEnemies = 0;
+            foreach (var pair in enemyPositions)
+            {
+                long xMm = pair.Value[0], zMm = pair.Value[1];
+                if (!visible[(int)(zMm / CellMillimeters) * WidthCells + (int)(xMm / CellMillimeters)]) continue;
+                units.Add(Unit(pair.Key, false, xMm, zMm));
+                lastSeen[pair.Key] = new[] { xMm, zMm, tick };
+                visibleEnemies++;
+            }
+
+            var contacts = new List<EnemyContact>();
+            foreach (var pair in lastSeen)
+            {
+                long age = tick - pair.Value[2];
+                bool visibleNow = age == 0;
+                bool unknown = age >= 600;
+                contacts.Add(new EnemyContact(pair.Key - 100, Point(pair.Value[0], pair.Value[1]), pair.Value[2],
+                    unknown ? -1 : 1, unknown ? -1 : 1, visibleNow, null, age >= 200, unknown));
+            }
+            if (visibleEnemies > 0)
+            {
+                int k = (visibleEnemies + 4) / 5;
+                contacts.Add(new EnemyContact(1, Point(190000, 64000), tick, 5 * (k - 1) + 1, 5 * k, true, null, false, false, 10, false, true));
+            }
 
             int hp = CoreMaxHp - (int)((tick / 2) % CoreMaxHp);
             var objectives = new List<KnownObjective>
@@ -41,16 +96,16 @@ namespace Rts.UnityHost
             objectives.Add(new KnownObjective(GoalKind.Outpost, 2, Point(128000, 32000), true, 0, false, 0, tick, 2, (int)(phase / 2), 200));
             var armies = new List<OwnArmyView>
             {
-                new OwnArmyView(1, 1, UnitKind.Infantry, Point(30000 + Bounce(tick * MillimetersPerTick), 47500), 5, default(PolicyGoal)),
-                new OwnArmyView(2, 1, UnitKind.Infantry, Point(30000 + Bounce(tick * MillimetersPerTick), 62500), 5, default(PolicyGoal)),
+                new OwnArmyView(1, 1, UnitKind.Infantry, Point(30000 + travel, 47500), 5, default(PolicyGoal)),
+                new OwnArmyView(2, 1, UnitKind.Infantry, Point(30000 + travel, 62500), 5, default(PolicyGoal)),
                 new OwnArmyView(3, 1, UnitKind.Infantry, Point(28000, 64000), 2, default(PolicyGoal)),
-                new OwnArmyView(4, 1, UnitKind.Scout, Point(60000 + Bounce(tick * MillimetersPerTick * 2), 64000), 1, default(PolicyGoal)),
+                new OwnArmyView(4, 1, UnitKind.Scout, Point(scoutX, 64000), 1, default(PolicyGoal)),
             };
             var observation = new FactionObservation(factionId, tick,
-                armies, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives);
+                armies, Array.Empty<VisibleEnemy>(), contacts, objectives);
             return new FactionFrame(tick, factionId, units, observation,
                 CommandProvider != null ? CommandProvider() : Array.Empty<CommandView>(), Array.Empty<GameEvent>(),
-                new FogView(Array.Empty<bool>(), Array.Empty<bool>()), default(MatchResult));
+                new FogView(visible, (bool[])explored.Clone()), default(MatchResult));
         }
 
         private static long Bounce(long distance)

@@ -34,6 +34,7 @@ namespace Rts.Editor
             view.Push(source.Latest(1));
             source.Advance();
             view.Push(source.Latest(1));
+            LogFog(view, source, "t400");
             foreach (var alpha in new[] { 0f, 0.5f, 1f })
             {
                 view.Apply(alpha);
@@ -75,7 +76,12 @@ namespace Rts.Editor
             foreach (var v in port.Views()) Debug.Log("[MockBattlefield] Cmd age80 #" + v.CommandId + " " + v.Status + " " + v.Reason);
             view.Apply(1f);
             Render(Path.Combine(outDir, "arrows.png"));
-            for (int i = 0; i < 2600; i++) source.Advance();
+            for (int i = 0; i < 300; i++) { source.Advance(); }
+            view.Push(source.Latest(1));
+            view.Apply(1f);
+            LogFog(view, source, "t780");
+            Render(Path.Combine(outDir, "fog.png"));
+            for (int i = 0; i < 2300; i++) source.Advance();
             view.Push(source.Latest(1));
             view.Apply(1f);
             Render(Path.Combine(outDir, "low_hp.png"));
@@ -126,6 +132,24 @@ namespace Rts.Editor
             SetModel(viewSerialized, "coreModel", "Core");
             viewSerialized.ApplyModifiedPropertiesWithoutUndo();
             return (view, camera);
+        }
+
+        private static void LogFog(BattlefieldView view, MockFrameSource source, string label)
+        {
+            var frame = source.Latest(1);
+            int visibleCells = 0, exploredCells = 0, enemiesInFrame = 0, enemiesInVisibleCells = 0;
+            foreach (var v in frame.Fog.VisibleCells) if (v) visibleCells++;
+            foreach (var e in frame.Fog.ExploredCells) if (e) exploredCells++;
+            foreach (var u in frame.Units)
+            {
+                if (u.IsOwn) continue;
+                enemiesInFrame++;
+                int cx = (int)(u.Position.X.Raw / 65536 / 2), cz = (int)(u.Position.Z.Raw / 65536 / 2);
+                if (frame.Fog.VisibleCells[cz * 128 + cx]) enemiesInVisibleCells++;
+            }
+            Debug.Log("[MockBattlefield] Fog " + label + " visible=" + visibleCells + " explored=" + exploredCells
+                + " enemiesInFrame=" + enemiesInFrame + " inVisibleCells=" + enemiesInVisibleCells + " enemyVisuals=" + view.EnemyVisualCount);
+            foreach (var l in view.BuildContactLabels()) Debug.Log("[MockBattlefield] Label " + label + ": " + l.Value);
         }
 
         private static void SetModel(SerializedObject target, string field, string modelName)
