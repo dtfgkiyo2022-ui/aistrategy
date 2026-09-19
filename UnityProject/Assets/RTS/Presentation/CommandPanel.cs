@@ -15,6 +15,7 @@ namespace Rts.Presentation
         [SerializeField] private float mapHeightMeters = 128f;
 
         private ICommandPort port;
+        private ICommandDelayControl delayControl;
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
@@ -27,6 +28,7 @@ namespace Rts.Presentation
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
             port = commandPort;
+            delayControl = commandPort as ICommandDelayControl;
             factionId = faction;
             ownCoreId = ownCore;
             view = battlefield;
@@ -35,7 +37,8 @@ namespace Rts.Presentation
         public bool BlocksClick(Vector2 screenPoint)
         {
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint);
+            return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
+                || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint);
         }
 
         // Left click while waiting for a ground target: returns true when the click was consumed.
@@ -63,6 +66,10 @@ namespace Rts.Presentation
         private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - ButtonRows * (ButtonHeight + 4f), ButtonWidth + 8f, ButtonRows * (ButtonHeight + 4f) + 4f); }
 
         private Rect StatusRect() { return new Rect(Screen.width - 430f, LogRect().yMax + 8f, 422f, MaxLogLines * 20f + 30f); }
+
+        private Rect SupplyRect() { return new Rect(10f, 40f, 250f, 26f + 22f * 3f); }
+
+        private Rect DelayRect() { return new Rect(10f, SupplyRect().yMax + 8f, 250f, 62f); }
 
         private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -101,6 +108,9 @@ namespace Rts.Presentation
             if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Cancel"))
                 awaitingGround = false;
 
+            DrawSupply();
+            DrawDelaySelector();
+
             var statusRect = StatusRect();
             GUI.Box(statusRect, "Command status (7 states)");
             var frame = view.LatestFrame;
@@ -111,8 +121,12 @@ namespace Rts.Presentation
                 {
                     var c = frame.Commands[i];
                     string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
+                    string wait = "";
+                    long remaining = c.ApplyTick - frame.Tick;
+                    if (c.Status == CommandStatus.Interpreting) wait = " reserving, applies in " + Seconds(remaining);
+                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(remaining);
                     GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
-                        "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + reason);
+                        "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
                 }
             }
 
@@ -120,6 +134,43 @@ namespace Rts.Presentation
             GUI.Box(logRect, "Command log");
             for (int i = 0; i < log.Count; i++)
                 GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * 20f, logRect.width - 12f, 20f), log[i]);
+        }
+
+        private static string Seconds(long ticks)
+        {
+            return (ticks < 0 ? 0 : ticks / 20f).ToString("0.0") + "s";
+        }
+
+        private void DrawSupply()
+        {
+            var frame = view.LatestFrame;
+            var rect = SupplyRect();
+            GUI.Box(rect, "Supply / reinforcements");
+            if (frame == null) return;
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), "Units " + frame.AliveCount + " / " + frame.FactionCap);
+            int row = 1;
+            foreach (var r in frame.Reinforcements)
+            {
+                if (row > 2) break;
+                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f + row * 22f, rect.width - 12f, 20f),
+                    r.Kind + " " + r.Id + ": next in " + Seconds(r.TicksRemaining));
+                row++;
+            }
+        }
+
+        private void DrawDelaySelector()
+        {
+            var rect = DelayRect();
+            GUI.Box(rect, "AI reply delay (verification)");
+            if (delayControl == null) return;
+            int[] options = { 0, 60, 200, 400 };
+            string[] names = { "0s", "3s", "10s", "20s" };
+            for (int i = 0; i < options.Length; i++)
+            {
+                bool on = delayControl.DelayTicks == options[i];
+                var buttonRect = new Rect(rect.x + 6f + i * 60f, rect.y + 24f, 56f, 26f);
+                if (GUI.Toggle(buttonRect, on, names[i], GUI.skin.button) && !on) delayControl.DelayTicks = options[i];
+            }
         }
 
         private ScopeKey ArmyScope(SelectionTarget selection) { return new ScopeKey(factionId, ScopeKind.Army, selection.Id); }

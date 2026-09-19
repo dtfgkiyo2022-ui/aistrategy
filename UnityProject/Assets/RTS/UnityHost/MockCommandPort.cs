@@ -1,11 +1,17 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 
 namespace Rts.UnityHost
 {
     /// <summary>Accepts commands without a simulation behind it, so the input UI can be checked on its own.</summary>
-    public sealed class MockCommandPort : ICommandPort
+    public sealed class MockCommandPort : ICommandPort, Rts.Presentation.ICommandDelayControl
     {
+        private const int DeadlineTicks = 240;
+        private const int TransmitTicks = 40;
+
+        public int DelayTicks { get; set; } = 60;
+
         private ulong nextId = 1;
         private long tick;
 
@@ -15,6 +21,7 @@ namespace Rts.UnityHost
             public UserPolicyIntent Intent;
             public long AcceptedTick;
             public bool Cancelled;
+            public int Delay;
         }
 
         private readonly List<Entry> entries = new List<Entry>();
@@ -27,7 +34,7 @@ namespace Rts.UnityHost
         {
             Submitted.Add(intent);
             ulong id = nextId++;
-            entries.Add(new Entry { Id = id, Intent = intent, AcceptedTick = tick });
+            entries.Add(new Entry { Id = id, Intent = intent, AcceptedTick = tick, Delay = DelayTicks });
             return id;
         }
 
@@ -39,15 +46,19 @@ namespace Rts.UnityHost
             foreach (var e in entries)
             {
                 long age = tick - e.AcceptedTick;
+                // Chapter 11: ReadyTick = R + delay; ApplyTick = max(R + 40, ReadyTick + 1); replies after the 240-tick deadline expire.
+                long applyTick = e.AcceptedTick + Math.Max(TransmitTicks, e.Delay + 1);
+                bool late = e.Delay > DeadlineTicks;
                 var status = e.Cancelled ? CommandStatus.Cancelled
-                    : age < 20 ? CommandStatus.Interpreting
-                    : age < 60 ? CommandStatus.Pending
-                    : age < 500 ? CommandStatus.Executing : CommandStatus.Completed;
-                var reason = e.Cancelled ? ReasonCode.UserCancelled : ReasonCode.None;
+                    : age < e.Delay && !(late && age >= DeadlineTicks) ? CommandStatus.Interpreting
+                    : late ? CommandStatus.Expired
+                    : tick < applyTick ? CommandStatus.Pending
+                    : tick < applyTick + 440 ? CommandStatus.Executing : CommandStatus.Completed;
+                var reason = e.Cancelled ? ReasonCode.UserCancelled : late && age >= DeadlineTicks ? ReasonCode.Deadline : ReasonCode.None;
                 bool unreachable = e.Intent.Kind == PolicyKind.Focus && e.Intent.Goal.Kind == GoalKind.Point && e.Intent.Goal.Point.X.Raw > 200L * 65536L;
-                if (unreachable && age >= 60) { status = CommandStatus.Impossible; reason = ReasonCode.NoPath; }
+                if (unreachable && status == CommandStatus.Executing) { status = CommandStatus.Impossible; reason = ReasonCode.NoPath; }
                 views.Add(new CommandView(e.Id, e.Intent.Target, e.Intent.Kind, e.Intent.Goal, status,
-                    e.AcceptedTick, e.AcceptedTick + 60, reason, CommandSource.Human));
+                    e.AcceptedTick, applyTick, reason, CommandSource.Human));
             }
             return views;
         }
