@@ -31,8 +31,8 @@
 
 ### ブランチと PR
 
-- `main` は `69c6906`（PR #68〜#72＝表示側の #11・#12・#13・#18・#19 まで含む。最新は `git log --oneline -3 origin/main` で確認）
-- **GitHub Actions が課金／利用上限で動かない**（2026-09-19 に発覚。PR #70〜#72 のCIがジョブ起動前に失敗）。Billing & plans の設定はオーナーにしか直せない。復旧するまでは、マージ前に手元で `dotnet test Headless/Rts.Headless.slnx --configuration Release` を実行して代替した（main 最新で 355 件合格）。復旧したらこの行を消す
+- `main` は `3f73fe9`（PR #68〜#79＝表示側の #11・#12・#13・#18・#19・#25・#26・#30・#31 と、実シミュレーションとの結線まで含む。最新は `git log --oneline -3 origin/main` で確認）
+- GitHub Actions は 2026-09-19 に課金／利用上限で一時的に動かなかったが、リポジトリを**公開**にしたため（公開リポジトリは実行時間が無料）復旧した。再び上限に達したら、ジョブが2秒で失敗し注釈に「recent account payments have failed or your spending limit needs to be increased」と出る（`gh run view <id>` で確認）。そのときは手元で `dotnet test Headless/Rts.Headless.slnx --configuration Release` を実行して代替する
 - **PR #62（draft、未マージ）**：コア前の守衛（Sentry）。ブランチ `a/59-sentry`。**保留中**（→「4. 保留した実験」、状況は変わらず）
 - ローカルのブランチは `main`・`a/59-sentry` のみ。作業用 worktree は片付け済み
 
@@ -55,11 +55,14 @@
 
 段階0〜3 の A 担当（シミュレーション）の実装はおおむね完了し、段階4 に入っています。
 
-**B 担当（表示・UI）**は相方が進める前提でしたが、相方のブランチは未pushだったため、2026-09-19 にオーナーの依頼でオーナー側 Claude Code が #11・#12・#13・#18・#19 を先に実装してマージした（相方の作業と重ならないことを確認済み）。すべて**仮データ（モック）で表示**していて、実際の Simulation とはまだつないでいない。
-- 場所：`Presentation/`（BattlefieldView・BattlefieldCamera・BattlefieldSelector・CommandPanel・GroundPointQuantizer・TerrainMap・PresentationMaterials）、`UnityHost/`（MockFrameSource・MockCommandPort・MockBattlefieldHost・MockTerrain）、`Editor/MockBattlefieldSceneBuilder.cs`、シーン `Scenes/MockBattlefield.unity`、Blender で作った仮モデル `Models/Placeholder/*.fbx`（生成スクリプト `Tools/blender/make_placeholders.py`）
-- 見た目の確認は Unity をバッチ実行して撮影画像で行った（手順は前アカウントのメモリではなく `memory/unity-blender-batch-tools.md`）。**未確認**：実際に再生ボタンで動かした操作感、IMGUI（ボタン・状態一覧）の見た目、実際の Simulation とつないだときの挙動
-- 未着手の B 担当：#25（霧・推定兵力）、#26（遅延・予約・増援の表示）、#30・#31（段階4の時系列表示・手動検証）。#27・#32 は相方との共同
-- 相方へ：進捗をまだ伝えていない。相方が着手する前に「#11・#12・#13・#18・#19 はマージ済み」と伝えるのを忘れないこと
+**B 担当（表示・UI）**は相方が進める前提でしたが、相方のブランチは未pushだったため、2026-09-19 にオーナーの依頼でオーナー側 Claude Code が #11・#12・#13・#18・#19・#25・#26・#30・#31 を実装してマージした（相方の作業と重ならないことを確認済み）。
+- **2種類のシーン**：`Scenes/MockBattlefield.unity`（仮データ）、`Scenes/LiveBattlefield.unity`（**本物の Simulation＋CommandGateway で試合が動く**。西＝自分、東＝`maintain`）、`Scenes/ReplayView.unity`（`.rtsreplay` を選んで再生）。3つとも `Editor/MockBattlefieldSceneBuilder.cs` の `Create*Scene` で作り直せる
+- 場所：`Presentation/`（BattlefieldView・BattlefieldCamera・BattlefieldSelector・CommandPanel・TimelinePanel・MatchTimeline・GroundPointQuantizer・TerrainMap・SelectionTarget・PresentationMaterials・IMatchClock・ICommandDelayControl）、`UnityHost/`（LiveMatchHost・LiveCommandPort・ReplayViewHost・ScenarioTerrain・Mock*）、`Application/ReplayPlayer.cs`（画面で見る用の再生。照合は従来どおり `ReplayRunner.Replay`／CLI）、Blender の仮モデル `Models/Placeholder/*.fbx`（`Tools/blender/make_placeholders.py`）
+- **検証**：`VerifyFogLeak`（Unity バッチ）が両陣営の視点で本物の試合を3000tick進め、霧の情報漏れを数える。結果は PASS。実行すると `D:/rts-verify/31/report.txt`。**この検証で、補間中に敵が霧に描かれる漏れを1件見つけて直した**（Issue #31 にコメント済み）。表示や霧を触ったら必ず再実行する
+- 見た目の確認は Unity をバッチ実行して撮影画像で行った（手順は `memory/unity-blender-batch-tools.md`）。**未確認**：実際に再生ボタンで動かした操作感、IMGUI（ボタン・状態一覧）の見た目、遅延3/10/20秒を選んだときの実挙動（翻訳スタブ経路）、長い記録の再生の重さ、試合の決着まで進めたときの表示
+- **設計判断（Astra 未レビュー）**：①遅延0は直接の定型命令、3秒以上は `SubmitInterpreted`（人間の翻訳スタブが操作側の命令をそのまま返す）。遅延の切り替えは試合の作り直し ②照合と表示の分離（`ReplayPlayer` を新設し `ReplayRunner` は変更なし）③敵は今見えないマスへ補間しない
+- 表示側の残り：#27・#32（相方との共同）。#30 の「再生ファイルの選択」まで完了した
+- 相方へ：進捗をまだ伝えていない。相方が着手する前に「表示側は #11〜#31 まで一通りマージ済み。相方の作業は、実際に画面で触って気になる点を Issue に書くこと」と伝えるのを忘れないこと
 - Unity 公式プラグイン（skills 29個）はカードを出したが、有効になったかは未確認。Blender 5.2.2 は `D:/Program Files (x86)/Blender/` にある
 
 ### 開いている Issue（A 担当と共同のもの）
