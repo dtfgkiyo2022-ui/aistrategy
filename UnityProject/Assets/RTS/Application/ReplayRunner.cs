@@ -92,7 +92,7 @@ namespace Rts.Application
                 { w.Write(e.CommandId); w.Write((byte)e.Kind); w.Write(e.Value); w.Write((byte)e.Reason); }
             }
         });
-        public static ReplayOutcome Replay(Stream input,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,bool allowBuildMismatch=false)
+        public static ReplayOutcome Replay(Stream input,BuildIdentity build,Action<DiagnosticState,byte[],byte[]> capture=null,bool allowBuildMismatch=false,long phaseTick=-1,Action<int,string,byte[]> phaseCapture=null)
         {
             using(var reader=new ReplayReader(input))
             {
@@ -119,7 +119,10 @@ namespace Rts.Application
                     else if(r.Kind==ReplayRecordKind.TickHash)
                     {
                         if(terminal || r.Tick!=nextTick || r.LogIndex!=lastIndex || r.Payload.Length!=64)throw new InvalidDataException("TickHash order/size.");
+                        // Chapter 13.3 debug re-run: per-phase state hashes for exactly one tick.
+                        if(phaseCapture!=null && nextTick==phaseTick)sim.PhaseHashObserver=phaseCapture;
                         if(nextTick>0)sim.Step(nextTick,batch); batch.Clear();
+                        sim.PhaseHashObserver=null;
                         lastState=sim.CaptureDiagnostic(); byte[] hash=ReplayBinary.Hash(lastState.CanonicalState), events=ReplayBinary.Hash(DiagnosticComparison.EventHash(sim.Capture(1)).Concat(DiagnosticComparison.EventHash(sim.Capture(2))));
                         if(!r.Payload.SequenceEqual(hash.Concat(events)) && !result.FirstMismatchTick.HasValue)result.FirstMismatchTick=nextTick;
                         capture?.Invoke(lastState,hash,events); result.LastTick=nextTick; result.IsFault=sim.Capture(1).Result.IsFault;

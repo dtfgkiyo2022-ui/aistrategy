@@ -134,12 +134,13 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--min-r","--max-r","--r-step","--input-delay"}, "bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs"},"record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--min-r","--max-r","--r-step","--input-delay"}, "bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs"},"record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
             if(args[0]=="bench") return BenchmarkCommand.Run(options, build);
             if(args[0]=="analyze") return AnalyzeCommand.Run(options, build);
             if(args[0]=="grace") return GraceCommand.Run(options, build);
+            if(args[0]=="intervene") return InterventionCommand.Run(options, build);
             if(args[0]=="record")
             {
                 var scenario=JsonInput.Scenario(Required("--scenario"));
@@ -228,8 +229,9 @@ internal static class Program
         }
         Console.WriteLine("First mismatch tick="+tick+"\nBuild A: "+ah.Build+"\nBuild B: "+bh.Build);
         string dir=left+".diff";
-        Rerun(ah,"left",replay,replayHash,tick,dir,build,allow);
-        Rerun(bh,"right",replay,replayHash,tick,dir,build,allow);
+        var leftPhases=Rerun(ah,"left",replay,replayHash,tick,dir,build,allow);
+        var rightPhases=Rerun(bh,"right",replay,replayHash,tick,dir,build,allow);
+        Console.WriteLine(FirstDifferentPhase(tick,leftPhases,rightPhases));
         var priorLeft=ReadState(left,previousA,tick-1); var priorRight=ReadState(right,previousB,tick-1);
         if(priorLeft!=null)Dump(dir,"left-"+(tick-1),priorLeft);
         if(priorRight!=null)Dump(dir,"right-"+(tick-1),priorRight);
@@ -246,13 +248,27 @@ internal static class Program
         return 2;
     }
     private sealed class CapturedTick:Exception { }
-    private static void Rerun(HashHeader header,string side,string supplied,string suppliedHash,long tick,string dir,BuildIdentity build,bool allow)
+    /// <summary>Chapter 13.3: the first phase of the tick whose end-of-phase state hash differs between the two re-runs.</summary>
+    internal static string FirstDifferentPhase(long tick,List<KeyValuePair<string,string>> left,List<KeyValuePair<string,string>> right)
+    {
+        if(left==null || right==null)return "最初に異なるフェーズ: 判定不可（"+(left==null?"left":"right")+" を再実行できませんでした）。";
+        int count=Math.Min(left.Count,right.Count);
+        for(int i=0;i<count;i++)
+        {
+            if(left[i].Key!=right[i].Key)return "最初に異なるフェーズ: tick="+tick+" #"+(i+1)+" フェーズ名が食い違います left="+left[i].Key+" right="+right[i].Key;
+            if(left[i].Value!=right[i].Value)return "最初に異なるフェーズ: tick="+tick+" #"+(i+1)+" "+left[i].Key+" left="+left[i].Value[..16]+" right="+right[i].Value[..16];
+        }
+        if(left.Count!=right.Count)return "最初に異なるフェーズ: tick="+tick+" #"+(count+1)+" 片方のtickがここで終わっています（left="+left.Count+"フェーズ right="+right.Count+"フェーズ）";
+        return "最初に異なるフェーズ: なし（tick="+tick+" の全 "+left.Count+" フェーズが再実行では一致。この環境では再現しないため、ずれは記録元の環境で起きたものです）";
+    }
+    private static List<KeyValuePair<string,string>> Rerun(HashHeader header,string side,string supplied,string suppliedHash,long tick,string dir,BuildIdentity build,bool allow)
     {
         string path=header.ReplayHash==suppliedHash?supplied:header.ReplayPath;
         if(!File.Exists(path) || FileHash(path)!=header.ReplayHash)
-        { Console.WriteLine(side+": 元の再生ファイルがないため、保存済み診断状態を使用します。"); return; }
+        { Console.WriteLine(side+": 元の再生ファイルがないため、保存済み診断状態を使用します。"); return null; }
         if(header.Build.SourceHash!=build.SourceHash && !allow)
-        { Console.WriteLine(side+": 元のビルドを再実行できないため、保存済み診断状態を使用します。"); return; }
+        { Console.WriteLine(side+": 元のビルドを再実行できないため、保存済み診断状態を使用します。"); return null; }
+        var phases=new List<KeyValuePair<string,string>>();
         try
         {
             using var stream=File.OpenRead(path);
@@ -260,9 +276,11 @@ internal static class Program
             {
                 if(s.Tick==tick-1 || s.Tick==tick)Dump(dir,side+"-rerun-"+s.Tick,s);
                 if(s.Tick==tick)throw new CapturedTick();
-            },allow);
+            },allow,tick,(ordinal,name,hash)=>phases.Add(new KeyValuePair<string,string>(name,ReplayBinary.Hex(hash))));
         }
         catch(CapturedTick) { }
+        File.WriteAllLines(Path.Combine(dir,side+"-rerun-"+tick+".phases.txt"),phases.Select((p,i)=>"#"+(i+1)+" "+p.Key+" "+p.Value));
+        return phases;
     }
     private static DiagnosticState ReadState(string hashes,HashRow row,long tick)
     {

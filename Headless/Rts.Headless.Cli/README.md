@@ -50,7 +50,10 @@ ScenarioBinaryは schemaVersion、scenarioId、seed、tickRate、verificationTic
 
 compareは最初の不一致/欠落tickを見つけ、元の再生ファイルが利用可能な両実行を先頭からそのtickまで再実行します。`<left>.diff/` にt−1/tの再実行結果と両実行の保存済み診断を出し、最初の異なるフィールドパスと左右の整数/Raw値、両ビルド、入力カーソル、乱数状態を表示します。元ファイルが移動した場合は `--replay` を指紋一致で代用できます。診断側のSHAは各hashes値と照合します。過去のビルドを再実行できなくても、保存された当tickの左右の状態があれば比較できます。状態がなければ不足を明記し、値をハッシュから捏造しません。
 
-EventHashは1週目の公開済み終端イベント列を明示的にハッシュ化します。通常戦闘イベント・フェーズ別ハッシュ・不完全ファイルの部分診断再生は今回追加していません。終了欠落は常にコード3です。
+EventHashは1週目の公開済み終端イベント列を明示的にハッシュ化します。通常戦闘イベント・不完全ファイルの部分診断再生は今回追加していません。終了欠落は常にコード3です。
+
+**最初に異なるフェーズ（設計書13.3）**：compareが再実行できる場合（元の再生ファイルとビルドが利用可能）、不一致tickのtickを左右それぞれ再実行し、Simulationの12個のフェーズ（`Commands`／`AI`／`Commands`／`EnemySearchCombat`／`Movement`／`Visibility`／`EnemySearchCombat`／`ObjectivesReinforcements`／`Visibility`／`Commands`／`ObjectivesReinforcements`／`Frames`）の終了時点の正規状態ハッシュを取り、**最初にハッシュが食い違うフェーズ番号と名前**を表示します（`<left>.diff/left-rerun-<tick>.phases.txt` と `right-rerun-<tick>.phases.txt` に全フェーズを残します）。同名のフェーズが複数回あるため、番号（#1〜#12）で区別します。両方の再実行で全フェーズが一致した場合は「この環境では再現しない（ずれは記録元の環境で起きた）」と表示します。フェーズごとのハッシュは再実行専用の口（`Simulation.PhaseHashObserver`）で取り、通常のrecord/replayでは何も計算しません。取っても正規状態は変わりません（テストで確認）。
+
 
 ## 2経路マップ
 
@@ -129,3 +132,17 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace 
 拠点の所有者は「所有陣営は自拠点を常に視認できる」性質を使い、各陣営のフレームが自分の所有だと申告したかどうかで判定します（敗れた側の古い記憶を排除するため）。
 
 実行時間は「1実行のtick数 × Rの候補数 × 2（即時・+60）」に比例します。week2-2routes（40人・経路探索あり）で概ね 7ms/tick 程度のため、R を1tick刻みで上限まで全探索すると実用的でない場合があります。`--max-r` と `--r-step` で候補を絞れます。終了コードは正常出力0（猶予あり・なし・未評価いずれも0）、形式・引数エラー3、Fault等の異常4です。`analyze` と違いハッシュ計算・ファイルI/Oの再生経路は通らず、Simulationを直接回します。
+
+## intervene: 介入方法の比較（Issue 4-5）
+
+西陣営（プレイヤー）の介入のしかたを固定し、東陣営の方針プリセット・返答遅延と組み合わせた1試合を記録します。人の判断を評価するものではなく、比較の土台になる**機械的な代役**です。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll intervene --scenario TestData/week2-2routes.json --ticks 20000 --style change --east-preset maintain --delay 60 --out D:/rts-verify/32/runs/change_maintain_60.rtsreplay
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyze --in D:/rts-verify/32/runs/change_maintain_60.rtsreplay --out D:/rts-verify/32/runs/change_maintain_60.indicators.json
+```
+
+- `--style`：`auto`＝プレイヤーの命令なし（完全お任せ）／`start`＝tick 0 に予備30%（MaintainReserve 300‰）を1回だけ出して手を離す／`change`＝それに加え、**西の画面に最初の敵接触が報告されたtick**に予備50%への変更と、予備軍団（西の3番目の軍団）による自コア防衛（Defend）を出す
+- `--east-preset`：`none`／`maintain`／`concentrate`／`maintain-legacy`（既定none）
+- `--delay`：プレイヤーの命令の返答遅延 0／60／200／400 tick。0は直接の定型命令、それ以外は解釈スタブ経由（設計書11章。応答は操作側の命令をそのまま返す）。400は締切240tickを超えるため失効し、命令は実行されない
+- 出力：`--out` の再生ファイル（`analyze --in`／`replay`／`compare` にそのまま使える）と、`--summary-out`（既定は `<out>.summary.json`）。要約には最初の接触tick、プレイヤー命令ごとの受付tick・適用tick・最終状態・理由が入る
