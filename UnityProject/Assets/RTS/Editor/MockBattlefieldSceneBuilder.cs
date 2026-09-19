@@ -53,6 +53,12 @@ namespace Rts.Editor
             camera.transform.SetPositionAndRotation(new Vector3(128f, 120f, 10f), Quaternion.Euler(70f, 0f, 0f));
             camera.farClipPlane = 500f;
 
+            var lightObject = new GameObject("Directional Light");
+            var light = lightObject.AddComponent<Light>();
+            light.type = LightType.Directional;
+            light.intensity = 1.2f;
+            lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
+
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.position = new Vector3(128f, -0.05f, 64f);
@@ -66,7 +72,18 @@ namespace Rts.Editor
             var serialized = new SerializedObject(host);
             serialized.FindProperty("view").objectReferenceValue = view;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            var viewSerialized = new SerializedObject(view);
+            SetModel(viewSerialized, "infantryModel", "Infantry");
+            SetModel(viewSerialized, "scoutModel", "Scout");
+            SetModel(viewSerialized, "coreModel", "Core");
+            viewSerialized.ApplyModifiedPropertiesWithoutUndo();
             return (view, camera);
+        }
+
+        private static void SetModel(SerializedObject target, string field, string modelName)
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/RTS/Models/Placeholder/" + modelName + ".fbx");
+            if (model != null) target.FindProperty(field).objectReferenceValue = model;
         }
 
         private static void Render(string path)

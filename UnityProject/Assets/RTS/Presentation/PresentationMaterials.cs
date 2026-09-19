@@ -8,14 +8,20 @@ namespace Rts.Presentation
     {
         private static readonly Dictionary<Color, Material> Cache = new Dictionary<Color, Material>();
 
-        public static Material Get(Color color)
+        private static readonly Dictionary<Color, Material> UnlitCache = new Dictionary<Color, Material>();
+
+        public static Material Get(Color color) { return Build(color, false, Cache); }
+
+        public static Material GetUnlit(Color color) { return Build(color, true, UnlitCache); }
+
+        private static Material Build(Color color, bool unlit, Dictionary<Color, Material> cache)
         {
-            if (Cache.TryGetValue(color, out var material) && material != null) return material;
-            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (cache.TryGetValue(color, out var material) && material != null) return material;
+            var shader = Shader.Find(unlit ? "Universal Render Pipeline/Unlit" : "Universal Render Pipeline/Lit");
             if (shader == null) shader = Shader.Find("Sprites/Default");
             material = new Material(shader) { color = color };
             material.SetColor("_BaseColor", color);
-            Cache[color] = material;
+            cache[color] = material;
             return material;
         }
     }

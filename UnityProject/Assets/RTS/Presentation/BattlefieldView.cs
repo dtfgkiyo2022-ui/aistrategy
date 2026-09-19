@@ -9,8 +9,13 @@ namespace Rts.Presentation
     {
         public const float TickSeconds = 0.05f;
         private const float Fix64Scale = 65536f;
+        private const float UnitModelScale = 2.2f;
+        private const float CoreModelScale = 1.2f;
 
         [SerializeField] private int coreMaxHp = 3000;
+        [SerializeField] private GameObject infantryModel;
+        [SerializeField] private GameObject scoutModel;
+        [SerializeField] private GameObject coreModel;
 
         private sealed class Visual
         {
@@ -61,7 +66,7 @@ namespace Rts.Presentation
             foreach (var unit in frame.Units)
             {
                 present.Add(unit.Id);
-                var target = ToWorld(unit.Position, 1.1f);
+                var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null ? 0f : 1.1f);
                 if (!units.TryGetValue(unit.Id, out var visual))
                 {
                     visual = new Visual { Object = CreateUnitObject(unit), From = target };
@@ -93,7 +98,7 @@ namespace Rts.Presentation
             foreach (var objective in frame.Objectives)
             {
                 if (objective.Kind != GoalKind.Core) continue;
-                var target = ToWorld(objective.Position, 2f);
+                var target = ToWorld(objective.Position, coreModel != null ? 0f : 2f);
                 if (!cores.TryGetValue(objective.Id, out var visual))
                 {
                     visual = CreateCoreObject(objective);
@@ -123,45 +128,81 @@ namespace Rts.Presentation
             return new Vector3(point.X.Raw / Fix64Scale, height, point.Z.Raw / Fix64Scale);
         }
 
+        private GameObject ModelFor(UnitKind kind)
+        {
+            return kind == UnitKind.Scout ? scoutModel : infantryModel;
+        }
+
         private GameObject CreateUnitObject(RenderUnit unit)
         {
-            var type = unit.Kind == UnitKind.Scout ? PrimitiveType.Sphere : PrimitiveType.Capsule;
-            var go = GameObject.CreatePrimitive(type);
+            var color = PresentationMaterials.Get(unit.IsOwn ? new Color(0.2f, 0.5f, 1f) : new Color(1f, 0.3f, 0.25f));
+            var model = ModelFor(unit.Kind);
+            GameObject go;
+            if (model != null)
+            {
+                go = Instantiate(model, transform);
+                go.transform.localScale = Vector3.one * UnitModelScale;
+                Tint(go, color);
+            }
+            else
+            {
+                var type = unit.Kind == UnitKind.Scout ? PrimitiveType.Sphere : PrimitiveType.Capsule;
+                go = GameObject.CreatePrimitive(type);
+                go.transform.SetParent(transform, false);
+                float size = unit.Kind == UnitKind.Scout ? 1.6f : 2.2f;
+                go.transform.localScale = new Vector3(size, size, size);
+                Discard(go.GetComponent<Collider>());
+                go.GetComponent<Renderer>().sharedMaterial = color;
+            }
             go.name = (unit.IsOwn ? "Own_" : "Enemy_") + unit.Id;
-            go.transform.SetParent(transform, false);
-            float size = unit.Kind == UnitKind.Scout ? 1.6f : 2.2f;
-            go.transform.localScale = new Vector3(size, size, size);
-            Discard(go.GetComponent<Collider>());
-            go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(unit.IsOwn ? new Color(0.2f, 0.5f, 1f) : new Color(1f, 0.3f, 0.25f));
             return go;
+        }
+
+        private static void Tint(GameObject go, Material material)
+        {
+            foreach (var renderer in go.GetComponentsInChildren<Renderer>())
+                renderer.sharedMaterial = material;
         }
 
         private Visual CreateCoreObject(KnownObjective objective)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "Core_" + objective.Id;
-            go.transform.SetParent(transform, false);
-            go.transform.localScale = new Vector3(8f, 4f, 8f);
-            Discard(go.GetComponent<Collider>());
-            go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(
+            var root = new GameObject("Core_" + objective.Id);
+            root.transform.SetParent(transform, false);
+            var color = PresentationMaterials.Get(
                 objective.OwnerFactionId == 1 ? new Color(0.1f, 0.3f, 0.8f) : new Color(0.8f, 0.15f, 0.1f));
+            float barHeight;
+            if (coreModel != null)
+            {
+                var body = Instantiate(coreModel, root.transform);
+                body.transform.localScale = Vector3.one * CoreModelScale;
+                Tint(body, color);
+                barHeight = 8f;
+            }
+            else
+            {
+                var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                body.transform.SetParent(root.transform, false);
+                body.transform.localScale = new Vector3(8f, 4f, 8f);
+                Discard(body.GetComponent<Collider>());
+                body.GetComponent<Renderer>().sharedMaterial = color;
+                barHeight = 4.6f;
+            }
 
             var bar = new GameObject("HpBar");
-            bar.transform.SetParent(go.transform, false);
-            bar.transform.localPosition = new Vector3(0f, 2.6f, 0f);
-            bar.transform.localScale = new Vector3(1f / 8f, 1f / 4f, 1f / 8f);
+            bar.transform.SetParent(root.transform, false);
+            bar.transform.localPosition = new Vector3(0f, barHeight, 0f);
             var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
             back.name = "Back";
             back.transform.SetParent(bar.transform, false);
             back.transform.localScale = new Vector3(8.4f, 1.9f, 1f);
             Discard(back.GetComponent<Collider>());
-            back.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(new Color(0.08f, 0.08f, 0.08f));
+            back.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.08f, 0.08f, 0.08f));
             var fill = GameObject.CreatePrimitive(PrimitiveType.Quad);
             fill.name = "Fill";
             fill.transform.SetParent(bar.transform, false);
             fill.transform.localPosition = new Vector3(0f, 0f, -0.01f);
             Discard(fill.GetComponent<Collider>());
-            return new Visual { Object = go, HpFill = fill.transform };
+            return new Visual { Object = root, HpFill = fill.transform };
         }
 
         private void UpdateHpBar(Visual visual, int hp)
@@ -170,7 +211,7 @@ namespace Rts.Presentation
             const float width = 8f;
             visual.HpFill.localScale = new Vector3(width * ratio, 1.5f, 1f);
             visual.HpFill.localPosition = new Vector3(-width * (1f - ratio) / 2f, 0f, -0.01f);
-            visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(
+            visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(
                 Color.Lerp(new Color(0.9f, 0.15f, 0.1f), new Color(0.2f, 0.85f, 0.2f), ratio));
             visual.Hp = hp;
         }
