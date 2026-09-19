@@ -14,6 +14,16 @@ namespace Rts.Presentation
 
         public static Material GetUnlit(Color color) { return Build(color, true, UnlitCache); }
 
+        public static Material NewUnlitTextured(Texture2D texture)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            var material = new Material(shader);
+            material.SetTexture("_BaseMap", texture);
+            material.mainTexture = texture;
+            return material;
+        }
+
         private static Material Build(Color color, bool unlit, Dictionary<Color, Material> cache)
         {
             if (cache.TryGetValue(color, out var material) && material != null) return material;

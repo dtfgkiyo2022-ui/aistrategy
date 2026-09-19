@@ -3,6 +3,7 @@
   "rootNamespace": "Rts.UnityHost",
   "references": [
     "Rts.Application",
+    "Rts.Simulation",
     "Rts.Presentation",
     "Rts.Contracts"
   ],
