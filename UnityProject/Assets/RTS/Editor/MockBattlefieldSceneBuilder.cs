@@ -52,6 +52,12 @@ namespace Rts.Editor
             bool missHit = view.TryPick(cam, new Vector2(5f, 5f), 36f, out var miss);
             Debug.Log("[MockBattlefield] Pick empty -> " + missHit + " " + miss.Kind);
             view.Select(armyPicked);
+            // Quantizer: nearest 1/256 m, midpoint away from zero, NaN/out-of-range rejected.
+            bool q1 = Rts.Presentation.GroundPointQuantizer.TryQuantize(10.001953125f, 20f, 256f, 128f, out var qp1);
+            bool q2 = Rts.Presentation.GroundPointQuantizer.TryQuantize(float.NaN, 20f, 256f, 128f, out _);
+            bool q3 = Rts.Presentation.GroundPointQuantizer.TryQuantize(-1f, 20f, 256f, 128f, out _);
+            bool q4 = Rts.Presentation.GroundPointQuantizer.TryQuantize(255.9999f, 127.9999f, 256f, 128f, out _);
+            Debug.Log("[MockBattlefield] Quantize ok=" + q1 + " raw=" + qp1.X.Raw + "/" + qp1.Z.Raw + " nan=" + q2 + " neg=" + q3 + " edge=" + q4);
             Render(Path.Combine(outDir, "selected_army.png"));
             for (int i = 0; i < 2600; i++) source.Advance();
             view.Push(source.Latest(1));
@@ -86,8 +92,13 @@ namespace Rts.Editor
             var view = root.AddComponent<BattlefieldView>();
             var host = root.AddComponent<MockBattlefieldHost>();
             var selector = root.AddComponent<BattlefieldSelector>();
+            var panel = root.AddComponent<CommandPanel>();
+            var panelHost = new SerializedObject(host);
+            panelHost.FindProperty("panel").objectReferenceValue = panel;
+            panelHost.ApplyModifiedPropertiesWithoutUndo();
             var selectorSerialized = new SerializedObject(selector);
             selectorSerialized.FindProperty("view").objectReferenceValue = view;
+            selectorSerialized.FindProperty("panel").objectReferenceValue = panel;
             selectorSerialized.ApplyModifiedPropertiesWithoutUndo();
             var serialized = new SerializedObject(host);
             serialized.FindProperty("view").objectReferenceValue = view;
