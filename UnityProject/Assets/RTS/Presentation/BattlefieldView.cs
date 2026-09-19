@@ -31,91 +31,13 @@ namespace Rts.Presentation
         private readonly List<uint> scratch = new List<uint>();
         private readonly Dictionary<uint, Vector3> previousUnitPositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, Vector3> previousCorePositions = new Dictionary<uint, Vector3>();
-        private readonly Dictionary<uint, Visual> armies = new Dictionary<uint, Visual>();
-        private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
-        private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
-        private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
-        private GameObject selectionRing;
-        private SelectionTarget selected = SelectionTarget.None;
         private float sinceUpdate;
-
-        public SelectionTarget Selected { get { return selected; } }
-
-        public void Select(SelectionTarget target)
-        {
-            selected = target;
-            UpdateSelectionRing();
-        }
-
-        public bool TryPick(Camera camera, Vector2 screenPoint, float radiusPixels, out SelectionTarget target)
-        {
-            target = SelectionTarget.None;
-            float best = radiusPixels * radiusPixels;
-            foreach (var pair in armies) Consider(camera, screenPoint, pair.Value, SelectionKind.Army, pair.Key, ref best, ref target);
-            foreach (var pair in cores) Consider(camera, screenPoint, pair.Value, SelectionKind.Core, pair.Key, ref best, ref target);
-            return target.Kind != SelectionKind.None;
-        }
-
-        public string DescribeSelection()
-        {
-            switch (selected.Kind)
-            {
-                case SelectionKind.Army:
-                    return "Selected: Army " + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? " (alive " + alive + ")" : "");
-                case SelectionKind.Core:
-                    return "Selected: Core " + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? " (HP " + hp + ")" : "");
-                default:
-                    return "";
-            }
-        }
-
-        private static void Consider(Camera camera, Vector2 screenPoint, Visual visual, SelectionKind kind, uint id, ref float best, ref SelectionTarget target)
-        {
-            var projected = camera.WorldToScreenPoint(visual.Object.transform.position);
-            if (projected.z <= 0f) return;
-            float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
-            if (distance > best) return;
-            best = distance;
-            target = new SelectionTarget(kind, id);
-        }
-
-        private void UpdateSelectionRing()
-        {
-            if (selected.Kind == SelectionKind.None)
-            {
-                if (selectionRing != null) selectionRing.SetActive(false);
-                return;
-            }
-            if (selectionRing == null)
-            {
-                selectionRing = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                selectionRing.name = "SelectionRing";
-                selectionRing.transform.SetParent(transform, false);
-                Discard(selectionRing.GetComponent<Collider>());
-                selectionRing.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.9f, 0.2f));
-            }
-            selectionRing.SetActive(true);
-            bool isCore = selected.Kind == SelectionKind.Core;
-            selectionRing.transform.localScale = isCore ? new Vector3(12f, 0.05f, 12f) : new Vector3(6f, 0.05f, 6f);
-            PlaceSelectionRing();
-        }
-
-        private void PlaceSelectionRing()
-        {
-            if (selectionRing == null || selected.Kind == SelectionKind.None) return;
-            var map = selected.Kind == SelectionKind.Core ? cores : armies;
-            if (!map.TryGetValue(selected.Id, out var visual)) { selectionRing.SetActive(false); return; }
-            selectionRing.SetActive(true);
-            var position = visual.Object.transform.position;
-            selectionRing.transform.position = new Vector3(position.x, 0.05f, position.z);
-        }
 
         public void Push(FactionFrame frame)
         {
             sinceUpdate = 0f;
             SyncUnits(frame);
             SyncCores(frame);
-            SyncArmies(frame);
             Apply(0f);
         }
 
@@ -126,9 +48,6 @@ namespace Rts.Presentation
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
-            foreach (var visual in armies.Values)
-                visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
-            PlaceSelectionRing();
             var camera = Camera.main;
             if (camera == null) return;
             foreach (var visual in cores.Values)
@@ -191,53 +110,11 @@ namespace Rts.Presentation
                     visual.From = previousCorePositions.TryGetValue(objective.Id, out var previous) ? previous : target;
                 }
                 visual.To = target;
-                coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : coreMaxHp;
                 UpdateHpBar(visual, objective.IsHpKnown ? objective.Hp : coreMaxHp);
             }
 
             previousCorePositions.Clear();
             foreach (var pair in cores) previousCorePositions[pair.Key] = pair.Value.To;
-        }
-
-        private void SyncArmies(FactionFrame frame)
-        {
-            var present = new HashSet<uint>();
-            foreach (var army in frame.Observation.OwnArmies)
-            {
-                present.Add(army.Id);
-                var target = ToWorld(army.Position, 6f);
-                if (!armies.TryGetValue(army.Id, out var visual))
-                {
-                    var marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    marker.name = "Army_" + army.Id;
-                    marker.transform.SetParent(transform, false);
-                    marker.transform.localScale = new Vector3(2f, 2f, 2f);
-                    marker.transform.rotation = Quaternion.Euler(45f, 45f, 0f);
-                    Discard(marker.GetComponent<Collider>());
-                    marker.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.5f, 0.85f, 1f));
-                    visual = new Visual { Object = marker, From = target };
-                    armies.Add(army.Id, visual);
-                }
-                else
-                {
-                    visual.From = previousArmyPositions.TryGetValue(army.Id, out var previous) ? previous : target;
-                }
-                visual.To = target;
-                armyAlive[army.Id] = army.AliveCount;
-            }
-
-            scratch.Clear();
-            foreach (var pair in armies)
-                if (!present.Contains(pair.Key)) scratch.Add(pair.Key);
-            foreach (var id in scratch)
-            {
-                Discard(armies[id].Object);
-                armies.Remove(id);
-                armyAlive.Remove(id);
-            }
-
-            previousArmyPositions.Clear();
-            foreach (var pair in armies) previousArmyPositions[pair.Key] = pair.Value.To;
         }
 
         private static void Discard(Object target)

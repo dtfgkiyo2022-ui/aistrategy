@@ -38,21 +38,6 @@ namespace Rts.Editor
                 view.Apply(alpha);
                 Render(Path.Combine(outDir, "alpha_" + (int)(alpha * 100) + ".png"));
             }
-            view.Apply(1f);
-            var cam = Camera.main;
-            foreach (var probe in new[] { new Vector3(24f, 2f, 64f), new Vector3(232f, 2f, 64f) })
-            {
-                var screen = cam.WorldToScreenPoint(probe);
-                bool hit = view.TryPick(cam, screen, 36f, out var picked);
-                Debug.Log("[MockBattlefield] Pick core at " + probe + " -> " + hit + " " + picked.Kind + " " + picked.Id);
-            }
-            var armyScreen = cam.WorldToScreenPoint(GameObject.Find("Army_2").transform.position);
-            bool armyHit = view.TryPick(cam, armyScreen, 36f, out var armyPicked);
-            Debug.Log("[MockBattlefield] Pick army 2 -> " + armyHit + " " + armyPicked.Kind + " " + armyPicked.Id);
-            bool missHit = view.TryPick(cam, new Vector2(5f, 5f), 36f, out var miss);
-            Debug.Log("[MockBattlefield] Pick empty -> " + missHit + " " + miss.Kind);
-            view.Select(armyPicked);
-            Render(Path.Combine(outDir, "selected_army.png"));
             for (int i = 0; i < 2600; i++) source.Advance();
             view.Push(source.Latest(1));
             view.Apply(1f);
@@ -67,7 +52,6 @@ namespace Rts.Editor
             camera.backgroundColor = new Color(0.12f, 0.14f, 0.12f);
             camera.transform.SetPositionAndRotation(new Vector3(128f, 120f, 10f), Quaternion.Euler(70f, 0f, 0f));
             camera.farClipPlane = 500f;
-            cameraObject.AddComponent<BattlefieldCamera>();
 
             var lightObject = new GameObject("Directional Light");
             var light = lightObject.AddComponent<Light>();
@@ -85,10 +69,6 @@ namespace Rts.Editor
             var root = new GameObject("Battlefield");
             var view = root.AddComponent<BattlefieldView>();
             var host = root.AddComponent<MockBattlefieldHost>();
-            var selector = root.AddComponent<BattlefieldSelector>();
-            var selectorSerialized = new SerializedObject(selector);
-            selectorSerialized.FindProperty("view").objectReferenceValue = view;
-            selectorSerialized.ApplyModifiedPropertiesWithoutUndo();
             var serialized = new SerializedObject(host);
             serialized.FindProperty("view").objectReferenceValue = view;
             serialized.ApplyModifiedPropertiesWithoutUndo();
