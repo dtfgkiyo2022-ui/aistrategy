@@ -6,6 +6,7 @@ namespace Rts.Presentation
     public sealed class BattlefieldSelector : MonoBehaviour
     {
         [SerializeField] private BattlefieldView view;
+        [SerializeField] private CommandPanel panel;
         [SerializeField] private float pickRadiusPixels = 36f;
 
         private void Update()
@@ -13,6 +14,8 @@ namespace Rts.Presentation
             if (!Input.GetMouseButtonDown(0)) return;
             var camera = Camera.main;
             if (camera == null) return;
+            if (panel != null && panel.BlocksClick(Input.mousePosition)) return;
+            if (panel != null && panel.TryConsumeGroundClick(camera, Input.mousePosition)) return;
             view.Select(view.TryPick(camera, Input.mousePosition, pickRadiusPixels, out var target) ? target : SelectionTarget.None);
         }
 
