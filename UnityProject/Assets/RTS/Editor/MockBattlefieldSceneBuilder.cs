@@ -1,6 +1,7 @@
 using System.IO;
 using Rts.Contracts;
 using Rts.Presentation;
+using Rts.Replay;
 using Rts.UnityHost;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -13,6 +14,50 @@ namespace Rts.Editor
     {
         private const string ScenePath = "Assets/RTS/Scenes/MockBattlefield.unity";
         private const string LiveScenePath = "Assets/RTS/Scenes/LiveBattlefield.unity";
+        private const string ReplayScenePath = "Assets/RTS/Scenes/ReplayView.unity";
+
+        [MenuItem("RTS/Create Replay View Scene")]
+        public static void CreateReplayScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            Populate(false, true);
+            EditorSceneManager.SaveScene(scene, ReplayScenePath);
+            Debug.Log("[ReplayView] Saved " + ReplayScenePath);
+        }
+
+        // Batch entry: records a short match, then plays it back through the display without Play mode.
+        public static void CaptureReplay()
+        {
+            var outDir = "D:/rts-verify/live";
+            Directory.CreateDirectory(outDir);
+            string path = Path.Combine(outDir, "sample.rtsreplay");
+            var scenario = Rts.Simulation.WeekTwoScenario.Create();
+            var build = new BuildIdentity { Commit = "editor", SourceHash = new string('a', 64), Backend = "editor" };
+            var inputs = Rts.Application.PolicyPresets.RecordedInputs(scenario, "none", "maintain", 400);
+            using (var file = File.Create(path))
+                Rts.Application.ReplayRunner.Record(file, scenario, inputs, 400, build, null, "none", "maintain");
+            Debug.Log("[ReplayView] Recorded " + path + " inputs=" + inputs.Length);
+
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var view = Populate(false, true).view;
+            var host = Object.FindFirstObjectByType<ReplayViewHost>();
+            host.Folder = outDir;
+            host.Refresh();
+            Debug.Log("[ReplayView] " + host.Status + " files=" + host.Files.Length);
+            bool opened = host.Open(path);
+            Debug.Log("[ReplayView] opened=" + opened + " " + host.Status);
+
+            var clock = (IMatchClock)host;
+            for (int i = 0; i < 400; i++) clock.StepOneTick();
+            var frame = view.LatestFrame;
+            int own = 0, enemy = 0;
+            foreach (var u in frame.Units) { if (u.IsOwn) own++; else enemy++; }
+            Debug.Log("[ReplayView] played tick=" + host.Tick + " faction=" + frame.FactionId + " own=" + own
+                + " enemy=" + enemy + " enemyVisuals=" + view.EnemyVisualCount + " mismatch=" + host.MismatchTick
+                + " commands=" + frame.Commands.Count);
+            view.Apply(1f);
+            Render(Path.Combine(outDir, "replay.png"));
+        }
 
         [MenuItem("RTS/Create Live Battlefield Scene")]
         public static void CreateLiveScene()
@@ -189,7 +234,7 @@ namespace Rts.Editor
             Render(Path.Combine(outDir, "low_hp.png"));
         }
 
-        private static (BattlefieldView view, Camera camera) Populate(bool live = false)
+        private static (BattlefieldView view, Camera camera) Populate(bool live = false, bool replay = false)
         {
             var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
             var camera = cameraObject.AddComponent<Camera>();
@@ -215,13 +260,14 @@ namespace Rts.Editor
             var root = new GameObject("Battlefield");
             var view = root.AddComponent<BattlefieldView>();
             view.SetTerrain(MockTerrain.Create());
-            MonoBehaviour host = live ? (MonoBehaviour)root.AddComponent<LiveMatchHost>() : root.AddComponent<MockBattlefieldHost>();
+            MonoBehaviour host = replay ? (MonoBehaviour)root.AddComponent<ReplayViewHost>()
+                : live ? root.AddComponent<LiveMatchHost>() : root.AddComponent<MockBattlefieldHost>();
             var selector = root.AddComponent<BattlefieldSelector>();
-            var panel = root.AddComponent<CommandPanel>();
+            var panel = replay ? null : root.AddComponent<CommandPanel>();
             var selectorSerialized = new SerializedObject(selector);
             selectorSerialized.FindProperty("view").objectReferenceValue = view;
             selectorSerialized.FindProperty("panel").objectReferenceValue = panel;
-            if (live)
+            if (live || replay)
             {
                 var timeline = root.AddComponent<TimelinePanel>();
                 var timelineSerialized = new SerializedObject(timeline);
@@ -233,7 +279,7 @@ namespace Rts.Editor
             selectorSerialized.ApplyModifiedPropertiesWithoutUndo();
             var serialized = new SerializedObject(host);
             serialized.FindProperty("view").objectReferenceValue = view;
-            serialized.FindProperty("panel").objectReferenceValue = panel;
+            if (panel != null) serialized.FindProperty("panel").objectReferenceValue = panel;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             var viewSerialized = new SerializedObject(view);
             SetModel(viewSerialized, "infantryModel", "Infantry");
