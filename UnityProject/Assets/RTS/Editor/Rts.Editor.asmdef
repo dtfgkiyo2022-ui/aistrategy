@@ -3,7 +3,10 @@
   "rootNamespace": "Rts.Editor",
   "references": [
     "Unity.RenderPipelines.Core.Runtime",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Rts.Contracts",
+    "Rts.Presentation",
+    "Rts.UnityHost"
   ],
   "includePlatforms": [
     "Editor"
