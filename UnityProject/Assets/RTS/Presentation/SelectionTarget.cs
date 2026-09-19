@@ -1,6 +1,6 @@
 namespace Rts.Presentation
 {
-    public enum SelectionKind : byte { None = 0, Army = 1, Core = 2, Outpost = 3 }
+    public enum SelectionKind : byte { None = 0, Army = 1, Core = 2 }
 
     /// <summary>A selection by frame ID, never by display position.</summary>
     public readonly struct SelectionTarget

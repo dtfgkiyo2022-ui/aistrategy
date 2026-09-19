@@ -35,7 +35,7 @@ namespace Rts.Presentation
         public bool BlocksClick(Vector2 screenPoint)
         {
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint);
+            return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint);
         }
 
         // Left click while waiting for a ground target: returns true when the click was consumed.
@@ -58,11 +58,7 @@ namespace Rts.Presentation
             return true;
         }
 
-        private const int ButtonRows = 7;
-
-        private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - ButtonRows * (ButtonHeight + 4f), ButtonWidth + 8f, ButtonRows * (ButtonHeight + 4f) + 4f); }
-
-        private Rect StatusRect() { return new Rect(Screen.width - 430f, LogRect().yMax + 8f, 422f, MaxLogLines * 20f + 30f); }
+        private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - 6f * (ButtonHeight + 4f), ButtonWidth + 8f, 6f * (ButtonHeight + 4f) + 4f); }
 
         private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -86,11 +82,6 @@ namespace Rts.Presentation
                 Send(PolicyKind.Defend, ArmyScope(selection), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, "Defend Army " + selection.Id + " -> Core " + ownCoreId);
             y += ButtonHeight + 4f;
 
-            GUI.enabled = selection.Kind == SelectionKind.Outpost;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Allow abandon outpost"))
-                Send(PolicyKind.AllowAbandon, new ScopeKey(factionId, ScopeKind.Outpost, selection.Id), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, "Allow abandon Outpost " + selection.Id);
-            y += ButtonHeight + 4f;
-
             GUI.enabled = true;
             if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Keep reserve 30%"))
                 Send(PolicyKind.MaintainReserve, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 300, "Keep reserve 30% (all)");
@@ -100,21 +91,6 @@ namespace Rts.Presentation
             y += ButtonHeight + 4f;
             if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Cancel"))
                 awaitingGround = false;
-
-            var statusRect = StatusRect();
-            GUI.Box(statusRect, "Command status (7 states)");
-            var frame = view.LatestFrame;
-            if (frame != null)
-            {
-                int shown = 0;
-                for (int i = frame.Commands.Count - 1; i >= 0 && shown < MaxLogLines; i--, shown++)
-                {
-                    var c = frame.Commands[i];
-                    string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
-                    GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
-                        "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + reason);
-                }
-            }
 
             var logRect = LogRect();
             GUI.Box(logRect, "Command log");
