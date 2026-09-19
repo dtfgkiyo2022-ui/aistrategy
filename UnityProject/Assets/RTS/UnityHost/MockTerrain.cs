@@ -8,8 +8,7 @@ namespace Rts.UnityHost
     {
         public static TerrainMap Create()
         {
-            var map = WeekTwoScenario.Create().Map;
-            return new TerrainMap(map.WidthCells, map.HeightCells, map.CellSizeMeters, map.BlockedCellIds);
+            return ScenarioTerrain.From(WeekTwoScenario.Create().Map);
         }
     }
 }

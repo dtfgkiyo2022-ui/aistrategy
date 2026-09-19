@@ -26,10 +26,11 @@ namespace Rts.Presentation
             public int Hp;
         }
 
-        private readonly Dictionary<uint, Visual> units = new Dictionary<uint, Visual>();
+        private readonly Dictionary<ulong, Visual> units = new Dictionary<ulong, Visual>();
+        private readonly List<ulong> scratchUnitIds = new List<ulong>();
         private readonly Dictionary<uint, Visual> cores = new Dictionary<uint, Visual>();
         private readonly List<uint> scratch = new List<uint>();
-        private readonly Dictionary<uint, Vector3> previousUnitPositions = new Dictionary<uint, Vector3>();
+        private readonly Dictionary<ulong, Vector3> previousUnitPositions = new Dictionary<ulong, Vector3>();
         private readonly Dictionary<uint, Vector3> previousCorePositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, Visual> armies = new Dictionary<uint, Visual>();
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
@@ -78,7 +79,7 @@ namespace Rts.Presentation
                 case SelectionKind.Outpost:
                     return "Selected: Outpost " + selected.Id;
                 case SelectionKind.Core:
-                    return "Selected: Core " + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? " (HP " + hp + ")" : "");
+                    return "Selected: Core " + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? (hp < 0 ? " (HP unknown)" : " (HP " + hp + ")") : "");
                 default:
                     return "";
             }
@@ -170,30 +171,36 @@ namespace Rts.Presentation
             Apply(sinceUpdate / TickSeconds);
         }
 
+        private static ulong UnitKey(RenderUnit unit)
+        {
+            return unit.Id | (unit.IsOwn ? 0UL : 1UL << 32);
+        }
+
         private void SyncUnits(FactionFrame frame)
         {
-            var present = new HashSet<uint>();
+            var present = new HashSet<ulong>();
             foreach (var unit in frame.Units)
             {
-                present.Add(unit.Id);
+                ulong key = UnitKey(unit);
+                present.Add(key);
                 var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null ? 0f : 1.1f);
-                if (!units.TryGetValue(unit.Id, out var visual))
+                if (!units.TryGetValue(key, out var visual))
                 {
                     visual = new Visual { Object = CreateUnitObject(unit), From = target };
-                    units.Add(unit.Id, visual);
+                    units.Add(key, visual);
                 }
                 else
                 {
                     visual.From = visual.Object.transform.position;
-                    if (previousUnitPositions.TryGetValue(unit.Id, out var previous)) visual.From = previous;
+                    if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
                 visual.To = target;
             }
 
-            scratch.Clear();
+            scratchUnitIds.Clear();
             foreach (var pair in units)
-                if (!present.Contains(pair.Key)) scratch.Add(pair.Key);
-            foreach (var id in scratch)
+                if (!present.Contains(pair.Key)) scratchUnitIds.Add(pair.Key);
+            foreach (var id in scratchUnitIds)
             {
                 Discard(units[id].Object);
                 units.Remove(id);
@@ -220,8 +227,10 @@ namespace Rts.Presentation
                     visual.From = previousCorePositions.TryGetValue(objective.Id, out var previous) ? previous : target;
                 }
                 visual.To = target;
-                coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : coreMaxHp;
-                UpdateHpBar(visual, objective.IsHpKnown ? objective.Hp : coreMaxHp);
+                // An unobserved core must not show a full bar; hide it instead of inventing a value.
+                coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
+                visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
+                if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp);
             }
 
             previousCorePositions.Clear();

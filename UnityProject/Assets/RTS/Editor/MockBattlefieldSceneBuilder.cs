@@ -12,6 +12,66 @@ namespace Rts.Editor
     public static class MockBattlefieldSceneBuilder
     {
         private const string ScenePath = "Assets/RTS/Scenes/MockBattlefield.unity";
+        private const string LiveScenePath = "Assets/RTS/Scenes/LiveBattlefield.unity";
+
+        [MenuItem("RTS/Create Live Battlefield Scene")]
+        public static void CreateLiveScene()
+        {
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            Populate(true);
+            EditorSceneManager.SaveScene(scene, LiveScenePath);
+            Debug.Log("[LiveBattlefield] Saved " + LiveScenePath);
+        }
+
+        // Batch entry: runs the real Simulation through the gateway without Play mode and renders the result.
+        public static void CaptureLive()
+        {
+            var outDir = "D:/rts-verify/live";
+            Directory.CreateDirectory(outDir);
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var built = Populate(true);
+            var view = built.view;
+            var host = Object.FindFirstObjectByType<LiveMatchHost>();
+            host.Begin();
+            LogLive(host, view, "t0");
+
+            var army = new ScopeKey(1, ScopeKind.Army, 1);
+            var intent = new UserPolicyIntent(1, army, PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Outpost, 1, default(SimPoint)), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
+            ulong request = host.Submit(intent);
+            Debug.Log("[LiveBattlefield] Submitted request " + request);
+
+            for (int i = 0; i < 120; i++)
+            {
+                host.StepOnce();
+                if (i == 0 || i == 40 || i == 119) LogLive(host, view, "t" + (i + 1));
+            }
+            view.Apply(1f);
+            Render(Path.Combine(outDir, "live.png"));
+
+            for (int i = 0; i < 880 && !host.HasEnded; i++) host.StepOnce();
+            LogLive(host, view, "t1000");
+            view.Apply(1f);
+            Render(Path.Combine(outDir, "live_late.png"));
+        }
+
+        private static void LogLive(LiveMatchHost host, BattlefieldView view, string label)
+        {
+            var frame = host.Frame;
+            int own = 0, enemy = 0;
+            foreach (var u in frame.Units) { if (u.IsOwn) own++; else enemy++; }
+            int visible = 0;
+            foreach (var v in frame.Fog.VisibleCells) if (v) visible++;
+            Debug.Log("[LiveBattlefield] " + label + " tick=" + frame.Tick + " faction=" + frame.FactionId
+                + " own=" + own + " enemy=" + enemy + " visibleCells=" + visible + " alive=" + frame.AliveCount
+                + "/" + frame.FactionCap + " unitVisuals=" + (own + enemy) + " enemyVisuals=" + view.EnemyVisualCount
+                + " commands=" + frame.Commands.Count + " ended=" + frame.Result.HasEnded);
+            foreach (var c in frame.Commands)
+                Debug.Log("[LiveBattlefield] " + label + " cmd #" + c.CommandId + " " + c.Source + " " + c.Kind
+                    + " " + c.Target.Kind + c.Target.Id + " [" + c.Status + "] reason=" + c.Reason
+                    + " accepted=" + c.AcceptedTick + " apply=" + c.ApplyTick);
+        }
 
         [MenuItem("RTS/Create Mock Battlefield Scene")]
         public static void CreateScene()
@@ -100,7 +160,7 @@ namespace Rts.Editor
             Render(Path.Combine(outDir, "low_hp.png"));
         }
 
-        private static (BattlefieldView view, Camera camera) Populate()
+        private static (BattlefieldView view, Camera camera) Populate(bool live = false)
         {
             var cameraObject = new GameObject("Main Camera") { tag = "MainCamera" };
             var camera = cameraObject.AddComponent<Camera>();
@@ -126,18 +186,16 @@ namespace Rts.Editor
             var root = new GameObject("Battlefield");
             var view = root.AddComponent<BattlefieldView>();
             view.SetTerrain(MockTerrain.Create());
-            var host = root.AddComponent<MockBattlefieldHost>();
+            MonoBehaviour host = live ? (MonoBehaviour)root.AddComponent<LiveMatchHost>() : root.AddComponent<MockBattlefieldHost>();
             var selector = root.AddComponent<BattlefieldSelector>();
             var panel = root.AddComponent<CommandPanel>();
-            var panelHost = new SerializedObject(host);
-            panelHost.FindProperty("panel").objectReferenceValue = panel;
-            panelHost.ApplyModifiedPropertiesWithoutUndo();
             var selectorSerialized = new SerializedObject(selector);
             selectorSerialized.FindProperty("view").objectReferenceValue = view;
             selectorSerialized.FindProperty("panel").objectReferenceValue = panel;
             selectorSerialized.ApplyModifiedPropertiesWithoutUndo();
             var serialized = new SerializedObject(host);
             serialized.FindProperty("view").objectReferenceValue = view;
+            serialized.FindProperty("panel").objectReferenceValue = panel;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             var viewSerialized = new SerializedObject(view);
             SetModel(viewSerialized, "infantryModel", "Infantry");
