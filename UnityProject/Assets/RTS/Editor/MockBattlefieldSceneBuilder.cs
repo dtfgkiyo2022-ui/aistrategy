@@ -50,7 +50,36 @@ namespace Rts.Editor
             view.Apply(1f);
             Render(Path.Combine(outDir, "live.png"));
 
-            for (int i = 0; i < 880 && !host.HasEnded; i++) host.StepOnce();
+            var timelinePanel = Object.FindFirstObjectByType<TimelinePanel>();
+            var clock = (IMatchClock)host;
+            clock.Paused = true;
+            long before = clock.Tick;
+            clock.StepOneTick();
+            Debug.Log("[LiveBattlefield] clock paused=" + clock.Paused + " stepped " + before + " -> " + clock.Tick);
+            clock.SpeedMultiplier = 4;
+            clock.SpeedMultiplier = 3;
+            Debug.Log("[LiveBattlefield] speed after 4 then invalid 3 = x" + clock.SpeedMultiplier);
+            clock.Paused = false;
+
+            for (int i = 0; i < 880 && !host.HasEnded; i++)
+            {
+                host.StepOnce();
+                timelinePanel.Timeline.Ingest(host.Frame);
+            }
+            var entries = timelinePanel.Timeline.Entries;
+            Debug.Log("[LiveBattlefield] timeline entries=" + entries.Count);
+            for (int i = System.Math.Max(0, entries.Count - 8); i < entries.Count; i++)
+                Debug.Log("[LiveBattlefield] timeline t" + entries[i].Tick + " " + entries[i].Text);
+
+            clock.ViewFactionId = 2;
+            var otherFrame = host.Frame;
+            int otherOwn = 0, otherEnemy = 0;
+            foreach (var u in otherFrame.Units) { if (u.IsOwn) otherOwn++; else otherEnemy++; }
+            Debug.Log("[LiveBattlefield] switched view faction=" + otherFrame.FactionId + " own=" + otherOwn
+                + " enemy=" + otherEnemy + " unitVisuals=" + (otherOwn + otherEnemy) + " enemyVisuals=" + view.EnemyVisualCount);
+            view.Apply(1f);
+            Render(Path.Combine(outDir, "live_faction2.png"));
+            clock.ViewFactionId = 1;
             LogLive(host, view, "t1000");
             view.Apply(1f);
             Render(Path.Combine(outDir, "live_late.png"));

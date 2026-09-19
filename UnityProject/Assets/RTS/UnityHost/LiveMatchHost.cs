@@ -11,7 +11,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour
+    public sealed class LiveMatchHost : MonoBehaviour, IMatchClock
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -24,9 +24,36 @@ namespace Rts.UnityHost
         private LiveCommandPort port;
         private PresetController enemy;
         private float accumulated;
+        private int speedMultiplier = 1;
+        private bool paused;
         private float tickSeconds = BattlefieldView.TickSeconds;
 
         public long Tick { get { return simulation == null ? 0 : simulation.Capture(viewFactionId).Tick; } }
+
+        public bool Paused { get { return paused; } set { paused = value; } }
+
+        public int SpeedMultiplier
+        {
+            get { return speedMultiplier; }
+            set { speedMultiplier = value == 2 || value == 4 ? value : 1; }
+        }
+
+        /// <summary>Verification only: shows that faction's own frame. It never shows both at once.</summary>
+        public uint ViewFactionId
+        {
+            get { return viewFactionId; }
+            set
+            {
+                if (value != 1 && value != 2 || value == viewFactionId) return;
+                viewFactionId = value;
+                view.ResetVisuals();
+                if (simulation == null) return;
+                view.Push(simulation.Capture(viewFactionId));
+                panel.Bind(port, viewFactionId, viewFactionId, view);
+            }
+        }
+
+        public void StepOneTick() { StepOnce(); }
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
 
@@ -71,7 +98,8 @@ namespace Rts.UnityHost
                 Begin();
                 return;
             }
-            accumulated += Time.deltaTime;
+            if (paused) return;
+            accumulated += Time.deltaTime * speedMultiplier;
             while (accumulated >= tickSeconds)
             {
                 accumulated -= tickSeconds;
