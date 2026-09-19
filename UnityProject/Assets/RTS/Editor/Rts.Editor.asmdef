@@ -6,7 +6,10 @@
     "Unity.RenderPipelines.Universal.Runtime",
     "Rts.Contracts",
     "Rts.Presentation",
-    "Rts.UnityHost"
+    "Rts.UnityHost",
+    "Rts.Application",
+    "Rts.Simulation",
+    "Rts.Replay"
   ],
   "includePlatforms": [
     "Editor"

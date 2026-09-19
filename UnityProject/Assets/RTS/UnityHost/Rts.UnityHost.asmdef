@@ -4,6 +4,7 @@
   "references": [
     "Rts.Application",
     "Rts.Simulation",
+    "Rts.Replay",
     "Rts.Presentation",
     "Rts.Contracts"
   ],
