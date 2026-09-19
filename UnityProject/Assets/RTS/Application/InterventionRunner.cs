@@ -43,7 +43,7 @@ namespace Rts.Application
     /// </summary>
     public static class InterventionRunner
     {
-        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks)
+        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks, AiTimingProfile profile = null)
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -58,7 +58,7 @@ namespace Rts.Application
                 var i = interpreting.Value;
                 return new[] { new PolicyOrder(0, 0, CommandSource.Human, i.Target, i.Kind, i.Goal, i.Priority, i.AllowedLoss,
                     i.End, i.ReservePermille, 0, Array.Empty<PolicyVersion>(), request.StartedTick, i.Expiration) };
-            });
+            }, profile);
             var gateway = new CommandGateway(sim, provider);
             var east = PolicyPresets.CreateController(eastPreset ?? "none", 2, gateway);
             east.Initialize();

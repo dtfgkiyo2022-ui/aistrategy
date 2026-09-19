@@ -94,6 +94,18 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void TheLongProfileLetsTheTwentySecondReplyTakeEffect()
+        {
+            // Chapter 11: a dedicated setting with a 500-tick deadline compares the case where a 20 s reply is still valid.
+            var result = InterventionRunner.Run(WeekTwoScenario.Create(), 1300, "maintain", InterventionStyle.Change, 400, AiTimingProfile.Long);
+            Assert.That(result.LastTick, Is.EqualTo(1300));
+            var defend = result.Commands.Single(c => c.Kind == "Defend");
+            Assert.That(defend.FinalStatus, Is.EqualTo("Executing"));
+            Assert.That(defend.ApplyTick, Is.EqualTo(result.FirstContactTick + 401));
+            Assert.That(result.Commands.Any(c => c.FinalStatus == "Expired"), Is.False);
+        }
+
+        [Test]
         public void TheSameInterventionRunTwiceProducesTheSameInputLog()
         {
             var a = InterventionRunner.Run(WeekTwoScenario.Create(), 900, "concentrate", InterventionStyle.Change, 60);

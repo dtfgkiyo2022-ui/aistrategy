@@ -26,6 +26,7 @@ internal static class InterventionCommand
         public string Style = "";
         public string EastPreset = "";
         public int DelayTicks;
+        public string AiProfile = "";
         public long LastTick;
         public long FirstContactTick;
         public List<InterventionCommandOutcome> Commands = new();
@@ -48,12 +49,13 @@ internal static class InterventionCommand
         };
         string east = options.GetValueOrDefault("--east-preset") ?? "none";
         int delay = options.TryGetValue("--delay", out var d) ? int.Parse(d, CultureInfo.InvariantCulture) : 0;
+        var profile = AiTimingProfile.Parse(options.GetValueOrDefault("--ai-profile") ?? "default");
         long ticks = long.Parse(options.TryGetValue("--ticks", out var t) ? t : throw new InvalidDataException("Missing --ticks."), CultureInfo.InvariantCulture);
 
-        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay);
+        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay, profile);
         using (var file = File.Create(output))
         {
-            var outcome = ReplayRunner.Record(file, scenario, result.Inputs, ticks, build, null, "none", east, delay, "default");
+            var outcome = ReplayRunner.Record(file, scenario, result.Inputs, ticks, build, null, "none", east, delay, profile.Name);
             if (outcome.IsFault) { Console.Error.WriteLine("Fault at tick " + outcome.LastTick); return 4; }
         }
 
@@ -64,6 +66,7 @@ internal static class InterventionCommand
             Style = style,
             EastPreset = east,
             DelayTicks = delay,
+            AiProfile = profile.Name,
             LastTick = result.LastTick,
             FirstContactTick = result.FirstContactTick,
             Commands = result.Commands

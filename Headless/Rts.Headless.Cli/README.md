@@ -144,5 +144,5 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyz
 
 - `--style`：`auto`＝プレイヤーの命令なし（完全お任せ）／`start`＝tick 0 に予備30%（MaintainReserve 300‰）を1回だけ出して手を離す／`change`＝それに加え、**西の画面に最初の敵接触が報告されたtick**に予備50%への変更と、予備軍団（西の3番目の軍団）による自コア防衛（Defend）を出す
 - `--east-preset`：`none`／`maintain`／`concentrate`／`maintain-legacy`（既定none）
-- `--delay`：プレイヤーの命令の返答遅延 0／60／200／400 tick。0は直接の定型命令、それ以外は解釈スタブ経由（設計書11章。応答は操作側の命令をそのまま返す）。400は締切240tickを超えるため失効し、命令は実行されない
+- `--delay`：プレイヤーの命令の返答遅延 0／60／200／400 tick。0は直接の定型命令、それ以外は解釈スタブ経由（設計書11章。応答は操作側の命令をそのまま返す）。400は既定の締切240tickを超えるため失効し、命令は実行されない。`--ai-profile long` は締切・観測年齢を500tickにする専用設定（設計書11章）で、20秒応答が有効な場合を比べられる
 - 出力：`--out` の再生ファイル（`analyze --in`／`replay`／`compare` にそのまま使える）と、`--summary-out`（既定は `<out>.summary.json`）。要約には最初の接触tick、プレイヤー命令ごとの受付tick・適用tick・最終状態・理由が入る
