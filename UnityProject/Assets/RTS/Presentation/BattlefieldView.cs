@@ -35,7 +35,9 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
+        private readonly Dictionary<uint, Visual> outposts = new Dictionary<uint, Visual>();
         private GameObject selectionRing;
+        private GameObject terrainObject;
         private SelectionTarget selected = SelectionTarget.None;
         private float sinceUpdate;
 
@@ -116,6 +118,7 @@ namespace Rts.Presentation
             SyncUnits(frame);
             SyncCores(frame);
             SyncArmies(frame);
+            SyncOutposts(frame);
             Apply(0f);
         }
 
@@ -133,6 +136,7 @@ namespace Rts.Presentation
             if (camera == null) return;
             foreach (var visual in cores.Values)
                 visual.HpFill.parent.rotation = camera.transform.rotation;
+            FaceCamera(camera);
         }
 
         private void Update()
@@ -214,7 +218,7 @@ namespace Rts.Presentation
                     marker.transform.localScale = new Vector3(2f, 2f, 2f);
                     marker.transform.rotation = Quaternion.Euler(45f, 45f, 0f);
                     Discard(marker.GetComponent<Collider>());
-                    marker.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.5f, 0.85f, 1f));
+                    marker.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(ArmyPalette[(int)((army.Id + 3) % 4)]);
                     visual = new Visual { Object = marker, From = target };
                     armies.Add(army.Id, visual);
                 }
@@ -238,6 +242,107 @@ namespace Rts.Presentation
 
             previousArmyPositions.Clear();
             foreach (var pair in armies) previousArmyPositions[pair.Key] = pair.Value.To;
+        }
+
+        public void SetTerrain(TerrainMap terrain)
+        {
+            var existing = transform.Find("Terrain");
+            if (existing != null) Discard(existing.gameObject);
+            var texture = new Texture2D(terrain.WidthCells, terrain.HeightCells, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Point,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var open = new Color(0.42f, 0.6f, 0.36f);
+            var wall = new Color(0.16f, 0.2f, 0.16f);
+            var pixels = new Color[terrain.WidthCells * terrain.HeightCells];
+            for (int z = 0; z < terrain.HeightCells; z++)
+                for (int x = 0; x < terrain.WidthCells; x++)
+                    pixels[z * terrain.WidthCells + x] = terrain.IsBlocked(x, z) ? wall : open;
+            texture.SetPixels(pixels);
+            texture.Apply();
+
+            var terrainObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            terrainObject.name = "Terrain";
+            terrainObject.transform.SetParent(transform, false);
+            float width = terrain.WidthCells * terrain.CellSizeMeters;
+            float height = terrain.HeightCells * terrain.CellSizeMeters;
+            terrainObject.transform.position = new Vector3(width / 2f, 0.02f, height / 2f);
+            terrainObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            terrainObject.transform.localScale = new Vector3(width, height, 1f);
+            Discard(terrainObject.GetComponent<Collider>());
+            terrainObject.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.NewUnlitTextured(texture);
+        }
+
+        private static readonly Color[] ArmyPalette =
+        {
+            new Color(0.4f, 0.9f, 1f), new Color(1f, 0.75f, 0.2f), new Color(0.75f, 0.5f, 1f), new Color(0.6f, 1f, 0.4f)
+        };
+
+        private static Color FactionColor(uint faction)
+        {
+            if (faction == 1) return new Color(0.2f, 0.45f, 0.95f);
+            if (faction == 2) return new Color(0.9f, 0.25f, 0.2f);
+            return new Color(0.65f, 0.65f, 0.65f);
+        }
+
+        private void SyncOutposts(FactionFrame frame)
+        {
+            foreach (var objective in frame.Objectives)
+            {
+                if (objective.Kind != GoalKind.Outpost) continue;
+                var target = ToWorld(objective.Position, 0.4f);
+                if (!outposts.TryGetValue(objective.Id, out var visual))
+                {
+                    var root = new GameObject("Outpost_" + objective.Id);
+                    root.transform.SetParent(transform, false);
+                    var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    body.transform.SetParent(root.transform, false);
+                    body.transform.localScale = new Vector3(9f, 0.4f, 9f);
+                    Discard(body.GetComponent<Collider>());
+                    var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    pole.name = "Pole";
+                    pole.transform.SetParent(root.transform, false);
+                    pole.transform.localPosition = new Vector3(0f, 2f, 0f);
+                    pole.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
+                    Discard(pole.GetComponent<Collider>());
+                    var bar = new GameObject("CaptureGauge");
+                    bar.transform.SetParent(root.transform, false);
+                    bar.transform.localPosition = new Vector3(0f, 6f, 0f);
+                    var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    back.name = "Back";
+                    back.transform.SetParent(bar.transform, false);
+                    back.transform.localScale = new Vector3(8.4f, 1.6f, 1f);
+                    Discard(back.GetComponent<Collider>());
+                    back.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.08f, 0.08f, 0.08f));
+                    var fill = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    fill.name = "Fill";
+                    fill.transform.SetParent(bar.transform, false);
+                    Discard(fill.GetComponent<Collider>());
+                    visual = new Visual { Object = root, HpFill = fill.transform, From = target };
+                    outposts.Add(objective.Id, visual);
+                }
+                visual.To = target;
+                visual.From = target;
+                visual.Object.transform.position = target;
+                uint owner = objective.IsOwnerKnown ? objective.OwnerFactionId : 0u;
+                var ownerMaterial = PresentationMaterials.Get(FactionColor(owner));
+                foreach (var renderer in visual.Object.GetComponentsInChildren<Renderer>())
+                    if (renderer.gameObject.name != "Back" && renderer.gameObject.name != "Fill") renderer.sharedMaterial = ownerMaterial;
+
+                float ratio = objective.CaptureDurationTicks > 0 ? Mathf.Clamp01(objective.CaptureTicks / (float)objective.CaptureDurationTicks) : 0f;
+                const float width = 8f;
+                visual.HpFill.gameObject.SetActive(ratio > 0f);
+                visual.HpFill.localScale = new Vector3(width * ratio, 1.2f, 1f);
+                visual.HpFill.localPosition = new Vector3(-width * (1f - ratio) / 2f, 0f, -0.01f);
+                visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(FactionColor(objective.CapturingFactionId));
+            }
+        }
+
+        private void FaceCamera(Camera camera)
+        {
+            foreach (var visual in outposts.Values)
+                visual.HpFill.parent.rotation = camera.transform.rotation;
         }
 
         private static void Discard(Object target)
