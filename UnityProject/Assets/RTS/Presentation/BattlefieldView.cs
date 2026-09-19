@@ -24,6 +24,7 @@ namespace Rts.Presentation
             public Vector3 To;
             public Transform HpFill;
             public int Hp;
+            public bool IsEnemy;
         }
 
         private readonly Dictionary<ulong, Visual> units = new Dictionary<ulong, Visual>();
@@ -40,6 +41,17 @@ namespace Rts.Presentation
         private GameObject selectionRing;
         private Texture2D fogTexture;
         private int fogWidth;
+        private float fogCellSize;
+
+        private bool IsVisibleNow(Vector3 position)
+        {
+            if (latestFrame == null || latestFrame.Fog == null || fogCellSize <= 0f) return true;
+            var cells = latestFrame.Fog.VisibleCells;
+            if (cells.Count != fogWidth * fogHeight) return true;
+            int x = Mathf.FloorToInt(position.x / fogCellSize), z = Mathf.FloorToInt(position.z / fogCellSize);
+            if (x < 0 || z < 0 || x >= fogWidth || z >= fogHeight) return false;
+            return cells[z * fogWidth + x];
+        }
         private int fogHeight;
         private readonly Dictionary<ulong, GameObject> ghosts = new Dictionary<ulong, GameObject>();
         private readonly List<ulong> scratchGhostIds = new List<ulong>();
@@ -144,7 +156,12 @@ namespace Rts.Presentation
         {
             alpha = Mathf.Clamp01(alpha);
             foreach (var visual in units.Values)
-                visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
+            {
+                var position = Vector3.Lerp(visual.From, visual.To, alpha);
+                // Chapter 12: never interpolate an enemy through a cell this faction cannot see now.
+                if (visual.IsEnemy && !IsVisibleNow(position)) position = visual.To;
+                visual.Object.transform.position = position;
+            }
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
             foreach (var visual in armies.Values)
@@ -186,7 +203,7 @@ namespace Rts.Presentation
                 var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null ? 0f : 1.1f);
                 if (!units.TryGetValue(key, out var visual))
                 {
-                    visual = new Visual { Object = CreateUnitObject(unit), From = target };
+                    visual = new Visual { Object = CreateUnitObject(unit), From = target, IsEnemy = !unit.IsOwn };
                     units.Add(key, visual);
                 }
                 else
@@ -295,6 +312,7 @@ namespace Rts.Presentation
                     pixels[z * terrain.WidthCells + x] = terrain.IsBlocked(x, z) ? wall : open;
             texture.SetPixels(pixels);
             texture.Apply();
+            fogCellSize = terrain.CellSizeMeters;
             fogWidth = terrain.WidthCells;
             fogHeight = terrain.HeightCells;
             var oldFog = transform.Find("Fog");
@@ -452,6 +470,14 @@ namespace Rts.Presentation
                     if (visual.Object.name.StartsWith("Enemy_")) count++;
                 return count;
             }
+        }
+
+        /// <summary>Verification hook: where enemy units are drawn right now (after interpolation).</summary>
+        public void CollectEnemyVisualPositions(List<Vector3> into)
+        {
+            into.Clear();
+            foreach (var visual in units.Values)
+                if (visual.Object.name.StartsWith("Enemy_")) into.Add(visual.Object.transform.position);
         }
 
         public List<KeyValuePair<Vector3, string>> BuildContactLabels()
