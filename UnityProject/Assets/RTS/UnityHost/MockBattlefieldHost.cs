@@ -7,6 +7,7 @@ namespace Rts.UnityHost
     public sealed class MockBattlefieldHost : MonoBehaviour
     {
         [SerializeField] private BattlefieldView view;
+        [SerializeField] private CommandPanel panel;
 
         private readonly MockFrameSource source = new MockFrameSource();
         private float accumulated;
@@ -14,6 +15,7 @@ namespace Rts.UnityHost
         private void Start()
         {
             view.Push(source.Latest(1));
+            panel.Bind(new MockCommandPort(), 1, 1, view);
         }
 
         private void Update()
