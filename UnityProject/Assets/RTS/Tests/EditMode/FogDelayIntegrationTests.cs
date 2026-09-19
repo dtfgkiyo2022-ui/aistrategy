@@ -106,6 +106,22 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void PushSendsEveryArmyAtTheEnemyCoreAndSecureSendsEachArmyToItsOutpost()
+        {
+            var push = InterventionRunner.Run(WeekTwoScenario.Create(), 900, "maintain", InterventionStyle.Push, 0);
+            var focus = push.Commands.Single(c => c.Kind == "Focus");
+            Assert.That(focus.Target, Is.EqualTo("All:0"));
+            Assert.That(focus.FinalStatus, Is.EqualTo("Executing"), focus.Reason);
+            Assert.That(focus.ApplyTick, Is.EqualTo(push.FirstContactTick + 40));
+
+            var secure = InterventionRunner.Run(WeekTwoScenario.Create(), 900, "maintain", InterventionStyle.Secure, 0);
+            var armies = secure.Commands.Where(c => c.Kind == "Focus").Select(c => c.Target).OrderBy(t => t).ToArray();
+            Assert.That(armies, Is.EqualTo(new[] { "Army:1", "Army:2" }));
+            Assert.That(secure.Commands.Where(c => c.Kind == "Focus").All(c => c.FinalStatus == "Executing"), Is.True,
+                string.Join(", ", secure.Commands.Select(c => c.Kind + ":" + c.FinalStatus + "/" + c.Reason)));
+        }
+
+        [Test]
         public void TheSameInterventionRunTwiceProducesTheSameInputLog()
         {
             var a = InterventionRunner.Run(WeekTwoScenario.Create(), 900, "concentrate", InterventionStyle.Change, 60);

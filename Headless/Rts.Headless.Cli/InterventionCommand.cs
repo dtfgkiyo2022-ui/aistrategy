@@ -45,7 +45,9 @@ internal static class InterventionCommand
             "auto" => InterventionStyle.Auto,
             "start" => InterventionStyle.StartOnly,
             "change" => InterventionStyle.Change,
-            _ => throw new InvalidDataException("--style must be auto, start or change.")
+            "push" => InterventionStyle.Push,
+            "secure" => InterventionStyle.Secure,
+            _ => throw new InvalidDataException("--style must be auto, start, change, push or secure.")
         };
         string east = options.GetValueOrDefault("--east-preset") ?? "none";
         int delay = options.TryGetValue("--delay", out var d) ? int.Parse(d, CultureInfo.InvariantCulture) : 0;
