@@ -543,6 +543,26 @@ namespace Rts.Presentation
                 visual.HpFill.parent.rotation = camera.transform.rotation;
         }
 
+        /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>
+        public void ResetVisuals()
+        {
+            foreach (var visual in units.Values) Discard(visual.Object);
+            units.Clear(); previousUnitPositions.Clear();
+            foreach (var visual in armies.Values) Discard(visual.Object);
+            armies.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();
+            foreach (var visual in cores.Values) Discard(visual.Object);
+            cores.Clear(); previousCorePositions.Clear(); coreHp.Clear();
+            foreach (var visual in outposts.Values) Discard(visual.Object);
+            outposts.Clear();
+            foreach (var ghost in ghosts.Values) Discard(ghost);
+            ghosts.Clear();
+            foreach (var arrow in arrows.Values) Discard(arrow.Line.gameObject);
+            arrows.Clear();
+            if (selectionRing != null) { Discard(selectionRing); selectionRing = null; }
+            selected = SelectionTarget.None;
+            latestFrame = null;
+        }
+
         private static void Discard(Object target)
         {
             if (Application.isPlaying) Destroy(target);

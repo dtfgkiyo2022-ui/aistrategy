@@ -7,6 +7,7 @@ namespace Rts.Presentation
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
+        [SerializeField] private TimelinePanel timelinePanel;
         [SerializeField] private float pickRadiusPixels = 36f;
 
         private void Update()
@@ -15,6 +16,7 @@ namespace Rts.Presentation
             var camera = Camera.main;
             if (camera == null) return;
             if (panel != null && panel.BlocksClick(Input.mousePosition)) return;
+            if (timelinePanel != null && timelinePanel.BlocksClick(Input.mousePosition)) return;
             if (panel != null && panel.TryConsumeGroundClick(camera, Input.mousePosition)) return;
             view.Select(view.TryPick(camera, Input.mousePosition, pickRadiusPixels, out var target) ? target : SelectionTarget.None);
         }
