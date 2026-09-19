@@ -69,6 +69,19 @@ namespace Rts.Editor
                 new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
             port.Submit(Attack(1, 1, 180));
             port.Submit(Attack(2, 2, 230));
+            foreach (var delay in new[] { 0, 60, 200, 400 })
+            {
+                port.DelayTicks = delay;
+                var delayed = port.Submit(Attack((ulong)(10 + delay), 1, 100));
+                for (int t = 0; t <= 480; t += 40)
+                {
+                    port.SetTick(source.Tick + t);
+                    foreach (var v in port.Views())
+                        if (v.CommandId == delayed) Debug.Log("[MockBattlefield] Delay" + delay + " +" + t + " #" + v.CommandId + " " + v.Status + " " + v.Reason + " apply=" + (v.ApplyTick - v.AcceptedTick));
+                }
+                port.SetTick(source.Tick);
+            }
+            port.DelayTicks = 60;
             for (int i = 0; i < 30; i++) { source.Advance(); port.SetTick(source.Tick); }
             foreach (var v in port.Views()) Debug.Log("[MockBattlefield] Cmd age30 #" + v.CommandId + " " + v.Status + " " + v.Reason);
             for (int i = 0; i < 50; i++) { source.Advance(); port.SetTick(source.Tick); }

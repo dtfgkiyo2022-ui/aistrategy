@@ -105,7 +105,12 @@ namespace Rts.UnityHost
                 armies, Array.Empty<VisibleEnemy>(), contacts, objectives);
             return new FactionFrame(tick, factionId, units, observation,
                 CommandProvider != null ? CommandProvider() : Array.Empty<CommandView>(), Array.Empty<GameEvent>(),
-                new FogView(visible, (bool[])explored.Clone()), default(MatchResult));
+                new FogView(visible, (bool[])explored.Clone()), default(MatchResult), 11 + (int)((tick / 100) % 10), 40,
+                new[]
+                {
+                    new ReinforcementView(GoalKind.Core, 1, 100 - tick % 100),
+                    new ReinforcementView(GoalKind.Outpost, 1, 200 - tick % 200),
+                });
         }
 
         private static long Bounce(long distance)
