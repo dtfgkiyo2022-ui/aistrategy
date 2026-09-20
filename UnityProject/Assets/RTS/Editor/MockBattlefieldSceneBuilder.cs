@@ -188,6 +188,80 @@ namespace Rts.Editor
             EditorApplication.EnterPlaymode();
         }
 
+        // Batch entry: plays the live scene and reports the average frame time and the cost of rendering the Game camera.
+        // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first.
+        // The camera cost is the CPU side of drawing (submission, skinning); the GPU is not measured.
+        public static void PerfProbe()
+        {
+            Directory.CreateDirectory("D:/rts-verify/perf");
+            var args = System.Environment.GetCommandLineArgs();
+            int preTicks = 0; bool noPack = false;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-perfNoPack") noPack = true;
+                if (args[i] == "-perfTicks" && i + 1 < args.Length) preTicks = int.Parse(args[i + 1]);
+            }
+            LocalVisualPack.Disabled = noPack;
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0;
+            double last = 0, sumFrame = 0, sumRender = 0; int counted = 0;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        // Play the match forward first so the measurement sees a mid-game crowd, not the empty opening.
+                        if (frames == 5 && preTicks > 0)
+                        {
+                            var pre = Object.FindFirstObjectByType<LiveMatchHost>();
+                            // Per-tick cost of the simulation itself inside the Editor, in blocks of 600 ticks.
+                            var block = System.Diagnostics.Stopwatch.StartNew();
+                            for (int t = 0; t < preTicks; t++)
+                            {
+                                pre.StepOnce();
+                                if ((t + 1) % 600 == 0)
+                                {
+                                    Debug.Log("[PerfProbe] ticks " + (t - 598) + ".." + (t + 1) + " avgMsPerTick=" + (block.Elapsed.TotalMilliseconds / 600.0).ToString("F2"));
+                                    block.Restart();
+                                }
+                            }
+                        }
+                        double now = Time.realtimeSinceStartupAsDouble;
+                        if (frames > 100 && frames <= 500)
+                        {
+                            sumFrame += now - last;
+                            var cam = Camera.main;
+                            var target = RenderTexture.GetTemporary(1280, 720, 24);
+                            cam.targetTexture = target;
+                            double t0 = Time.realtimeSinceStartupAsDouble;
+                            cam.Render();
+                            sumRender += Time.realtimeSinceStartupAsDouble - t0;
+                            cam.targetTexture = null; RenderTexture.ReleaseTemporary(target);
+                            counted++;
+                        }
+                        last = now;
+                        if (frames == 500)
+                        {
+                            var view = Object.FindFirstObjectByType<BattlefieldView>();
+                            var host = Object.FindFirstObjectByType<LiveMatchHost>();
+                            int renderers = view.GetComponentsInChildren<Renderer>().Length;
+                            int objects = view.GetComponentsInChildren<Transform>().Length;
+                            Debug.Log("[PerfProbe] noPack=" + LocalVisualPack.Disabled
+                                + " tick=" + host.Tick + " renderers=" + renderers + " transforms=" + objects
+                                + " frameMs=" + (1000.0 * sumFrame / counted).ToString("F2") + " cameraRenderMs=" + (1000.0 * sumRender / counted).ToString("F2"));
+                            EditorApplication.ExitPlaymode();
+                        }
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && frames >= 500) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         [MenuItem("RTS/Create Live Battlefield Scene")]
         public static void CreateLiveScene()
         {
