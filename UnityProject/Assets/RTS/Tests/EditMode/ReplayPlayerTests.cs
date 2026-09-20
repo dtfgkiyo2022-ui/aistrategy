@@ -70,7 +70,7 @@ namespace Rts.Tests.EditMode
                 Assert.That(expected, Is.EqualTo(Ticks + 1));
                 Assert.That(player.HasEnded, Is.True);
                 Assert.That(player.StepOnce(), Is.False);
-                Assert.That(player.MismatchTick, Is.Null);
+                Assert.That(player.DisplayMismatchTick, Is.Null);
             }
         }
 
@@ -105,14 +105,14 @@ namespace Rts.Tests.EditMode
             using (var player = new ReplayPlayer(clean, Build()))
             {
                 while (player.StepOnce()) { }
-                Assert.That(player.MismatchTick, Is.Null, "An untouched recording must play back clean.");
+                Assert.That(player.DisplayMismatchTick, Is.Null, "An untouched recording must play back clean.");
             }
 
             using (var broken = new MemoryStream(WithBrokenTickHash(Record(40), 20)))
             using (var player = new ReplayPlayer(broken, Build()))
             {
                 while (player.StepOnce()) { }
-                Assert.That(player.MismatchTick, Is.EqualTo(20));
+                Assert.That(player.DisplayMismatchTick, Is.EqualTo(20));
                 Assert.That(player.Tick, Is.EqualTo(40), "A mismatch must not stop playback.");
             }
         }

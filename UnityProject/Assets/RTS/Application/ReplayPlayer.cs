@@ -10,8 +10,11 @@ using Battle = Rts.Simulation.Simulation;
 namespace Rts.Application
 {
     /// <summary>
-    /// Steps a recorded match one tick at a time so a viewer can follow it. Verification stays with
-    /// ReplayRunner.Replay and the CLI: this player reports a tick hash mismatch but does not stop on it.
+    /// Steps a recorded match one tick at a time so a viewer can follow it. This is a display, not a verification:
+    /// it compares only each tick's state/event hash and does not stop on a difference. It does not check the recorded
+    /// command results, the diagnostic checkpoints or the end record's fault flag, and a viewer may open a recording made
+    /// by another build. A clean run here therefore does NOT mean the recording verified; ReplayRunner.Replay and the
+    /// CLI replay/compare commands are the verification (technical design 13.3).
     /// </summary>
     public sealed class ReplayPlayer : IDisposable
     {
@@ -27,7 +30,8 @@ namespace Rts.Application
         /// <summary>Last tick loaded; -1 before the first step.</summary>
         public long Tick { get; private set; } = -1;
         public bool HasEnded { get; private set; }
-        public long? MismatchTick { get; private set; }
+        /// <summary>First tick whose state/event hash differed from the recording. For display only; see the class remarks.</summary>
+        public long? DisplayMismatchTick { get; private set; }
 
         public ReplayPlayer(Stream input, BuildIdentity build, bool allowBuildMismatch = false)
         {
@@ -73,7 +77,7 @@ namespace Rts.Application
                     byte[] hash = ReplayBinary.Hash(state.CanonicalState);
                     byte[] events = ReplayBinary.Hash(DiagnosticComparison.EventHash(simulation.Capture(1))
                         .Concat(DiagnosticComparison.EventHash(simulation.Capture(2))));
-                    if (!record.Payload.SequenceEqual(hash.Concat(events)) && !MismatchTick.HasValue) MismatchTick = nextTick;
+                    if (!record.Payload.SequenceEqual(hash.Concat(events)) && !DisplayMismatchTick.HasValue) DisplayMismatchTick = nextTick;
                     Tick = nextTick;
                     nextTick++;
                     return true;
