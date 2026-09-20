@@ -18,7 +18,11 @@ namespace Rts.Application
         /// <summary>The start order, then at the first contact every army focuses on the enemy core.</summary>
         Push = 3,
         /// <summary>The start order, then at the first contact the north and south armies each focus on their own outpost.</summary>
-        Secure = 4
+        Secure = 4,
+        /// <summary>The start order, then at the first contact only the reserve ratio changes (no core defence order).</summary>
+        ChangeReserveOnly = 5,
+        /// <summary>The start order, then at the first contact only the reserve army defends the own core (no reserve change).</summary>
+        ChangeDefendOnly = 6
     }
 
     public sealed class InterventionCommandOutcome
@@ -95,6 +99,8 @@ namespace Rts.Application
                         send(ReserveIntent(sequence++, changeReservePermille));
                         send(DefendCoreIntent(sequence++, scenario));
                     }
+                    else if (style == InterventionStyle.ChangeReserveOnly) send(ReserveIntent(sequence++, changeReservePermille));
+                    else if (style == InterventionStyle.ChangeDefendOnly) send(DefendCoreIntent(sequence++, scenario));
                     else if (style == InterventionStyle.Push) send(PushIntent(sequence++, scenario));
                     else
                     {
