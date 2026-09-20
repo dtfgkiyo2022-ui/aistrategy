@@ -18,6 +18,9 @@ namespace Rts.Presentation
         private const float InfantryHeight = 2.4f, ScoutHeight = 2.4f, CoreWidth = 9f, OutpostWidth = 6f;
         private const string OutpostModel = "models/buildings/Tower_A.FBX";
 
+        /// <summary>Hides the pack so the placeholders are used; for measuring one against the other.</summary>
+        public static bool Disabled;
+
         public static bool HasUnit(UnitKind kind) { return Exists(UnitPath(kind)); }
 
         public static bool HasCore() { return Exists(Root + "models/buildings/Castle.FBX"); }
@@ -61,7 +64,7 @@ namespace Rts.Presentation
         }
 
 #if UNITY_EDITOR
-        private static bool Exists(string path) { return AssetDatabase.LoadAssetAtPath<GameObject>(path) != null; }
+        private static bool Exists(string path) { return !Disabled && AssetDatabase.LoadAssetAtPath<GameObject>(path) != null; }
 
         private static void Recolor(GameObject instance, string materialPath)
         {
@@ -79,6 +82,7 @@ namespace Rts.Presentation
             out GameObject instance, out float height)
         {
             instance = null; height = 0f;
+            if (Disabled) return false;
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
             if (model == null) return false;
             var holder = new GameObject("Pack");
