@@ -68,7 +68,8 @@ internal static class GraceCommand
         "retreat" => GraceCriterion.Retreat,
         "reinforcement" => GraceCriterion.Reinforcement,
         "diversion" => GraceCriterion.DiversionResponse,
-        _ => throw new InvalidDataException("--criterion must be core-defense, retreat, reinforcement or diversion.")
+        "outpost-held" => GraceCriterion.OutpostHeld,
+        _ => throw new InvalidDataException("--criterion must be core-defense, retreat, reinforcement, diversion or outpost-held.")
     };
 
     private static PolicyOrder Order(Dictionary<string, string> options, uint faction)
