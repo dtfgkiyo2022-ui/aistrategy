@@ -47,7 +47,7 @@ namespace Rts.Application
     /// </summary>
     public static class InterventionRunner
     {
-        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks, AiTimingProfile profile = null, long triggerTick = -1)
+        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks, AiTimingProfile profile = null, long triggerTick = -1, ushort changeReservePermille = 500)
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -92,7 +92,7 @@ namespace Rts.Application
                     changed = true;
                     if (style == InterventionStyle.Change)
                     {
-                        send(ReserveIntent(sequence++, 500));
+                        send(ReserveIntent(sequence++, changeReservePermille));
                         send(DefendCoreIntent(sequence++, scenario));
                     }
                     else if (style == InterventionStyle.Push) send(PushIntent(sequence++, scenario));
