@@ -70,7 +70,8 @@ namespace Rts.Editor
                     if (view.EnemyVisualCount != enemies) visualCountMismatch++;
                     foreach (var contact in frame.Observation.Contacts) if (!contact.IsCurrentlyVisible && !contact.IsArmyContact) ghostsSeen++;
 
-                    foreach (var alpha in new[] { 0f, 0.5f, 1f })
+                    // The renderer's alpha is a continuous value, so sample it densely rather than at three points.
+                    foreach (var alpha in new[] { 0f, 0.17f, 0.33f, 0.5f, 0.67f, 0.83f, 1f })
                     {
                         view.Apply(alpha);
                         view.CollectEnemyVisualPositions(positions);
@@ -82,7 +83,8 @@ namespace Rts.Editor
                             && !Visible(visible, map, e.Position.X.Raw / 65536f, e.Position.Z.Raw / 65536f)) eventsInFog++;
                 }
 
-                int failures = hiddenEnemyInFrame + hpLeak + visualCountMismatch + interpolationIntoFog;
+                // Chapter 12: a fight in the fog must not be heard or shown, so those events count as leaks too.
+                int failures = hiddenEnemyInFrame + hpLeak + visualCountMismatch + interpolationIntoFog + eventsInFog;
                 totalFailures += failures;
                 string line = "faction " + faction + ": ticks=" + host.Tick + " firstEnemyTick=" + firstEnemyTick + " maxEnemiesShown=" + maxEnemies
                     + " enemyUnitTicks=" + enemyFrameTotal + " | hiddenEnemyInFrame=" + hiddenEnemyInFrame + " enemyHpLeak=" + hpLeak
