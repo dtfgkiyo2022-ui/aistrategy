@@ -28,12 +28,15 @@ internal static class BenchmarkCommand
 
         // Separate instance: measurement always starts at S0 and includes the first N ticks.
         ReplayRunner.Benchmark(null, scenario, inputs.Where(i => i.AcceptedTick < warmup), warmup, build, null);
+        // --alloc-types: sample allocations by type (runtime AllocationTick events, about one per 100 KB).
+        var typeListener = options.ContainsKey("--alloc-types") ? new AllocTypeListener() : null;
         var samples = new Collector();
         var elapsed = Stopwatch.StartNew();
         ReplayOutcome outcome;
         string record = options.GetValueOrDefault("--record");
         using (var output = record != null ? File.Create(record) : null)
             outcome = ReplayRunner.Benchmark(output, scenario, inputs, ticks, build, samples.Phase);
+        typeListener?.Dispose();
         elapsed.Stop(); // Includes initialization, S0, header, End and final stream flush/close.
         var assembly = typeof(BenchmarkCommand).Assembly;
         string configuration = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
@@ -47,6 +50,8 @@ internal static class BenchmarkCommand
             outcome.IsFault, WallTotalMs = elapsed.Elapsed.TotalMilliseconds,
             Compute = Stats.From(samples.Compute), ReplayIO = Stats.From(samples.IO), TickWithIO = Stats.From(samples.Total),
             Phases = samples.Stages.ToDictionary(p => p.Key, p => Stats.From(p.Value)),
+            AllocTypesKB = typeListener?.Top(25),
+            AllocKBPerTick = samples.AllocBytes.ToDictionary(p => p.Key, p => Math.Round(p.Value / 1024.0 / Math.Max(1, samples.Total.Count), 2)),
             PercentileMethod = "nearest-rank ceil(p*N); S0 and independent warmup excluded",
             Timing = "Compute = Step + canonical state and state/event hashes; replay serialization/writes excluded. Phases exclusive; Pathfinding deducted from caller. WallTotal includes setup and final flush. Buffered file I/O; no per-tick fsync.",
             Build = build
@@ -82,7 +87,9 @@ internal static class BenchmarkCommand
         internal readonly List<double> Compute = new(), IO = new(), Total = new();
         internal readonly Dictionary<string, List<double>> Stages = new();
         private readonly Dictionary<string, long> current = new();
-        private readonly Stack<(string Name, long Start, long Children)> stack = new();
+        private readonly Stack<(string Name, long Start, long Children, long AllocStart, long AllocChildren)> stack = new();
+        // Bytes allocated by this thread inside each stage (its own, children excluded), summed over all measured ticks.
+        internal readonly Dictionary<string, long> AllocBytes = new();
         private long tickStart;
         private bool active;
         private static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
@@ -102,16 +109,48 @@ internal static class BenchmarkCommand
                 return;
             }
             if (!active) return;
-            if (start) { stack.Push((name, now, 0)); return; }
+            long allocNow = GC.GetAllocatedBytesForCurrentThread();
+            if (start) { stack.Push((name, now, 0, allocNow, 0)); return; }
             var scope = stack.Pop();
             if (scope.Name != name) throw new InvalidOperationException("Mismatched phase scopes.");
             long duration = now - scope.Start;
+            long allocated = allocNow - scope.AllocStart;
             current[name] = current.GetValueOrDefault(name) + duration - scope.Children;
+            AllocBytes[name] = AllocBytes.GetValueOrDefault(name) + allocated - scope.AllocChildren;
             if (stack.Count != 0)
             {
                 var parent = stack.Pop();
-                stack.Push((parent.Name, parent.Start, parent.Children + duration));
+                stack.Push((parent.Name, parent.Start, parent.Children + duration, parent.AllocStart, parent.AllocChildren + allocated));
             }
         }
     }
 }
+
+// Aggregates the runtime's sampled allocation events by type name. Diagnostic only; it never touches the simulation.
+internal sealed class AllocTypeListener : System.Diagnostics.Tracing.EventListener
+{
+    private readonly Dictionary<string, long> bytes = new();
+    private readonly object gate = new();
+    protected override void OnEventSourceCreated(System.Diagnostics.Tracing.EventSource source)
+    {
+        if (source.Name == "Microsoft-Windows-DotNETRuntime")
+            EnableEvents(source, System.Diagnostics.Tracing.EventLevel.Verbose, (System.Diagnostics.Tracing.EventKeywords)0x1);
+    }
+    protected override void OnEventWritten(System.Diagnostics.Tracing.EventWrittenEventArgs e)
+    {
+        if (e.EventName == null || !e.EventName.StartsWith("GCAllocationTick", StringComparison.Ordinal) || e.Payload == null) return;
+        string type = null; long amount = 0;
+        for (int i = 0; i < e.PayloadNames!.Count; i++)
+        {
+            if (e.PayloadNames[i] == "TypeName") type = e.Payload[i] as string;
+            else if (e.PayloadNames[i] == "AllocationAmount64") amount = Convert.ToInt64(e.Payload[i], CultureInfo.InvariantCulture);
+        }
+        if (type == null) return;
+        lock (gate) bytes[type] = bytes.GetValueOrDefault(type) + amount;
+    }
+    internal Dictionary<string, long> Top(int count)
+    {
+        lock (gate) return bytes.OrderByDescending(p => p.Value).Take(count).ToDictionary(p => p.Key, p => p.Value / 1024);
+    }
+}
+

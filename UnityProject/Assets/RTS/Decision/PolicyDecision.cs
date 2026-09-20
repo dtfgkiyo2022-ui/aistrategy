@@ -11,8 +11,27 @@ namespace Rts.Decision
     {
         public static BigInteger Distance(SimPoint a, SimPoint b)
         { var x = new BigInteger(a.X.Raw) - b.X.Raw; var z = new BigInteger(a.Z.Raw) - b.Z.Raw; return x * x + z * z; }
+        /// <summary>
+        /// Exact squared distance as a 128-bit value type. BigInteger allocated on almost every call here, and these
+        /// run for every enemy and route on every tick. Exact for every pair of positions.
+        /// </summary>
+        public static Wide DistanceSquared(SimPoint a, SimPoint b) =>
+            Wide.SumOfSquares(Wide.AbsDifference(a.X.Raw, b.X.Raw), Wide.AbsDifference(a.Z.Raw, b.Z.Raw));
+
+        /// <summary>
+        /// Floor of the distance between two points in raw units, i.e. IntegerSqrt(Distance) without BigInteger: the binary
+        /// search over BigInteger allocated on every step, and route lengths ask for it once per cell. A squared distance
+        /// beyond 64 bits (not reachable on a map) still takes the BigInteger path.
+        /// </summary>
+        public static long SegmentLength(SimPoint a, SimPoint b)
+        {
+            var squared = DistanceSquared(a, b);
+            if (squared.Hi != 0) return checked((long)FixMath.IntegerSqrt(squared.ToBigInteger()));
+            return checked((long)Wide.FloorSqrt(squared.Lo));
+        }
         public static bool Within(SimPoint a, SimPoint b, int meters) => Within(a, b, Fix64.FromInt(meters));
-        private static bool Within(SimPoint a, SimPoint b, Fix64 radius) => Distance(a, b) <= new BigInteger(radius.Raw) * radius.Raw;
+        private static bool Within(SimPoint a, SimPoint b, Fix64 radius) =>
+            DistanceSquared(a, b) <= Wide.Multiply(Wide.Abs(radius.Raw), Wide.Abs(radius.Raw));
         public static SimPoint Position(FactionObservation o, PolicyGoal goal)
         {
             if (goal.Kind == GoalKind.Point) return goal.Point;
@@ -53,24 +72,56 @@ namespace Rts.Decision
         public static bool NearRoute(SimPoint point, IReadOnlyList<SimPoint> cells, int meters)
         {
             if (cells == null || cells.Count == 0) return false;
-            BigInteger radius = new BigInteger(Fix64.FromInt(meters).Raw); radius *= radius;
+            long radiusRaw = Fix64.FromInt(meters).Raw;
+            long px = point.X.Raw, pz = point.Z.Raw;
             for (int i = 0; i < cells.Count; i++)
             {
                 SimPoint a = cells[i], b = cells[Math.Min(i + 1, cells.Count - 1)];
-                BigInteger ax = a.X.Raw, az = a.Z.Raw, bx = b.X.Raw, bz = b.Z.Raw, px = point.X.Raw, pz = point.Z.Raw;
-                BigInteger dx = bx - ax, dz = bz - az, ux = px - ax, uz = pz - az, length = dx * dx + dz * dz;
-                BigInteger cross;
-                if (length == 0) { cross = ux * ux + uz * uz; if (cross <= radius) return true; }
-                else
-                {
-                    BigInteger dot = ux * dx + uz * dz;
-                    if (dot <= 0) { if (ux * ux + uz * uz <= radius) return true; continue; }
-                    else if (dot >= length) { BigInteger vx = px - bx, vz = pz - bz; if (vx * vx + vz * vz <= radius) return true; continue; }
-                    else cross = (ux * ux + uz * uz) * length - dot * dot;
-                    if (cross <= radius * length) return true;
-                }
+                long ax = a.X.Raw, az = a.Z.Raw, bx = b.X.Raw, bz = b.Z.Raw;
+                // A point within radius of the segment lies inside its bounding box grown by the radius, so a point
+                // outside that box cannot match. The box test is exact and needs no wide arithmetic.
+                if (checked(px < Math.Min(ax, bx) - radiusRaw || px > Math.Max(ax, bx) + radiusRaw
+                    || pz < Math.Min(az, bz) - radiusRaw || pz > Math.Max(az, bz) + radiusRaw)) continue;
+                bool near;
+                try { near = NearSegment(px, pz, ax, az, bx, bz, radiusRaw); }
+                catch (OverflowException) { near = NearSegmentWide(px, pz, ax, az, bx, bz, radiusRaw); }
+                if (near) return true;
             }
             return false;
+        }
+
+        // Exact in 128-bit integers while every coordinate difference is under 2^30 raw units (16384 m), which holds for
+        // any segment on the map. Anything larger is redone in NearSegmentWide (BigInteger) instead.
+        private static bool NearSegment(long px, long pz, long ax, long az, long bx, long bz, long radiusRaw)
+        {
+            const long Limit = 1L << 30;
+            // checked: a difference that overflows a long is redone in NearSegmentWide by the caller, never wrapped.
+            long dx = checked(bx - ax), dz = checked(bz - az), ux = checked(px - ax), uz = checked(pz - az), vx = checked(px - bx), vz = checked(pz - bz);
+            if (Math.Abs(dx) >= Limit || Math.Abs(dz) >= Limit || Math.Abs(ux) >= Limit || Math.Abs(uz) >= Limit
+                || Math.Abs(vx) >= Limit || Math.Abs(vz) >= Limit || radiusRaw < 0 || radiusRaw >= Limit)
+                throw new OverflowException("Segment test outside the 128-bit range.");
+            ulong radius = (ulong)radiusRaw * (ulong)radiusRaw;
+            ulong length = (ulong)(dx * dx + dz * dz), uu = (ulong)(ux * ux + uz * uz);
+            if (length == 0) return uu <= radius;
+            long dot = ux * dx + uz * dz;
+            if (dot <= 0) return uu <= radius;
+            if (dot >= (long)length) return (ulong)(vx * vx + vz * vz) <= radius;
+            // uu * length - dot^2 is never negative (Cauchy-Schwarz); compare it with radius * length.
+            var cross = Wide.Subtract(Wide.Multiply(uu, length), Wide.Multiply((ulong)dot, (ulong)dot));
+            return cross <= Wide.Multiply(radius, length);
+        }
+
+        private static bool NearSegmentWide(long px0, long pz0, long ax0, long az0, long bx0, long bz0, long radiusRaw)
+        {
+            BigInteger radius = radiusRaw; radius *= radius;
+            BigInteger ax = ax0, az = az0, bx = bx0, bz = bz0, px = px0, pz = pz0;
+            BigInteger dx = bx - ax, dz = bz - az, ux = px - ax, uz = pz - az, length = dx * dx + dz * dz;
+            if (length == 0) return ux * ux + uz * uz <= radius;
+            BigInteger dot = ux * dx + uz * dz;
+            if (dot <= 0) return ux * ux + uz * uz <= radius;
+            if (dot >= length) { BigInteger vx = px - bx, vz = pz - bz; return vx * vx + vz * vz <= radius; }
+            BigInteger cross = (ux * ux + uz * uz) * length - dot * dot;
+            return cross <= radius * length;
         }
         private static int RouteEstimate(FactionObservation o, ObjectiveRoute route, KnownObjective goal)
         {
@@ -248,13 +299,13 @@ namespace Rts.Decision
             if ((defend || reserve) && !Within(position, anchor, leash))
                 return new ArmyIntent(input.ArmyId, anchor, 0, default, false);
             var visible = o.VisibleEnemies.Where(e => (defend || reserve) ? Within(e.Position, anchor, leash) : Within(e.Position, position, 24))
-                .OrderBy(e => Distance(position, e.Position)).ThenBy(e => e.ContactId).ToArray();
+                .OrderBy(e => DistanceSquared(position, e.Position)).ThenBy(e => e.ContactId).ToArray();
             foreach (var enemy in visible)
                 if (Within(position, enemy.Position, input.Range))
                     return new ArmyIntent(input.ArmyId, defend && Within(position, anchor, 8) || reserve && Within(position, anchor, 8) ? position : mission, enemy.ContactId, default, false);
             var core = o.Objectives.Where(c => c.Kind == GoalKind.Core && c.OwnerFactionId != o.FactionId && c.IsHpKnown && c.Hp > 0 &&
                 Within(position, c.Position, input.Range + input.CoreRadius) && (!defend && !reserve || Within(c.Position, anchor, leash)))
-                .OrderBy(c => Distance(position, c.Position)).ThenBy(c => c.Id).ToArray();
+                .OrderBy(c => DistanceSquared(position, c.Position)).ThenBy(c => c.Id).ToArray();
             if (core.Length > 0) return new ArmyIntent(input.ArmyId, mission, 0, new PolicyGoal(GoalKind.Core, core[0].Id, default), false);
             if (visible.Length > 0)
             {
@@ -266,7 +317,7 @@ namespace Rts.Decision
         }
         public static SimPoint ScoutReturn(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance = default)
         {
-            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance)).OrderBy(e => Distance(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
+            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance)).OrderBy(e => DistanceSquared(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
             if (enemy.Length == 0) return home;
             var e = enemy[0].Position;
             long dx = checked(position.X.Raw - e.X.Raw), dz = checked(position.Z.Raw - e.Z.Raw);

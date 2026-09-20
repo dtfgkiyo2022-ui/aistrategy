@@ -42,5 +42,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/SimulationTests.cs" Link="Tests/SimulationTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/PresetControllerTests.cs" Link="Tests/PresetControllerTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/GraceMeasurementTests.cs" Link="Tests/GraceMeasurementTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DecisionArithmeticTests.cs" Link="Tests/DecisionArithmeticTests.cs" />
   </ItemGroup>
 </Project>
