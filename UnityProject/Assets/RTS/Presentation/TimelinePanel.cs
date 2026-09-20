@@ -25,7 +25,13 @@ namespace Rts.Presentation
 
         private static Rect ClockRect() { return new Rect(Screen.width / 2f - 200f, 8f, 400f, 58f); }
 
-        private static Rect TimelineRect() { return new Rect(Screen.width / 2f - 240f, 72f, 480f, VisibleLines * 18f + 26f); }
+        private static Rect TimelineRect()
+        {
+            float top = 8f + 2f * (8f * 20f + 30f) + 16f;
+            float bottom = Screen.height - 10f;
+            float height = Mathf.Clamp(bottom - top, 62f, VisibleLines * 18f + 26f);
+            return new Rect(Screen.width - 432f, bottom - height, 422f, height);
+        }
 
         private void Update()
         {
@@ -60,7 +66,8 @@ namespace Rts.Presentation
             var timelineRect = TimelineRect();
             GUI.Box(timelineRect, "Timeline");
             var entries = timeline.Entries;
-            int first = Mathf.Max(0, entries.Count - VisibleLines);
+            int lines = Mathf.Max(1, (int)((timelineRect.height - 26f) / 18f));
+            int first = Mathf.Max(0, entries.Count - lines);
             for (int i = first; i < entries.Count; i++)
                 GUI.Label(new Rect(timelineRect.x + 6f, timelineRect.y + 20f + (i - first) * 18f, timelineRect.width - 12f, 18f),
                     "t" + entries[i].Tick + "  " + entries[i].Text);

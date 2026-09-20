@@ -8,7 +8,7 @@ namespace Rts.Presentation
     public sealed class CommandPanel : MonoBehaviour
     {
         private const int MaxLogLines = 8;
-        private const float ButtonWidth = 150f;
+        private const float ButtonWidth = 220f;
         private const float ButtonHeight = 28f;
 
         [SerializeField] private float mapWidthMeters = 256f;
@@ -62,8 +62,9 @@ namespace Rts.Presentation
         }
 
         private const int ButtonRows = 7;
+        private const float HeaderHeight = 44f;
 
-        private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - ButtonRows * (ButtonHeight + 4f), ButtonWidth + 8f, ButtonRows * (ButtonHeight + 4f) + 4f); }
+        private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - ButtonRows * (ButtonHeight + 4f) - HeaderHeight, ButtonWidth + 8f, ButtonRows * (ButtonHeight + 4f) + 4f + HeaderHeight); }
 
         private Rect StatusRect() { return new Rect(Screen.width - 430f, LogRect().yMax + 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -80,7 +81,11 @@ namespace Rts.Presentation
             GUI.Box(buttons, "Commands");
             var selection = view.Selected;
             bool armySelected = selection.Kind == SelectionKind.Army;
-            float y = buttons.y + 24f;
+            string selectionText = view.DescribeSelection();
+            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 20f, buttons.width - 12f, 20f),
+                selectionText.Length > 0 ? selectionText : "Nothing selected: click an army");
+            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), "WASD move, wheel zoom");
+            float y = buttons.y + 24f + HeaderHeight;
 
             GUI.enabled = armySelected;
             if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? "Attack: click ground" : "Attack (pick ground)"))
@@ -122,9 +127,9 @@ namespace Rts.Presentation
                     var c = frame.Commands[i];
                     string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
                     string wait = "";
-                    long remaining = c.ApplyTick - frame.Tick;
-                    if (c.Status == CommandStatus.Interpreting) wait = " reserving, applies in " + Seconds(remaining);
-                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(remaining);
+                    // While interpreting there is no apply tick yet, so show how long the reply has been awaited.
+                    if (c.Status == CommandStatus.Interpreting) wait = " waiting for the reply (" + Seconds(frame.Tick - c.AcceptedTick) + ")";
+                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(c.ApplyTick - frame.Tick);
                     GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
                         "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
                 }

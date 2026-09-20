@@ -141,6 +141,53 @@ namespace Rts.Editor
             Render(Path.Combine(outDir, "replay.png"));
         }
 
+        /// <summary>Opens the live match scene without pressing Play, so the Game view is ready before you press it.</summary>
+        [MenuItem("RTS/Open Live Battlefield")]
+        public static void OpenLive()
+        {
+            EditorSceneManager.OpenScene(LiveScenePath);
+        }
+
+        /// <summary>One click to play: opens the live match scene and presses Play.</summary>
+        [MenuItem("RTS/Play Live Battlefield")]
+        public static void PlayLive()
+        {
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorApplication.delayCall += () => EditorApplication.EnterPlaymode();
+        }
+
+        // Batch entry: enters real Play mode on the live scene, lets it run, and renders the Game camera to a PNG.
+        public static void PlaySmoke()
+        {
+            Directory.CreateDirectory("D:/rts-verify/play");
+            EditorSceneManager.OpenScene(LiveScenePath);
+            // Keep this script's callbacks alive across Play (a domain reload would drop them). Reverted from git afterwards.
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        if (frames != 200) return;
+                        var cam = Camera.main;
+                        Debug.Log("[PlaySmoke] camera=" + (cam == null ? "null" : cam.transform.position + " rot=" + cam.transform.eulerAngles));
+                        var view = Object.FindFirstObjectByType<BattlefieldView>();
+                        var host = Object.FindFirstObjectByType<LiveMatchHost>();
+                        int renderers = view.GetComponentsInChildren<Renderer>().Length;
+                        Debug.Log("[PlaySmoke] tick=" + host.Tick + " renderers=" + renderers + " enemyVisuals=" + view.EnemyVisualCount);
+                        Render("D:/rts-verify/play/play.png");
+                        EditorApplication.ExitPlaymode();
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && frames >= 200) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         [MenuItem("RTS/Create Live Battlefield Scene")]
         public static void CreateLiveScene()
         {

@@ -39,7 +39,9 @@ namespace Rts.Presentation
         {
             if (frame == null) return;
             if (frame.FactionId != factionId) { factionId = frame.FactionId; Clear(); }
-            if (frame.Tick <= lastTick) return;
+            // A tick that goes backwards means the match was restarted: forget the old match's entries.
+            if (frame.Tick < lastTick) Clear();
+            else if (frame.Tick == lastTick) return;
             lastTick = frame.Tick;
 
             foreach (var contact in frame.Observation.Contacts)
