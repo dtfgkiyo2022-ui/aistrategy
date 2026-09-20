@@ -220,12 +220,17 @@ namespace Rts.Editor
                             var pre = Object.FindFirstObjectByType<LiveMatchHost>();
                             // Per-tick cost of the simulation itself inside the Editor, in blocks of 600 ticks.
                             var block = System.Diagnostics.Stopwatch.StartNew();
+                            int lastGcs = System.GC.CollectionCount(0);
                             for (int t = 0; t < preTicks; t++)
                             {
                                 pre.StepOnce();
                                 if ((t + 1) % 600 == 0)
                                 {
-                                    Debug.Log("[PerfProbe] ticks " + (t - 598) + ".." + (t + 1) + " avgMsPerTick=" + (block.Elapsed.TotalMilliseconds / 600.0).ToString("F2"));
+                                    int gcs = System.GC.CollectionCount(0);
+                                    Debug.Log("[PerfProbe] ticks " + (t - 598) + ".." + (t + 1) + " avgMsPerTick=" + (block.Elapsed.TotalMilliseconds / 600.0).ToString("F2")
+                                        + " gen0GCs=" + (gcs - lastGcs)
+                                        + " heapMB=" + (System.GC.GetTotalMemory(false) / 1048576.0).ToString("F0"));
+                                    lastGcs = gcs;
                                     block.Restart();
                                 }
                             }
