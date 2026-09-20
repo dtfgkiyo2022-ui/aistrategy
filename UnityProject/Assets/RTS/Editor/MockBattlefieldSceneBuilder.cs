@@ -447,6 +447,9 @@ namespace Rts.Editor
             var camera = Camera.main;
             var target = new RenderTexture(1280, 720, 24);
             camera.targetTexture = target;
+            // The first render of a batch session draws pink placeholders while shaders are still compiling, so the
+            // frame that is kept is the second one.
+            camera.Render();
             camera.Render();
             RenderTexture.active = target;
             var texture = new Texture2D(1280, 720, TextureFormat.RGB24, false);

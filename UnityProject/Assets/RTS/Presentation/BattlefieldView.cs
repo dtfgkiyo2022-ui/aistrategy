@@ -201,7 +201,7 @@ namespace Rts.Presentation
             {
                 ulong key = UnitKey(unit);
                 present.Add(key);
-                var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null ? 0f : 1.1f);
+                var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null || LocalVisualPack.HasUnit(unit.Kind) ? 0f : 1.1f);
                 if (!units.TryGetValue(key, out var visual))
                 {
                     visual = new Visual { Object = CreateUnitObject(unit), From = target, IsEnemy = !unit.IsOwn };
@@ -233,7 +233,7 @@ namespace Rts.Presentation
             foreach (var objective in frame.Objectives)
             {
                 if (objective.Kind != GoalKind.Core) continue;
-                var target = ToWorld(objective.Position, coreModel != null ? 0f : 2f);
+                var target = ToWorld(objective.Position, coreModel != null || LocalVisualPack.HasCore() ? 0f : 2f);
                 if (!cores.TryGetValue(objective.Id, out var visual))
                 {
                     visual = CreateCoreObject(objective);
@@ -618,6 +618,12 @@ namespace Rts.Presentation
 
         private GameObject CreateUnitObject(RenderUnit unit)
         {
+            // A purchased pack, when this machine has it, replaces the placeholders; everyone else keeps them.
+            if (LocalVisualPack.TryCreateUnit(unit.Kind, unit.IsOwn, transform, out var packed))
+            {
+                packed.name = (unit.IsOwn ? "Own_" : "Enemy_") + unit.Id;
+                return packed;
+            }
             var color = PresentationMaterials.Get(unit.IsOwn ? new Color(0.2f, 0.5f, 1f) : new Color(1f, 0.3f, 0.25f));
             var model = ModelFor(unit.Kind);
             GameObject go;
@@ -654,7 +660,11 @@ namespace Rts.Presentation
             var color = PresentationMaterials.Get(
                 objective.OwnerFactionId == 1 ? new Color(0.1f, 0.3f, 0.8f) : new Color(0.8f, 0.15f, 0.1f));
             float barHeight;
-            if (coreModel != null)
+            if (LocalVisualPack.TryCreateCore(objective.OwnerFactionId == 1, root.transform, out _, out var packedHeight))
+            {
+                barHeight = packedHeight + 1f;
+            }
+            else if (coreModel != null)
             {
                 var body = Instantiate(coreModel, root.transform);
                 body.transform.localScale = Vector3.one * CoreModelScale;
