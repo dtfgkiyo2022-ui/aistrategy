@@ -15,11 +15,31 @@ namespace Rts.Presentation
     public static class LocalVisualPack
     {
         private const string Root = "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/";
-        private const float InfantryHeight = 2.4f, ScoutHeight = 2.4f, CoreWidth = 9f;
+        private const float InfantryHeight = 2.4f, ScoutHeight = 2.4f, CoreWidth = 9f, OutpostWidth = 6f;
+        private const string OutpostModel = "models/buildings/Tower_A.FBX";
 
         public static bool HasUnit(UnitKind kind) { return Exists(UnitPath(kind)); }
 
         public static bool HasCore() { return Exists(Root + "models/buildings/Castle.FBX"); }
+
+        public static bool HasOutpost() { return Exists(Root + OutpostModel); }
+
+        /// <summary>Creates an outpost tower under parent, white (neutral) until SetOutpostOwner colors it.</summary>
+        public static bool TryCreateOutpost(Transform parent, out GameObject instance, out float height)
+        {
+            return TryCreate(Root + OutpostModel, BuildingMaterial(0), parent, OutpostWidth, true, out instance, out height);
+        }
+
+        /// <summary>Colors an outpost tower by its owner: 1 west blue, 2 east red, anything else neutral white.</summary>
+        public static void SetOutpostOwner(GameObject instance, uint owner)
+        {
+            Recolor(instance, BuildingMaterial(owner));
+        }
+
+        private static string BuildingMaterial(uint owner)
+        {
+            return Root + "models/materials/color/Buildings/TT_RTS_buildings_" + (owner == 1 ? "blue" : owner == 2 ? "red" : "white") + ".mat";
+        }
 
         /// <summary>Creates a unit of the pack under parent, feet on the parent's y, team blue (own) or red (enemy).</summary>
         public static bool TryCreateUnit(UnitKind kind, bool own, Transform parent, out GameObject instance)
@@ -43,24 +63,29 @@ namespace Rts.Presentation
 #if UNITY_EDITOR
         private static bool Exists(string path) { return AssetDatabase.LoadAssetAtPath<GameObject>(path) != null; }
 
+        private static void Recolor(GameObject instance, string materialPath)
+        {
+            var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (material == null || instance == null) return;
+            foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+            {
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++) materials[i] = material;
+                renderer.sharedMaterials = materials;
+            }
+        }
+
         private static bool TryCreate(string modelPath, string materialPath, Transform parent, float size, bool bySpan,
             out GameObject instance, out float height)
         {
             instance = null; height = 0f;
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
             if (model == null) return false;
-            var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
             var holder = new GameObject("Pack");
             holder.transform.SetParent(parent, false);
             var body = Object.Instantiate(model, holder.transform);
             body.transform.localPosition = Vector3.zero;
-            if (material != null)
-                foreach (var renderer in body.GetComponentsInChildren<Renderer>())
-                {
-                    var materials = renderer.sharedMaterials;
-                    for (int i = 0; i < materials.Length; i++) materials[i] = material;
-                    renderer.sharedMaterials = materials;
-                }
+            Recolor(body, materialPath);
             var bounds = Measure(body);
             float measured = bySpan ? Mathf.Max(bounds.size.x, bounds.size.z) : bounds.size.y;
             if (measured <= 0.0001f) { Discard(holder); return false; }
@@ -92,6 +117,8 @@ namespace Rts.Presentation
 #else
         // A player build cannot load the pack by path, so it always uses the placeholder models.
         private static bool Exists(string path) { return false; }
+
+        private static void Recolor(GameObject instance, string materialPath) { }
 
         private static bool TryCreate(string modelPath, string materialPath, Transform parent, float size, bool bySpan,
             out GameObject instance, out float height)

@@ -26,6 +26,9 @@ namespace Rts.Presentation
             public Transform HpFill;
             public int Hp;
             public bool IsEnemy;
+            // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
+            public GameObject PackTower;
+            public uint PackOwner;
         }
 
         private readonly Dictionary<ulong, Visual> units = new Dictionary<ulong, Visual>();
@@ -363,24 +366,31 @@ namespace Rts.Presentation
             foreach (var objective in frame.Objectives)
             {
                 if (objective.Kind != GoalKind.Outpost) continue;
-                var target = ToWorld(objective.Position, 0.4f);
+                var target = ToWorld(objective.Position, LocalVisualPack.HasOutpost() ? 0f : 0.4f);
                 if (!outposts.TryGetValue(objective.Id, out var visual))
                 {
                     var root = new GameObject("Outpost_" + objective.Id);
                     root.transform.SetParent(transform, false);
-                    var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    body.transform.SetParent(root.transform, false);
-                    body.transform.localScale = new Vector3(9f, 0.4f, 9f);
-                    Discard(body.GetComponent<Collider>());
-                    var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    pole.name = "Pole";
-                    pole.transform.SetParent(root.transform, false);
-                    pole.transform.localPosition = new Vector3(0f, 2f, 0f);
-                    pole.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
-                    Discard(pole.GetComponent<Collider>());
+                    // A purchased pack, when this machine has it, replaces the placeholder body and pole.
+                    float gaugeHeight = 6f;
+                    if (LocalVisualPack.TryCreateOutpost(root.transform, out var packTower, out var towerHeight)) gaugeHeight = towerHeight + 1f;
+                    else
+                    {
+                        packTower = null;
+                        var body = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                        body.transform.SetParent(root.transform, false);
+                        body.transform.localScale = new Vector3(9f, 0.4f, 9f);
+                        Discard(body.GetComponent<Collider>());
+                        var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                        pole.name = "Pole";
+                        pole.transform.SetParent(root.transform, false);
+                        pole.transform.localPosition = new Vector3(0f, 2f, 0f);
+                        pole.transform.localScale = new Vector3(0.5f, 2f, 0.5f);
+                        Discard(pole.GetComponent<Collider>());
+                    }
                     var bar = new GameObject("CaptureGauge");
                     bar.transform.SetParent(root.transform, false);
-                    bar.transform.localPosition = new Vector3(0f, 6f, 0f);
+                    bar.transform.localPosition = new Vector3(0f, gaugeHeight, 0f);
                     var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     back.name = "Back";
                     back.transform.SetParent(bar.transform, false);
@@ -391,16 +401,23 @@ namespace Rts.Presentation
                     fill.name = "Fill";
                     fill.transform.SetParent(bar.transform, false);
                     Discard(fill.GetComponent<Collider>());
-                    visual = new Visual { Object = root, HpFill = fill.transform, From = target };
+                    visual = new Visual { Object = root, HpFill = fill.transform, From = target, PackTower = packTower, PackOwner = uint.MaxValue };
                     outposts.Add(objective.Id, visual);
                 }
                 visual.To = target;
                 visual.From = target;
                 visual.Object.transform.position = target;
                 uint owner = objective.IsOwnerKnown ? objective.OwnerFactionId : 0u;
-                var ownerMaterial = PresentationMaterials.Get(FactionColor(owner));
-                foreach (var renderer in visual.Object.GetComponentsInChildren<Renderer>())
-                    if (renderer.gameObject.name != "Back" && renderer.gameObject.name != "Fill") renderer.sharedMaterial = ownerMaterial;
+                if (visual.PackTower != null)
+                {
+                    if (visual.PackOwner != owner) { LocalVisualPack.SetOutpostOwner(visual.PackTower, owner); visual.PackOwner = owner; }
+                }
+                else
+                {
+                    var ownerMaterial = PresentationMaterials.Get(FactionColor(owner));
+                    foreach (var renderer in visual.Object.GetComponentsInChildren<Renderer>())
+                        if (renderer.gameObject.name != "Back" && renderer.gameObject.name != "Fill") renderer.sharedMaterial = ownerMaterial;
+                }
 
                 float ratio = objective.CaptureDurationTicks > 0 ? Mathf.Clamp01(objective.CaptureTicks / (float)objective.CaptureDurationTicks) : 0f;
                 const float width = 8f;
