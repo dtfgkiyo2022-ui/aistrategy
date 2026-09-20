@@ -14,7 +14,7 @@ namespace Rts.Decision
         public static long Length(IReadOnlyList<SimPoint> cells)
         {
             long distance = 0;
-            for (int i = 1; i < cells.Count; i++) distance = checked(distance + (long)FixMath.IntegerSqrt(PolicyDecision.Distance(cells[i - 1], cells[i])));
+            for (int i = 1; i < cells.Count; i++) distance = checked(distance + PolicyDecision.SegmentLength(cells[i - 1], cells[i]));
             return distance;
         }
         public static SimPoint Rally(FactionObservation o, IReadOnlyList<SimPoint> corePath)
@@ -28,7 +28,7 @@ namespace Rts.Decision
             if (corePath.Count == 0) return false;
             int cursor = corePath.Count - 1; long distance = 0;
             while (cursor > 0 && distance < Fix64.FromInt(RallyDistanceMeters).Raw)
-            { distance += (long)FixMath.IntegerSqrt(PolicyDecision.Distance(corePath[cursor], corePath[cursor - 1])); cursor--; }
+            { distance += PolicyDecision.SegmentLength(corePath[cursor], corePath[cursor - 1]); cursor--; }
             while (cursor > 0 && o.VisibleEnemies.Any(e => PolicyDecision.Within(e.Position, corePath[cursor], 24))) cursor--;
             rally = corePath[cursor];
             var selected = rally;
