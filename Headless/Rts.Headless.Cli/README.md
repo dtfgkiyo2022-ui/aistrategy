@@ -151,3 +151,16 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyz
 - `--east-preset`：`none`／`maintain`／`concentrate`／`maintain-legacy`（既定none）
 - `--delay`：プレイヤーの命令の返答遅延 0／60／200／400 tick。0は直接の定型命令、それ以外は解釈スタブ経由（設計書11章。応答は操作側の命令をそのまま返す）。400は既定の締切240tickを超えるため失効し、命令は実行されない。`--ai-profile long` は締切・観測年齢を500tickにする専用設定（設計書11章）で、20秒応答が有効な場合を比べられる
 - 出力：`--out` の再生ファイル（`analyze --in`／`replay`／`compare` にそのまま使える）と、`--summary-out`（既定は `<out>.summary.json`）。要約には最初の接触tick、プレイヤー命令ごとの受付tick・適用tick・最終状態・理由が入る
+
+## snapshot: AI接続の試験用に戦況を書き出す（Issue 87）
+
+プリセット同士の試合を回し、指定した陣営の観測（`FactionObservation`）を一定tickごとにJSON Linesで書き出します。外部のAI（Jev など）へ実際の戦況を送って応答時間や答えを測る `Tools/provider-probe/probe.py` の入力に使います。Simulation・再生形式は変更しません。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll snapshot --scenario TestData/week2-2routes.json --ticks 9000 --every 300 --faction 1 --west-preset maintain --east-preset concentrate --out D:/rts-verify/87/snaps.jsonl
+```
+
+- `--every N`（既定500）tickごとに1行、`--faction` は1（西）か2（東）、プリセットは `--west-preset`（既定maintain）／`--east-preset`（既定concentrate）
+- 1行 = `{tick, phase, faction, observation}`。座標などのFix64は**メートル単位の小数**に変換して書きます（人やモデルが読むためで、再生には使いません）。`phase` は `--ticks` を3等分した early／mid／late
+- 試合が決着した時点で書き出しは止まります
+
