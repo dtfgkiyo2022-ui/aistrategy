@@ -47,7 +47,7 @@ namespace Rts.Application
     /// </summary>
     public static class InterventionRunner
     {
-        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks, AiTimingProfile profile = null)
+        public static InterventionResult Run(ScenarioDefinition scenario, long ticks, string eastPreset, InterventionStyle style, int delayTicks, AiTimingProfile profile = null, long triggerTick = -1)
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
             if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new ArgumentOutOfRangeException(nameof(ticks));
@@ -86,7 +86,8 @@ namespace Rts.Application
                 var west = sim.Capture(1);
                 if (west.Result.HasEnded) break;
                 if (result.FirstContactTick < 0 && west.Observation.Contacts.Count > 0) result.FirstContactTick = west.Tick;
-                if (style >= InterventionStyle.Change && !changed && result.FirstContactTick >= 0)
+                // A fixed triggerTick replaces the first-contact sign, so the acceptance tick of the change can be swept.
+                if (style >= InterventionStyle.Change && !changed && (triggerTick >= 0 ? west.Tick >= triggerTick : result.FirstContactTick >= 0))
                 {
                     changed = true;
                     if (style == InterventionStyle.Change)
