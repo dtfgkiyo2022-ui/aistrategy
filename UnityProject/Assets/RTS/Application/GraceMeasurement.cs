@@ -17,7 +17,9 @@ namespace Rts.Application
         /// <summary>Diversion response: the designated outpost or the core is still held at the end.</summary>
         DiversionResponse = 4,
         /// <summary>Outpost held: the designated outpost belongs to the measured faction at the end of the run.</summary>
-        OutpostHeld = 5
+        OutpostHeld = 5,
+        /// <summary>Core and outpost held: the core survives and the designated outpost is owned at the end.</summary>
+        CoreAndOutpostHeld = 6
     }
 
     /// <summary>Outcome of one candidate acceptance tick. NotApplied means the order never entered the run.</summary>
@@ -232,6 +234,7 @@ namespace Rts.Application
                 case GraceCriterion.Reinforcement: return new ReinforcementEvaluator(request.FactionId, request.OutpostId, request.Scenario);
                 case GraceCriterion.DiversionResponse: return new DiversionEvaluator(request.FactionId, request.OutpostId);
                 case GraceCriterion.OutpostHeld: return new OutpostHeldEvaluator(request.FactionId, request.OutpostId);
+                case GraceCriterion.CoreAndOutpostHeld: return new CoreAndOutpostHeldEvaluator(request.FactionId, request.OutpostId);
                 default: throw new ArgumentOutOfRangeException(nameof(request));
             }
         }
@@ -366,6 +369,24 @@ namespace Rts.Application
             public bool IsDecided => false;
             public GraceOutcome Conclude(Simulation.Simulation sim) =>
                 OutpostOwner(sim, outpostId) == faction ? GraceOutcome.Success : GraceOutcome.Failure;
+        }
+
+        /// <summary>
+        /// Core and outpost held: the diversion response the design asks for is to keep both, so success needs the
+        /// core alive and the designated outpost owned at the end. The diversion criterion above is met by holding
+        /// either, which for a core-saving order reduces to core defence; this one does not. A lost core ends the match,
+        /// so it is a failure at once.
+        /// </summary>
+        private sealed class CoreAndOutpostHeldEvaluator : IGraceEvaluator
+        {
+            private readonly uint faction, outpostId;
+            private bool coreLost;
+            internal CoreAndOutpostHeldEvaluator(uint faction, uint outpostId) { this.faction = faction; this.outpostId = outpostId; }
+            public void Begin(Simulation.Simulation sim) { }
+            public void Observe(Simulation.Simulation sim) { if (CoreLost(sim, faction)) coreLost = true; }
+            public bool IsDecided => coreLost;
+            public GraceOutcome Conclude(Simulation.Simulation sim) =>
+                !coreLost && OutpostOwner(sim, outpostId) == faction ? GraceOutcome.Success : GraceOutcome.Failure;
         }
 
         /// <summary>
