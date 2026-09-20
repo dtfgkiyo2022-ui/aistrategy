@@ -116,7 +116,7 @@ dotnet build Headless/Rts.Headless.slnx --configuration Release
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace --scenario TestData/week2-2routes.json --ticks 3000 --faction 1 --criterion reinforcement --outpost 1 --observed-tick 0 --order-kind Defend --order-scope Outpost --order-scope-id 1 --order-goal Outpost --order-goal-id 1 --min-r 1 --max-r 41 --r-step 20 --out D:/rts-verify/29/reinforcement.json
 ```
 
-オプション：`--scenario`（必須）、`--ticks`（1実行のtick上限。既定はシナリオのverificationTickLimit）、`--faction`（既定1）、`--criterion`（`core-defense` / `retreat` / `reinforcement` / `diversion`、既定core-defense）、`--army`（retreat用）、`--outpost`（reinforcement・diversion用）、`--observed-tick`（初観測tick。猶予の起点で、呼び出し側が与える入力です）、`--min-r`（既定1）、`--max-r`（既定は`--ticks`）、`--r-step`（既定1）、`--input-delay`（既定60）、`--out`。命令の中身は `--order-kind`（PolicyKind名、既定Defend）、`--order-scope`（All/Army/Outpost、既定All）、`--order-scope-id`、`--order-goal`（None/Point/Outpost/Core）、`--order-goal-id`、`--reserve-permille` で指定します。命令は測定側が毎回 Reserve+Resolve の組に合成し、CommandId・TargetRevision・ObservedTick を実行ごとに付け直します。
+オプション：`--scenario`（必須）、`--ticks`（1実行のtick上限。既定はシナリオのverificationTickLimit）、`--faction`（既定1）、`--criterion`（`core-defense` / `retreat` / `reinforcement` / `diversion` / `outpost-held`、既定core-defense）、`--army`（retreat用）、`--outpost`（reinforcement・diversion用）、`--observed-tick`（初観測tick。猶予の起点で、呼び出し側が与える入力です）、`--min-r`（既定1）、`--max-r`（既定は`--ticks`）、`--r-step`（既定1）、`--input-delay`（既定60）、`--out`。命令の中身は `--order-kind`（PolicyKind名、既定Defend）、`--order-scope`（All/Army/Outpost、既定All）、`--order-scope-id`、`--order-goal`（None/Point/Outpost/Core）、`--order-goal-id`、`--reserve-permille` で指定します。命令は測定側が毎回 Reserve+Resolve の組に合成し、CommandId・TargetRevision・ObservedTick を実行ごとに付け直します。
 
 出力は `Immediate`（受付tick R でそのまま適用）と `Delayed`（理解・入力時間として **R + 60 tick** で適用。R自体は操作側の時計のまま記録）の2件です。各件に成功・失敗・未評価・未適用のR一覧、`LastSuccessTick`、`GraceTicks`（＝最終成功tick − 初観測tick）、`Verdict` が入ります。
 
@@ -130,6 +130,7 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace 
 - **撤退**：指定軍団の生存者 × 2 ≧ 開始時人数なら成功（丸めを避けた50%以上。8人なら4人、5人なら3人）。増援で補充され得るため、途中では判定せず実行終了時の人数で決めます。
 - **増援**：拠点の所有者が敵になった時点で失敗。敵所有でないまま自陣営の歩兵が占領半径内に入った時点で成功（防衛到着）。どちらも起きないまま上限に達したら未評価です（争われなかっただけでは「間に合った」と言えないため）。拠点が中立で始まる既存シナリオを許容し、開始時点で敵所有の場合だけ引数エラーにします。
 - **陽動対応**：指定拠点とコアの**両方**を失ったときだけ失敗。どちらかを保持していれば成功です。
+- **拠点保持**（`--criterion outpost-held`、`--outpost` 必須）：**試合の最後（tick上限か決着）に、指定拠点が測定陣営の所有**なら成功。中立や敵所有は失敗です。途中では判定せず、適用できた候補は必ず成功か失敗に決まります（未評価にならない）。増援の述語は「味方の歩兵が着いた時点」で決まり、命令なしでも満たされる戦況では命令が間に合ったかを測れないため、命令の効果が最終状態に出る述語として追加しました
 
 拠点の所有者は「所有陣営は自拠点を常に視認できる」性質を使い、各陣営のフレームが自分の所有だと申告したかどうかで判定します（敗れた側の古い記憶を排除するため）。
 

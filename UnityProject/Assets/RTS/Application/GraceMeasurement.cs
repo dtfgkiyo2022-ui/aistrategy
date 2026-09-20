@@ -15,7 +15,9 @@ namespace Rts.Application
         /// <summary>Reinforcement: defenders reach the designated outpost before it falls.</summary>
         Reinforcement = 3,
         /// <summary>Diversion response: the designated outpost or the core is still held at the end.</summary>
-        DiversionResponse = 4
+        DiversionResponse = 4,
+        /// <summary>Outpost held: the designated outpost belongs to the measured faction at the end of the run.</summary>
+        OutpostHeld = 5
     }
 
     /// <summary>Outcome of one candidate acceptance tick. NotApplied means the order never entered the run.</summary>
@@ -229,6 +231,7 @@ namespace Rts.Application
                 case GraceCriterion.Retreat: return new RetreatEvaluator(request.FactionId, request.ArmyId);
                 case GraceCriterion.Reinforcement: return new ReinforcementEvaluator(request.FactionId, request.OutpostId, request.Scenario);
                 case GraceCriterion.DiversionResponse: return new DiversionEvaluator(request.FactionId, request.OutpostId);
+                case GraceCriterion.OutpostHeld: return new OutpostHeldEvaluator(request.FactionId, request.OutpostId);
                 default: throw new ArgumentOutOfRangeException(nameof(request));
             }
         }
@@ -345,6 +348,24 @@ namespace Rts.Application
             }
             public bool IsDecided => outcome != GraceOutcome.Undetermined;
             public GraceOutcome Conclude(Simulation.Simulation sim) => outcome;
+        }
+
+        /// <summary>
+        /// Outpost held: success only when the measured faction owns the outpost at the end of the run (the tick
+        /// limit, or the end of the match). Reinforcement is decided the moment defenders arrive, which happens
+        /// without any order in the shipped scenarios, so it cannot show whether an order came in time. Holding the
+        /// outpost at the end depends on what the order changed, so every applied candidate is judged, never early.
+        /// A neutral or enemy-owned outpost is a failure: the faction did not hold it.
+        /// </summary>
+        private sealed class OutpostHeldEvaluator : IGraceEvaluator
+        {
+            private readonly uint faction, outpostId;
+            internal OutpostHeldEvaluator(uint faction, uint outpostId) { this.faction = faction; this.outpostId = outpostId; }
+            public void Begin(Simulation.Simulation sim) { }
+            public void Observe(Simulation.Simulation sim) { }
+            public bool IsDecided => false;
+            public GraceOutcome Conclude(Simulation.Simulation sim) =>
+                OutpostOwner(sim, outpostId) == faction ? GraceOutcome.Success : GraceOutcome.Failure;
         }
 
         /// <summary>

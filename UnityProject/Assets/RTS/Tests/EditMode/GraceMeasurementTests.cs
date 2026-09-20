@@ -149,6 +149,29 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void OutpostHeldFailsWhenTheFactionDoesNotOwnTheOutpostAtTheEnd()
+        {
+            // The week two outposts start neutral and nobody reaches outpost 1 within 60 ticks, so it is not held.
+            // Unlike reinforcement, every applied candidate is judged: nothing stays undetermined.
+            var report = GraceMeasurement.Measure(Request(GraceCriterion.OutpostHeld, outpostId: 1, ticks: 60, maxR: 3, step: 2));
+            Assert.That(report.Immediate.FailureTicks, Is.EqualTo(new long[] { 1, 3 }));
+            Assert.That(report.Immediate.UndeterminedTicks, Is.Empty);
+            Assert.That(report.Immediate.Verdict, Is.EqualTo(GraceVerdict.NoGrace));
+        }
+
+        [Test]
+        public void OutpostHeldIsNotDecidedBeforeTheHorizon()
+        {
+            // The same neutral outpost is a failure at the horizon for a candidate applied late in the run,
+            // and a candidate beyond the horizon is not applied at all.
+            var request = Request(GraceCriterion.OutpostHeld, outpostId: 1, ticks: 60, maxR: 3, step: 2);
+            request.InputDelayTicks = 58;
+            var report = GraceMeasurement.Measure(request);
+            Assert.That(report.Delayed.FailureTicks, Is.EqualTo(new long[] { 1 }), "1+58 is inside the 60 tick horizon");
+            Assert.That(report.Delayed.NotAppliedTicks, Is.EqualTo(new long[] { 3 }), "3+58 is beyond it");
+        }
+
+        [Test]
         public void AcceptanceTicksBeyondTheHorizonAreNotApplied()
         {
             var request = Request(GraceCriterion.CoreDefense, ticks: 20, maxR: 2, step: 1);
