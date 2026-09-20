@@ -116,7 +116,13 @@ dotnet build Headless/Rts.Headless.slnx --configuration Release
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace --scenario TestData/week2-2routes.json --ticks 3000 --faction 1 --criterion reinforcement --outpost 1 --observed-tick 0 --order-kind Defend --order-scope Outpost --order-scope-id 1 --order-goal Outpost --order-goal-id 1 --min-r 1 --max-r 41 --r-step 20 --out D:/rts-verify/29/reinforcement.json
 ```
 
-オプション：`--scenario`（必須）、`--ticks`（1実行のtick上限。既定はシナリオのverificationTickLimit）、`--faction`（既定1）、`--criterion`（`core-defense` / `retreat` / `reinforcement` / `diversion` / `outpost-held`、既定core-defense）、`--army`（retreat用）、`--outpost`（reinforcement・diversion用）、`--observed-tick`（初観測tick。猶予の起点で、呼び出し側が与える入力です）、`--min-r`（既定1）、`--max-r`（既定は`--ticks`）、`--r-step`（既定1）、`--input-delay`（既定60）、`--out`。命令の中身は `--order-kind`（PolicyKind名、既定Defend）、`--order-scope`（All/Army/Outpost、既定All）、`--order-scope-id`、`--order-goal`（None/Point/Outpost/Core）、`--order-goal-id`、`--reserve-permille` で指定します。命令は測定側が毎回 Reserve+Resolve の組に合成し、CommandId・TargetRevision・ObservedTick を実行ごとに付け直します。
+オプション：`--scenario`（必須）、`--ticks`（1実行のtick上限。既定はシナリオのverificationTickLimit）、`--faction`（既定1）、`--criterion`（`core-defense` / `retreat` / `reinforcement` / `diversion` / `outpost-held`、既定core-defense）、`--army`（retreat用）、`--outpost`（reinforcement・diversion用）、`--observed-tick`（初観測tick。猶予の起点で、呼び出し側が与える入力です）、`--min-r`（既定1）、`--max-r`（既定は`--ticks`）、`--r-step`（既定1）、`--input-delay`（既定60）、`--rate-bands`（既定10）、`--out`。命令の中身は `--order-kind`（PolicyKind名、既定Defend）、`--order-scope`（All/Army/Outpost、既定All）、`--order-scope-id`、`--order-goal`（None/Point/Outpost/Core）、`--order-goal-id`、`--reserve-permille` で指定します。命令は測定側が毎回 Reserve+Resolve の組に合成し、CommandId・TargetRevision・ObservedTick を実行ごとに付け直します。
+
+**成功の密度**：成功は R について単調でないため、`LastSuccessTick` だけでは猶予を表せません（実測で「失敗を挟んで成功が戻る島」がある）。各件に次を併記します。
+
+- `SuccessRuns`：連続して成功した候補のまとまり（`FromTick`〜`ToTick`、件数）。島がそのまま見えます。`LongestSuccessRun` は最長のもの（同数なら早いほう）
+- `DecidedCount` / `SuccessCount` / `SuccessPermille`：**決着した候補**（成功か失敗）に対する成功率（‰）。未評価・未適用はその受付tickについて何も言えないため、率には入れません（まとまりは切ります）
+- `Bands`：走査した範囲を `--rate-bands N`（既定10）等分した帯ごとの成功率。`FirstBandBelow900Tick`・`FirstBandBelow500Tick` は、**決着があって**9割・5割を下回った最初の帯の開始tickです。決着ゼロの帯は `SuccessPermille = -1` とし、全滅と読み違えないようにします
 
 出力は `Immediate`（受付tick R でそのまま適用）と `Delayed`（理解・入力時間として **R + 60 tick** で適用。R自体は操作側の時計のまま記録）の2件です。各件に成功・失敗・未評価・未適用のR一覧、`LastSuccessTick`、`GraceTicks`（＝最終成功tick − 初観測tick）、`Verdict` が入ります。
 

@@ -40,7 +40,8 @@ internal static class GraceCommand
             MinAcceptTick = Number(options, "--min-r", 1),
             MaxAcceptTick = Number(options, "--max-r", -1),
             AcceptStep = Number(options, "--r-step", 1),
-            InputDelayTicks = Number(options, "--input-delay", 60)
+            InputDelayTicks = Number(options, "--input-delay", 60),
+            RateBandCount = (int)Number(options, "--rate-bands", 10)
         };
         var order = Order(options, request.FactionId, "--order");
         // A second order (--order2-*) is applied at the same tick, e.g. core defence together with an outpost focus.

@@ -53,6 +53,29 @@ namespace Rts.Application
         public long AcceptStep = 1;
         /// <summary>Comprehension and input time added to the compared case. The specification uses 60.</summary>
         public long InputDelayTicks = 60;
+        /// <summary>How many equal-width bands the swept range is split into for the success rate.</summary>
+        public int RateBandCount = 10;
+    }
+
+    /// <summary>A maximal run of consecutive candidates that all succeeded, in sweep order.</summary>
+    public sealed class GraceRun
+    {
+        public long FromTick;
+        public long ToTick;
+        public int Count;
+    }
+
+    /// <summary>
+    /// One equal-width slice of the swept range. SuccessPermille is -1 when the band decided nothing, so an
+    /// untested band is never read as a total failure.
+    /// </summary>
+    public sealed class GraceBand
+    {
+        public long FromTick;
+        public long ToTick;
+        public int Decided;
+        public int Success;
+        public int SuccessPermille = -1;
     }
 
     /// <summary>Result of one sweep. Candidate ticks are the operator-side acceptance ticks R, never R + delay.</summary>
@@ -68,6 +91,21 @@ namespace Rts.Application
         /// <summary>LastSuccessTick - FirstObservedTick. Null unless the verdict is Grace.</summary>
         public long? GraceTicks;
         public GraceVerdict Verdict = GraceVerdict.Unevaluated;
+
+        // Success is not monotone in R, so the last success alone overstates the grace. The fields below describe
+        // how densely the successes sit, which is what tells a late island apart from a dependable window.
+        public int DecidedCount;
+        public int SuccessCount;
+        /// <summary>Successes per 1000 decided candidates; -1 when nothing was decided.</summary>
+        public int SuccessPermille = -1;
+        /// <summary>Maximal runs of consecutive successful candidates, in sweep order.</summary>
+        public List<GraceRun> SuccessRuns = new List<GraceRun>();
+        /// <summary>The longest such run; on a tie the earliest. Null when there is no success.</summary>
+        public GraceRun LongestSuccessRun;
+        public List<GraceBand> Bands = new List<GraceBand>();
+        /// <summary>First band that decided something and fell under 90%/50%; null when no band does.</summary>
+        public long? FirstBandBelow900Tick;
+        public long? FirstBandBelow500Tick;
     }
 
     /// <summary>Both compared cases: the order applied at R, and the order applied at R + InputDelayTicks.</summary>
@@ -102,6 +140,7 @@ namespace Rts.Application
             if (request.FirstObservedTick < 0) throw new ArgumentOutOfRangeException(nameof(request));
             if (request.AcceptStep < 1) throw new ArgumentOutOfRangeException(nameof(request));
             if (request.InputDelayTicks < 0) throw new ArgumentOutOfRangeException(nameof(request));
+            if (request.RateBandCount < 1) throw new ArgumentOutOfRangeException(nameof(request));
             long limit = request.TickLimit > 0 ? request.TickLimit : request.Scenario.VerificationTickLimit;
             if (limit < 1) throw new ArgumentOutOfRangeException(nameof(request));
             long minAccept = request.MinAcceptTick < 1 ? 1 : request.MinAcceptTick;
@@ -130,8 +169,8 @@ namespace Rts.Application
                 cache.Add(applyTick, outcome);
                 return outcome;
             };
-            report.Immediate = Scan(minAccept, maxAccept, request.AcceptStep, request.FirstObservedTick, 0, evaluate);
-            report.Delayed = Scan(minAccept, maxAccept, request.AcceptStep, request.FirstObservedTick, request.InputDelayTicks, evaluate);
+            report.Immediate = Scan(minAccept, maxAccept, request.AcceptStep, request.FirstObservedTick, 0, evaluate, request.RateBandCount);
+            report.Delayed = Scan(minAccept, maxAccept, request.AcceptStep, request.FirstObservedTick, request.InputDelayTicks, evaluate, request.RateBandCount);
             return report;
         }
 
@@ -141,15 +180,18 @@ namespace Rts.Application
         /// candidate stays R so both cases are comparable on the operator's clock.
         /// </summary>
         public static GraceResult Scan(long minAccept, long maxAccept, long step, long firstObservedTick,
-            long inputDelayTicks, Func<long, GraceOutcome> evaluate)
+            long inputDelayTicks, Func<long, GraceOutcome> evaluate, int bandCount = 10)
         {
             if (evaluate == null) throw new ArgumentNullException(nameof(evaluate));
             if (step < 1) throw new ArgumentOutOfRangeException(nameof(step));
             if (inputDelayTicks < 0) throw new ArgumentOutOfRangeException(nameof(inputDelayTicks));
+            if (bandCount < 1) throw new ArgumentOutOfRangeException(nameof(bandCount));
             var result = new GraceResult { InputDelayTicks = inputDelayTicks, FirstObservedTick = firstObservedTick };
+            var outcomes = new List<KeyValuePair<long, GraceOutcome>>();
             for (long candidate = minAccept; candidate <= maxAccept; candidate = checked(candidate + step))
             {
                 var outcome = evaluate(checked(candidate + inputDelayTicks));
+                outcomes.Add(new KeyValuePair<long, GraceOutcome>(candidate, outcome));
                 switch (outcome)
                 {
                     case GraceOutcome.Success: result.SuccessTicks.Add(candidate); break;
@@ -158,6 +200,7 @@ namespace Rts.Application
                     default: result.NotAppliedTicks.Add(candidate); break;
                 }
             }
+            Describe(result, outcomes, minAccept, maxAccept, bandCount);
             if (result.SuccessTicks.Count != 0)
             {
                 long last = result.SuccessTicks[result.SuccessTicks.Count - 1];
@@ -170,6 +213,59 @@ namespace Rts.Application
             else if (result.UndeterminedTicks.Count == 0 && result.FailureTicks.Count != 0) result.Verdict = GraceVerdict.NoGrace;
             else result.Verdict = GraceVerdict.Unevaluated;
             return result;
+        }
+
+        /// <summary>
+        /// Fills the density fields from the outcomes in sweep order. Runs need no parameter and show the islands
+        /// directly; the bands answer "from where does it stop being dependable" at 90% and 50%. Undetermined and
+        /// not-applied candidates say nothing about the acceptance tick, so they break a run but are left out of
+        /// every rate.
+        /// </summary>
+        private static void Describe(GraceResult result, List<KeyValuePair<long, GraceOutcome>> outcomes,
+            long minAccept, long maxAccept, int bandCount)
+        {
+            GraceRun open = null;
+            foreach (var pair in outcomes)
+            {
+                if (pair.Value == GraceOutcome.Success)
+                {
+                    if (open == null) { open = new GraceRun { FromTick = pair.Key, ToTick = pair.Key, Count = 1 }; result.SuccessRuns.Add(open); }
+                    else { open.ToTick = pair.Key; open.Count++; }
+                }
+                else open = null;
+                if (pair.Value == GraceOutcome.Success || pair.Value == GraceOutcome.Failure) result.DecidedCount++;
+                if (pair.Value == GraceOutcome.Success) result.SuccessCount++;
+            }
+            if (result.DecidedCount > 0) result.SuccessPermille = (int)(1000L * result.SuccessCount / result.DecidedCount);
+            foreach (var run in result.SuccessRuns)
+                if (result.LongestSuccessRun == null || run.Count > result.LongestSuccessRun.Count) result.LongestSuccessRun = run;
+
+            long span = checked(maxAccept - minAccept + 1);
+            if (span < 1) return;
+            for (int i = 0; i < bandCount; i++)
+                result.Bands.Add(new GraceBand
+                {
+                    FromTick = checked(minAccept + span * i / bandCount),
+                    ToTick = i == bandCount - 1 ? maxAccept : checked(minAccept + span * (i + 1) / bandCount - 1)
+                });
+            foreach (var pair in outcomes)
+            {
+                if (pair.Value != GraceOutcome.Success && pair.Value != GraceOutcome.Failure) continue;
+                // The band is found from the printed boundaries, never from a second formula: integer division makes
+                // "which band starts here" and "which band is this tick in" disagree, which mislabels the edges.
+                int index = bandCount - 1;
+                while (index > 0 && result.Bands[index].FromTick > pair.Key) index--;
+                var band = result.Bands[index];
+                band.Decided++;
+                if (pair.Value == GraceOutcome.Success) band.Success++;
+            }
+            foreach (var band in result.Bands)
+            {
+                if (band.Decided == 0) continue;
+                band.SuccessPermille = (int)(1000L * band.Success / band.Decided);
+                if (band.SuccessPermille < 900 && result.FirstBandBelow900Tick == null) result.FirstBandBelow900Tick = band.FromTick;
+                if (band.SuccessPermille < 500 && result.FirstBandBelow500Tick == null) result.FirstBandBelow500Tick = band.FromTick;
+            }
         }
 
         /// <summary>One full run from tick 0 with the order applied during Step(applyTick).</summary>

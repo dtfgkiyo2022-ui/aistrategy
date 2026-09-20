@@ -33,6 +33,65 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void IslandsAreReportedAsRunsAndARate()
+        {
+            // The same 2-and-7 sweep: LastSuccessTick is 7, but only 2 of 10 candidates work and neither run is wide.
+            var result = GraceMeasurement.Scan(1, 10, 1, 0, 0, Succeeding(2, 7));
+            Assert.That(result.SuccessRuns.Select(r => r.FromTick + "-" + r.ToTick + "x" + r.Count),
+                Is.EqualTo(new[] { "2-2x1", "7-7x1" }));
+            Assert.That(result.DecidedCount, Is.EqualTo(10));
+            Assert.That(result.SuccessCount, Is.EqualTo(2));
+            Assert.That(result.SuccessPermille, Is.EqualTo(200));
+            Assert.That(result.LongestSuccessRun.FromTick, Is.EqualTo(2), "ties go to the earliest run");
+        }
+
+        [Test]
+        public void BandsSayWhereTheSweepStopsBeingDependable()
+        {
+            var result = GraceMeasurement.Scan(1, 10, 1, 0, 0, Succeeding(1, 2, 3, 4, 5, 6, 7, 9), bandCount: 5);
+            Assert.That(result.Bands.Select(b => b.FromTick + "-" + b.ToTick + ":" + b.SuccessPermille),
+                Is.EqualTo(new[] { "1-2:1000", "3-4:1000", "5-6:1000", "7-8:500", "9-10:500" }));
+            Assert.That(result.FirstBandBelow900Tick, Is.EqualTo(7));
+            Assert.That(result.FirstBandBelow500Tick, Is.Null, "500 permille is not below 500");
+            Assert.That(result.LastSuccessTick, Is.EqualTo(9), "the last success sits inside a half-failing band");
+        }
+
+        [Test]
+        public void EveryCandidateIsCountedInTheBandThatPrintsItsTick()
+        {
+            // 4280..4400 by 10 into 6 bands: integer division put 4380 in the band printed as 4360-4379, so the last
+            // success landed in a band shown as 0%. Every decided candidate must fall inside its own band's range.
+            var result = GraceMeasurement.Scan(4280, 4400, 10, 0, 0, _ => GraceOutcome.Success, bandCount: 6);
+            Assert.That(result.Bands.Sum(b => b.Decided), Is.EqualTo(13), "every candidate is counted exactly once");
+            Assert.That(result.Bands.Where(b => b.Decided > 0).Select(b => b.SuccessPermille).Distinct(),
+                Is.EqualTo(new[] { 1000 }), "an all-success sweep has no band under 100%");
+            foreach (var band in result.Bands)
+                Assert.That(result.SuccessTicks.Count(t => t >= band.FromTick && t <= band.ToTick), Is.EqualTo(band.Decided),
+                    "band " + band.FromTick + "-" + band.ToTick + " counts ticks it does not print");
+        }
+
+        [Test]
+        public void UndecidedCandidatesBreakARunButLeaveTheRateAlone()
+        {
+            // Candidate 3 is undetermined: it says nothing about acceptance tick 3, so it is outside every rate.
+            var result = GraceMeasurement.Scan(1, 4, 1, 0, 0,
+                applyTick => applyTick == 3 ? GraceOutcome.Undetermined : GraceOutcome.Success, bandCount: 1);
+            Assert.That(result.SuccessRuns.Select(r => r.FromTick + "-" + r.ToTick), Is.EqualTo(new[] { "1-2", "4-4" }));
+            Assert.That(result.DecidedCount, Is.EqualTo(3));
+            Assert.That(result.SuccessPermille, Is.EqualTo(1000));
+            Assert.That(result.Bands.Single().Decided, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void ABandThatDecidedNothingIsNotReadAsAFailure()
+        {
+            var result = GraceMeasurement.Scan(1, 2, 1, 0, 0, _ => GraceOutcome.NotApplied, bandCount: 2);
+            Assert.That(result.Bands.Select(b => b.SuccessPermille), Is.EqualTo(new[] { -1, -1 }));
+            Assert.That(result.FirstBandBelow900Tick, Is.Null);
+            Assert.That(result.SuccessPermille, Is.EqualTo(-1));
+        }
+
+        [Test]
         public void GraceCountsFromTheFirstObservationTick()
         {
             var result = GraceMeasurement.Scan(1, 10, 1, 4, 0, Succeeding(2, 7));
