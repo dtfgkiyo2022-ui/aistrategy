@@ -29,7 +29,7 @@ namespace Rts.UnityHost
 
         public string Status { get { return status; } }
         public long Tick { get { return player == null ? 0 : player.Tick; } }
-        public long? MismatchTick { get { return player == null ? null : player.MismatchTick; } }
+        public long? DisplayMismatchTick { get { return player == null ? null : player.DisplayMismatchTick; } }
         public bool Paused { get { return paused; } set { paused = value; } }
         public int SpeedMultiplier { get { return speedMultiplier; } set { speedMultiplier = value == 2 || value == 4 ? value : 1; } }
 
@@ -79,7 +79,7 @@ namespace Rts.UnityHost
                 view.ResetVisuals();
                 player.StepOnce();
                 view.Push(player.Capture(viewFactionId));
-                status = "Playing " + Path.GetFileName(path) + " (" + player.Scenario.ScenarioId + ")";
+                status = "Playing " + Path.GetFileName(path) + " (" + player.Scenario.ScenarioId + ")" + DisplayOnlyNotice;
                 return true;
             }
             catch (Exception e) when (e is IOException || e is InvalidDataException || e is UnauthorizedAccessException)
@@ -100,12 +100,16 @@ namespace Rts.UnityHost
         {
             if (player == null) return;
             if (player.StepOnce()) view.Push(player.Capture(viewFactionId));
-            else status = "Finished at tick " + player.Tick + MismatchText();
+            else status = "Finished at tick " + player.Tick + MismatchText() + DisplayOnlyNotice;
         }
+
+        // Always shown: this viewer does not verify the recording (it cannot even tell which build made it), so a
+        // clean playback must not be read as a verified one. Verification is the CLI replay/compare commands.
+        private const string DisplayOnlyNotice = "  [display only - not a verification; build not checked]";
 
         private string MismatchText()
         {
-            return player != null && player.MismatchTick.HasValue ? "  hash mismatch at tick " + player.MismatchTick.Value : "";
+            return player != null && player.DisplayMismatchTick.HasValue ? "  hash differs at tick " + player.DisplayMismatchTick.Value : "";
         }
 
         // The viewer is display-side, so the build identity only decides whether a foreign recording is refused.

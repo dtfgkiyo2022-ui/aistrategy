@@ -137,7 +137,7 @@ namespace Rts.Editor
             int own = 0, enemy = 0;
             foreach (var u in frame.Units) { if (u.IsOwn) own++; else enemy++; }
             Debug.Log("[ReplayView] played tick=" + host.Tick + " faction=" + frame.FactionId + " own=" + own
-                + " enemy=" + enemy + " enemyVisuals=" + view.EnemyVisualCount + " mismatch=" + host.MismatchTick
+                + " enemy=" + enemy + " enemyVisuals=" + view.EnemyVisualCount + " displayMismatch=" + host.DisplayMismatchTick
                 + " commands=" + frame.Commands.Count);
             view.Apply(1f);
             Render(Path.Combine(outDir, "replay.png"));
