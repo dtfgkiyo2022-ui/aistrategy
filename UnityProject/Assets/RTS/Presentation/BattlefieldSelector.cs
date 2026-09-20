@@ -21,10 +21,5 @@ namespace Rts.Presentation
             view.Select(view.TryPick(camera, Input.mousePosition, pickRadiusPixels, out var target) ? target : SelectionTarget.None);
         }
 
-        private void OnGUI()
-        {
-            var text = view.DescribeSelection();
-            if (text.Length > 0) GUI.Label(new Rect(12f, 10f, 500f, 24f), text);
-        }
     }
 }
