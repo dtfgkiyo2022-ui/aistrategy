@@ -42,8 +42,11 @@ internal static class GraceCommand
             AcceptStep = Number(options, "--r-step", 1),
             InputDelayTicks = Number(options, "--input-delay", 60)
         };
-        var order = Order(options, request.FactionId);
-        request.Orders = new[] { order };
+        var order = Order(options, request.FactionId, "--order");
+        // A second order (--order2-*) is applied at the same tick, e.g. core defence together with an outpost focus.
+        var orders = new List<PolicyOrder> { order };
+        if (options.ContainsKey("--order2-kind")) orders.Add(Order(options, request.FactionId, "--order2"));
+        request.Orders = orders;
 
         var report = GraceMeasurement.Measure(request);
         var document = new GraceDocument
@@ -51,7 +54,7 @@ internal static class GraceCommand
             Build = build,
             ScenarioId = scenario.ScenarioId,
             ScenarioPath = Path.GetFullPath(scenarioPath),
-            OrderKind = order.Kind + " " + order.Target.Kind + ":" + order.Target.Id + " goal " + order.Goal.Kind + ":" + order.Goal.Id,
+            OrderKind = string.Join(" + ", orders.Select(o => o.Kind + " " + o.Target.Kind + ":" + o.Target.Id + " goal " + o.Goal.Kind + ":" + o.Goal.Id)),
             Report = report
         };
         string json = JsonSerializer.Serialize(document, Json);
@@ -69,19 +72,20 @@ internal static class GraceCommand
         "reinforcement" => GraceCriterion.Reinforcement,
         "diversion" => GraceCriterion.DiversionResponse,
         "outpost-held" => GraceCriterion.OutpostHeld,
-        _ => throw new InvalidDataException("--criterion must be core-defense, retreat, reinforcement, diversion or outpost-held.")
+        "core-and-outpost-held" => GraceCriterion.CoreAndOutpostHeld,
+        _ => throw new InvalidDataException("--criterion must be core-defense, retreat, reinforcement, diversion, outpost-held or core-and-outpost-held.")
     };
 
-    private static PolicyOrder Order(Dictionary<string, string> options, uint faction)
+    private static PolicyOrder Order(Dictionary<string, string> options, uint faction, string prefix)
     {
-        var kind = Enum.Parse<PolicyKind>(options.GetValueOrDefault("--order-kind") ?? "Defend", true);
-        var scopeKind = Enum.Parse<ScopeKind>(options.GetValueOrDefault("--order-scope") ?? "All", true);
-        var goalKind = Enum.Parse<GoalKind>(options.GetValueOrDefault("--order-goal") ?? "None", true);
-        var scope = new ScopeKey(faction, scopeKind, (uint)Number(options, "--order-scope-id", 0));
-        var goal = new PolicyGoal(goalKind, (uint)Number(options, "--order-goal-id", 0), default);
+        var kind = Enum.Parse<PolicyKind>(options.GetValueOrDefault(prefix + "-kind") ?? "Defend", true);
+        var scopeKind = Enum.Parse<ScopeKind>(options.GetValueOrDefault(prefix + "-scope") ?? "All", true);
+        var goalKind = Enum.Parse<GoalKind>(options.GetValueOrDefault(prefix + "-goal") ?? "None", true);
+        var scope = new ScopeKey(faction, scopeKind, (uint)Number(options, prefix + "-scope-id", 0));
+        var goal = new PolicyGoal(goalKind, (uint)Number(options, prefix + "-goal-id", 0), default);
         // The measurement rewrites CommandId, TargetRevision and ObservedTick per run; only the payload matters here.
         return new PolicyOrder(1, 0, CommandSource.Human, scope, kind, goal, 50, new LossBudget(300),
-            new EndCondition(EndKind.UntilReplaced, 0), (ushort)Number(options, "--reserve-permille", 0), 0,
+            new EndCondition(EndKind.UntilReplaced, 0), (ushort)Number(options, prefix == "--order" ? "--reserve-permille" : prefix + "-reserve-permille", 0), 0,
             Array.Empty<PolicyVersion>(), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None));
     }
 }

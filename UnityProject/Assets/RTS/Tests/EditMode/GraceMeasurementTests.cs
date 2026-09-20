@@ -160,6 +160,20 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void CoreAndOutpostHeldNeedsBothAndTakesTwoOrdersAtTheSameTick()
+        {
+            // The core survives 60 ticks, but the neutral outpost is not owned, so holding both fails.
+            var request = Request(GraceCriterion.CoreAndOutpostHeld, outpostId: 1, ticks: 60, maxR: 3, step: 2);
+            request.Orders = new[] { RetreatOrder(1), RetreatOrder(2) };
+            var report = GraceMeasurement.Measure(request);
+            Assert.That(report.Immediate.FailureTicks, Is.EqualTo(new long[] { 1, 3 }));
+            Assert.That(report.Immediate.Verdict, Is.EqualTo(GraceVerdict.NoGrace));
+            var sim = new Battle(WeekTwoScenario.Create());
+            var inputs = GraceMeasurement.ComposeInputs(sim, 5, request.Orders);
+            Assert.That(inputs.Count, Is.EqualTo(4), "each order becomes a Reserve and a Resolve input at the same tick");
+        }
+
+        [Test]
         public void OutpostHeldIsNotDecidedBeforeTheHorizon()
         {
             // The same neutral outpost is a failure at the horizon for a candidate applied late in the run,
