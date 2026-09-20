@@ -28,18 +28,26 @@ internal static class AnalyzeCommand
             ReplayRunner.Record(stream, definition, inputs, ticks, build, null, west, east);
             stream.Position = 0;
         }
-        var report = Analyze(stream, build, options.ContainsKey("--allow-build-mismatch"));
+        string tracePath = options.GetValueOrDefault("--trace-out");
+        if (tracePath == null && options.ContainsKey("--trace-every")) throw new InvalidDataException("--trace-every needs --trace-out.");
+        var trace = tracePath == null ? null : new IndicatorTrace(options.TryGetValue("--trace-every", out var every)
+            ? long.Parse(every, CultureInfo.InvariantCulture) : 100);
+        var report = Analyze(stream, build, options.ContainsKey("--allow-build-mismatch"), null, trace);
+        trace?.Write(tracePath);
         string json = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });
         if (output == null) Console.WriteLine(json); else File.WriteAllText(output, json);
         return report.IsFault ? 4 : report.FirstMismatchTick.HasValue ? 2 : 0;
     }
 
-    internal static IndicatorReport Analyze(Stream input, BuildIdentity build, bool allow = false, Action<DiagnosticState, byte[], byte[]> capture = null)
+    internal static IndicatorReport Analyze(Stream input, BuildIdentity build, bool allow = false,
+        Action<DiagnosticState, byte[], byte[]> capture = null, IndicatorTrace trace = null)
     {
         var counter = new IndicatorCounter();
         var outcome = ReplayRunner.Replay(input, build, (state, hash, events) =>
         {
-            counter.Observe(state.Tick, DiagnosticComparison.Fields(state).ToDictionary(p => p.Key, p => p.Value));
+            var fields = DiagnosticComparison.Fields(state).ToDictionary(p => p.Key, p => p.Value);
+            counter.Observe(state.Tick, fields);
+            trace?.Observe(state.Tick, fields, counter.Report.EndTick == state.Tick);
             capture?.Invoke(state, hash, events);
         }, allow);
         counter.Report.FirstMismatchTick = outcome.FirstMismatchTick;
