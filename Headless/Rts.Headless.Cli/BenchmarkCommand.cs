@@ -47,6 +47,7 @@ internal static class BenchmarkCommand
             outcome.IsFault, WallTotalMs = elapsed.Elapsed.TotalMilliseconds,
             Compute = Stats.From(samples.Compute), ReplayIO = Stats.From(samples.IO), TickWithIO = Stats.From(samples.Total),
             Phases = samples.Stages.ToDictionary(p => p.Key, p => Stats.From(p.Value)),
+            AllocKBPerTick = samples.AllocBytes.ToDictionary(p => p.Key, p => Math.Round(p.Value / 1024.0 / Math.Max(1, samples.Total.Count), 2)),
             PercentileMethod = "nearest-rank ceil(p*N); S0 and independent warmup excluded",
             Timing = "Compute = Step + canonical state and state/event hashes; replay serialization/writes excluded. Phases exclusive; Pathfinding deducted from caller. WallTotal includes setup and final flush. Buffered file I/O; no per-tick fsync.",
             Build = build
@@ -82,7 +83,9 @@ internal static class BenchmarkCommand
         internal readonly List<double> Compute = new(), IO = new(), Total = new();
         internal readonly Dictionary<string, List<double>> Stages = new();
         private readonly Dictionary<string, long> current = new();
-        private readonly Stack<(string Name, long Start, long Children)> stack = new();
+        private readonly Stack<(string Name, long Start, long Children, long AllocStart, long AllocChildren)> stack = new();
+        // Bytes allocated by this thread inside each stage (its own, children excluded), summed over all measured ticks.
+        internal readonly Dictionary<string, long> AllocBytes = new();
         private long tickStart;
         private bool active;
         private static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
@@ -102,15 +105,18 @@ internal static class BenchmarkCommand
                 return;
             }
             if (!active) return;
-            if (start) { stack.Push((name, now, 0)); return; }
+            long allocNow = GC.GetAllocatedBytesForCurrentThread();
+            if (start) { stack.Push((name, now, 0, allocNow, 0)); return; }
             var scope = stack.Pop();
             if (scope.Name != name) throw new InvalidOperationException("Mismatched phase scopes.");
             long duration = now - scope.Start;
+            long allocated = allocNow - scope.AllocStart;
             current[name] = current.GetValueOrDefault(name) + duration - scope.Children;
+            AllocBytes[name] = AllocBytes.GetValueOrDefault(name) + allocated - scope.AllocChildren;
             if (stack.Count != 0)
             {
                 var parent = stack.Pop();
-                stack.Push((parent.Name, parent.Start, parent.Children + duration));
+                stack.Push((parent.Name, parent.Start, parent.Children + duration, parent.AllocStart, parent.AllocChildren + allocated));
             }
         }
     }
