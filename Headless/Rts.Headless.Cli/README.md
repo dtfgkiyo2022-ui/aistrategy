@@ -89,6 +89,8 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyz
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll analyze --scenario TestData/week2-2routes.json --ticks 20000 --east-preset maintain
 ```
 
+`--trace-out <csv>` を付けると、指標の元になる値（生存数・コアHP・拠点所有・攻勢の段階と目標・軍団ごとの割当と生存数）をCSVの時系列で書き出します。`--trace-every N`（既定100）tickごとに1行で、最終tickと決着tickは必ず残ります。集計では分からない「いつ軍団が攻勢に使えなくなったか」を読むための診断用で、再生の結果は変わりません。
+
 `--out` 省略時はJSONを標準出力へ出します。`--in` と `--scenario` は排他です。シナリオ指定時は `--ticks` が必須で、`--west-preset` / `--east-preset` はrecordと同じ4種（既定none）です。既存記録の意図的なビルド間互換検証には `--allow-build-mismatch` が使えます。
 
 計測はCLIの `IndicatorCounter` が既存の `DiagnosticComparison.Fields` を毎tick読みます。Simulation・Contracts・正規状態・再生形式・既定値は変更しません。通常のReplayRunnerで記録内のStateHash/EventHash・命令結果・チェックポイントも照合し、`FirstMismatchTick` を出します。終了コードは一致0、不一致2、形式不正3、Fault4です。`.hashes.states` は生成しません。
