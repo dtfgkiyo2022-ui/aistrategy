@@ -52,9 +52,10 @@ internal static class InterventionCommand
         string east = options.GetValueOrDefault("--east-preset") ?? "none";
         int delay = options.TryGetValue("--delay", out var d) ? int.Parse(d, CultureInfo.InvariantCulture) : 0;
         var profile = AiTimingProfile.Parse(options.GetValueOrDefault("--ai-profile") ?? "default");
+        long trigger = options.TryGetValue("--trigger-tick", out var tt) ? long.Parse(tt, CultureInfo.InvariantCulture) : -1;
         long ticks = long.Parse(options.TryGetValue("--ticks", out var t) ? t : throw new InvalidDataException("Missing --ticks."), CultureInfo.InvariantCulture);
 
-        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay, profile);
+        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay, profile, trigger);
         using (var file = File.Create(output))
         {
             var outcome = ReplayRunner.Record(file, scenario, result.Inputs, ticks, build, null, "none", east, delay, profile.Name);
