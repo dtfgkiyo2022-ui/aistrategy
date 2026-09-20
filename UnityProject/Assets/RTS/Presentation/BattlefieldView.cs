@@ -49,9 +49,11 @@ namespace Rts.Presentation
 
         private bool IsVisibleNow(Vector3 position)
         {
-            if (latestFrame == null || latestFrame.Fog == null || fogCellSize <= 0f) return true;
+            // Fail safe: when the fog data cannot be used, nothing counts as visible, so an enemy is never
+            // interpolated through a cell that might be hidden (it stays at its latest reported position).
+            if (latestFrame == null || latestFrame.Fog == null || fogCellSize <= 0f) return false;
             var cells = latestFrame.Fog.VisibleCells;
-            if (cells.Count != fogWidth * fogHeight) return true;
+            if (cells.Count != fogWidth * fogHeight) return false;
             int x = Mathf.FloorToInt(position.x / fogCellSize), z = Mathf.FloorToInt(position.z / fogCellSize);
             if (x < 0 || z < 0 || x >= fogWidth || z >= fogHeight) return false;
             return cells[z * fogWidth + x];

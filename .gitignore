@@ -45,3 +45,7 @@
 # 購入者だけが持つ。購入した素材は Assets/ThirdParty/ に置き、リポジトリには入れない）
 /UnityProject/Assets/ThirdParty.meta
 /UnityProject/Assets/ThirdParty/
+
+# Python のキャッシュ
+__pycache__/
+*.pyc
