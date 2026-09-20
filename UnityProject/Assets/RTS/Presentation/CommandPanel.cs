@@ -127,9 +127,9 @@ namespace Rts.Presentation
                     var c = frame.Commands[i];
                     string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
                     string wait = "";
-                    long remaining = c.ApplyTick - frame.Tick;
-                    if (c.Status == CommandStatus.Interpreting) wait = " reserving, applies in " + Seconds(remaining);
-                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(remaining);
+                    // While interpreting there is no apply tick yet, so show how long the reply has been awaited.
+                    if (c.Status == CommandStatus.Interpreting) wait = " waiting for the reply (" + Seconds(frame.Tick - c.AcceptedTick) + ")";
+                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(c.ApplyTick - frame.Tick);
                     GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
                         "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
                 }

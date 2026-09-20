@@ -11,6 +11,7 @@ namespace Rts.Presentation
         private const float Fix64Scale = 65536f;
         private const float UnitModelScale = 2.2f;
         private const float CoreModelScale = 1.2f;
+        private const int MaxContactLabels = 8;
 
         [SerializeField] private int coreMaxHp = 3000;
         [SerializeField] private GameObject infantryModel;
@@ -489,11 +490,11 @@ namespace Rts.Presentation
                 long seconds = (latestFrame.Tick - contact.LastSeenTick) / 20;
                 string text;
                 if (contact.IsArmyContact)
-                    text = "~" + contact.EstimateMax + " in sight (army total unknown)";
+                    text = "~" + contact.EstimateMax + " seen, total unknown";
                 else if (contact.IsCurrentlyVisible)
                     continue;
                 else if (contact.IsStrengthUnknown)
-                    text = "strength unknown (" + seconds + "s ago)";
+                    text = "strength ? (" + seconds + "s ago)";
                 else
                     text = "~" + contact.EstimateMax + " (" + seconds + "s ago)" + (contact.IsUncertain ? "?" : "") + (contact.IsAbsentAtLastPosition ? " absent" : "");
                 labels.Add(new KeyValuePair<Vector3, string>(ToWorld(contact.LastPosition, 3f), text));
@@ -501,15 +502,25 @@ namespace Rts.Presentation
             return labels;
         }
 
+        private readonly List<Rect> drawnLabels = new List<Rect>();
+
         private void OnGUI()
         {
             var camera = Camera.main;
             if (camera == null) return;
+            drawnLabels.Clear();
             foreach (var label in BuildContactLabels())
             {
+                if (drawnLabels.Count >= MaxContactLabels) break;
                 var screen = camera.WorldToScreenPoint(label.Key);
                 if (screen.z <= 0f) continue;
-                GUI.Label(new Rect(screen.x - 90f, Screen.height - screen.y - 10f, 220f, 22f), label.Value);
+                var rect = new Rect(screen.x - 70f, Screen.height - screen.y - 10f, 180f, 20f);
+                // Contacts cluster together, so a label that would sit on top of another one is dropped.
+                bool overlaps = false;
+                foreach (var drawn in drawnLabels) if (drawn.Overlaps(rect)) { overlaps = true; break; }
+                if (overlaps) continue;
+                drawnLabels.Add(rect);
+                GUI.Label(rect, label.Value);
             }
         }
 
