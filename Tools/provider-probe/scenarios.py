@@ -58,6 +58,8 @@ def build(base):
     out["D_north_outnumbered"] = (d, {"retreat": "high"})
     e = own_outposts(near(base, 128, 96, 3))    # 北の自軍16体に対して敵は3体
     out["E_north_advantage"] = (e, {"retreat": "low"})
+    f = own_outposts(near(base, 128, 96, 16))   # 北の自軍16体に対して敵も16体（境界。期待は中間）
+    out["F_north_even"] = (f, {"retreat": "middle"})
     return out
 
 
