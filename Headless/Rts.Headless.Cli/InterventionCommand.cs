@@ -53,9 +53,11 @@ internal static class InterventionCommand
         int delay = options.TryGetValue("--delay", out var d) ? int.Parse(d, CultureInfo.InvariantCulture) : 0;
         var profile = AiTimingProfile.Parse(options.GetValueOrDefault("--ai-profile") ?? "default");
         long trigger = options.TryGetValue("--trigger-tick", out var tt) ? long.Parse(tt, CultureInfo.InvariantCulture) : -1;
+        ushort changeReserve = options.TryGetValue("--change-reserve", out var cr) ? ushort.Parse(cr, CultureInfo.InvariantCulture) : (ushort)500;
+        if (changeReserve > 1000) throw new InvalidDataException("--change-reserve must be 0..1000.");
         long ticks = long.Parse(options.TryGetValue("--ticks", out var t) ? t : throw new InvalidDataException("Missing --ticks."), CultureInfo.InvariantCulture);
 
-        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay, profile, trigger);
+        var result = InterventionRunner.Run(scenario, ticks, east, parsed, delay, profile, trigger, changeReserve);
         using (var file = File.Create(output))
         {
             var outcome = ReplayRunner.Record(file, scenario, result.Inputs, ticks, build, null, "none", east, delay, profile.Name);
