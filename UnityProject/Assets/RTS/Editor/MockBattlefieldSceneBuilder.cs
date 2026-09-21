@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using Rts.Contracts;
 using Rts.Presentation;
@@ -340,6 +341,40 @@ namespace Rts.Editor
             LogLive(host, view, "t1000");
             view.Apply(1f);
             Render(Path.Combine(outDir, "live_late.png"));
+        }
+
+        // Batch entry for stage 5: the same live match with every soldier repeated -crowdScale K times, played to each
+        // -crowdTicks T (comma separated) and captured, so the crowd can be judged by eye. Pack visuals follow -perfNoPack.
+        public static void CaptureCrowd()
+        {
+            var outDir = "D:/rts-verify/stage5/shots";
+            Directory.CreateDirectory(outDir);
+            var args = System.Environment.GetCommandLineArgs();
+            int scale = 12; var ticks = new List<int> { 60, 2200, 3000 }; bool noPack = false;
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-crowdScale" && i + 1 < args.Length) scale = int.Parse(args[i + 1]);
+                if (args[i] == "-crowdTicks" && i + 1 < args.Length)
+                {
+                    ticks.Clear();
+                    foreach (var t in args[i + 1].Split(',')) ticks.Add(int.Parse(t));
+                }
+                if (args[i] == "-perfNoPack") noPack = true;
+            }
+            LocalVisualPack.Disabled = noPack;
+            LiveMatchHost.ScenarioMultiplier = scale;
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var built = Populate(true);
+            var host = Object.FindFirstObjectByType<LiveMatchHost>();
+            host.Begin();
+            int stepped = 0;
+            foreach (var target in ticks)
+            {
+                while (stepped < target && !host.HasEnded) { host.StepOnce(); stepped++; }
+                LogLive(host, built.view, "crowd" + stepped);
+                built.view.Apply(1f);
+                Render(Path.Combine(outDir, "crowd_x" + scale + "_t" + stepped + ".png"));
+            }
         }
 
         private static void LogLive(LiveMatchHost host, BattlefieldView view, string label)
