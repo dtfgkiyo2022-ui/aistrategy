@@ -191,7 +191,8 @@ namespace Rts.Editor
         }
 
         // Batch entry: plays the live scene and reports the average frame time and the cost of rendering the Game camera.
-        // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first.
+        // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first;
+        // -perfScale K repeats every soldier K times (stage 5 measurement, 40 x K soldiers).
         // The camera cost is the CPU side of drawing (submission, skinning); the GPU is not measured.
         public static void PerfProbe()
         {
@@ -202,6 +203,7 @@ namespace Rts.Editor
             {
                 if (args[i] == "-perfNoPack") noPack = true;
                 if (args[i] == "-perfTicks" && i + 1 < args.Length) preTicks = int.Parse(args[i + 1]);
+                if (args[i] == "-perfScale" && i + 1 < args.Length) Rts.UnityHost.LiveMatchHost.ScenarioMultiplier = int.Parse(args[i + 1]);
             }
             LocalVisualPack.Disabled = noPack;
             EditorSceneManager.OpenScene(LiveScenePath);

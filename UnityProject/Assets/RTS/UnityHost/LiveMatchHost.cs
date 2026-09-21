@@ -57,9 +57,12 @@ namespace Rts.UnityHost
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
 
+        /// <summary>Measurement only (stage 5): repeats every soldier this many times. 1 is the normal match.</summary>
+        public static int ScenarioMultiplier = 1;
+
         public void Begin()
         {
-            var scenario = WeekTwoScenario.Create();
+            var scenario = ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
