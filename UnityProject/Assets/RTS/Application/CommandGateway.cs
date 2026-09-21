@@ -31,7 +31,10 @@ namespace Rts.Application
         }
         private readonly List<AutonomousRequest> autonomous = new List<AutonomousRequest>();
         private readonly List<UserPolicyIntent> autonomousTargets = new List<UserPolicyIntent>();
+        private readonly List<PollWatch> watches = new List<PollWatch>();
         public AiTimingProfile AiProfile { get; }
+        /// <summary>How often autonomous decisions are asked for. Ver.1 default: every allocation cycle.</summary>
+        public AutonomousPollSchedule PollSchedule { get; }
         private sealed class Arrival
         {
             internal Request Request;
@@ -48,10 +51,12 @@ namespace Rts.Application
         private readonly List<ScheduledInput> log = new List<ScheduledInput>();
         private ulong nextRequest = 1, nextCommand = 1, nextBatch = 1, nextLog = 1;
         private long tick;
-        public CommandGateway(Battle simulation, IPolicyProvider provider = null, AiTimingProfile profile = null)
+        public CommandGateway(Battle simulation, IPolicyProvider provider = null, AiTimingProfile profile = null,
+            AutonomousPollSchedule schedule = null)
         {
             this.simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
             this.provider = provider;
+            PollSchedule = schedule ?? AutonomousPollSchedule.EveryCycle;
             AiProfile = profile ?? (provider as DelayedPolicyProvider)?.Profile ?? AiTimingProfile.Default;
             if (provider is DelayedPolicyProvider delayed && delayed.Profile != AiProfile)
                 throw new ArgumentException("Gateway and provider must use the same AI profile.", nameof(profile));
@@ -112,6 +117,7 @@ namespace Rts.Application
             if (intent.Target.FactionId < 1 || intent.Target.FactionId > 2) throw new ArgumentException("Invalid faction.");
             if (autonomousTargets.Any(i => i.Target.Equals(intent.Target))) throw new ArgumentException("Target already registered.");
             autonomousTargets.Add(intent);
+            watches.Add(new PollWatch());
         }
         private void InvalidateAutonomous()
         {
@@ -122,17 +128,69 @@ namespace Rts.Application
         private void PollAutonomous()
         {
             InvalidateAutonomous();
+            // Allocation only runs on the 20 tick cycle, so asking off the cycle cannot change anything sooner.
             if (tick % 20 != 0) return;
-            foreach (var intent in autonomousTargets)
+            for (int i = 0; i < autonomousTargets.Count; i++)
             {
+                var intent = autonomousTargets[i];
+                var observation = simulation.Capture(intent.Target.FactionId).Observation;
+                // The watch is updated every cycle even when a request is already out, so a change that happens while
+                // the model is thinking is still waiting to be asked about once the answer comes back.
+                bool wanted = watches[i].Update(observation, tick, PollSchedule);
                 if (autonomous.Any(r => !r.Completed && r.Invalidated == ReasonCode.None && r.Snapshot.Scope.Equals(intent.Target))) continue;
+                if (!wanted) continue;
+                watches[i].Asked(tick);
                 var snapshot = new PolicyRequest(nextRequest, intent.Target.FactionId, intent.Target, tick,
-                    simulation.Capture(intent.Target.FactionId).Observation, simulation.Versions(intent.Target),
+                    observation, simulation.Versions(intent.Target),
                     checked(tick + AiProfile.DeadlineTicks), intent.Kind, intent.Goal);
                 nextRequest = checked(nextRequest + 1);
                 autonomous.Add(new AutonomousRequest { Snapshot = snapshot });
                 provider.Request(snapshot);
             }
+        }
+
+        /// <summary>
+        /// Remembers the part of one faction's observation the schedule reacts to. Everything here is an integer read
+        /// from the observation, so two runs of the same match reach the same decision.
+        /// </summary>
+        private sealed class PollWatch
+        {
+            private bool started;
+            private bool wants;
+            private long lastAskTick;
+            private int contacts;
+            private int coreHp = int.MaxValue;
+            private uint[] outpostIds = Array.Empty<uint>();
+            private uint[] outpostOwners = Array.Empty<uint>();
+
+            internal bool Update(FactionObservation observation, long tick, AutonomousPollSchedule schedule)
+            {
+                var ids = observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id).Select(o => o.Id).ToArray();
+                var owners = observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id)
+                    .Select(o => o.IsOwnerKnown ? o.OwnerFactionId : 0u).ToArray();
+                int hp = observation.Objectives.Where(o => o.Kind == GoalKind.Core && o.Id == observation.FactionId && o.IsHpKnown)
+                    .Select(o => o.Hp).DefaultIfEmpty(coreHp).First();
+                if (!started)
+                {
+                    // The opening ask sets the baseline; nothing before it counts as a change.
+                    started = true; wants = true;
+                }
+                else if (schedule.AsksEveryCycle) wants = true;
+                else
+                {
+                    if (observation.Contacts.Count > contacts) wants = true;
+                    else if (hp < coreHp) wants = true;
+                    else if (!ids.SequenceEqual(outpostIds) || !owners.SequenceEqual(outpostOwners)) wants = true;
+                    else if (checked(tick - lastAskTick) >= schedule.MaxIntervalTicks) wants = true;
+                }
+                contacts = observation.Contacts.Count;
+                coreHp = hp;
+                outpostIds = ids;
+                outpostOwners = owners;
+                return wants;
+            }
+
+            internal void Asked(long tick) { wants = false; lastAskTick = tick; }
         }
         private void Receive(PolicyReply reply)
         {
