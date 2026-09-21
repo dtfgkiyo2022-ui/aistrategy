@@ -10,6 +10,16 @@ using Rts.Contracts;
 namespace Rts.Providers
 {
     /// <summary>
+    /// A gateway answer that was not a success, carrying its status. HttpRequestException only carries one from .NET 5,
+    /// and Unity's runtime does not have that, so the status travels on this instead.
+    /// </summary>
+    public sealed class JevHttpException : Exception
+    {
+        public JevHttpException(int statusCode, string message) : base(message) { StatusCode = statusCode; }
+        public int StatusCode { get; }
+    }
+
+    /// <summary>
     /// Short reasons a call produced nothing, for the diagnostic log. They are deliberately coarse and fixed: a raw
     /// exception message could repeat the request, and the key must never reach a log.
     /// </summary>
@@ -31,7 +41,8 @@ namespace Rts.Providers
                 case OperationCanceledException _: return Timeout;
                 case InvalidOperationException _: return NoKey;
                 case FormatException _: return BadReply;
-                case HttpRequestException http: return http.StatusCode.HasValue ? "http-" + (int)http.StatusCode.Value : "http";
+                case JevHttpException gateway: return "http-" + gateway.StatusCode;
+                case HttpRequestException _: return "http";
                 default: return Unknown;
             }
         }

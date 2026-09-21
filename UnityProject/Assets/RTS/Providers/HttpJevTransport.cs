@@ -53,7 +53,7 @@ namespace Rts.Providers
                     // The status travels on the exception so the diagnostic log can say why a call failed; the body is
                     // never echoed, in case it repeats the request.
                     if (!response.IsSuccessStatusCode)
-                        throw new HttpRequestException("The AI gateway answered " + (int)response.StatusCode + ".", null, response.StatusCode);
+                        throw new JevHttpException((int)response.StatusCode, "The AI gateway answered " + (int)response.StatusCode + ".");
                     string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                     return Read(text);
                 }

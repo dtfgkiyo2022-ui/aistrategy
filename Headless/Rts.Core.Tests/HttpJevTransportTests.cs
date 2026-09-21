@@ -118,7 +118,8 @@ namespace Rts.Tests.Headless
         public void AFailureStatusIsAnExceptionThatDoesNotRepeatTheKeyOrTheBody(HttpStatusCode status)
         {
             var handler = new FakeHandler { Status = status, Reply = "{\"error\":\"" + Key + "\"}" };
-            var thrown = Assert.ThrowsAsync<HttpRequestException>(() => Make(handler).AskAsync(State, CancellationToken.None));
+            var thrown = Assert.ThrowsAsync<JevHttpException>(() => Make(handler).AskAsync(State, CancellationToken.None));
+            Assert.That(thrown.StatusCode, Is.EqualTo((int)status));
             Assert.That(thrown.Message, Does.Contain(((int)status).ToString()));
             Assert.That(thrown.Message, Does.Not.Contain(Key));
         }

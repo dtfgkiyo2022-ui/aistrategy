@@ -6,7 +6,8 @@
     "Rts.Simulation",
     "Rts.Replay",
     "Rts.Presentation",
-    "Rts.Contracts"
+    "Rts.Contracts",
+    "Rts.Providers"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
