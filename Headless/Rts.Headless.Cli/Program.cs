@@ -257,11 +257,13 @@ internal static class Program
         for(int i=0;i<count;i++)
         {
             if(left[i].Key!=right[i].Key)return "最初に異なるフェーズ: tick="+tick+" #"+(i+1)+" フェーズ名が食い違います left="+left[i].Key+" right="+right[i].Key;
-            if(left[i].Value!=right[i].Value)return "最初に異なるフェーズ: tick="+tick+" #"+(i+1)+" "+left[i].Key+" left="+left[i].Value[..16]+" right="+right[i].Value[..16];
+            // A diagnostic must not crash on the data it is meant to explain, so the hash is shortened defensively.
+            if(left[i].Value!=right[i].Value)return "最初に異なるフェーズ: tick="+tick+" #"+(i+1)+" "+left[i].Key+" left="+Short(left[i].Value)+" right="+Short(right[i].Value);
         }
         if(left.Count!=right.Count)return "最初に異なるフェーズ: tick="+tick+" #"+(count+1)+" 片方のtickがここで終わっています（left="+left.Count+"フェーズ right="+right.Count+"フェーズ）";
         return "最初に異なるフェーズ: なし（tick="+tick+" の全 "+left.Count+" フェーズが再実行では一致。この環境では再現しないため、ずれは記録元の環境で起きたものです）";
     }
+    private static string Short(string hash)=>hash==null?"(なし)":hash.Length<=16?hash:hash[..16];
     private static List<KeyValuePair<string,string>> Rerun(HashHeader header,string side,string supplied,string suppliedHash,long tick,string dir,BuildIdentity build,bool allow)
     {
         string path=header.ReplayHash==suppliedHash?supplied:header.ReplayPath;
