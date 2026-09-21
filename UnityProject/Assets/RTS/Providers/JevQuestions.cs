@@ -17,7 +17,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q6";
+        public const string Version = "q7";
 
         // The keys are Jev's; the game's own names are mapped in HttpJevTransport.
         public const string Json =
@@ -31,7 +31,7 @@ namespace Rts.Providers
             "\"outnumbering\":{\"type\":\"noul\"," +
             "\"instructions\":\"自軍の総兵数（myTotalSoldiers）は、観測できている敵兵数の上限（enemy.knownSoldiersAtMost）より多い。\"}," +
             "\"enemy_near_my_core\":{\"type\":\"noul\"," +
-            "\"instructions\":\"自分のコア（heldBy が me のコア）から40メートル以内に、敵の目撃（enemy.sightings）が少なくとも1つある。\"}," +
+            "\"instructions\":\"objectives のうち kind が \\\"core\\\" かつ heldBy が \\\"me\\\" である要素について、その nearestEnemyMeters が 40 以下である。その要素に nearestEnemyMeters がない場合、または該当する要素がない場合は偽とする。\"}," +
             "\"outpost_held_by_enemy\":{\"type\":\"noul\"," +
             "\"instructions\":\"objectives のうち kind が \\\"outpost\\\" である要素に限って見たとき、heldBy が \\\"the enemy\\\" であるものが少なくとも1つある。kind が \\\"core\\\" の要素は数えない。heldBy が \\\"nobody\\\" や \\\"unknown\\\" のものも数えない。\"}}";
     }

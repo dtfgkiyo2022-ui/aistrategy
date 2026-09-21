@@ -21,7 +21,7 @@ namespace Rts.Providers
     public static class JevState
     {
         /// <summary>Bumped whenever the content changes, because the answers are only comparable within one version.</summary>
-        public const string Version = "s3";
+        public const string Version = "s4";
 
         public static string Build(FactionObservation o)
         {
@@ -41,7 +41,7 @@ namespace Rts.Providers
                 sb.Append("{\"id\":").Append(a.Id).Append(",\"soldiers\":").Append(a.AliveCount)
                   .Append(",\"x\":").Append(M(a.Position.X)).Append(",\"z\":").Append(M(a.Position.Z))
                   .Append(",\"defends\":\"").Append(Name(names, a.HomeObjective.Kind, a.HomeObjective.Id)).Append('"');
-                long nearest = NearestEnemyMeters(a.Position, o.Contacts);
+                long nearest = NearestEnemyMetres(a.Position, o.Contacts);
                 if (nearest >= 0) sb.Append(",\"nearestEnemyMeters\":").Append(nearest);
                 sb.Append('}');
             }
@@ -80,6 +80,8 @@ namespace Rts.Providers
                   .Append(",\"x\":").Append(M(b.Position.X)).Append(",\"z\":").Append(M(b.Position.Z))
                   .Append(",\"heldBy\":\"").Append(Owner(b, o.FactionId)).Append('"');
                 if (b.IsHpKnown) sb.Append(",\"hp\":").Append(b.Hp);
+                long near = NearestEnemyMetres(b.Position, o.Contacts);
+                if (near >= 0) sb.Append(",\"nearestEnemyMeters\":").Append(near);
                 if (b.CapturingFactionId != 0 && b.CaptureDurationTicks > 0)
                     sb.Append(",\"beingTakenBy\":\"").Append(b.CapturingFactionId == o.FactionId ? "me" : "the enemy")
                       .Append("\",\"capturePercent\":").Append(100 * b.CaptureTicks / b.CaptureDurationTicks);
@@ -136,7 +138,13 @@ namespace Rts.Providers
 
         private static string Bool(bool value) => value ? "true" : "false";
 
-        private static long NearestEnemyMeters(SimPoint from, IReadOnlyList<EnemyContact> contacts)
+        /// <summary>
+        /// Whole metres to the closest sighting, or -1 when nothing has been seen. Public because a question about a
+        /// distance can only be answered by reading it, and the truth it is scored against has to be the same number:
+        /// measured, the two facts that could be read straight off the state were right 214 times out of 214, while
+        /// this one, which had to be worked out from coordinates, averaged 0.63 when it was true.
+        /// </summary>
+        public static long NearestEnemyMetres(SimPoint from, IReadOnlyList<EnemyContact> contacts)
         {
             long best = -1;
             foreach (var c in contacts)
