@@ -230,6 +230,54 @@ namespace Rts.Editor
             EditorApplication.EnterPlaymode();
         }
 
+        // Batch entry (match loop): plays a real match to its end, reports what the result overlay would say, presses
+        // "Play again" the way the button does, and checks the new match starts from tick 0 and runs. The overlay itself is
+        // IMGUI and cannot be photographed in batch mode, so this covers the logic and the restart, not how it looks.
+        public static void PlayMatchLoop()
+        {
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0;
+            int restartFrame = 0;
+            LiveMatchHost host = null;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        if (frames == 5)
+                        {
+                            host = Object.FindFirstObjectByType<LiveMatchHost>();
+                            host.Paused = true; // the loop below steps by hand, so the clock must not also step
+                            int guard = 0;
+                            while (!host.HasEnded && guard++ < 30000) host.StepOneTick();
+                            var frame = host.Frame;
+                            var outcome = MatchOutcome.Describe(frame.Result, host.ViewFactionId, frame.Tick);
+                            Debug.Log("[MatchLoop] ended=" + host.HasEnded + " tick=" + host.Tick + " outcome="
+                                + (outcome.HasValue ? outcome.Value.Headline + " | " + outcome.Value.Detail : "none"));
+                            host.RestartMatch();
+                            restartFrame = frames;
+                        }
+                        if (restartFrame > 0 && frames == restartFrame + 3)
+                        {
+                            Debug.Log("[MatchLoop] after restart: tick=" + host.Tick + " ended=" + host.HasEnded);
+                            host.Paused = false;
+                        }
+                        if (restartFrame > 0 && frames == restartFrame + 60)
+                        {
+                            Debug.Log("[MatchLoop] running again: tick=" + host.Tick + " ended=" + host.HasEnded);
+                            EditorApplication.ExitPlaymode();
+                        }
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && frames >= 60) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         // Batch entry: plays the live scene and reports the average frame time and the cost of rendering the Game camera.
         // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first;
         // -perfScale K repeats every soldier K times (stage 5 measurement, 40 x K soldiers).

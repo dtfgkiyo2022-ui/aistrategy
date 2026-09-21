@@ -13,7 +13,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -55,6 +55,9 @@ namespace Rts.UnityHost
             }
         }
 
+        /// <summary>The result overlay's "Play again": same delay and outside-AI setting, both sides back at tick 0.</summary>
+        public void RestartMatch() { matchRestartRequested = true; }
+
         public void StepOneTick() { StepOnce(); }
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
@@ -76,6 +79,7 @@ namespace Rts.UnityHost
         // What the switch on the panel controls. Off by default: a match that has not been told otherwise sends nothing.
         private bool externalEnabled;
         private bool externalRestartRequested;
+        private bool matchRestartRequested;
         private JevPolicyProvider jev;
         private HttpJevTransport jevTransport;
 
@@ -151,6 +155,7 @@ namespace Rts.UnityHost
             view.Push(simulation.Capture(viewFactionId));
             panel.Bind(port, viewFactionId, viewFactionId, view);
             panel.ExternalAi = this;
+            panel.MatchRestart = this;
         }
 
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>
@@ -171,10 +176,11 @@ namespace Rts.UnityHost
         private void Update()
         {
             if (simulation == null) return;
-            if (port.RestartRequested || externalRestartRequested)
+            if (port.RestartRequested || externalRestartRequested || matchRestartRequested)
             {
                 aiDelayTicks = port.DelayTicks;
                 externalRestartRequested = false;
+                matchRestartRequested = false;
                 accumulated = 0f;
                 Begin();
                 return;
