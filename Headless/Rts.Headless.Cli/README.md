@@ -122,7 +122,9 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll grace 
 
 - `SuccessRuns`：連続して成功した候補のまとまり（`FromTick`〜`ToTick`、件数）。島がそのまま見えます。`LongestSuccessRun` は最長のもの（同数なら早いほう）
 - `DecidedCount` / `SuccessCount` / `SuccessPermille`：**決着した候補**（成功か失敗）に対する成功率（‰）。未評価・未適用はその受付tickについて何も言えないため、率には入れません（まとまりは切ります）
-- `Bands`：走査した範囲を `--rate-bands N`（既定10）等分した帯ごとの成功率。`FirstBandBelow900Tick`・`FirstBandBelow500Tick` は、**決着があって**9割・5割を下回った最初の帯の開始tickです。決着ゼロの帯は `SuccessPermille = -1` とし、全滅と読み違えないようにします
+- `Bands`：走査した範囲を `--rate-bands N`（既定10）等分した帯ごとの成功率。決着ゼロの帯は `SuccessPermille = -1` とし、全滅と読み違えないようにします
+- `FirstBandAtLeast900Tick`：初めて9割に達した帯の開始tick。**頼れる区間の始まり**です
+- `FirstBandBelow900Tick`・`FirstBandBelow500Tick`：**その始まりより後で**9割・5割を下回った最初の帯。**頼れる区間の終わり**です。始まりより前の帯は見ません（撤退のように「早すぎる受付は全部失敗する」述語では、先頭の帯を答えても「いつ間に合わなくなるか」を表さないため）。9割に達する帯が1つもなければ、3つとも null です
 
 出力は `Immediate`（受付tick R でそのまま適用）と `Delayed`（理解・入力時間として **R + 60 tick** で適用。R自体は操作側の時計のまま記録）の2件です。各件に成功・失敗・未評価・未適用のR一覧、`LastSuccessTick`、`GraceTicks`（＝最終成功tick − 初観測tick）、`Verdict` が入ります。
 
