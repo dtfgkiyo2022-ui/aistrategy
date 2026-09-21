@@ -28,6 +28,19 @@ namespace Rts.Providers
     {
         public double MinFocusConfidence = 0.7;
         public double RetreatProbability = 0.7;
+        /// <summary>Consecutive failures that stop the calls; 0 never stops them.</summary>
+        public int FailuresBeforeStopping = 3;
+        /// <summary>How long the calls stay stopped, in ticks. 600 = 30 seconds at 20 Hz.</summary>
+        public long StoppedTicks = 600;
+    }
+
+    /// <summary>What the display shows about the external AI.</summary>
+    public enum JevAvailability
+    {
+        /// <summary>Calls are being made.</summary>
+        Calling = 0,
+        /// <summary>Too many failed in a row, so calls are paused; the automatic AI is running the match alone.</summary>
+        Paused = 1
     }
 
     /// <summary>
@@ -59,9 +72,33 @@ namespace Rts.Providers
         /// <summary>Calls that failed or came back unusable since the start; for the "AI suggestions unavailable" display.</summary>
         public int FailureCount => Volatile.Read(ref failures);
 
+        /// <summary>Whether calls are being made right now. Read on the game thread, after Request/Poll.</summary>
+        public JevAvailability Availability { get; private set; } = JevAvailability.Calling;
+
+        /// <summary>The tick calls resume at while <see cref="Availability"/> is Paused; 0 when they are not paused.</summary>
+        public long ResumeTick { get; private set; }
+
+        // Failures in a row on the game thread. A single good answer clears it: the gateway is what decides whether the
+        // orders are useful, and a model that answers at all is not the failure this is guarding against.
+        private int consecutiveFailures;
+
         public void Request(PolicyRequest request)
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
+            if (Availability == JevAvailability.Paused)
+            {
+                if (request.StartedTick < ResumeTick)
+                {
+                    // Still paused: answer straight away with nothing, so the gateway records a rejection at the usual
+                    // place and the match is never left waiting on a request that was never sent.
+                    done.Enqueue(new Completed { RequestId = request.RequestId });
+                    open[request.RequestId] = request;
+                    return;
+                }
+                Availability = JevAvailability.Calling;
+                ResumeTick = 0;
+                consecutiveFailures = 0;
+            }
             // The state is written out now, on the caller's thread, so nothing the simulation mutates later can leak in.
             string state = JevState.Build(request.Observation);
             open[request.RequestId] = request;
@@ -96,8 +133,16 @@ namespace Rts.Providers
                 open.Remove(c.RequestId);
                 var orders = c.Answers == null ? new List<PolicyOrder>() : Decide(request, c.Answers);
                 if (c.Answers != null && orders.Count == 0) Interlocked.Increment(ref failures);
+                if (c.Answers == null) consecutiveFailures++; else consecutiveFailures = 0;
                 // No usable answer is an empty reply: the gateway logs it as a rejection and the automatic AI carries on.
                 replies.Add(new PolicyReply(c.RequestId, tick, orders, ReasonCode.None));
+            }
+            if (Availability == JevAvailability.Calling && thresholds.FailuresBeforeStopping > 0
+                && consecutiveFailures >= thresholds.FailuresBeforeStopping)
+            {
+                // The tick is the game's clock, so a paused window is the same length however slow the machine is.
+                Availability = JevAvailability.Paused;
+                ResumeTick = checked(tick + thresholds.StoppedTicks);
             }
             return replies;
         }
