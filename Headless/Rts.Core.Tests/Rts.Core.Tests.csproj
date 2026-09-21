@@ -18,6 +18,8 @@
     <Compile Include="IndicatorTests.cs" />
     <Compile Include="PhaseDiffTests.cs" />
     <Compile Include="ScenarioScaleTests.cs" />
+    <Compile Include="JevProviderTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Providers/**/*.cs" Link="Providers/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="TuningRuleTests.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
