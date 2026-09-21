@@ -35,7 +35,7 @@ internal static class JevMatchCommand
         var thresholds = new JevThresholds
         {
             MinChoiceConfidence = Permille(options, "--min-confidence-permille", 700),
-            CommitReserve = Permille(options, "--commit-reserve-permille", 700)
+            RepeatSameOrderAfterTicks = Number(options, "--repeat-after", 1200),
         };
         var schedule = options.GetValueOrDefault("--schedule") switch
         {
@@ -53,8 +53,9 @@ internal static class JevMatchCommand
         // The raw answers go into this report, which is a diagnostic file, never into the replay.
         provider.Observe = record => answers.Add(new JevAnswerLine { Tick = record.Tick, Answered = record.Answered,
             Failure = record.Failure, Choice = record.Choice, ConfidencePermille = (long)(record.ChoiceConfidence * 1000),
-            CommitReservePermille = record.CommitReserve.HasValue ? (long)(record.CommitReserve.Value * 1000) : null,
-            OrderCount = record.OrderCount });
+            Facts = record.Facts.Select(f => new JevFactLine { Name = f.Name, Truth = f.Truth,
+                Permille = f.Probability < 0 ? null : (long?)(f.Probability * 1000) }).ToList(),
+            OrderCount = record.OrderCount, Suppressed = record.Suppressed, Understood = record.Understood });
         var simulation = new Rts.Simulation.Simulation(scenario);
         var gateway = new CommandGateway(simulation, provider, null, schedule);
         gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(faction, ScopeKind.All, 0), PolicyKind.Focus,
@@ -63,7 +64,7 @@ internal static class JevMatchCommand
 
         var report = new JevMatchReport { Build = build, ScenarioId = scenario.ScenarioId, FactionId = faction,
             Schedule = schedule.ToString(), MinConfidencePermille = Number(options, "--min-confidence-permille", 700),
-            CommitReservePermille = Number(options, "--commit-reserve-permille", 700) };
+ };
         // One allocation cycle is 20 ticks, which is one second at the scenario's 20 Hz.
         long cycleSleepMs = Number(options, "--cycle-sleep-ms", 1000);
         report.CycleSleepMs = cycleSleepMs;
@@ -84,6 +85,22 @@ internal static class JevMatchCommand
         report.WinnerFactionId = result.WinnerFactionId;
         report.FailedCalls = provider.FailureCount;
         report.DeclinedCalls = provider.DeclinedCount;
+        report.SuppressedCalls = provider.SuppressedCount;
+        report.NotUnderstoodCalls = provider.NotUnderstoodCount;
+        report.ComprehensionCorrect = provider.ComprehensionCorrect;
+        report.ComprehensionAnswered = provider.ComprehensionAnswered;
+        // How well each statement's answers matched its actual truth. Means far apart mean the answer tracks it.
+        report.FactScores = answers.SelectMany(a => a.Facts).Where(f => f.Permille.HasValue)
+            .GroupBy(f => f.Name).OrderBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new JevFactScore
+            {
+                Name = g.Key,
+                Answered = g.Count(),
+                StatementTrue = g.Count(f => f.Truth),
+                MeanWhenTrue = Mean(g.Where(f => f.Truth).Select(f => f.Permille.Value)),
+                MeanWhenFalse = Mean(g.Where(f => !f.Truth).Select(f => f.Permille.Value)),
+                Correct = g.Count(f => f.Truth == f.Permille.Value >= 500)
+            }).ToList();
         report.Answers = answers;
         // Grouped so the report says at a glance whether the gateway rate-limited us or the replies were unreadable.
         report.FailureReasons = answers.Where(a => a.Failure != null).GroupBy(a => a.Failure)
@@ -107,10 +124,17 @@ internal static class JevMatchCommand
         string json = JsonSerializer.Serialize(report, Json);
         if (output == null) Console.WriteLine(json); else File.WriteAllText(output, json);
         Console.Error.WriteLine("calls=" + (report.AcceptedProposals + report.RejectedProposals)
-            + " orders=" + report.AcceptedProposals + " declined=" + report.DeclinedCalls + " failed=" + report.FailedCalls
+            + " orders=" + report.AcceptedProposals + " declined=" + report.DeclinedCalls + " suppressed=" + report.SuppressedCalls + " notUnderstood=" + report.NotUnderstoodCalls + " failed=" + report.FailedCalls
+            + " facts=" + string.Join(",", report.FactScores.Select(f => f.Name + " " + f.Correct + "/" + f.Answered))
             + " reasons=" + string.Join(",", report.FailureReasons.Select(f => f.Reason + "x" + f.Count))
             + " inputTokens=" + report.InputTokens + " cost=$" + (report.CostMicroDollars / 1000000m).ToString("0.000000", CultureInfo.InvariantCulture));
         return 0;
+    }
+
+    private static long? Mean(IEnumerable<long> values)
+    {
+        var list = values.ToList();
+        return list.Count == 0 ? null : list.Sum() / list.Count;
     }
 
     private static long Number(Dictionary<string, string> options, string key, long fallback) =>
@@ -119,6 +143,25 @@ internal static class JevMatchCommand
     // The thresholds are doubles because the model answers in probabilities; the command line stays in integers.
     private static double Permille(Dictionary<string, string> options, string key, long fallback) =>
         Number(options, key, fallback) / 1000.0;
+}
+
+internal sealed class JevFactLine
+{
+    public string Name { get; set; } = "";
+    /// <summary>Null when the model did not answer this statement.</summary>
+    public long? Permille { get; set; }
+    public bool Truth { get; set; }
+}
+
+internal sealed class JevFactScore
+{
+    public string Name { get; set; } = "";
+    public int Answered { get; set; }
+    public int StatementTrue { get; set; }
+    /// <summary>Answers on the right side of a half, which is the coarsest possible reading of them.</summary>
+    public int Correct { get; set; }
+    public long? MeanWhenTrue { get; set; }
+    public long? MeanWhenFalse { get; set; }
 }
 
 internal sealed class JevFailureCount
@@ -134,8 +177,11 @@ internal sealed class JevAnswerLine
     public string Failure { get; set; }
     public string Choice { get; set; }
     public long ConfidencePermille { get; set; }
-    public long? CommitReservePermille { get; set; }
+    /// <summary>Each statement's answer and what it actually was, so the answers can be scored.</summary>
+    public List<JevFactLine> Facts { get; set; } = new();
     public int OrderCount { get; set; }
+    public bool Suppressed { get; set; }
+    public bool Understood { get; set; }
 }
 
 internal sealed class JevOrderLine
@@ -157,7 +203,6 @@ internal sealed class JevMatchReport
     /// <summary>Wall-clock milliseconds per 20 ticks. 1000 is real time; less throws away answers on the deadline.</summary>
     public long CycleSleepMs { get; set; }
     public long MinConfidencePermille { get; set; }
-    public long CommitReservePermille { get; set; }
     public long Ticks { get; set; }
     public bool HasEnded { get; set; }
     public uint WinnerFactionId { get; set; }
@@ -166,10 +211,17 @@ internal sealed class JevMatchReport
     public int FailedCalls { get; set; }
     /// <summary>Answered, but the answer cleared no threshold. Not an error.</summary>
     public int DeclinedCalls { get; set; }
+    /// <summary>Answered and decided, but the order repeated the one already in force.</summary>
+    public int SuppressedCalls { get; set; }
+    /// <summary>Replies held back because the recent factual answers were too often wrong.</summary>
+    public int NotUnderstoodCalls { get; set; }
+    public int ComprehensionCorrect { get; set; }
+    public int ComprehensionAnswered { get; set; }
     public long? FirstPausedTick { get; set; }
     public long InputTokens { get; set; }
     public long CostMicroDollars { get; set; }
     public List<JevOrderLine> Orders { get; set; } = new();
     public List<JevAnswerLine> Answers { get; set; } = new();
     public List<JevFailureCount> FailureReasons { get; set; } = new();
+    public List<JevFactScore> FactScores { get; set; } = new();
 }

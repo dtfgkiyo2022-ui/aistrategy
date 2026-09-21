@@ -61,7 +61,20 @@ namespace Rts.Tests.Headless
             return got;
         }
 
-        private static JevAnswers Focus(string choice, double confidence) => new JevAnswers { Choice = choice, ChoiceConfidence = confidence };
+        private static JevAnswers Focus(string choice, double confidence)
+        {
+            // Every order that goes anywhere but our own ground needs the "we outnumber them" statement to hold.
+            var answers = new JevAnswers { Choice = choice, ChoiceConfidence = confidence };
+            answers.Facts[JevFacts.Outnumbering] = 0.95;
+            return answers;
+        }
+
+        private static JevAnswers Fact(string name, double probability)
+        {
+            var answers = new JevAnswers();
+            answers.Facts[name] = probability;
+            return answers;
+        }
 
         [Test]
         public void PollAndRequestNeverWaitForTheNetwork()
@@ -124,21 +137,54 @@ namespace Rts.Tests.Headless
             }
         }
 
-        [TestCase(JevChoice.NorthOutpost, 1u)]
-        [TestCase(JevChoice.SouthOutpost, 2u)]
-        public void AConfidentChoiceBecomesAFocusOnThatOutpost(string choice, uint outpost)
+        [Test]
+        public void GroundThatIsAlreadyOursIsHeldRatherThanAttacked()
         {
+            // North is ours in this observation, so "the decisive point is the north outpost" means hold it.
             var transport = new ScriptedTransport();
             using (var provider = new JevPolicyProvider(transport))
             {
                 provider.Request(Request(1, 20));
-                transport.Wait(1).SetResult(Focus(choice, 0.8));
+                transport.Wait(1).SetResult(Focus(JevChoice.NorthOutpost, 0.8));
                 var order = PollUntil(provider, 1).Single().Orders.Single();
-                Assert.That(order.Kind, Is.EqualTo(PolicyKind.Focus));
-                Assert.That(order.Goal.Kind, Is.EqualTo(GoalKind.Outpost));
-                Assert.That(order.Goal.Id, Is.EqualTo(outpost));
+                Assert.That(order.Kind, Is.EqualTo(PolicyKind.Defend));
+                Assert.That(order.Goal, Is.EqualTo(new PolicyGoal(GoalKind.Outpost, 1, default(SimPoint))));
                 Assert.That(order.Source, Is.EqualTo(CommandSource.Ai));
                 Assert.That(order.Target, Is.EqualTo(new ScopeKey(1, ScopeKind.All, 0)));
+            }
+        }
+
+        [TestCase(0.95, PolicyKind.Focus)]
+        [TestCase(0.30, PolicyKind.Defend)]
+        public void GroundThatIsNotOursIsOnlyAttackedWhenWeOutnumberThem(double outnumbering, PolicyKind expected)
+        {
+            // South belongs to nobody here. Going to take it is worth it only if we are the larger force; otherwise
+            // the same answer means hold the line where it is.
+            var transport = new ScriptedTransport();
+            using (var provider = new JevPolicyProvider(transport))
+            {
+                provider.Request(Request(1, 20));
+                var answers = new JevAnswers { Choice = JevChoice.SouthOutpost, ChoiceConfidence = 0.9 };
+                answers.Facts[JevFacts.Outnumbering] = outnumbering;
+                transport.Wait(1).SetResult(answers);
+                var order = PollUntil(provider, 1).Single().Orders.Single();
+                Assert.That(order.Kind, Is.EqualTo(expected));
+                Assert.That(order.Goal.Id, Is.EqualTo(2u));
+            }
+        }
+
+        [Test]
+        public void ChargingTheEnemyCoreNeedsBothTheChoiceAndTheNumbers()
+        {
+            var seen = new KnownObjective(GoalKind.Core, 2, new SimPoint(Fix64.FromInt(240), Fix64.FromInt(64)), true, 2, true, 3000, 10);
+            var transport = new ScriptedTransport();
+            using (var provider = new JevPolicyProvider(transport))
+            {
+                provider.Request(Request(1, 20, Observation(20, seen)));
+                var outnumbered = new JevAnswers { Choice = JevChoice.EnemyCore, ChoiceConfidence = 0.99 };
+                outnumbered.Facts[JevFacts.Outnumbering] = 0.05;
+                transport.Wait(1).SetResult(outnumbered);
+                Assert.That(PollUntil(provider, 1).Single().Orders, Is.Empty, "confident about where, but we are the smaller force");
             }
         }
 
@@ -174,68 +220,20 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
-        public void ACommitReserveAtTheThresholdIssuesAReserveOrder()
+        public void ANoulAnswerIsRecordedButNeverBecomesAnOrder()
         {
+            // Two action-shaped noul questions in a row sat near 0.3 whatever the match did, so q3 asks a statement
+            // this code can check for itself and nothing is derived from the answer until that score says it tracks.
             var transport = new ScriptedTransport();
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { CommitReserve = 0.7 }))
+            var records = new List<JevAnswerRecord>();
+            using (var provider = new JevPolicyProvider(transport))
             {
-                // The two calls start on the thread pool, so the second request only goes out once the first has been
-                // sent; otherwise which answer belongs to which request is a race.
+                provider.Observe = records.Add;
                 provider.Request(Request(1, 20, Observation(20)));
-                var first = transport.Wait(1);
-                provider.Request(Request(2, 20, Observation(21)));
-                var second = transport.Wait(2);
-                first.SetResult(new JevAnswers { CommitReserve = 0.69 });
-                second.SetResult(new JevAnswers { CommitReserve = 0.70 });
-                var replies = PollUntil(provider, 2);
-                Assert.That(replies[0].Orders, Is.Empty);
-                Assert.That(replies[1].Orders.Single().Kind, Is.EqualTo(PolicyKind.MaintainReserve));
+                transport.Wait(1).SetResult(Fact(JevFacts.Outnumbering, 0.99));
+                Assert.That(PollUntil(provider, 1).Single().Orders, Is.Empty);
+                Assert.That(records.Single().Facts.Single(f => f.Name == JevFacts.Outnumbering).Probability, Is.EqualTo(0.99).Within(1e-9));
             }
-        }
-
-        [Test]
-        public void TheStateSentToTheModelIsFixedWhenTheRequestIsMade()
-        {
-            var transport = new ScriptedTransport();
-            using (var provider = new JevPolicyProvider(transport))
-            {
-                var request = Request(1, 20);
-                provider.Request(request);
-                string sent = transport.Wait(1) != null ? transport.States[0] : null;
-                Assert.That(sent, Is.EqualTo(JevState.Build(request.Observation)));
-                Assert.That(sent, Does.Contain("\"tick\":20").And.Contain("\"myTotalSoldiers\":8"));
-                // Meters must not depend on the machine's locale.
-                var previous = System.Globalization.CultureInfo.CurrentCulture;
-                try
-                {
-                    System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
-                    var half = new FactionObservation(1, 20, new[] { new OwnArmyView(1, 1, UnitKind.Infantry, new SimPoint(Fix64.FromRaw(1605632), Fix64.FromInt(96)), 8, default(PolicyGoal)) },
-                        Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), Array.Empty<KnownObjective>());
-                    Assert.That(JevState.Build(half), Does.Contain("\"x\":24.5"));
-                }
-                finally { System.Globalization.CultureInfo.CurrentCulture = previous; }
-            }
-        }
-
-        [Test]
-        public void AMatchKeepsRunningWhenEveryCallFails()
-        {
-            var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create());
-            var transport = new AlwaysFailingTransport();
-            using (var provider = new JevPolicyProvider(transport))
-            {
-                var gateway = new CommandGateway(sim, provider);
-                gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(1, ScopeKind.All, 0), PolicyKind.MaintainReserve, default(PolicyGoal),
-                    50, new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 100, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
-                for (int i = 0; i < 300; i++) { gateway.Step(); Thread.Sleep(1); }
-                Assert.That(sim.Capture(1).Result.IsFault, Is.False);
-                Assert.That(provider.FailureCount, Is.GreaterThan(0));
-            }
-        }
-
-        private sealed class AlwaysFailingTransport : IJevTransport
-        {
-            public Task<JevAnswers> AskAsync(string stateJson, CancellationToken cancel) => Task.FromException<JevAnswers>(new InvalidOperationException("offline"));
         }
     }
 }

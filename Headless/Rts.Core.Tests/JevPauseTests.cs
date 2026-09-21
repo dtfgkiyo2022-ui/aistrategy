@@ -28,8 +28,15 @@ namespace Rts.Tests.Headless
                 Interlocked.Increment(ref Calls);
                 return Fail
                     ? Task.FromException<JevAnswers>(new InvalidOperationException("offline"))
-                    : Task.FromResult(new JevAnswers { Choice = JevChoice.NorthOutpost, ChoiceConfidence = 0.9 });
+                    : Task.FromResult(Answer(JevChoice.NorthOutpost, 0.9));
             }
+        }
+
+        private static JevAnswers Answer(string choice, double confidence)
+        {
+            var answers = new JevAnswers { Choice = choice, ChoiceConfidence = confidence };
+            answers.Facts[JevFacts.Outnumbering] = 0.95;
+            return answers;
         }
 
         private static PolicyRequest Request(ulong id, long tick)
@@ -92,7 +99,7 @@ namespace Rts.Tests.Headless
                 transport.Fail = false;
                 var order = Round(provider, 3, 640).Orders.Single();
                 Assert.That(transport.Calls, Is.EqualTo(3), "the call resumes exactly at the resume tick");
-                Assert.That(order.Kind, Is.EqualTo(PolicyKind.Focus));
+                Assert.That(order.Kind, Is.EqualTo(PolicyKind.Defend), "the north outpost is ours in this observation");
                 Assert.That(provider.Availability, Is.EqualTo(JevAvailability.Calling));
                 Assert.That(provider.ResumeTick, Is.EqualTo(0));
             }

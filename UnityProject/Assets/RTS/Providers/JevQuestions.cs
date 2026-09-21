@@ -17,7 +17,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q2";
+        public const string Version = "q6";
 
         // The keys are Jev's; the game's own names are mapped in HttpJevTransport.
         public const string Json =
@@ -28,7 +28,11 @@ namespace Rts.Providers
             "\"south_outpost\":\"南の拠点。南の拠点が自分の所有でない、占領が進行中、または敵の目撃が南の拠点の近くにある\"," +
             "\"my_core\":\"自分のコア。自分のコアのHPが減っている、または敵の目撃が自分のコアの近くにある\"," +
             "\"enemy_core\":\"敵のコア。自分の総兵数が敵の推定上限を上回り、敵の目撃が自分のコアから遠い\"}}," +
-            "\"commit_reserve\":{\"type\":\"noul\"," +
-            "\"instructions\":\"今は予備を温存せず、手持ちの軍団をすべて前に出すべきである。判断の材料は、自軍の総兵数（myTotalSoldiers）と敵の推定兵数（knownSoldiersAtLeast／knownSoldiersAtMost）の差、目撃の新しさ（sightingAgeSeconds）、自分のコアのHPです。\"}}";
+            "\"outnumbering\":{\"type\":\"noul\"," +
+            "\"instructions\":\"自軍の総兵数（myTotalSoldiers）は、観測できている敵兵数の上限（enemy.knownSoldiersAtMost）より多い。\"}," +
+            "\"enemy_near_my_core\":{\"type\":\"noul\"," +
+            "\"instructions\":\"自分のコア（heldBy が me のコア）から40メートル以内に、敵の目撃（enemy.sightings）が少なくとも1つある。\"}," +
+            "\"outpost_held_by_enemy\":{\"type\":\"noul\"," +
+            "\"instructions\":\"objectives のうち kind が \\\"outpost\\\" である要素に限って見たとき、heldBy が \\\"the enemy\\\" であるものが少なくとも1つある。kind が \\\"core\\\" の要素は数えない。heldBy が \\\"nobody\\\" や \\\"unknown\\\" のものも数えない。\"}}";
     }
 }

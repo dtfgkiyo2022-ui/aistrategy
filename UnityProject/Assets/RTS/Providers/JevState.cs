@@ -21,7 +21,7 @@ namespace Rts.Providers
     public static class JevState
     {
         /// <summary>Bumped whenever the content changes, because the answers are only comparable within one version.</summary>
-        public const string Version = "s2";
+        public const string Version = "s3";
 
         public static string Build(FactionObservation o)
         {
@@ -73,7 +73,10 @@ namespace Rts.Providers
                 string name = b.Kind == GoalKind.Core
                     ? (b.IsOwnerKnown && b.OwnerFactionId == o.FactionId ? "my core" : "the enemy core")
                     : Name(names, b.Kind, b.Id);
+                // The kind is spelled out because a question that distinguishes outposts from cores can only do it by
+                // a word the state carries: relying on the name alone, an answer about outposts also matched the core.
                 sb.Append("{\"name\":\"").Append(name).Append('"')
+                  .Append(",\"kind\":\"").Append(b.Kind == GoalKind.Core ? "core" : "outpost").Append('"')
                   .Append(",\"x\":").Append(M(b.Position.X)).Append(",\"z\":").Append(M(b.Position.Z))
                   .Append(",\"heldBy\":\"").Append(Owner(b, o.FactionId)).Append('"');
                 if (b.IsHpKnown) sb.Append(",\"hp\":").Append(b.Hp);

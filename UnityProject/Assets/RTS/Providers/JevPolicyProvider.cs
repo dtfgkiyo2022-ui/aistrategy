@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -51,8 +52,8 @@ namespace Rts.Providers
         /// <summary>A <see cref="JevChoice"/> value, or null when the model did not choose one of them.</summary>
         public string Choice;
         public double ChoiceConfidence;
-        /// <summary>Probability that the reserve should be committed, when the noul question was answered.</summary>
-        public double? CommitReserve;
+        /// <summary>Each factual statement's probability, by <see cref="JevFacts"/> name. Missing means unanswered.</summary>
+        public Dictionary<string, double> Facts = new Dictionary<string, double>();
     }
 
     /// <summary>The network side. Real HTTP lives behind this so tests and replays never touch the network.</summary>
@@ -65,11 +66,38 @@ namespace Rts.Providers
     public sealed class JevThresholds
     {
         public double MinChoiceConfidence = 0.7;
-        public double CommitReserve = 0.7;
+
+        /// <summary>
+        /// How many of the last factual answers must be right before an order is issued at all, per thousand. The
+        /// statements are all things this code works out for itself, so getting them wrong means the model is not
+        /// reading the state - and then its one real judgement, where the match is being decided, is worth nothing.
+        /// 0 never gates.
+        /// </summary>
+        public int MinComprehensionPermille = 700;
+
+        /// <summary>How many recent factual answers the check looks at, and the fewest it will judge on.</summary>
+        public int ComprehensionWindow = 12;
+        public int ComprehensionMinimumAnswers = 6;
+
+        /// <summary>
+        /// How sure a factual statement has to be before the order table treats it as so. Measured answers to this
+        /// shape of question sat at 0.98 when true and 0.04 when false, so anything in the middle is unusual and is
+        /// treated as "not so".
+        /// </summary>
+        public double MinFactProbability = 0.7;
         /// <summary>Consecutive failures that stop the calls; 0 never stops them.</summary>
         public int FailuresBeforeStopping = 3;
         /// <summary>How long the calls stay stopped, in ticks. 600 = 30 seconds at 20 Hz.</summary>
         public long StoppedTicks = 600;
+
+        /// <summary>
+        /// An order the same as the one just issued is not issued again until this many ticks have passed. Repeating it
+        /// changes nothing in the match - the order runs until replaced - but each repeat costs a command id and a
+        /// supersede in the log. It is a delay rather than a ban because the provider is not told whether the gateway
+        /// accepted the order, so a suppressed order must eventually be tried again. 1200 = one minute at 20 Hz.
+        /// 0 never suppresses.
+        /// </summary>
+        public long RepeatSameOrderAfterTicks = 1200;
     }
 
     /// <summary>
@@ -86,8 +114,22 @@ namespace Rts.Providers
         public string Failure;
         public string Choice;
         public double ChoiceConfidence;
-        public double? CommitReserve;
+        /// <summary>What was answered for each statement, and what the statement actually was.</summary>
+        public List<JevFactAnswer> Facts = new List<JevFactAnswer>();
         public int OrderCount;
+        /// <summary>True when an order was derived but not issued, because it repeated the one already in force.</summary>
+        public bool Suppressed;
+        /// <summary>False when the recent factual answers were too often wrong, so no order was derived at all.</summary>
+        public bool Understood = true;
+    }
+
+    /// <summary>One statement: what the model said, and what it actually was.</summary>
+    public sealed class JevFactAnswer
+    {
+        public string Name;
+        /// <summary>-1 when the model did not answer this one.</summary>
+        public double Probability = -1;
+        public bool Truth;
     }
 
     /// <summary>What the display shows about the external AI.</summary>
@@ -135,6 +177,19 @@ namespace Rts.Providers
         /// counted apart from <see cref="FailureCount"/>.
         /// </summary>
         public int DeclinedCount { get; private set; }
+
+        /// <summary>Answers that would have repeated the order already in force, and so were not turned into one.</summary>
+        public int SuppressedCount { get; private set; }
+
+        /// <summary>Replies held back because the recent factual answers were too often wrong.</summary>
+        public int NotUnderstoodCount { get; private set; }
+
+        /// <summary>Right answers, and answers, among the statements in the current window.</summary>
+        public int ComprehensionCorrect { get; private set; }
+        public int ComprehensionAnswered { get; private set; }
+
+        // Whether each of the last few factual answers was right. Oldest first.
+        private readonly Queue<bool> comprehension = new Queue<bool>();
 
         /// <summary>
         /// Receives what the model answered, for the diagnostic log. The design keeps raw answers out of the replay, so
@@ -201,8 +256,13 @@ namespace Rts.Providers
             {
                 if (!open.TryGetValue(c.RequestId, out var request)) continue;
                 open.Remove(c.RequestId);
-                var orders = c.Answers == null ? new List<PolicyOrder>() : Decide(request, c.Answers);
-                if (c.Answers != null && orders.Count == 0) DeclinedCount++;
+                var facts = FactAnswers(c.Answers, request.Observation);
+                bool understood = Score(facts);
+                bool suppressed = false;
+                var orders = c.Answers == null || !understood ? new List<PolicyOrder>() : Decide(request, c.Answers, tick, out suppressed);
+                if (c.Answers != null && !understood) NotUnderstoodCount++;
+                if (c.Answers != null && understood && orders.Count == 0 && !suppressed) DeclinedCount++;
+                if (suppressed) SuppressedCount++;
                 // A request short-circuited by the pause never reached the gateway, so it says nothing about whether
                 // the gateway is back; only a real attempt moves the run of failures.
                 if (c.Answers == null && c.Failure != JevFailure.Paused) consecutiveFailures++;
@@ -215,8 +275,10 @@ namespace Rts.Providers
                     Failure = c.Failure,
                     Choice = c.Answers?.Choice,
                     ChoiceConfidence = c.Answers == null ? 0 : c.Answers.ChoiceConfidence,
-                    CommitReserve = c.Answers?.CommitReserve,
-                    OrderCount = orders.Count
+                    Facts = facts,
+                    Understood = understood,
+                    OrderCount = orders.Count,
+                    Suppressed = suppressed
                 });
                 // No usable answer is an empty reply: the gateway logs it as a rejection and the automatic AI carries on.
                 replies.Add(new PolicyReply(c.RequestId, tick, orders, ReasonCode.None));
@@ -232,42 +294,102 @@ namespace Rts.Providers
         }
 
         /// <summary>
-        /// The answer table (design sketch section 4). At most one order per reply: two orders in one reply would make
-        /// it impossible to say afterwards which answer changed the match, and the point of this is to find out.
+        /// The answer table (design sketch section 4). One order per reply at most, and only from the choice question:
+        /// the noul answer is recorded and scored, not acted on (see JevQuestions).
         /// </summary>
-        private List<PolicyOrder> Decide(PolicyRequest request, JevAnswers answers)
+        private List<PolicyOrder> Decide(PolicyRequest request, JevAnswers answers, long tick, out bool suppressed)
         {
+            suppressed = false;
             var orders = new List<PolicyOrder>();
             if (answers.Choice != null && answers.ChoiceConfidence >= thresholds.MinChoiceConfidence)
             {
                 var observation = request.Observation;
+                // The choice says where; the statements say whether this faction can afford to push there. Attacking
+                // while the enemy is the larger force is the one combination worth ruling out, so a place that is not
+                // already mine is only attacked when the model says we outnumber them.
+                bool strong = Believes(answers, JevFacts.Outnumbering, thresholds.MinFactProbability);
                 switch (answers.Choice)
                 {
                     case JevChoice.NorthOutpost:
                     case JevChoice.SouthOutpost:
+                    {
                         // The state names north and south by position, so the order has to resolve them the same way.
                         uint outpost = JevState.OutpostId(observation, answers.Choice == JevChoice.NorthOutpost);
-                        if (outpost != 0) orders.Add(Order(request, PolicyKind.Focus, new PolicyGoal(GoalKind.Outpost, outpost, default(SimPoint))));
+                        if (outpost == 0) break;
+                        bool mine = observation.Objectives.Any(b => b.Kind == GoalKind.Outpost && b.Id == outpost
+                            && b.IsOwnerKnown && b.OwnerFactionId == observation.FactionId);
+                        // Hold what is already ours when we are the smaller force; go and take it when we are not.
+                        var kind = mine || !strong ? PolicyKind.Defend : PolicyKind.Focus;
+                        orders.Add(Order(request, kind, new PolicyGoal(GoalKind.Outpost, outpost, default(SimPoint))));
                         break;
+                    }
                     case JevChoice.MyCore:
-                        uint mine = CoreId(observation, own: true);
-                        if (mine != 0) orders.Add(Order(request, PolicyKind.Defend, new PolicyGoal(GoalKind.Core, mine, default(SimPoint))));
+                        uint mineCore = CoreId(observation, own: true);
+                        if (mineCore != 0) orders.Add(Order(request, PolicyKind.Defend, new PolicyGoal(GoalKind.Core, mineCore, default(SimPoint))));
                         break;
                     case JevChoice.EnemyCore:
                         uint theirs = CoreId(observation, own: false);
-                        // An enemy core that has not been seen cannot be named, so no order is issued.
-                        if (theirs != 0) orders.Add(Order(request, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, theirs, default(SimPoint))));
+                        // An enemy core that has not been seen cannot be named, and charging it while outnumbered is
+                        // the mistake this table exists to avoid, so both conditions have to hold.
+                        if (theirs != 0 && strong) orders.Add(Order(request, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, theirs, default(SimPoint))));
                         break;
                 }
             }
-            if (orders.Count == 0 && answers.CommitReserve.HasValue && answers.CommitReserve.Value >= thresholds.CommitReserve)
+            if (orders.Count == 1)
             {
-                // Holding nothing back. MaintainReserve is a different field from Focus, so it would not have replaced
-                // the choice above; it is second only so that one reply changes one thing.
-                orders.Add(Order(request, PolicyKind.MaintainReserve, default(PolicyGoal)));
+                string key = orders[0].Kind + "/" + orders[0].Goal.Kind + ":" + orders[0].Goal.Id;
+                if (thresholds.RepeatSameOrderAfterTicks > 0 && key == lastOrderKey
+                    && checked(tick - lastOrderTick) < thresholds.RepeatSameOrderAfterTicks)
+                {
+                    suppressed = true;
+                    orders.Clear();
+                }
+                else { lastOrderKey = key; lastOrderTick = tick; }
             }
             return orders;
         }
+
+        // The last order actually handed back, so an answer that only repeats it can be recognised.
+        private string lastOrderKey;
+        private long lastOrderTick;
+
+        /// <summary>Folds this reply's factual answers into the window and says whether the model is still reading it.</summary>
+        private bool Score(List<JevFactAnswer> facts)
+        {
+            foreach (var f in facts)
+            {
+                if (f.Probability < 0) continue;
+                // A half is the coarsest possible reading, and the measured answers sit at 0.04 and 0.98, so nothing
+                // real is near the line.
+                comprehension.Enqueue(f.Truth == f.Probability >= 0.5);
+                while (comprehension.Count > Math.Max(1, thresholds.ComprehensionWindow)) comprehension.Dequeue();
+            }
+            ComprehensionAnswered = comprehension.Count;
+            int correct = 0;
+            foreach (bool right in comprehension) if (right) correct++;
+            ComprehensionCorrect = correct;
+            if (thresholds.MinComprehensionPermille <= 0) return true;
+            // Too few answers to judge on yet: the model gets the benefit of the doubt rather than the match losing it.
+            if (comprehension.Count < thresholds.ComprehensionMinimumAnswers) return true;
+            return 1000 * correct / comprehension.Count >= thresholds.MinComprehensionPermille;
+        }
+
+        private static List<JevFactAnswer> FactAnswers(JevAnswers answers, FactionObservation observation)
+        {
+            var list = new List<JevFactAnswer>();
+            // Walked in a fixed order so the diagnostic log reads the same way every time.
+            foreach (string name in JevFacts.All)
+                list.Add(new JevFactAnswer
+                {
+                    Name = name,
+                    Probability = answers != null && answers.Facts.TryGetValue(name, out var p) ? p : -1,
+                    Truth = JevFacts.Truth(name, observation)
+                });
+            return list;
+        }
+
+        private static bool Believes(JevAnswers answers, string fact, double threshold) =>
+            answers.Facts.TryGetValue(fact, out var p) && p >= threshold;
 
         private static uint CoreId(FactionObservation o, bool own)
         {

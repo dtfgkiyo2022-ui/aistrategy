@@ -41,7 +41,7 @@ namespace Rts.Tests.Headless
         private const string GoodReply =
             "{\"model\":\"typesafe/jev-latest\",\"answers\":{" +
             "\"decisive_point\":{\"choice\":\"enemy_core\",\"probabilities\":{\"north_outpost\":0.1,\"south_outpost\":0.1,\"my_core\":0.0,\"enemy_core\":0.8},\"confidence\":0.8}," +
-            "\"commit_reserve\":{\"noul\":0.42}},\"usage\":{\"input_tokens\":1234,\"output_tokens\":12}}";
+            "\"outnumbering\":{\"noul\":0.42},\"enemy_near_my_core\":{\"noul\":0.03},\"outpost_held_by_enemy\":{\"noul\":0.9}},\"usage\":{\"input_tokens\":1234,\"output_tokens\":12}}";
 
         private static HttpJevTransport Make(FakeHandler handler, Func<string> key = null, TimeSpan? timeout = null) =>
             new HttpJevTransport(key ?? (() => Key), handler, timeout: timeout);
@@ -67,8 +67,8 @@ namespace Rts.Tests.Headless
             Assert.That(body["model"], Is.EqualTo(HttpJevTransport.DefaultModel));
             Assert.That(((Dictionary<string, object>)body["state"])["tick"], Is.EqualTo(20d));
             var questions = (Dictionary<string, object>)body["questions"];
-            Assert.That(questions.Keys, Is.EquivalentTo(new[] { "decisive_point", "commit_reserve" }));
-            Assert.That(JevQuestions.Version, Is.EqualTo("q2"), "a change of wording is a change of behaviour and must change the version");
+            Assert.That(questions.Keys, Is.EquivalentTo(new[] { "decisive_point" }.Concat(JevFacts.All).ToArray()));
+            Assert.That(JevQuestions.Version, Is.EqualTo("q6"), "a change of wording is a change of behaviour and must change the version");
         }
 
         [Test]
@@ -78,7 +78,7 @@ namespace Rts.Tests.Headless
             var answers = await Make(handler).AskAsync(State, CancellationToken.None);
             Assert.That(answers.Choice, Is.EqualTo(JevChoice.EnemyCore));
             Assert.That(answers.ChoiceConfidence, Is.EqualTo(0.8).Within(1e-9));
-            Assert.That(answers.CommitReserve, Is.EqualTo(0.42).Within(1e-9));
+            Assert.That(answers.Facts[JevFacts.Outnumbering], Is.EqualTo(0.42).Within(1e-9));
         }
 
         [TestCase("north_outpost", JevChoice.NorthOutpost)]
@@ -98,8 +98,8 @@ namespace Rts.Tests.Headless
             Assert.That(unknown.Choice, Is.Null);
             var noConfidence = await Make(new FakeHandler { Reply = "{\"answers\":{\"decisive_point\":{\"choice\":\"enemy_core\"}}}" }).AskAsync(State, CancellationToken.None);
             Assert.That(noConfidence.ChoiceConfidence, Is.EqualTo(0));
-            var outOfRange = await Make(new FakeHandler { Reply = "{\"answers\":{\"commit_reserve\":{\"noul\":1.5}}}" }).AskAsync(State, CancellationToken.None);
-            Assert.That(outOfRange.CommitReserve, Is.Null);
+            var outOfRange = await Make(new FakeHandler { Reply = "{\"answers\":{\"outnumbering\":{\"noul\":1.5}}}" }).AskAsync(State, CancellationToken.None);
+            Assert.That(outOfRange.Facts, Is.Empty);
         }
 
         [Test]
@@ -154,7 +154,8 @@ namespace Rts.Tests.Headless
         [Test]
         public async Task TheProviderTurnsAConfidentAnswerIntoAnOrderThroughTheRealTransport()
         {
-            var handler = new FakeHandler { Reply = GoodReply };
+            // The enemy core is only charged when the "we outnumber them" statement holds too.
+            var handler = new FakeHandler { Reply = GoodReply.Replace("\"outnumbering\":{\"noul\":0.42}", "\"outnumbering\":{\"noul\":0.95}") };
             using (var provider = new JevPolicyProvider(Make(handler), new JevThresholds { MinChoiceConfidence = 0.7 }))
             {
                 var enemyCore = new KnownObjective(GoalKind.Core, 2, new SimPoint(Fix64.FromInt(240), Fix64.FromInt(64)), true, 2, true, 3000, 10);
@@ -187,9 +188,9 @@ namespace Rts.Tests.Headless
                 });
             var answers = await transport.AskAsync(JevState.Build(observation), CancellationToken.None);
             TestContext.Out.WriteLine("live: " + clock.ElapsedMilliseconds + " ms choice=" + answers.Choice + " confidence=" + answers.ChoiceConfidence
-                + " commitReserve=" + (answers.CommitReserve.HasValue ? answers.CommitReserve.Value.ToString("0.00") : "(none)") + " inputTokens=" + transport.InputTokens);
+                + " facts=" + string.Join(" ", answers.Facts.Select(f => f.Key + "=" + f.Value.ToString("0.00"))) + " inputTokens=" + transport.InputTokens);
             Assert.That(answers.Choice, Is.AnyOf(JevChoice.NorthOutpost, JevChoice.SouthOutpost, JevChoice.MyCore, JevChoice.EnemyCore));
-            Assert.That(answers.CommitReserve, Is.Not.Null);
+            Assert.That(answers.Facts.Keys, Is.EquivalentTo(JevFacts.All));
         }
 
         [Test]

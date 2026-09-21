@@ -75,9 +75,10 @@ namespace Rts.Providers
                 if (p.TryGetValue("confidence", out var confidence) && confidence is double c) result.ChoiceConfidence = c;
                 // A missing confidence stays 0, so an answer without one never clears the threshold.
             }
-            if (answers.TryGetValue("commit_reserve", out var commit) && commit is Dictionary<string, object> r
-                && r.TryGetValue("noul", out var noul) && noul is double n && n >= 0 && n <= 1)
-                result.CommitReserve = n;
+            foreach (string fact in JevFacts.All)
+                if (answers.TryGetValue(fact, out var value) && value is Dictionary<string, object> r
+                    && r.TryGetValue("noul", out var noul) && noul is double n && n >= 0 && n <= 1)
+                    result.Facts[fact] = n;
             return result;
         }
 
