@@ -10,21 +10,6 @@ using System.Threading.Tasks;
 namespace Rts.Providers
 {
     /// <summary>
-    /// The questions sent with every state. The wording is versioned: in the measurements (#87) the wording of a
-    /// question moved the answer a lot, so a change of wording is a change of behaviour and must change the version.
-    /// </summary>
-    public static class JevQuestions
-    {
-        public const string Version = "q1";
-
-        // The choice keys are Jev's; the game's own names ("north", "south", "core") are mapped in HttpJevTransport.
-        public const string Json =
-            "{\"focus\":{\"type\":\"choice\",\"instructions\":\"この陣営が次に重点を置く目標を選んでください。\"," +
-            "\"criteria\":{\"north_outpost\":\"北の拠点を守る、または取る\",\"south_outpost\":\"南の拠点を守る、または取る\",\"enemy_core\":\"敵のコアを攻める\"}}," +
-            "\"retreat\":{\"type\":\"noul\",\"instructions\":\"北の部隊は今すぐ撤退すべきである。\"}}";
-    }
-
-    /// <summary>
     /// Talks to the AI gateway (POST /v1/systemone). The key comes from a supplied function (an environment variable in
     /// the game host) and is only ever placed in the Authorization header: never in a message, a log or the state.
     /// Any failure (no key, timeout, non-2xx, unreadable reply) is an exception, which the provider turns into "no order".
@@ -65,7 +50,10 @@ namespace Rts.Providers
                 using (var response = await client.SendAsync(request, cancel).ConfigureAwait(false))
                 {
                     // The status is enough to explain a failure; the body is not echoed, in case it repeats the request.
-                    if (!response.IsSuccessStatusCode) throw new HttpRequestException("The AI gateway answered " + (int)response.StatusCode + ".");
+                    // The status travels on the exception so the diagnostic log can say why a call failed; the body is
+                    // never echoed, in case it repeats the request.
+                    if (!response.IsSuccessStatusCode)
+                        throw new HttpRequestException("The AI gateway answered " + (int)response.StatusCode + ".", null, response.StatusCode);
                     string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                     return Read(text);
                 }
@@ -81,15 +69,16 @@ namespace Rts.Providers
             var answers = root.TryGetValue("answers", out var a) ? a as Dictionary<string, object> : null;
             if (answers == null) throw new FormatException("The reply has no answers.");
             var result = new JevAnswers();
-            if (answers.TryGetValue("focus", out var focus) && focus is Dictionary<string, object> f)
+            if (answers.TryGetValue("decisive_point", out var point) && point is Dictionary<string, object> p)
             {
-                result.Focus = Game(f.TryGetValue("choice", out var choice) ? choice as string : null);
-                if (f.TryGetValue("confidence", out var confidence) && confidence is double c) result.FocusConfidence = c;
+                result.Choice = Game(p.TryGetValue("choice", out var choice) ? choice as string : null);
+                if (p.TryGetValue("confidence", out var confidence) && confidence is double c) result.ChoiceConfidence = c;
                 // A missing confidence stays 0, so an answer without one never clears the threshold.
             }
-            if (answers.TryGetValue("retreat", out var retreat) && retreat is Dictionary<string, object> r
-                && r.TryGetValue("noul", out var noul) && noul is double p && p >= 0 && p <= 1)
-                result.RetreatProbability = p;
+            foreach (string fact in JevFacts.All)
+                if (answers.TryGetValue(fact, out var value) && value is Dictionary<string, object> r
+                    && r.TryGetValue("noul", out var noul) && noul is double n && n >= 0 && n <= 1)
+                    result.Facts[fact] = n;
             return result;
         }
 
@@ -97,9 +86,10 @@ namespace Rts.Providers
         {
             switch (choice)
             {
-                case "north_outpost": return "north";
-                case "south_outpost": return "south";
-                case "enemy_core": return "core";
+                case "north_outpost": return JevChoice.NorthOutpost;
+                case "south_outpost": return JevChoice.SouthOutpost;
+                case "my_core": return JevChoice.MyCore;
+                case "enemy_core": return JevChoice.EnemyCore;
                 default: return null; // unknown or missing: no choice
             }
         }

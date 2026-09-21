@@ -6,7 +6,11 @@
     <Nullable>disable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../Rts.Core/Rts.Core.csproj" /></ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />
+    <!-- The external-model provider. It is not part of the deterministic core, so it is linked here, not in Rts.Core. -->
+    <Compile Include="../../UnityProject/Assets/RTS/Providers/**/*.cs" Link="Providers/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
   <!-- Hash the sources shipped with this binary, even if the checkout is subsequently edited. -->
   <ItemGroup>
     <EmbeddedResource Include="../../UnityProject/Assets/RTS/Contracts/**/*.cs" LogicalName="Source/UnityProject/Assets/RTS/Contracts/%(RecursiveDir)%(Filename)%(Extension)" />

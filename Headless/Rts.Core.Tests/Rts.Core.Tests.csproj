@@ -21,8 +21,10 @@
     <Compile Include="JevProviderTests.cs" />
     <Compile Include="HttpJevTransportTests.cs" />
     <Compile Include="JevPauseTests.cs" />
+    <Compile Include="JevStateTests.cs" />
+    <Compile Include="JevRepeatTests.cs" />
+    <Compile Include="JevComprehensionTests.cs" />
     <Compile Include="AutonomousPollScheduleTests.cs" />
-    <Compile Include="../../UnityProject/Assets/RTS/Providers/**/*.cs" Link="Providers/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="TuningRuleTests.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
