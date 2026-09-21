@@ -181,7 +181,7 @@ Issue #59 で「コアが壊されるのは救援が間に合わないため」�
 | 320 | 20000 | 7.6 ms | 19.1 | 23.2 | 32.7 | なし |
 | 480 | 20000 | 12.3 ms | 24.0 | 27.8 | **47.2** | なし |
 
-480体の内訳：Canonical 6.5、AI 2.2、Visibility 1.9、EnemySearchCombat 1.1。**480体の最大 47.2ms は予算 50ms にほぼ余裕がない**（平均・p99 は余裕がある）。CLI（.NET）の値で、エディタ（Mono）ではさらに重くなる見込み。**Unity エディタでの測定は未実施**：`MockBattlefieldSceneBuilder.PerfProbe` は `WeekTwoScenario`（40体）固定で、Unity 側にシナリオ JSON を読む仕組みがない。測るには `LiveMatchHost`（UnityHost、相方の担当範囲）にシナリオを差し込む変更が要るので、オーナーの判断待ち。
+480体の内訳：Canonical 6.5、AI 2.2、Visibility 1.9、EnemySearchCombat 1.1。**480体の最大 47.2ms は予算 50ms にほぼ余裕がない**（平均・p99 は余裕がある）。CLI（.NET）の値。エディタ（Mono）での測定は次の項（重くなる見込みだったが、ほぼ同じだった）。
 
 **Unity エディタ（Mono）での測定（2026-09-21、素材なし `-perfNoPack`、3000 tick 先送り、Astra 未レビュー）**
 
