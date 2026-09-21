@@ -68,7 +68,7 @@ namespace Rts.Tests.Headless
             Assert.That(((Dictionary<string, object>)body["state"])["tick"], Is.EqualTo(20d));
             var questions = (Dictionary<string, object>)body["questions"];
             Assert.That(questions.Keys, Is.EquivalentTo(new[] { "decisive_point" }.Concat(JevFacts.All).ToArray()));
-            Assert.That(JevQuestions.Version, Is.EqualTo("q6"), "a change of wording is a change of behaviour and must change the version");
+            Assert.That(JevQuestions.Version, Is.EqualTo("q7"), "a change of wording is a change of behaviour and must change the version");
         }
 
         [Test]

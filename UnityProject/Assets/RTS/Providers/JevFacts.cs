@@ -46,13 +46,9 @@ namespace Rts.Providers
                 {
                     var core = o.Objectives.FirstOrDefault(b => b.Kind == GoalKind.Core && b.IsOwnerKnown && b.OwnerFactionId == o.FactionId);
                     if (core.Kind != GoalKind.Core) return false; // this faction cannot see its own core: say nothing
-                    foreach (var c in o.Contacts)
-                    {
-                        long dx = (core.Position.X.Raw - c.LastPosition.X.Raw) / 65536;
-                        long dz = (core.Position.Z.Raw - c.LastPosition.Z.Raw) / 65536;
-                        if (dx * dx + dz * dz <= (long)NearCoreMetres * NearCoreMetres) return true;
-                    }
-                    return false;
+                    // The same number the state prints, so the answer is scored against what the model was shown.
+                    long metres = JevState.NearestEnemyMetres(core.Position, o.Contacts);
+                    return metres >= 0 && metres <= NearCoreMetres;
                 }
                 case OutpostHeldByEnemy:
                     // "not mine" was ambiguous: the state also has outposts held by nobody, and the answers to that

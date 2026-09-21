@@ -41,7 +41,7 @@ namespace Rts.Tests.Headless
         {
             var state = Parse(Observation());
             Assert.That(state["stateVersion"], Is.EqualTo(JevState.Version));
-            Assert.That(JevState.Version, Is.EqualTo("s3"), "a change of content must change the version, or answers stop being comparable");
+            Assert.That(JevState.Version, Is.EqualTo("s4"), "a change of content must change the version, or answers stop being comparable");
         }
 
         [Test]
@@ -144,6 +144,34 @@ namespace Rts.Tests.Headless
             var army = (Dictionary<string, object>)((List<object>)state["myArmies"])[0];
             Assert.That(army["defends"], Is.EqualTo("the north outpost"));
             Assert.That(army["nearestEnemyMeters"], Is.EqualTo(36d), "the army at (24,96) is 36 m from (24,60), not 36 m from the other one");
+        }
+
+        [Test]
+        public void EachObjectiveAlsoCarriesHowCloseTheNearestSightingIs()
+        {
+            // A question about a distance can only be answered by reading one: when the state made the model work it
+            // out from coordinates, that answer averaged 0.63 where it was true, against 0.98 for the readable facts.
+            var state = Parse(Observation(
+                contacts: new[] { Contact(16, 96, true, 1200, 4, 6) },
+                objectives: new[] { Core(1, 1, 3000), Outpost(1, 96, true, 1), Outpost(2, 32, true, 0) }));
+            var core = (Dictionary<string, object>)((List<object>)state["objectives"])[0];
+            Assert.That(core["name"], Is.EqualTo("my core"));
+            Assert.That(core["nearestEnemyMeters"], Is.EqualTo(32d), "the core at (16,64) is 32 m from (16,96)");
+        }
+
+        [Test]
+        public void TheDistanceTheStateShowsIsTheOneTheAnswerIsScoredAgainst()
+        {
+            // Just inside and just outside the 40 m the question names. A truth worked out a different way from the
+            // printed number would mark a correct answer wrong at the edge.
+            foreach (var (z, expected) in new[] { (104, true), (105, false) })
+            {
+                var observation = Observation(contacts: new[] { Contact(16, z, true, 1200, 4, 6) },
+                    objectives: new[] { Core(1, 1, 3000) });
+                var core = (Dictionary<string, object>)((List<object>)Parse(observation)["objectives"])[0];
+                Assert.That((double)core["nearestEnemyMeters"] <= JevFacts.NearCoreMetres, Is.EqualTo(expected), "z=" + z);
+                Assert.That(JevFacts.Truth(JevFacts.EnemyNearMyCore, observation), Is.EqualTo(expected), "z=" + z);
+            }
         }
 
         [Test]
