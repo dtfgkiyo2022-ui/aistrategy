@@ -63,14 +63,18 @@ internal static class JevMatchCommand
         var report = new JevMatchReport { Build = build, ScenarioId = scenario.ScenarioId, FactionId = faction,
             Schedule = schedule.ToString(), MinConfidencePermille = Number(options, "--min-confidence-permille", 700),
             RetreatPermille = Number(options, "--retreat-permille", 700) };
+        // One allocation cycle is 20 ticks, which is one second at the scenario's 20 Hz.
+        long cycleSleepMs = Number(options, "--cycle-sleep-ms", 1000);
+        report.CycleSleepMs = cycleSleepMs;
         long tick = 0;
         while (tick < ticks && !simulation.Capture(faction).Result.HasEnded)
         {
             gateway.Step();
             tick++;
-            // The provider answers on another thread. Without a pause the match runs to the end before the first answer
-            // arrives, which would measure nothing; a real game runs at 20 Hz anyway.
-            if (tick % 20 == 0) Thread.Sleep((int)Number(options, "--tick-sleep-ms", 25));
+            // The match must advance at the speed a real one does. The model answers in seconds of wall clock, and the
+            // deadline is counted in ticks, so running the match faster than 20 Hz throws away answers that would have
+            // arrived in time: at 40x, a 2 second answer lands 1600 ticks late against a 240 tick deadline.
+            if (tick % 20 == 0) Thread.Sleep((int)cycleSleepMs);
             if (provider.Availability == JevAvailability.Paused && report.FirstPausedTick == null) report.FirstPausedTick = tick;
         }
         var result = simulation.Capture(faction).Result;
@@ -135,6 +139,8 @@ internal sealed class JevMatchReport
     public string ScenarioId { get; set; } = "";
     public uint FactionId { get; set; }
     public string Schedule { get; set; } = "";
+    /// <summary>Wall-clock milliseconds per 20 ticks. 1000 is real time; less throws away answers on the deadline.</summary>
+    public long CycleSleepMs { get; set; }
     public long MinConfidencePermille { get; set; }
     public long RetreatPermille { get; set; }
     public long Ticks { get; set; }

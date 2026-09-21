@@ -21,6 +21,7 @@
     <Compile Include="JevProviderTests.cs" />
     <Compile Include="HttpJevTransportTests.cs" />
     <Compile Include="JevPauseTests.cs" />
+    <Compile Include="JevStateTests.cs" />
     <Compile Include="AutonomousPollScheduleTests.cs" />
     <Compile Include="TuningRuleTests.cs" />
   </ItemGroup>

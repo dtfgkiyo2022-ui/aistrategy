@@ -191,7 +191,7 @@ namespace Rts.Tests.Headless
                 provider.Request(request);
                 string sent = transport.Wait(1) != null ? transport.States[0] : null;
                 Assert.That(sent, Is.EqualTo(JevState.Build(request.Observation)));
-                Assert.That(sent, Does.Contain("\"tick\":20").And.Contain("\"alive\":8"));
+                Assert.That(sent, Does.Contain("\"tick\":20").And.Contain("\"myTotalSoldiers\":8"));
                 // Meters must not depend on the machine's locale.
                 var previous = System.Globalization.CultureInfo.CurrentCulture;
                 try
