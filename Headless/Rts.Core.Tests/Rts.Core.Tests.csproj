@@ -19,6 +19,7 @@
     <Compile Include="PhaseDiffTests.cs" />
     <Compile Include="ScenarioScaleTests.cs" />
     <Compile Include="JevProviderTests.cs" />
+    <Compile Include="HttpJevTransportTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Providers/**/*.cs" Link="Providers/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="TuningRuleTests.cs" />
   </ItemGroup>
