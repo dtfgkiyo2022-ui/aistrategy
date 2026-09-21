@@ -196,6 +196,17 @@ Issue #59 で「コアが壊されるのは救援が間に合わないため」�
 
 測るために足したもの：`Simulation/ScenarioScale.cs`（兵を K 回繰り返し、`factionCap` と軍団の容量を K 倍にする。整数メートルだけ。通常の試合は呼ばない測定用）、`LiveMatchHost.ScenarioMultiplier`（既定1）、`PerfProbe` の `-perfScale K`。**`-quit` を付けると再生に入る前に終わって何も出ない**（付けない）。K=12 で 480体。K=12 では2つの軍団の兵が同じ場所に出る不具合を `ScenarioScaleTests` が見つけ、間隔を 3→2 m にして直した。
 
+### 2026-09-21：Ver.2 の最初の一切れ（Jev プロバイダー。Astra 未レビュー・オーナー判断で先行）
+
+`Providers/`（新しいアセンブリ `Rts.Providers`、Contracts だけ参照、`noEngineReferences`）に、`IPolicyProvider` の実装 `JevPolicyProvider` を置いた。**Simulation の外**で、決定論の禁止API検査（`DeterminismSourceTests`）の対象外（Task・キューを使うため）。`Contracts` は変えていない。
+
+- `IJevTransport`：通信の差し替え口。**実際の HTTP はまだない**（偽の通信でテスト）。`POST https://ai-gateway.lolipop.jp/v1/systemone` の実装は次の一切れ
+- `JevState.Build`：`FactionObservation` を送る文字列にする（**観測できた情報だけ**。ルール6）。メートルは固定カルチャで書く（日本語ロケール以外でも同じ）
+- `JevPolicyProvider`：`Request` は積んで即返す・`Poll` は待たず、**完了した答えを RequestId 順に返す**（設計案 §3.1・§3.2）。失敗・確信度不足・未知の選択肢・未発見の敵コアは**空の返答**＝命令なし（ゲートウェイが拒否として記録し、お任せAIが続く）。`FailureCount` は「AI提案が使えていない」表示用
+- 答え→命令の表：`focus` の確信度 ≥ 0.7 で `Focus`（north=拠点1、south=拠点2、core=見えている敵コア）、`retreat` の確率 ≥ 0.7 で `Retreat`。**0.7 は仮値で較正が要る**（#87 では noul が 0.7 を超える戦況を作れていない）
+- テスト `JevProviderTests` 11件（待たない／RequestId順／失敗／低確信度／選択→拠点／敵コア未発見／未知の選択／撤退の閾値／状態はRequest時点で固定・ロケール／全呼び出し失敗でも試合が続く）。時間に依存するため3回連続で確認
+- **確認できていないこと**：実際の Jev との通信、`PollAutonomous` の呼び出し間隔（契機ベースへの変更、Application 層）、失敗が続くときの回路遮断、設問文言の版管理と再生ヘッダへの記録、外部へ戦況を送ることの開示・同意（製品の判断）、Claude を締切の外に置く構成
+
 ### 次にやること（候補）
 
 - **オーナーの確認結果（2026-09-21）**：480体の画面の見やすさ、購入素材の見た目の続き、試遊の残り（敵の残像・推定兵力、陣営視点の切り替え、決着までの長時間、`concentrate` 相手）を、オーナーが確認して**すべて問題なし**。実戦的な大規模配置（陣形、軍団ごとの人数）の設計は、次に私が案を作る
