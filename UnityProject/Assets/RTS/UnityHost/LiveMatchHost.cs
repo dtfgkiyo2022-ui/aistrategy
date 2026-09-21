@@ -1,6 +1,8 @@
+using System;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Presentation;
+using Rts.Providers;
 using Rts.Simulation;
 using UnityEngine;
 using Battle = Rts.Simulation.Simulation;
@@ -60,16 +62,34 @@ namespace Rts.UnityHost
         /// <summary>Measurement only (stage 5): repeats every soldier this many times. 1 is the normal match.</summary>
         public static int ScenarioMultiplier = 1;
 
+        /// <summary>
+        /// Ver.2, off by default: when set, this faction's autonomous upper policy is decided by the external judgement
+        /// model instead of being absent. It is a separate provider from the one that interprets the player's own
+        /// orders, so the model never decides what the player just asked for. Turning it on sends the faction's
+        /// observation to an outside service, so nothing here turns it on by itself.
+        /// </summary>
+        public static Func<IPolicyProvider> ExternalPolicyProvider;
+
+        /// <summary>Set while a match is running with an external provider, for the display to read.</summary>
+        public JevPolicyProvider ExternalProvider { get; private set; }
+
         public void Begin()
         {
             var scenario = ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
-            gateway = new CommandGateway(simulation, provider);
+            var external = ExternalPolicyProvider == null ? null : ExternalPolicyProvider();
+            ExternalProvider = external as JevPolicyProvider;
+            gateway = new CommandGateway(simulation, provider, null,
+                external == null ? null : AutonomousPollSchedule.OnChange(600), external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
             enemy = PolicyPresets.CreateController(enemyPreset, 3 - viewFactionId, gateway);
             enemy.Initialize();
+            if (external != null)
+                gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
+                    PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
+                    new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
 
             view.SetTerrain(ScenarioTerrain.From(scenario.Map));
             view.Push(simulation.Capture(viewFactionId));

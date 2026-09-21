@@ -181,8 +181,8 @@ namespace Rts.Tests.Headless
                     "timeout" => new TaskCanceledException("The request was canceled due to timeout."),
                     "no-key" => new InvalidOperationException("No API key is set."),
                     "bad-reply" => new FormatException("The reply has no answers."),
-                    "http-429" => new HttpRequestException("The AI gateway answered 429.", null, (HttpStatusCode)429),
-                    "http-401" => new HttpRequestException("The AI gateway answered 401.", null, HttpStatusCode.Unauthorized),
+                    "http-429" => new JevHttpException(429, "The AI gateway answered 429."),
+                    "http-401" => new JevHttpException(401, "The AI gateway answered 401."),
                     _ => new NotSupportedException(key)
                 }
             };

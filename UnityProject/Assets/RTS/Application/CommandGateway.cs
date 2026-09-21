@@ -46,16 +46,20 @@ namespace Rts.Application
         }
         private readonly Battle simulation;
         private readonly IPolicyProvider provider;
+        // The autonomous upper policy may come from somewhere else than the human command path. Without this the one
+        // provider answers both, so plugging in an external model would have it decide the player's own orders too.
+        private readonly IPolicyProvider autonomousProvider;
         private readonly List<Request> requests = new List<Request>();
         private readonly List<Arrival> arrivals = new List<Arrival>();
         private readonly List<ScheduledInput> log = new List<ScheduledInput>();
         private ulong nextRequest = 1, nextCommand = 1, nextBatch = 1, nextLog = 1;
         private long tick;
         public CommandGateway(Battle simulation, IPolicyProvider provider = null, AiTimingProfile profile = null,
-            AutonomousPollSchedule schedule = null)
+            AutonomousPollSchedule schedule = null, IPolicyProvider autonomousProvider = null)
         {
             this.simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
             this.provider = provider;
+            this.autonomousProvider = autonomousProvider ?? provider;
             PollSchedule = schedule ?? AutonomousPollSchedule.EveryCycle;
             AiProfile = profile ?? (provider as DelayedPolicyProvider)?.Profile ?? AiTimingProfile.Default;
             if (provider is DelayedPolicyProvider delayed && delayed.Profile != AiProfile)
@@ -113,7 +117,7 @@ namespace Rts.Application
         /// <summary>Register a recurring upper-policy decision, evaluated at R=0,20,40,... .</summary>
         public void EnableAutonomous(UserPolicyIntent intent)
         {
-            if (provider == null) throw new InvalidOperationException("Autonomous requests require a provider.");
+            if (autonomousProvider == null) throw new InvalidOperationException("Autonomous requests require a provider.");
             if (intent.Target.FactionId < 1 || intent.Target.FactionId > 2) throw new ArgumentException("Invalid faction.");
             if (autonomousTargets.Any(i => i.Target.Equals(intent.Target))) throw new ArgumentException("Target already registered.");
             autonomousTargets.Add(intent);
@@ -145,7 +149,7 @@ namespace Rts.Application
                     checked(tick + AiProfile.DeadlineTicks), intent.Kind, intent.Goal);
                 nextRequest = checked(nextRequest + 1);
                 autonomous.Add(new AutonomousRequest { Snapshot = snapshot });
-                provider.Request(snapshot);
+                autonomousProvider.Request(snapshot);
             }
         }
 
@@ -250,8 +254,12 @@ namespace Rts.Application
         public IReadOnlyList<ScheduledInput> Step()
         {
             PollAutonomous();
-            if (provider != null)
-                foreach (var reply in provider.Poll(tick)) Receive(reply);
+            // Both providers are read, then the replies are taken in RequestId order. Receive consumes command ids, and
+            // command ids are part of the canonical state, so the order must not depend on which provider answered first.
+            var replies = new List<PolicyReply>();
+            if (provider != null) replies.AddRange(provider.Poll(tick));
+            if (autonomousProvider != null && !ReferenceEquals(autonomousProvider, provider)) replies.AddRange(autonomousProvider.Poll(tick));
+            foreach (var reply in replies.OrderBy(r => r.RequestId)) Receive(reply);
             long next = checked(tick + 1);
             var inputs = new List<ScheduledInput>();
             var reserved = new List<Request>();
