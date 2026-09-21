@@ -34,6 +34,22 @@ namespace Rts.Providers
         public long StoppedTicks = 600;
     }
 
+    /// <summary>
+    /// One answer, for the diagnostic log only. The model's own words never enter the replay: what the match records
+    /// is the order the game derived, if any.
+    /// </summary>
+    public sealed class JevAnswerRecord
+    {
+        public ulong RequestId;
+        public long Tick;
+        /// <summary>False when the call did not come back at all.</summary>
+        public bool Answered;
+        public string Focus;
+        public double FocusConfidence;
+        public double? RetreatProbability;
+        public int OrderCount;
+    }
+
     /// <summary>What the display shows about the external AI.</summary>
     public enum JevAvailability
     {
@@ -69,8 +85,21 @@ namespace Rts.Providers
             this.thresholds = thresholds ?? new JevThresholds();
         }
 
-        /// <summary>Calls that failed or came back unusable since the start; for the "AI suggestions unavailable" display.</summary>
+        /// <summary>Calls that did not come back at all; for the "AI suggestions unavailable" display.</summary>
         public int FailureCount => Volatile.Read(ref failures);
+
+        /// <summary>
+        /// Calls the model answered but that produced no order, because it was not confident enough or named something
+        /// that cannot be turned into an order. This is the thresholds working, not the gateway being down, so it is
+        /// counted apart from <see cref="FailureCount"/>.
+        /// </summary>
+        public int DeclinedCount { get; private set; }
+
+        /// <summary>
+        /// Receives what the model answered, for the diagnostic log. The design keeps raw answers out of the replay, so
+        /// nothing here is fed back into the match. Called on the game thread from Poll.
+        /// </summary>
+        public Action<JevAnswerRecord> Observe { get; set; }
 
         /// <summary>Whether calls are being made right now. Read on the game thread, after Request/Poll.</summary>
         public JevAvailability Availability { get; private set; } = JevAvailability.Calling;
@@ -132,8 +161,18 @@ namespace Rts.Providers
                 if (!open.TryGetValue(c.RequestId, out var request)) continue;
                 open.Remove(c.RequestId);
                 var orders = c.Answers == null ? new List<PolicyOrder>() : Decide(request, c.Answers);
-                if (c.Answers != null && orders.Count == 0) Interlocked.Increment(ref failures);
+                if (c.Answers != null && orders.Count == 0) DeclinedCount++;
                 if (c.Answers == null) consecutiveFailures++; else consecutiveFailures = 0;
+                Observe?.Invoke(new JevAnswerRecord
+                {
+                    RequestId = c.RequestId,
+                    Tick = tick,
+                    Answered = c.Answers != null,
+                    Focus = c.Answers?.Focus,
+                    FocusConfidence = c.Answers == null ? 0 : c.Answers.FocusConfidence,
+                    RetreatProbability = c.Answers?.RetreatProbability,
+                    OrderCount = orders.Count
+                });
                 // No usable answer is an empty reply: the gateway logs it as a rejection and the automatic AI carries on.
                 replies.Add(new PolicyReply(c.RequestId, tick, orders, ReasonCode.None));
             }

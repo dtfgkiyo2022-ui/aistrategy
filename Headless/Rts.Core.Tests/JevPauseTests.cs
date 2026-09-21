@@ -126,6 +126,26 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void DecliningIsCountedApartFromFailingAndIsReportedToTheDiagnosticLog()
+        {
+            var transport = new CountingTransport { Fail = false };
+            var records = new List<JevAnswerRecord>();
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { MinFocusConfidence = 0.95 }))
+            {
+                provider.Observe = records.Add;
+                Round(provider, 1, 20);
+                transport.Fail = true;
+                Round(provider, 2, 40);
+                Assert.That(provider.DeclinedCount, Is.EqualTo(1), "answered but not confident enough");
+                Assert.That(provider.FailureCount, Is.EqualTo(1), "did not come back at all");
+                Assert.That(records.Select(r => r.Answered), Is.EqualTo(new[] { true, false }));
+                Assert.That(records[0].Focus, Is.EqualTo("north"));
+                Assert.That(records[0].FocusConfidence, Is.EqualTo(0.9).Within(1e-9));
+                Assert.That(records[0].OrderCount, Is.EqualTo(0));
+            }
+        }
+
+        [Test]
         public void PausingCanBeTurnedOff()
         {
             var transport = new CountingTransport();
