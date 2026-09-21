@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Rts.Application;
@@ -33,8 +34,8 @@ internal static class JevMatchCommand
         string keyVariable = options.GetValueOrDefault("--key-env") ?? "PROBE_KEY";
         var thresholds = new JevThresholds
         {
-            MinFocusConfidence = Permille(options, "--min-confidence-permille", 700),
-            RetreatProbability = Permille(options, "--retreat-permille", 700)
+            MinChoiceConfidence = Permille(options, "--min-confidence-permille", 700),
+            CommitReserve = Permille(options, "--commit-reserve-permille", 700)
         };
         var schedule = options.GetValueOrDefault("--schedule") switch
         {
@@ -51,8 +52,8 @@ internal static class JevMatchCommand
         var answers = new List<JevAnswerLine>();
         // The raw answers go into this report, which is a diagnostic file, never into the replay.
         provider.Observe = record => answers.Add(new JevAnswerLine { Tick = record.Tick, Answered = record.Answered,
-            Focus = record.Focus, ConfidencePermille = (long)(record.FocusConfidence * 1000),
-            RetreatPermille = record.RetreatProbability.HasValue ? (long)(record.RetreatProbability.Value * 1000) : null,
+            Failure = record.Failure, Choice = record.Choice, ConfidencePermille = (long)(record.ChoiceConfidence * 1000),
+            CommitReservePermille = record.CommitReserve.HasValue ? (long)(record.CommitReserve.Value * 1000) : null,
             OrderCount = record.OrderCount });
         var simulation = new Rts.Simulation.Simulation(scenario);
         var gateway = new CommandGateway(simulation, provider, null, schedule);
@@ -62,7 +63,7 @@ internal static class JevMatchCommand
 
         var report = new JevMatchReport { Build = build, ScenarioId = scenario.ScenarioId, FactionId = faction,
             Schedule = schedule.ToString(), MinConfidencePermille = Number(options, "--min-confidence-permille", 700),
-            RetreatPermille = Number(options, "--retreat-permille", 700) };
+            CommitReservePermille = Number(options, "--commit-reserve-permille", 700) };
         // One allocation cycle is 20 ticks, which is one second at the scenario's 20 Hz.
         long cycleSleepMs = Number(options, "--cycle-sleep-ms", 1000);
         report.CycleSleepMs = cycleSleepMs;
@@ -84,6 +85,10 @@ internal static class JevMatchCommand
         report.FailedCalls = provider.FailureCount;
         report.DeclinedCalls = provider.DeclinedCount;
         report.Answers = answers;
+        // Grouped so the report says at a glance whether the gateway rate-limited us or the replies were unreadable.
+        report.FailureReasons = answers.Where(a => a.Failure != null).GroupBy(a => a.Failure)
+            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal)
+            .Select(g => new JevFailureCount { Reason = g.Key, Count = g.Count() }).ToList();
         report.InputTokens = transport.InputTokens;
         // Prices are per million input tokens; kept as permille of a cent so no floating point enters the report.
         report.CostMicroDollars = report.InputTokens * 42 / 1000;
@@ -103,6 +108,7 @@ internal static class JevMatchCommand
         if (output == null) Console.WriteLine(json); else File.WriteAllText(output, json);
         Console.Error.WriteLine("calls=" + (report.AcceptedProposals + report.RejectedProposals)
             + " orders=" + report.AcceptedProposals + " declined=" + report.DeclinedCalls + " failed=" + report.FailedCalls
+            + " reasons=" + string.Join(",", report.FailureReasons.Select(f => f.Reason + "x" + f.Count))
             + " inputTokens=" + report.InputTokens + " cost=$" + (report.CostMicroDollars / 1000000m).ToString("0.000000", CultureInfo.InvariantCulture));
         return 0;
     }
@@ -115,13 +121,20 @@ internal static class JevMatchCommand
         Number(options, key, fallback) / 1000.0;
 }
 
+internal sealed class JevFailureCount
+{
+    public string Reason { get; set; } = "";
+    public int Count { get; set; }
+}
+
 internal sealed class JevAnswerLine
 {
     public long Tick { get; set; }
     public bool Answered { get; set; }
-    public string Focus { get; set; }
+    public string Failure { get; set; }
+    public string Choice { get; set; }
     public long ConfidencePermille { get; set; }
-    public long? RetreatPermille { get; set; }
+    public long? CommitReservePermille { get; set; }
     public int OrderCount { get; set; }
 }
 
@@ -139,10 +152,12 @@ internal sealed class JevMatchReport
     public string ScenarioId { get; set; } = "";
     public uint FactionId { get; set; }
     public string Schedule { get; set; } = "";
+    public string QuestionsVersion { get; set; } = JevQuestions.Version;
+    public string StateVersion { get; set; } = JevState.Version;
     /// <summary>Wall-clock milliseconds per 20 ticks. 1000 is real time; less throws away answers on the deadline.</summary>
     public long CycleSleepMs { get; set; }
     public long MinConfidencePermille { get; set; }
-    public long RetreatPermille { get; set; }
+    public long CommitReservePermille { get; set; }
     public long Ticks { get; set; }
     public bool HasEnded { get; set; }
     public uint WinnerFactionId { get; set; }
@@ -156,4 +171,5 @@ internal sealed class JevMatchReport
     public long CostMicroDollars { get; set; }
     public List<JevOrderLine> Orders { get; set; } = new();
     public List<JevAnswerLine> Answers { get; set; } = new();
+    public List<JevFailureCount> FailureReasons { get; set; } = new();
 }

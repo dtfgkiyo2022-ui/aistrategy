@@ -40,8 +40,8 @@ namespace Rts.Tests.Headless
 
         private const string GoodReply =
             "{\"model\":\"typesafe/jev-latest\",\"answers\":{" +
-            "\"focus\":{\"choice\":\"enemy_core\",\"probabilities\":{\"north_outpost\":0.1,\"south_outpost\":0.1,\"enemy_core\":0.8},\"confidence\":0.8}," +
-            "\"retreat\":{\"noul\":0.42}},\"usage\":{\"input_tokens\":1234,\"output_tokens\":12}}";
+            "\"decisive_point\":{\"choice\":\"enemy_core\",\"probabilities\":{\"north_outpost\":0.1,\"south_outpost\":0.1,\"my_core\":0.0,\"enemy_core\":0.8},\"confidence\":0.8}," +
+            "\"commit_reserve\":{\"noul\":0.42}},\"usage\":{\"input_tokens\":1234,\"output_tokens\":12}}";
 
         private static HttpJevTransport Make(FakeHandler handler, Func<string> key = null, TimeSpan? timeout = null) =>
             new HttpJevTransport(key ?? (() => Key), handler, timeout: timeout);
@@ -67,8 +67,8 @@ namespace Rts.Tests.Headless
             Assert.That(body["model"], Is.EqualTo(HttpJevTransport.DefaultModel));
             Assert.That(((Dictionary<string, object>)body["state"])["tick"], Is.EqualTo(20d));
             var questions = (Dictionary<string, object>)body["questions"];
-            Assert.That(questions.Keys, Is.EquivalentTo(new[] { "focus", "retreat" }));
-            Assert.That(JevQuestions.Version, Is.EqualTo("q1"));
+            Assert.That(questions.Keys, Is.EquivalentTo(new[] { "decisive_point", "commit_reserve" }));
+            Assert.That(JevQuestions.Version, Is.EqualTo("q2"), "a change of wording is a change of behaviour and must change the version");
         }
 
         [Test]
@@ -76,29 +76,30 @@ namespace Rts.Tests.Headless
         {
             var handler = new FakeHandler { Reply = GoodReply };
             var answers = await Make(handler).AskAsync(State, CancellationToken.None);
-            Assert.That(answers.Focus, Is.EqualTo("core"));
-            Assert.That(answers.FocusConfidence, Is.EqualTo(0.8).Within(1e-9));
-            Assert.That(answers.RetreatProbability, Is.EqualTo(0.42).Within(1e-9));
+            Assert.That(answers.Choice, Is.EqualTo(JevChoice.EnemyCore));
+            Assert.That(answers.ChoiceConfidence, Is.EqualTo(0.8).Within(1e-9));
+            Assert.That(answers.CommitReserve, Is.EqualTo(0.42).Within(1e-9));
         }
 
-        [TestCase("north_outpost", "north")]
-        [TestCase("south_outpost", "south")]
-        [TestCase("enemy_core", "core")]
+        [TestCase("north_outpost", JevChoice.NorthOutpost)]
+        [TestCase("south_outpost", JevChoice.SouthOutpost)]
+        [TestCase("my_core", JevChoice.MyCore)]
+        [TestCase("enemy_core", JevChoice.EnemyCore)]
         public async Task EveryQuestionedChoiceMapsToAGameChoice(string jev, string game)
         {
-            var handler = new FakeHandler { Reply = "{\"answers\":{\"focus\":{\"choice\":\"" + jev + "\",\"confidence\":0.9}}}" };
-            Assert.That((await Make(handler).AskAsync(State, CancellationToken.None)).Focus, Is.EqualTo(game));
+            var handler = new FakeHandler { Reply = "{\"answers\":{\"decisive_point\":{\"choice\":\"" + jev + "\",\"confidence\":0.9}}}" };
+            Assert.That((await Make(handler).AskAsync(State, CancellationToken.None)).Choice, Is.EqualTo(game));
         }
 
         [Test]
         public async Task AnUnknownChoiceOrAMissingConfidenceNeverClearsAThreshold()
         {
-            var unknown = await Make(new FakeHandler { Reply = "{\"answers\":{\"focus\":{\"choice\":\"west\",\"confidence\":0.99}}}" }).AskAsync(State, CancellationToken.None);
-            Assert.That(unknown.Focus, Is.Null);
-            var noConfidence = await Make(new FakeHandler { Reply = "{\"answers\":{\"focus\":{\"choice\":\"enemy_core\"}}}" }).AskAsync(State, CancellationToken.None);
-            Assert.That(noConfidence.FocusConfidence, Is.EqualTo(0));
-            var outOfRange = await Make(new FakeHandler { Reply = "{\"answers\":{\"retreat\":{\"noul\":1.5}}}" }).AskAsync(State, CancellationToken.None);
-            Assert.That(outOfRange.RetreatProbability, Is.Null);
+            var unknown = await Make(new FakeHandler { Reply = "{\"answers\":{\"decisive_point\":{\"choice\":\"west\",\"confidence\":0.99}}}" }).AskAsync(State, CancellationToken.None);
+            Assert.That(unknown.Choice, Is.Null);
+            var noConfidence = await Make(new FakeHandler { Reply = "{\"answers\":{\"decisive_point\":{\"choice\":\"enemy_core\"}}}" }).AskAsync(State, CancellationToken.None);
+            Assert.That(noConfidence.ChoiceConfidence, Is.EqualTo(0));
+            var outOfRange = await Make(new FakeHandler { Reply = "{\"answers\":{\"commit_reserve\":{\"noul\":1.5}}}" }).AskAsync(State, CancellationToken.None);
+            Assert.That(outOfRange.CommitReserve, Is.Null);
         }
 
         [Test]
@@ -154,7 +155,7 @@ namespace Rts.Tests.Headless
         public async Task TheProviderTurnsAConfidentAnswerIntoAnOrderThroughTheRealTransport()
         {
             var handler = new FakeHandler { Reply = GoodReply };
-            using (var provider = new JevPolicyProvider(Make(handler), new JevThresholds { MinFocusConfidence = 0.7 }))
+            using (var provider = new JevPolicyProvider(Make(handler), new JevThresholds { MinChoiceConfidence = 0.7 }))
             {
                 var enemyCore = new KnownObjective(GoalKind.Core, 2, new SimPoint(Fix64.FromInt(240), Fix64.FromInt(64)), true, 2, true, 3000, 10);
                 var observation = new FactionObservation(1, 20, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), new[] { enemyCore });
@@ -174,24 +175,30 @@ namespace Rts.Tests.Headless
         {
             var transport = new HttpJevTransport(() => Environment.GetEnvironmentVariable("PROBE_KEY"), timeout: TimeSpan.FromSeconds(20));
             var clock = Stopwatch.StartNew();
-            var answers = await transport.AskAsync(
-                "{\"tick\":6000,\"faction\":1,\"ownArmies\":[{\"id\":1,\"alive\":8,\"x\":24,\"z\":96},{\"id\":2,\"alive\":8,\"x\":24,\"z\":32}],"
-                + "\"enemyContacts\":[{\"x\":60,\"z\":96,\"visible\":true,\"min\":14,\"max\":18}],"
-                + "\"objectives\":[{\"kind\":\"Outpost\",\"id\":1,\"owner\":1},{\"kind\":\"Outpost\",\"id\":2,\"owner\":0},{\"kind\":\"Core\",\"id\":1,\"owner\":1,\"hp\":3000}]}",
-                CancellationToken.None);
-            TestContext.Out.WriteLine("live: " + clock.ElapsedMilliseconds + " ms focus=" + answers.Focus + " confidence=" + answers.FocusConfidence
-                + " retreat=" + (answers.RetreatProbability.HasValue ? answers.RetreatProbability.Value.ToString("0.00") : "(none)") + " inputTokens=" + transport.InputTokens);
-            Assert.That(answers.Focus, Is.AnyOf("north", "south", "core"));
-            Assert.That(answers.RetreatProbability, Is.Not.Null);
+            var observation = new FactionObservation(1, 6000,
+                new[] { new OwnArmyView(1, 1, UnitKind.Infantry, new SimPoint(Fix64.FromInt(24), Fix64.FromInt(96)), 8, new PolicyGoal(GoalKind.Outpost, 1, default)) },
+                Array.Empty<VisibleEnemy>(),
+                new[] { new EnemyContact(1, new SimPoint(Fix64.FromInt(60), Fix64.FromInt(96)), 6000, 14, 18, true) },
+                new[]
+                {
+                    new KnownObjective(GoalKind.Outpost, 1, new SimPoint(Fix64.FromInt(128), Fix64.FromInt(96)), true, 2, false, 0, 6000),
+                    new KnownObjective(GoalKind.Outpost, 2, new SimPoint(Fix64.FromInt(128), Fix64.FromInt(32)), true, 0, false, 0, 6000),
+                    new KnownObjective(GoalKind.Core, 1, new SimPoint(Fix64.FromInt(16), Fix64.FromInt(64)), true, 1, true, 2100, 6000)
+                });
+            var answers = await transport.AskAsync(JevState.Build(observation), CancellationToken.None);
+            TestContext.Out.WriteLine("live: " + clock.ElapsedMilliseconds + " ms choice=" + answers.Choice + " confidence=" + answers.ChoiceConfidence
+                + " commitReserve=" + (answers.CommitReserve.HasValue ? answers.CommitReserve.Value.ToString("0.00") : "(none)") + " inputTokens=" + transport.InputTokens);
+            Assert.That(answers.Choice, Is.AnyOf(JevChoice.NorthOutpost, JevChoice.SouthOutpost, JevChoice.MyCore, JevChoice.EnemyCore));
+            Assert.That(answers.CommitReserve, Is.Not.Null);
         }
 
         [Test]
         public void TheQuestionTextIsValidJsonAndItsChoicesAreTheOnesTheTransportMaps()
         {
             var questions = (Dictionary<string, object>)MiniJson.Parse(JevQuestions.Json);
-            var focus = (Dictionary<string, object>)questions["focus"];
+            var focus = (Dictionary<string, object>)questions["decisive_point"];
             var criteria = (Dictionary<string, object>)focus["criteria"];
-            Assert.That(criteria.Keys, Is.EquivalentTo(new[] { "north_outpost", "south_outpost", "enemy_core" }));
+            Assert.That(criteria.Keys, Is.EquivalentTo(new[] { "north_outpost", "south_outpost", "my_core", "enemy_core" }));
         }
 
         [Test]

@@ -87,6 +87,19 @@ namespace Rts.Providers
         }
 
         /// <summary>
+        /// The id the state called the north (or south) outpost, so an answer naming one can be turned into an order
+        /// for the same objective. 0 when this faction cannot see two outposts and the names were never used.
+        /// </summary>
+        public static uint OutpostId(FactionObservation o, bool north)
+        {
+            if (o == null) throw new ArgumentNullException(nameof(o));
+            var outposts = o.Objectives.Where(b => b.Kind == GoalKind.Outpost)
+                .OrderByDescending(b => b.Position.Z.Raw).ThenBy(b => b.Id).ToArray();
+            if (outposts.Length != 2) return 0;
+            return north ? outposts[0].Id : outposts[1].Id;
+        }
+
+        /// <summary>
         /// The question offers "north" and "south", but the observation only has coordinates and the model has no map.
         /// Among the outposts that are visible to this faction, the one furthest along z is the northern one.
         /// </summary>
@@ -97,8 +110,8 @@ namespace Rts.Providers
                 .OrderByDescending(b => b.Position.Z.Raw).ThenBy(b => b.Id).ToArray();
             if (outposts.Length == 2)
             {
-                names[outposts[0].Id] = "the north outpost";
-                names[outposts[1].Id] = "the south outpost";
+                names[OutpostId(o, north: true)] = "the north outpost";
+                names[OutpostId(o, north: false)] = "the south outpost";
             }
             else foreach (var b in outposts) names[b.Id] = "outpost " + b.Id;
             return names;

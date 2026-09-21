@@ -40,9 +40,14 @@ namespace Rts.Tests.Headless
             }
         }
 
+        // Two outposts are always in view, because "north" and "south" are decided by position: with fewer than two
+        // there is no north to name and no order to give.
+        private static readonly KnownObjective North = new KnownObjective(GoalKind.Outpost, 1, new SimPoint(Fix64.FromInt(128), Fix64.FromInt(96)), true, 1, false, 0, 0);
+        private static readonly KnownObjective South = new KnownObjective(GoalKind.Outpost, 2, new SimPoint(Fix64.FromInt(128), Fix64.FromInt(32)), true, 0, false, 0, 0);
+
         private static FactionObservation Observation(long tick, params KnownObjective[] objectives) =>
             new FactionObservation(1, tick, new[] { new OwnArmyView(1, 1, UnitKind.Infantry, new SimPoint(Fix64.FromInt(24), Fix64.FromInt(96)), 8, default(PolicyGoal)) },
-                Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives);
+                Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), new[] { North, South }.Concat(objectives).ToArray());
 
         private static PolicyRequest Request(ulong id, long tick, FactionObservation observation = null) =>
             new PolicyRequest(id, 1, new ScopeKey(1, ScopeKind.All, 0), tick, observation ?? Observation(tick),
@@ -56,7 +61,7 @@ namespace Rts.Tests.Headless
             return got;
         }
 
-        private static JevAnswers Focus(string choice, double confidence) => new JevAnswers { Focus = choice, FocusConfidence = confidence };
+        private static JevAnswers Focus(string choice, double confidence) => new JevAnswers { Choice = choice, ChoiceConfidence = confidence };
 
         [Test]
         public void PollAndRequestNeverWaitForTheNetwork()
@@ -81,11 +86,12 @@ namespace Rts.Tests.Headless
             using (var provider = new JevPolicyProvider(transport))
             {
                 provider.Request(Request(1, 20, Observation(20)));
+                var first = transport.Wait(1);
                 provider.Request(Request(2, 20, Observation(21)));
-                var first = transport.Wait(1); var second = transport.Wait(2);
+                var second = transport.Wait(2);
                 // The network answers request 2 first. Command ids follow the order replies are received, so this matters.
-                second.SetResult(Focus("north", 0.9));
-                first.SetResult(Focus("south", 0.9));
+                second.SetResult(Focus(JevChoice.NorthOutpost, 0.9));
+                first.SetResult(Focus(JevChoice.SouthOutpost, 0.9));
                 var replies = PollUntil(provider, 2);
                 Assert.That(replies.Select(r => r.RequestId), Is.EqualTo(new ulong[] { 1, 2 }));
             }
@@ -110,16 +116,16 @@ namespace Rts.Tests.Headless
         public void ALowConfidenceChoiceIssuesNoOrder()
         {
             var transport = new ScriptedTransport();
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { MinFocusConfidence = 0.7 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { MinChoiceConfidence = 0.7 }))
             {
                 provider.Request(Request(1, 20));
-                transport.Wait(1).SetResult(Focus("north", 0.69));
+                transport.Wait(1).SetResult(Focus(JevChoice.NorthOutpost, 0.69));
                 Assert.That(PollUntil(provider, 1).Single().Orders, Is.Empty);
             }
         }
 
-        [TestCase("north", 1u)]
-        [TestCase("south", 2u)]
+        [TestCase(JevChoice.NorthOutpost, 1u)]
+        [TestCase(JevChoice.SouthOutpost, 2u)]
         public void AConfidentChoiceBecomesAFocusOnThatOutpost(string choice, uint outpost)
         {
             var transport = new ScriptedTransport();
@@ -144,9 +150,11 @@ namespace Rts.Tests.Headless
             using (var provider = new JevPolicyProvider(transport))
             {
                 provider.Request(Request(1, 20, Observation(20)));
+                var withoutCore = transport.Wait(1);
                 provider.Request(Request(2, 20, Observation(20, seen)));
-                transport.Wait(1).SetResult(Focus("core", 0.9));
-                transport.Wait(2).SetResult(Focus("core", 0.9));
+                var withCore = transport.Wait(2);
+                withoutCore.SetResult(Focus(JevChoice.EnemyCore, 0.9));
+                withCore.SetResult(Focus(JevChoice.EnemyCore, 0.9));
                 var replies = PollUntil(provider, 2);
                 Assert.That(replies[0].Orders, Is.Empty, "the enemy core is not in this observation");
                 Assert.That(replies[1].Orders.Single().Goal, Is.EqualTo(new PolicyGoal(GoalKind.Core, 2, default(SimPoint))));
@@ -166,18 +174,22 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
-        public void ARetreatProbabilityAtTheThresholdIssuesARetreat()
+        public void ACommitReserveAtTheThresholdIssuesAReserveOrder()
         {
             var transport = new ScriptedTransport();
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RetreatProbability = 0.7 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { CommitReserve = 0.7 }))
             {
+                // The two calls start on the thread pool, so the second request only goes out once the first has been
+                // sent; otherwise which answer belongs to which request is a race.
                 provider.Request(Request(1, 20, Observation(20)));
+                var first = transport.Wait(1);
                 provider.Request(Request(2, 20, Observation(21)));
-                transport.Wait(1).SetResult(new JevAnswers { RetreatProbability = 0.69 });
-                transport.Wait(2).SetResult(new JevAnswers { RetreatProbability = 0.70 });
+                var second = transport.Wait(2);
+                first.SetResult(new JevAnswers { CommitReserve = 0.69 });
+                second.SetResult(new JevAnswers { CommitReserve = 0.70 });
                 var replies = PollUntil(provider, 2);
                 Assert.That(replies[0].Orders, Is.Empty);
-                Assert.That(replies[1].Orders.Single().Kind, Is.EqualTo(PolicyKind.Retreat));
+                Assert.That(replies[1].Orders.Single().Kind, Is.EqualTo(PolicyKind.MaintainReserve));
             }
         }
 

@@ -2,19 +2,57 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Rts.Contracts;
 
 namespace Rts.Providers
 {
+    /// <summary>
+    /// Short reasons a call produced nothing, for the diagnostic log. They are deliberately coarse and fixed: a raw
+    /// exception message could repeat the request, and the key must never reach a log.
+    /// </summary>
+    public static class JevFailure
+    {
+        public const string Paused = "paused";
+        public const string Timeout = "timeout";
+        public const string NoKey = "no-key";
+        public const string BadReply = "bad-reply";
+        public const string Unknown = "unknown";
+
+        public static string Describe(Exception e)
+        {
+            while (e is AggregateException aggregate && aggregate.InnerException != null) e = aggregate.InnerException;
+            switch (e)
+            {
+                case null: return Unknown;
+                case TaskCanceledException _:
+                case OperationCanceledException _: return Timeout;
+                case InvalidOperationException _: return NoKey;
+                case FormatException _: return BadReply;
+                case HttpRequestException http: return http.StatusCode.HasValue ? "http-" + (int)http.StatusCode.Value : "http";
+                default: return Unknown;
+            }
+        }
+    }
+
+    /// <summary>The game's names for the choices, so the transport and the order table cannot drift apart.</summary>
+    public static class JevChoice
+    {
+        public const string NorthOutpost = "north-outpost";
+        public const string SouthOutpost = "south-outpost";
+        public const string MyCore = "my-core";
+        public const string EnemyCore = "enemy-core";
+    }
+
     /// <summary>One question set's answers. Null / missing means "no answer": the game then issues no order.</summary>
     public sealed class JevAnswers
     {
-        /// <summary>"north", "south" or "core"; null when Jev did not choose.</summary>
-        public string Focus;
-        public double FocusConfidence;
-        /// <summary>Probability that the army should retreat, when the noul question was answered.</summary>
-        public double? RetreatProbability;
+        /// <summary>A <see cref="JevChoice"/> value, or null when the model did not choose one of them.</summary>
+        public string Choice;
+        public double ChoiceConfidence;
+        /// <summary>Probability that the reserve should be committed, when the noul question was answered.</summary>
+        public double? CommitReserve;
     }
 
     /// <summary>The network side. Real HTTP lives behind this so tests and replays never touch the network.</summary>
@@ -26,8 +64,8 @@ namespace Rts.Providers
     /// <summary>Game-side decision table (design sketch section 4). The thresholds are calibrated, not guessed.</summary>
     public sealed class JevThresholds
     {
-        public double MinFocusConfidence = 0.7;
-        public double RetreatProbability = 0.7;
+        public double MinChoiceConfidence = 0.7;
+        public double CommitReserve = 0.7;
         /// <summary>Consecutive failures that stop the calls; 0 never stops them.</summary>
         public int FailuresBeforeStopping = 3;
         /// <summary>How long the calls stay stopped, in ticks. 600 = 30 seconds at 20 Hz.</summary>
@@ -44,9 +82,11 @@ namespace Rts.Providers
         public long Tick;
         /// <summary>False when the call did not come back at all.</summary>
         public bool Answered;
-        public string Focus;
-        public double FocusConfidence;
-        public double? RetreatProbability;
+        /// <summary>Why it did not, when it did not: a <see cref="JevFailure"/> value. Never carries the key.</summary>
+        public string Failure;
+        public string Choice;
+        public double ChoiceConfidence;
+        public double? CommitReserve;
         public int OrderCount;
     }
 
@@ -70,6 +110,7 @@ namespace Rts.Providers
         {
             internal ulong RequestId;
             internal JevAnswers Answers; // null when the call failed
+            internal string Failure;     // why, when Answers is null
         }
 
         private readonly IJevTransport transport;
@@ -120,7 +161,7 @@ namespace Rts.Providers
                 {
                     // Still paused: answer straight away with nothing, so the gateway records a rejection at the usual
                     // place and the match is never left waiting on a request that was never sent.
-                    done.Enqueue(new Completed { RequestId = request.RequestId });
+                    done.Enqueue(new Completed { RequestId = request.RequestId, Failure = JevFailure.Paused });
                     open[request.RequestId] = request;
                     return;
                 }
@@ -134,18 +175,18 @@ namespace Rts.Providers
             ulong id = request.RequestId;
             Task<JevAnswers> call;
             try { call = Task.Run(() => transport.AskAsync(state, cancel.Token)); }
-            catch (Exception) { Fail(id); return; }
+            catch (Exception e) { Fail(id, JevFailure.Describe(e)); return; }
             call.ContinueWith(t =>
             {
                 if (t.IsCompletedSuccessfully && t.Result != null) done.Enqueue(new Completed { RequestId = id, Answers = t.Result });
-                else Fail(id);
+                else Fail(id, JevFailure.Describe(t.Exception));
             }, TaskScheduler.Default);
         }
 
-        private void Fail(ulong id)
+        private void Fail(ulong id, string reason)
         {
             Interlocked.Increment(ref failures);
-            done.Enqueue(new Completed { RequestId = id });
+            done.Enqueue(new Completed { RequestId = id, Failure = reason });
         }
 
         public IReadOnlyList<PolicyReply> Poll(long tick)
@@ -162,15 +203,19 @@ namespace Rts.Providers
                 open.Remove(c.RequestId);
                 var orders = c.Answers == null ? new List<PolicyOrder>() : Decide(request, c.Answers);
                 if (c.Answers != null && orders.Count == 0) DeclinedCount++;
-                if (c.Answers == null) consecutiveFailures++; else consecutiveFailures = 0;
+                // A request short-circuited by the pause never reached the gateway, so it says nothing about whether
+                // the gateway is back; only a real attempt moves the run of failures.
+                if (c.Answers == null && c.Failure != JevFailure.Paused) consecutiveFailures++;
+                else if (c.Answers != null) consecutiveFailures = 0;
                 Observe?.Invoke(new JevAnswerRecord
                 {
                     RequestId = c.RequestId,
                     Tick = tick,
                     Answered = c.Answers != null,
-                    Focus = c.Answers?.Focus,
-                    FocusConfidence = c.Answers == null ? 0 : c.Answers.FocusConfidence,
-                    RetreatProbability = c.Answers?.RetreatProbability,
+                    Failure = c.Failure,
+                    Choice = c.Answers?.Choice,
+                    ChoiceConfidence = c.Answers == null ? 0 : c.Answers.ChoiceConfidence,
+                    CommitReserve = c.Answers?.CommitReserve,
                     OrderCount = orders.Count
                 });
                 // No usable answer is an empty reply: the gateway logs it as a rejection and the automatic AI carries on.
@@ -186,35 +231,49 @@ namespace Rts.Providers
             return replies;
         }
 
+        /// <summary>
+        /// The answer table (design sketch section 4). At most one order per reply: two orders in one reply would make
+        /// it impossible to say afterwards which answer changed the match, and the point of this is to find out.
+        /// </summary>
         private List<PolicyOrder> Decide(PolicyRequest request, JevAnswers answers)
         {
             var orders = new List<PolicyOrder>();
-            if (answers.RetreatProbability.HasValue && answers.RetreatProbability.Value >= thresholds.RetreatProbability)
+            if (answers.Choice != null && answers.ChoiceConfidence >= thresholds.MinChoiceConfidence)
             {
-                orders.Add(Order(request, PolicyKind.Retreat, default(PolicyGoal)));
-                return orders;
+                var observation = request.Observation;
+                switch (answers.Choice)
+                {
+                    case JevChoice.NorthOutpost:
+                    case JevChoice.SouthOutpost:
+                        // The state names north and south by position, so the order has to resolve them the same way.
+                        uint outpost = JevState.OutpostId(observation, answers.Choice == JevChoice.NorthOutpost);
+                        if (outpost != 0) orders.Add(Order(request, PolicyKind.Focus, new PolicyGoal(GoalKind.Outpost, outpost, default(SimPoint))));
+                        break;
+                    case JevChoice.MyCore:
+                        uint mine = CoreId(observation, own: true);
+                        if (mine != 0) orders.Add(Order(request, PolicyKind.Defend, new PolicyGoal(GoalKind.Core, mine, default(SimPoint))));
+                        break;
+                    case JevChoice.EnemyCore:
+                        uint theirs = CoreId(observation, own: false);
+                        // An enemy core that has not been seen cannot be named, so no order is issued.
+                        if (theirs != 0) orders.Add(Order(request, PolicyKind.Focus, new PolicyGoal(GoalKind.Core, theirs, default(SimPoint))));
+                        break;
+                }
             }
-            if (answers.Focus != null && answers.FocusConfidence >= thresholds.MinFocusConfidence)
+            if (orders.Count == 0 && answers.CommitReserve.HasValue && answers.CommitReserve.Value >= thresholds.CommitReserve)
             {
-                var goal = FocusGoal(request.Observation, answers.Focus);
-                if (goal.HasValue) orders.Add(Order(request, PolicyKind.Focus, goal.Value));
+                // Holding nothing back. MaintainReserve is a different field from Focus, so it would not have replaced
+                // the choice above; it is second only so that one reply changes one thing.
+                orders.Add(Order(request, PolicyKind.MaintainReserve, default(PolicyGoal)));
             }
             return orders;
         }
 
-        private static PolicyGoal? FocusGoal(FactionObservation o, string choice)
+        private static uint CoreId(FactionObservation o, bool own)
         {
-            switch (choice)
-            {
-                case "north": return new PolicyGoal(GoalKind.Outpost, 1, default(SimPoint));
-                case "south": return new PolicyGoal(GoalKind.Outpost, 2, default(SimPoint));
-                case "core":
-                    foreach (var obj in o.Objectives)
-                        if (obj.Kind == GoalKind.Core && obj.OwnerFactionId != o.FactionId)
-                            return new PolicyGoal(GoalKind.Core, obj.Id, default(SimPoint));
-                    return null; // the enemy core has not been seen, so it cannot be named
-                default: return null; // an unknown choice is not guessed at
-            }
+            foreach (var b in o.Objectives)
+                if (b.Kind == GoalKind.Core && b.IsOwnerKnown && (b.OwnerFactionId == o.FactionId) == own) return b.Id;
+            return 0;
         }
 
         private static PolicyOrder Order(PolicyRequest r, PolicyKind kind, PolicyGoal goal) =>
