@@ -77,7 +77,11 @@ namespace Rts.Presentation
 
         private Rect DelayRect() { return new Rect(10f, SupplyRect().yMax + 8f, 250f, 62f); }
 
-        private Rect ExternalAiRect() { return new Rect(10f, DelayRect().yMax + 8f, 250f, 112f); }
+        // Top centre, under the match clock. The left column is supply, reply delay and the command buttons, and the
+        // buttons grow upward from the bottom edge, so anything stacked under the delay box runs into them on a short
+        // window; the right column is the log and the timeline. The clock's bottom edge is 8 + 58 (TimelinePanel).
+        private const float ClockBottom = 66f;
+        private Rect ExternalAiRect() { return new Rect(Screen.width / 2f - 200f, ClockBottom + 6f, 400f, 78f); }
 
         private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -177,16 +181,17 @@ namespace Rts.Presentation
             GUI.Box(rect, "Outside AI (optional)");
             if (!externalAi.KeyAvailable)
             {
-                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 84f),
+                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 52f),
                     "Off. No key is set on this PC, so it cannot be turned on.");
                 return;
             }
             bool on = externalAi.Enabled;
-            bool now = GUI.Toggle(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 24f), on, on ? "On - asking an outside AI" : "Off - ask an outside AI", GUI.skin.button);
+            bool now = GUI.Toggle(new Rect(rect.x + 6f, rect.y + 20f, rect.width - 12f, 22f), on, on ? "On - asking an outside AI" : "Off - ask an outside AI", GUI.skin.button);
             if (now != on) externalAi.Enabled = now; // this restarts the match, like the reply delay above
-            var text = new Rect(rect.x + 6f, rect.y + 50f, rect.width - 12f, 58f);
+            var text = new Rect(rect.x + 6f, rect.y + 44f, rect.width - 12f, 32f);
             // The notice is on screen next to the switch, not behind it: turning it on sends the faction's view out.
-            GUI.Label(text, on ? externalAi.Status : "Turning it on restarts the match and sends what your side can see (positions, counts, outposts) to an outside service.");
+            GUI.Label(text, on ? externalAi.Status.Replace("\n", "   ")
+                : "Turning it on restarts the match and sends what your side can see (positions, counts, outposts) to an outside service.");
         }
 
         private void DrawDelaySelector()
