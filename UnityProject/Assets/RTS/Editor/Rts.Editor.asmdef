@@ -9,7 +9,8 @@
     "Rts.UnityHost",
     "Rts.Application",
     "Rts.Simulation",
-    "Rts.Replay"
+    "Rts.Replay",
+    "Rts.Providers"
   ],
   "includePlatforms": [
     "Editor"

@@ -191,6 +191,45 @@ namespace Rts.Editor
             EditorApplication.EnterPlaymode();
         }
 
+        // Batch entry (Ver.2): plays the real live scene, flips the outside-AI switch the way the panel does, and reports
+        // what the panel would show. It needs PROBE_KEY and sends real requests, so it is never part of a test run.
+        public static void PlayExternalAi()
+        {
+            Directory.CreateDirectory("D:/rts-verify/play");
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0;
+            LiveMatchHost host = null;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        if (frames == 5)
+                        {
+                            host = Object.FindFirstObjectByType<LiveMatchHost>();
+                            Debug.Log("[ExternalAi] before: keyAvailable=" + host.KeyAvailable + " enabled=" + host.Enabled + " status=" + host.Status);
+                            host.Enabled = true; // exactly what the panel's switch does
+                            Debug.Log("[ExternalAi] after switch: enabled=" + host.Enabled);
+                        }
+                        // The match runs at 20 Hz; every 600 frames report what the panel would show.
+                        if (frames > 5 && frames % 300 == 0)
+                            Debug.Log("[ExternalAi] frame " + frames + " tick=" + host.Tick + " status=" + host.Status.Replace("\n", " | "));
+                        if (frames == 1800)
+                        {
+                            Debug.Log("[ExternalAi] final tick=" + host.Tick + " provider=" + (host.ExternalProvider != null));
+                            EditorApplication.ExitPlaymode();
+                        }
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && frames >= 1800) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         // Batch entry: plays the live scene and reports the average frame time and the cost of rendering the Game camera.
         // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first;
         // -perfScale K repeats every soldier K times (stage 5 measurement, 40 x K soldiers).

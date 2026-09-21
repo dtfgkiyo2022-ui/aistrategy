@@ -16,6 +16,7 @@ namespace Rts.Presentation
 
         private ICommandPort port;
         private ICommandDelayControl delayControl;
+        private IExternalAiControl externalAi;
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
@@ -24,6 +25,9 @@ namespace Rts.Presentation
         private readonly List<string> log = new List<string>();
 
         public bool IsAwaitingGround { get { return awaitingGround; } }
+
+        /// <summary>The optional outside AI. Null hides the panel, which is what the mock scene wants.</summary>
+        public IExternalAiControl ExternalAi { get { return externalAi; } set { externalAi = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -38,7 +42,8 @@ namespace Rts.Presentation
         {
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
             return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
-                || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint);
+                || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint)
+                || (externalAi != null && ExternalAiRect().Contains(guiPoint));
         }
 
         // Left click while waiting for a ground target: returns true when the click was consumed.
@@ -71,6 +76,8 @@ namespace Rts.Presentation
         private Rect SupplyRect() { return new Rect(10f, 40f, 250f, 26f + 22f * 3f); }
 
         private Rect DelayRect() { return new Rect(10f, SupplyRect().yMax + 8f, 250f, 62f); }
+
+        private Rect ExternalAiRect() { return new Rect(10f, DelayRect().yMax + 8f, 250f, 112f); }
 
         private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -115,6 +122,7 @@ namespace Rts.Presentation
 
             DrawSupply();
             DrawDelaySelector();
+            if (externalAi != null) DrawExternalAi();
 
             var statusRect = StatusRect();
             GUI.Box(statusRect, "Command status (7 states)");
@@ -161,6 +169,24 @@ namespace Rts.Presentation
                     r.Kind + " " + r.Id + ": next in " + Seconds(r.TicksRemaining));
                 row++;
             }
+        }
+
+        private void DrawExternalAi()
+        {
+            var rect = ExternalAiRect();
+            GUI.Box(rect, "Outside AI (optional)");
+            if (!externalAi.KeyAvailable)
+            {
+                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 84f),
+                    "Off. No key is set on this PC, so it cannot be turned on.");
+                return;
+            }
+            bool on = externalAi.Enabled;
+            bool now = GUI.Toggle(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 24f), on, on ? "On - asking an outside AI" : "Off - ask an outside AI", GUI.skin.button);
+            if (now != on) externalAi.Enabled = now; // this restarts the match, like the reply delay above
+            var text = new Rect(rect.x + 6f, rect.y + 50f, rect.width - 12f, 58f);
+            // The notice is on screen next to the switch, not behind it: turning it on sends the faction's view out.
+            GUI.Label(text, on ? externalAi.Status : "Turning it on restarts the match and sends what your side can see (positions, counts, outposts) to an outside service.");
         }
 
         private void DrawDelaySelector()

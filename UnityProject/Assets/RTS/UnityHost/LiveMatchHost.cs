@@ -13,7 +13,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IMatchClock
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -70,8 +70,56 @@ namespace Rts.UnityHost
         /// </summary>
         public static Func<IPolicyProvider> ExternalPolicyProvider;
 
+        /// <summary>The environment variable the key is read from. The key is never stored, shown or logged.</summary>
+        public const string KeyVariable = "PROBE_KEY";
+
+        // What the switch on the panel controls. Off by default: a match that has not been told otherwise sends nothing.
+        private bool externalEnabled;
+        private bool externalRestartRequested;
+        private JevPolicyProvider jev;
+        private HttpJevTransport jevTransport;
+
         /// <summary>Set while a match is running with an external provider, for the display to read.</summary>
-        public JevPolicyProvider ExternalProvider { get; private set; }
+        public JevPolicyProvider ExternalProvider { get { return jev; } }
+
+        public bool KeyAvailable { get { return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(KeyVariable)); } }
+
+        public bool Enabled
+        {
+            get { return externalEnabled; }
+            set
+            {
+                if (value == externalEnabled) return;
+                if (value && !KeyAvailable) return; // nothing to ask with; the panel says so
+                externalEnabled = value;
+                externalRestartRequested = true;    // both sides start again from tick 0, as with the reply delay
+            }
+        }
+
+        public string Status
+        {
+            get
+            {
+                if (jev == null) return externalEnabled ? "Starting..." : "Off.";
+                string cost = "~$" + (jevTransport.InputTokens * 42 / 1000000m).ToString("0.0000", System.Globalization.CultureInfo.InvariantCulture);
+                string line = jev.Availability == JevAvailability.Paused
+                    ? "Paused after repeated failures; resumes at tick " + jev.ResumeTick + ". The automatic AI is playing alone."
+                    : "Asking. Orders given: " + gatewayOrders + ", declined: " + jev.DeclinedCount + ", repeats skipped: " + jev.SuppressedCount;
+                return line + "\nFailed calls: " + jev.FailureCount + "   Used: " + cost;
+            }
+        }
+
+        private int gatewayOrders;
+
+        private void StopExternal()
+        {
+            if (jev != null) jev.Dispose();
+            jev = null;
+            jevTransport = null;
+            gatewayOrders = 0;
+        }
+
+        private void OnDestroy() { StopExternal(); }
 
         public void Begin()
         {
@@ -79,8 +127,16 @@ namespace Rts.UnityHost
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
-            var external = ExternalPolicyProvider == null ? null : ExternalPolicyProvider();
-            ExternalProvider = external as JevPolicyProvider;
+            StopExternal();
+            IPolicyProvider external = null;
+            if (ExternalPolicyProvider != null) external = ExternalPolicyProvider();
+            else if (externalEnabled && KeyAvailable)
+            {
+                jevTransport = new HttpJevTransport(() => Environment.GetEnvironmentVariable(KeyVariable));
+                jev = new JevPolicyProvider(jevTransport);
+                jev.Observe = record => { if (record.OrderCount > 0) gatewayOrders++; };
+                external = jev;
+            }
             gateway = new CommandGateway(simulation, provider, null,
                 external == null ? null : AutonomousPollSchedule.OnChange(600), external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
@@ -94,6 +150,7 @@ namespace Rts.UnityHost
             view.SetTerrain(ScenarioTerrain.From(scenario.Map));
             view.Push(simulation.Capture(viewFactionId));
             panel.Bind(port, viewFactionId, viewFactionId, view);
+            panel.ExternalAi = this;
         }
 
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>
@@ -114,9 +171,10 @@ namespace Rts.UnityHost
         private void Update()
         {
             if (simulation == null) return;
-            if (port.RestartRequested)
+            if (port.RestartRequested || externalRestartRequested)
             {
                 aiDelayTicks = port.DelayTicks;
+                externalRestartRequested = false;
                 accumulated = 0f;
                 Begin();
                 return;
