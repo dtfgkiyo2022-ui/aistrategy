@@ -17,6 +17,7 @@
     <ProjectReference Include="../Rts.Headless.Cli/Rts.Headless.Cli.csproj" />
     <Compile Include="IndicatorTests.cs" />
     <Compile Include="PhaseDiffTests.cs" />
+    <Compile Include="ScenarioScaleTests.cs" />
     <Compile Include="TuningRuleTests.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
