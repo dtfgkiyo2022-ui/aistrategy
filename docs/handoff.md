@@ -326,6 +326,10 @@ Issue #59 で「コアが壊されるのは救援が間に合わないため」�
 - **ゲーム本体への組み込み（解決済み、`Contracts` は変えずに済んだ）**：`CommandGateway` がプロバイダーを1つしか持たず「人の命令の翻訳」と「自律方針」の両方を受けるため、Jev を差すと**人の命令まで Jev が決め直して**しまう問題があった。`Contracts` に印を足す（相方の合意が要る）のではなく、**ゲートウェイに自律用のプロバイダーを別に持たせる**ことで解決した（`CommandGateway(..., autonomousProvider)`、既定は今までどおり同じプロバイダー）。両方から取った返答は **RequestId 順**に並べて受け取る（CommandId は正規状態に入るので、どちらが先に答えたかで状態が変わってはいけない。テストで固定）
   - `LiveMatchHost.ExternalPolicyProvider`（`static Func<IPolicyProvider>`、**既定は null＝切**）。設定すると自陣営の自律方針を外部モデルが決める。**外部へ戦況を送るので、こちらから勝手に有効にはしない**
   - **Unity の Mono には `HttpRequestException.StatusCode` がない**（.NET 5 以降の API）。失敗の原因記録が Headless では通るのに Unity で落ちたので、自前の `JevHttpException` に変えた。**Providers を触ったら Unity のバッチコンパイルを必ず通す**
+- **画面のスイッチ（PR、2026-09-21）**：コマンドパネルに「Outside AI (optional)」を足した。**既定は切**。`IExternalAiControl`（Presentation。パネルは状態を読みスイッチを切り替えるだけで、外部サービスのことは知らない）を `LiveMatchHost` が実装する。入れると**試合を最初からやり直し**（遅延の切り替えと同じ）、外部プロバイダーを作る。キーは環境変数 `PROBE_KEY` からだけ読み、無ければスイッチは使えず「No key is set on this PC」と出る。**入れる前の注意書きを、スイッチの隣に常時表示**している（送られるのは自陣営が見えているものだけ）。入れた後は「Asking. Orders given / declined / repeats skipped」「Failed calls」「Used: ~$」を1行ずつ出し、回路遮断中は「Paused ... resumes at tick N。The automatic AI is playing alone」と出す
+  - **確認できていないこと**：画面の見た目（camera の撮影に IMGUI は写らない）。バッチ実行では1フレームがほぼ1 tick しか進まず、**実際の通信までは確かめられていない**（スイッチを入れて外部プロバイダーが作られ、状態表示が「Asking」になるところまで）。**オーナーが Unity で実際に開いて確かめる必要がある**（メニュー RTS → Play Live Battlefield）
+  - **「既定で入れたい」（オーナー判断）にはまだ届いていない**：既定を入にするには、規約の第3条6項を満たす**起動時の通知の画面**が要る。今は「切」＋注意書きまで
+  - **バッチ入口 `PlayExternalAi`** を足した（`-executeMethod Rts.Editor.MockBattlefieldSceneBuilder.PlayExternalAi`、`PROBE_KEY` が要り実際に送るのでテストには含めない）
 - **Jev あり・なしの比較（`week2-2routes`、西＝基準では負ける側、5試合）**：基準は tick 5428 で必ず西コア破壊＝負け。**Jev を付けると5試合すべて 8000 tick 未決着**（勝ち0・負け0）。負けは確実に回避するが勝てない。事実の判定は 522/522 正解
   - **5試合の命令列がほぼ同一**（`Focus→北` → `Defend→北` ×2 → `Defend→自コア` ×3）。オーナーの指摘どおり**選択肢が4つ・命令が2種類しかなく、出せる結果の幅が狭い**。Jev が安定しているというより、取りうる答えが少ない。広げるなら軍団ごとの指示、予備の割合の数値指定など
   - **8000 tick 上限で打ち切っており、設計書9.2章の関門（20000 tick 以内に決着）は見ていない**
