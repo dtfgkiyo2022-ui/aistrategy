@@ -51,9 +51,33 @@ namespace Rts.Tests.EditMode
             var result = GraceMeasurement.Scan(1, 10, 1, 0, 0, Succeeding(1, 2, 3, 4, 5, 6, 7, 9), bandCount: 5);
             Assert.That(result.Bands.Select(b => b.FromTick + "-" + b.ToTick + ":" + b.SuccessPermille),
                 Is.EqualTo(new[] { "1-2:1000", "3-4:1000", "5-6:1000", "7-8:500", "9-10:500" }));
+            Assert.That(result.FirstBandAtLeast900Tick, Is.EqualTo(1));
             Assert.That(result.FirstBandBelow900Tick, Is.EqualTo(7));
             Assert.That(result.FirstBandBelow500Tick, Is.Null, "500 permille is not below 500");
             Assert.That(result.LastSuccessTick, Is.EqualTo(9), "the last success sits inside a half-failing band");
+        }
+
+        [Test]
+        public void BandsBeforeTheDependableStretchAreNotReportedAsTheEndOfIt()
+        {
+            // A "window" predicate like retreat: too early fails, the middle works, then it decays. Reporting the
+            // very first band as "fell under 90%" told us nothing; the answer must be where the window closes.
+            var result = GraceMeasurement.Scan(1, 10, 1, 0, 0, Succeeding(3, 4, 5, 6, 7), bandCount: 5);
+            Assert.That(result.Bands.Select(b => b.SuccessPermille), Is.EqualTo(new[] { 0, 1000, 1000, 500, 0 }));
+            Assert.That(result.FirstBandAtLeast900Tick, Is.EqualTo(3), "the window opens in the second band");
+            Assert.That(result.FirstBandBelow900Tick, Is.EqualTo(7), "and closes in the fourth, not at tick 1");
+            Assert.That(result.FirstBandBelow500Tick, Is.EqualTo(9));
+        }
+
+        [Test]
+        public void ASweepThatNeverBecomesDependableReportsNoBandAtAll()
+        {
+            var result = GraceMeasurement.Scan(1, 10, 1, 0, 0, Succeeding(1, 4, 7), bandCount: 5);
+            Assert.That(result.Bands.Select(b => b.SuccessPermille), Is.EqualTo(new[] { 500, 500, 0, 500, 0 }));
+            Assert.That(result.FirstBandAtLeast900Tick, Is.Null);
+            Assert.That(result.FirstBandBelow900Tick, Is.Null, "there was no dependable stretch to fall out of");
+            Assert.That(result.FirstBandBelow500Tick, Is.Null);
+            Assert.That(result.SuccessPermille, Is.EqualTo(300), "the overall rate still says it is unreliable");
         }
 
         [Test]

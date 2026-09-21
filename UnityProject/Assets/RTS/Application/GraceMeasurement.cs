@@ -103,7 +103,14 @@ namespace Rts.Application
         /// <summary>The longest such run; on a tie the earliest. Null when there is no success.</summary>
         public GraceRun LongestSuccessRun;
         public List<GraceBand> Bands = new List<GraceBand>();
-        /// <summary>First band that decided something and fell under 90%/50%; null when no band does.</summary>
+        /// <summary>First band that reached 90%; null when no band does. The start of the dependable stretch.</summary>
+        public long? FirstBandAtLeast900Tick;
+        /// <summary>
+        /// First band under 90%/50% *after* FirstBandAtLeast900Tick, that is where the dependable stretch ends.
+        /// Bands before the first dependable one are skipped: a predicate whose early candidates all fail (retreat)
+        /// would otherwise always report its very first band, which says nothing about when help stops arriving.
+        /// Null when no band ever reached 90%, or when none falls back below.
+        /// </summary>
         public long? FirstBandBelow900Tick;
         public long? FirstBandBelow500Tick;
     }
@@ -263,7 +270,13 @@ namespace Rts.Application
             {
                 if (band.Decided == 0) continue;
                 band.SuccessPermille = (int)(1000L * band.Success / band.Decided);
-                if (band.SuccessPermille < 900 && result.FirstBandBelow900Tick == null) result.FirstBandBelow900Tick = band.FromTick;
+                if (band.SuccessPermille >= 900)
+                {
+                    if (result.FirstBandAtLeast900Tick == null) result.FirstBandAtLeast900Tick = band.FromTick;
+                    continue;
+                }
+                if (result.FirstBandAtLeast900Tick == null) continue;
+                if (result.FirstBandBelow900Tick == null) result.FirstBandBelow900Tick = band.FromTick;
                 if (band.SuccessPermille < 500 && result.FirstBandBelow500Tick == null) result.FirstBandBelow500Tick = band.FromTick;
             }
         }
