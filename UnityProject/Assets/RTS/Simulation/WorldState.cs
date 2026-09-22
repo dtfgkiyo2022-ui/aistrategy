@@ -87,6 +87,40 @@ namespace Rts.Simulation
         internal long LastSeenTick;
     }
 
+    /// <summary>Ver.3 (technical-design-v3 3.2). Villagers are a separate array: soldier code indexes armies by
+    /// ArmyId - 1, and a villager has no army (the sentry lesson in 5.5).</summary>
+    internal struct VillagerState
+    {
+        internal uint Id, FactionId;
+        internal bool Alive, IsMoving;
+        internal int Hp;
+        internal SimPoint Position, MoveGoal;
+        internal VillagerTask Task;
+        internal uint NodeId;
+        internal ResourceKind CarryKind;
+        internal int Carry;
+        internal long NextGatherTick;
+        internal int[] Route;
+        internal int RouteCursor;
+        internal SimPoint RouteGoal;
+    }
+
+    internal enum VillagerTask : byte { Idle = 0, ToNode = 1, Gathering = 2, ToDropOff = 3 }
+
+    internal struct ResourceNodeState
+    {
+        internal ResourceNodeDefinition Definition;
+        internal int Remaining;
+    }
+
+    internal struct FactionEconomy
+    {
+        internal int Food, Wood;
+        /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
+        internal int Queued;
+        internal long TrainRemaining;
+    }
+
     internal sealed class WorldState
     {
         internal readonly ScenarioDefinition Config;
@@ -104,6 +138,12 @@ namespace Rts.Simulation
         internal readonly uint NextArmyId, NextCoreId, NextOutpostId, NextFactionId;
         internal long Tick;
         internal ulong InputCursor;
+        internal ResourceNodeState[] Nodes;
+        internal VillagerState[] Villagers;
+        internal uint NextVillagerId;
+        internal int VillagerCount => checked((int)(NextVillagerId - 1));
+        internal FactionEconomy[] Economies;
+        internal Fix64 VillagerStep;
         internal MatchResult Result;
 
         internal WorldState(ScenarioDefinition source)
@@ -156,6 +196,20 @@ namespace Rts.Simulation
             }
             SoldierTraversal = soldiers.ToArray();
             ArmyTraversal = armies.ToArray();
+            var e = Config.Economy;
+            Nodes = new ResourceNodeState[Config.ResourceNodes.Length];
+            for (int i = 0; i < Nodes.Length; i++) Nodes[i] = new ResourceNodeState { Definition = Config.ResourceNodes[i], Remaining = Config.ResourceNodes[i].Amount };
+            Villagers = new VillagerState[Config.Villagers.Length];
+            for (int i = 0; i < Villagers.Length; i++)
+            {
+                var v = Config.Villagers[i];
+                Villagers[i] = new VillagerState { Id = v.Id, FactionId = v.FactionId, Alive = true, Hp = e.VillagerHp,
+                    Position = v.Position, MoveGoal = v.Position, Route = Array.Empty<int>() };
+            }
+            NextVillagerId = checked((uint)Villagers.Length + 1);
+            Economies = new FactionEconomy[2];
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood };
+            VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
         }
 
         private static ScenarioDefinition CopyAndValidate(ScenarioDefinition s)
@@ -190,9 +244,25 @@ namespace Rts.Simulation
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
-                ResourceNodes = Copy(s.ResourceNodes), Economy = new EconomyRules { Enabled = s.Economy != null && s.Economy.Enabled } };
-            Require(s.Economy != null, "Missing economy rules.");
-            Require(!c.Economy.Enabled, "The economy is not implemented yet (technical-design-v3 8, PR 2).");
+                ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers) };
+            var e = c.Economy;
+            if (e.Enabled)
+                Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
+                    && e.VillagerSpeed.Raw > 0 && e.VillagerSpeed <= Fix64.FromInt(16) && e.CarryCapacity > 0 && e.GatherIntervalTicks > 0
+                    && e.VillagerFoodCost >= 0 && e.VillagerTrainTicks > 0 && e.QueueLimit > 0 && e.AutoVillagerTarget >= 0
+                    && e.DropOffMargin.Raw >= 0 && e.DropOffMargin <= Fix64.FromInt(1024), "Invalid economy rules.");
+            else Require(c.Villagers.Length == 0, "Villagers need an enabled economy.");
+            Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
+            var villagerCounts = new int[2];
+            var villagerGrid = new GridMap(c.Map);
+            for (int i = 0; i < c.Villagers.Length; i++)
+            {
+                var v = c.Villagers[i];
+                Require(v.Id == i + 1 && v.FactionId >= 1 && v.FactionId <= 2, "Invalid villager.");
+                ValidatePoint(v.Position, c.Map);
+                Require(villagerGrid.IsPassable(villagerGrid.Cell(v.Position)), "Villager starts outside passable terrain.");
+                villagerCounts[v.FactionId - 1]++;
+            }
             Array.Sort(c.ResourceNodes, (a, b) => a.Id.CompareTo(b.Id));
             var nodeCells = new System.Collections.Generic.HashSet<long>();
             for (int i = 0; i < c.ResourceNodes.Length; i++)
@@ -273,7 +343,20 @@ namespace Rts.Simulation
                         && ++factionCounts[d.FactionId - 1] <= r.FactionCap, "Initial capacity exceeded.");
                 }
             }
+            if (e.Enabled)
+                for (int f = 0; f < 2; f++)
+                    Require(factionCounts[f] + villagerCounts[f] <= e.PopulationCap, "Initial population exceeds the cap.");
             return c;
+        }
+
+        private static EconomyRules CopyEconomy(EconomyRules e)
+        {
+            Require(e != null, "Missing economy rules.");
+            return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
+                PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
+                CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
+                VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
+                DropOffMargin = e.DropOffMargin };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

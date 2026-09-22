@@ -76,7 +76,31 @@ namespace Rts.Simulation
                     w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds,world.SoldierCount);
                     for(int i=0;i<world.SoldierCount;i++) { string c=n+"Contacts["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Point(c+"Position",f.ContactPositions[i]); w.Value(c+"LastSeenTick",f.ContactLastSeenTicks[i]); w.Value(c+"Absent",f.ContactAbsent[i]); } }
                 WriteDecision(w);
+                // Written only when the economy is on, so Ver.1 scenarios keep their exact canonical bytes.
+                if (world.Config.Economy.Enabled) WriteEconomy(w);
                 return new DiagnosticState(world.Tick,s.ToArray());
+            }
+        }
+        private void WriteEconomy(StateWriter w)
+        {
+            for (int f = 0; f < world.Economies.Length; f++)
+            {
+                var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining);
+            }
+            w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
+            foreach (var r in world.Nodes) w.Value("ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining", r.Remaining);
+            w.Value("NextVillagerId", world.NextVillagerId);
+            w.Value("Villagers.Count", (uint)world.VillagerCount);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i]; string n = "Villagers[" + v.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Id", v.Id); w.Value(n + "FactionId", v.FactionId); w.Value(n + "Alive", v.Alive); w.Value(n + "Hp", v.Hp);
+                w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
+                w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
+                w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
+                w.Value(n + "Route.Count", (uint)v.Route.Length);
+                for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }
         }
         private sealed class StateWriter : BinaryWriter

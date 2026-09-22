@@ -14,7 +14,7 @@ internal static class GenMapCommand
     internal static int Run(Dictionary<string, string> options)
     {
         ulong seed = ulong.Parse(options.TryGetValue("--seed", out var value) ? value : throw new InvalidDataException("Missing --seed."), CultureInfo.InvariantCulture);
-        var scenario = MapGenerator.Generate(seed);
+        var scenario = MapGenerator.Generate(seed, options.ContainsKey("--economy"));
         string text = Describe(scenario);
         if (options.TryGetValue("--out", out var path)) File.WriteAllText(path, text, new UTF8Encoding(false));
         else Console.Write(text);
@@ -32,6 +32,7 @@ internal static class GenMapCommand
         int Cell(SimPoint p) => (int)(p.Z.Raw / 65536 / size) * columns + (int)(p.X.Raw / 65536 / size);
         foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : 'f';
         foreach (var d in s.Soldiers) marks[Cell(d.Position)] = d.FactionId == 1 ? '1' : '2';
+        foreach (var v in s.Villagers) marks[Cell(v.Position)] = 'v';
         marks[Cell(s.Outposts[0].Position)] = 'N';
         marks[Cell(s.Outposts[1].Position)] = 'S';
         marks[Cell(s.Cores[0].Position)] = 'W';
@@ -39,7 +40,7 @@ internal static class GenMapCommand
 
         var b = new StringBuilder();
         b.AppendLine(s.ScenarioId + "  (" + MapGenerator.Version + ", " + columns + "x" + rows + " cells of " + size + " m)");
-        b.AppendLine("W/E cores, N/S outposts, w wood, f food, 1/2 soldiers, # blocked");
+        b.AppendLine("W/E cores, N/S outposts, w wood, f food, 1/2 soldiers, v villagers, # blocked");
         for (int z = rows - 1; z >= 0; z--)
         {
             for (int x = 0; x < columns; x++) b.Append(marks[z * columns + x]);

@@ -23,6 +23,14 @@ namespace Rts.Simulation
         public ResourceNodeDefinition[] ResourceNodes = Array.Empty<ResourceNodeDefinition>();
         /// <summary>Ver.3: economy rules. Disabled in every Ver.1 scenario, so nothing new runs there.</summary>
         public EconomyRules Economy = new EconomyRules();
+        /// <summary>Ver.3: villagers at S0. Only allowed when the economy is enabled.</summary>
+        public VillagerDefinition[] Villagers = Array.Empty<VillagerDefinition>();
+    }
+
+    public struct VillagerDefinition
+    {
+        public uint Id, FactionId;
+        public SimPoint Position;
     }
 
     public struct ResourceNodeDefinition
@@ -33,10 +41,21 @@ namespace Rts.Simulation
         public int Amount;
     }
 
+    /// <summary>technical-design-v3 4: provisional values. They make one pass work; they are not tuned.</summary>
     public sealed class EconomyRules
     {
-        /// <summary>V3-1 PR1 only places resources; the simulation does not run an economy yet, so this must stay false.</summary>
         public bool Enabled;
+        public int StartFood = 200, StartWood = 150;
+        /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
+        public int PopulationCap = 60;
+        public int VillagerHp = 40;
+        public Fix64 VillagerSpeed = Fix64.FromInt(2);
+        public int CarryCapacity = 10, GatherIntervalTicks = 20;
+        public int VillagerFoodCost = 50, VillagerTrainTicks = 200, QueueLimit = 5;
+        /// <summary>The automatic economy trains villagers up to this many (5.4 step 1).</summary>
+        public int AutoVillagerTarget = 10;
+        /// <summary>A villager drops its load once within the core radius plus this.</summary>
+        public Fix64 DropOffMargin = Fix64.FromInt(2);
     }
 
     public sealed class MapDefinition
