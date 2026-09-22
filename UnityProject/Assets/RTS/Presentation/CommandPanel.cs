@@ -59,7 +59,8 @@ namespace Rts.Presentation
         {
             if (ExtraBlocksClick != null && ExtraBlocksClick(screenPoint)) return true;
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
+            return ButtonsRect().Contains(guiPoint) || LogToggleRect().Contains(guiPoint)
+                || (logOpen && (LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)))
                 || SupplyRect().Contains(guiPoint) || SetupButtonRect().Contains(guiPoint) || LanguageButtonRect().Contains(guiPoint)
                 || (setupOpen && SetupRect().Contains(guiPoint))
                 || (Outcome().HasValue && ResultRect().Contains(guiPoint));
@@ -113,7 +114,12 @@ namespace Rts.Presentation
             return frame == null ? (MatchOutcome?)null : MatchOutcome.Describe(frame.Result, factionId, frame.Tick);
         }
 
-        private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
+        private bool logOpen;
+
+        /// <summary>The fold button at the top of the right column; the log opens under it.</summary>
+        private Rect LogToggleRect() { return new Rect(Screen.width - 430f, 8f, 422f, 26f); }
+
+        private Rect LogRect() { return new Rect(Screen.width - 430f, 38f, 422f, MaxLogLines * 20f + 30f); }
 
         private void OnGUI()
         {
@@ -165,6 +171,10 @@ namespace Rts.Presentation
                 if (LanguageChanged != null) LanguageChanged(UiText.Japanese);
             }
 
+            // The command log and status stay folded unless the player opens them: they are for checking, not playing.
+            if (GUI.Button(LogToggleRect(), logOpen ? UiText.T("Fold the command log ^", "命令の記録と状態を畳む ▲")
+                : UiText.T("Command log and status v", "命令の記録と状態を開く ▼"))) logOpen = !logOpen;
+            if (!logOpen) { if (setupOpen) DrawSetup(); DrawResult(); return; }
             var statusRect = StatusRect();
             GUI.Box(statusRect, UiText.T("Command status (7 states)", "命令の状態（7段階）"));
             var frame = view.LatestFrame;
