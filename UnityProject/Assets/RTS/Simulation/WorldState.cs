@@ -133,6 +133,8 @@ namespace Rts.Simulation
         internal int QueuedMetal;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
         internal int Interval;
+        /// <summary>V3-5 (32): the kind of each queued unit, front first; null without ages (then every entry is infantry).</summary>
+        internal UnitKind[] QueueKinds;
         /// <summary>V3-2 mine: the ore point under its footprint.</summary>
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
@@ -337,7 +339,8 @@ namespace Rts.Simulation
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
-                && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0), "Invalid age rules.");
+                && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
+                && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -473,7 +476,8 @@ namespace Rts.Simulation
                 AgrarianInfantryFood = e.AgrarianInfantryFood, AgrarianInfantryWood = e.AgrarianInfantryWood, AgrarianInfantryTicks = e.AgrarianInfantryTicks,
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
-                FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach };
+                FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
+                ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

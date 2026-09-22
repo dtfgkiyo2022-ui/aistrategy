@@ -26,8 +26,15 @@ namespace Rts.Simulation
             }
         }
 
-        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin)
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin) => Spawn(faction, kind, objective, origin, UnitKind.Infantry);
+
+        /// <summary>
+        /// A new soldier of <paramref name="unit"/> next to <paramref name="origin"/>. Infantry joins the home army of the
+        /// objective, then the reserve, then any other non-scout army (Ver.1); a scout joins a scout army (V3-5).
+        /// </summary>
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit)
         {
+            bool scout = unit == UnitKind.Scout;
             int alive = 0;
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) alive++;
@@ -37,7 +44,7 @@ namespace Rts.Simulation
                 foreach (uint id in world.Factions[faction - 1].ArmyIds)
                 {
                     var a = world.Armies[id - 1];
-                    if (a.Definition.Role == "scout") continue;
+                    if ((a.Definition.Role == "scout") != scout) continue;
                     var home = a.Definition.HomeObjective;
                     int rank = home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
                     if (rank != priority) continue;
@@ -54,12 +61,12 @@ namespace Rts.Simulation
             int index = world.SoldierCount;
             EnsureSoldierCapacity(index + 1);
             var position = world.Map.Center(cell);
-            var parameters = Array.Find(world.Config.UnitParameters, p => p.Kind == UnitKind.Infantry);
-            if (parameters.Hp <= 0) throw new ArithmeticException("Missing infantry parameters.");
+            var parameters = Array.Find(world.Config.UnitParameters, p => p.Kind == unit);
+            if (parameters.Hp <= 0) throw new ArithmeticException("Missing " + unit + " parameters.");
             world.Soldiers[index] = new SoldierState
             {
                 Initial = new SoldierDefinition { Id = world.NextSoldierId, FactionId = faction, ArmyId = army,
-                    Kind = UnitKind.Infantry, Alive = true, Hp = parameters.Hp, Position = position },
+                    Kind = unit, Alive = true, Hp = parameters.Hp, Position = position },
                 Alive = true, Hp = parameters.Hp, Position = position, MoveGoal = position,
                 Parameters = parameters, StepDistance = Fix64.FromRaw(parameters.Speed.Raw / 20)
             };

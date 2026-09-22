@@ -302,13 +302,15 @@ namespace Rts.Contracts
         /// <summary>V3-4: the farm (agrarian civilisation only).</summary>
         public int FarmWoodCost { get; }
         public int FarmSizeCells { get; }
+        /// <summary>V3-5: a scout at the barracks (maps with ages only; 0 otherwise).</summary>
+        public int ScoutFoodCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -318,8 +320,9 @@ namespace Rts.Contracts
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
             int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
             EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost,
-            int farmWoodCost, int farmSizeCells)
+            int farmWoodCost, int farmSizeCells, int scoutFoodCost)
         {
+            ScoutFoodCost = scoutFoodCost;
             FarmWoodCost = farmWoodCost; FarmSizeCells = farmSizeCells;
             Ages = ages; Civ = civ; AdvancingTo = advancingTo; AdvanceRemaining = advanceRemaining;
             AdvanceFoodCost = advanceFoodCost; AdvanceWoodCost = advanceWoodCost;

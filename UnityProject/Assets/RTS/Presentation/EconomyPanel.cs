@@ -311,6 +311,15 @@ namespace Rts.Presentation
             }
             else GUI.Label(new Rect(right, y, half, 22f), UiText.T("Infantry: build a barracks", "歩兵：兵舎を建てると作れる"));
             y += 26f;
+            if (economy.Ages)
+            {
+                // V3-5: scouts from the barracks.
+                GUI.enabled = barracks.HasValue && barracks.Value.Complete;
+                if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Scout (", "斥候（食料 ") + economy.ScoutFoodCost + UiText.T(" food)", "）")) && barracks.HasValue)
+                    Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Scout), UiText.T("Scout requested", "斥候を依頼しました"));
+                GUI.enabled = true;
+                y += 26f;
+            }
             if (economy.Ages && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
             {
                 // V3-4: advancing out of the primitive age, into one civilisation.
@@ -324,7 +333,8 @@ namespace Rts.Presentation
             if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Idle -> food", "待機中の村人 → 食料"))) SendIdle(economy, ResourceKind.Food);
             if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Idle -> wood", "待機中の村人 → 木材"))) SendIdle(economy, ResourceKind.Wood);
             y += 26f;
-            if (!economy.Industry) return;
+            // Nothing to carry by hand before a civilisation brings mines or farms.
+            if (!economy.Industry || (economy.Ages && economy.Civ == CivKind.Primitive)) return;
             bool farming = economy.Ages && economy.Civ == CivKind.Agrarian;
             var source = OwnBuilding(economy, farming ? BuildingKind.Farm : BuildingKind.Mine);
             string from = farming ? UiText.T("the farm", "農場") : UiText.T("the mine", "採掘場");

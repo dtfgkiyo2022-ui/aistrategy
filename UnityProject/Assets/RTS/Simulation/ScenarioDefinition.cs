@@ -106,6 +106,8 @@ namespace Rts.Simulation
         /// for each food point within FarmFoodReach metres and once more with river within FarmRiverReach, never under FarmMinTicks.</summary>
         public int FarmSizeCells = 2, FarmWoodCost = 80, FarmWork = 200, FarmHp = 400;
         public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
+        /// <summary>V3-5 (32): scouts trained at a barracks on a map with ages.</summary>
+        public int ScoutFoodCost = 40, ScoutWoodCost = 0, ScoutTrainTicks = 200;
     }
 
     public sealed class MapDefinition

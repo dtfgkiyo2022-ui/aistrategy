@@ -68,15 +68,9 @@ namespace Rts.Simulation
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
-                    if (b.Kind != BuildingKind.Barracks || !b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
-                        || economy.Food < InfantryFoodFor(faction) || economy.Wood < InfantryWoodFor(faction) || economy.Metal < InfantryMetalFor(faction)) return;
-                    economy.Food = checked(economy.Food - InfantryFoodFor(faction));
-                    economy.Wood = checked(economy.Wood - InfantryWoodFor(faction));
-                    economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
-                    b.QueuedMetal = checked(b.QueuedMetal + InfantryMetalFor(faction));
+                    if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit)) return;
                     if (IndustryOn) b.Held = true;
-                    if (b.Queued == 0) b.TrainRemaining = InfantryTicksFor(faction);
-                    b.Queued++;
+                    Enqueue(faction, ref b, c.Unit);
                     return;
                 }
                 case EconomyCommandKind.CancelTrain:
@@ -95,15 +89,8 @@ namespace Rts.Simulation
                     ref var b = ref world.Buildings[index];
                     if (b.Queued == 0) return;
                     if (IndustryOn) b.Held = true;
-                    b.Queued--;
-                    // A cancel returns today's price; advancing only ever lowers food and wood, so nothing is gained.
-                    economy.Food = checked(economy.Food + InfantryFoodFor(faction));
-                    economy.Wood = checked(economy.Wood + InfantryWoodFor(faction));
-                    // Never more metal back than the queue paid (a cancel after advancing into metallurgy).
-                    int metalBack = Math.Min(InfantryMetalFor(faction), b.QueuedMetal);
-                    b.QueuedMetal -= metalBack;
-                    economy.Metal = checked(economy.Metal + metalBack);
-                    if (b.Queued == 0) b.TrainRemaining = 0;
+                    // Today's price back; advancing only ever lowers food and wood, and metal comes back only as paid.
+                    CancelLast(faction, ref b);
                     return;
                 }
                 case EconomyCommandKind.AssignVillagers:

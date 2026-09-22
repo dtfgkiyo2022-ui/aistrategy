@@ -33,16 +33,12 @@ namespace Rts.Simulation
                 PlaceBarracks(faction);
             if (barracks < 0) return;
             ref var building = ref world.Buildings[barracks];
+            if (DecideScout(faction, ref building)) return;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, rules.PopulationCap, HasInfantryRoom(faction))
                 || economy.Metal < InfantryMetalFor(faction) || SavingToAdvance(faction)) return;
-            economy.Food = checked(economy.Food - InfantryFoodFor(faction));
-            economy.Wood = checked(economy.Wood - InfantryWoodFor(faction));
-            economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
-            building.QueuedMetal = checked(building.QueuedMetal + InfantryMetalFor(faction));
-            if (building.Queued == 0) building.TrainRemaining = InfantryTicksFor(faction);
-            building.Queued++;
+            Enqueue(faction, ref building, UnitKind.Infantry);
         }
 
         private void PlaceBarracks(uint faction)
@@ -232,17 +228,17 @@ namespace Rts.Simulation
                 if (b.TrainRemaining > 0) continue;
                 // A full population or full armies hold the finished soldier at the door until there is room.
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= rules.PopulationCap) continue;
+                var unit = QueueAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
-                bool paid = metal > 0 && b.QueuedMetal >= metal;
-                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell))) continue;
+                bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
+                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), unit)) continue;
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
-                b.Queued--;
-                b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - InfantryMetalFor(b.FactionId));
-                b.TrainRemaining = b.Queued > 0 ? InfantryTicksFor(b.FactionId) : 0;
+                Dequeue(b.FactionId, ref b, unit);
             }
         }
 
+        /// <summary>Every unit queued in the faction's buildings (for the population).</summary>
         private int QueuedInfantry(uint faction)
         {
             int count = 0;
@@ -251,19 +247,7 @@ namespace Rts.Simulation
         }
 
         /// <summary>The same rule the reinforcement assignment uses: any non-scout army with a free slot.</summary>
-        private bool HasInfantryRoom(uint faction)
-        {
-            int queued = QueuedInfantry(faction), free = 0;
-            foreach (uint id in world.Factions[faction - 1].ArmyIds)
-            {
-                var a = world.Armies[id - 1];
-                if (a.Definition.Role == "scout") continue;
-                int count = 0;
-                foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
-                free += a.Definition.Capacity - count;
-            }
-            return free > queued;
-        }
+        private bool HasInfantryRoom(uint faction) => HasRoomFor(faction, UnitKind.Infantry);
 
         private int SizeOf(BuildingKind kind)
         {
