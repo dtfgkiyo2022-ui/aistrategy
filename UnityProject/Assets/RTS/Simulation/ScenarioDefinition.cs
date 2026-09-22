@@ -98,7 +98,15 @@ namespace Rts.Simulation
         public int WidthCells = 128, HeightCells = 64;
         public bool DefaultPassable = true;
         public int[] BlockedCellIds = Array.Empty<int>();
+        /// <summary>
+        /// V3-4 (technical-design-v3 28.1): one TerrainKind per cell, or empty for plain ground everywhere. It only names
+        /// what a blocked cell is; BlockedCellIds alone decides where units can go.
+        /// </summary>
+        public byte[] Terrain = Array.Empty<byte>();
     }
+
+    /// <summary>V3-4 terrain kinds. Everything but Plain is impassable.</summary>
+    public enum TerrainKind : byte { Plain = 0, Forest = 1, River = 2, Mountain = 3 }
 
     public sealed class RuleDefinition
     {

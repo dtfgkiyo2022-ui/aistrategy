@@ -8,7 +8,7 @@ namespace Rts.UnityHost
     {
         public static TerrainMap From(MapDefinition map)
         {
-            return new TerrainMap(map.WidthCells, map.HeightCells, map.CellSizeMeters, map.BlockedCellIds);
+            return new TerrainMap(map.WidthCells, map.HeightCells, map.CellSizeMeters, map.BlockedCellIds, map.Terrain);
         }
     }
 }

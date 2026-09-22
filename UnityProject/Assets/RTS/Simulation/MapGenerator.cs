@@ -12,7 +12,7 @@ namespace Rts.Simulation
     /// build the same map from a seed and compare Config.Hash before an online match.
     /// Changing what a seed produces requires a new <see cref="Version"/>.
     /// </summary>
-    public static class MapGenerator
+    public static partial class MapGenerator
     {
         public const string Version = "mapgen-1";
 

@@ -163,8 +163,8 @@ namespace Rts.UnityHost
         {
             if (mapSeed == 0) mapSeed = FreshSeed();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
-            // V3-2: the random map is the industry map (mapgen-2): ore, mines, smelters and belts.
-            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.Generate(mapSeed, true, true)
+            // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
+            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.GenerateTerrain(mapSeed)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);

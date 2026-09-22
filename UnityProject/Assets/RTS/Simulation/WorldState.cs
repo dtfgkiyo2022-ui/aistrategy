@@ -298,7 +298,8 @@ namespace Rts.Simulation
             var c = new ScenarioDefinition { SchemaVersion = s.SchemaVersion, ScenarioId = s.ScenarioId, Seed = s.Seed,
                 TickRateHz = s.TickRateHz, VerificationTickLimit = s.VerificationTickLimit,
                 Map = new MapDefinition { WidthMeters = m.WidthMeters, HeightMeters = m.HeightMeters,
-                    CellSizeMeters = m.CellSizeMeters, WidthCells = m.WidthCells, HeightCells = m.HeightCells, DefaultPassable = m.DefaultPassable, BlockedCellIds = blocked },
+                    CellSizeMeters = m.CellSizeMeters, WidthCells = m.WidthCells, HeightCells = m.HeightCells, DefaultPassable = m.DefaultPassable, BlockedCellIds = blocked,
+                    Terrain = Copy(m.Terrain) },
                 Rules = new RuleDefinition { FactionCap = r.FactionCap, CoreRadius = r.CoreRadius,
                     OwnedObjectiveVision = r.OwnedObjectiveVision, CaptureRadius = r.CaptureRadius,
                     CaptureDurationTicks = r.CaptureDurationTicks, CoreReinforcementIntervalTicks = r.CoreReinforcementIntervalTicks,
@@ -325,6 +326,15 @@ namespace Rts.Simulation
                     && e.SmelterSizeCells > 0 && e.SmelterSizeCells <= 8 && e.SmelterWoodCost >= 0 && e.SmelterWork > 0 && e.SmelterHp > 0
                     && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0, "Invalid industry rules.");
             else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0, "Belts and metal costs need industry.");
+            // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
+            if (c.Map.Terrain.Length != 0)
+            {
+                Require(e.Industry && c.Map.Terrain.Length == m.WidthCells * m.HeightCells && m.DefaultPassable, "Invalid terrain.");
+                var closed = new bool[c.Map.Terrain.Length];
+                foreach (int id in blocked) closed[id] = true;
+                for (int i = 0; i < closed.Length; i++)
+                    Require(c.Map.Terrain[i] <= (byte)TerrainKind.Mountain && (c.Map.Terrain[i] == 0 || closed[i]), "Terrain outside a blocked cell.");
+            }
             Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
             var villagerCounts = new int[2];
             var villagerGrid = new GridMap(c.Map);
