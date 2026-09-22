@@ -40,6 +40,11 @@ namespace Rts.Presentation
         private static readonly Color EnemyBeltColor = new Color(0.3f, 0.2f, 0.2f);
         private static readonly Color StripeColor = new Color(0.75f, 0.75f, 0.8f);
         private static readonly Color PortColor = new Color(1f, 0.85f, 0.2f);
+        // V3-3: what the player holds (the automatic economy leaves it alone) carries a small white flag, and a held belt
+        // is a lighter plate.
+        private static readonly Color HeldColor = new Color(1f, 1f, 1f);
+        private static readonly Color HeldBeltColor = new Color(0.42f, 0.42f, 0.5f);
+        private readonly Dictionary<uint, GameObject> buildingFlags = new Dictionary<uint, GameObject>();
         private static readonly Color OwnVillagerColor = new Color(0.55f, 0.8f, 1f);
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
@@ -72,6 +77,8 @@ namespace Rts.Presentation
             foreach (var go in buildings.Values) Destroy(go);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
+            foreach (var go in buildingFlags.Values) Destroy(go);
+            buildingFlags.Clear();
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
@@ -136,6 +143,7 @@ namespace Rts.Presentation
                         ownVillagers.Add(v.Id, go);
                     }
                     villagerTargets[v.Id] = p;
+                    SetFlag(go.transform, v.PlayerHeld, new Vector3(0f, 1.4f, 0f), new Vector3(0.18f, 0.7f, 0.18f));
                 }
                 else
                 {
@@ -188,8 +196,24 @@ namespace Rts.Presentation
                 go.transform.position = new Vector3(p.x, height / 2f, p.z);
                 go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
                 go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                if (b.PlayerHeld)
+                {
+                    if (!buildingFlags.TryGetValue(b.Id, out var flag))
+                    {
+                        flag = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        flag.name = "Held " + b.Id;
+                        Destroy(flag.GetComponent<Collider>());
+                        flag.transform.SetParent(transform, false);
+                        flag.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(HeldColor);
+                        flag.transform.localScale = new Vector3(0.3f, 1.4f, 0.3f);
+                        buildingFlags.Add(b.Id, flag);
+                    }
+                    flag.transform.position = new Vector3(p.x, height + 0.7f, p.z);
+                }
+                else if (buildingFlags.TryGetValue(b.Id, out var old)) { Destroy(old); buildingFlags.Remove(b.Id); }
             }
             Remove(buildings, seen);
+            Remove(buildingFlags, seen);
             Remove(ports, seen);
         }
 
@@ -220,7 +244,7 @@ namespace Rts.Presentation
                     stripe.transform.localPosition = new Vector3(0f, 0.1f, 0.25f);
                     belts.Add(b.Cell, plate);
                 }
-                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(b.FactionId == ownFaction ? BeltColor : EnemyBeltColor);
+                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor);
                 plate.transform.position = new Vector3(centre.x, 0.05f, centre.z);
                 plate.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 if (b.Item == 0) continue;
@@ -277,6 +301,26 @@ namespace Rts.Presentation
 
         public static Vector3 Direction(Facing facing)
             => facing == Facing.North ? Vector3.forward : facing == Facing.East ? Vector3.right : facing == Facing.South ? Vector3.back : Vector3.left;
+
+        /// <summary>A white flag child on a unit's object, made once and shown only while the player holds it.</summary>
+        private static void SetFlag(Transform parent, bool shown, Vector3 localPosition, Vector3 worldScale)
+        {
+            var flag = parent.Find("Held");
+            if (flag == null)
+            {
+                if (!shown) return;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = "Held";
+                Destroy(go.GetComponent<Collider>());
+                go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(HeldColor);
+                go.transform.SetParent(parent, false);
+                var s = parent.lossyScale;
+                go.transform.localScale = new Vector3(worldScale.x / s.x, worldScale.y / s.y, worldScale.z / s.z);
+                go.transform.localPosition = new Vector3(localPosition.x / s.x, localPosition.y / s.y, localPosition.z / s.z);
+                flag = go.transform;
+            }
+            flag.gameObject.SetActive(shown);
+        }
 
         private GameObject Capsule(string name, Color color)
         {
