@@ -18,6 +18,7 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             int mine = OwnBuildingIndex(faction, BuildingKind.Mine), smelter = OwnBuildingIndex(faction, BuildingKind.Smelter);
@@ -202,6 +203,119 @@ namespace Rts.Simulation
                 }
             }
             return (null, null);
+        }
+
+        private const int FarmTarget = 2, FarmSearchRadiusCells = 12;
+
+        /// <summary>
+        /// V3-4 agrarian (technical-design-v3 29): up to FarmTarget farms on the quickest ground near the core, each with
+        /// a belt line into the core; until a farm's line is whole, one villager carries its food by hand. A farm the
+        /// player placed or runs is left to them.
+        /// </summary>
+        private void DecideFarms(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int farms = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+            if (farms < FarmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
+            var taken = new bool[world.Belts.Length];
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Farm || !b.Complete || b.Held) continue;
+                var route = BeltRoute(faction, OutputCell(b), taken, next => FeedsOwnCore(next, faction));
+                bool whole = false;
+                if (route.cells != null)
+                {
+                    foreach (int c in route.cells) taken[c] = true;
+                    whole = LayBelts(faction, route.cells, route.facings);
+                }
+                SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+            }
+        }
+
+        /// <summary>Clear footprints in rings around the core; the quickest ground wins (then the ring order).</summary>
+        private bool PlaceFarm(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int size = world.Config.Economy.FarmSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int coreCell = world.Map.Cell(core), cx = coreCell % width, cz = coreCell / width;
+            var candidates = new System.Collections.Generic.List<(int interval, int order, int origin, Facing side)>();
+            int order = 0;
+            for (int r = 2; r <= FarmSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!SiteIsClear(origin, coreCell, size)) continue;
+                        foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        {
+                            if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            candidates.Add((FarmInterval(origin), order++, origin, side));
+                            break;
+                        }
+                    }
+            candidates.Sort((a, b) => a.interval != b.interval ? a.interval.CompareTo(b.interval) : a.order.CompareTo(b.order));
+            foreach (var c in candidates)
+            {
+                if (!KeepsMapConnected(faction, c.origin, size)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Farm, c.origin, c.side, 0);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Lays the missing belts of one route while wood lasts; true when every cell carries an own belt along it.</summary>
+        private bool LayBelts(uint faction, int[] route, Facing[] facings)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int owned = 0;
+            for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            bool whole = true;
+            for (int i = 0; i < route.Length; i++)
+            {
+                ref var belt = ref world.Belts[route[i]];
+                if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
+                whole = false;
+                if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) continue;
+                economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
+                belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
+                owned++;
+                world.BeltOrder = null;
+            }
+            return whole;
+        }
+
+        /// <summary>One carrier per farm while its line is not whole (the nearest gatherer or idle villager), none after.</summary>
+        private void SetFarmHauler(uint faction, uint farm, int wanted)
+        {
+            int current = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != farm) continue;
+                if (wanted == 0) StopHauling(ref v); else current++;
+            }
+            if (current >= wanted) return;
+            var spot = world.Map.Center(world.Buildings[farm - 1].WorkCell);
+            int best = -1;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.Carry > 0
+                    || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
+            }
+            if (best < 0) return;
+            ref var chosen = ref world.Villagers[best];
+            chosen.NodeId = 0;
+            chosen.HaulFrom = farm;
+            chosen.Task = VillagerTask.ToPickup;
         }
 
         /// <summary>
