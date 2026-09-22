@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -68,7 +68,7 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
-    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6 }
+    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8 }
 
     public enum EventKind : byte
     {

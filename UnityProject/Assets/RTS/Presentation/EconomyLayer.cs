@@ -34,6 +34,7 @@ namespace Rts.Presentation
         private static readonly Color WoodColor = new Color(0.2f, 0.55f, 0.2f);
         private static readonly Color FoodColor = new Color(0.95f, 0.8f, 0.2f);
         private static readonly Color OreColor = new Color(0.45f, 0.42f, 0.48f);
+        private static readonly Color StoneColor = new Color(0.78f, 0.78f, 0.74f);
         private static readonly Color OreItemColor = new Color(0.55f, 0.35f, 0.2f);
         private static readonly Color MetalItemColor = new Color(0.85f, 0.88f, 0.95f);
         private static readonly Color BeltColor = new Color(0.18f, 0.18f, 0.2f);
@@ -107,12 +108,12 @@ namespace Rts.Presentation
                 seen.Add(r.Id);
                 if (!resources.TryGetValue(r.Id, out var go))
                 {
-                    bool ore = r.Kind == ResourceKind.Ore;
-                    go = GameObject.CreatePrimitive(r.Kind == ResourceKind.Wood ? PrimitiveType.Cylinder : ore ? PrimitiveType.Cube : PrimitiveType.Sphere);
-                    go.name = (r.Kind == ResourceKind.Wood ? "Wood " : ore ? "Ore " : "Food ") + r.Id;
+                    bool ore = r.Kind == ResourceKind.Ore, stone = r.Kind == ResourceKind.Stone;
+                    go = GameObject.CreatePrimitive(r.Kind == ResourceKind.Wood ? PrimitiveType.Cylinder : ore || stone ? PrimitiveType.Cube : PrimitiveType.Sphere);
+                    go.name = (r.Kind == ResourceKind.Wood ? "Wood " : ore ? "Ore " : stone ? "Stone " : "Food ") + r.Id;
                     Destroy(go.GetComponent<Collider>());
                     go.transform.SetParent(transform, false);
-                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(r.Kind == ResourceKind.Wood ? WoodColor : ore ? OreColor : FoodColor);
+                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(r.Kind == ResourceKind.Wood ? WoodColor : ore ? OreColor : stone ? StoneColor : FoodColor);
                     if (ore) go.transform.rotation = Quaternion.Euler(0f, 30f, 0f);
                     resources.Add(r.Id, go);
                 }
@@ -120,7 +121,7 @@ namespace Rts.Presentation
                 float fill = Mathf.Clamp01(r.Remaining / (r.Kind == ResourceKind.Ore ? 400f : 300f)) * 0.66f + 0.34f;
                 var p = ToWorld(r.Position);
                 if (r.Kind == ResourceKind.Wood) { go.transform.position = new Vector3(p.x, 1.5f * fill, p.z); go.transform.localScale = new Vector3(1.2f, 1.5f * fill, 1.2f); }
-                else if (r.Kind == ResourceKind.Ore) { go.transform.position = new Vector3(p.x, 0.5f * fill, p.z); go.transform.localScale = new Vector3(1.5f, 1f, 1.5f) * fill; }
+                else if (r.Kind == ResourceKind.Ore || r.Kind == ResourceKind.Stone) { go.transform.position = new Vector3(p.x, 0.5f * fill, p.z); go.transform.localScale = new Vector3(1.5f, 1f, 1.5f) * fill; }
                 else { go.transform.position = new Vector3(p.x, 0.6f * fill, p.z); go.transform.localScale = Vector3.one * 1.3f * fill; }
             }
             Remove(resources, seen);
@@ -189,7 +190,8 @@ namespace Rts.Presentation
                 // An enemy building's progress is not shown (0), so it is drawn as finished.
                 bool finished = b.Complete || b.MaxHp == 0;
                 float full = b.Kind == BuildingKind.Mine ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
-                    : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f : 3f;
+                    : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f
+                    : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : 3f;
                 float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;

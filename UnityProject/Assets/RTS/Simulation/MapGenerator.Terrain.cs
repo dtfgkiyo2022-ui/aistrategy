@@ -20,6 +20,7 @@ namespace Rts.Simulation
         private const int LeanInner = 20, LeanOuter = 36, PondInner = 16, PondOuter = 30;
         private const int EdgeWood = 2, EdgeOre = 2, LeanOre = 3, PondFood = 3, RiverFood = 6;
         private const int TerrainScatteredWood = 8, TerrainScatteredFood = 5;
+        private const int GuaranteedStone = 2, StoneInner = 14, ScatteredStone = 4, StoneAmount = 300;
 
         /// <summary>What the ground near a core favours (28.2 step 4).</summary>
         public enum CoreLean : byte { Mountain = 0, River = 1 }
@@ -112,6 +113,27 @@ namespace Rts.Simulation
                 var kind = i < TerrainScatteredWood ? ResourceKind.Wood : ResourceKind.Food;
                 int cell = DrawCell(rng, reachable, used, c => !InRing(c, coreX[0], coreZ[0], 0, GuaranteedOuter) && !InRing(c, coreX[1], coreZ[1], 0, GuaranteedOuter));
                 nodes.Add(Node(nodes.Count + 1, kind, CenterX(cell), CenterZ(cell)));
+            }
+            // V3-5 (32 #5): stone - two near each core, one at the foot of each mountain, a few scattered. Drawn last.
+            for (int f = 0; f < 2; f++)
+                for (int i = 0; i < GuaranteedStone; i++)
+                {
+                    int cell = DrawCell(rng, reachable, used, c => InRing(c, coreX[f], coreZ[f], StoneInner, GuaranteedOuter));
+                    nodes.Add(Node(nodes.Count + 1, ResourceKind.Stone, CenterX(cell), CenterZ(cell)));
+                }
+            foreach (var feature in features)
+            {
+                if (feature[0] != (int)TerrainKind.Mountain) continue;
+                var edge = EdgeCells(terrain, reachable, used, TerrainKind.Mountain, feature[1], feature[2], feature[4]);
+                if (edge.Count == 0) continue;
+                int cell = edge[Range(rng, 0, edge.Count - 1)];
+                used.Add(cell);
+                nodes.Add(Node(nodes.Count + 1, ResourceKind.Stone, CenterX(cell), CenterZ(cell)));
+            }
+            for (int i = 0; i < ScatteredStone; i++)
+            {
+                int cell = DrawCell(rng, reachable, used, c => !InRing(c, coreX[0], coreZ[0], 0, GuaranteedOuter) && !InRing(c, coreX[1], coreZ[1], 0, GuaranteedOuter));
+                nodes.Add(Node(nodes.Count + 1, ResourceKind.Stone, CenterX(cell), CenterZ(cell)));
             }
             s.ResourceNodes = nodes.ToArray();
 

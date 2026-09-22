@@ -122,7 +122,7 @@ namespace Rts.Replay
                 w.Write((uint)e.VillagerIds.Count); foreach(var id in e.VillagerIds) w.Write(id);
                 w.Write((byte)e.TargetKind); w.Write(e.TargetId); w.Write(e.Enabled);
                 // V3-2: only a belt run carries cells, so every V3-1 economy input keeps its exact bytes.
-                if(e.Kind==EconomyCommandKind.PlaceBelt)
+                if(e.Kind==EconomyCommandKind.PlaceBelt || e.Kind==EconomyCommandKind.PlaceWall)
                 {
                     w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
                 }
@@ -156,7 +156,7 @@ namespace Rts.Replay
                 var villagers=new uint[ReplayBinary.Count(r)]; for(int i=0;i<villagers.Length;i++)villagers[i]=r.ReadUInt32();
                 var target=ReplayBinary.Enum<EconomyTargetKind>(r); uint targetId=r.ReadUInt32(); bool enabled=ReplayBinary.Bool(r);
                 int[] cells=null; Facing[] facings=null;
-                if(ek==EconomyCommandKind.PlaceBelt)
+                if(ek==EconomyCommandKind.PlaceBelt || ek==EconomyCommandKind.PlaceWall)
                 {
                     int n=ReplayBinary.Count(r); if(n>EconomyCommand.MaxBeltRun)throw new InvalidDataException("Belt run length.");
                     cells=new int[n]; facings=new Facing[n];

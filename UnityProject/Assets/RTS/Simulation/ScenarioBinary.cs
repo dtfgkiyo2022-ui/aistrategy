@@ -74,6 +74,9 @@ namespace Rts.Simulation
                     w.Write(e.ScoutFoodCost); w.Write(e.ScoutWoodCost); w.Write(e.ScoutTrainTicks);
                     w.Write(e.BasePopulation); w.Write(e.HousePopulation); w.Write(e.HouseSizeCells); w.Write(e.HouseWoodCost); w.Write(e.HouseWork); w.Write(e.HouseHp);
                     w.Write(e.DropSiteSizeCells); w.Write(e.DropSiteWoodCost); w.Write(e.DropSiteWork); w.Write(e.DropSiteHp);
+                    w.Write(e.WallStoneCost); w.Write(e.WallHp); w.Write(e.WallReach); w.Write(e.StartStone);
+                    w.Write(e.TowerSizeCells); w.Write(e.TowerWoodCost); w.Write(e.TowerStoneCost); w.Write(e.TowerWork); w.Write(e.TowerHp);
+                    w.Write(e.TowerRange); w.Write(e.TowerVision); w.Write(e.TowerDamage); w.Write(e.TowerIntervalTicks);
                 }
                 return s.ToArray();
             }
@@ -135,6 +138,9 @@ namespace Rts.Simulation
                     e.ScoutFoodCost=r.ReadInt32(); e.ScoutWoodCost=r.ReadInt32(); e.ScoutTrainTicks=r.ReadInt32();
                     e.BasePopulation=r.ReadInt32(); e.HousePopulation=r.ReadInt32(); e.HouseSizeCells=r.ReadInt32(); e.HouseWoodCost=r.ReadInt32(); e.HouseWork=r.ReadInt32(); e.HouseHp=r.ReadInt32();
                     e.DropSiteSizeCells=r.ReadInt32(); e.DropSiteWoodCost=r.ReadInt32(); e.DropSiteWork=r.ReadInt32(); e.DropSiteHp=r.ReadInt32();
+                    e.WallStoneCost=r.ReadInt32(); e.WallHp=r.ReadInt32(); e.WallReach=r.ReadInt32(); e.StartStone=r.ReadInt32();
+                    e.TowerSizeCells=r.ReadInt32(); e.TowerWoodCost=r.ReadInt32(); e.TowerStoneCost=r.ReadInt32(); e.TowerWork=r.ReadInt32(); e.TowerHp=r.ReadInt32();
+                    e.TowerRange=r.ReadInt32(); e.TowerVision=r.ReadInt32(); e.TowerDamage=r.ReadInt32(); e.TowerIntervalTicks=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

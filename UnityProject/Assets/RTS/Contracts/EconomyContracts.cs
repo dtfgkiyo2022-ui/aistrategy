@@ -11,6 +11,8 @@ namespace Rts.Contracts
         SetAutoEconomy = 5,
         /// <summary>V3-2: one run of belts (Cells with their Facings), as one drag on screen.</summary>
         PlaceBelt = 6,
+        /// <summary>V3-5: one run of wall cells (Cells; Facings unused, all north), as one drag on screen.</summary>
+        PlaceWall = 11,
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
         RemoveBelt = 7,
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
@@ -135,6 +137,12 @@ namespace Rts.Contracts
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
+        {
+            var facings = new Facing[cells == null ? 0 : cells.Count];
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWall, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+        }
 
         public static EconomyCommand RemoveBelt(uint faction, ulong sequence, int cell)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBelt, 0, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
@@ -308,13 +316,18 @@ namespace Rts.Contracts
         public int HouseWoodCost { get; }
         /// <summary>V3-5: a resource drop-off (maps with ages only; 0 otherwise).</summary>
         public int DropSiteWoodCost { get; }
+        /// <summary>V3-5 stone and defences (maps with ages only; 0 otherwise).</summary>
+        public int Stone { get; }
+        public int WallStoneCost { get; }
+        public int TowerWoodCost { get; }
+        public int TowerStoneCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -324,8 +337,10 @@ namespace Rts.Contracts
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
             int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
             EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost,
-            int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost)
+            int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost,
+            int stone, int wallStoneCost, int towerWoodCost, int towerStoneCost)
         {
+            Stone = stone; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
             HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;

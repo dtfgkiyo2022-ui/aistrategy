@@ -38,6 +38,7 @@ namespace Rts.Simulation
                 ResumeUnbuilt(faction);
                 DecideHouse(faction);
                 DecideDropSite(faction);
+                DecideTower(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
             }
@@ -146,7 +147,7 @@ namespace Rts.Simulation
             var kinds = new ResourceKind[n];
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
-            var kind = EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
+            var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
             int index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind);
             if (index < 0) index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
             if (index < 0) return; // nothing left anywhere: stays idle

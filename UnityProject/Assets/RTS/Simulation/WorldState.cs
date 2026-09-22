@@ -135,6 +135,8 @@ namespace Rts.Simulation
         internal int Interval;
         /// <summary>V3-5 (32): the kind of each queued unit, front first; null without ages (then every entry is infantry).</summary>
         internal UnitKind[] QueueKinds;
+        /// <summary>V3-5 tower: shots fired so far.</summary>
+        internal int Shots;
         /// <summary>V3-2 mine: the ore point under its footprint.</summary>
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
@@ -164,8 +166,8 @@ namespace Rts.Simulation
     internal struct FactionEconomy
     {
         internal int Food, Wood;
-        /// <summary>V3-2 stock; always 0 without industry.</summary>
-        internal int Ore, Metal;
+        /// <summary>V3-2 stock; always 0 without industry. Stone (V3-5) only with ages.</summary>
+        internal int Ore, Metal, Stone;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -274,7 +276,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -343,7 +345,10 @@ namespace Rts.Simulation
                 && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0
                 && e.BasePopulation > 0 && e.HousePopulation >= 0 && e.HouseSizeCells > 0 && e.HouseSizeCells <= 8
                 && e.HouseWoodCost >= 0 && e.HouseWork > 0 && e.HouseHp > 0
-                && e.DropSiteSizeCells > 0 && e.DropSiteSizeCells <= 8 && e.DropSiteWoodCost >= 0 && e.DropSiteWork > 0 && e.DropSiteHp > 0), "Invalid age rules.");
+                && e.DropSiteSizeCells > 0 && e.DropSiteSizeCells <= 8 && e.DropSiteWoodCost >= 0 && e.DropSiteWork > 0 && e.DropSiteHp > 0
+                && e.WallStoneCost >= 0 && e.WallHp > 0 && e.WallReach >= 0 && e.StartStone >= 0 && e.TowerSizeCells > 0 && e.TowerSizeCells <= 8
+                && e.TowerWoodCost >= 0 && e.TowerStoneCost >= 0 && e.TowerWork > 0 && e.TowerHp > 0 && e.TowerRange >= 0 && e.TowerVision >= 0
+                && e.TowerDamage >= 0 && e.TowerIntervalTicks > 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -369,7 +374,8 @@ namespace Rts.Simulation
             for (int i = 0; i < c.ResourceNodes.Length; i++)
             {
                 var n = c.ResourceNodes[i];
-                Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood || (n.Kind == ResourceKind.Ore && e.Industry))
+                Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood || (n.Kind == ResourceKind.Ore && e.Industry)
+                    || (n.Kind == ResourceKind.Stone && e.Ages))
                     && n.Amount > 0, "Invalid resource node.");
                 ValidatePoint(n.Position, c.Map);
                 // One node per cell; the key is the cell, not the point, so two points in one cell are rejected too.
@@ -483,7 +489,10 @@ namespace Rts.Simulation
                 ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks,
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
-                DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp };
+                DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
+                WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach, StartStone = e.StartStone,
+                TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
+                TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

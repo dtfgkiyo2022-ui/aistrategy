@@ -293,7 +293,8 @@ namespace Rts.Simulation
         }
 
         private static ResourceNodeDefinition Node(int id, ResourceKind kind, int x, int z) => new ResourceNodeDefinition
-        { Id = (uint)id, Kind = kind, Position = Point(x, z), Amount = kind == ResourceKind.Wood ? WoodAmount : kind == ResourceKind.Ore ? OreAmount : FoodAmount };
+        { Id = (uint)id, Kind = kind, Position = Point(x, z),
+          Amount = kind == ResourceKind.Wood ? WoodAmount : kind == ResourceKind.Ore ? OreAmount : kind == ResourceKind.Stone ? StoneAmount : FoodAmount };
 
         /// <summary>Uniform integer in [min, max] (inclusive), by rejection sampling in SplitMix64.</summary>
         private static int Range(SplitMix64 rng, int min, int max) => min + (int)rng.NextUInt64((ulong)(max - min + 1));
