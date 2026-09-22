@@ -23,7 +23,7 @@ namespace Rts.Presentation
     public sealed class EconomyPanel : MonoBehaviour
     {
         // Between the command buttons on the left (238 px) and the log/timeline column on the right (440 px).
-        private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f, Height = 150f, IndustryRows = 78f;
+        private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f, Height = 150f, IndustryRows = 104f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
         private enum Mode { None, Barracks, Mine, Smelter, Belt, RemoveBelt }
@@ -207,7 +207,7 @@ namespace Rts.Presentation
             string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
             if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
             GUI.Label(new Rect(x, y, w, 20f), stock + UiText.T("  Pop ", "  人口 ") + economy.Population + "/" + economy.PopulationCap
-                + UiText.T("  Idle ", "  待機 ") + CountIdle(economy));
+                + UiText.T("  Idle ", "  待機 ") + CountIdle(economy) + (economy.CorePlayerHeld ? UiText.T("  (core: yours)", "  （コア：手動）") : ""));
             y += 22f;
             bool auto = GUI.Toggle(new Rect(x, y, half, 22f), economy.AutoEconomy, economy.AutoEconomy ? UiText.T("Auto economy: on", "お任せ内政：入") : UiText.T("Auto economy: off", "お任せ内政：切"), GUI.skin.button);
             if (auto != economy.AutoEconomy) Send(EconomyCommand.Auto(faction, ++sequence, auto), auto ? UiText.T("Auto economy on", "お任せ内政を入れました") : UiText.T("Auto economy off: villagers wait for you", "お任せ内政を切りました：村人は指示を待ちます"));
@@ -231,6 +231,14 @@ namespace Rts.Presentation
             y += 26f;
             if (economy.Industry)
             {
+                // V3-3: the economy policy, and handing back what the player holds.
+                float quarter = (w - 12f) / 4f;
+                PolicyButton(new Rect(x, y, quarter, 22f), economy, EconomyPolicy.Balanced, UiText.T("Balanced", "均衡"));
+                PolicyButton(new Rect(x + quarter + 4f, y, quarter, 22f), economy, EconomyPolicy.Military, UiText.T("Army first", "兵を優先"));
+                PolicyButton(new Rect(x + 2f * (quarter + 4f), y, quarter, 22f), economy, EconomyPolicy.Growth, UiText.T("Economy first", "内政を優先"));
+                if (GUI.Button(new Rect(x + 3f * (quarter + 4f), y, quarter, 22f), UiText.T("Hand back", "お任せに戻す")))
+                    Send(EconomyCommand.ReturnToAuto(faction, ++sequence), UiText.T("Everything you held goes back to the auto economy", "触った物をすべてお任せの内政に戻しました"));
+                y += 26f;
                 ModeButton(new Rect(x, y, half, 22f), Mode.Mine, UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Smelter, UiText.T("Smelter (", "精錬所（木材 ") + economy.SmelterWoodCost + UiText.T(" wood)", "）"));
                 y += 26f;
@@ -254,6 +262,13 @@ namespace Rts.Presentation
                 : UiText.T("Click the ground (Esc cancels). R turns the output side: ", "地面をクリック（Escで取消）。R で出口の向きを回す：") + FacingName(facing);
             if (hint != null) GUI.Label(new Rect(x, y, w, rect.yMax - y - 2f), hint);
             else DrawNotes(new Rect(x, y, w, rect.yMax - y - 2f));
+        }
+
+        private void PolicyButton(Rect r, EconomyView economy, EconomyPolicy policy, string label)
+        {
+            bool on = GUI.Toggle(r, economy.Policy == policy, label, GUI.skin.button);
+            if (on && economy.Policy != policy)
+                Send(EconomyCommand.SetPolicy(faction, ++sequence, policy), UiText.T("Economy policy: ", "内政の方針：") + label);
         }
 
         private void ModeButton(Rect r, Mode target, string label)
