@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -52,7 +52,7 @@ namespace Rts.Presentation
         // The panel keeps one height: a row of tabs and at most four rows of buttons under it, then one line of notes.
         private const float TabbedHeight = 22f + 26f + 4f * 26f + 24f;
 
-        private enum Tab { Build, Make, Policy }
+        private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
 
         private Rect PanelRect()
@@ -148,17 +148,20 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 0;
             return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
-                : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
+                : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
             => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
                 : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.House ? UiText.T("House", "住居")
-                : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔") : UiText.T("Barracks", "兵舎");
+                : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
+                : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場") : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
             => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm
-                : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower : BuildingKind.Barracks;
+                : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
+                : m == Mode.Blacksmith ? BuildingKind.Blacksmith : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
@@ -243,13 +246,15 @@ namespace Rts.Presentation
             if (economy == null) { DrawNotes(new Rect(x, y, w, rect.yMax - y - 4f)); return; }
 
             // Tabs: build (ground work), make (people and soldiers), policy (how the automatic economy runs).
-            float third = (w - 8f) / 3f;
-            TabButton(new Rect(x, y, third, 22f), Tab.Build, UiText.T("Build", "建てる"));
-            TabButton(new Rect(x + third + 4f, y, third, 22f), Tab.Make, UiText.T("Make", "作る"));
-            TabButton(new Rect(x + 2f * (third + 4f), y, third, 22f), Tab.Policy, UiText.T("Policy", "方針"));
+            float quarter = (w - 12f) / 4f;
+            TabButton(new Rect(x, y, quarter, 22f), Tab.Build, UiText.T("Build", "建てる"));
+            TabButton(new Rect(x + quarter + 4f, y, quarter, 22f), Tab.Make, UiText.T("Make", "作る"));
+            TabButton(new Rect(x + 2f * (quarter + 4f), y, quarter, 22f), Tab.Research, UiText.T("Research", "研究"));
+            TabButton(new Rect(x + 3f * (quarter + 4f), y, quarter, 22f), Tab.Policy, UiText.T("Policy", "方針"));
             y += 26f;
             if (tab == Tab.Build) DrawBuild(economy, x, y, w, half, right);
             else if (tab == Tab.Make) DrawMake(economy, x, y, w, half, right);
+            else if (tab == Tab.Research) DrawResearch(economy, x, y, w, half, right);
             else DrawPolicy(economy, x, y, w, half, right);
 
             float notesY = rect.yMax - 24f;
@@ -382,6 +387,52 @@ namespace Rts.Presentation
             GUI.enabled = source.HasValue && source.Value.Complete;
             if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle -> carry from ", "待機中の村人 → ") + from + UiText.T(" by hand", "から手で運ぶ")))
                 SendIdleTo(economy, EconomyTargetKind.Building, source.Value.Id, from + UiText.T(" by hand", "から手で運ぶ"));
+            GUI.enabled = true;
+        }
+
+        private static string TechName(TechKind t)
+        {
+            switch (t)
+            {
+                case TechKind.Weapons: return UiText.T("Weapons (attack +2)", "武器（攻撃+2）");
+                case TechKind.Armour: return UiText.T("Armour (HP +20)", "鎧（HP+20）");
+                case TechKind.Tools: return UiText.T("Tools (gather faster)", "道具（採集が速い）");
+                case TechKind.Carts: return UiText.T("Carts (carry +5)", "荷車（運ぶ量+5）");
+                case TechKind.Irrigation: return UiText.T("Irrigation (farms)", "灌漑（農場が速い）");
+                default: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
+            }
+        }
+
+        /// <summary>V3-5: the blacksmith and its techs (each once; the civilisation's own tech only for that civilisation).</summary>
+        private void DrawResearch(EconomyView economy, float x, float y, float w, float half, float right)
+        {
+            if (!economy.Ages) { GUI.Label(new Rect(x, y, w, 22f), UiText.T("No research on this map", "このマップには研究はありません")); return; }
+            if (economy.Civ == CivKind.Primitive) { GUI.Label(new Rect(x, y, w, 22f), UiText.T("Research comes with a civilisation", "研究は文明に進んでから")); return; }
+            var smith = OwnBuilding(economy, BuildingKind.Blacksmith);
+            if (!smith.HasValue)
+            {
+                ModeButton(new Rect(x, y, half, 22f), Mode.Blacksmith, UiText.T("Blacksmith (", "鍛冶場（木材 ") + economy.BlacksmithWoodCost + UiText.T(" wood)", "）"));
+                return;
+            }
+            var b = smith.Value;
+            GUI.Label(new Rect(x, y, w, 22f), !b.Complete ? UiText.T("Blacksmith: building ", "鍛冶場：建設中 ") + Percent(b)
+                : b.Researching != 0 ? UiText.T("Researching: ", "研究中：") + TechName(b.Researching) + " " + Seconds(b.ResearchRemaining)
+                : UiText.T("Blacksmith: pick a tech", "鍛冶場：研究を選ぶ"));
+            y += 26f;
+            var techs = new List<TechKind> { TechKind.Weapons, TechKind.Armour, TechKind.Tools, TechKind.Carts };
+            techs.Add(economy.Civ == CivKind.Agrarian ? TechKind.Irrigation : TechKind.BlastFurnace);
+            for (int i = 0; i < techs.Count; i++)
+            {
+                var t = techs[i];
+                int index = (int)t - 1;
+                bool done = (economy.Techs & (1UL << index)) != 0;
+                string cost = index < economy.TechFoodCosts.Count
+                    ? UiText.T(" F", " 食") + economy.TechFoodCosts[index] + UiText.T(" W", " 木") + economy.TechWoodCosts[index] : "";
+                GUI.enabled = b.Complete && b.Researching == 0 && !done;
+                var r = new Rect(i % 2 == 0 ? x : right, y + (i / 2) * 26f, half, 22f);
+                if (GUI.Button(r, (done ? UiText.T("Done: ", "済：") : "") + TechName(t) + (done ? "" : cost)))
+                    Send(EconomyCommand.Research(faction, ++sequence, b.Id, t), UiText.T("Research requested: ", "研究を依頼しました：") + TechName(t));
+            }
             GUI.enabled = true;
         }
 

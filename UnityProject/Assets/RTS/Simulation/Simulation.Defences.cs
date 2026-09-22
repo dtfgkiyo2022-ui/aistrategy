@@ -108,7 +108,7 @@ namespace Rts.Simulation
         /// <summary>Once in a civilisation, the automatic economy keeps StoneGatherers villagers on stone (for its towers).</summary>
         private bool StoneWanted(uint faction)
         {
-            if (!AgesOn || world.Economies[faction - 1].Civ == CivKind.Primitive) return false;
+            if (!AgesOn || !CivLineStarted(faction)) return false;
             int onStone = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -119,10 +119,21 @@ namespace Rts.Simulation
             return onStone < StoneGatherers;
         }
 
+        /// <summary>
+        /// The civilisation's own line is under way: metallurgy has a mine and a smelter, farming a farm. The automatic
+        /// economy puts stone, towers and research after it, so wood and villagers go to the line first.
+        /// </summary>
+        private bool CivLineStarted(uint faction)
+        {
+            var civ = world.Economies[faction - 1].Civ;
+            if (civ == CivKind.Metallurgy) return OwnBuildingIndex(faction, BuildingKind.Mine) >= 0 && OwnBuildingIndex(faction, BuildingKind.Smelter) >= 0;
+            return civ == CivKind.Agrarian && OwnBuildingIndex(faction, BuildingKind.Farm) >= 0;
+        }
+
         /// <summary>AI phase: up to AutoTowers towers by the core, one at a time, once in a civilisation and not saving.</summary>
         private void DecideTower(uint faction)
         {
-            if (!AgesOn || world.Economies[faction - 1].Civ == CivKind.Primitive) return;
+            if (!AgesOn || !CivLineStarted(faction)) return;
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
             if (economy.Wood < rules.TowerWoodCost || economy.Stone < rules.TowerStoneCost) return;

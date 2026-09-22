@@ -40,7 +40,8 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideDropSite(uint faction)
         {
-            if (!AgesOn || SavingToAdvance(faction)) return;
+            // Not while saving to advance, and not while the civilisation's own line is still waiting for its wood.
+            if (!AgesOn || SavingToAdvance(faction) || (world.Economies[faction - 1].Civ != CivKind.Primitive && !CivLineStarted(faction))) return;
             var rules = world.Config.Economy;
             if (world.Economies[faction - 1].Wood < rules.DropSiteWoodCost) return;
             for (int i = 0; i < world.BuildingCount; i++)

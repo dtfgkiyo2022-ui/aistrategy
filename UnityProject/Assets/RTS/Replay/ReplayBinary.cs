@@ -132,6 +132,8 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
                 if(e.Kind==EconomyCommandKind.AdvanceAge) w.Write((byte)e.Civ);
+                // V3-5: only research carries the tech.
+                if(e.Kind==EconomyCommandKind.Research) w.Write((byte)e.Tech);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -165,7 +167,8 @@ namespace Rts.Replay
                 var facing=ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
-                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ));
+                var tech=ek==EconomyCommandKind.Research ? ReplayBinary.Enum<TechKind>(r) : (TechKind)0;
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

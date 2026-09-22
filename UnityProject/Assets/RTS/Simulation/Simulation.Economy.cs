@@ -15,6 +15,9 @@ namespace Rts.Simulation
 
         private bool EconomyOn => world.Config.Economy.Enabled;
 
+        /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
+        private const int StockGap = 300;
+
         /// <summary>AI phase, on the allocation cycle (5.4 step 1): the automatic economy trains villagers.</summary>
         private void DecideEconomy()
         {
@@ -39,6 +42,7 @@ namespace Rts.Simulation
                 DecideHouse(faction);
                 DecideDropSite(faction);
                 DecideTower(faction);
+                DecideResearch(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
             }
@@ -79,6 +83,7 @@ namespace Rts.Simulation
             AdvanceBelts();
             AdvanceIndustry();
             AdvanceAges();
+            AdvanceResearch();
             int count = world.VillagerCount; // villagers trained below start next tick
             for (int i = 0; i < count; i++)
             {
@@ -91,7 +96,7 @@ namespace Rts.Simulation
                     if (InRange(v.Position, node.Definition.Position, GatherReach))
                     {
                         v.Task = VillagerTask.Gathering;
-                        v.NextGatherTick = checked(world.Tick + rules.GatherIntervalTicks);
+                        v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId));
                     }
                 }
                 else if (v.Task == VillagerTask.Gathering)
@@ -102,8 +107,8 @@ namespace Rts.Simulation
                     node.Remaining--;
                     v.CarryKind = node.Definition.Kind;
                     v.Carry++;
-                    v.NextGatherTick = checked(world.Tick + rules.GatherIntervalTicks);
-                    if (v.Carry >= rules.CarryCapacity || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
+                    v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId));
+                    if (v.Carry >= CarryFor(v.FactionId) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
                 {
@@ -148,6 +153,13 @@ namespace Rts.Simulation
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
             var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
+            // V3-5 (32.7): on a map with ages the stock speaks too - far more of one than the other sends the idle to the other.
+            if (AgesOn && kind != ResourceKind.Stone)
+            {
+                var stock = world.Economies[v.FactionId - 1];
+                if (stock.Food >= stock.Wood + StockGap) kind = ResourceKind.Wood;
+                else if (stock.Wood >= stock.Food + StockGap) kind = ResourceKind.Food;
+            }
             int index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind);
             if (index < 0) index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
             if (index < 0) return; // nothing left anywhere: stays idle

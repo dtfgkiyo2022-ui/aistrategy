@@ -61,6 +61,12 @@ namespace Rts.Contracts
     /// </summary>
     public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2 }
 
+    /// <summary>
+    /// V3-5 research at a blacksmith (technical-design-v3 32 #6). A faction's researched techs are a bit set of
+    /// 1 &lt;&lt; (value - 1). Irrigation is for farming only, BlastFurnace for metallurgy only.
+    /// </summary>
+    public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6 }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 
@@ -68,7 +74,7 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
-    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8 }
+    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9 }
 
     public enum EventKind : byte
     {

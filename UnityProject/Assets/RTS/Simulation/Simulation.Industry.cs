@@ -33,7 +33,7 @@ namespace Rts.Simulation
                 {
                     // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
                     if (b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < b.Interval) continue;
+                    if (++b.Timer < FarmTicksFor(b)) continue;
                     b.Timer = 0;
                     b.Output++;
                 }
@@ -42,7 +42,7 @@ namespace Rts.Simulation
                     if (b.Timer == 0 && b.Input >= rules.OrePerMetal && b.Output < rules.BufferLimit)
                     {
                         b.Input -= rules.OrePerMetal;
-                        b.Timer = rules.SmeltTicks;
+                        b.Timer = SmeltTicksFor(b.FactionId);
                     }
                     if (b.Timer > 0 && --b.Timer == 0) b.Output++;
                 }
@@ -144,11 +144,11 @@ namespace Rts.Simulation
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
                 var kind = OutputKind(source.Kind);
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
-                int take = Math.Min(source.Output, rules.CarryCapacity - v.Carry);
+                int take = Math.Min(source.Output, CarryFor(v.FactionId) - v.Carry);
                 source.Output -= take;
                 v.Carry += take;
                 v.CarryKind = kind;
-                if (v.Carry == 0 || (v.Carry < rules.CarryCapacity && source.Output > 0)) return;
+                if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && source.Output > 0)) return;
                 v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;
                 v.Task = v.HaulTo != 0 ? VillagerTask.ToDeliver : VillagerTask.ToDropOff;
                 return;
