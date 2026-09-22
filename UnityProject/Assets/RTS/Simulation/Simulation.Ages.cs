@@ -53,9 +53,18 @@ namespace Rts.Simulation
             int steps = 0;
             foreach (var node in world.Nodes)
                 if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, centre, Fix64.FromInt(rules.FarmFoodReach))) steps++;
+            // River: only the cells around the farm can be in reach, so only they are looked at.
             var terrain = world.Config.Map.Terrain;
-            for (int cell = 0; cell < terrain.Length; cell++)
-                if (terrain[cell] == (byte)TerrainKind.River && InRange(world.Map.Center(cell), centre, Fix64.FromInt(rules.FarmRiverReach))) { steps++; break; }
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, cellSize = world.Config.Map.CellSizeMeters;
+            int reach = rules.FarmRiverReach / cellSize + rules.FarmSizeCells + 1, ox = origin % width, oz = origin / width;
+            bool river = false;
+            for (int z = System.Math.Max(0, oz - reach); z <= System.Math.Min(height - 1, oz + reach) && !river; z++)
+                for (int x = System.Math.Max(0, ox - reach); x <= System.Math.Min(width - 1, ox + reach) && !river; x++)
+                {
+                    int cell = z * width + x;
+                    if (terrain.Length != 0 && terrain[cell] == (byte)TerrainKind.River && InRange(world.Map.Center(cell), centre, Fix64.FromInt(rules.FarmRiverReach))) river = true;
+                }
+            if (river) steps++;
             return System.Math.Max(rules.FarmMinTicks, rules.FarmBaseTicks - rules.FarmStepTicks * steps);
         }
 

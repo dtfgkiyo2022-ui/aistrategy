@@ -79,6 +79,37 @@ namespace Rts.Core.Tests
             }
         }
 
+        /// <summary>Strength the west trained by tick 12000 as <paramref name="civ"/>: HP times damage of each soldier it made.</summary>
+        private static long Power(ulong seed, CivKind civ)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.StartFood = 800; s.Economy.StartWood = 600;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, civ));
+            Steps(gateway, sim, 12000);
+            var f = Fields(sim);
+            long power = 0;
+            for (long id = s.Soldiers.Length + 1; id < Number(f, "NextSoldierId"); id++)
+                if (f["Soldiers[" + id + "].FactionId"] == "1")
+                    power += Number(f, "Soldiers[" + id + "].Parameters.Hp") * Number(f, "Soldiers[" + id + "].Parameters.Damage");
+            return power;
+        }
+
+        /// <summary>
+        /// Gate 1 of V3-4 (25): on one ground farming makes the west stronger, on another metallurgy does. Seed 4 puts the
+        /// west by a river, seed 5 by a mountain (measured over 8 seeds: 27.1).
+        /// </summary>
+        [Test]
+        public void TheCivilisationThatPaysDependsOnTheGround()
+        {
+            long riverFarm = Power(4, CivKind.Agrarian), riverMetal = Power(4, CivKind.Metallurgy);
+            long hillFarm = Power(5, CivKind.Agrarian), hillMetal = Power(5, CivKind.Metallurgy);
+            TestContext.WriteLine("river (seed 4): farming " + riverFarm + ", metallurgy " + riverMetal + "; mountain (seed 5): farming " + hillFarm + ", metallurgy " + hillMetal);
+            Assert.That(riverFarm, Is.GreaterThan(riverMetal), "by the river, farming pays");
+            Assert.That(hillMetal, Is.GreaterThan(hillFarm), "by the mountain, metallurgy pays");
+        }
+
         [Test]
         public void AFarmMakesFoodAtThePaceOfItsGroundAndOnlyForFarmers()
         {
