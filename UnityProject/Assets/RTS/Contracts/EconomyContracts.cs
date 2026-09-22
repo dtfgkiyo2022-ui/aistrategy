@@ -14,7 +14,9 @@ namespace Rts.Contracts
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
         RemoveBelt = 7,
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
-        ReturnEconomyToAuto = 8
+        ReturnEconomyToAuto = 8,
+        /// <summary>V3-3: sets the faction's economy policy (Policy).</summary>
+        SetEconomyPolicy = 9
     }
 
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
@@ -46,6 +48,8 @@ namespace Rts.Contracts
         public IReadOnlyList<Facing> Facings { get; }
         /// <summary>PlaceBuilding of a mine or smelter: the side its output comes out of. The barracks ignores it.</summary>
         public Facing Facing { get; }
+        /// <summary>SetEconomyPolicy: the new policy.</summary>
+        public EconomyPolicy Policy { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -63,7 +67,15 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, cells, facings, facing, EconomyPolicy.Balanced)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy)
+        {
+            Policy = policy;
             Facing = facing;
             Cells = ContractList.Copy(cells ?? Array.Empty<int>());
             Facings = ContractList.Copy(facings ?? Array.Empty<Facing>());
@@ -102,6 +114,9 @@ namespace Rts.Contracts
 
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+
+        public static EconomyCommand SetPolicy(uint faction, ulong sequence, EconomyPolicy policy)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SetEconomyPolicy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, policy);
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
@@ -259,13 +274,15 @@ namespace Rts.Contracts
         public int SmelterSizeCells { get; }
         /// <summary>V3-3: the player trains villagers at the core by hand; the automatic economy does not.</summary>
         public bool CorePlayerHeld { get; }
+        /// <summary>V3-3: the faction's economy policy (always Balanced without industry).</summary>
+        public EconomyPolicy Policy { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced)
         {
         }
 
@@ -273,9 +290,11 @@ namespace Rts.Contracts
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources,
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
-            int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld)
+            int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
+            EconomyPolicy policy)
         {
             CorePlayerHeld = corePlayerHeld;
+            Policy = policy;
             InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;
             MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;

@@ -9,6 +9,31 @@ namespace Rts.Decision
     /// </summary>
     public static class EconomyDecision
     {
+        /// <summary>The numbers a policy sets for the automatic economy (technical-design-v3 20). The steps stay the same.</summary>
+        public readonly struct Plan
+        {
+            public int VillagerTarget { get; }
+            public int InfantryQueue { get; }
+            /// <summary>Food gatherers kept per wood gatherer.</summary>
+            public int FoodPerWood { get; }
+            public Plan(int villagerTarget, int infantryQueue, int foodPerWood) { VillagerTarget = villagerTarget; InfantryQueue = infantryQueue; FoodPerWood = foodPerWood; }
+        }
+
+        /// <summary>
+        /// Balanced keeps the scenario's own numbers, so a match without a policy runs as before. Military trains fewer
+        /// villagers and keeps a longer infantry queue with more on food; Growth trains many villagers, one infantry at a
+        /// time, and gathers food and wood evenly.
+        /// </summary>
+        public static Plan PlanFor(EconomyPolicy policy, int villagerTarget, int infantryQueue)
+        {
+            switch (policy)
+            {
+                case EconomyPolicy.Military: return new Plan(7, 4, 3);
+                case EconomyPolicy.Growth: return new Plan(18, 1, 1);
+                default: return new Plan(villagerTarget, infantryQueue, 2);
+            }
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;
@@ -25,8 +50,11 @@ namespace Rts.Decision
         /// Step 4: which resource the next idle villager gathers. Keeps the gatherers near two on food for each one on
         /// wood; counting gatherers rather than stock keeps a batch of idle villagers from all picking the same kind.
         /// </summary>
-        public static ResourceKind KindToGather(int foodGatherers, int woodGatherers)
-            => foodGatherers <= 2 * woodGatherers ? ResourceKind.Food : ResourceKind.Wood;
+        public static ResourceKind KindToGather(int foodGatherers, int woodGatherers) => KindToGather(foodGatherers, woodGatherers, 2);
+
+        /// <summary>Step 4 with the policy's food-per-wood ratio.</summary>
+        public static ResourceKind KindToGather(int foodGatherers, int woodGatherers, int foodPerWood)
+            => foodGatherers <= foodPerWood * woodGatherers ? ResourceKind.Food : ResourceKind.Wood;
 
         /// <summary>
         /// Nearest point of this kind with something left, by squared distance, then by lower index (the ids are in

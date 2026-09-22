@@ -55,7 +55,7 @@ namespace Rts.Simulation
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, rules.InfantryFoodCost,
                 rules.InfantryWoodCost, villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
-                rules.InfantryMetalCost, rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld);
+                rules.InfantryMetalCost, rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

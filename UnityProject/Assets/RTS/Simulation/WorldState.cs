@@ -167,6 +167,8 @@ namespace Rts.Simulation
         internal bool AutoOff;
         /// <summary>V3-3 (19): the player trained or cancelled at the core; the automatic economy trains no villagers.</summary>
         internal bool CoreHeld;
+        /// <summary>V3-3 (20): what the automatic economy aims for. Balanced without industry.</summary>
+        internal EconomyPolicy Policy;
     }
 
     internal sealed class WorldState
