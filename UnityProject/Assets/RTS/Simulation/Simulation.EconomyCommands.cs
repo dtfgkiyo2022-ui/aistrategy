@@ -57,9 +57,10 @@ namespace Rts.Simulation
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (b.Kind != BuildingKind.Barracks || !b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
-                        || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost) return;
+                        || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost || economy.Metal < rules.InfantryMetalCost) return;
                     economy.Food = checked(economy.Food - rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
+                    economy.Metal = checked(economy.Metal - rules.InfantryMetalCost);
                     if (b.Queued == 0) b.TrainRemaining = rules.InfantryTrainTicks;
                     b.Queued++;
                     return;
@@ -81,12 +82,14 @@ namespace Rts.Simulation
                     b.Queued--;
                     economy.Food = checked(economy.Food + rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood + rules.InfantryWoodCost);
+                    economy.Metal = checked(economy.Metal + rules.InfantryMetalCost);
                     if (b.Queued == 0) b.TrainRemaining = 0;
                     return;
                 }
                 case EconomyCommandKind.AssignVillagers:
                 {
                     int nodeIndex = -1, buildingIndex = -1;
+                    bool haul = false;
                     if (c.TargetKind == EconomyTargetKind.ResourceNode)
                     {
                         if (c.TargetId == 0 || c.TargetId > world.Nodes.Length || world.Nodes[c.TargetId - 1].Remaining <= 0) return;
@@ -96,7 +99,11 @@ namespace Rts.Simulation
                     }
                     else if (c.TargetKind == EconomyTargetKind.Building)
                     {
-                        if (!OwnBuilding(faction, c.TargetId, out buildingIndex) || world.Buildings[buildingIndex].Complete) return;
+                        if (!OwnBuilding(faction, c.TargetId, out buildingIndex)) return;
+                        var target = world.Buildings[buildingIndex];
+                        // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter);
+                        if (target.Complete && !haul) return;
                     }
                     else return;
                     foreach (uint id in c.VillagerIds)
@@ -104,7 +111,14 @@ namespace Rts.Simulation
                         if (id == 0 || id > world.VillagerCount) continue;
                         ref var v = ref world.Villagers[id - 1];
                         if (!v.Alive || v.FactionId != faction) continue;
-                        if (nodeIndex >= 0)
+                        v.HaulFrom = 0; v.HaulTo = 0;
+                        if (haul)
+                        {
+                            v.NodeId = 0;
+                            v.HaulFrom = c.TargetId;
+                            v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToPickup;
+                        }
+                        else if (nodeIndex >= 0)
                         {
                             var kind = world.Nodes[nodeIndex].Definition.Kind;
                             v.NodeId = c.TargetId;

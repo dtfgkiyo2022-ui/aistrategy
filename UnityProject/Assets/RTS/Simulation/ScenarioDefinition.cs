@@ -88,6 +88,8 @@ namespace Rts.Simulation
         public int SmelterSizeCells = 3, SmelterWoodCost = 120, SmelterWork = 300, SmelterHp = 600, SmeltTicks = 60, OrePerMetal = 2;
         /// <summary>Items a mine or smelter holds at its input and at its output; a full output stops the work.</summary>
         public int BufferLimit = 10;
+        /// <summary>Metal an infantry costs on top of food and wood (12.4). 0 unless the map sets it.</summary>
+        public int InfantryMetalCost;
     }
 
     public sealed class MapDefinition

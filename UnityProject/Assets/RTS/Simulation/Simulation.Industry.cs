@@ -56,11 +56,13 @@ namespace Rts.Simulation
         private static ResourceKind OutputKind(BuildingKind kind) => kind == BuildingKind.Mine ? ResourceKind.Ore : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
-        private int OutputCell(BuildingState b)
+        private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
+
+        private int OutputCell(int origin, int size, Facing facing)
         {
-            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(b.Kind);
-            int x0 = b.OriginCell % width, z0 = b.OriginCell / width, x, z;
-            switch (b.Facing)
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int x0 = origin % width, z0 = origin / width, x, z;
+            switch (facing)
             {
                 case Facing.North: x = x0 + size / 2; z = z0 + size; break;
                 case Facing.East: x = x0 + size; z = z0 + size / 2; break;
@@ -110,6 +112,63 @@ namespace Rts.Simulation
                 }
             }
             return nodeId != 0;
+        }
+
+        /// <summary>
+        /// Carrying by hand (12.3), economy step. At the source's work cell the villager takes what the output holds, up to
+        /// a full load, and leaves as soon as it has a full load or the output is empty: ore from a mine goes to the own
+        /// finished smelter with the lowest id (or to the core when there is none), metal goes to the core. At a smelter it
+        /// puts in what the input has room for and waits with the rest. A source that is gone ends the carrying.
+        /// </summary>
+        private void Haul(ref VillagerState v)
+        {
+            var rules = world.Config.Economy;
+            ref var source = ref world.Buildings[v.HaulFrom - 1];
+            if (!source.Alive || !source.Complete)
+            {
+                v.HaulFrom = 0; v.HaulTo = 0;
+                v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
+                return;
+            }
+            if (v.Task == VillagerTask.ToPickup)
+            {
+                if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
+                var kind = OutputKind(source.Kind);
+                if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
+                int take = Math.Min(source.Output, rules.CarryCapacity - v.Carry);
+                source.Output -= take;
+                v.Carry += take;
+                v.CarryKind = kind;
+                if (v.Carry == 0 || (v.Carry < rules.CarryCapacity && source.Output > 0)) return;
+                v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;
+                v.Task = v.HaulTo != 0 ? VillagerTask.ToDeliver : VillagerTask.ToDropOff;
+                return;
+            }
+            ref var target = ref world.Buildings[v.HaulTo - 1];
+            if (!target.Alive || !target.Complete) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
+            if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
+            int put = Math.Min(v.Carry, rules.BufferLimit - target.Input);
+            target.Input += put;
+            v.Carry -= put;
+            if (v.Carry == 0) v.Task = VillagerTask.ToPickup;
+        }
+
+        /// <summary>The own finished smelter with the lowest id, or 0.</summary>
+        private uint OwnSmelter(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Smelter) return b.Id;
+            }
+            return 0;
+        }
+
+        /// <summary>Stops carrying by hand: a load in hand goes to the core first.</summary>
+        private static void StopHauling(ref VillagerState v)
+        {
+            v.HaulFrom = 0; v.HaulTo = 0;
+            if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
         }
 
         /// <summary>Villagers on their way to (or working) the ore point a new mine covers stop and look for other work.</summary>

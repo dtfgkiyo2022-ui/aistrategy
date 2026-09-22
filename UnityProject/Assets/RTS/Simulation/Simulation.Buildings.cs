@@ -34,9 +34,11 @@ namespace Rts.Simulation
             ref var building = ref world.Buildings[barracks];
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(rules.AutoInfantryQueue, rules.QueueLimit),
-                economy.Food, economy.Wood, rules.InfantryFoodCost, rules.InfantryWoodCost, population, rules.PopulationCap, HasInfantryRoom(faction))) return;
+                economy.Food, economy.Wood, rules.InfantryFoodCost, rules.InfantryWoodCost, population, rules.PopulationCap, HasInfantryRoom(faction))
+                || economy.Metal < rules.InfantryMetalCost) return;
             economy.Food = checked(economy.Food - rules.InfantryFoodCost);
             economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
+            economy.Metal = checked(economy.Metal - rules.InfantryMetalCost);
             if (building.Queued == 0) building.TrainRemaining = rules.InfantryTrainTicks;
             building.Queued++;
         }
@@ -185,6 +187,7 @@ namespace Rts.Simulation
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
                 }
                 if (best < 0) return;
+                world.Villagers[best].HaulFrom = 0; world.Villagers[best].HaulTo = 0;
                 world.Villagers[best].Task = VillagerTask.ToBuild;
                 world.Villagers[best].BuildingId = building.Id;
             }
