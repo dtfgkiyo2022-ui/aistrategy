@@ -49,6 +49,9 @@ namespace Rts.Contracts
     // UnitKind has no assigned numbers in chapter 5; these are the initial contract values.
     public enum UnitKind : byte { Infantry = 1, Scout = 2 }
 
+    /// <summary>Ver.3 resources (technical-design-v3 2.3). V3-1 has two.</summary>
+    public enum ResourceKind : byte { Food = 1, Wood = 2 }
+
     public enum EventKind : byte
     {
         CommandChanged = 1, MoveStarted = 2, Attack = 3, Death = 4,
