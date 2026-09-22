@@ -4,7 +4,8 @@ using Rts.Contracts;
 
 namespace Rts.Simulation
 {
-    /// <summary>Immutable integer grid and deterministic, bounded army path search.</summary>
+    /// <summary>Integer grid and deterministic, bounded army path search. Ver.1 terrain never changes; Ver.3 buildings
+    /// change it only through <see cref="SetPassable"/>, which drops every cache.</summary>
     public sealed class GridMap
     {
         internal Action<string, bool> Measure;
@@ -81,6 +82,17 @@ namespace Rts.Simulation
             passable = new bool[checked(width * height)];
             Array.Fill(passable, map.DefaultPassable);
             foreach (int id in map.BlockedCellIds) passable[id] = false;
+        }
+        /// <summary>
+        /// Ver.3: a building opens or closes a cell. Every cached route and path was derived from the old terrain, so all
+        /// of them go. The simulation calls this at fixed points in a tick, so the same inputs clear the same caches.
+        /// </summary>
+        internal void SetPassable(int cell, bool value)
+        {
+            if (passable[cell] == value) return;
+            passable[cell] = value;
+            routes.Clear(); routeOrder.Clear();
+            paths.Clear(); pathOrder.Clear();
         }
         public bool IsPassable(int cell) => cell >= 0 && cell < passable.Length && passable[cell];
         public int Cell(SimPoint p)

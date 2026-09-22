@@ -75,7 +75,11 @@ namespace Rts.Core.Tests
                     queued += Number(f, "Economy[" + faction + "].Queued");
                 }
                 trained = villagers - scenario.Villagers.Length;
-                long spent = (trained + queued) * rules.VillagerFoodCost;
+                long buildings = Number(f, "Buildings.Count"), infantryQueued = 0;
+                for (int i = 1; i <= buildings; i++) infantryQueued += Number(f, "Buildings[" + i + "].Queued");
+                long infantryTrained = Number(f, "NextSoldierId") - 1 - scenario.Soldiers.Length; // no free reinforcements
+                long spent = (trained + queued) * rules.VillagerFoodCost + buildings * rules.BarracksWoodCost
+                    + (infantryTrained + infantryQueued) * (rules.InfantryFoodCost + rules.InfantryWoodCost);
                 long startStock = 2L * (rules.StartFood + rules.StartWood);
                 Assert.That(nodesAtStart - nodes, Is.EqualTo(stock + carried + spent - startStock), "conservation at tick " + t);
             });
@@ -129,13 +133,55 @@ namespace Rts.Core.Tests
         [Test]
         public void FreeReinforcementsStopWhenTheEconomyIsOn()
         {
+            // Free reinforcements would add one at tick 100; a barracks needs at least 200 to build and 300 to train.
             var sim = new Battle(MapGenerator.Generate(4, true));
-            Run(sim, 1, 1000);
-            Assert.That(Number(Fields(sim), "NextSoldierId"), Is.EqualTo(41), "no soldier appears without production");
+            Run(sim, 1, 450);
+            Assert.That(Number(Fields(sim), "NextSoldierId"), Is.EqualTo(41), "no soldier appears before production can deliver one");
             var off = new Battle(MapGenerator.Generate(4));
             Run(off, 1, 1000);
             Assert.That(Number(Fields(off), "NextSoldierId"), Is.GreaterThan(41), "the Ver.1 map still reinforces");
         }
+
+        // 5.4 steps 2-3 and 5.2: a barracks goes up near the core, its footprint closes, builders finish it, and it trains
+        // infantry that join a Ver.1 army. Checked every tick from placement on, well past the build (400) and training
+        // (300) times.
+        [TestCase(1UL)]
+        [TestCase(2UL)]
+        public void ABarracksIsBuiltAndItsInfantryJoinTheArmies(ulong seed)
+        {
+            var scenario = MapGenerator.Generate(seed, true);
+            var sim = new Battle(scenario);
+            long placedAt = 0, completedAt = 0, firstSoldierAt = 0;
+            Run(sim, 1, 12000, t =>
+            {
+                var f = Fields(sim);
+                if (Number(f, "Buildings.Count") == 0) return;
+                if (placedAt == 0) placedAt = t;
+                if (completedAt == 0 && f["Buildings[1].Complete"] == "1") completedAt = t;
+                if (firstSoldierAt == 0 && Number(f, "NextSoldierId") > scenario.Soldiers.Length + 1) firstSoldierAt = t;
+                // Nobody stands inside a footprint.
+                for (int b = 1; b <= Number(f, "Buildings.Count"); b++)
+                {
+                    int origin = (int)Number(f, "Buildings[" + b + "].OriginCell");
+                    var cells = new HashSet<int>();
+                    for (int z = 0; z < 3; z++) for (int x = 0; x < 3; x++) cells.Add(origin + z * 128 + x);
+                    for (int i = 1; i <= Number(f, "Soldiers.Count"); i++)
+                        if (f["Soldiers[" + i + "].Alive"] == "1") Assert.That(cells.Contains(Cell(f, "Soldiers[" + i + "].Position")), Is.False, "soldier " + i + " inside at tick " + t);
+                    for (int i = 1; i <= Number(f, "Villagers.Count"); i++)
+                        if (f["Villagers[" + i + "].Alive"] == "1") Assert.That(cells.Contains(Cell(f, "Villagers[" + i + "].Position")), Is.False, "villager " + i + " inside at tick " + t);
+                }
+            });
+            Assert.That(placedAt, Is.GreaterThan(0), "a barracks was placed");
+            Assert.That(completedAt, Is.GreaterThanOrEqualTo(placedAt + scenario.Economy.BarracksWork / scenario.Economy.Builders), "two builders need at least 200 ticks");
+            Assert.That(firstSoldierAt, Is.GreaterThanOrEqualTo(completedAt + scenario.Economy.InfantryTrainTicks), "training takes its time");
+            var end = Fields(sim);
+            // Produced soldiers were assigned to an army (Ver.1 reinforcement assignment), never to none.
+            for (long i = scenario.Soldiers.Length + 1; i < Number(end, "NextSoldierId"); i++)
+                Assert.That(Number(end, "Soldiers[" + i + "].ArmyId"), Is.InRange(1, 8), "soldier " + i);
+        }
+
+        private static int Cell(Dictionary<string, string> f, string point)
+            => (int)(Number(f, point + ".Z.Raw") / 65536 / 2) * 128 + (int)(Number(f, point + ".X.Raw") / 65536 / 2);
 
         [Test]
         public void AnEconomyMatchReplaysWithEveryTickMatching()
@@ -144,12 +190,12 @@ namespace Rts.Core.Tests
             using (var stream = new MemoryStream())
             {
                 var build = new BuildIdentity();
-                ReplayRunner.Record(stream, scenario, Array.Empty<ScheduledInput>(), 3000, build);
+                ReplayRunner.Record(stream, scenario, Array.Empty<ScheduledInput>(), 8000, build);
                 stream.Position = 0;
                 var outcome = ReplayRunner.Replay(stream, build);
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
-                Assert.That(outcome.LastTick, Is.EqualTo(3000));
+                Assert.That(outcome.LastTick, Is.GreaterThanOrEqualTo(3000), "long enough to build and train");
             }
         }
 

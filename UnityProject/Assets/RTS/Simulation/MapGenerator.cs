@@ -162,6 +162,8 @@ namespace Rts.Simulation
             {
                 s.ScenarioId = "gen1e-" + seed.ToString(CultureInfo.InvariantCulture);
                 s.Economy = new EconomyRules { Enabled = true };
+                // Soldiers are capped by the population now; the Ver.1 faction cap must not stop production first.
+                s.Rules.FactionCap = s.Economy.PopulationCap;
                 s.Villagers = new VillagerDefinition[6];
                 for (uint f = 1; f <= 2; f++)
                 {

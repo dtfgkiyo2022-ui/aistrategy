@@ -52,6 +52,9 @@ namespace Rts.Contracts
     /// <summary>Ver.3 resources (technical-design-v3 2.3). V3-1 has two.</summary>
     public enum ResourceKind : byte { Food = 1, Wood = 2 }
 
+    /// <summary>Ver.3 buildings (technical-design-v3 3.3). The core is not a building.</summary>
+    public enum BuildingKind : byte { Barracks = 1 }
+
     public enum EventKind : byte
     {
         CommandChanged = 1, MoveStarted = 2, Attack = 3, Death = 4,

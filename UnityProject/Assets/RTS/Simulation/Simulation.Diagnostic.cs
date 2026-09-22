@@ -90,6 +90,15 @@ namespace Rts.Simulation
             }
             w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
             foreach (var r in world.Nodes) w.Value("ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining", r.Remaining);
+            w.Value("NextBuildingId", world.NextBuildingId);
+            w.Value("Buildings.Count", (uint)world.BuildingCount);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i]; string n = "Buildings[" + b.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
+                w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
+                w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+            }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);
             for (int i = 0; i < world.VillagerCount; i++)
@@ -99,6 +108,7 @@ namespace Rts.Simulation
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
+                w.Value(n + "BuildingId", v.BuildingId);
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }

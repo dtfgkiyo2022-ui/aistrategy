@@ -56,6 +56,13 @@ namespace Rts.Simulation
         public int AutoVillagerTarget = 10;
         /// <summary>A villager drops its load once within the core radius plus this.</summary>
         public Fix64 DropOffMargin = Fix64.FromInt(2);
+        /// <summary>Barracks: square footprint in cells, wood cost, work to build (one villager adds one per tick), HP.</summary>
+        public int BarracksSizeCells = 3, BarracksWoodCost = 150, BarracksWork = 400, BarracksHp = 1000;
+        /// <summary>Villagers sent to build a new barracks.</summary>
+        public int Builders = 2;
+        public int InfantryFoodCost = 50, InfantryWoodCost = 20, InfantryTrainTicks = 300;
+        /// <summary>The automatic economy keeps at most this many infantry queued at a barracks (5.4 step 3).</summary>
+        public int AutoInfantryQueue = 2;
     }
 
     public sealed class MapDefinition
