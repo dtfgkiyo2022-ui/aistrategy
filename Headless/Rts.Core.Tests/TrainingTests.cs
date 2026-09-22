@@ -186,6 +186,45 @@ namespace Rts.Core.Tests
             Assert.That(with, Is.GreaterThan(without));
         }
 
+        /// <summary>West belts laid all around the east soldiers' starting places (outside the east core).</summary>
+        private static ScenarioDefinition WestBeltsAmongEastSoldiers(ScenarioDefinition s)
+        {
+            var cells = new SortedSet<int>();
+            var core = s.Cores[1].Position;
+            var blocked = new HashSet<int>(s.Map.BlockedCellIds);
+            var nodes = new HashSet<int>(s.ResourceNodes.Select(n => (int)(n.Position.Z.Raw / 65536 / 2) * 128 + (int)(n.Position.X.Raw / 65536 / 2)));
+            foreach (var d in s.Soldiers.Where(d => d.FactionId == 2))
+            {
+                int c = (int)(d.Position.Z.Raw / 65536 / 2) * 128 + (int)(d.Position.X.Raw / 65536 / 2);
+                foreach (int n in new[] { c + 1, c - 1, c + 128, c - 128 })
+                {
+                    long x = (n % 128) * 2 + 1 - core.X.Raw / 65536, z = (n / 128) * 2 + 1 - core.Z.Raw / 65536;
+                    if (n >= 0 && n < 128 * 64 && !blocked.Contains(n) && !nodes.Contains(n) && x * x + z * z > 36) cells.Add(n);
+                }
+            }
+            s.Belts = cells.Take(s.Economy.BeltLimit).Select(c => new BeltDefinition { Cell = c, FactionId = 1, Facing = Facing.North }).ToArray();
+            return s;
+        }
+
+        /// <summary>32 #4: soldiers with nothing else to fight break the enemy belts in reach - cutting the lines.</summary>
+        [Test]
+        public void SoldiersBreakEnemyBeltsInReach()
+        {
+            var s = WestBeltsAmongEastSoldiers(MapGenerator.GenerateTerrain(1));
+            int laid = s.Belts.Length;
+            var sim = new Battle(s);
+            for (long t = 1; t <= 600; t++) sim.Step(t, Array.Empty<ScheduledInput>());
+            long left = Number(Fields(sim), "Belts.Count");
+            TestContext.WriteLine("west belts among the east soldiers: " + laid + ", left after 600 ticks: " + left);
+            Assert.That(left, Is.LessThan(laid), "some were broken");
+
+            // Without ages (mapgen-2) the same belts stay: belts are not raided there.
+            var old = WestBeltsAmongEastSoldiers(MapGenerator.Generate(1, true, true));
+            var oldSim = new Battle(old);
+            for (long t = 1; t <= 600; t++) oldSim.Step(t, Array.Empty<ScheduledInput>());
+            Assert.That(Number(Fields(oldSim), "Belts.Count"), Is.EqualTo(old.Belts.Length));
+        }
+
         [Test]
         public void AMapWithoutAgesTrainsNoScouts()
         {
