@@ -12,10 +12,11 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        internal const byte TargetVillager = 3, TargetBuilding = 4;
+        internal const byte TargetVillager = 3, TargetBuilding = 4, TargetBelt = 5;
 
         private long[] villagerDamage = Array.Empty<long>();
         private long[] buildingDamage = Array.Empty<long>();
+        private long[] beltDamage = Array.Empty<long>();
 
         /// <summary>Intents phase: fills only an empty target, and never for a soldier that is retreating.</summary>
         private void PickRaidTarget(ref SoldierState s)
@@ -38,7 +39,31 @@ namespace Rts.Simulation
                 BigInteger d = DistanceSquared(s.Position, NearestFootprintPoint(b, s.Position));
                 if (best < 0 || d < bestDistance) { best = i; bestDistance = d; }
             }
-            if (best >= 0) { s.TargetKind = TargetBuilding; s.TargetId = world.Buildings[best].Id; }
+            if (best >= 0) { s.TargetKind = TargetBuilding; s.TargetId = world.Buildings[best].Id; return; }
+            // V3-5 (32 #4): last, an enemy belt cell in range - cutting the enemy's lines. Maps with ages only.
+            if (!AgesOn) return;
+            int cellBest = NearestEnemyBelt(faction, s.Position, s.Parameters.Range);
+            if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
+        }
+
+        /// <summary>The visible enemy belt cell nearest <paramref name="from"/> within <paramref name="range"/> (then the lower cell), or -1.</summary>
+        private int NearestEnemyBelt(uint faction, SimPoint from, Fix64 range)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, cellSize = world.Config.Map.CellSizeMeters;
+            int reach = (int)(range.Raw / 65536 / cellSize) + 1, here = world.Map.Cell(from), hx = here % width, hz = here / width;
+            int best = -1; BigInteger bestDistance = 0;
+            for (int z = Math.Max(0, hz - reach); z <= Math.Min(height - 1, hz + reach); z++)
+                for (int x = Math.Max(0, hx - reach); x <= Math.Min(width - 1, hx + reach); x++)
+                {
+                    int cell = z * width + x;
+                    var belt = world.Belts[cell];
+                    if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                    var centre = world.Map.Center(cell);
+                    if (!InRange(from, centre, range)) continue;
+                    BigInteger d = DistanceSquared(from, centre);
+                    if (best < 0 || d < bestDistance) { best = cell; bestDistance = d; }
+                }
+            return best;
         }
 
         /// <summary>Attack phase: the engine re-checks the target like any other, then adds the damage.</summary>
@@ -51,6 +76,14 @@ namespace Rts.Simulation
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) return;
                 villagerDamage[i] = checked(villagerDamage[i] + s.Parameters.Damage);
+            }
+            else if (s.TargetKind == TargetBelt)
+            {
+                int cell = checked((int)s.TargetId - 1);
+                var belt = world.Belts[cell];
+                if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]
+                    || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
+                beltDamage[cell] = checked(beltDamage[cell] + s.Parameters.Damage);
             }
             else
             {
@@ -67,14 +100,18 @@ namespace Rts.Simulation
         {
             if (villagerDamage.Length < world.Villagers.Length) villagerDamage = new long[world.Villagers.Length];
             if (buildingDamage.Length < world.Buildings.Length) buildingDamage = new long[world.Buildings.Length];
+            if (beltDamage.Length < world.Belts.Length) beltDamage = new long[world.Belts.Length];
             Array.Clear(villagerDamage, 0, villagerDamage.Length);
             Array.Clear(buildingDamage, 0, buildingDamage.Length);
+            Array.Clear(beltDamage, 0, beltDamage.Length);
         }
 
         private void ApplyRaidDamage()
         {
             for (int i = 0; i < world.VillagerCount; i++) world.Villagers[i].Hp = RemainingHp(world.Villagers[i].Hp, villagerDamage[i]);
             for (int i = 0; i < world.BuildingCount; i++) world.Buildings[i].Hp = RemainingHp(world.Buildings[i].Hp, buildingDamage[i]);
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+                if (beltDamage[cell] > 0) world.Belts[cell].Hp = RemainingHp(world.Belts[cell].Hp, beltDamage[cell]);
         }
 
         /// <summary>
@@ -95,6 +132,13 @@ namespace Rts.Simulation
                 opened = true;
             }
             if (opened) TerrainChanged();
+            // A broken belt is gone with what it carried; the line's order is worked out again.
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                if (world.Belts[cell].FactionId == 0 || world.Belts[cell].Hp != 0) continue;
+                world.Belts[cell] = default;
+                world.BeltOrder = null;
+            }
         }
 
         private bool BuildingVisibleTo(uint faction, BuildingState b)

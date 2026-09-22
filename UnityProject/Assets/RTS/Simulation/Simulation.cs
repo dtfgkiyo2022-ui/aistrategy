@@ -167,7 +167,7 @@ namespace Rts.Simulation
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
                     soldierDamage[target] = checked(soldierDamage[target] + s.Parameters.Damage);
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding) { AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
