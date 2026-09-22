@@ -51,7 +51,7 @@ namespace Rts.Core.Tests
             var s = OneScoutLost(1);
             var sim = new Battle(s);
             var gateway = new CommandGateway(sim);
-            Steps(gateway, sim, 4000);
+            Steps(gateway, sim, 6000);
             var f = Fields(sim);
             var trained = Enumerable.Range(s.Soldiers.Length + 1, (int)Number(f, "NextSoldierId") - s.Soldiers.Length - 1)
                 .Where(id => f["Soldiers[" + id + "].FactionId"] == "1" && f["Soldiers[" + id + "].Kind"] == ((byte)UnitKind.Scout).ToString(CultureInfo.InvariantCulture)).ToArray();
@@ -104,6 +104,40 @@ namespace Rts.Core.Tests
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
             }
+        }
+
+        /// <summary>32 #2: the cap starts at BasePopulation and grows by HousePopulation per finished house.</summary>
+        [Test]
+        public void HousesRaiseThePopulationCapAndTheAutomaticEconomyBuildsThem()
+        {
+            var s = MapGenerator.GenerateTerrain(1);
+            var sim = new Battle(s);
+            Assert.That(sim.Capture(1).Economy.PopulationCap, Is.EqualTo(s.Economy.BasePopulation));
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 6000);
+            var f = Fields(sim);
+            int houses = 0;
+            for (int b = 1; b <= Number(f, "Buildings.Count"); b++)
+                if (f["Buildings[" + b + "].FactionId"] == "1" && f["Buildings[" + b + "].Kind"] == "5" && f["Buildings[" + b + "].Alive"] == "1" && f["Buildings[" + b + "].Complete"] == "1") houses++;
+            TestContext.WriteLine("west houses by 6000: " + houses + ", cap " + sim.Capture(1).Economy.PopulationCap + ", population " + sim.Capture(1).Economy.Population);
+            Assert.That(houses, Is.GreaterThan(0), "the automatic economy built houses");
+            Assert.That(sim.Capture(1).Economy.PopulationCap, Is.EqualTo(Math.Min(s.Economy.PopulationCap, s.Economy.BasePopulation + s.Economy.HousePopulation * houses)));
+            Assert.That(sim.Capture(1).Economy.Population, Is.LessThanOrEqualTo(sim.Capture(1).Economy.PopulationCap));
+        }
+
+        [Test]
+        public void AMapWithoutAgesHasNoHousesAndTheOldCap()
+        {
+            var s = MapGenerator.Generate(1, true, true);
+            s.Economy.StartWood = 1000;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            Assert.That(sim.Capture(1).Economy.PopulationCap, Is.EqualTo(s.Economy.PopulationCap));
+            int core = (int)(s.Cores[0].Position.Z.Raw / 65536 / 2) * 128 + (int)(s.Cores[0].Position.X.Raw / 65536 / 2);
+            for (int d = 5; d < 12; d++) gateway.SubmitEconomy(EconomyCommand.Place(1, (ulong)d, BuildingKind.House, core + d, Facing.North));
+            Steps(gateway, sim, 1);
+            var f = Fields(sim);
+            for (int b = 1; b <= Number(f, "Buildings.Count"); b++) Assert.That(f["Buildings[" + b + "].Kind"], Is.Not.EqualTo("5"));
         }
 
         [Test]

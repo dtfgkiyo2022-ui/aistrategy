@@ -41,7 +41,7 @@ namespace Rts.Simulation
                 {
                     var kind = c.Building;
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
-                        && !(kind == BuildingKind.Farm && FarmingAllowed(faction))) return;
+                        && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !(kind == BuildingKind.House && AgesOn)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -56,7 +56,7 @@ namespace Rts.Simulation
                 case EconomyCommandKind.Train:
                 {
                     int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
-                    if (population >= rules.PopulationCap) return;
+                    if (population >= PopCapFor(faction)) return;
                     if (c.ProducerId == 0)
                     {
                         if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost || economy.AdvanceRemaining > 0) return;

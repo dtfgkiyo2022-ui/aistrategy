@@ -29,12 +29,13 @@ namespace Rts.Simulation
                 var plan = PlanOf(faction);
                 DecideAdvance(faction);
                 if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), rules.PopulationCap, rules.QueueLimit))
+                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
                 {
                     economy.Food = checked(economy.Food - rules.VillagerFoodCost);
                     if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
                     economy.Queued++;
                 }
+                DecideHouse(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
             }
@@ -121,7 +122,7 @@ namespace Rts.Simulation
                 if (economy.TrainRemaining > 0) continue;
                 uint faction = (uint)f + 1;
                 // A full population holds the finished villager at the door until there is room.
-                if (LivingVillagers(faction) + LivingSoldiers(faction) >= rules.PopulationCap) continue;
+                if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
                 SpawnVillager(faction);
                 economy.Queued--;
                 economy.TrainRemaining = economy.Queued > 0 ? rules.VillagerTrainTicks : 0;

@@ -72,6 +72,7 @@ namespace Rts.Simulation
                     w.Write(e.FarmSizeCells); w.Write(e.FarmWoodCost); w.Write(e.FarmWork); w.Write(e.FarmHp);
                     w.Write(e.FarmBaseTicks); w.Write(e.FarmStepTicks); w.Write(e.FarmMinTicks); w.Write(e.FarmFoodReach); w.Write(e.FarmRiverReach);
                     w.Write(e.ScoutFoodCost); w.Write(e.ScoutWoodCost); w.Write(e.ScoutTrainTicks);
+                    w.Write(e.BasePopulation); w.Write(e.HousePopulation); w.Write(e.HouseSizeCells); w.Write(e.HouseWoodCost); w.Write(e.HouseWork); w.Write(e.HouseHp);
                 }
                 return s.ToArray();
             }
@@ -131,6 +132,7 @@ namespace Rts.Simulation
                     e.FarmSizeCells=r.ReadInt32(); e.FarmWoodCost=r.ReadInt32(); e.FarmWork=r.ReadInt32(); e.FarmHp=r.ReadInt32();
                     e.FarmBaseTicks=r.ReadInt32(); e.FarmStepTicks=r.ReadInt32(); e.FarmMinTicks=r.ReadInt32(); e.FarmFoodReach=r.ReadInt32(); e.FarmRiverReach=r.ReadInt32();
                     e.ScoutFoodCost=r.ReadInt32(); e.ScoutWoodCost=r.ReadInt32(); e.ScoutTrainTicks=r.ReadInt32();
+                    e.BasePopulation=r.ReadInt32(); e.HousePopulation=r.ReadInt32(); e.HouseSizeCells=r.ReadInt32(); e.HouseWoodCost=r.ReadInt32(); e.HouseWork=r.ReadInt32(); e.HouseHp=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;
