@@ -16,13 +16,14 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             if (!AgesOn) return rules.PopulationCap;
+            int ceiling = rules.PopulationCap + (world.Economies[faction - 1].Age >= 2 ? rules.Age2PopulationBonus : 0);
             int houses = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.House) houses++;
             }
-            return Math.Min(rules.PopulationCap, rules.BasePopulation + rules.HousePopulation * houses);
+            return Math.Min(ceiling, rules.BasePopulation + rules.HousePopulation * houses);
         }
 
         /// <summary>
@@ -36,7 +37,8 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int cap = PopCapFor(faction);
-            if (cap >= rules.PopulationCap || economy.Wood < rules.HouseWoodCost) return;
+            int ceiling = rules.PopulationCap + (economy.Age >= 2 ? rules.Age2PopulationBonus : 0);
+            if (cap >= ceiling || economy.Wood < rules.HouseWoodCost) return;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (population + HouseMargin < cap) return;
             for (int i = 0; i < world.BuildingCount; i++)

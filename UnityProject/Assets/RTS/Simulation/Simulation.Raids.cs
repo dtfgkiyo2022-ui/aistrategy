@@ -90,7 +90,7 @@ namespace Rts.Simulation
                 int i = checked((int)s.TargetId - 1);
                 var b = world.Buildings[i];
                 if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
-                buildingDamage[i] = checked(buildingDamage[i] + s.Parameters.Damage);
+                buildingDamage[i] = checked(buildingDamage[i] + SiegeDamage(s));
             }
             s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
             s.IsAttacking = true;

@@ -32,9 +32,11 @@ namespace Rts.Core.Tests
         }
 
         /// <summary>The west advances at once into <paramref name="civ"/> (plenty of stock); its economy stays automatic.</summary>
-        private static (ScenarioDefinition s, Battle sim, CommandGateway gateway) Advanced(ulong seed, CivKind civ)
+        private static (ScenarioDefinition s, Battle sim, CommandGateway gateway) Advanced(ulong seed, CivKind civ, bool widenReserve = false)
         {
             var s = MapGenerator.GenerateTerrain(seed);
+            // Room for the trained units even after the automatic economy fills the usual armies.
+            if (widenReserve) s.Armies[2].Capacity = 26;
             s.Economy.StartFood = 3000; s.Economy.StartWood = 3000;
             var sim = new Battle(s);
             var gateway = new CommandGateway(sim);
@@ -69,8 +71,10 @@ namespace Rts.Core.Tests
                 Assert.That(trained.Length, Is.GreaterThan(0), civ + " trains infantry");
                 // Soldiers queued while the west was still primitive (the first 1200 ticks) come out ordinary.
                 // Research may add weapons and armour on top (32 #6); forged soldiers start at ForgedInfantryHp, ordinary ones at 100.
-                int forged = trained.Count(id => Number(f, "Soldiers[" + id + "].Parameters.Hp") >= s.Economy.ForgedInfantryHp);
-                int ordinary = trained.Count(id => Number(f, "Soldiers[" + id + "].Parameters.Hp") < s.Economy.ForgedInfantryHp);
+                // By damage, not HP: armour (+20) lifts an ordinary soldier to the forged HP, while weapons (+2) leaves
+                // ordinary damage under the forged one (32.9, this is what made the test read farmers as forging).
+                int forged = trained.Count(id => Number(f, "Soldiers[" + id + "].Parameters.Damage") >= s.Economy.ForgedInfantryDamage);
+                int ordinary = trained.Count(id => Number(f, "Soldiers[" + id + "].Parameters.Damage") < s.Economy.ForgedInfantryDamage);
                 TestContext.WriteLine(civ + ": forged " + forged + ", ordinary " + ordinary);
                 Assert.That(forged + ordinary, Is.EqualTo(trained.Length), "every trained soldier is one or the other");
                 if (civ == CivKind.Metallurgy) Assert.That(forged, Is.GreaterThan(0), "metallurgy forges its infantry");
@@ -108,6 +112,76 @@ namespace Rts.Core.Tests
             TestContext.WriteLine("seed 4: farming " + farm4 + ", metallurgy " + metal4 + "; seed 7: farming " + farm7 + ", metallurgy " + metal7);
             Assert.That(farm4, Is.GreaterThan(metal4), "on seed 4's ground farming pays");
             Assert.That(metal7, Is.GreaterThan(farm7), "on seed 7's ground metallurgy pays");
+        }
+
+        /// <summary>32 #7, #8: the second age raises the population ceiling and opens the civilisation's own unit.</summary>
+        [TestCase(CivKind.Agrarian, UnitKind.Archer, UnitKind.Cavalry)]
+        [TestCase(CivKind.Metallurgy, UnitKind.Cavalry, UnitKind.Archer)]
+        public void TheSecondAgeOpensTheCivilisationsOwnUnit(CivKind civ, UnitKind own, UnitKind other)
+        {
+            var s = MapGenerator.GenerateTerrain(7);
+            s.Armies[2].Capacity = 26; // room for the trained unit after the automatic economy filled the usual armies
+            s.Economy.StartFood = 3000; s.Economy.StartWood = 3000; s.Economy.StartMetal = 100;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            ulong seq = 0;
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++seq, civ));
+            Steps(gateway, sim, s.Economy.AdvanceTicks + 2);
+            uint barracks = 0;
+            for (int t = 0; t < 4000 && barracks == 0; t += 20)
+            {
+                Steps(gateway, sim, 20);
+                var b = sim.Capture(1).Economy.Buildings.FirstOrDefault(v => v.Kind == BuildingKind.Barracks && v.FactionId == 1 && v.Complete);
+                barracks = b.Id;
+            }
+            Assume.That(barracks, Is.Not.EqualTo(0u));
+            gateway.SubmitEconomy(EconomyCommand.Train(1, ++seq, barracks, own));
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++seq, false));
+            for (int i = 0; i < 5; i++) { gateway.SubmitEconomy(EconomyCommand.CancelTrain(1, ++seq, barracks)); gateway.SubmitEconomy(EconomyCommand.CancelTrain(1, ++seq, 0)); }
+            Steps(gateway, sim, 1);
+            Assert.That(sim.Capture(1).Economy.Buildings.First(b => b.Id == barracks).Queued, Is.EqualTo(0), "not before the second age");
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++seq, civ));
+            Steps(gateway, sim, 1);
+            Assert.That(sim.Capture(1).Economy.AdvanceRemaining, Is.GreaterThan(0), "the second age is under way");
+            Steps(gateway, sim, s.Economy.Age2Ticks + 1);
+            var e = sim.Capture(1).Economy;
+            Assert.That(e.Age, Is.EqualTo(2));
+            Assert.That(e.PopulationCap, Is.LessThanOrEqualTo(s.Economy.PopulationCap + s.Economy.Age2PopulationBonus));
+
+            gateway.SubmitEconomy(EconomyCommand.Train(1, ++seq, barracks, other)); // the other civilisation's unit: refused
+            gateway.SubmitEconomy(EconomyCommand.Train(1, ++seq, barracks, own));
+            Steps(gateway, sim, 1);
+            var f = Fields(sim);
+            string n = "Buildings[" + barracks + "].";
+            Assert.That(Number(f, n + "Queued"), Is.EqualTo(1));
+            Assert.That(f[n + "QueueKinds[0]"], Is.EqualTo(((byte)own).ToString(CultureInfo.InvariantCulture)));
+            long next = Number(f, "NextSoldierId");
+            Steps(gateway, sim, 400);
+            f = Fields(sim);
+            // The east goes on training too, so the new west soldier is the first west one from here.
+            long mine = Enumerable.Range((int)next, (int)(Number(f, "NextSoldierId") - next)).FirstOrDefault(i => f["Soldiers[" + i + "].FactionId"] == "1");
+            Assert.That(mine, Is.GreaterThan(0), "it came out");
+            string id = "Soldiers[" + mine + "].";
+            Assert.That(f[id + "Class"], Is.EqualTo(((byte)own).ToString(CultureInfo.InvariantCulture)));
+            Assert.That(f[id + "Kind"], Is.EqualTo(((byte)UnitKind.Infantry).ToString(CultureInfo.InvariantCulture)), "it fights as infantry");
+            if (own == UnitKind.Archer) Assert.That(Number(f, id + "Parameters.Range.Raw"), Is.EqualTo(s.Economy.ArcherRange.Raw));
+            else Assert.That(Number(f, id + "Parameters.Speed.Raw"), Is.EqualTo(s.Economy.CavalrySpeed.Raw));
+        }
+
+        /// <summary>
+        /// Left alone on seed 7 the west reaches the city age (measured, 32.8). Archers it does not train: wood stays
+        /// short, and an archer costs 50 of it (32.9). The count is printed, and the day wood is easier it can be asserted.
+        /// </summary>
+        [Test]
+        public void LeftAloneSeedSevenReachesTheCityAge()
+        {
+            var s = MapGenerator.GenerateTerrain(7);
+            var sim = new Battle(s);
+            for (long t = 1; t <= 40000 && !sim.Capture(1).Result.HasEnded; t++) sim.Step(t, Array.Empty<ScheduledInput>());
+            var f = Fields(sim);
+            int archers = Enumerable.Range(1, (int)Number(f, "NextSoldierId") - 1).Count(id => f["Soldiers[" + id + "].Class"] == ((byte)UnitKind.Archer).ToString(CultureInfo.InvariantCulture));
+            TestContext.WriteLine("seed 7 by 40000: ages W" + f["Economy[1].Age"] + " E" + f["Economy[2].Age"] + ", archers " + archers);
+            Assert.That(Math.Max(Number(f, "Economy[1].Age"), Number(f, "Economy[2].Age")), Is.EqualTo(2));
         }
 
         [Test]

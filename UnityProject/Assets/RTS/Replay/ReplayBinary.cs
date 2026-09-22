@@ -134,6 +134,8 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.AdvanceAge) w.Write((byte)e.Civ);
                 // V3-5: only research carries the tech.
                 if(e.Kind==EconomyCommandKind.Research) w.Write((byte)e.Tech);
+                // V3-5: only a trade carries what it gives and takes.
+                if(e.Kind==EconomyCommandKind.Trade) { w.Write((byte)e.Give); w.Write((byte)e.Take); }
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -168,7 +170,9 @@ namespace Rts.Replay
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
                 var tech=ek==EconomyCommandKind.Research ? ReplayBinary.Enum<TechKind>(r) : (TechKind)0;
-                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech));
+                var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
+                var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

@@ -117,8 +117,8 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #5): a wall cell (stands at once, no builders), placed within WallReach metres of the own core or a
         /// finished own building, never so that the own core loses its way to the enemy core.</summary>
         public int WallStoneCost = 3, WallHp = 400, WallReach = 30;
-        /// <summary>Stone each side starts with (maps with ages).</summary>
-        public int StartStone;
+        /// <summary>Stone and metal each side starts with (maps with ages).</summary>
+        public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>
         public int TowerSizeCells = 2, TowerWoodCost = 50, TowerStoneCost = 100, TowerWork = 250, TowerHp = 800;
         public int TowerRange = 10, TowerVision = 16, TowerDamage = 6, TowerIntervalTicks = 20;
@@ -129,6 +129,19 @@ namespace Rts.Simulation
         public int[] TechTicks = { 600, 600, 400, 400, 500, 500 };
         /// <summary>What the techs do: attack, HP, ticks per gather, carry, farm and smelt ticks saved.</summary>
         public int WeaponsDamage = 2, ArmourHp = 20, ToolsGatherTicks = 5, CartsCarry = 5, IrrigationTicks = 10, BlastFurnaceTicks = 20;
+        /// <summary>V3-5 (32 #7): the second age inside a civilisation (city age for farming, iron age for metallurgy).</summary>
+        public int Age2FoodCost = 800, Age2WoodCost = 500, Age2Ticks = 1800, Age2PopulationBonus = 20;
+        /// <summary>V3-5 (32 #8): archers (farming, second age) shoot from afar; cavalry (metallurgy, second age) is quick and hard.</summary>
+        public int ArcherFood = 40, ArcherWood = 50, ArcherTicks = 250, ArcherHp = 60, ArcherDamage = 7, ArcherInterval = 25;
+        public Fix64 ArcherRange = Fix64.FromInt(8), ArcherSpeed = Fix64.FromInt(2), ArcherVision = Fix64.FromInt(22);
+        public int CavalryFood = 80, CavalryWood = 20, CavalryMetal = 10, CavalryTicks = 300, CavalryHp = 150, CavalryDamage = 12, CavalryInterval = 20;
+        public Fix64 CavalryRange = Fix64.FromInt(2), CavalrySpeed = Fix64.FromInt(4), CavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
+        public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
+        /// <summary>V3-5 (32 #9): the siege workshop (second age) and its ram - slow, weak on soldiers, heavy on buildings and cores.</summary>
+        public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
+        public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;
+        public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
     }
 
     public sealed class MapDefinition

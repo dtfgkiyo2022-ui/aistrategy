@@ -11,7 +11,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private const int CivOreReach = 44, CivFoodReach = 30, GuaranteedFoodPoints = 3, AdvanceVillagers = 8;
+        private const int CivOreReach = 44, CivFoodReach = 30, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
@@ -68,23 +68,36 @@ namespace Rts.Simulation
             return System.Math.Max(rules.FarmMinTicks, rules.FarmBaseTicks - rules.FarmStepTicks * steps);
         }
 
-        private bool CanAdvance(uint faction)
+        /// <summary>
+        /// Advancing into <paramref name="civ"/>: out of the primitive age into either civilisation, or (32 #7) into the
+        /// second age of the civilisation already taken. Nothing else is ever possible.
+        /// </summary>
+        private bool CanAdvance(uint faction, CivKind civ)
         {
             if (!AgesOn) return false;
-            var rules = world.Config.Economy;
             var e = world.Economies[faction - 1];
-            return e.Civ == CivKind.Primitive && e.AdvanceRemaining == 0 && e.Queued == 0
-                && e.Food >= rules.AdvanceFoodCost && e.Wood >= rules.AdvanceWoodCost;
+            if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
+            var (food, wood, _) = AdvancePrice(e);
+            if (e.Food < food || e.Wood < wood) return false;
+            if (e.Civ == CivKind.Primitive) return civ == CivKind.Agrarian || civ == CivKind.Metallurgy;
+            return e.Age == 1 && civ == e.Civ;
+        }
+
+        private (int food, int wood, int ticks) AdvancePrice(FactionEconomy e)
+        {
+            var rules = world.Config.Economy;
+            return e.Civ == CivKind.Primitive ? (rules.AdvanceFoodCost, rules.AdvanceWoodCost, rules.AdvanceTicks)
+                : (rules.Age2FoodCost, rules.Age2WoodCost, rules.Age2Ticks);
         }
 
         private void StartAdvance(uint faction, CivKind civ)
         {
-            var rules = world.Config.Economy;
             ref var e = ref world.Economies[faction - 1];
-            e.Food = checked(e.Food - rules.AdvanceFoodCost);
-            e.Wood = checked(e.Wood - rules.AdvanceWoodCost);
+            var (food, wood, ticks) = AdvancePrice(e);
+            e.Food = checked(e.Food - food);
+            e.Wood = checked(e.Wood - wood);
             e.AdvancingTo = civ;
-            e.AdvanceRemaining = rules.AdvanceTicks;
+            e.AdvanceRemaining = ticks;
         }
 
         /// <summary>Economy step: the advancing clock; at zero the civilisation is taken.</summary>
@@ -96,6 +109,7 @@ namespace Rts.Simulation
                 ref var e = ref world.Economies[f];
                 if (e.AdvanceRemaining == 0) continue;
                 if (--e.AdvanceRemaining > 0) continue;
+                e.Age = e.Civ == CivKind.Primitive ? (byte)1 : (byte)2;
                 e.Civ = e.AdvancingTo;
                 e.AdvancingTo = CivKind.Primitive;
             }
@@ -108,8 +122,10 @@ namespace Rts.Simulation
         private void DecideAdvance(uint faction)
         {
             // The core the player runs by hand (V3-3, 19) is theirs to advance too.
-            if (world.Economies[faction - 1].CoreHeld || !SavingToAdvance(faction) || !CanAdvance(faction)) return;
-            StartAdvance(faction, ChooseCiv(faction));
+            var e = world.Economies[faction - 1];
+            var civ = e.Civ == CivKind.Primitive ? ChooseCiv(faction) : e.Civ;
+            if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvance(faction, civ)) return;
+            StartAdvance(faction, civ);
         }
 
         /// <summary>True while the automatic economy keeps food and wood for advancing (no infantry is queued then).</summary>
@@ -117,15 +133,28 @@ namespace Rts.Simulation
         {
             if (!AgesOn) return false;
             var e = world.Economies[faction - 1];
-            if (e.Civ != CivKind.Primitive || e.AdvanceRemaining > 0) return false;
+            if (e.AdvanceRemaining > 0 || e.Age >= 2) return false;
+            // The second age waits for the civilisation's own line, and for the stock to be half way there (32.8).
+            if (e.Civ != CivKind.Primitive)
+            {
+                var rules = world.Config.Economy;
+                if (!CivLineStarted(faction) || 2 * (e.Food + e.Wood) < rules.Age2FoodCost + rules.Age2WoodCost) return false;
+            }
             bool barracks = false;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) { barracks = true; break; }
             }
-            return barracks && LivingVillagers(faction) >= AdvanceVillagers;
+            return barracks && LivingVillagers(faction) >= (e.Civ == CivKind.Primitive ? AdvanceVillagers : Age2Villagers);
         }
+
+        /// <summary>
+        /// True while the automatic economy holds back its cheap groundwork too - houses, drop sites, research, markets.
+        /// Only the first step out of the primitive age is worth that: saving for the second age lasts long, and stopping
+        /// the groundwork for it cost the side its research and its defence (32.9, measured).
+        /// </summary>
+        private bool SavingHard(uint faction) => SavingToAdvance(faction) && world.Economies[faction - 1].Civ == CivKind.Primitive;
 
         private CivKind ChooseCiv(uint faction)
         {

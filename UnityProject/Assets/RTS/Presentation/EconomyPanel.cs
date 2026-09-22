@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -49,8 +49,9 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most four rows of buttons under it, then one line of notes.
-        private const float TabbedHeight = 22f + 26f + 4f * 26f + 24f;
+        // The panel keeps one height: a row of tabs and at most seven rows of buttons under it, then one line of notes.
+        // Seven since V3-5 (32 #9): the make tab can show the ram and the market's trades as well.
+        private const float TabbedHeight = 22f + 26f + 7f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
@@ -149,22 +150,30 @@ namespace Rts.Presentation
             if (e == null) return 0;
             return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
-                : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
+                : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
             => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
                 : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.House ? UiText.T("House", "住居")
                 : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
-                : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場") : UiText.T("Barracks", "兵舎");
+                : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場")
+                : kind == BuildingKind.Market ? UiText.T("Market", "市場") : kind == BuildingKind.SiegeWorkshop ? UiText.T("Siege workshop", "攻城工房")
+                : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
             => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
-                : m == Mode.Blacksmith ? BuildingKind.Blacksmith : BuildingKind.Barracks;
+                : m == Mode.Blacksmith ? BuildingKind.Blacksmith
+                : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
+
+        /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
+        private static string AgeName(CivKind c, int age)
+            => age < 2 ? CivName(c) : c == CivKind.Agrarian ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代");
 
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
@@ -272,8 +281,8 @@ namespace Rts.Presentation
             var bar = TopBarRect();
             GUI.Box(bar, "");
             string age = !economy.Ages ? "" : economy.AdvanceRemaining > 0
-                ? UiText.T("Advancing to ", "進めている：") + CivName(economy.AdvancingTo) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
-                : CivName(economy.Civ) + "  |  ";
+                ? UiText.T("Advancing to ", "進めている：") + AgeName(economy.AdvancingTo, economy.Civ == CivKind.Primitive ? 1 : 2) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
+                : AgeName(economy.Civ, economy.Age) + "  |  ";
             string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
             if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
             if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone;
@@ -307,6 +316,12 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x + 2f * (third + 4f), y, third, 22f), Mode.Wall, mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ")
                     : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"));
                 y += 26f;
+                // V3-5 (32 #9): the market comes with a civilisation, the siege workshop with the second age.
+                if (economy.Civ != CivKind.Primitive)
+                    ModeButton(new Rect(x, y, half, 22f), Mode.Market, UiText.T("Market (", "市場（木材 ") + economy.MarketWoodCost + UiText.T(" wood)", "）"));
+                if (economy.Age >= 2)
+                    ModeButton(new Rect(right, y, half, 22f), Mode.SiegeWorkshop, UiText.T("Siege workshop (", "攻城工房（木材 ") + economy.WorkshopWoodCost + UiText.T(" wood)", "）"));
+                if (economy.Civ != CivKind.Primitive || economy.Age >= 2) y += 26f;
             }
             if (!economy.Industry) return;
             // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
@@ -353,8 +368,43 @@ namespace Rts.Presentation
                 GUI.enabled = barracks.HasValue && barracks.Value.Complete;
                 if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Scout (", "斥候（食料 ") + economy.ScoutFoodCost + UiText.T(" food)", "）")) && barracks.HasValue)
                     Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Scout), UiText.T("Scout requested", "斥候を依頼しました"));
+                // V3-5 (32 #8): the civilisation's own unit, from its second age.
+                if (economy.Age >= 2 && economy.Civ == CivKind.Agrarian)
+                {
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）")) && barracks.HasValue)
+                        Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Archer), UiText.T("Archer requested", "弓兵を依頼しました"));
+                }
+                else if (economy.Age >= 2 && economy.Civ == CivKind.Metallurgy)
+                {
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost
+                        + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）")) && barracks.HasValue)
+                        Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
+                }
                 GUI.enabled = true;
                 y += 26f;
+                // V3-5 (32 #9): the ram from the siege workshop, and the market's trades.
+                var workshop = OwnBuilding(economy, BuildingKind.SiegeWorkshop);
+                if (workshop.HasValue)
+                {
+                    string queued = workshop.Value.Queued == 0 ? "" : " [" + workshop.Value.Queued + ", " + Seconds(workshop.Value.TrainRemaining) + "]";
+                    GUI.enabled = workshop.Value.Complete;
+                    if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Ram (", "破城槌（食") + economy.RamFoodCost + UiText.T("F ", " 木") + economy.RamWoodCost + UiText.T("W)", "）") + queued))
+                        Send(EconomyCommand.Train(faction, ++sequence, workshop.Value.Id, UnitKind.Ram), UiText.T("Ram requested", "破城槌を依頼しました"));
+                    GUI.enabled = true;
+                    y += 26f;
+                }
+                var market = OwnBuilding(economy, BuildingKind.Market);
+                if (market.HasValue)
+                {
+                    GUI.enabled = market.Value.Complete;
+                    GUI.Label(new Rect(x, y, 96f, 22f), UiText.T("Market ", "市場 ") + economy.TradeLot + UiText.T("->", "→") + economy.TradeReturn);
+                    float third = (w - 100f - 8f) / 3f;
+                    TradeButton(new Rect(x + 100f, y, third, 22f), economy, ResourceKind.Food, ResourceKind.Wood, UiText.T("Food->Wood", "食料→木材"));
+                    TradeButton(new Rect(x + 100f + third + 4f, y, third, 22f), economy, ResourceKind.Wood, ResourceKind.Food, UiText.T("Wood->Food", "木材→食料"));
+                    TradeButton(new Rect(x + 100f + 2f * (third + 4f), y, third, 22f), economy, ResourceKind.Wood, ResourceKind.Stone, UiText.T("Wood->Stone", "木材→石"));
+                    GUI.enabled = true;
+                    y += 26f;
+                }
             }
             if (economy.Ages && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
             {
@@ -364,6 +414,14 @@ namespace Rts.Presentation
                     Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
                 if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
                     Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
+                y += 26f;
+            }
+            else if (economy.Ages && economy.Age == 1 && economy.AdvanceRemaining == 0)
+            {
+                // V3-5 (32 #7): the second age of the civilisation taken.
+                string next = economy.Civ == CivKind.Agrarian ? UiText.T("Advance: city age", "時代を進める：都市の時代") : UiText.T("Advance: iron age", "時代を進める：鉄の時代");
+                if (GUI.Button(new Rect(x, y, w, 22f), next + UiText.T(" (", "（食") + economy.Age2FoodCost + UiText.T("F ", " 木") + economy.Age2WoodCost + UiText.T("W)", "）")))
+                    Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
                 y += 26f;
             }
             if (economy.Ages)
@@ -388,6 +446,13 @@ namespace Rts.Presentation
             if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle -> carry from ", "待機中の村人 → ") + from + UiText.T(" by hand", "から手で運ぶ")))
                 SendIdleTo(economy, EconomyTargetKind.Building, source.Value.Id, from + UiText.T(" by hand", "から手で運ぶ"));
             GUI.enabled = true;
+        }
+
+        /// <summary>One trade at the market: TradeLot of one resource for TradeReturn of another (32 #9).</summary>
+        private void TradeButton(Rect r, EconomyView economy, ResourceKind give, ResourceKind take, string label)
+        {
+            if (GUI.Button(r, label))
+                Send(EconomyCommand.Trade(faction, ++sequence, give, take), label + UiText.T(" traded", " を交換しました"));
         }
 
         private static string TechName(TechKind t)

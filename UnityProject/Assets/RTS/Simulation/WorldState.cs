@@ -20,6 +20,8 @@ namespace Rts.Simulation
         internal int[] LocalPath;
         internal int LocalCursor, JoinCursor;
         internal SimPoint LocalGoal;
+        /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
+        internal UnitKind Class;
     }
 
     internal struct ArmyState
@@ -181,6 +183,8 @@ namespace Rts.Simulation
         internal EconomyPolicy Policy;
         /// <summary>V3-4 (26): the civilisation, and while advancing the one chosen and the ticks left.</summary>
         internal CivKind Civ, AdvancingTo;
+        /// <summary>V3-5 (32 #7): 0 primitive, 1 on taking a civilisation, 2 after the second age.</summary>
+        internal byte Age;
         internal long AdvanceRemaining;
         /// <summary>V3-5 (32 #6): researched techs, bit 1 &lt;&lt; (TechKind - 1).</summary>
         internal ulong Techs;
@@ -280,7 +284,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -350,14 +354,23 @@ namespace Rts.Simulation
                 && e.BasePopulation > 0 && e.HousePopulation >= 0 && e.HouseSizeCells > 0 && e.HouseSizeCells <= 8
                 && e.HouseWoodCost >= 0 && e.HouseWork > 0 && e.HouseHp > 0
                 && e.DropSiteSizeCells > 0 && e.DropSiteSizeCells <= 8 && e.DropSiteWoodCost >= 0 && e.DropSiteWork > 0 && e.DropSiteHp > 0
-                && e.WallStoneCost >= 0 && e.WallHp > 0 && e.WallReach >= 0 && e.StartStone >= 0 && e.TowerSizeCells > 0 && e.TowerSizeCells <= 8
+                && e.WallStoneCost >= 0 && e.WallHp > 0 && e.WallReach >= 0 && e.StartStone >= 0 && e.StartMetal >= 0 && e.TowerSizeCells > 0 && e.TowerSizeCells <= 8
                 && e.TowerWoodCost >= 0 && e.TowerStoneCost >= 0 && e.TowerWork > 0 && e.TowerHp > 0 && e.TowerRange >= 0 && e.TowerVision >= 0
                 && e.TowerDamage >= 0 && e.TowerIntervalTicks > 0
                 && e.BlacksmithSizeCells > 0 && e.BlacksmithSizeCells <= 8 && e.BlacksmithWoodCost >= 0 && e.BlacksmithWork > 0 && e.BlacksmithHp > 0
                 && e.TechFood != null && e.TechFood.Length == 6 && e.TechWood != null && e.TechWood.Length == 6 && e.TechTicks != null && e.TechTicks.Length == 6
                 && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
-                && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks), "Invalid age rules.");
+                && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
+                && e.Age2FoodCost >= 0 && e.Age2WoodCost >= 0 && e.Age2Ticks > 0 && e.Age2PopulationBonus >= 0
+                && e.ArcherFood >= 0 && e.ArcherWood >= 0 && e.ArcherTicks > 0 && e.ArcherHp > 0 && e.ArcherDamage >= 0 && e.ArcherInterval > 0
+                && e.ArcherRange.Raw >= 0 && e.ArcherRange <= Fix64.FromInt(64) && e.ArcherSpeed.Raw > 0 && e.ArcherSpeed <= Fix64.FromInt(16) && e.ArcherVision.Raw >= 0
+                && e.CavalryFood >= 0 && e.CavalryWood >= 0 && e.CavalryMetal >= 0 && e.CavalryTicks > 0 && e.CavalryHp > 0 && e.CavalryDamage >= 0 && e.CavalryInterval > 0
+                && e.CavalryRange.Raw >= 0 && e.CavalryRange <= Fix64.FromInt(64) && e.CavalrySpeed.Raw > 0 && e.CavalrySpeed <= Fix64.FromInt(16) && e.CavalryVision.Raw >= 0
+                && e.MarketSizeCells > 0 && e.MarketSizeCells <= 8 && e.MarketWoodCost >= 0 && e.MarketWork > 0 && e.MarketHp > 0 && e.TradeLot > 0 && e.TradeReturn >= 0
+                && e.WorkshopSizeCells > 0 && e.WorkshopSizeCells <= 8 && e.WorkshopWoodCost >= 0 && e.WorkshopWork > 0 && e.WorkshopHp > 0
+                && e.RamFood >= 0 && e.RamWood >= 0 && e.RamTicks > 0 && e.RamHp > 0 && e.RamDamage >= 0 && e.RamSiegeDamage >= 0 && e.RamInterval > 0
+                && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -499,13 +512,22 @@ namespace Rts.Simulation
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
                 DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
-                WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach, StartStone = e.StartStone,
+                WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach, StartStone = e.StartStone, StartMetal = e.StartMetal,
                 TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
                 BlacksmithSizeCells = e.BlacksmithSizeCells, BlacksmithWoodCost = e.BlacksmithWoodCost, BlacksmithWork = e.BlacksmithWork, BlacksmithHp = e.BlacksmithHp,
                 TechFood = (int[])e.TechFood.Clone(), TechWood = (int[])e.TechWood.Clone(), TechTicks = (int[])e.TechTicks.Clone(),
                 WeaponsDamage = e.WeaponsDamage, ArmourHp = e.ArmourHp, ToolsGatherTicks = e.ToolsGatherTicks, CartsCarry = e.CartsCarry,
-                IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks };
+                IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks,
+                Age2FoodCost = e.Age2FoodCost, Age2WoodCost = e.Age2WoodCost, Age2Ticks = e.Age2Ticks, Age2PopulationBonus = e.Age2PopulationBonus,
+                ArcherFood = e.ArcherFood, ArcherWood = e.ArcherWood, ArcherTicks = e.ArcherTicks, ArcherHp = e.ArcherHp, ArcherDamage = e.ArcherDamage,
+                ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
+                CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,
+                CavalryDamage = e.CavalryDamage, CavalryInterval = e.CavalryInterval, CavalryRange = e.CavalryRange, CavalrySpeed = e.CavalrySpeed, CavalryVision = e.CavalryVision,
+                MarketSizeCells = e.MarketSizeCells, MarketWoodCost = e.MarketWoodCost, MarketWork = e.MarketWork, MarketHp = e.MarketHp, TradeLot = e.TradeLot, TradeReturn = e.TradeReturn,
+                WorkshopSizeCells = e.WorkshopSizeCells, WorkshopWoodCost = e.WorkshopWoodCost, WorkshopWork = e.WorkshopWork, WorkshopHp = e.WorkshopHp,
+                RamFood = e.RamFood, RamWood = e.RamWood, RamTicks = e.RamTicks, RamHp = e.RamHp, RamDamage = e.RamDamage, RamSiegeDamage = e.RamSiegeDamage,
+                RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

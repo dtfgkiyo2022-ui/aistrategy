@@ -108,7 +108,7 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideResearch(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction) || SavingToAdvance(faction)) return;
+            if (!AgesOn || !CivLineStarted(faction) || SavingHard(faction)) return;
             var rules = world.Config.Economy;
             int smith = OwnBuildingIndex(faction, BuildingKind.Blacksmith);
             if (smith < 0)
