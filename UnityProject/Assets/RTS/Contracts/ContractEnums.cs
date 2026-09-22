@@ -77,7 +77,8 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
-    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11 }
+    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
+        ArcheryRange = 12, Stable = 13 }
 
     public enum EventKind : byte
     {

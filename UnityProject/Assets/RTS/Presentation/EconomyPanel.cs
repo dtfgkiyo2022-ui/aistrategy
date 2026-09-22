@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -151,7 +151,8 @@ namespace Rts.Presentation
             return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
-                : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
+                : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
@@ -160,13 +161,15 @@ namespace Rts.Presentation
                 : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
                 : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場")
                 : kind == BuildingKind.Market ? UiText.T("Market", "市場") : kind == BuildingKind.SiegeWorkshop ? UiText.T("Siege workshop", "攻城工房")
+                : kind == BuildingKind.ArcheryRange ? UiText.T("Archery range", "射撃場") : kind == BuildingKind.Stable ? UiText.T("Stable", "厥舎")
                 : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
             => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
-                : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop : BuildingKind.Barracks;
+                : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
+                : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
@@ -327,6 +330,13 @@ namespace Rts.Presentation
                 if (economy.Age >= 2)
                     ModeButton(new Rect(right, y, half, 22f), Mode.SiegeWorkshop, UiText.T("Siege workshop (", "攻城工房（木材 ") + economy.WorkshopWoodCost + UiText.T(" wood)", "）"));
                 if (economy.Civ != CivKind.Primitive || economy.Age >= 2) y += 26f;
+                // V3-5 (32 #12): the range and the stable, so either civilisation can field the unit it does not train.
+                if (economy.Age >= 2)
+                {
+                    ModeButton(new Rect(x, y, half, 22f), Mode.ArcheryRange, UiText.T("Archery range (", "射撃場（木材 ") + economy.RangeWoodCost + UiText.T(" wood)", "）"));
+                    ModeButton(new Rect(right, y, half, 22f), Mode.Stable, UiText.T("Stable (", "厥舎（木材 ") + economy.StableWoodCost + UiText.T(" wood)", "）"));
+                    y += 26f;
+                }
             }
             if (!economy.Industry) return;
             // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
@@ -395,6 +405,28 @@ namespace Rts.Presentation
                     GUI.enabled = workshop.Value.Complete;
                     if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Ram (", "破城槌（食") + economy.RamFoodCost + UiText.T("F ", " 木") + economy.RamWoodCost + UiText.T("W)", "）") + queued))
                         Send(EconomyCommand.Train(faction, ++sequence, workshop.Value.Id, UnitKind.Ram), UiText.T("Ram requested", "破城槌を依頼しました"));
+                    GUI.enabled = true;
+                    y += 26f;
+                }
+                var range = OwnBuilding(economy, BuildingKind.ArcheryRange);
+                var stable = OwnBuilding(economy, BuildingKind.Stable);
+                if (range.HasValue || stable.HasValue)
+                {
+                    if (range.HasValue)
+                    {
+                        GUI.enabled = range.Value.Complete;
+                        string queued = range.Value.Queued == 0 ? "" : " [" + range.Value.Queued + "]";
+                        if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）") + queued))
+                            Send(EconomyCommand.Train(faction, ++sequence, range.Value.Id, UnitKind.Archer), UiText.T("Archer requested", "弓兵を依頼しました"));
+                    }
+                    if (stable.HasValue)
+                    {
+                        GUI.enabled = stable.Value.Complete;
+                        string queued = stable.Value.Queued == 0 ? "" : " [" + stable.Value.Queued + "]";
+                        if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost
+                            + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）") + queued))
+                            Send(EconomyCommand.Train(faction, ++sequence, stable.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
+                    }
                     GUI.enabled = true;
                     y += 26f;
                 }

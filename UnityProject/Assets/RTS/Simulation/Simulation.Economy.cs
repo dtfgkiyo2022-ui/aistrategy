@@ -45,6 +45,7 @@ namespace Rts.Simulation
                 DecideResearch(faction);
                 DecideMarket(faction);
                 DecideSiege(faction);
+                DecideCrossUnit(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
             }
