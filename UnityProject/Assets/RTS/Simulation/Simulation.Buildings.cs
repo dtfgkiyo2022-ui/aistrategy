@@ -36,10 +36,11 @@ namespace Rts.Simulation
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, rules.InfantryFoodCost, rules.InfantryWoodCost, population, rules.PopulationCap, HasInfantryRoom(faction))
-                || economy.Metal < rules.InfantryMetalCost) return;
+                || economy.Metal < InfantryMetalFor(faction) || SavingToAdvance(faction)) return;
             economy.Food = checked(economy.Food - rules.InfantryFoodCost);
             economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
-            economy.Metal = checked(economy.Metal - rules.InfantryMetalCost);
+            economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
+            building.QueuedMetal = checked(building.QueuedMetal + InfantryMetalFor(faction));
             if (building.Queued == 0) building.TrainRemaining = rules.InfantryTrainTicks;
             building.Queued++;
         }
@@ -232,6 +233,7 @@ namespace Rts.Simulation
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= rules.PopulationCap) continue;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell))) continue;
                 b.Queued--;
+                b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - InfantryMetalFor(b.FactionId));
                 b.TrainRemaining = b.Queued > 0 ? rules.InfantryTrainTicks : 0;
             }
         }

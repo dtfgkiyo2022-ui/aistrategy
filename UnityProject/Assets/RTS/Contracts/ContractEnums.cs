@@ -55,6 +55,12 @@ namespace Rts.Contracts
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4 }
 
+    /// <summary>
+    /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
+    /// More civilisations and later ages are added after the first ones are tried (the value is not an age number).
+    /// </summary>
+    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2 }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 

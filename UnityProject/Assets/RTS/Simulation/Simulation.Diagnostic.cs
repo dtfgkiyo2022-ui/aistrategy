@@ -103,6 +103,7 @@ namespace Rts.Simulation
                 {
                     w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Input", b.Input); w.Value(n + "Output", b.Output);
                     w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
+                    if (world.Config.Economy.Ages) w.Value(n + "QueuedMetal", b.QueuedMetal);
                 }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
@@ -125,6 +126,7 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
+                if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); }
             }
             uint belts = 0;
             foreach (var b in world.Belts) if (b.FactionId != 0) belts++;

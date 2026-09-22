@@ -90,6 +90,14 @@ namespace Rts.Simulation
         public int BufferLimit = 10;
         /// <summary>Metal an infantry costs on top of food and wood (12.4). 0 unless the map sets it.</summary>
         public int InfantryMetalCost;
+
+        /// <summary>
+        /// V3-4 (technical-design-v3 26): everyone starts in the primitive age and advances into a civilisation. Mines,
+        /// smelters and the metal cost of infantry then belong to the metallurgy civilisation only. False keeps V3-2/V3-3.
+        /// </summary>
+        public bool Ages;
+        /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
+        public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
     }
 
     public sealed class MapDefinition

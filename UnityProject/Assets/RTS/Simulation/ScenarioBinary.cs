@@ -63,7 +63,12 @@ namespace Rts.Simulation
                     w.Write(e.BufferLimit); w.Write(e.InfantryMetalCost);
                     w.Write((uint)c.Belts.Length); foreach (var b in c.Belts) { w.Write(b.Cell); w.Write(b.FactionId); w.Write((byte)b.Facing); w.Write((byte)b.Item); }
                 }
-                if (schema >= 5) { w.Write((uint)m.Terrain.Length); w.Write(m.Terrain); }
+                if (schema >= 5)
+                {
+                    w.Write((uint)m.Terrain.Length); w.Write(m.Terrain);
+                    var e = c.Economy;
+                    w.Write(e.Ages); w.Write(e.AdvanceFoodCost); w.Write(e.AdvanceWoodCost); w.Write(e.AdvanceTicks);
+                }
                 return s.ToArray();
             }
         }
@@ -116,6 +121,8 @@ namespace Rts.Simulation
                 {
                     int n=Count(r); var terrain=r.ReadBytes(n); if(terrain.Length!=n) throw new EndOfStreamException();
                     c.Map.Terrain=terrain;
+                    var e=c.Economy;
+                    e.Ages=Bool(r); e.AdvanceFoodCost=r.ReadInt32(); e.AdvanceWoodCost=r.ReadInt32(); e.AdvanceTicks=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

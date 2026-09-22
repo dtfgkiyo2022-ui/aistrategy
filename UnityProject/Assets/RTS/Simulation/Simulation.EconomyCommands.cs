@@ -28,6 +28,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     ReturnToAuto(faction);
                     return;
+                case EconomyCommandKind.AdvanceAge:
+                    if (CanAdvance(faction) && (c.Civ == CivKind.Agrarian || c.Civ == CivKind.Metallurgy)) StartAdvance(faction, c.Civ);
+                    return;
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
                     return;
@@ -37,7 +40,7 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
-                    if (kind != BuildingKind.Barracks && !(IndustryOn && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))) return;
+                    if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -55,7 +58,7 @@ namespace Rts.Simulation
                     if (population >= rules.PopulationCap) return;
                     if (c.ProducerId == 0)
                     {
-                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost) return;
+                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost || economy.AdvanceRemaining > 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
                         economy.Food = checked(economy.Food - rules.VillagerFoodCost);
                         if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
@@ -65,10 +68,11 @@ namespace Rts.Simulation
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (b.Kind != BuildingKind.Barracks || !b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
-                        || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost || economy.Metal < rules.InfantryMetalCost) return;
+                        || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost || economy.Metal < InfantryMetalFor(faction)) return;
                     economy.Food = checked(economy.Food - rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
-                    economy.Metal = checked(economy.Metal - rules.InfantryMetalCost);
+                    economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
+                    b.QueuedMetal = checked(b.QueuedMetal + InfantryMetalFor(faction));
                     if (IndustryOn) b.Held = true;
                     if (b.Queued == 0) b.TrainRemaining = rules.InfantryTrainTicks;
                     b.Queued++;
@@ -93,7 +97,10 @@ namespace Rts.Simulation
                     b.Queued--;
                     economy.Food = checked(economy.Food + rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood + rules.InfantryWoodCost);
-                    economy.Metal = checked(economy.Metal + rules.InfantryMetalCost);
+                    // Never more metal back than the queue paid (a cancel after advancing into metallurgy).
+                    int metalBack = Math.Min(InfantryMetalFor(faction), b.QueuedMetal);
+                    b.QueuedMetal -= metalBack;
+                    economy.Metal = checked(economy.Metal + metalBack);
                     if (b.Queued == 0) b.TrainRemaining = 0;
                     return;
                 }

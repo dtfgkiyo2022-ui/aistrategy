@@ -18,7 +18,7 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
-            if (!IndustryOn) return;
+            if (!IndustryOn || !MetalworkAllowed(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             int mine = OwnBuildingIndex(faction, BuildingKind.Mine), smelter = OwnBuildingIndex(faction, BuildingKind.Smelter);
             if (mine < 0)
