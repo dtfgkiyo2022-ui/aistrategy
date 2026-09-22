@@ -126,13 +126,17 @@ namespace Rts.Simulation
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }
+            // V3-5: the class each soldier was trained as, only with ages.
+            if (world.Config.Economy.Ages)
+                for (int i = 0; i < world.SoldierCount; i++)
+                    w.Value("Soldiers[" + world.Soldiers[i].Initial.Id.ToString(CultureInfo.InvariantCulture) + "].Class", (byte)world.Soldiers[i].Class);
             // V3-2: written only with industry, so a V3-1 economy keeps its exact canonical bytes.
             if (!world.Config.Economy.Industry) return;
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
-                if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Techs", e.Techs); }
+                if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); }
             }
             uint belts = 0;

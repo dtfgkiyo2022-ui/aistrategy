@@ -49,8 +49,8 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most four rows of buttons under it, then one line of notes.
-        private const float TabbedHeight = 22f + 26f + 4f * 26f + 24f;
+        // The panel keeps one height: a row of tabs and at most five rows of buttons under it, then one line of notes.
+        private const float TabbedHeight = 22f + 26f + 5f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
@@ -166,6 +166,10 @@ namespace Rts.Presentation
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
 
+        /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
+        private static string AgeName(CivKind c, int age)
+            => age < 2 ? CivName(c) : c == CivKind.Agrarian ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代");
+
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
 
@@ -272,8 +276,8 @@ namespace Rts.Presentation
             var bar = TopBarRect();
             GUI.Box(bar, "");
             string age = !economy.Ages ? "" : economy.AdvanceRemaining > 0
-                ? UiText.T("Advancing to ", "進めている：") + CivName(economy.AdvancingTo) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
-                : CivName(economy.Civ) + "  |  ";
+                ? UiText.T("Advancing to ", "進めている：") + AgeName(economy.AdvancingTo, economy.Civ == CivKind.Primitive ? 1 : 2) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
+                : AgeName(economy.Civ, economy.Age) + "  |  ";
             string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
             if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
             if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone;
@@ -353,6 +357,18 @@ namespace Rts.Presentation
                 GUI.enabled = barracks.HasValue && barracks.Value.Complete;
                 if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Scout (", "斥候（食料 ") + economy.ScoutFoodCost + UiText.T(" food)", "）")) && barracks.HasValue)
                     Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Scout), UiText.T("Scout requested", "斥候を依頼しました"));
+                // V3-5 (32 #8): the civilisation's own unit, from its second age.
+                if (economy.Age >= 2 && economy.Civ == CivKind.Agrarian)
+                {
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）")) && barracks.HasValue)
+                        Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Archer), UiText.T("Archer requested", "弓兵を依頼しました"));
+                }
+                else if (economy.Age >= 2 && economy.Civ == CivKind.Metallurgy)
+                {
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost
+                        + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）")) && barracks.HasValue)
+                        Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
+                }
                 GUI.enabled = true;
                 y += 26f;
             }
@@ -364,6 +380,14 @@ namespace Rts.Presentation
                     Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
                 if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
                     Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
+                y += 26f;
+            }
+            else if (economy.Ages && economy.Age == 1 && economy.AdvanceRemaining == 0)
+            {
+                // V3-5 (32 #7): the second age of the civilisation taken.
+                string next = economy.Civ == CivKind.Agrarian ? UiText.T("Advance: city age", "時代を進める：都市の時代") : UiText.T("Advance: iron age", "時代を進める：鉄の時代");
+                if (GUI.Button(new Rect(x, y, w, 22f), next + UiText.T(" (", "（食") + economy.Age2FoodCost + UiText.T("F ", " 木") + economy.Age2WoodCost + UiText.T("W)", "）")))
+                    Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
                 y += 26f;
             }
             if (economy.Ages)

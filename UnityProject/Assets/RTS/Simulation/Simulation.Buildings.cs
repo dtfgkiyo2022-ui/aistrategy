@@ -37,8 +37,24 @@ namespace Rts.Simulation
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, PopCapFor(faction), HasInfantryRoom(faction))
-                || economy.Metal < InfantryMetalFor(faction) || SavingToAdvance(faction)) return;
-            Enqueue(faction, ref building, UnitKind.Infantry);
+                || economy.Metal < InfantryMetalFor(faction) || (SavingToAdvance(faction) && economy.Civ == CivKind.Primitive)) return;
+            // V3-5 (32 #8): in the second age, one in three is the civilisation's own unit when it can be paid.
+            var special = SpecialUnit(faction);
+            var kind = special != 0 && CanPay(faction, special) && 2 * CountClass(faction, special) < CountClass(faction, UnitKind.Infantry) ? special : UnitKind.Infantry;
+            Enqueue(faction, ref building, kind);
+        }
+
+        /// <summary>Living line soldiers trained (or queued) as <paramref name="kind"/>; infantry counts those of no class.</summary>
+        private int CountClass(uint faction, UnitKind kind)
+        {
+            int count = QueuedOf(faction, kind);
+            foreach (int i in world.SoldierTraversal)
+            {
+                var s = world.Soldiers[i];
+                if (!s.Alive || s.Initial.FactionId != faction || s.Initial.Kind != UnitKind.Infantry) continue;
+                if (kind == UnitKind.Infantry ? s.Class == 0 : s.Class == kind) count++;
+            }
+            return count;
         }
 
         private void PlaceBarracks(uint faction)
@@ -261,7 +277,8 @@ namespace Rts.Simulation
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
-                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), unit)) continue;
+                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), unit == UnitKind.Scout ? UnitKind.Scout : UnitKind.Infantry)) continue;
+                ApplyClass(world.SoldierCount - 1, unit);
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
                 Dequeue(b.FactionId, ref b, unit);

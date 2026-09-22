@@ -15,12 +15,49 @@ namespace Rts.Simulation
         {
             var e = world.Config.Economy;
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, e.ScoutTrainTicks);
+            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, e.ArcherTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, e.CavalryTicks);
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), InfantryTicksFor(faction));
         }
 
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
         private bool Trains(BuildingState b, UnitKind kind)
-            => b.Kind == BuildingKind.Barracks && (kind == UnitKind.Infantry || (kind == UnitKind.Scout && AgesOn));
+        {
+            if (b.Kind != BuildingKind.Barracks) return false;
+            if (kind == UnitKind.Infantry) return true;
+            if (!AgesOn) return false;
+            var e = world.Economies[b.FactionId - 1];
+            return kind == UnitKind.Scout
+                || (kind == UnitKind.Archer && e.Civ == CivKind.Agrarian && e.Age >= 2)
+                || (kind == UnitKind.Cavalry && e.Civ == CivKind.Metallurgy && e.Age >= 2);
+        }
+
+        /// <summary>The civilisation's own unit once it is in its second age (archers or cavalry), else 0.</summary>
+        private UnitKind SpecialUnit(uint faction)
+        {
+            var e = world.Economies[faction - 1];
+            if (!AgesOn || e.Age < 2) return 0;
+            return e.Civ == CivKind.Agrarian ? UnitKind.Archer : e.Civ == CivKind.Metallurgy ? UnitKind.Cavalry : 0;
+        }
+
+        /// <summary>Archers and cavalry fight as infantry with their own numbers (32 #8); it is what they were trained as.</summary>
+        private void ApplyClass(int index, UnitKind unit)
+        {
+            if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
+            var e = world.Config.Economy;
+            ref var s = ref world.Soldiers[index];
+            bool archer = unit == UnitKind.Archer;
+            s.Class = unit;
+            s.Parameters.Hp = archer ? e.ArcherHp : e.CavalryHp;
+            s.Parameters.Damage = archer ? e.ArcherDamage : e.CavalryDamage;
+            s.Parameters.AttackIntervalTicks = archer ? e.ArcherInterval : e.CavalryInterval;
+            s.Parameters.Range = archer ? e.ArcherRange : e.CavalryRange;
+            s.Parameters.Speed = archer ? e.ArcherSpeed : e.CavalrySpeed;
+            s.Parameters.Vision = archer ? e.ArcherVision : e.CavalryVision;
+            s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
+            s.Hp = s.Parameters.Hp;
+            s.Initial.Hp = s.Parameters.Hp;
+        }
 
         private static UnitKind QueueAt(BuildingState b, int i) => b.QueueKinds == null || i >= b.QueueKinds.Length ? UnitKind.Infantry : b.QueueKinds[i];
 
@@ -80,7 +117,8 @@ namespace Rts.Simulation
                 Array.Copy(b.QueueKinds, 1, rest, 0, rest.Length);
                 b.QueueKinds = rest;
             }
-            if (done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - InfantryMetalFor(faction));
+            int metal = CostOf(faction, done).metal;
+            if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0)).ticks : 0;
         }
 
@@ -101,6 +139,9 @@ namespace Rts.Simulation
         private bool HasRoomFor(uint faction, UnitKind kind)
         {
             bool scout = kind == UnitKind.Scout;
+            // Archers and cavalry join the infantry armies, so they share the infantry room.
+            int queued = scout ? QueuedOf(faction, UnitKind.Scout)
+                : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {
@@ -110,7 +151,7 @@ namespace Rts.Simulation
                 foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
                 free += a.Definition.Capacity - count;
             }
-            return free > QueuedOf(faction, kind);
+            return free > queued;
         }
 
         /// <summary>

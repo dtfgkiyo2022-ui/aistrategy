@@ -322,7 +322,7 @@ namespace Rts.Simulation
                     bool own = s.Initial.FactionId == f;
                     if (!own && !IsVisibleTo(f, s.Position)) continue;
                     uint id = own ? s.Initial.Id : world.Factions[f - 1].ContactIds[i];
-                    units.Add(new RenderUnit(id, own, s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
+                    units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
                         own && s.IsRetreating, own, own ? s.Hp : 0));
                     if (!own)
                     {

@@ -736,7 +736,30 @@ namespace Rts.Presentation
                 go.GetComponent<Renderer>().sharedMaterial = color;
             }
             go.name = (unit.IsOwn ? "Own_" : "Enemy_") + unit.Id;
+            MarkClass(go, unit.Kind);
             return go;
+        }
+
+        /// <summary>V3-5: archers carry a tall thin bow, cavalry stands wider on a low block, so both read apart from infantry.</summary>
+        private void MarkClass(GameObject go, UnitKind kind)
+        {
+            if (kind != UnitKind.Archer && kind != UnitKind.Cavalry) return;
+            var mark = GameObject.CreatePrimitive(kind == UnitKind.Archer ? PrimitiveType.Cylinder : PrimitiveType.Cube);
+            mark.name = kind == UnitKind.Archer ? "Bow" : "Mount";
+            Discard(mark.GetComponent<Collider>());
+            mark.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(kind == UnitKind.Archer ? new Color(0.55f, 0.35f, 0.15f) : new Color(0.35f, 0.25f, 0.15f));
+            mark.transform.SetParent(go.transform, false);
+            var s = go.transform.lossyScale;
+            if (kind == UnitKind.Archer)
+            {
+                mark.transform.localScale = new Vector3(0.12f / s.x, 1.1f / s.y, 0.12f / s.z);
+                mark.transform.localPosition = new Vector3(0.6f / s.x, 0.4f / s.y, 0f);
+            }
+            else
+            {
+                mark.transform.localScale = new Vector3(1.6f / s.x, 0.6f / s.y, 2.4f / s.z);
+                mark.transform.localPosition = new Vector3(0f, -0.4f / s.y, 0f);
+            }
         }
 
         private static void Tint(GameObject go, Material material)

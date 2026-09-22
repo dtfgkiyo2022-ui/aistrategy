@@ -60,7 +60,9 @@ namespace Rts.Simulation
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, rules.AdvanceFoodCost, rules.AdvanceWoodCost,
                 rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
                 economy.Stone, rules.Ages ? rules.WallStoneCost : 0, rules.Ages ? rules.TowerWoodCost : 0, rules.Ages ? rules.TowerStoneCost : 0,
-                rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null);
+                rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null,
+                economy.Age, rules.Ages ? rules.Age2FoodCost : 0, rules.Ages ? rules.Age2WoodCost : 0, rules.Ages ? rules.ArcherFood : 0, rules.Ages ? rules.ArcherWood : 0,
+                rules.Ages ? rules.CavalryFood : 0, rules.Ages ? rules.CavalryWood : 0, rules.Ages ? rules.CavalryMetal : 0);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

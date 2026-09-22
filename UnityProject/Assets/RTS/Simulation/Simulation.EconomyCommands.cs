@@ -29,7 +29,7 @@ namespace Rts.Simulation
                     ReturnToAuto(faction);
                     return;
                 case EconomyCommandKind.AdvanceAge:
-                    if (CanAdvance(faction) && (c.Civ == CivKind.Agrarian || c.Civ == CivKind.Metallurgy)) StartAdvance(faction, c.Civ);
+                    if (CanAdvance(faction, c.Civ)) StartAdvance(faction, c.Civ);
                     return;
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
