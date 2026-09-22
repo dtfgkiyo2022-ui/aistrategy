@@ -126,6 +126,8 @@ namespace Rts.Replay
                 {
                     w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
                 }
+                // V3-2: a mine or smelter carries the side of its output; a barracks keeps its V3-1 bytes.
+                if(e.Kind==EconomyCommandKind.PlaceBuilding && e.Building!=BuildingKind.Barracks) w.Write((byte)e.Facing);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -156,7 +158,8 @@ namespace Rts.Replay
                     cells=new int[n]; facings=new Facing[n];
                     for(int i=0;i<n;i++) { cells[i]=r.ReadInt32(); facings[i]=ReplayBinary.Enum<Facing>(r); }
                 }
-                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings));
+                var facing=ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks ? ReplayBinary.Enum<Facing>(r) : Facing.North;
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

@@ -68,6 +68,7 @@ namespace Rts.Simulation
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
             AdvanceBelts();
+            AdvanceIndustry();
             int count = world.VillagerCount; // villagers trained below start next tick
             for (int i = 0; i < count; i++)
             {
