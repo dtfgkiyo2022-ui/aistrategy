@@ -374,7 +374,7 @@ namespace Rts.Simulation
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents,
                     new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
-                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f));
+                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f));
             }
         }
 
