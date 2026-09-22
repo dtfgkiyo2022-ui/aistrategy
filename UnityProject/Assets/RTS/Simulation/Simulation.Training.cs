@@ -26,6 +26,9 @@ namespace Rts.Simulation
         {
             // V3-5 (32 #9): the siege workshop trains rams, and only rams.
             if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
+            if (b.Kind == BuildingKind.ArcheryRange) return kind == UnitKind.Archer && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            if (b.Kind == BuildingKind.Stable) return kind == UnitKind.Cavalry && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
             if (!AgesOn) return false;

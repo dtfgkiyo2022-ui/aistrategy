@@ -91,6 +91,8 @@ namespace Rts.Simulation
                     w.Write(e.RamRange.Raw); w.Write(e.RamSpeed.Raw); w.Write(e.RamVision.Raw);
                     w.Write(e.Age3FoodCost); w.Write(e.Age3WoodCost); w.Write(e.Age3Ticks); w.Write(e.Age3PopulationBonus);
                     w.Write(e.SiegecraftSiegeDamage); w.Write(e.MasonryTowerDamage); w.Write(e.BankingTradeReturn);
+                    w.Write(e.RangeSizeCells); w.Write(e.RangeWoodCost); w.Write(e.RangeWork); w.Write(e.RangeHp);
+                    w.Write(e.StableSizeCells); w.Write(e.StableWoodCost); w.Write(e.StableWork); w.Write(e.StableHp);
                 }
                 return s.ToArray();
             }
@@ -170,6 +172,8 @@ namespace Rts.Simulation
                     e.RamRange=Fix(r); e.RamSpeed=Fix(r); e.RamVision=Fix(r);
                     e.Age3FoodCost=r.ReadInt32(); e.Age3WoodCost=r.ReadInt32(); e.Age3Ticks=r.ReadInt32(); e.Age3PopulationBonus=r.ReadInt32();
                     e.SiegecraftSiegeDamage=r.ReadInt32(); e.MasonryTowerDamage=r.ReadInt32(); e.BankingTradeReturn=r.ReadInt32();
+                    e.RangeSizeCells=r.ReadInt32(); e.RangeWoodCost=r.ReadInt32(); e.RangeWork=r.ReadInt32(); e.RangeHp=r.ReadInt32();
+                    e.StableSizeCells=r.ReadInt32(); e.StableWoodCost=r.ReadInt32(); e.StableWork=r.ReadInt32(); e.StableHp=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

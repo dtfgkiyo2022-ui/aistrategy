@@ -65,7 +65,8 @@ namespace Rts.Simulation
                 rules.Ages ? rules.CavalryFood : 0, rules.Ages ? rules.CavalryWood : 0, rules.Ages ? rules.CavalryMetal : 0,
                 rules.Ages ? rules.MarketWoodCost : 0, rules.Ages ? rules.WorkshopWoodCost : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
                 rules.Ages ? rules.RamFood : 0, rules.Ages ? rules.RamWood : 0,
-                rules.Ages ? rules.Age3FoodCost : 0, rules.Ages ? rules.Age3WoodCost : 0);
+                rules.Ages ? rules.Age3FoodCost : 0, rules.Ages ? rules.Age3WoodCost : 0,
+                rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch
