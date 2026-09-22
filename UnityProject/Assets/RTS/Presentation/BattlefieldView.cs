@@ -93,11 +93,11 @@ namespace Rts.Presentation
             switch (selected.Kind)
             {
                 case SelectionKind.Army:
-                    return "Selected: Army " + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? " (alive " + alive + ")" : "");
+                    return UiText.T("Selected: Army ", "選択中：軍団 ") + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? UiText.T(" (alive ", "（生存 ") + alive + ")" : "");
                 case SelectionKind.Outpost:
-                    return "Selected: Outpost " + selected.Id;
+                    return UiText.T("Selected: Outpost ", "選択中：拠点 ") + selected.Id;
                 case SelectionKind.Core:
-                    return "Selected: Core " + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? (hp < 0 ? " (HP unknown)" : " (HP " + hp + ")") : "");
+                    return UiText.T("Selected: Core ", "選択中：コア ") + selected.Id + (coreHp.TryGetValue(selected.Id, out var hp) ? (hp < 0 ? UiText.T(" (HP unknown)", "（HP不明）") : " (HP " + hp + ")") : "");
                 default:
                     return "";
             }
@@ -509,13 +509,13 @@ namespace Rts.Presentation
                 long seconds = (latestFrame.Tick - contact.LastSeenTick) / 20;
                 string text;
                 if (contact.IsArmyContact)
-                    text = "~" + contact.EstimateMax + " seen, total unknown";
+                    text = "~" + contact.EstimateMax + UiText.T(" seen, total unknown", " 目撃、総数不明");
                 else if (contact.IsCurrentlyVisible)
                     continue;
                 else if (contact.IsStrengthUnknown)
-                    text = "strength ? (" + seconds + "s ago)";
+                    text = UiText.T("strength ? (", "兵力 ?（") + seconds + UiText.T("s ago)", "秒前）");
                 else
-                    text = "~" + contact.EstimateMax + " (" + seconds + "s ago)" + (contact.IsUncertain ? "?" : "") + (contact.IsAbsentAtLastPosition ? " absent" : "");
+                    text = "~" + contact.EstimateMax + " (" + seconds + UiText.T("s ago)", "秒前)") + (contact.IsUncertain ? "?" : "") + (contact.IsAbsentAtLastPosition ? UiText.T(" absent", " 不在") : "");
                 labels.Add(new KeyValuePair<Vector3, string>(ToWorld(contact.LastPosition, 3f), text));
             }
             return labels;
