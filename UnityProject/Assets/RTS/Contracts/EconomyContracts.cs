@@ -222,21 +222,30 @@ namespace Rts.Contracts
         public int BeltWoodCost { get; }
         public int BeltTicksPerCell { get; }
         public IReadOnlyList<BeltView> Belts { get; }
+        /// <summary>V3-2 costs and footprints for the placement buttons.</summary>
+        public int InfantryMetalCost { get; }
+        public int MineWoodCost { get; }
+        public int SmelterWoodCost { get; }
+        public int MineSizeCells { get; }
+        public int SmelterSizeCells { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0)
         {
         }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources,
-            bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts)
+            bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
+            int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells)
         {
+            InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;
+            MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;
             Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());
             Food = food; Wood = wood; Population = population; PopulationCap = populationCap;

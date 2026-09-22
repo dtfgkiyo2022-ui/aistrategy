@@ -54,7 +54,8 @@ namespace Rts.Simulation
             return new EconomyView(economy.Food, economy.Wood, population, rules.PopulationCap, economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, rules.InfantryFoodCost,
                 rules.InfantryWoodCost, villagers, buildings, resources,
-                rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts);
+                rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
+                rules.InfantryMetalCost, rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch
