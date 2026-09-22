@@ -107,6 +107,8 @@ namespace Rts.Simulation
         /// <summary>V3-2 carrying by hand (12.3): the mine or smelter it takes from (0 = not carrying), and the smelter
         /// it takes ore to (0 = the core).</summary>
         internal uint HaulFrom, HaulTo;
+        /// <summary>V3-3 (19): the player assigned this villager; the automatic economy leaves it alone.</summary>
+        internal bool Held;
     }
 
     /// <summary>ToPickup and ToDeliver are V3-2 carrying by hand; a load for the core goes by ToDropOff.</summary>
@@ -129,6 +131,8 @@ namespace Rts.Simulation
         internal int Input, Output, Timer;
         /// <summary>V3-2 mine: the ore point under its footprint.</summary>
         internal uint NodeId;
+        /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
+        internal bool Held;
     }
 
     internal struct ResourceNodeState
@@ -147,6 +151,8 @@ namespace Rts.Simulation
         internal ResourceKind Item;
         /// <summary>Ticks since the item entered this cell.</summary>
         internal int Progress;
+        /// <summary>V3-3 (19): laid by the player; the automatic line routes around it.</summary>
+        internal bool Held;
     }
 
     internal struct FactionEconomy
@@ -159,6 +165,8 @@ namespace Rts.Simulation
         internal long TrainRemaining;
         /// <summary>The player turned the automatic economy off (it is on by default).</summary>
         internal bool AutoOff;
+        /// <summary>V3-3 (19): the player trained or cancelled at the core; the automatic economy trains no villagers.</summary>
+        internal bool CoreHeld;
     }
 
     internal sealed class WorldState

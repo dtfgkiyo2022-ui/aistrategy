@@ -102,7 +102,7 @@ namespace Rts.Simulation
                 if (world.Config.Economy.Industry)
                 {
                     w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Input", b.Input); w.Value(n + "Output", b.Output);
-                    w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId);
+                    w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
                 }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
@@ -115,7 +115,7 @@ namespace Rts.Simulation
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
                 w.Value(n + "BuildingId", v.BuildingId);
-                if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); }
+                if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); w.Value(n + "Held", v.Held); }
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }
@@ -124,7 +124,7 @@ namespace Rts.Simulation
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
-                w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal);
+                w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld);
             }
             uint belts = 0;
             foreach (var b in world.Belts) if (b.FactionId != 0) belts++;
@@ -135,7 +135,7 @@ namespace Rts.Simulation
                 if (b.FactionId == 0) continue;
                 string n = "Belts[" + cell.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
-                w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress);
+                w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
             }
         }
         private sealed class StateWriter : BinaryWriter

@@ -23,7 +23,10 @@ namespace Rts.Simulation
                     economy.AutoOff = !c.Enabled;
                     return;
                 case EconomyCommandKind.PlaceBelt:
-                    PlaceBelts(faction, c);
+                    PlaceBelts(faction, c, IndustryOn);
+                    return;
+                case EconomyCommandKind.ReturnEconomyToAuto:
+                    ReturnToAuto(faction);
                     return;
                 case EconomyCommandKind.RemoveBelt:
                     RemoveBelt(faction, c.Cell);
@@ -40,6 +43,7 @@ namespace Rts.Simulation
                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
+                    world.Buildings[world.BuildingCount - 1].Held = IndustryOn; // V3-3: the player's building
                     return;
                 }
                 case EconomyCommandKind.Train:
@@ -49,6 +53,7 @@ namespace Rts.Simulation
                     if (c.ProducerId == 0)
                     {
                         if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost) return;
+                        if (IndustryOn) economy.CoreHeld = true;
                         economy.Food = checked(economy.Food - rules.VillagerFoodCost);
                         if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
                         economy.Queued++;
@@ -61,6 +66,7 @@ namespace Rts.Simulation
                     economy.Food = checked(economy.Food - rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
                     economy.Metal = checked(economy.Metal - rules.InfantryMetalCost);
+                    if (IndustryOn) b.Held = true;
                     if (b.Queued == 0) b.TrainRemaining = rules.InfantryTrainTicks;
                     b.Queued++;
                     return;
@@ -71,6 +77,7 @@ namespace Rts.Simulation
                     if (c.ProducerId == 0)
                     {
                         if (economy.Queued == 0) return;
+                        if (IndustryOn) economy.CoreHeld = true;
                         economy.Queued--;
                         economy.Food = checked(economy.Food + rules.VillagerFoodCost);
                         if (economy.Queued == 0) economy.TrainRemaining = 0;
@@ -79,6 +86,7 @@ namespace Rts.Simulation
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (b.Queued == 0) return;
+                    if (IndustryOn) b.Held = true;
                     b.Queued--;
                     economy.Food = checked(economy.Food + rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood + rules.InfantryWoodCost);
@@ -112,6 +120,7 @@ namespace Rts.Simulation
                         ref var v = ref world.Villagers[id - 1];
                         if (!v.Alive || v.FactionId != faction) continue;
                         v.HaulFrom = 0; v.HaulTo = 0;
+                        if (IndustryOn) v.Held = true;
                         if (haul)
                         {
                             v.NodeId = 0;
@@ -134,6 +143,16 @@ namespace Rts.Simulation
                     return;
                 }
             }
+        }
+
+        /// <summary>V3-3 (19): every hold of the faction ends; each villager goes on with its task until it is idle again.</summary>
+        private void ReturnToAuto(uint faction)
+        {
+            if (!IndustryOn) return;
+            world.Economies[faction - 1].CoreHeld = false;
+            for (int i = 0; i < world.VillagerCount; i++) if (world.Villagers[i].FactionId == faction) world.Villagers[i].Held = false;
+            for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].FactionId == faction) world.Buildings[i].Held = false;
+            for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) world.Belts[i].Held = false;
         }
 
         private bool OwnBuilding(uint faction, uint id, out int index)

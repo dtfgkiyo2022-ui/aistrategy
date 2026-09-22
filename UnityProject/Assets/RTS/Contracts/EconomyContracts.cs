@@ -12,7 +12,9 @@ namespace Rts.Contracts
         /// <summary>V3-2: one run of belts (Cells with their Facings), as one drag on screen.</summary>
         PlaceBelt = 6,
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
-        RemoveBelt = 7
+        RemoveBelt = 7,
+        /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
+        ReturnEconomyToAuto = 8
     }
 
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
@@ -101,6 +103,9 @@ namespace Rts.Contracts
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
 
+        public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
+
         public static EconomyCommand RemoveBelt(uint faction, ulong sequence, int cell)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBelt, 0, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
 
@@ -121,10 +126,17 @@ namespace Rts.Contracts
         public ResourceKind CarryKind { get; }
         public int Carry { get; }
         public int Hp { get; }
+        /// <summary>V3-3: the player assigned this own villager; the automatic economy leaves it alone.</summary>
+        public bool PlayerHeld { get; }
 
         public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp)
+            : this(id, isOwn, position, activity, carryKind, carry, hp, false)
         {
-            Id = id; IsOwn = isOwn; Position = position; Activity = activity; CarryKind = carryKind; Carry = carry; Hp = hp;
+        }
+
+        public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp, bool playerHeld)
+        {
+            Id = id; IsOwn = isOwn; Position = position; Activity = activity; CarryKind = carryKind; Carry = carry; Hp = hp; PlayerHeld = playerHeld;
         }
     }
 
@@ -156,9 +168,19 @@ namespace Rts.Contracts
         {
         }
 
+        /// <summary>V3-3: an own building the player placed or operated.</summary>
+        public bool PlayerHeld { get; }
+
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, facing, input, output, false)
         {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld)
+        {
+            PlayerHeld = playerHeld;
             Facing = facing; Input = input; Output = output;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
@@ -190,10 +212,17 @@ namespace Rts.Contracts
         public Facing Facing { get; }
         public ResourceKind Item { get; }
         public int Progress { get; }
+        /// <summary>V3-3: an own belt the player laid; the automatic line goes around it.</summary>
+        public bool PlayerHeld { get; }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress)
+            : this(cell, factionId, facing, item, progress, false)
         {
-            Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress;
+        }
+
+        public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld)
+        {
+            Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
         }
     }
 
@@ -228,13 +257,15 @@ namespace Rts.Contracts
         public int SmelterWoodCost { get; }
         public int MineSizeCells { get; }
         public int SmelterSizeCells { get; }
+        /// <summary>V3-3: the player trains villagers at the core by hand; the automatic economy does not.</summary>
+        public bool CorePlayerHeld { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false)
         {
         }
 
@@ -242,8 +273,9 @@ namespace Rts.Contracts
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources,
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
-            int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells)
+            int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld)
         {
+            CorePlayerHeld = corePlayerHeld;
             InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;
             MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;

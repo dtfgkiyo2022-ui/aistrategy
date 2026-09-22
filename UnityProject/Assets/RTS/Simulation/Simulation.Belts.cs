@@ -132,7 +132,7 @@ namespace Rts.Simulation
         /// PlaceBelt (14): each cell of the run is checked on its own, in order - on the map, open ground, no resource
         /// point, outside every core, no belt yet, under the faction's limit, wood in stock. A cell that fails is skipped.
         /// </summary>
-        private void PlaceBelts(uint faction, EconomyCommand c)
+        private void PlaceBelts(uint faction, EconomyCommand c, bool held)
         {
             if (!IndustryOn) return;
             var rules = world.Config.Economy;
@@ -147,7 +147,7 @@ namespace Rts.Simulation
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
-                world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp };
+                world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held };
                 owned++;
                 world.BeltOrder = null;
             }
