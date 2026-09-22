@@ -8,6 +8,9 @@ namespace Rts.Application
 {
     public static class PolicyPresets
     {
+        /// <summary>The doctrine names every preset-driven API accepts, in the order a picker should offer them.</summary>
+        public static readonly string[] Names = { "none", "maintain", "concentrate", "maintain-legacy" };
+
         /// <summary>Ordinary doctrine proposals, captured in the replay input log.</summary>
         public static ScheduledInput[] InitialInputs(ScenarioDefinition scenario, string preset, uint faction = 2)
         {

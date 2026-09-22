@@ -278,6 +278,49 @@ namespace Rts.Editor
             EditorApplication.EnterPlaymode();
         }
 
+        // Batch entry (opponent picker): switches the opponent's doctrine the way the panel's picker does, checks the
+        // match restarts from tick 0 with the new doctrine, and switching to the doctrine already running does nothing.
+        public static void PlayOpponentSwitch()
+        {
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0;
+            LiveMatchHost host = null;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        if (frames == 5)
+                        {
+                            host = Object.FindFirstObjectByType<LiveMatchHost>();
+                            IOpponentControl opponent = host;
+                            Debug.Log("[OpponentSwitch] choices=" + string.Join(",", opponent.Choices) + " current=" + opponent.Current);
+                            opponent.Current = opponent.Current; // same value: must not restart
+                            Debug.Log("[OpponentSwitch] after no-op set: tick=" + host.Tick);
+                        }
+                        if (frames == 40)
+                        {
+                            Debug.Log("[OpponentSwitch] before switch: tick=" + host.Tick + " (should have advanced)");
+                            ((IOpponentControl)host).Current = "concentrate";
+                        }
+                        if (frames == 43)
+                            Debug.Log("[OpponentSwitch] after switch: tick=" + host.Tick + " current=" + ((IOpponentControl)host).Current);
+                        if (frames == 100)
+                        {
+                            Debug.Log("[OpponentSwitch] running with new doctrine: tick=" + host.Tick);
+                            EditorApplication.ExitPlaymode();
+                        }
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && frames >= 100) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         // Batch entry: plays the live scene and reports the average frame time and the cost of rendering the Game camera.
         // -perfNoPack hides the pack so the placeholders are measured; -perfTicks N plays the match forward first;
         // -perfScale K repeats every soldier K times (stage 5 measurement, 40 x K soldiers).

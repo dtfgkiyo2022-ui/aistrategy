@@ -13,7 +13,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -57,6 +57,20 @@ namespace Rts.UnityHost
 
         /// <summary>The result overlay's "Play again": same delay and outside-AI setting, both sides back at tick 0.</summary>
         public void RestartMatch() { matchRestartRequested = true; }
+
+        // IOpponentControl: which doctrine the opponent runs. Reads and writes the field Begin() already uses, so
+        // picking a different one and restarting is the same path a fresh match always took.
+        public string[] Choices { get { return Rts.Application.PolicyPresets.Names; } }
+        public string Current
+        {
+            get { return enemyPreset; }
+            set
+            {
+                if (value == enemyPreset || System.Array.IndexOf(Choices, value) < 0) return;
+                enemyPreset = value;
+                matchRestartRequested = true; // both sides start again from tick 0, as with the reply delay
+            }
+        }
 
         public void StepOneTick() { StepOnce(); }
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
@@ -156,6 +170,7 @@ namespace Rts.UnityHost
             panel.Bind(port, viewFactionId, viewFactionId, view);
             panel.ExternalAi = this;
             panel.MatchRestart = this;
+            panel.Opponent = this;
         }
 
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>
