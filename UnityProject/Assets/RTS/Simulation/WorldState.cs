@@ -129,6 +129,8 @@ namespace Rts.Simulation
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
         internal Facing Facing;
         internal int Input, Output, Timer;
+        /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
+        internal int QueuedMetal;
         /// <summary>V3-2 mine: the ore point under its footprint.</summary>
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
@@ -169,6 +171,9 @@ namespace Rts.Simulation
         internal bool CoreHeld;
         /// <summary>V3-3 (20): what the automatic economy aims for. Balanced without industry.</summary>
         internal EconomyPolicy Policy;
+        /// <summary>V3-4 (26): the civilisation, and while advancing the one chosen and the ticks left.</summary>
+        internal CivKind Civ, AdvancingTo;
+        internal long AdvanceRemaining;
     }
 
     internal sealed class WorldState
@@ -326,6 +331,8 @@ namespace Rts.Simulation
                     && e.SmelterSizeCells > 0 && e.SmelterSizeCells <= 8 && e.SmelterWoodCost >= 0 && e.SmelterWork > 0 && e.SmelterHp > 0
                     && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0, "Invalid industry rules.");
             else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0, "Belts and metal costs need industry.");
+            // V3-4: ages come with the terrain map.
+            Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -456,7 +463,8 @@ namespace Rts.Simulation
                 Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                 MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
                 SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
-                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost };
+                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
+                Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

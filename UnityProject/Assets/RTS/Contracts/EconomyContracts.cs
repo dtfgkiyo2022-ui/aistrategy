@@ -16,7 +16,9 @@ namespace Rts.Contracts
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
         ReturnEconomyToAuto = 8,
         /// <summary>V3-3: sets the faction's economy policy (Policy).</summary>
-        SetEconomyPolicy = 9
+        SetEconomyPolicy = 9,
+        /// <summary>V3-4: starts advancing out of the primitive age into Civ, at the core.</summary>
+        AdvanceAge = 10
     }
 
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
@@ -50,6 +52,8 @@ namespace Rts.Contracts
         public Facing Facing { get; }
         /// <summary>SetEconomyPolicy: the new policy.</summary>
         public EconomyPolicy Policy { get; }
+        /// <summary>AdvanceAge: the civilisation to advance into.</summary>
+        public CivKind Civ { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -74,7 +78,15 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, cells, facings, facing, policy, CivKind.Primitive)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ)
+        {
+            Civ = civ;
             Policy = policy;
             Facing = facing;
             Cells = ContractList.Copy(cells ?? Array.Empty<int>());
@@ -117,6 +129,9 @@ namespace Rts.Contracts
 
         public static EconomyCommand SetPolicy(uint faction, ulong sequence, EconomyPolicy policy)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetEconomyPolicy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, policy);
+
+        public static EconomyCommand Advance(uint faction, ulong sequence, CivKind civ)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AdvanceAge, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, civ);
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
@@ -276,13 +291,21 @@ namespace Rts.Contracts
         public bool CorePlayerHeld { get; }
         /// <summary>V3-3: the faction's economy policy (always Balanced without industry).</summary>
         public EconomyPolicy Policy { get; }
+        /// <summary>V3-4: false on a map without ages (then Civ stays Primitive and means nothing).</summary>
+        public bool Ages { get; }
+        public CivKind Civ { get; }
+        /// <summary>V3-4: while advancing, the civilisation chosen and the ticks left; otherwise Primitive and 0.</summary>
+        public CivKind AdvancingTo { get; }
+        public long AdvanceRemaining { get; }
+        public int AdvanceFoodCost { get; }
+        public int AdvanceWoodCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0)
         {
         }
 
@@ -291,8 +314,10 @@ namespace Rts.Contracts
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources,
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
             int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
-            EconomyPolicy policy)
+            EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost)
         {
+            Ages = ages; Civ = civ; AdvancingTo = advancingTo; AdvanceRemaining = advanceRemaining;
+            AdvanceFoodCost = advanceFoodCost; AdvanceWoodCost = advanceWoodCost;
             CorePlayerHeld = corePlayerHeld;
             Policy = policy;
             InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;

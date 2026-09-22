@@ -34,6 +34,14 @@ namespace Rts.Decision
             }
         }
 
+        /// <summary>
+        /// V3-4 (technical-design-v3 29): the civilisation that suits the ground around the core. Every core has
+        /// <paramref name="guaranteedFood"/> food points by the fairness rule, so only the food beyond them speaks for
+        /// farming; ore points speak for metallurgy. A tie goes to farming.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int guaranteedFood)
+            => orePointsNear > foodPointsNear - guaranteedFood ? CivKind.Metallurgy : CivKind.Agrarian;
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

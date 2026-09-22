@@ -27,7 +27,8 @@ namespace Rts.Simulation
                 ref var economy = ref world.Economies[f];
                 int villagers = LivingVillagers(faction);
                 var plan = PlanOf(faction);
-                if (!economy.CoreHeld && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
+                DecideAdvance(faction);
+                if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
                     rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), rules.PopulationCap, rules.QueueLimit))
                 {
                     economy.Food = checked(economy.Food - rules.VillagerFoodCost);
@@ -73,6 +74,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             AdvanceBelts();
             AdvanceIndustry();
+            AdvanceAges();
             int count = world.VillagerCount; // villagers trained below start next tick
             for (int i = 0; i < count; i++)
             {

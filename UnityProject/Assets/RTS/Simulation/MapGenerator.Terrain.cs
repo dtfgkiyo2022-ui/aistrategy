@@ -117,7 +117,7 @@ namespace Rts.Simulation
 
             // 7. Soldiers and villagers as on the economy maps; the rules of mapgen-2.
             PlaceStartingUnits(s, wx, wz, ex, ez);
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal };
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true };
             s.Rules.FactionCap = s.Economy.PopulationCap;
             return s;
         }
