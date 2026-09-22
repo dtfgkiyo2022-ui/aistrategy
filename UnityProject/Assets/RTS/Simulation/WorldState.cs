@@ -367,6 +367,7 @@ namespace Rts.Simulation
                 && e.SiegecraftSiegeDamage >= 0 && e.MasonryTowerDamage >= 0 && e.BankingTradeReturn >= 0
                 && e.RangeSizeCells > 0 && e.RangeWoodCost >= 0 && e.RangeWork > 0 && e.RangeHp > 0
                 && e.StableSizeCells > 0 && e.StableWoodCost >= 0 && e.StableWork > 0 && e.StableHp > 0
+                && e.CounterBonusPermille >= 0
                 && e.ArcherFood >= 0 && e.ArcherWood >= 0 && e.ArcherTicks > 0 && e.ArcherHp > 0 && e.ArcherDamage >= 0 && e.ArcherInterval > 0
                 && e.ArcherRange.Raw >= 0 && e.ArcherRange <= Fix64.FromInt(64) && e.ArcherSpeed.Raw > 0 && e.ArcherSpeed <= Fix64.FromInt(16) && e.ArcherVision.Raw >= 0
                 && e.CavalryFood >= 0 && e.CavalryWood >= 0 && e.CavalryMetal >= 0 && e.CavalryTicks > 0 && e.CavalryHp > 0 && e.CavalryDamage >= 0 && e.CavalryInterval > 0
@@ -528,6 +529,7 @@ namespace Rts.Simulation
                 SiegecraftSiegeDamage = e.SiegecraftSiegeDamage, MasonryTowerDamage = e.MasonryTowerDamage, BankingTradeReturn = e.BankingTradeReturn,
                 RangeSizeCells = e.RangeSizeCells, RangeWoodCost = e.RangeWoodCost, RangeWork = e.RangeWork, RangeHp = e.RangeHp,
                 StableSizeCells = e.StableSizeCells, StableWoodCost = e.StableWoodCost, StableWork = e.StableWork, StableHp = e.StableHp,
+                CounterBonusPermille = e.CounterBonusPermille,
                 ArcherFood = e.ArcherFood, ArcherWood = e.ArcherWood, ArcherTicks = e.ArcherTicks, ArcherHp = e.ArcherHp, ArcherDamage = e.ArcherDamage,
                 ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
                 CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,

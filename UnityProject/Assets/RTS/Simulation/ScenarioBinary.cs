@@ -93,6 +93,7 @@ namespace Rts.Simulation
                     w.Write(e.SiegecraftSiegeDamage); w.Write(e.MasonryTowerDamage); w.Write(e.BankingTradeReturn);
                     w.Write(e.RangeSizeCells); w.Write(e.RangeWoodCost); w.Write(e.RangeWork); w.Write(e.RangeHp);
                     w.Write(e.StableSizeCells); w.Write(e.StableWoodCost); w.Write(e.StableWork); w.Write(e.StableHp);
+                    w.Write(e.CounterBonusPermille);
                 }
                 return s.ToArray();
             }
@@ -174,6 +175,7 @@ namespace Rts.Simulation
                     e.SiegecraftSiegeDamage=r.ReadInt32(); e.MasonryTowerDamage=r.ReadInt32(); e.BankingTradeReturn=r.ReadInt32();
                     e.RangeSizeCells=r.ReadInt32(); e.RangeWoodCost=r.ReadInt32(); e.RangeWork=r.ReadInt32(); e.RangeHp=r.ReadInt32();
                     e.StableSizeCells=r.ReadInt32(); e.StableWoodCost=r.ReadInt32(); e.StableWork=r.ReadInt32(); e.StableHp=r.ReadInt32();
+                    e.CounterBonusPermille=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

@@ -161,7 +161,7 @@ namespace Rts.Presentation
                 : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
                 : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場")
                 : kind == BuildingKind.Market ? UiText.T("Market", "市場") : kind == BuildingKind.SiegeWorkshop ? UiText.T("Siege workshop", "攻城工房")
-                : kind == BuildingKind.ArcheryRange ? UiText.T("Archery range", "射撃場") : kind == BuildingKind.Stable ? UiText.T("Stable", "厥舎")
+                : kind == BuildingKind.ArcheryRange ? UiText.T("Archery range", "射撃場") : kind == BuildingKind.Stable ? UiText.T("Stable", "厩舎")
                 : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
@@ -334,7 +334,11 @@ namespace Rts.Presentation
                 if (economy.Age >= 2)
                 {
                     ModeButton(new Rect(x, y, half, 22f), Mode.ArcheryRange, UiText.T("Archery range (", "射撃場（木材 ") + economy.RangeWoodCost + UiText.T(" wood)", "）"));
-                    ModeButton(new Rect(right, y, half, 22f), Mode.Stable, UiText.T("Stable (", "厥舎（木材 ") + economy.StableWoodCost + UiText.T(" wood)", "）"));
+                    ModeButton(new Rect(right, y, half, 22f), Mode.Stable, UiText.T("Stable (", "厩舎（木材 ") + economy.StableWoodCost + UiText.T(" wood)", "）"));
+                    y += 26f;
+                    // V3-5 (32 #13): the triangle, said once where the two buildings are chosen.
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Archers beat infantry, cavalry beats archers, infantry beats cavalry",
+                        "相性：弓兵は歩兵に強く、騎兵は弓兵に強く、歩兵は騎兵に強い"));
                     y += 26f;
                 }
             }

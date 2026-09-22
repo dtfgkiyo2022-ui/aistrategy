@@ -165,7 +165,9 @@ namespace Rts.Simulation
                 {
                     var enemy = world.Soldiers[target];
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
-                    soldierDamage[target] = checked(soldierDamage[target] + s.Parameters.Damage);
+                    // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
+                    soldierDamage[target] = checked(soldierDamage[target]
+                        + Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille));
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
                 else
