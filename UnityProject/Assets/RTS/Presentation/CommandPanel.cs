@@ -18,6 +18,7 @@ namespace Rts.Presentation
         private ICommandDelayControl delayControl;
         private IExternalAiControl externalAi;
         private IMatchRestart matchRestart;
+        private IOpponentControl opponent;
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
@@ -32,6 +33,9 @@ namespace Rts.Presentation
 
         /// <summary>Lets the result overlay start the next match. Null hides the button, which is what the mock scene wants.</summary>
         public IMatchRestart MatchRestart { get { return matchRestart; } set { matchRestart = value; } }
+
+        /// <summary>Lets the player pick the opponent's doctrine. Null hides the picker, which is what the mock scene wants.</summary>
+        public IOpponentControl Opponent { get { return opponent; } set { opponent = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -48,6 +52,7 @@ namespace Rts.Presentation
             return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
                 || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint)
                 || (externalAi != null && ExternalAiRect().Contains(guiPoint))
+                || (opponent != null && OpponentRect().Contains(guiPoint))
                 || (Outcome().HasValue && ResultRect().Contains(guiPoint));
         }
 
@@ -81,6 +86,9 @@ namespace Rts.Presentation
         private Rect SupplyRect() { return new Rect(10f, 40f, 250f, 26f + 22f * 3f); }
 
         private Rect DelayRect() { return new Rect(10f, SupplyRect().yMax + 8f, 250f, 62f); }
+
+        private const int OpponentRows = 4;
+        private Rect OpponentRect() { return new Rect(10f, DelayRect().yMax + 8f, 250f, 28f + OpponentRows * 28f); }
 
         // Top centre, under the match clock. The left column is supply, reply delay and the command buttons, and the
         // buttons grow upward from the bottom edge, so anything stacked under the delay box runs into them on a short
@@ -139,6 +147,7 @@ namespace Rts.Presentation
 
             DrawSupply();
             DrawDelaySelector();
+            if (opponent != null) DrawOpponentSelector();
             if (externalAi != null) DrawExternalAi();
 
             var statusRect = StatusRect();
@@ -237,6 +246,23 @@ namespace Rts.Presentation
                 bool on = delayControl.DelayTicks == options[i];
                 var buttonRect = new Rect(rect.x + 6f + i * 60f, rect.y + 24f, 56f, 26f);
                 if (GUI.Toggle(buttonRect, on, names[i], GUI.skin.button) && !on) delayControl.DelayTicks = options[i];
+            }
+        }
+
+        // Picking a different doctrine restarts the match immediately, like the reply delay and outside AI above:
+        // this is the "choose an opponent and start" screen, folded into the panel that is already on screen from
+        // tick 0 rather than a separate pre-game screen, so it works the same way whether it is the first match or
+        // the fifth "Play again".
+        private void DrawOpponentSelector()
+        {
+            var rect = OpponentRect();
+            GUI.Box(rect, "Opponent (restarts the match)");
+            var choices = opponent.Choices;
+            for (int i = 0; i < choices.Length; i++)
+            {
+                bool on = opponent.Current == choices[i];
+                var buttonRect = new Rect(rect.x + 6f, rect.y + 24f + i * 28f, rect.width - 12f, 24f);
+                if (GUI.Toggle(buttonRect, on, choices[i], GUI.skin.button) && !on) opponent.Current = choices[i];
             }
         }
 
