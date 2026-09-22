@@ -108,7 +108,8 @@ namespace Rts.Presentation
                         Add(e.Tick, "reinforcement: +" + e.Value + " at " + e.SubjectId);
                         break;
                     case EventKind.MatchEnded:
-                        Add(e.Tick, "match ended");
+                        var outcome = MatchOutcome.Describe(frame.Result, frame.FactionId, e.Tick);
+                        Add(e.Tick, outcome.HasValue ? "match ended: " + outcome.Value.Headline : "match ended");
                         break;
                 }
             }

@@ -17,6 +17,7 @@ namespace Rts.Presentation
         private ICommandPort port;
         private ICommandDelayControl delayControl;
         private IExternalAiControl externalAi;
+        private IMatchRestart matchRestart;
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
@@ -28,6 +29,9 @@ namespace Rts.Presentation
 
         /// <summary>The optional outside AI. Null hides the panel, which is what the mock scene wants.</summary>
         public IExternalAiControl ExternalAi { get { return externalAi; } set { externalAi = value; } }
+
+        /// <summary>Lets the result overlay start the next match. Null hides the button, which is what the mock scene wants.</summary>
+        public IMatchRestart MatchRestart { get { return matchRestart; } set { matchRestart = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -43,7 +47,8 @@ namespace Rts.Presentation
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
             return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
                 || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint)
-                || (externalAi != null && ExternalAiRect().Contains(guiPoint));
+                || (externalAi != null && ExternalAiRect().Contains(guiPoint))
+                || (Outcome().HasValue && ResultRect().Contains(guiPoint));
         }
 
         // Left click while waiting for a ground target: returns true when the click was consumed.
@@ -82,6 +87,14 @@ namespace Rts.Presentation
         // window; the right column is the log and the timeline. The clock's bottom edge is 8 + 58 (TimelinePanel).
         private const float ClockBottom = 66f;
         private Rect ExternalAiRect() { return new Rect(Screen.width / 2f - 200f, ClockBottom + 6f, 400f, 78f); }
+
+        private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
+
+        private MatchOutcome? Outcome()
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            return frame == null ? (MatchOutcome?)null : MatchOutcome.Describe(frame.Result, factionId, frame.Tick);
+        }
 
         private Rect LogRect() { return new Rect(Screen.width - 430f, 8f, 422f, MaxLogLines * 20f + 30f); }
 
@@ -151,6 +164,24 @@ namespace Rts.Presentation
             GUI.Box(logRect, "Command log");
             for (int i = 0; i < log.Count; i++)
                 GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * 20f, logRect.width - 12f, 20f), log[i]);
+
+            DrawResult();
+        }
+
+        // Drawn last so it sits on top. The battlefield stays visible behind it: the frame that ended the match is
+        // still the frame on screen, and the player can read how it ended.
+        private void DrawResult()
+        {
+            var outcome = Outcome();
+            if (!outcome.HasValue) return;
+            var rect = ResultRect();
+            GUI.Box(rect, outcome.Value.Headline);
+            var big = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = true };
+            var small = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter, wordWrap = true };
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, big);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, small);
+            if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), "Play again"))
+                matchRestart.RestartMatch();
         }
 
         private static string Seconds(long ticks)
