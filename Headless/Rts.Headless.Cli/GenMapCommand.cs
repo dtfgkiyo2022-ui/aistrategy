@@ -14,7 +14,7 @@ internal static class GenMapCommand
     internal static int Run(Dictionary<string, string> options)
     {
         ulong seed = ulong.Parse(options.TryGetValue("--seed", out var value) ? value : throw new InvalidDataException("Missing --seed."), CultureInfo.InvariantCulture);
-        var scenario = MapGenerator.Generate(seed, options.ContainsKey("--economy"));
+        var scenario = MapGenerator.Generate(seed, options.ContainsKey("--economy") || options.ContainsKey("--industry"), options.ContainsKey("--industry"));
         string text = Describe(scenario);
         if (options.TryGetValue("--out", out var path)) File.WriteAllText(path, text, new UTF8Encoding(false));
         else Console.Write(text);
@@ -30,7 +30,7 @@ internal static class GenMapCommand
         var marks = new char[columns * rows];
         for (int i = 0; i < marks.Length; i++) marks[i] = blocked[i] ? '#' : '.';
         int Cell(SimPoint p) => (int)(p.Z.Raw / 65536 / size) * columns + (int)(p.X.Raw / 65536 / size);
-        foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : 'f';
+        foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : n.Kind == ResourceKind.Ore ? 'o' : 'f';
         foreach (var d in s.Soldiers) marks[Cell(d.Position)] = d.FactionId == 1 ? '1' : '2';
         foreach (var v in s.Villagers) marks[Cell(v.Position)] = 'v';
         marks[Cell(s.Outposts[0].Position)] = 'N';
@@ -39,8 +39,8 @@ internal static class GenMapCommand
         marks[Cell(s.Cores[1].Position)] = 'E';
 
         var b = new StringBuilder();
-        b.AppendLine(s.ScenarioId + "  (" + MapGenerator.Version + ", " + columns + "x" + rows + " cells of " + size + " m)");
-        b.AppendLine("W/E cores, N/S outposts, w wood, f food, 1/2 soldiers, v villagers, # blocked");
+        b.AppendLine(s.ScenarioId + "  (" + (s.Economy.Industry ? MapGenerator.IndustryVersion : MapGenerator.Version) + ", " + columns + "x" + rows + " cells of " + size + " m)");
+        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, 1/2 soldiers, v villagers, # blocked");
         for (int z = rows - 1; z >= 0; z--)
         {
             for (int x = 0; x < columns; x++) b.Append(marks[z * columns + x]);
@@ -56,14 +56,16 @@ internal static class GenMapCommand
         for (int f = 0; f < 2; f++)
         {
             var core = s.Cores[f].Position;
-            int wood = 0, food = 0, woodAmount = 0, foodAmount = 0;
+            int wood = 0, food = 0, ore = 0, woodAmount = 0, foodAmount = 0, oreAmount = 0;
             foreach (var n in s.ResourceNodes)
             {
                 long dx = (n.Position.X.Raw - core.X.Raw) / 65536, dz = (n.Position.Z.Raw - core.Z.Raw) / 65536;
+                if (n.Kind == ResourceKind.Ore) { if (dx * dx + dz * dz <= 36 * 36) { ore++; oreAmount += n.Amount; } continue; }
                 if (dx * dx + dz * dz > 30 * 30) continue;
                 if (n.Kind == ResourceKind.Wood) { wood++; woodAmount += n.Amount; } else { food++; foodAmount += n.Amount; }
             }
-            b.AppendLine((f == 0 ? "west" : "east") + " core within 30 m: wood " + wood + " (" + woodAmount + "), food " + food + " (" + foodAmount + ")");
+            b.AppendLine((f == 0 ? "west" : "east") + " core within 30 m: wood " + wood + " (" + woodAmount + "), food " + food + " (" + foodAmount + ")"
+                + (s.Economy.Industry ? "; ore within 36 m " + ore + " (" + oreAmount + ")" : ""));
         }
         return b.ToString();
     }

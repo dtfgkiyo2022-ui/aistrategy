@@ -27,14 +27,26 @@ namespace Rts.Simulation
         private const int MaxBlockedPermille = 200;
         private const int ObstacleAttempts = 64, PlacementDraws = 100000;
 
+        /// <summary>
+        /// V3-2 (technical-design-v3 14): the mapgen-1 economy map of the same seed, unchanged, with ore points drawn after
+        /// everything else. So the ground, the cores and the food and wood points of a seed are the same in both versions.
+        /// </summary>
+        public const string IndustryVersion = "mapgen-2";
+
+        private const int GuaranteedOre = 2, ScatteredOre = 6, OreInner = 16, OreOuter = 36, OreAmount = 400;
+
         public static ScenarioDefinition Generate(ulong seed) => Generate(seed, false);
+
+        public static ScenarioDefinition Generate(ulong seed, bool economy) => Generate(seed, economy, false);
 
         /// <summary>
         /// With <paramref name="economy"/>, the same ground (no extra draws) plus the V3-1 economy: rules enabled and three
         /// villagers behind each core. Soldiers stay the week-two set until production exists (V3-1 PR3).
+        /// With <paramref name="industry"/> (needs the economy), mapgen-2: ore points and the V3-2 industry rules on top.
         /// </summary>
-        public static ScenarioDefinition Generate(ulong seed, bool economy)
+        public static ScenarioDefinition Generate(ulong seed, bool economy, bool industry)
         {
+            if (industry && !economy) throw new ArgumentException("Industry needs the economy.");
             var rng = new SplitMix64(seed);
             // The Ver.1 base keeps unit parameters, rules, factions and the four armies per side that the automatic AI
             // is written for (north, south, reserve, scout). Only the ground under them changes.
@@ -175,6 +187,51 @@ namespace Rts.Simulation
                     }
                 }
             }
+            if (industry)
+            {
+                // Drawn last, so every earlier draw - and with it the whole mapgen-1 map - stays as it was.
+                s.ScenarioId = "gen2i-" + seed.ToString(CultureInfo.InvariantCulture);
+                s.Economy.Industry = true;
+                for (int f = 0; f < 2; f++)
+                {
+                    int cx = f == 0 ? wx : ex, cz = f == 0 ? wz : ez;
+                    for (int i = 0; i < GuaranteedOre; i++)
+                    {
+                        int draws = 0, nx, nz;
+                        while (true)
+                        {
+                            if (++draws > PlacementDraws) throw new InvalidOperationException("Map generation could not place a guaranteed ore point.");
+                            int ox = Range(rng, -OreOuter, OreOuter), oz = Range(rng, -OreOuter, OreOuter);
+                            long d2 = Square(ox) + Square(oz);
+                            if (d2 < Square(OreInner) || d2 > Square(OreOuter)) continue;
+                            nx = cx + ox; nz = cz + oz;
+                            if (nx < 1 || nx >= WidthMeters - 1 || nz < 1 || nz >= HeightMeters - 1) continue;
+                            nx = Snap(nx); nz = Snap(nz);
+                            int cell = CellOf(nx, nz);
+                            if (!reachable[cell] || usedCells.Contains(cell)) continue;
+                            usedCells.Add(cell);
+                            break;
+                        }
+                        nodes.Add(Node(nodes.Count + 1, ResourceKind.Ore, nx, nz));
+                    }
+                }
+                for (int i = 0; i < ScatteredOre; i++)
+                {
+                    int draws = 0, cell;
+                    while (true)
+                    {
+                        if (++draws > PlacementDraws) throw new InvalidOperationException("Map generation could not place a scattered ore point.");
+                        cell = Range(rng, 0, Columns * Rows - 1);
+                        if (!reachable[cell] || usedCells.Contains(cell)) continue;
+                        int x = (cell % Columns) * CellMeters + 1, z = (cell / Columns) * CellMeters + 1;
+                        if (Square(x - wx) + Square(z - wz) <= Square(OreOuter) || Square(x - ex) + Square(z - ez) <= Square(OreOuter)) continue;
+                        usedCells.Add(cell);
+                        nodes.Add(Node(nodes.Count + 1, ResourceKind.Ore, x, z));
+                        break;
+                    }
+                }
+                s.ResourceNodes = nodes.ToArray();
+            }
             return s;
         }
 
@@ -233,7 +290,7 @@ namespace Rts.Simulation
         }
 
         private static ResourceNodeDefinition Node(int id, ResourceKind kind, int x, int z) => new ResourceNodeDefinition
-        { Id = (uint)id, Kind = kind, Position = Point(x, z), Amount = kind == ResourceKind.Wood ? WoodAmount : FoodAmount };
+        { Id = (uint)id, Kind = kind, Position = Point(x, z), Amount = kind == ResourceKind.Wood ? WoodAmount : kind == ResourceKind.Ore ? OreAmount : FoodAmount };
 
         /// <summary>Uniform integer in [min, max] (inclusive), by rejection sampling in SplitMix64.</summary>
         private static int Range(SplitMix64 rng, int min, int max) => min + (int)rng.NextUInt64((ulong)(max - min + 1));

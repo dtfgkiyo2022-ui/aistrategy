@@ -129,7 +129,7 @@ namespace Rts.Tests.Headless
             Assert.That(copy.Rules.DefaultReservePermille, Is.EqualTo(reserve));
             Assert.That(Fields(new Battle(copy))["Config.Hash"], Is.Not.EqualTo(Fields(new Battle(original))["Config.Hash"]));
             var future = (byte[])bytes.Clone();
-            BitConverter.GetBytes(4).CopyTo(future, 0); // schema 3 is the Ver.3 map; 4 does not exist yet
+            BitConverter.GetBytes(5).CopyTo(future, 0); // schema 4 is the V3-2 industry map; 5 does not exist yet
             Assert.Throws<InvalidDataException>(() => ScenarioBinary.Decode(future));
         }
 

@@ -25,6 +25,17 @@ namespace Rts.Simulation
         public EconomyRules Economy = new EconomyRules();
         /// <summary>Ver.3: villagers at S0. Only allowed when the economy is enabled.</summary>
         public VillagerDefinition[] Villagers = Array.Empty<VillagerDefinition>();
+        /// <summary>Ver.3 V3-2: belts at S0 (with what they carry). Only allowed when the economy has industry.</summary>
+        public BeltDefinition[] Belts = Array.Empty<BeltDefinition>();
+    }
+
+    public struct BeltDefinition
+    {
+        public int Cell;
+        public uint FactionId;
+        public Facing Facing;
+        /// <summary>0 for an empty belt.</summary>
+        public ResourceKind Item;
     }
 
     public struct VillagerDefinition
@@ -63,6 +74,14 @@ namespace Rts.Simulation
         public int InfantryFoodCost = 50, InfantryWoodCost = 20, InfantryTrainTicks = 300;
         /// <summary>The automatic economy keeps at most this many infantry queued at a barracks (5.4 step 3).</summary>
         public int AutoInfantryQueue = 2;
+
+        /// <summary>
+        /// V3-2 (technical-design-v3 10-12): ore, metal and belts. False keeps a V3-1 economy exactly as it was - the
+        /// scenario binary, the canonical state and every tick.
+        /// </summary>
+        public bool Industry;
+        /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
+        public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
     }
 
     public sealed class MapDefinition
