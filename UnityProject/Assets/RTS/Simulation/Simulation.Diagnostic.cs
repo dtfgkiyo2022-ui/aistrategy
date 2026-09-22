@@ -103,7 +103,7 @@ namespace Rts.Simulation
                 {
                     w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Input", b.Input); w.Value(n + "Output", b.Output);
                     w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
-                    if (world.Config.Economy.Ages) w.Value(n + "QueuedMetal", b.QueuedMetal);
+                    if (world.Config.Economy.Ages) { w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "Interval", b.Interval); }
                 }
             }
             w.Value("NextVillagerId", world.NextVillagerId);

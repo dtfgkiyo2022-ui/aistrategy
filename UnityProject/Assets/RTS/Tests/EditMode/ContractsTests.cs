@@ -21,7 +21,7 @@ namespace Rts.Tests.EditMode
         [TestCase(typeof(UnitKind), "Infantry=1,Scout=2,Villager=4")]
         [TestCase(typeof(ResourceKind), "Food=1,Wood=2,Ore=3,Metal=4")]
         [TestCase(typeof(Facing), "North=0,East=1,South=2,West=3")]
-        [TestCase(typeof(BuildingKind), "Barracks=1,Mine=2,Smelter=3")]
+        [TestCase(typeof(BuildingKind), "Barracks=1,Mine=2,Smelter=3,Farm=4")]
         [TestCase(typeof(EconomyCommandKind), "PlaceBuilding=1,Train=2,CancelTrain=3,AssignVillagers=4,SetAutoEconomy=5,PlaceBelt=6,RemoveBelt=7,ReturnEconomyToAuto=8,SetEconomyPolicy=9,AdvanceAge=10")]
         [TestCase(typeof(CivKind), "Primitive=0,Agrarian=1,Metallurgy=2")]
         [TestCase(typeof(EconomyPolicy), "Balanced=0,Military=1,Growth=2")]

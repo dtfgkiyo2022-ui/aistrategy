@@ -35,13 +35,13 @@ namespace Rts.Simulation
             ref var building = ref world.Buildings[barracks];
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
-                economy.Food, economy.Wood, rules.InfantryFoodCost, rules.InfantryWoodCost, population, rules.PopulationCap, HasInfantryRoom(faction))
+                economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, rules.PopulationCap, HasInfantryRoom(faction))
                 || economy.Metal < InfantryMetalFor(faction) || SavingToAdvance(faction)) return;
-            economy.Food = checked(economy.Food - rules.InfantryFoodCost);
-            economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
+            economy.Food = checked(economy.Food - InfantryFoodFor(faction));
+            economy.Wood = checked(economy.Wood - InfantryWoodFor(faction));
             economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
             building.QueuedMetal = checked(building.QueuedMetal + InfantryMetalFor(faction));
-            if (building.Queued == 0) building.TrainRemaining = rules.InfantryTrainTicks;
+            if (building.Queued == 0) building.TrainRemaining = InfantryTicksFor(faction);
             building.Queued++;
         }
 
@@ -65,6 +65,7 @@ namespace Rts.Simulation
                 WorkCell = NearestPassableCell(FootprintCenter(origin, SizeOf(kind))), Alive = true, Hp = HpOf(kind), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
+            if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
             EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
@@ -231,10 +232,14 @@ namespace Rts.Simulation
                 if (b.TrainRemaining > 0) continue;
                 // A full population or full armies hold the finished soldier at the door until there is room.
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= rules.PopulationCap) continue;
+                // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
+                int metal = InfantryMetalFor(b.FactionId);
+                bool paid = metal > 0 && b.QueuedMetal >= metal;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell))) continue;
+                if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 b.Queued--;
                 b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - InfantryMetalFor(b.FactionId));
-                b.TrainRemaining = b.Queued > 0 ? rules.InfantryTrainTicks : 0;
+                b.TrainRemaining = b.Queued > 0 ? InfantryTicksFor(b.FactionId) : 0;
             }
         }
 
@@ -263,25 +268,25 @@ namespace Rts.Simulation
         private int SizeOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : e.BarracksSizeCells;
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : e.BarracksSizeCells;
         }
 
         private int HpOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Smelter ? e.SmelterHp : e.BarracksHp;
+            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.Farm ? e.FarmHp : e.BarracksHp;
         }
 
         private int WorkOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Smelter ? e.SmelterWork : e.BarracksWork;
+            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.Farm ? e.FarmWork : e.BarracksWork;
         }
 
         private int WoodOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : e.BarracksWoodCost;
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : e.BarracksWoodCost;
         }
 
         private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));

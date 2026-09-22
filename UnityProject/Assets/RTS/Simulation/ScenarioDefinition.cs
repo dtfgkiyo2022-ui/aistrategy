@@ -98,6 +98,14 @@ namespace Rts.Simulation
         public bool Ages;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
         public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
+        /// <summary>V3-4 agrarian (27, 26.2): infantry is cheaper and quicker to train.</summary>
+        public int AgrarianInfantryFood = 35, AgrarianInfantryWood = 10, AgrarianInfantryTicks = 200;
+        /// <summary>V3-4 metallurgy (27): trained infantry is born with these HP and damage.</summary>
+        public int ForgedInfantryHp = 140, ForgedInfantryDamage = 13;
+        /// <summary>V3-4 farm (27): footprint, wood, work, HP. It makes one food every FarmBaseTicks, FarmStepTicks faster
+        /// for each food point within FarmFoodReach metres and once more with river within FarmRiverReach, never under FarmMinTicks.</summary>
+        public int FarmSizeCells = 2, FarmWoodCost = 80, FarmWork = 200, FarmHp = 400;
+        public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
     }
 
     public sealed class MapDefinition

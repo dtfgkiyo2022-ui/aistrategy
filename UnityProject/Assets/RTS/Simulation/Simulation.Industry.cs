@@ -29,6 +29,14 @@ namespace Rts.Simulation
                     node.Remaining--;
                     b.Output++;
                 }
+                else if (b.Kind == BuildingKind.Farm)
+                {
+                    // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
+                    if (b.Output >= rules.BufferLimit) continue;
+                    if (++b.Timer < b.Interval) continue;
+                    b.Timer = 0;
+                    b.Output++;
+                }
                 else if (b.Kind == BuildingKind.Smelter)
                 {
                     if (b.Timer == 0 && b.Input >= rules.OrePerMetal && b.Output < rules.BufferLimit)
@@ -53,7 +61,8 @@ namespace Rts.Simulation
             }
         }
 
-        private static ResourceKind OutputKind(BuildingKind kind) => kind == BuildingKind.Mine ? ResourceKind.Ore : ResourceKind.Metal;
+        private static ResourceKind OutputKind(BuildingKind kind)
+            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.Farm ? ResourceKind.Food : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);

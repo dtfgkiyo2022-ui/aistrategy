@@ -40,7 +40,8 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
-                    if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))) return;
+                    if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                        && !(kind == BuildingKind.Farm && FarmingAllowed(faction))) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -68,13 +69,13 @@ namespace Rts.Simulation
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (b.Kind != BuildingKind.Barracks || !b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
-                        || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost || economy.Metal < InfantryMetalFor(faction)) return;
-                    economy.Food = checked(economy.Food - rules.InfantryFoodCost);
-                    economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
+                        || economy.Food < InfantryFoodFor(faction) || economy.Wood < InfantryWoodFor(faction) || economy.Metal < InfantryMetalFor(faction)) return;
+                    economy.Food = checked(economy.Food - InfantryFoodFor(faction));
+                    economy.Wood = checked(economy.Wood - InfantryWoodFor(faction));
                     economy.Metal = checked(economy.Metal - InfantryMetalFor(faction));
                     b.QueuedMetal = checked(b.QueuedMetal + InfantryMetalFor(faction));
                     if (IndustryOn) b.Held = true;
-                    if (b.Queued == 0) b.TrainRemaining = rules.InfantryTrainTicks;
+                    if (b.Queued == 0) b.TrainRemaining = InfantryTicksFor(faction);
                     b.Queued++;
                     return;
                 }
@@ -95,8 +96,9 @@ namespace Rts.Simulation
                     if (b.Queued == 0) return;
                     if (IndustryOn) b.Held = true;
                     b.Queued--;
-                    economy.Food = checked(economy.Food + rules.InfantryFoodCost);
-                    economy.Wood = checked(economy.Wood + rules.InfantryWoodCost);
+                    // A cancel returns today's price; advancing only ever lowers food and wood, so nothing is gained.
+                    economy.Food = checked(economy.Food + InfantryFoodFor(faction));
+                    economy.Wood = checked(economy.Wood + InfantryWoodFor(faction));
                     // Never more metal back than the queue paid (a cancel after advancing into metallurgy).
                     int metalBack = Math.Min(InfantryMetalFor(faction), b.QueuedMetal);
                     b.QueuedMetal -= metalBack;
@@ -120,7 +122,7 @@ namespace Rts.Simulation
                         if (!OwnBuilding(faction, c.TargetId, out buildingIndex)) return;
                         var target = world.Buildings[buildingIndex];
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter);
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm);
                         if (target.Complete && !haul) return;
                     }
                     else return;
