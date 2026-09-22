@@ -119,6 +119,12 @@ namespace Rts.Simulation
         internal bool Alive, Complete;
         internal int Hp, Progress, Queued;
         internal long TrainRemaining;
+        /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
+        /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
+        internal Facing Facing;
+        internal int Input, Output, Timer;
+        /// <summary>V3-2 mine: the ore point under its footprint.</summary>
+        internal uint NodeId;
     }
 
     internal struct ResourceNodeState
@@ -300,7 +306,10 @@ namespace Rts.Simulation
             else Require(c.Villagers.Length == 0 && !e.Industry, "Villagers and industry need an enabled economy.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
-                    && e.BeltLimit > 0 && e.BeltLimit <= 8192, "Invalid industry rules.");
+                    && e.BeltLimit > 0 && e.BeltLimit <= 8192
+                    && e.MineSizeCells > 0 && e.MineSizeCells <= 8 && e.MineWoodCost >= 0 && e.MineWork > 0 && e.MineHp > 0 && e.MineIntervalTicks > 0
+                    && e.SmelterSizeCells > 0 && e.SmelterSizeCells <= 8 && e.SmelterWoodCost >= 0 && e.SmelterWork > 0 && e.SmelterHp > 0
+                    && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit, "Invalid industry rules.");
             else Require(c.Belts.Length == 0, "Belts need industry.");
             Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
             var villagerCounts = new int[2];
@@ -420,7 +429,10 @@ namespace Rts.Simulation
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
                 InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
-                Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit };
+                Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
+                SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
+                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

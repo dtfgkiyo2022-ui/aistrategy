@@ -42,6 +42,8 @@ namespace Rts.Contracts
         public IReadOnlyList<int> Cells { get; }
         /// <summary>PlaceBelt: one direction per cell.</summary>
         public IReadOnlyList<Facing> Facings { get; }
+        /// <summary>PlaceBuilding of a mine or smelter: the side its output comes out of. The barracks ignores it.</summary>
+        public Facing Facing { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -52,7 +54,15 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, cells, facings, Facing.North)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing)
+        {
+            Facing = facing;
             Cells = ContractList.Copy(cells ?? Array.Empty<int>());
             Facings = ContractList.Copy(facings ?? Array.Empty<Facing>());
             if (Cells.Count != Facings.Count) throw new ArgumentException("A belt run needs one facing per cell.");
@@ -72,6 +82,9 @@ namespace Rts.Contracts
 
         public static EconomyCommand Place(uint faction, ulong sequence, BuildingKind building, int cell)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBuilding, building, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand Place(uint faction, ulong sequence, BuildingKind building, int cell, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBuilding, building, cell, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, facing);
 
         public static EconomyCommand Train(uint faction, ulong sequence, uint producerId, UnitKind unit)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.Train, 0, 0, producerId, unit, null, EconomyTargetKind.None, 0, false);
@@ -130,9 +143,22 @@ namespace Rts.Contracts
         public int Queued { get; }
         public long TrainRemaining { get; }
 
+        /// <summary>V3-2: the side a mine or smelter puts its output out of.</summary>
+        public Facing Facing { get; }
+        /// <summary>V3-2, own buildings only: ore waiting at a smelter's input, and items waiting at the output.</summary>
+        public int Input { get; }
+        public int Output { get; }
+
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, Facing.North, 0, 0)
         {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output)
+        {
+            Facing = facing; Input = input; Output = output;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }

@@ -82,6 +82,12 @@ namespace Rts.Simulation
         public bool Industry;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
+        /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
+        public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
+        /// <summary>Smelter (12.2): footprint, wood, work, HP, ticks per metal, and ore per metal.</summary>
+        public int SmelterSizeCells = 3, SmelterWoodCost = 120, SmelterWork = 300, SmelterHp = 600, SmeltTicks = 60, OrePerMetal = 2;
+        /// <summary>Items a mine or smelter holds at its input and at its output; a full output stops the work.</summary>
+        public int BufferLimit = 10;
     }
 
     public sealed class MapDefinition

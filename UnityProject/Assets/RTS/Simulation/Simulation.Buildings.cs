@@ -45,21 +45,23 @@ namespace Rts.Simulation
         {
             int origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
-            PlaceBarracksAt(faction, origin);
+            PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
         }
 
-        private void PlaceBarracksAt(uint faction, int origin)
+        /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
+        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId)
         {
-            var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            economy.Wood = checked(economy.Wood - rules.BarracksWoodCost);
+            economy.Wood = checked(economy.Wood - WoodOf(kind));
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
-            foreach (int cell in Footprint(origin)) world.Map.SetPassable(cell, false);
-            world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Barracks,
-                OriginCell = origin, WorkCell = NearestPassableCell(FootprintCenter(origin)), Alive = true, Hp = rules.BarracksHp };
+            var footprint = Footprint(origin, SizeOf(kind));
+            foreach (int cell in footprint) world.Map.SetPassable(cell, false);
+            world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
+                WorkCell = NearestPassableCell(FootprintCenter(origin, SizeOf(kind))), Alive = true, Hp = HpOf(kind), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
-            EvacuateFootprint(origin);
+            if (nodeId != 0) ReleaseNode(nodeId);
+            EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
         }
@@ -80,14 +82,14 @@ namespace Rts.Simulation
                         int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
-                        if (SiteIsClear(origin, core) && KeepsMapConnected(faction, origin)) return origin;
+                        if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
         }
 
-        private bool SiteIsClear(int origin, int coreCell)
+        private bool SiteIsClear(int origin, int coreCell, int size)
         {
-            foreach (int cell in Footprint(origin))
+            foreach (int cell in Footprint(origin, size))
             {
                 if (!world.Map.IsPassable(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
                 if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
@@ -96,19 +98,22 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     if (!world.Buildings[i].Alive) continue;
-                    foreach (int other in Footprint(world.Buildings[i].OriginCell))
+                    foreach (int other in Footprint(world.Buildings[i]))
                         if (Chebyshev(cell, other) < BuildingClearanceCells) return false;
                 }
             }
             return true;
         }
 
-        /// <summary>With the footprint closed, the own core still reaches the enemy core, both outposts and every resource.</summary>
-        private bool KeepsMapConnected(uint faction, int origin)
+        /// <summary>
+        /// With the footprint closed, the own core still reaches the enemy core, both outposts and every resource - except
+        /// a point under a footprint (a mine's own ore point, or one under this footprint), which nobody walks to.
+        /// </summary>
+        private bool KeepsMapConnected(uint faction, int origin, int size)
         {
             int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells, width = world.Config.Map.WidthCells;
             var closed = new bool[cells];
-            foreach (int cell in Footprint(origin)) closed[cell] = true;
+            foreach (int cell in Footprint(origin, size)) closed[cell] = true;
             var seen = new bool[cells];
             var queue = new int[cells];
             int head = 0, tail = 0, start = world.Map.Cell(OwnCore(faction).Definition.Position);
@@ -126,15 +131,20 @@ namespace Rts.Simulation
             }
             if (!Reached(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position)) return false;
             foreach (var post in world.Outposts) if (!Reached(post.Definition.Position)) return false;
-            foreach (var node in world.Nodes) if (!Reached(node.Definition.Position)) return false;
+            foreach (var node in world.Nodes)
+            {
+                int c = world.Map.Cell(node.Definition.Position);
+                if (c < 0) return false;
+                if (closed[c] || !world.Map.IsPassable(c)) continue;
+                if (!seen[c]) return false;
+            }
             return true;
             bool Reached(SimPoint p) { int c = world.Map.Cell(p); return c >= 0 && seen[c]; }
         }
 
         /// <summary>Anyone standing on a new footprint steps to the nearest free cell (distance, then cell id).</summary>
-        private void EvacuateFootprint(int origin)
+        private void EvacuateFootprint(int[] footprint)
         {
-            var footprint = Footprint(origin);
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
@@ -201,8 +211,8 @@ namespace Rts.Simulation
                     var v = world.Villagers[j];
                     if (v.Alive && v.Task == VillagerTask.Building && v.BuildingId == b.Id) b.Progress++;
                 }
-                if (b.Progress < rules.BarracksWork) continue;
-                b.Progress = rules.BarracksWork;
+                if (b.Progress < WorkOf(b.Kind)) continue;
+                b.Progress = WorkOf(b.Kind);
                 b.Complete = true;
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
@@ -244,18 +254,43 @@ namespace Rts.Simulation
             return free > queued;
         }
 
-        private int[] Footprint(int origin)
+        private int SizeOf(BuildingKind kind)
         {
-            int size = world.Config.Economy.BarracksSizeCells, width = world.Config.Map.WidthCells;
+            var e = world.Config.Economy;
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : e.BarracksSizeCells;
+        }
+
+        private int HpOf(BuildingKind kind)
+        {
+            var e = world.Config.Economy;
+            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Smelter ? e.SmelterHp : e.BarracksHp;
+        }
+
+        private int WorkOf(BuildingKind kind)
+        {
+            var e = world.Config.Economy;
+            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Smelter ? e.SmelterWork : e.BarracksWork;
+        }
+
+        private int WoodOf(BuildingKind kind)
+        {
+            var e = world.Config.Economy;
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : e.BarracksWoodCost;
+        }
+
+        private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));
+
+        private int[] Footprint(int origin, int size)
+        {
+            int width = world.Config.Map.WidthCells;
             var cells = new int[size * size];
             for (int z = 0; z < size; z++)
                 for (int x = 0; x < size; x++) cells[z * size + x] = origin + z * width + x;
             return cells;
         }
 
-        private SimPoint FootprintCenter(int origin)
+        private SimPoint FootprintCenter(int origin, int size)
         {
-            int size = world.Config.Economy.BarracksSizeCells;
             var corner = world.Map.Center(origin);
             long half = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw * (size - 1) / 2;
             return new SimPoint(Fix64.FromRaw(corner.X.Raw + half), Fix64.FromRaw(corner.Z.Raw + half));

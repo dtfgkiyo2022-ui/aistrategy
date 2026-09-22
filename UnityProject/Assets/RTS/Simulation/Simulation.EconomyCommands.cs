@@ -30,11 +30,16 @@ namespace Rts.Simulation
                     return;
                 case EconomyCommandKind.PlaceBuilding:
                 {
-                    if (c.Building != BuildingKind.Barracks || economy.Wood < rules.BarracksWoodCost) return;
-                    int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = rules.BarracksSizeCells;
+                    var kind = c.Building;
+                    if (kind != BuildingKind.Barracks && !(IndustryOn && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))) return;
+                    if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind)) return;
+                    int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
-                    if (!SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position)) || !KeepsMapConnected(faction, c.Cell)) return;
-                    PlaceBarracksAt(faction, c.Cell);
+                    uint node = 0;
+                    bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
+                        : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+                    if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
+                    PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
                     return;
                 }
                 case EconomyCommandKind.Train:
@@ -51,7 +56,7 @@ namespace Rts.Simulation
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
-                    if (!b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
+                    if (b.Kind != BuildingKind.Barracks || !b.Complete || c.Unit != UnitKind.Infantry || b.Queued >= rules.QueueLimit || !HasInfantryRoom(faction)
                         || economy.Food < rules.InfantryFoodCost || economy.Wood < rules.InfantryWoodCost) return;
                     economy.Food = checked(economy.Food - rules.InfantryFoodCost);
                     economy.Wood = checked(economy.Wood - rules.InfantryWoodCost);
@@ -85,6 +90,8 @@ namespace Rts.Simulation
                     if (c.TargetKind == EconomyTargetKind.ResourceNode)
                     {
                         if (c.TargetId == 0 || c.TargetId > world.Nodes.Length || world.Nodes[c.TargetId - 1].Remaining <= 0) return;
+                        // A point under a footprint (a mine's) cannot be walked to.
+                        if (!world.Map.IsPassable(world.Map.Cell(world.Nodes[c.TargetId - 1].Definition.Position))) return;
                         nodeIndex = (int)c.TargetId - 1;
                     }
                     else if (c.TargetKind == EconomyTargetKind.Building)

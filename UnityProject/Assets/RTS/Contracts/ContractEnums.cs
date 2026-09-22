@@ -58,8 +58,8 @@ namespace Rts.Contracts
     /// <summary>Ver.3 direction of a belt or a building's output (technical-design-v3 11.2). North is +z, east is +x.</summary>
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
-    /// <summary>Ver.3 buildings (technical-design-v3 3.3). The core is not a building.</summary>
-    public enum BuildingKind : byte { Barracks = 1 }
+    /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
+    public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3 }
 
     public enum EventKind : byte
     {

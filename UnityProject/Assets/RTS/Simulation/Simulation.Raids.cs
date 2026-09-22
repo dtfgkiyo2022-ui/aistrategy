@@ -91,7 +91,7 @@ namespace Rts.Simulation
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || b.Hp != 0) continue;
                 b.Alive = false;
-                foreach (int cell in Footprint(b.OriginCell)) world.Map.SetPassable(cell, true);
+                foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                 opened = true;
             }
             if (opened) TerrainChanged();
@@ -99,7 +99,7 @@ namespace Rts.Simulation
 
         private bool BuildingVisibleTo(uint faction, BuildingState b)
         {
-            foreach (int cell in Footprint(b.OriginCell))
+            foreach (int cell in Footprint(b))
                 if (world.Factions[faction - 1].VisibleCells[cell]) return true;
             return false;
         }
@@ -107,7 +107,7 @@ namespace Rts.Simulation
         /// <summary>The point of the footprint square closest to <paramref name="from"/>, for range checks.</summary>
         private SimPoint NearestFootprintPoint(BuildingState b, SimPoint from)
         {
-            int width = world.Config.Map.WidthCells, size = world.Config.Economy.BarracksSizeCells;
+            int width = world.Config.Map.WidthCells, size = SizeOf(b.Kind);
             long cell = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
             long minX = b.OriginCell % width * cell, minZ = b.OriginCell / width * cell;
             long maxX = minX + size * cell, maxZ = minZ + size * cell;

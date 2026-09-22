@@ -26,16 +26,16 @@ namespace Rts.Simulation
                     villagers.Add(new VillagerView(0, false, v.Position, VillagerActivity.Idle, 0, 0, 0));
             }
             var buildings = new List<BuildingView>();
-            int sizeMeters = rules.BarracksSizeCells * world.Config.Map.CellSizeMeters;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (!b.Alive) continue;
                 bool own = b.FactionId == faction;
                 if (!own && !BuildingVisibleTo(faction, b)) continue;
-                buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell), sizeMeters,
-                    own ? b.Hp : 0, own ? rules.BarracksHp : 0, b.Complete, own ? b.Progress : 0, rules.BarracksWork,
-                    own ? b.Queued : 0, own ? b.TrainRemaining : 0));
+                int size = SizeOf(b.Kind);
+                buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
+                    own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
+                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)

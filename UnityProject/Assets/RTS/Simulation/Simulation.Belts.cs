@@ -41,7 +41,12 @@ namespace Rts.Simulation
                     belt.Item = 0;
                     belt.Progress = 0;
                 }
-                // Anything else - bare ground, an enemy belt - holds the item where it is.
+                else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
+                {
+                    belt.Item = 0;
+                    belt.Progress = 0;
+                }
+                // Anything else - bare ground, an enemy belt, a building that does not take it - holds the item where it is.
             }
         }
 

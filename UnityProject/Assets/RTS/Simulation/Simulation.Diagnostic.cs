@@ -98,6 +98,12 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                // V3-2: only with industry, so a V3-1 building keeps its exact canonical bytes.
+                if (world.Config.Economy.Industry)
+                {
+                    w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Input", b.Input); w.Value(n + "Output", b.Output);
+                    w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId);
+                }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);

@@ -31,6 +31,7 @@
     <Compile Include="MapGeneratorTests.cs" />
     <Compile Include="EconomyTests.cs" />
     <Compile Include="BeltTests.cs" />
+    <Compile Include="IndustryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />

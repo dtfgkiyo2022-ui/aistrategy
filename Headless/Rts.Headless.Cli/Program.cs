@@ -27,7 +27,7 @@ internal static class JsonInput
         o.Converters.Add(new ValueConverter<EconomyCommand>(e => new EconomyCommand(Get<uint>(e,"factionId",o), Get<ulong>(e,"issuerSequence",o),
             Get<EconomyCommandKind>(e,"kind",o), Get<BuildingKind>(e,"building",o), Get<int>(e,"cell",o), Get<uint>(e,"producerId",o),
             Get<UnitKind>(e,"unit",o), Get<uint[]>(e,"villagerIds",o), Get<EconomyTargetKind>(e,"targetKind",o), Get<uint>(e,"targetId",o), Get<bool>(e,"enabled",o),
-            Get<int[]>(e,"cells",o), Get<Facing[]>(e,"facings",o))));
+            Get<int[]>(e,"cells",o), Get<Facing[]>(e,"facings",o), Get<Facing>(e,"facing",o))));
         // An input with an "economy" object is a Ver.3 direct economy operation; everything else is read as before.
         o.Converters.Add(new ValueConverter<ScheduledInput>(e => e.TryGetProperty("economy", out var economy)
             ? new ScheduledInput(Get<ulong>(e,"logIndex",o), Get<long>(e,"acceptedTick",o), Get<long>(e,"applyTick",o), economy.Deserialize<EconomyCommand>(o))
