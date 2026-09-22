@@ -67,7 +67,8 @@ namespace Rts.Contracts
     /// V3-5 research at a blacksmith (technical-design-v3 32 #6). A faction's researched techs are a bit set of
     /// 1 &lt;&lt; (value - 1). Irrigation is for farming only, BlastFurnace for metallurgy only.
     /// </summary>
-    public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6 }
+    /// <summary>Siegecraft, Masonry and Banking are the third age's techs (V3-5, 32 #10); the rest come with a civilisation.</summary>
+    public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6, Siegecraft = 7, Masonry = 8, Banking = 9 }
 
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }

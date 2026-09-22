@@ -11,7 +11,8 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace };
+        private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
+            TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
@@ -31,10 +32,12 @@ namespace Rts.Simulation
         /// <summary>Whether this faction may research <paramref name="tech"/> at all (the civilisation techs are for their own civilisation).</summary>
         private bool TechOpen(uint faction, TechKind tech)
         {
-            var civ = world.Economies[faction - 1].Civ;
-            if (civ == CivKind.Primitive || tech < TechKind.Weapons || tech > TechKind.BlastFurnace || HasTech(faction, tech)) return false;
-            if (tech == TechKind.Irrigation) return civ == CivKind.Agrarian;
-            if (tech == TechKind.BlastFurnace) return civ == CivKind.Metallurgy;
+            var e = world.Economies[faction - 1];
+            if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || tech > TechKind.Banking || HasTech(faction, tech)) return false;
+            if (tech == TechKind.Irrigation) return e.Civ == CivKind.Agrarian;
+            if (tech == TechKind.BlastFurnace) return e.Civ == CivKind.Metallurgy;
+            // V3-5 (32 #10): siegecraft, masonry and banking are the third age's, and both civilisations may have them.
+            if (tech >= TechKind.Siegecraft) return e.Age >= 3;
             return true;
         }
 

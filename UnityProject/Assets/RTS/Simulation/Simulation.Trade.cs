@@ -24,11 +24,16 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (StockOf(world.Economies[faction - 1], give) < rules.TradeLot) return;
             AddStock(faction, give, -rules.TradeLot);
-            AddStock(faction, take, rules.TradeReturn);
+            AddStock(faction, take, rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0));
         }
 
         /// <summary>What a soldier deals to a building or a core: a ram its siege damage, everyone else their damage.</summary>
-        private int SiegeDamage(SoldierState s) => s.Class == UnitKind.Ram ? world.Config.Economy.RamSiegeDamage : s.Parameters.Damage;
+        private int SiegeDamage(SoldierState s)
+        {
+            if (s.Class != UnitKind.Ram) return s.Parameters.Damage;
+            var rules = world.Config.Economy;
+            return rules.RamSiegeDamage + (HasTech(s.Initial.FactionId, TechKind.Siegecraft) ? rules.SiegecraftSiegeDamage : 0);
+        }
 
         /// <summary>
         /// AI phase, once the civilisation's line stands and a blacksmith too: a market; then, while one of food, wood and

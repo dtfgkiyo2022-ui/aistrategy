@@ -173,7 +173,12 @@ namespace Rts.Presentation
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
         private static string AgeName(CivKind c, int age)
-            => age < 2 ? CivName(c) : c == CivKind.Agrarian ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代");
+        {
+            if (age < 2) return CivName(c);
+            if (c == CivKind.Agrarian)
+                return age == 2 ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("farming, trade age", "農耕の文明・交易の時代");
+            return age == 2 ? UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代") : UiText.T("metallurgy, steel age", "冶金の文明・鋼の時代");
+        }
 
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
@@ -416,11 +421,13 @@ namespace Rts.Presentation
                     Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
                 y += 26f;
             }
-            else if (economy.Ages && economy.Age == 1 && economy.AdvanceRemaining == 0)
+            else if (economy.Ages && (economy.Age == 1 || economy.Age == 2) && economy.AdvanceRemaining == 0)
             {
-                // V3-5 (32 #7): the second age of the civilisation taken.
-                string next = economy.Civ == CivKind.Agrarian ? UiText.T("Advance: city age", "時代を進める：都市の時代") : UiText.T("Advance: iron age", "時代を進める：鉄の時代");
-                if (GUI.Button(new Rect(x, y, w, 22f), next + UiText.T(" (", "（食") + economy.Age2FoodCost + UiText.T("F ", " 木") + economy.Age2WoodCost + UiText.T("W)", "）")))
+                // V3-5 (32 #7, #10): the next age of the civilisation taken - the second, then the third.
+                string next = UiText.T("Advance: ", "時代を進める：") + AgeName(economy.Civ, economy.Age + 1);
+                int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age3FoodCost;
+                int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
+                if (GUI.Button(new Rect(x, y, w, 22f), next + UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + UiText.T("W)", "）")))
                     Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
                 y += 26f;
             }
@@ -464,6 +471,9 @@ namespace Rts.Presentation
                 case TechKind.Tools: return UiText.T("Tools (gather faster)", "道具（採集が速い）");
                 case TechKind.Carts: return UiText.T("Carts (carry +5)", "荷車（運ぶ量+5）");
                 case TechKind.Irrigation: return UiText.T("Irrigation (farms)", "灌漑（農場が速い）");
+                case TechKind.Siegecraft: return UiText.T("Siegecraft (rams +30)", "攻城術（破城槌+30）");
+                case TechKind.Masonry: return UiText.T("Masonry (towers +4)", "石工（見張り塔+4）");
+                case TechKind.Banking: return UiText.T("Banking (trade +25)", "両替（交換+25）");
                 default: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
             }
         }
@@ -486,6 +496,8 @@ namespace Rts.Presentation
             y += 26f;
             var techs = new List<TechKind> { TechKind.Weapons, TechKind.Armour, TechKind.Tools, TechKind.Carts };
             techs.Add(economy.Civ == CivKind.Agrarian ? TechKind.Irrigation : TechKind.BlastFurnace);
+            // V3-5 (32 #10): the third age opens three more, the same for both civilisations.
+            if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); }
             for (int i = 0; i < techs.Count; i++)
             {
                 var t = techs[i];

@@ -389,12 +389,16 @@ namespace Rts.Contracts
         public int RamFoodCost { get; }
         public int RamWoodCost { get; }
 
+        /// <summary>V3-5 (32 #10): the price of the third age (trade age for farming, steel age for metallurgy).</summary>
+        public int Age3FoodCost { get; }
+        public int Age3WoodCost { get; }
+
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -408,10 +412,12 @@ namespace Rts.Contracts
             int stone, int wallStoneCost, int towerWoodCost, int towerStoneCost,
             int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts,
             int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
-            int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost)
+            int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost,
+            int age3FoodCost, int age3WoodCost)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
+            Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             Age = age; Age2FoodCost = age2FoodCost; Age2WoodCost = age2WoodCost; ArcherFoodCost = archerFoodCost; ArcherWoodCost = archerWoodCost;
             CavalryFoodCost = cavalryFoodCost; CavalryWoodCost = cavalryWoodCost; CavalryMetalCost = cavalryMetalCost;
             BlacksmithWoodCost = blacksmithWoodCost; Techs = techs;

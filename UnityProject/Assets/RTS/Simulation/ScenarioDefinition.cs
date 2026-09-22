@@ -124,11 +124,13 @@ namespace Rts.Simulation
         public int TowerRange = 10, TowerVision = 16, TowerDamage = 6, TowerIntervalTicks = 20;
         /// <summary>V3-5 (32 #6): the blacksmith, and the price and time of each tech (index TechKind - 1).</summary>
         public int BlacksmithSizeCells = 3, BlacksmithWoodCost = 150, BlacksmithWork = 300, BlacksmithHp = 700;
-        public int[] TechFood = { 150, 150, 100, 100, 120, 120 };
-        public int[] TechWood = { 100, 100, 50, 100, 80, 80 };
-        public int[] TechTicks = { 600, 600, 400, 400, 500, 500 };
+        public int[] TechFood = { 150, 150, 100, 100, 120, 120, 200, 150, 200 };
+        public int[] TechWood = { 100, 100, 50, 100, 80, 80, 150, 200, 100 };
+        public int[] TechTicks = { 600, 600, 400, 400, 500, 500, 700, 700, 600 };
         /// <summary>What the techs do: attack, HP, ticks per gather, carry, farm and smelt ticks saved.</summary>
         public int WeaponsDamage = 2, ArmourHp = 20, ToolsGatherTicks = 5, CartsCarry = 5, IrrigationTicks = 10, BlastFurnaceTicks = 20;
+        /// <summary>V3-5 (32 #10): what the third age's techs do - a heavier ram, harder tower shots, a better trade.</summary>
+        public int SiegecraftSiegeDamage = 30, MasonryTowerDamage = 4, BankingTradeReturn = 25;
         /// <summary>V3-5 (32 #7): the second age inside a civilisation (city age for farming, iron age for metallurgy).</summary>
         public int Age2FoodCost = 800, Age2WoodCost = 500, Age2Ticks = 1800, Age2PopulationBonus = 20;
         /// <summary>V3-5 (32 #8): archers (farming, second age) shoot from afar; cavalry (metallurgy, second age) is quick and hard.</summary>
@@ -142,6 +144,8 @@ namespace Rts.Simulation
         public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
         public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;
         public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
+        /// <summary>V3-5 (32 #10): the third age of a civilisation (trade age for farming, steel age for metallurgy).</summary>
+        public int Age3FoodCost = 1200, Age3WoodCost = 800, Age3Ticks = 2400, Age3PopulationBonus = 20;
     }
 
     public sealed class MapDefinition
