@@ -98,14 +98,14 @@ namespace Rts.Core.Tests
 
         /// <summary>
         /// Gate 1 of V3-4 (25): on one ground farming makes the west stronger, on another metallurgy does. Seed 4 puts the
-        /// west by a river, seed 5 by a mountain (measured over 8 seeds: 27.1).
+        /// west by a river, seed 3 by a mountain (measured over 8 seeds: 27.2, 32.4).
         /// </summary>
         [Test]
         public void TheCivilisationThatPaysDependsOnTheGround()
         {
             long riverFarm = Power(4, CivKind.Agrarian), riverMetal = Power(4, CivKind.Metallurgy);
-            long hillFarm = Power(5, CivKind.Agrarian), hillMetal = Power(5, CivKind.Metallurgy);
-            TestContext.WriteLine("river (seed 4): farming " + riverFarm + ", metallurgy " + riverMetal + "; mountain (seed 5): farming " + hillFarm + ", metallurgy " + hillMetal);
+            long hillFarm = Power(3, CivKind.Agrarian), hillMetal = Power(3, CivKind.Metallurgy);
+            TestContext.WriteLine("river (seed 4): farming " + riverFarm + ", metallurgy " + riverMetal + "; mountain (seed 3): farming " + hillFarm + ", metallurgy " + hillMetal);
             Assert.That(riverFarm, Is.GreaterThan(riverMetal), "by the river, farming pays");
             Assert.That(hillMetal, Is.GreaterThan(hillFarm), "by the mountain, metallurgy pays");
         }

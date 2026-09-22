@@ -140,6 +140,52 @@ namespace Rts.Core.Tests
             for (int b = 1; b <= Number(f, "Buildings.Count"); b++) Assert.That(f["Buildings[" + b + "].Kind"], Is.Not.EqualTo("5"));
         }
 
+        /// <summary>Wood the three west villagers bring in over <paramref name="ticks"/>, from a far wood point, with or without a drop-off by it.</summary>
+        private static long FarWood(bool dropSite, int ticks)
+        {
+            var s = MapGenerator.GenerateTerrain(2);
+            s.Economy.StartWood = 1000;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, 1, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, 2, false));
+            Steps(gateway, sim, 1);
+            var core = s.Cores[0].Position;
+            long Dist2(SimPoint p) { long dx = (p.X.Raw - core.X.Raw) / 65536, dz = (p.Z.Raw - core.Z.Raw) / 65536; return dx * dx + dz * dz; }
+            var wood = s.ResourceNodes.Where(n => n.Kind == ResourceKind.Wood && Dist2(n.Position) >= 40 * 40 && Dist2(n.Position) <= 60 * 60)
+                .OrderBy(n => Dist2(n.Position)).ThenBy(n => n.Id).First();
+            ulong seq = 10;
+            if (dropSite)
+            {
+                int cell = (int)(wood.Position.Z.Raw / 65536 / 2) * 128 + (int)(wood.Position.X.Raw / 65536 / 2);
+                uint id = 0;
+                foreach (var (dx, dz) in new[] { (2, 0), (-3, 0), (0, 2), (0, -3), (2, 2), (-3, -3), (2, -3), (-3, 2) })
+                {
+                    gateway.SubmitEconomy(EconomyCommand.Place(1, ++seq, BuildingKind.DropSite, cell + dz * 128 + dx, Facing.North));
+                    Steps(gateway, sim, 1);
+                    var f0 = Fields(sim);
+                    if (Number(f0, "Buildings.Count") > 0) { id = 1; break; }
+                }
+                Assume.That(id, Is.EqualTo(1u), "a drop-off site by the far wood");
+                gateway.SubmitEconomy(EconomyCommand.Assign(1, ++seq, new uint[] { 1, 2, 3 }, EconomyTargetKind.Building, id));
+                for (int t = 0; t < 3000 && Fields(sim)["Buildings[1].Complete"] != "1"; t += 20) Steps(gateway, sim, 20);
+            }
+            gateway.SubmitEconomy(EconomyCommand.Assign(1, ++seq, new uint[] { 1, 2, 3 }, EconomyTargetKind.ResourceNode, wood.Id));
+            Steps(gateway, sim, 1);
+            long before = Number(Fields(sim), "Economy[1].Wood");
+            Steps(gateway, sim, ticks);
+            return Number(Fields(sim), "Economy[1].Wood") - before;
+        }
+
+        /// <summary>32 #3: a drop-off by a far resource point shortens the walk, so the same villagers bring in more.</summary>
+        [Test]
+        public void ADropOffByAFarPointBringsInMoreWood()
+        {
+            long without = FarWood(false, 3000), with = FarWood(true, 3000);
+            TestContext.WriteLine("far wood in 3000 ticks: without a drop-off " + without + ", with " + with);
+            Assert.That(with, Is.GreaterThan(without));
+        }
+
         [Test]
         public void AMapWithoutAgesTrainsNoScouts()
         {

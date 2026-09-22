@@ -189,7 +189,7 @@ namespace Rts.Presentation
                 // An enemy building's progress is not shown (0), so it is drawn as finished.
                 bool finished = b.Complete || b.MaxHp == 0;
                 float full = b.Kind == BuildingKind.Mine ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
-                    : b.Kind == BuildingKind.House ? 1.4f : 3f;
+                    : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f : 3f;
                 float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;

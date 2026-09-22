@@ -112,6 +112,8 @@ namespace Rts.Simulation
         /// never over PopulationCap.</summary>
         public int BasePopulation = 30, HousePopulation = 5;
         public int HouseSizeCells = 2, HouseWoodCost = 30, HouseWork = 100, HouseHp = 250;
+        /// <summary>V3-5 (32 #3): a drop-off where villagers leave what they carry instead of walking to the core.</summary>
+        public int DropSiteSizeCells = 2, DropSiteWoodCost = 50, DropSiteWork = 120, DropSiteHp = 300;
     }
 
     public sealed class MapDefinition

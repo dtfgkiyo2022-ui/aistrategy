@@ -74,10 +74,13 @@ namespace Rts.Simulation
         private int FindBarracksSite(uint faction) => FindSite(faction, world.Config.Economy.BarracksSizeCells);
 
         /// <summary>The same ring search for any square footprint of <paramref name="size"/> cells.</summary>
-        private int FindSite(uint faction, int size)
+        private int FindSite(uint faction, int size) => FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position));
+
+        /// <summary>The ring search around any <paramref name="centre"/> cell (the clearance from the own core still applies).</summary>
+        private int FindSiteNear(uint faction, int size, int centre)
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
-            int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = core % width, cz = core / width;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
             for (int r = 0; r <= SiteSearchRadiusCells; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
@@ -175,6 +178,28 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++) { world.Villagers[i].Route = Array.Empty<int>(); world.Villagers[i].RouteCursor = 0; }
         }
 
+        /// <summary>
+        /// V3-5 (32.4): an own unfinished building nobody is building gets builders. A building placed while every
+        /// villager was busy building something else was otherwise left unbuilt for good. Maps with ages only, so the
+        /// older maps keep every tick; a building the player placed is theirs to staff.
+        /// </summary>
+        private void ResumeUnbuilt(uint faction)
+        {
+            if (!AgesOn) return;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || b.Complete || b.Held || b.FactionId != faction) continue;
+                bool staffed = false;
+                for (int j = 0; j < world.VillagerCount && !staffed; j++)
+                {
+                    var v = world.Villagers[j];
+                    staffed = v.Alive && v.BuildingId == b.Id && (v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building);
+                }
+                if (!staffed) AssignBuilders(ref world.Buildings[i]);
+            }
+        }
+
         /// <summary>The nearest villagers (distance to the work cell, then id) stop what they do and go to build.</summary>
         private void AssignBuilders(ref BuildingState building)
         {
@@ -256,28 +281,28 @@ namespace Rts.Simulation
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
-                : kind == BuildingKind.House ? e.HouseSizeCells : e.BarracksSizeCells;
+                : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells : e.BarracksSizeCells;
         }
 
         private int HpOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.Farm ? e.FarmHp
-                : kind == BuildingKind.House ? e.HouseHp : e.BarracksHp;
+                : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp : e.BarracksHp;
         }
 
         private int WorkOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.Farm ? e.FarmWork
-                : kind == BuildingKind.House ? e.HouseWork : e.BarracksWork;
+                : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork : e.BarracksWork;
         }
 
         private int WoodOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
-                : kind == BuildingKind.House ? e.HouseWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost : e.BarracksWoodCost;
         }
 
         private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));
