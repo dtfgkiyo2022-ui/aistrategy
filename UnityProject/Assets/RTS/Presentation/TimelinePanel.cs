@@ -42,11 +42,11 @@ namespace Rts.Presentation
         {
             var clockRect = ClockRect();
             var current = Clock;
-            GUI.Box(clockRect, current == null ? "Clock" : "Clock  t=" + current.Tick + "  faction " + current.ViewFactionId);
+            GUI.Box(clockRect, current == null ? UiText.T("Clock", "時計") : UiText.T("Clock  t=", "時計  t=") + current.Tick + UiText.T("  faction ", "  陣営 ") + current.ViewFactionId);
             if (current != null)
             {
                 float x = clockRect.x + 8f;
-                if (GUI.Button(new Rect(x, clockRect.y + 26f, 64f, 24f), current.Paused ? "Play" : "Pause"))
+                if (GUI.Button(new Rect(x, clockRect.y + 26f, 64f, 24f), current.Paused ? UiText.T("Play", "再生") : UiText.T("Pause", "停止")))
                     current.Paused = !current.Paused;
                 x += 68f;
                 if (GUI.Button(new Rect(x, clockRect.y + 26f, 64f, 24f), "+1 tick")) current.StepOneTick();
@@ -59,12 +59,12 @@ namespace Rts.Presentation
                     x += 44f;
                 }
                 x += 8f;
-                if (GUI.Button(new Rect(x, clockRect.y + 26f, 100f, 24f), "View faction " + (3 - current.ViewFactionId)))
+                if (GUI.Button(new Rect(x, clockRect.y + 26f, 100f, 24f), UiText.T("View faction ", "陣営を見る ") + (3 - current.ViewFactionId)))
                     current.ViewFactionId = 3 - current.ViewFactionId;
             }
 
             var timelineRect = TimelineRect();
-            GUI.Box(timelineRect, "Timeline");
+            GUI.Box(timelineRect, UiText.T("Timeline", "時系列"));
             var entries = timeline.Entries;
             int lines = Mathf.Max(1, (int)((timelineRect.height - 26f) / 18f));
             int first = Mathf.Max(0, entries.Count - lines);

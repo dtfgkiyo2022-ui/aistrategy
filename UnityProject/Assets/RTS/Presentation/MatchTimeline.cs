@@ -47,7 +47,7 @@ namespace Rts.Presentation
             foreach (var contact in frame.Observation.Contacts)
             {
                 if (contact.IsArmyContact || !knownContacts.Add(contact.ContactId)) continue;
-                Add(frame.Tick, "first contact C" + contact.ContactId + " (report shown t=" + frame.Tick + ")");
+                Add(frame.Tick, UiText.T("first contact C", "初接触 C") + contact.ContactId + UiText.T(" (report shown t=", "（報告 t=") + frame.Tick + ")");
             }
 
             foreach (var objective in frame.Objectives)
@@ -56,7 +56,7 @@ namespace Rts.Presentation
                 if (outpostOwners.TryGetValue(objective.Id, out var previous))
                 {
                     if (previous == objective.OwnerFactionId) continue;
-                    Add(frame.Tick, "capture changed: outpost " + objective.Id + " faction " + previous + " -> " + objective.OwnerFactionId);
+                    Add(frame.Tick, UiText.T("capture changed: outpost ", "占領が変化：拠点 ") + objective.Id + UiText.T(" faction ", " 陣営 ") + previous + " -> " + objective.OwnerFactionId);
                 }
                 outpostOwners[objective.Id] = objective.OwnerFactionId;
             }
@@ -66,7 +66,7 @@ namespace Rts.Presentation
                 bool known = commandStatus.TryGetValue(command.CommandId, out var previous);
                 if (!known)
                 {
-                    Add(command.AcceptedTick, "command accepted #" + command.CommandId + " " + command.Kind
+                    Add(command.AcceptedTick, UiText.T("command accepted #", "命令を受付 #") + command.CommandId + " " + command.Kind
                         + " " + command.Target.Kind + command.Target.Id + " (" + command.Source + ")");
                 }
                 if (known && previous == command.Status) continue;
@@ -74,13 +74,13 @@ namespace Rts.Presentation
                 switch (command.Status)
                 {
                     case CommandStatus.Pending:
-                        Add(frame.Tick, "interpreted #" + command.CommandId + ", applies at t=" + command.ApplyTick);
+                        Add(frame.Tick, UiText.T("interpreted #", "解釈済み #") + command.CommandId + UiText.T(", applies at t=", "、適用 t=") + command.ApplyTick);
                         break;
                     case CommandStatus.Executing:
-                        Add(frame.Tick, "applied #" + command.CommandId);
+                        Add(frame.Tick, UiText.T("applied #", "適用 #") + command.CommandId);
                         break;
                     case CommandStatus.Completed:
-                        Add(frame.Tick, "arrived/completed #" + command.CommandId);
+                        Add(frame.Tick, UiText.T("arrived/completed #", "到着・完了 #") + command.CommandId);
                         break;
                     case CommandStatus.Cancelled:
                     case CommandStatus.Expired:
@@ -96,20 +96,20 @@ namespace Rts.Presentation
                 switch (e.Kind)
                 {
                     case EventKind.MoveStarted:
-                        Add(e.Tick, "departed: unit " + e.SubjectId);
+                        Add(e.Tick, UiText.T("departed: unit ", "出発：兵 ") + e.SubjectId);
                         break;
                     case EventKind.Death:
-                        Add(e.Tick, "loss: unit " + e.SubjectId);
+                        Add(e.Tick, UiText.T("loss: unit ", "損失：兵 ") + e.SubjectId);
                         break;
                     case EventKind.Capture:
-                        Add(e.Tick, "capture event: outpost " + e.SubjectId + " -> faction " + e.Value);
+                        Add(e.Tick, UiText.T("capture event: outpost ", "占領：拠点 ") + e.SubjectId + UiText.T(" -> faction ", " → 陣営 ") + e.Value);
                         break;
                     case EventKind.Reinforcement:
-                        Add(e.Tick, "reinforcement: +" + e.Value + " at " + e.SubjectId);
+                        Add(e.Tick, UiText.T("reinforcement: +", "増援：+") + e.Value + UiText.T(" at ", " 場所 ") + e.SubjectId);
                         break;
                     case EventKind.MatchEnded:
                         var outcome = MatchOutcome.Describe(frame.Result, frame.FactionId, e.Tick);
-                        Add(e.Tick, outcome.HasValue ? "match ended: " + outcome.Value.Headline : "match ended");
+                        Add(e.Tick, outcome.HasValue ? UiText.T("match ended: ", "試合終了：") + outcome.Value.Headline : UiText.T("match ended", "試合終了"));
                         break;
                 }
             }

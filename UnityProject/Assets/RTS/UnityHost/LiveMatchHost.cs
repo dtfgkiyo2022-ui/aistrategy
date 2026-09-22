@@ -48,7 +48,7 @@ namespace Rts.UnityHost
             {
                 if (value != 1 && value != 2 || value == viewFactionId) return;
                 viewFactionId = value;
-                if (economyPanel != null) economyPanel.Bind(gateway, viewFactionId, view, economyLayer, this);
+                if (economyPanel != null) economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
                 view.ResetVisuals();
                 if (simulation == null) return;
                 view.Push(simulation.Capture(viewFactionId));
@@ -201,7 +201,9 @@ namespace Rts.UnityHost
             if (economyPanel == null) economyPanel = gameObject.AddComponent<EconomyPanel>();
             economyLayer.Clear();
             economyLayer.Bind(view);
-            economyPanel.Bind(gateway, viewFactionId, view, economyLayer, this);
+            economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+            panel.MapChoice = this;
+            panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
         }
@@ -219,7 +221,14 @@ namespace Rts.UnityHost
             enemy.Step(simulation.Capture(3 - viewFactionId));
         }
 
-        private void Start() { Begin(); }
+        private const string LanguageKey = "rts.language.japanese";
+
+        private void Start()
+        {
+            // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
+            UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
+            Begin();
+        }
 
         private void Update()
         {

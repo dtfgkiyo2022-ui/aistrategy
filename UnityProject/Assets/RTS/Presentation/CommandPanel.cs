@@ -19,6 +19,8 @@ namespace Rts.Presentation
         private IExternalAiControl externalAi;
         private IMatchRestart matchRestart;
         private IOpponentControl opponent;
+        private IMapChoice mapChoice;
+        private bool setupOpen;
         private uint factionId;
         private uint ownCoreId;
         private BattlefieldView view;
@@ -36,6 +38,9 @@ namespace Rts.Presentation
 
         /// <summary>Lets the player pick the opponent's doctrine. Null hides the picker, which is what the mock scene wants.</summary>
         public IOpponentControl Opponent { get { return opponent; } set { opponent = value; } }
+
+        /// <summary>Random economy map or the classic one. Null hides the row.</summary>
+        public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -55,9 +60,8 @@ namespace Rts.Presentation
             if (ExtraBlocksClick != null && ExtraBlocksClick(screenPoint)) return true;
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
             return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
-                || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint)
-                || (externalAi != null && ExternalAiRect().Contains(guiPoint))
-                || (opponent != null && OpponentRect().Contains(guiPoint))
+                || SupplyRect().Contains(guiPoint) || SetupButtonRect().Contains(guiPoint) || LanguageButtonRect().Contains(guiPoint)
+                || (setupOpen && SetupRect().Contains(guiPoint))
                 || (Outcome().HasValue && ResultRect().Contains(guiPoint));
         }
 
@@ -68,17 +72,17 @@ namespace Rts.Presentation
             if (!awaitingGround || port == null) return false;
             var ray = camera.ScreenPointToRay(screenPoint);
             var ground = new Plane(Vector3.up, Vector3.zero);
-            if (!ground.Raycast(ray, out float enter)) { AddLog("Click was not on the ground."); return true; }
+            if (!ground.Raycast(ray, out float enter)) { AddLog(UiText.T("Click was not on the ground.", "地面ではない所をクリックしました。")); return true; }
             var hit = ray.GetPoint(enter);
             if (!GroundPointQuantizer.TryQuantize(hit.x, hit.z, mapWidthMeters, mapHeightMeters, out var point))
             {
-                AddLog("Click was outside the map.");
+                AddLog(UiText.T("Click was outside the map.", "マップの外をクリックしました。"));
                 return true;
             }
             awaitingGround = false;
             var selection = view.Selected;
             Send(PolicyKind.Focus, new ScopeKey(factionId, ScopeKind.Army, selection.Id), new PolicyGoal(GoalKind.Point, 0, point), 0,
-                "Attack Army " + selection.Id + " -> (" + hit.x.ToString("0.0") + ", " + hit.z.ToString("0.0") + ")");
+                UiText.T("Attack Army ", "攻撃 軍団 ") + selection.Id + " -> (" + hit.x.ToString("0.0") + ", " + hit.z.ToString("0.0") + ")");
             return true;
         }
 
@@ -91,16 +95,15 @@ namespace Rts.Presentation
 
         private Rect SupplyRect() { return new Rect(10f, 40f, 250f, 26f + 22f * 3f); }
 
-        private Rect DelayRect() { return new Rect(10f, SupplyRect().yMax + 8f, 250f, 62f); }
+        // The match settings (reply delay, opponent, map, outside AI) change rarely and each restarts the match, so they
+        // share one panel that stays folded; open, it sits over the supply box and the top of the battlefield.
+        private Rect SetupButtonRect() { return new Rect(10f, 8f, 250f, 26f); }
+        private Rect LanguageButtonRect() { return new Rect(264f, 8f, 90f, 26f); }
 
-        private const int OpponentRows = 4;
-        private Rect OpponentRect() { return new Rect(10f, DelayRect().yMax + 8f, 250f, 28f + OpponentRows * 28f); }
-
-        // Top centre, under the match clock. The left column is supply, reply delay and the command buttons, and the
-        // buttons grow upward from the bottom edge, so anything stacked under the delay box runs into them on a short
-        // window; the right column is the log and the timeline. The clock's bottom edge is 8 + 58 (TimelinePanel).
-        private const float ClockBottom = 66f;
-        private Rect ExternalAiRect() { return new Rect(Screen.width / 2f - 200f, ClockBottom + 6f, 400f, 78f); }
+        /// <summary>Called after the player switches the on-screen language, so the host can remember it.</summary>
+        public System.Action<bool> LanguageChanged;
+        private const float SetupRow = 30f;
+        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 3f + 62f); }
 
         private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
 
@@ -116,48 +119,52 @@ namespace Rts.Presentation
         {
             if (port == null) return;
             var buttons = ButtonsRect();
-            GUI.Box(buttons, "Commands");
+            GUI.Box(buttons, UiText.T("Commands", "命令"));
             var selection = view.Selected;
             bool armySelected = selection.Kind == SelectionKind.Army;
             string selectionText = view.DescribeSelection();
             GUI.Label(new Rect(buttons.x + 6f, buttons.y + 20f, buttons.width - 12f, 20f),
-                selectionText.Length > 0 ? selectionText : "Nothing selected: click an army");
-            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), "WASD move, wheel zoom");
+                selectionText.Length > 0 ? selectionText : UiText.T("Nothing selected: click an army", "未選択：軍団をクリック"));
+            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), UiText.T("WASD move, wheel zoom", "WASDで移動、ホイールで拡大縮小"));
             float y = buttons.y + 24f + HeaderHeight;
 
             GUI.enabled = armySelected;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? "Attack: click ground" : "Attack (pick ground)"))
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? UiText.T("Attack: click ground", "攻撃：地面をクリック") : UiText.T("Attack (pick ground)", "攻撃（地点を選ぶ）")))
                 awaitingGround = true;
             y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Retreat"))
-                Send(PolicyKind.Retreat, ArmyScope(selection), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, "Retreat Army " + selection.Id);
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Retreat", "撤退")))
+                Send(PolicyKind.Retreat, ArmyScope(selection), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Retreat Army ", "撤退 軍団 ") + selection.Id);
             y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Defend own core"))
-                Send(PolicyKind.Defend, ArmyScope(selection), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, "Defend Army " + selection.Id + " -> Core " + ownCoreId);
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Defend own core", "自コアを守る")))
+                Send(PolicyKind.Defend, ArmyScope(selection), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, UiText.T("Defend Army ", "防衛 軍団 ") + selection.Id + UiText.T(" -> Core ", " → コア ") + ownCoreId);
             y += ButtonHeight + 4f;
 
             GUI.enabled = selection.Kind == SelectionKind.Outpost;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Allow abandon outpost"))
-                Send(PolicyKind.AllowAbandon, new ScopeKey(factionId, ScopeKind.Outpost, selection.Id), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, "Allow abandon Outpost " + selection.Id);
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Allow abandon outpost", "拠点の放棄を許す")))
+                Send(PolicyKind.AllowAbandon, new ScopeKey(factionId, ScopeKind.Outpost, selection.Id), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Allow abandon Outpost ", "放棄を許可 拠点 ") + selection.Id);
             y += ButtonHeight + 4f;
 
             GUI.enabled = true;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Keep reserve 30%"))
-                Send(PolicyKind.MaintainReserve, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 300, "Keep reserve 30% (all)");
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Keep reserve 30%", "予備を30%保つ")))
+                Send(PolicyKind.MaintainReserve, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 300, UiText.T("Keep reserve 30% (all)", "予備を30%保つ（全軍）"));
             y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Return to auto"))
-                Send(PolicyKind.ReturnToAuto, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, "Return to auto (all)");
+            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Return to auto", "お任せに戻す")))
+                Send(PolicyKind.ReturnToAuto, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Return to auto (all)", "お任せに戻す（全軍）"));
             y += ButtonHeight + 4f;
-            if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), "Cancel"))
+            if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Cancel", "取消")))
                 awaitingGround = false;
 
-            DrawSupply();
-            DrawDelaySelector();
-            if (opponent != null) DrawOpponentSelector();
-            if (externalAi != null) DrawExternalAi();
+            if (!setupOpen) DrawSupply();
+            if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup (close)", "試合の設定（閉じる）") : UiText.T("Match setup (delay, opponent, map, outside AI)", "試合の設定（遅延・相手・マップ・外部AI）"))) setupOpen = !setupOpen;
+            // Shows the language it switches to, in that language.
+            if (GUI.Button(LanguageButtonRect(), UiText.Japanese ? "English" : "日本語"))
+            {
+                UiText.Japanese = !UiText.Japanese;
+                if (LanguageChanged != null) LanguageChanged(UiText.Japanese);
+            }
 
             var statusRect = StatusRect();
-            GUI.Box(statusRect, "Command status (7 states)");
+            GUI.Box(statusRect, UiText.T("Command status (7 states)", "命令の状態（7段階）"));
             var frame = view.LatestFrame;
             if (frame != null)
             {
@@ -168,18 +175,19 @@ namespace Rts.Presentation
                     string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
                     string wait = "";
                     // While interpreting there is no apply tick yet, so show how long the reply has been awaited.
-                    if (c.Status == CommandStatus.Interpreting) wait = " waiting for the reply (" + Seconds(frame.Tick - c.AcceptedTick) + ")";
-                    else if (c.Status == CommandStatus.Pending) wait = " applies in " + Seconds(c.ApplyTick - frame.Tick);
+                    if (c.Status == CommandStatus.Interpreting) wait = UiText.T(" waiting for the reply (", " 返答待ち（") + Seconds(frame.Tick - c.AcceptedTick) + ")";
+                    else if (c.Status == CommandStatus.Pending) wait = UiText.T(" applies in ", " 適用まで ") + Seconds(c.ApplyTick - frame.Tick);
                     GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
                         "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
                 }
             }
 
             var logRect = LogRect();
-            GUI.Box(logRect, "Command log");
+            GUI.Box(logRect, UiText.T("Command log", "命令の記録"));
             for (int i = 0; i < log.Count; i++)
                 GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * 20f, logRect.width - 12f, 20f), log[i]);
 
+            if (setupOpen) DrawSetup();
             DrawResult();
         }
 
@@ -195,7 +203,7 @@ namespace Rts.Presentation
             var small = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter, wordWrap = true };
             GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, big);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, small);
-            if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), "Play again"))
+            if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
                 matchRestart.RestartMatch();
         }
 
@@ -208,67 +216,85 @@ namespace Rts.Presentation
         {
             var frame = view.LatestFrame;
             var rect = SupplyRect();
-            GUI.Box(rect, "Supply / reinforcements");
+            GUI.Box(rect, UiText.T("Supply / reinforcements", "兵站・増援"));
             if (frame == null) return;
-            GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), "Units " + frame.AliveCount + " / " + frame.FactionCap);
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), UiText.T("Units ", "兵 ") + frame.AliveCount + " / " + frame.FactionCap);
             int row = 1;
             foreach (var r in frame.Reinforcements)
             {
                 if (row > 2) break;
                 GUI.Label(new Rect(rect.x + 6f, rect.y + 22f + row * 22f, rect.width - 12f, 20f),
-                    r.Kind + " " + r.Id + ": next in " + Seconds(r.TicksRemaining));
+                    r.Kind + " " + r.Id + UiText.T(": next in ", "：次まで ") + Seconds(r.TicksRemaining));
                 row++;
             }
         }
 
-        private void DrawExternalAi()
+        private void DrawSetup()
         {
-            var rect = ExternalAiRect();
-            GUI.Box(rect, "Outside AI (optional)");
-            if (!externalAi.KeyAvailable)
+            var rect = SetupRect();
+            GUI.Box(rect, UiText.T("Match setup (every change restarts the match)", "試合の設定（変えると試合が最初から始まります）"));
+            float x = rect.x + 8f, y = rect.y + 24f, labelWidth = 96f, cell = (rect.width - 16f - labelWidth) / 4f;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
+            if (delayControl != null)
             {
-                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 52f),
-                    "Off. No key is set on this PC, so it cannot be turned on.");
-                return;
+                int[] options = { 0, 60, 200, 400 };
+                string[] names = { "0s", "3s", "10s", "20s" };
+                for (int i = 0; i < options.Length; i++)
+                {
+                    bool on = delayControl.DelayTicks == options[i];
+                    if (GUI.Toggle(new Rect(x + labelWidth + i * cell, y, cell - 4f, 24f), on, names[i], GUI.skin.button) && !on) delayControl.DelayTicks = options[i];
+                }
             }
-            bool on = externalAi.Enabled;
-            bool now = GUI.Toggle(new Rect(rect.x + 6f, rect.y + 20f, rect.width - 12f, 22f), on, on ? "On - asking an outside AI" : "Off - ask an outside AI", GUI.skin.button);
-            if (now != on) externalAi.Enabled = now; // this restarts the match, like the reply delay above
-            var text = new Rect(rect.x + 6f, rect.y + 44f, rect.width - 12f, 32f);
-            // The notice is on screen next to the switch, not behind it: turning it on sends the faction's view out.
-            GUI.Label(text, on ? externalAi.Status.Replace("\n", "   ")
-                : "Turning it on restarts the match and sends what your side can see (positions, counts, outposts) to an outside service.");
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent", "相手の方針"));
+            if (opponent != null)
+            {
+                var choices = opponent.Choices;
+                float width = (rect.width - 16f - labelWidth) / choices.Length;
+                for (int i = 0; i < choices.Length; i++)
+                {
+                    bool on = opponent.Current == choices[i];
+                    if (GUI.Toggle(new Rect(x + labelWidth + i * width, y, width - 4f, 24f), on, PresetLabel(choices[i]), GUI.skin.button) && !on) opponent.Current = choices[i];
+                }
+            }
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Map", "マップ"));
+            if (mapChoice != null)
+            {
+                bool economyMap = mapChoice.EconomyMap;
+                float half = (rect.width - 16f - labelWidth) / 2f;
+                bool now = GUI.Toggle(new Rect(x + labelWidth, y, half - 4f, 24f), economyMap, economyMap ? UiText.T("Random #", "ランダム #") + mapChoice.Seed + UiText.T(" (economy)", "（内政あり）") : UiText.T("Classic two roads", "旧来の二本道"), GUI.skin.button);
+                if (now != economyMap) mapChoice.EconomyMap = now;
+                GUI.enabled = economyMap;
+                if (GUI.Button(new Rect(x + labelWidth + half, y, half - 4f, 24f), UiText.T("New random map", "新しいランダムマップ"))) mapChoice.NewMap();
+                GUI.enabled = true;
+            }
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Outside AI", "外部AI"));
+            if (externalAi == null) return;
+            var line = new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f);
+            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return; }
+            bool ai = externalAi.Enabled;
+            bool aiNow = GUI.Toggle(line, ai, ai ? UiText.T("On - asking an outside AI", "入 - 外部AIに聞いています") : UiText.T("Off - ask an outside AI", "切 - 外部AIに聞く"), GUI.skin.button);
+            if (aiNow != ai) externalAi.Enabled = aiNow;
+            // The notice stays next to the switch: turning it on sends what the faction can see to an outside service.
+            GUI.Label(new Rect(x, y + 26f, rect.width - 16f, 34f), ai ? externalAi.Status.Replace("\n", "   ")
+                : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"));
         }
 
-        private void DrawDelaySelector()
+        private static string PresetLabel(string name)
         {
-            var rect = DelayRect();
-            GUI.Box(rect, "AI reply delay (verification)");
-            if (delayControl == null) return;
-            int[] options = { 0, 60, 200, 400 };
-            string[] names = { "0s", "3s", "10s", "20s" };
-            for (int i = 0; i < options.Length; i++)
+            switch (name)
             {
-                bool on = delayControl.DelayTicks == options[i];
-                var buttonRect = new Rect(rect.x + 6f + i * 60f, rect.y + 24f, 56f, 26f);
-                if (GUI.Toggle(buttonRect, on, names[i], GUI.skin.button) && !on) delayControl.DelayTicks = options[i];
-            }
-        }
-
-        // Picking a different doctrine restarts the match immediately, like the reply delay and outside AI above:
-        // this is the "choose an opponent and start" screen, folded into the panel that is already on screen from
-        // tick 0 rather than a separate pre-game screen, so it works the same way whether it is the first match or
-        // the fifth "Play again".
-        private void DrawOpponentSelector()
-        {
-            var rect = OpponentRect();
-            GUI.Box(rect, "Opponent (restarts the match)");
-            var choices = opponent.Choices;
-            for (int i = 0; i < choices.Length; i++)
-            {
-                bool on = opponent.Current == choices[i];
-                var buttonRect = new Rect(rect.x + 6f, rect.y + 24f + i * 28f, rect.width - 12f, 24f);
-                if (GUI.Toggle(buttonRect, on, choices[i], GUI.skin.button) && !on) opponent.Current = choices[i];
+                case "none": return UiText.T("none", "なし");
+                case "maintain": return UiText.T("maintain", "維持型");
+                case "concentrate": return UiText.T("concentrate", "集中型");
+                case "maintain-legacy": return UiText.T("maintain-legacy", "維持型（旧）");
+                default: return name;
             }
         }
 

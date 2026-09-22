@@ -34,6 +34,20 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void TheOutcomeFollowsTheOnScreenLanguage()
+        {
+            try
+            {
+                UiText.Japanese = true;
+                Assert.That(MatchOutcome.Describe(Ended(1), 1, 5428).Value.Headline, Is.EqualTo("勝利"));
+                Assert.That(MatchOutcome.Describe(Ended(2), 1, 5428).Value.Headline, Is.EqualTo("敗北"));
+                Assert.That(MatchOutcome.Describe(Ended(1), 1, 5428).Value.Detail, Does.Contain("4:31"));
+            }
+            finally { UiText.Japanese = false; }
+            Assert.That(MatchOutcome.Describe(Ended(1), 1, 5428).Value.Headline, Is.EqualTo("Victory"));
+        }
+
+        [Test]
         public void TheClockIsMinutesAndSecondsOfTheScenarioTickRate()
         {
             Assert.That(MatchOutcome.Clock(5428), Is.EqualTo("4:31"));
