@@ -12,11 +12,18 @@ namespace Rts.Simulation
         /// <summary>The automatic economy builds when fewer than this many places are left under the cap.</summary>
         private const int HouseMargin = 3;
 
+        /// <summary>V3-5 (32 #7, #10): how much the ages lift the population ceiling - the second and the third each add their bonus.</summary>
+        private int AgeRoom(int age)
+        {
+            var rules = world.Config.Economy;
+            return (age >= 2 ? rules.Age2PopulationBonus : 0) + (age >= 3 ? rules.Age3PopulationBonus : 0);
+        }
+
         private int PopCapFor(uint faction)
         {
             var rules = world.Config.Economy;
             if (!AgesOn) return rules.PopulationCap;
-            int ceiling = rules.PopulationCap + (world.Economies[faction - 1].Age >= 2 ? rules.Age2PopulationBonus : 0);
+            int ceiling = rules.PopulationCap + AgeRoom(world.Economies[faction - 1].Age);
             int houses = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -37,7 +44,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int cap = PopCapFor(faction);
-            int ceiling = rules.PopulationCap + (economy.Age >= 2 ? rules.Age2PopulationBonus : 0);
+            int ceiling = rules.PopulationCap + AgeRoom(economy.Age);
             if (cap >= ceiling || economy.Wood < rules.HouseWoodCost) return;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (population + HouseMargin < cap) return;

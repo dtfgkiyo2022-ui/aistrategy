@@ -80,14 +80,16 @@ namespace Rts.Simulation
             var (food, wood, _) = AdvancePrice(e);
             if (e.Food < food || e.Wood < wood) return false;
             if (e.Civ == CivKind.Primitive) return civ == CivKind.Agrarian || civ == CivKind.Metallurgy;
-            return e.Age == 1 && civ == e.Civ;
+            // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
+            return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
 
         private (int food, int wood, int ticks) AdvancePrice(FactionEconomy e)
         {
             var rules = world.Config.Economy;
-            return e.Civ == CivKind.Primitive ? (rules.AdvanceFoodCost, rules.AdvanceWoodCost, rules.AdvanceTicks)
-                : (rules.Age2FoodCost, rules.Age2WoodCost, rules.Age2Ticks);
+            if (e.Civ == CivKind.Primitive) return (rules.AdvanceFoodCost, rules.AdvanceWoodCost, rules.AdvanceTicks);
+            return e.Age == 1 ? (rules.Age2FoodCost, rules.Age2WoodCost, rules.Age2Ticks)
+                : (rules.Age3FoodCost, rules.Age3WoodCost, rules.Age3Ticks);
         }
 
         private void StartAdvance(uint faction, CivKind civ)
@@ -109,7 +111,7 @@ namespace Rts.Simulation
                 ref var e = ref world.Economies[f];
                 if (e.AdvanceRemaining == 0) continue;
                 if (--e.AdvanceRemaining > 0) continue;
-                e.Age = e.Civ == CivKind.Primitive ? (byte)1 : (byte)2;
+                e.Age = checked((byte)(e.Age + 1));
                 e.Civ = e.AdvancingTo;
                 e.AdvancingTo = CivKind.Primitive;
             }
@@ -133,12 +135,12 @@ namespace Rts.Simulation
         {
             if (!AgesOn) return false;
             var e = world.Economies[faction - 1];
-            if (e.AdvanceRemaining > 0 || e.Age >= 2) return false;
-            // The second age waits for the civilisation's own line, and for the stock to be half way there (32.8).
+            if (e.AdvanceRemaining > 0 || e.Age >= 3) return false;
+            // The second and third ages wait for the civilisation's own line, and for the stock to be half way there (32.8).
             if (e.Civ != CivKind.Primitive)
             {
-                var rules = world.Config.Economy;
-                if (!CivLineStarted(faction) || 2 * (e.Food + e.Wood) < rules.Age2FoodCost + rules.Age2WoodCost) return false;
+                var (food, wood, _) = AdvancePrice(e);
+                if (!CivLineStarted(faction) || 2 * (e.Food + e.Wood) < food + wood) return false;
             }
             bool barracks = false;
             for (int i = 0; i < world.BuildingCount; i++)

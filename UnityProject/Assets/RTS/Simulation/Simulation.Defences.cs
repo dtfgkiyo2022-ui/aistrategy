@@ -54,6 +54,13 @@ namespace Rts.Simulation
             return false;
         }
 
+        /// <summary>What one tower shot takes off: its damage, heavier with masonry (V3-5, 32 #10).</summary>
+        private int TowerShot(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return rules.TowerDamage + (HasTech(faction, TechKind.Masonry) ? rules.MasonryTowerDamage : 0);
+        }
+
         /// <summary>Attack phase, before damage is applied: every finished tower whose clock is up shoots once.</summary>
         private void TowersShoot()
         {
@@ -75,7 +82,7 @@ namespace Rts.Simulation
                 }
                 if (best >= 0)
                 {
-                    soldierDamage[best] = checked(soldierDamage[best] + rules.TowerDamage);
+                    soldierDamage[best] = checked(soldierDamage[best] + TowerShot(b.FactionId));
                     b.Timer = rules.TowerIntervalTicks - 1;
                     b.Shots++;
                     continue;
@@ -88,7 +95,7 @@ namespace Rts.Simulation
                     if (best < 0 || d < bestDistance) { best = v; bestDistance = d; }
                 }
                 if (best < 0) continue;
-                villagerDamage[best] = checked(villagerDamage[best] + rules.TowerDamage);
+                villagerDamage[best] = checked(villagerDamage[best] + TowerShot(b.FactionId));
                 b.Timer = rules.TowerIntervalTicks - 1;
                 b.Shots++;
             }
