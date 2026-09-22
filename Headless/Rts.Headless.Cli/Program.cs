@@ -125,7 +125,7 @@ internal static class Program
     {
         try
         {
-            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze, grace.");
+            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze, grace, genmap.");
             var options=new Dictionary<string,string>(StringComparer.Ordinal);
             for(int i=1;i<args.Length;i++)
             {
@@ -134,9 +134,10 @@ internal static class Program
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset","--trace-out","--trace-every"}, "snapshot"=>new[]{"--scenario","--out","--ticks","--every","--faction","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--ai-profile","--trigger-tick","--change-reserve","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--order2-kind","--order2-scope","--order2-scope-id","--order2-goal","--order2-goal-id","--order2-reserve-permille","--min-r","--max-r","--r-step","--input-delay","--rate-bands"}, "jev-match"=>new[]{"--scenario","--ticks","--faction","--out","--schedule","--heartbeat","--min-confidence-permille","--repeat-after","--key-env","--timeout-seconds","--cycle-sleep-ms"},"bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs","--alloc-types"},"record"=>new[]{"--scenario","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset","--trace-out","--trace-every"}, "snapshot"=>new[]{"--scenario","--out","--ticks","--every","--faction","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--ai-profile","--trigger-tick","--change-reserve","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--order2-kind","--order2-scope","--order2-scope-id","--order2-goal","--order2-goal-id","--order2-reserve-permille","--min-r","--max-r","--r-step","--input-delay","--rate-bands"}, "jev-match"=>new[]{"--scenario","--ticks","--faction","--out","--schedule","--heartbeat","--min-confidence-permille","--repeat-after","--key-env","--timeout-seconds","--cycle-sleep-ms"},"bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs","--alloc-types"},"genmap"=>new[]{"--seed","--out"},"record"=>new[]{"--scenario","--map-seed","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             var build=BuildInfo.Current();
+            if(args[0]=="genmap") return GenMapCommand.Run(options);
             if(args[0]=="bench") return BenchmarkCommand.Run(options, build);
             if(args[0]=="analyze") return AnalyzeCommand.Run(options, build);
             if(args[0]=="snapshot") return SnapshotCommand.Run(options);
@@ -145,7 +146,9 @@ internal static class Program
             if(args[0]=="intervene") return InterventionCommand.Run(options, build);
             if(args[0]=="record")
             {
-                var scenario=JsonInput.Scenario(Required("--scenario"));
+                if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed")) throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
+                // A generated map is recorded like any other scenario: the replay holds the map itself, not the seed.
+                var scenario=options.TryGetValue("--map-seed",out var mapSeed)?MapGenerator.Generate(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture)):JsonInput.Scenario(Required("--scenario"));
                 var inputs=options.TryGetValue("--inputs",out var path)?JsonSerializer.Deserialize<ScheduledInput[]>(File.ReadAllText(path),JsonInput.Options) ?? throw new InvalidDataException("Null inputs."):Array.Empty<ScheduledInput>();
                 if (options.ContainsKey("--enemy-preset") && options.ContainsKey("--east-preset")) throw new InvalidDataException("--enemy-preset is an alias for --east-preset; use only one.");
                 string eastPreset = options.TryGetValue("--east-preset", out var east) ? east : options.GetValueOrDefault("--enemy-preset");

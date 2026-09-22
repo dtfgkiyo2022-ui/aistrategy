@@ -189,7 +189,21 @@ namespace Rts.Simulation
                     OccupationThreatMemoryTicks = r.OccupationThreatMemoryTicks,
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
-                Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers) };
+                Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
+                ResourceNodes = Copy(s.ResourceNodes), Economy = new EconomyRules { Enabled = s.Economy != null && s.Economy.Enabled } };
+            Require(s.Economy != null, "Missing economy rules.");
+            Require(!c.Economy.Enabled, "The economy is not implemented yet (technical-design-v3 8, PR 2).");
+            Array.Sort(c.ResourceNodes, (a, b) => a.Id.CompareTo(b.Id));
+            var nodeCells = new System.Collections.Generic.HashSet<long>();
+            for (int i = 0; i < c.ResourceNodes.Length; i++)
+            {
+                var n = c.ResourceNodes[i];
+                Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood) && n.Amount > 0, "Invalid resource node.");
+                ValidatePoint(n.Position, c.Map);
+                // One node per cell; the key is the cell, not the point, so two points in one cell are rejected too.
+                long cell = (n.Position.Z.Raw / 65536 / m.CellSizeMeters) * m.WidthCells + n.Position.X.Raw / 65536 / m.CellSizeMeters;
+                Require(nodeCells.Add(cell), "Two resource nodes share a cell.");
+            }
             // Definitions may arrive in any enumeration order; IDs are explicit and contiguous.
             Array.Sort(c.Factions, (a, b) => a.Id.CompareTo(b.Id));
             Array.Sort(c.Cores, (a, b) => a.Id.CompareTo(b.Id));

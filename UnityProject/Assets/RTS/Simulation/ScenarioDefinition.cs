@@ -19,6 +19,24 @@ namespace Rts.Simulation
         public OutpostDefinition[] Outposts = Array.Empty<OutpostDefinition>();
         public ArmyDefinition[] Armies = Array.Empty<ArmyDefinition>();
         public SoldierDefinition[] Soldiers = Array.Empty<SoldierDefinition>();
+        /// <summary>Ver.3: resource points. They do not block movement. Empty in every Ver.1 scenario.</summary>
+        public ResourceNodeDefinition[] ResourceNodes = Array.Empty<ResourceNodeDefinition>();
+        /// <summary>Ver.3: economy rules. Disabled in every Ver.1 scenario, so nothing new runs there.</summary>
+        public EconomyRules Economy = new EconomyRules();
+    }
+
+    public struct ResourceNodeDefinition
+    {
+        public uint Id;
+        public ResourceKind Kind;
+        public SimPoint Position;
+        public int Amount;
+    }
+
+    public sealed class EconomyRules
+    {
+        /// <summary>V3-1 PR1 only places resources; the simulation does not run an economy yet, so this must stay false.</summary>
+        public bool Enabled;
     }
 
     public sealed class MapDefinition
