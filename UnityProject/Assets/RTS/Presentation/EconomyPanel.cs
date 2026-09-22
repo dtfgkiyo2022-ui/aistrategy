@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -138,22 +138,26 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : e.BuildingSizeCells;
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
+                : kind == BuildingKind.House || kind == BuildingKind.DropSite ? 2 : e.BuildingSizeCells;
         }
 
         private int WoodOf(BuildingKind kind)
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : e.BarracksWoodCost;
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
+                : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
             => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
-                : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : UiText.T("Barracks", "兵舎");
+                : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.House ? UiText.T("House", "住居")
+                : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
-            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : BuildingKind.Barracks;
+            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm
+                : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
@@ -268,10 +272,21 @@ namespace Rts.Presentation
         private void DrawBuild(EconomyView economy, float x, float y, float w, float half, float right)
         {
             ModeButton(new Rect(x, y, half, 22f), Mode.Barracks, UiText.T("Barracks (", "兵舎（木材 ") + economy.BarracksWoodCost + UiText.T(" wood)", "）"));
-            var barracks = OwnBuilding(economy, BuildingKind.Barracks);
-            if (barracks.HasValue && !barracks.Value.Complete)
-                GUI.Label(new Rect(right, y, half, 22f), UiText.T("Barracks: building ", "兵舎：建設中 ") + Percent(barracks.Value));
+            if (economy.Ages)
+                ModeButton(new Rect(right, y, half, 22f), Mode.House, UiText.T("House +pop (", "住居・人口+（木材 ") + economy.HouseWoodCost + UiText.T(" wood)", "）"));
+            else
+            {
+                var barracks = OwnBuilding(economy, BuildingKind.Barracks);
+                if (barracks.HasValue && !barracks.Value.Complete)
+                    GUI.Label(new Rect(right, y, half, 22f), UiText.T("Barracks: building ", "兵舎：建設中 ") + Percent(barracks.Value));
+            }
             y += 26f;
+            if (economy.Ages)
+            {
+                ModeButton(new Rect(x, y, half, 22f), Mode.DropSite, UiText.T("Drop-off (", "資源置き場（木材 ") + economy.DropSiteWoodCost + UiText.T(" wood)", "）"));
+                GUI.Label(new Rect(right, y, half, 22f), UiText.T("Villagers unload at the nearest", "村人は近い方に納める"));
+                y += 26f;
+            }
             if (!economy.Industry) return;
             // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
             if (!economy.Ages || economy.Civ == CivKind.Metallurgy)

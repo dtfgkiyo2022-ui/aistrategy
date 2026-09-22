@@ -304,13 +304,17 @@ namespace Rts.Contracts
         public int FarmSizeCells { get; }
         /// <summary>V3-5: a scout at the barracks (maps with ages only; 0 otherwise).</summary>
         public int ScoutFoodCost { get; }
+        /// <summary>V3-5: a house (maps with ages only; 0 otherwise).</summary>
+        public int HouseWoodCost { get; }
+        /// <summary>V3-5: a resource drop-off (maps with ages only; 0 otherwise).</summary>
+        public int DropSiteWoodCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -320,8 +324,10 @@ namespace Rts.Contracts
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
             int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
             EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost,
-            int farmWoodCost, int farmSizeCells, int scoutFoodCost)
+            int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost)
         {
+            DropSiteWoodCost = dropSiteWoodCost;
+            HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;
             FarmWoodCost = farmWoodCost; FarmSizeCells = farmSizeCells;
             Ages = ages; Civ = civ; AdvancingTo = advancingTo; AdvanceRemaining = advanceRemaining;

@@ -51,13 +51,13 @@ namespace Rts.Simulation
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held));
             }
-            return new EconomyView(economy.Food, economy.Wood, population, rules.PopulationCap, economy.Queued, economy.TrainRemaining,
+            return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, rules.AdvanceFoodCost, rules.AdvanceWoodCost,
-                rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0);
+                rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

@@ -108,6 +108,12 @@ namespace Rts.Simulation
         public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
         /// <summary>V3-5 (32): scouts trained at a barracks on a map with ages.</summary>
         public int ScoutFoodCost = 40, ScoutWoodCost = 0, ScoutTrainTicks = 200;
+        /// <summary>V3-5 (32 #2): the population cap starts at BasePopulation and each finished house adds HousePopulation,
+        /// never over PopulationCap.</summary>
+        public int BasePopulation = 30, HousePopulation = 5;
+        public int HouseSizeCells = 2, HouseWoodCost = 30, HouseWork = 100, HouseHp = 250;
+        /// <summary>V3-5 (32 #3): a drop-off where villagers leave what they carry instead of walking to the core.</summary>
+        public int DropSiteSizeCells = 2, DropSiteWoodCost = 50, DropSiteWork = 120, DropSiteHp = 300;
     }
 
     public sealed class MapDefinition

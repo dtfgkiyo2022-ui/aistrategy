@@ -29,12 +29,15 @@ namespace Rts.Simulation
                 var plan = PlanOf(faction);
                 DecideAdvance(faction);
                 if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), rules.PopulationCap, rules.QueueLimit))
+                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
                 {
                     economy.Food = checked(economy.Food - rules.VillagerFoodCost);
                     if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
                     economy.Queued++;
                 }
+                ResumeUnbuilt(faction);
+                DecideHouse(faction);
+                DecideDropSite(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
             }
@@ -52,7 +55,7 @@ namespace Rts.Simulation
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
-                else if (v.Task == VillagerTask.ToDropOff) goal = OwnCore(v.FactionId).Definition.Position;
+                else if (v.Task == VillagerTask.ToDropOff) goal = DropOff(v).point;
                 else if (v.Task == VillagerTask.ToBuild) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToPickup) goal = world.Map.Center(world.Buildings[v.HaulFrom - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToDeliver) goal = world.Map.Center(world.Buildings[v.HaulTo - 1].WorkCell);
@@ -103,8 +106,8 @@ namespace Rts.Simulation
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
                 {
-                    var core = OwnCore(v.FactionId);
-                    if (!InRange(v.Position, core.Definition.Position, world.Config.Rules.CoreRadius + rules.DropOffMargin)) continue;
+                    var drop = DropOff(v);
+                    if (!InRange(v.Position, drop.point, drop.reach)) continue;
                     AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
                     if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
@@ -121,7 +124,7 @@ namespace Rts.Simulation
                 if (economy.TrainRemaining > 0) continue;
                 uint faction = (uint)f + 1;
                 // A full population holds the finished villager at the door until there is room.
-                if (LivingVillagers(faction) + LivingSoldiers(faction) >= rules.PopulationCap) continue;
+                if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
                 SpawnVillager(faction);
                 economy.Queued--;
                 economy.TrainRemaining = economy.Queued > 0 ? rules.VillagerTrainTicks : 0;

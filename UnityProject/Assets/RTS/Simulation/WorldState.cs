@@ -340,7 +340,10 @@ namespace Rts.Simulation
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                 && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
-                && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0), "Invalid age rules.");
+                && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0
+                && e.BasePopulation > 0 && e.HousePopulation >= 0 && e.HouseSizeCells > 0 && e.HouseSizeCells <= 8
+                && e.HouseWoodCost >= 0 && e.HouseWork > 0 && e.HouseHp > 0
+                && e.DropSiteSizeCells > 0 && e.DropSiteSizeCells <= 8 && e.DropSiteWoodCost >= 0 && e.DropSiteWork > 0 && e.DropSiteHp > 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -477,7 +480,10 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks };
+                ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks,
+                BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
+                HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
+                DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(
