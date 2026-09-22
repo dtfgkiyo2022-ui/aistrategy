@@ -27,7 +27,13 @@ namespace Rts.Simulation
         private const int MaxBlockedPermille = 200;
         private const int ObstacleAttempts = 64, PlacementDraws = 100000;
 
-        public static ScenarioDefinition Generate(ulong seed)
+        public static ScenarioDefinition Generate(ulong seed) => Generate(seed, false);
+
+        /// <summary>
+        /// With <paramref name="economy"/>, the same ground (no extra draws) plus the V3-1 economy: rules enabled and three
+        /// villagers behind each core. Soldiers stay the week-two set until production exists (V3-1 PR3).
+        /// </summary>
+        public static ScenarioDefinition Generate(ulong seed, bool economy)
         {
             var rng = new SplitMix64(seed);
             // The Ver.1 base keeps unit parameters, rules, factions and the four armies per side that the automatic AI
@@ -151,6 +157,21 @@ namespace Rts.Simulation
                             Position = Point(baseX + toward * (i % 4), baseZ + i / 4) };
                         id++;
                     }
+            }
+            if (economy)
+            {
+                s.ScenarioId = "gen1e-" + seed.ToString(CultureInfo.InvariantCulture);
+                s.Economy = new EconomyRules { Enabled = true };
+                s.Villagers = new VillagerDefinition[6];
+                for (uint f = 1; f <= 2; f++)
+                {
+                    int cx = f == 1 ? wx : ex, cz = f == 1 ? wz : ez, away = f == 1 ? -1 : 1;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        uint vid = (f - 1) * 3 + (uint)k + 1;
+                        s.Villagers[vid - 1] = new VillagerDefinition { Id = vid, FactionId = f, Position = Point(cx + away * 5, cz - 2 + k * 2) };
+                    }
+                }
             }
             return s;
         }

@@ -51,13 +51,14 @@ namespace Rts.Simulation
                 phaseOrdinal = 0;
                 commandEvents.Clear();
                 Phase("Commands", () => { ApplyInputs(inputs); ApplyPendingCommands(); ComposePolicies(); });
-                Phase("AI", DecideArmies);
+                Phase("AI", () => { DecideArmies(); DecideEconomy(); });
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", GenerateIntents);
-                Phase("Movement", Move);
+                Phase("Movement", () => { Move(); MoveVillagers(); });
                 Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveDeaths(); });
-                Phase("ObjectivesReinforcements", () => { CaptureOutposts(); Reinforce(); });
+                // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
+                Phase("ObjectivesReinforcements", () => { EconomyStep(); CaptureOutposts(); if (!EconomyOn) Reinforce(); });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
                 Phase("ObjectivesReinforcements", ResolveVictory);

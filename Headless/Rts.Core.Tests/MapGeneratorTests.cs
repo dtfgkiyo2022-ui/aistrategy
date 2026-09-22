@@ -98,14 +98,6 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AnEnabledEconomyIsRejectedUntilTheSimulationRunsOne()
-        {
-            var s = MapGenerator.Generate(5);
-            s.Economy.Enabled = true;
-            Assert.Throws<System.ArgumentException>(() => new Rts.Simulation.Simulation(s));
-        }
-
-        [Test]
         public void TwoResourcesInOneCellAreRejected()
         {
             var s = MapGenerator.Generate(5);
