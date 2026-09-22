@@ -17,6 +17,8 @@ namespace Rts.Contracts
         public int AliveCount { get; }
         public int FactionCap { get; }
         public IReadOnlyList<ReinforcementView> Reinforcements { get; }
+        /// <summary>Ver.3: stock, own villagers and buildings, seen enemy ones, resources. Null without an economy.</summary>
+        public EconomyView Economy { get; }
 
         public FactionFrame(
             long tick,
@@ -29,8 +31,10 @@ namespace Rts.Contracts
             MatchResult result,
             int aliveCount = 0,
             int factionCap = 0,
-            IReadOnlyList<ReinforcementView> reinforcements = null)
+            IReadOnlyList<ReinforcementView> reinforcements = null,
+            EconomyView economy = null)
         {
+            Economy = economy;
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);

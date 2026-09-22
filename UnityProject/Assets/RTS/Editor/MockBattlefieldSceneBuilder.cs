@@ -278,6 +278,56 @@ namespace Rts.Editor
             EditorApplication.EnterPlaymode();
         }
 
+        // Batch entry (Ver.3 economy screen, V3-1 PR5): plays the live scene on a random economy map, sends a few economy
+        // operations the way the panel does, reports what the frame hands the display, and photographs the ground at
+        // three points. IMGUI (the panel itself) does not show in batch photographs; the 3D economy visuals do.
+        public static void PlayEconomy()
+        {
+            Directory.CreateDirectory("D:/rts-verify/v3/shots");
+            EditorSceneManager.OpenScene(LiveScenePath);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload | EnterPlayModeOptions.DisableSceneReload;
+            int frames = 0, shot = 0;
+            long[] marks = { 60, 1500, 4000 };
+            LiveMatchHost host = null;
+            EditorApplication.playModeStateChanged += state =>
+            {
+                if (state == PlayModeStateChange.EnteredPlayMode)
+                {
+                    EditorApplication.update += () =>
+                    {
+                        frames++;
+                        if (frames == 5)
+                        {
+                            host = Object.FindFirstObjectByType<LiveMatchHost>();
+                            host.Paused = true;
+                            var gateway = (Rts.Contracts.IEconomyPort)typeof(LiveMatchHost).GetField("gateway", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(host);
+                            gateway.SubmitEconomy(Rts.Contracts.EconomyCommand.Train(1, 1, 0, UnitKind.Villager));
+                            Debug.Log("[Economy] map economy=" + host.EconomyMap + " seed=" + host.Seed);
+                        }
+                        if (host == null || shot >= marks.Length || frames < 6) return;
+                        // Step on one editor frame, photograph two frames later: the economy layer redraws in Update.
+                        if (frames % 3 == 0) { while (host.Tick < marks[shot] && !host.HasEnded) host.StepOneTick(); return; }
+                        if (frames % 3 != 2) return;
+                        var e = host.Frame.Economy;
+                        if (e == null) { Debug.Log("[Economy] no economy in the frame"); EditorApplication.ExitPlaymode(); shot = marks.Length; return; }
+                        int own = 0, enemy = 0, idle = 0;
+                        foreach (var v in e.Villagers) { if (v.IsOwn) own++; else enemy++; if (v.IsOwn && v.Activity == Rts.Contracts.VillagerActivity.Idle) idle++; }
+                        string buildings = "";
+                        foreach (var b in e.Buildings) buildings += " [#" + b.Id + " f" + b.FactionId + (b.Complete ? " done" : " " + b.Progress + "/" + b.Work) + " q" + b.Queued + "]";
+                        Debug.Log("[Economy] tick=" + host.Tick + " food=" + e.Food + " wood=" + e.Wood + " pop=" + e.Population + "/" + e.PopulationCap
+                            + " ownVillagers=" + own + " idle=" + idle + " enemyVillagersSeen=" + enemy + " resources=" + e.Resources.Count + " buildings:" + buildings
+                            + " auto=" + e.AutoEconomy + " layerChildren=" + Object.FindFirstObjectByType<EconomyLayer>().transform.childCount);
+                        Render("D:/rts-verify/v3/shots/economy-" + marks[shot] + ".png");
+                        shot++;
+                        if (shot == marks.Length) EditorApplication.ExitPlaymode();
+                    };
+                }
+                else if (state == PlayModeStateChange.EnteredEditMode && shot >= marks.Length) EditorApplication.Exit(0);
+            };
+            EditorApplication.EnterPlaymode();
+        }
+
         // Batch entry (opponent picker): switches the opponent's doctrine the way the panel's picker does, checks the
         // match restarts from tick 0 with the new doctrine, and switching to the doctrine already running does nothing.
         public static void PlayOpponentSwitch()

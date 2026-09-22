@@ -241,6 +241,37 @@ namespace Rts.Core.Tests
             Assert.That(rebuilt, "the automatic economy placed a new one");
         }
 
+        // PR5: the frame hands the display own things in full and enemy things only while seen, without their inner state.
+        [Test]
+        public void TheFrameShowsOwnEconomyInFullAndOnlySeenEnemyThingsBare()
+        {
+            Assert.That(new Battle(WeekTwoScenario.Create()).Capture(1).Economy, Is.Null, "no economy, no economy view");
+            var core = MapGenerator.Generate(1, true).Cores[0].Position;
+            var sim = new Battle(WithRaiders(MapGenerator.Generate(1, true), k => new SimPoint(core.X - Fix64.FromInt(8), core.Z + Fix64.FromInt(k % 4))));
+            bool sawEnemyVillager = false;
+            Run(sim, 1, 3000, t =>
+            {
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var frame = sim.Capture(faction);
+                    var e = frame.Economy;
+                    Assert.That(e, Is.Not.Null);
+                    Assert.That(e.Resources.All(r => r.Remaining > 0));
+                    foreach (var v in e.Villagers)
+                    {
+                        if (v.IsOwn) { Assert.That(v.Id, Is.GreaterThan(0u)); Assert.That(v.Hp, Is.GreaterThan(0)); continue; }
+                        sawEnemyVillager = true;
+                        Assert.That(v.Id, Is.EqualTo(0u), "an enemy villager has no id on screen");
+                        Assert.That(v.Hp, Is.EqualTo(0));
+                        Assert.That(v.Carry, Is.EqualTo(0));
+                    }
+                    foreach (var b in e.Buildings)
+                        if (b.FactionId != faction) { Assert.That(b.Hp, Is.EqualTo(0)); Assert.That(b.Queued, Is.EqualTo(0)); Assert.That(b.Progress, Is.EqualTo(0)); }
+                }
+            });
+            Assert.That(sawEnemyVillager, "the east raiders saw west villagers, so the test looked at enemy entries");
+        }
+
         [Test]
         public void WithoutAnEconomyNoSoldierEverTargetsAVillagerOrBuilding()
         {

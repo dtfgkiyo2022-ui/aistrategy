@@ -13,7 +13,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -48,6 +48,7 @@ namespace Rts.UnityHost
             {
                 if (value != 1 && value != 2 || value == viewFactionId) return;
                 viewFactionId = value;
+                if (economyPanel != null) economyPanel.Bind(gateway, viewFactionId, view, economyLayer, this);
                 view.ResetVisuals();
                 if (simulation == null) return;
                 view.Push(simulation.Capture(viewFactionId));
@@ -139,9 +140,31 @@ namespace Rts.UnityHost
 
         private void OnDestroy() { StopExternal(); }
 
+        // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
+        // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
+        [SerializeField] private bool economyMap = true;
+        private ulong mapSeed;
+        private EconomyLayer economyLayer;
+        private EconomyPanel economyPanel;
+
+        public bool EconomyMap
+        {
+            get { return economyMap; }
+            set { if (value == economyMap) return; economyMap = value; matchRestartRequested = true; }
+        }
+
+        public ulong Seed { get { return mapSeed; } }
+
+        public void NewMap() { mapSeed = FreshSeed(); matchRestartRequested = true; }
+
+        private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
+
         public void Begin()
         {
-            var scenario = ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
+            if (mapSeed == 0) mapSeed = FreshSeed();
+            // Stage-5 measurement tools scale the Ver.1 map; they always get it.
+            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.Generate(mapSeed, true)
+                : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
@@ -171,6 +194,16 @@ namespace Rts.UnityHost
             panel.ExternalAi = this;
             panel.MatchRestart = this;
             panel.Opponent = this;
+            // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
+            if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
+            if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
+            if (economyPanel == null) economyPanel = GetComponent<EconomyPanel>();
+            if (economyPanel == null) economyPanel = gameObject.AddComponent<EconomyPanel>();
+            economyLayer.Clear();
+            economyLayer.Bind(view);
+            economyPanel.Bind(gateway, viewFactionId, view, economyLayer, this);
+            panel.ExtraBlocksClick = economyPanel.BlocksClick;
+            panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
         }
 
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>

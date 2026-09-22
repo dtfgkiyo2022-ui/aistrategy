@@ -46,8 +46,13 @@ namespace Rts.Presentation
             view = battlefield;
         }
 
+        /// <summary>Another panel on the same screen (the economy panel): its area blocks clicks and it may take a ground click first.</summary>
+        public System.Func<Vector2, bool> ExtraBlocksClick;
+        public System.Func<Camera, Vector2, bool> ExtraGroundClick;
+
         public bool BlocksClick(Vector2 screenPoint)
         {
+            if (ExtraBlocksClick != null && ExtraBlocksClick(screenPoint)) return true;
             var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
             return ButtonsRect().Contains(guiPoint) || LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)
                 || SupplyRect().Contains(guiPoint) || DelayRect().Contains(guiPoint)
@@ -59,6 +64,7 @@ namespace Rts.Presentation
         // Left click while waiting for a ground target: returns true when the click was consumed.
         public bool TryConsumeGroundClick(Camera camera, Vector2 screenPoint)
         {
+            if (ExtraGroundClick != null && ExtraGroundClick(camera, screenPoint)) return true;
             if (!awaitingGround || port == null) return false;
             var ray = camera.ScreenPointToRay(screenPoint);
             var ground = new Plane(Vector3.up, Vector3.zero);

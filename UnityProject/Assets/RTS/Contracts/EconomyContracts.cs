@@ -67,6 +67,96 @@ namespace Rts.Contracts
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoEconomy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
     }
 
+    public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5 }
+
+    /// <summary>A villager on screen. Enemy villagers carry only a position (id 0, no HP or load), like enemy soldiers.</summary>
+    public readonly struct VillagerView
+    {
+        public uint Id { get; }
+        public bool IsOwn { get; }
+        public SimPoint Position { get; }
+        public VillagerActivity Activity { get; }
+        public ResourceKind CarryKind { get; }
+        public int Carry { get; }
+        public int Hp { get; }
+
+        public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp)
+        {
+            Id = id; IsOwn = isOwn; Position = position; Activity = activity; CarryKind = carryKind; Carry = carry; Hp = hp;
+        }
+    }
+
+    /// <summary>An own building, or an enemy building the faction can see now.</summary>
+    public readonly struct BuildingView
+    {
+        public uint Id { get; }
+        public uint FactionId { get; }
+        public BuildingKind Kind { get; }
+        public SimPoint Center { get; }
+        public int SizeMeters { get; }
+        public int Hp { get; }
+        public int MaxHp { get; }
+        public bool Complete { get; }
+        public int Progress { get; }
+        public int Work { get; }
+        public int Queued { get; }
+        public long TrainRemaining { get; }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining)
+        {
+            Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
+            Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
+        }
+    }
+
+    /// <summary>A resource point with something left. V3-1 shows every point to both sides (technical-design-v3 5.4).</summary>
+    public readonly struct ResourceView
+    {
+        public uint Id { get; }
+        public ResourceKind Kind { get; }
+        public SimPoint Position { get; }
+        public int Remaining { get; }
+
+        public ResourceView(uint id, ResourceKind kind, SimPoint position, int remaining)
+        {
+            Id = id; Kind = kind; Position = position; Remaining = remaining;
+        }
+    }
+
+    /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
+    public sealed class EconomyView
+    {
+        public int Food { get; }
+        public int Wood { get; }
+        public int Population { get; }
+        public int PopulationCap { get; }
+        public int VillagerQueued { get; }
+        public long VillagerTrainRemaining { get; }
+        public bool AutoEconomy { get; }
+        public int BuildingSizeCells { get; }
+        public int BarracksWoodCost { get; }
+        public int VillagerFoodCost { get; }
+        public int InfantryFoodCost { get; }
+        public int InfantryWoodCost { get; }
+        public IReadOnlyList<VillagerView> Villagers { get; }
+        public IReadOnlyList<BuildingView> Buildings { get; }
+        public IReadOnlyList<ResourceView> Resources { get; }
+
+        public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
+            bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
+            IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
+        {
+            Food = food; Wood = wood; Population = population; PopulationCap = populationCap;
+            VillagerQueued = villagerQueued; VillagerTrainRemaining = villagerTrainRemaining; AutoEconomy = autoEconomy;
+            BuildingSizeCells = buildingSizeCells; BarracksWoodCost = barracksWoodCost; VillagerFoodCost = villagerFoodCost;
+            InfantryFoodCost = infantryFoodCost; InfantryWoodCost = infantryWoodCost;
+            Villagers = ContractList.Copy(villagers ?? Array.Empty<VillagerView>());
+            Buildings = ContractList.Copy(buildings ?? Array.Empty<BuildingView>());
+            Resources = ContractList.Copy(resources ?? Array.Empty<ResourceView>());
+        }
+    }
+
     /// <summary>Where the display sends direct economy operations. Separate from ICommandPort so its implementers are untouched.</summary>
     public interface IEconomyPort
     {
