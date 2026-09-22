@@ -123,6 +123,7 @@ namespace Rts.Simulation
                     s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal, s.StepDistance);
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
+                PickRaidTarget(ref s);
 
             }
         }
@@ -154,6 +155,7 @@ namespace Rts.Simulation
         {
             Array.Clear(soldierDamage, 0, soldierDamage.Length);
             Array.Clear(coreDamage, 0, coreDamage.Length);
+            if (EconomyOn) ClearRaidDamage();
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
@@ -165,6 +167,7 @@ namespace Rts.Simulation
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
                     soldierDamage[target] = checked(soldierDamage[target] + s.Parameters.Damage);
                 }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding) { AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
@@ -179,6 +182,7 @@ namespace Rts.Simulation
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
             foreach (var f in world.Factions)
                 world.Cores[f.CoreId - 1].Hp = RemainingHp(world.Cores[f.CoreId - 1].Hp, coreDamage[f.CoreId - 1]);
+            if (EconomyOn) ApplyRaidDamage();
         }
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
@@ -194,6 +198,7 @@ namespace Rts.Simulation
                             world.Factions[f - 1].ContactIds[i] = 0;
                     world.Soldiers[i].Alive = false;
                 }
+            if (EconomyOn) ResolveRaidDeaths();
         }
 
         private void CaptureOutposts()

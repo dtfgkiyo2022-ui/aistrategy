@@ -180,6 +180,79 @@ namespace Rts.Core.Tests
                 Assert.That(Number(end, "Soldiers[" + i + "].ArmyId"), Is.InRange(1, 8), "soldier " + i);
         }
 
+        // PR3b: a soldier the tactics leave without a target strikes an enemy villager or building in range. The tactics
+        // do not chase them (they are not contacts), so the raiders are set down where the work already is.
+        private static ScenarioDefinition WithRaiders(ScenarioDefinition scenario, Func<int, SimPoint> place)
+        {
+            int k = 0;
+            for (int i = 0; i < scenario.Soldiers.Length; i++)
+                if (scenario.Soldiers[i].FactionId == 2 && scenario.Soldiers[i].ArmyId == 5) scenario.Soldiers[i].Position = place(k++);
+            return scenario;
+        }
+
+        [Test]
+        public void RaidersPassingTheCoreKillVillagers()
+        {
+            var core = MapGenerator.Generate(1, true).Cores[0].Position;
+            var sim = new Battle(WithRaiders(MapGenerator.Generate(1, true), k => new SimPoint(core.X - Fix64.FromInt(8), core.Z + Fix64.FromInt(k % 4))));
+            bool hurt = false, died = false;
+            Run(sim, 1, 1000, t =>
+            {
+                var f = Fields(sim);
+                for (int i = 1; i <= Number(f, "Villagers.Count"); i++)
+                {
+                    if (f["Villagers[" + i + "].FactionId"] != "1") continue;
+                    if (Number(f, "Villagers[" + i + "].Hp") < 40) hurt = true;
+                    if (f["Villagers[" + i + "].Alive"] == "0") { died = true; Assert.That(Number(f, "Villagers[" + i + "].Hp"), Is.EqualTo(0)); }
+                }
+            });
+            Assert.That(hurt, "a west villager was struck");
+            Assert.That(died, "a west villager died");
+        }
+
+        [Test]
+        public void ADestroyedBarracksOpensItsGroundAndIsRebuilt()
+        {
+            // Where the west barracks goes does not depend on where soldiers stand, so find it first.
+            var probe = new Battle(MapGenerator.Generate(1, true));
+            Run(probe, 1, 25);
+            var found = Fields(probe);
+            int origin = -1;
+            for (int b = 1; b <= Number(found, "Buildings.Count"); b++)
+                if (found["Buildings[" + b + "].FactionId"] == "1") origin = (int)Number(found, "Buildings[" + b + "].OriginCell");
+            Assert.That(origin, Is.GreaterThanOrEqualTo(0), "the west placed a barracks");
+            int x0 = origin % 128 * 2, z0 = origin / 128 * 2;
+            // Just above the footprint's top edge (6 m square), inside the 2 m range.
+            var scenario = WithRaiders(MapGenerator.Generate(1, true), k => new SimPoint(Fix64.FromInt(x0 + 1 + k % 4), Fix64.FromInt(z0 + 7)));
+            scenario.Economy.BarracksHp = 10; // one strike
+            var sim = new Battle(scenario);
+            uint destroyed = 0; bool rebuilt = false;
+            Run(sim, 1, 8000, t =>
+            {
+                var f = Fields(sim);
+                for (int b = 1; b <= Number(f, "Buildings.Count"); b++)
+                {
+                    if (f["Buildings[" + b + "].FactionId"] != "1") continue;
+                    if (f["Buildings[" + b + "].Alive"] == "0" && destroyed == 0) destroyed = (uint)b;
+                    if (destroyed != 0 && b > destroyed && f["Buildings[" + b + "].Alive"] == "1") rebuilt = true;
+                }
+            });
+            Assert.That(destroyed, Is.Not.EqualTo(0u), "the west barracks was destroyed");
+            Assert.That(rebuilt, "the automatic economy placed a new one");
+        }
+
+        [Test]
+        public void WithoutAnEconomyNoSoldierEverTargetsAVillagerOrBuilding()
+        {
+            var sim = new Battle(MapGenerator.Generate(1));
+            Run(sim, 1, 3000, t =>
+            {
+                var f = Fields(sim);
+                for (int i = 1; i <= Number(f, "Soldiers.Count"); i++)
+                    Assert.That(Number(f, "Soldiers[" + i + "].TargetKind"), Is.LessThanOrEqualTo(2), "tick " + t);
+            });
+        }
+
         private static int Cell(Dictionary<string, string> f, string point)
             => (int)(Number(f, point + ".Z.Raw") / 65536 / 2) * 128 + (int)(Number(f, point + ".X.Raw") / 65536 / 2);
 

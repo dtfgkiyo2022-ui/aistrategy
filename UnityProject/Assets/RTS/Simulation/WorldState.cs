@@ -12,7 +12,7 @@ namespace Rts.Simulation
         internal bool Alive, IsMoving, IsAttacking, IsRetreating;
         internal long NextAttackTick;
         internal PursuitMemory Pursuit;
-        internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core
+        internal byte TargetKind; // 0 = none, 1 = soldier, 2 = core, 3 = villager, 4 = building (Ver.3)
         internal uint TargetId;
         internal UnitParameters Parameters;
         internal Fix64 StepDistance;
