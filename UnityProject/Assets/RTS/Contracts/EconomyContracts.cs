@@ -108,7 +108,8 @@ namespace Rts.Contracts
         public const int MaxBeltRun = 256;
     }
 
-    public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5 }
+    /// <summary>Hauling (V3-2) covers carrying by hand between a mine, a smelter and the core.</summary>
+    public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5, Hauling = 6 }
 
     /// <summary>A villager on screen. Enemy villagers carry only a position (id 0, no HP or load), like enemy soldiers.</summary>
     public readonly struct VillagerView

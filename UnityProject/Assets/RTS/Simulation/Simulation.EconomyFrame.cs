@@ -64,6 +64,8 @@ namespace Rts.Simulation
             VillagerTask.ToDropOff => VillagerActivity.Returning,
             VillagerTask.ToBuild => VillagerActivity.ToBuild,
             VillagerTask.Building => VillagerActivity.Building,
+            VillagerTask.ToPickup => VillagerActivity.Hauling,
+            VillagerTask.ToDeliver => VillagerActivity.Hauling,
             _ => VillagerActivity.Idle
         };
     }

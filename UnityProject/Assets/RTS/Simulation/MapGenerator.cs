@@ -33,6 +33,8 @@ namespace Rts.Simulation
         /// </summary>
         public const string IndustryVersion = "mapgen-2";
 
+        /// <summary>Metal per infantry on a mapgen-2 map (12.4): the line decides how fast the army grows.</summary>
+        private const int InfantryMetal = 5;
         private const int GuaranteedOre = 2, ScatteredOre = 6, OreInner = 16, OreOuter = 36, OreAmount = 400;
 
         public static ScenarioDefinition Generate(ulong seed) => Generate(seed, false);
@@ -192,6 +194,7 @@ namespace Rts.Simulation
                 // Drawn last, so every earlier draw - and with it the whole mapgen-1 map - stays as it was.
                 s.ScenarioId = "gen2i-" + seed.ToString(CultureInfo.InvariantCulture);
                 s.Economy.Industry = true;
+                s.Economy.InfantryMetalCost = InfantryMetal;
                 for (int f = 0; f < 2; f++)
                 {
                     int cx = f == 0 ? wx : ex, cz = f == 0 ? wz : ez;

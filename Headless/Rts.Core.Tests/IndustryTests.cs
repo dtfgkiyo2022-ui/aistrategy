@@ -318,6 +318,89 @@ namespace Rts.Core.Tests
             Assert.That(Number(m.F, "Buildings[" + mine + "].Queued"), Is.EqualTo(0), "only a barracks trains soldiers");
         }
 
+        /// <summary>The same mine and smelter, built by hand; the caller lays belts or sends carriers.</summary>
+        private static (Match m, uint mine, uint smelter, int[] toSmelter, Facing[] toSmelterFacings, int[] toCore, Facing[] toCoreFacings) Workshop(ulong seed)
+        {
+            var m = Start(seed);
+            int core = CellOf(m.S.Cores[0].Position);
+            int size = m.S.Economy.SmelterSizeCells;
+            foreach (int origin in Ring(core, 5, 12))
+                foreach (Facing f in new[] { Facing.North, Facing.East, Facing.South, Facing.West })
+                {
+                    var (toCore, toCoreFacings) = Route(m.S, OutputCell(origin, size, f), c => InsideCore(m.S, c), new HashSet<int>(Footprint(origin, size)));
+                    if (toCore == null) continue;
+                    var (smelter, placed) = Place(m, BuildingKind.Smelter, f, new[] { origin });
+                    if (smelter == 0) break;
+                    var smelterCells = new HashSet<int>(Footprint(placed, size));
+                    var (mine, _, toSmelter, toSmelterFacings) = MineWithRoute(m, c => smelterCells.Contains(c), new HashSet<int>(smelterCells.Concat(toCore)));
+                    if (mine == 0) return (null, 0, 0, null, null, null, null);
+                    Build(m, smelter);
+                    Build(m, mine);
+                    return (m, mine, smelter, toSmelter, toSmelterFacings, toCore, toCoreFacings);
+                }
+            return (null, 0, 0, null, null, null, null);
+        }
+
+        /// <summary>
+        /// Gate 1 of V3-2 (10): with the same mine, smelter and villagers, a line brings more metal to the core than two
+        /// villagers carrying by hand (one mine to smelter, one smelter to core), over the same long stretch.
+        /// </summary>
+        [TestCase(1UL)]
+        [TestCase(6UL)]
+        public void ALineBringsMoreMetalThanCarryingByHand(ulong seed)
+        {
+            const int Ticks = 8000;
+            var line = Workshop(seed);
+            Assume.That(line.m, Is.Not.Null);
+            line.m.Send(EconomyCommand.PlaceBelt(1, ++line.m.Seq, line.toSmelter, line.toSmelterFacings));
+            line.m.Send(EconomyCommand.PlaceBelt(1, ++line.m.Seq, line.toCore, line.toCoreFacings));
+            long lineStart = Number(line.m.F, "Economy[1].Metal");
+            line.m.Steps(Ticks);
+            long byLine = Number(line.m.F, "Economy[1].Metal") - lineStart;
+
+            var hand = Workshop(seed);
+            hand.m.Send(EconomyCommand.Assign(1, ++hand.m.Seq, new uint[] { 1 }, EconomyTargetKind.Building, hand.mine));
+            hand.m.Send(EconomyCommand.Assign(1, ++hand.m.Seq, new uint[] { 2 }, EconomyTargetKind.Building, hand.smelter));
+            long handStart = Number(hand.m.F, "Economy[1].Metal");
+            hand.m.Steps(Ticks);
+            long byHand = Number(hand.m.F, "Economy[1].Metal") - handStart;
+
+            TestContext.WriteLine("seed " + seed + ": metal in " + Ticks + " ticks, line " + byLine + ", by hand " + byHand
+                + " (belts " + (line.toSmelter.Length + line.toCore.Length) + ")");
+            Assert.That(byHand, Is.GreaterThan(0), "carrying by hand works at all");
+            Assert.That(byLine, Is.GreaterThan(byHand), "the line is faster");
+        }
+
+        /// <summary>13: left alone, each side builds a mine, a smelter and the belts between them, and metal reaches its core.</summary>
+        [TestCase(1UL)]
+        [TestCase(2UL)]
+        [TestCase(5UL)]
+        public void TheAutomaticEconomyBuildsTheLineAndUsesTheMetal(ulong seed)
+        {
+            var s = MapGenerator.Generate(seed, true, true);
+            var sim = new Battle(s);
+            var lineTick = new long[2];
+            for (long t = 1; t <= 15000 && !sim.Capture(1).Result.HasEnded; t++)
+            {
+                sim.Step(t, Array.Empty<ScheduledInput>());
+                if (t % 100 != 0) continue;
+                var f = Fields(sim);
+                for (int side = 0; side < 2; side++)
+                {
+                    string faction = (side + 1).ToString(CultureInfo.InvariantCulture);
+                    if (lineTick[side] == 0 && f.Keys.Any(k => k.StartsWith("Belts[", StringComparison.Ordinal) && k.EndsWith("].Item", StringComparison.Ordinal)
+                        && f[k] == ((byte)ResourceKind.Metal).ToString(CultureInfo.InvariantCulture)
+                        && f[k.Replace("].Item", "].FactionId")] == faction)) lineTick[side] = t;
+                }
+            }
+            var end = Fields(sim);
+            TestContext.WriteLine("seed " + seed + ": first metal on a belt at tick west " + lineTick[0] + ", east " + lineTick[1]
+                + "; ended " + end["Result.HasEnded"] + " at " + end["Tick"]);
+            for (int side = 0; side < 2; side++) Assert.That(lineTick[side], Is.GreaterThan(0), "side " + (side + 1) + " moved metal on its own belts");
+            // Infantry costs metal on this map, so every soldier past the starting 40 was paid for by a line.
+            Assert.That(Number(end, "NextSoldierId"), Is.GreaterThan(s.Soldiers.Length + 1), "metal became infantry");
+        }
+
         [Test]
         public void AVerThreeOneMapPlacesNoMine()
         {

@@ -34,6 +34,7 @@ namespace Rts.Simulation
                     economy.Queued++;
                 }
                 DecideBuildings(faction);
+                DecideIndustry(faction);
             }
         }
 
@@ -51,6 +52,8 @@ namespace Rts.Simulation
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = OwnCore(v.FactionId).Definition.Position;
                 else if (v.Task == VillagerTask.ToBuild) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToPickup) goal = world.Map.Center(world.Buildings[v.HaulFrom - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToDeliver) goal = world.Map.Center(world.Buildings[v.HaulTo - 1].WorkCell);
                 else { v.MoveGoal = v.Position; continue; }
                 v.MoveGoal = VillagerRouteTarget(ref v, goal);
                 var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep));
@@ -101,8 +104,10 @@ namespace Rts.Simulation
                     if (!InRange(v.Position, core.Definition.Position, world.Config.Rules.CoreRadius + rules.DropOffMargin)) continue;
                     AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
+                    if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
                     v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
                 }
+                else if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) Haul(ref v);
             }
             AdvanceBuildings();
             for (int f = 0; f < 2; f++)

@@ -104,9 +104,13 @@ namespace Rts.Simulation
         internal int RouteCursor;
         internal SimPoint RouteGoal;
         internal uint BuildingId;
+        /// <summary>V3-2 carrying by hand (12.3): the mine or smelter it takes from (0 = not carrying), and the smelter
+        /// it takes ore to (0 = the core).</summary>
+        internal uint HaulFrom, HaulTo;
     }
 
-    internal enum VillagerTask : byte { Idle = 0, ToNode = 1, Gathering = 2, ToDropOff = 3, ToBuild = 4, Building = 5 }
+    /// <summary>ToPickup and ToDeliver are V3-2 carrying by hand; a load for the core goes by ToDropOff.</summary>
+    internal enum VillagerTask : byte { Idle = 0, ToNode = 1, Gathering = 2, ToDropOff = 3, ToBuild = 4, Building = 5, ToPickup = 6, ToDeliver = 7 }
 
     internal struct BuildingState
     {
@@ -309,8 +313,8 @@ namespace Rts.Simulation
                     && e.BeltLimit > 0 && e.BeltLimit <= 8192
                     && e.MineSizeCells > 0 && e.MineSizeCells <= 8 && e.MineWoodCost >= 0 && e.MineWork > 0 && e.MineHp > 0 && e.MineIntervalTicks > 0
                     && e.SmelterSizeCells > 0 && e.SmelterSizeCells <= 8 && e.SmelterWoodCost >= 0 && e.SmelterWork > 0 && e.SmelterHp > 0
-                    && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit, "Invalid industry rules.");
-            else Require(c.Belts.Length == 0, "Belts need industry.");
+                    && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0, "Invalid industry rules.");
+            else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0, "Belts and metal costs need industry.");
             Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
             var villagerCounts = new int[2];
             var villagerGrid = new GridMap(c.Map);
@@ -432,7 +436,7 @@ namespace Rts.Simulation
                 Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
                 MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
                 SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
-                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit };
+                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(
