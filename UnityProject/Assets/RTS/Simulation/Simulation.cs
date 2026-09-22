@@ -173,7 +173,7 @@ namespace Rts.Simulation
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
-                    coreDamage[target] = checked(coreDamage[target] + s.Parameters.Damage);
+                    coreDamage[target] = checked(coreDamage[target] + SiegeDamage(s));
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
                 s.IsAttacking = true;

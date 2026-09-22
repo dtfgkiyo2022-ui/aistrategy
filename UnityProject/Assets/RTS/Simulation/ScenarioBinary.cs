@@ -85,6 +85,10 @@ namespace Rts.Simulation
                     w.Write(e.ArcherRange.Raw); w.Write(e.ArcherSpeed.Raw); w.Write(e.ArcherVision.Raw);
                     w.Write(e.CavalryFood); w.Write(e.CavalryWood); w.Write(e.CavalryMetal); w.Write(e.CavalryTicks); w.Write(e.CavalryHp); w.Write(e.CavalryDamage); w.Write(e.CavalryInterval);
                     w.Write(e.CavalryRange.Raw); w.Write(e.CavalrySpeed.Raw); w.Write(e.CavalryVision.Raw);
+                    w.Write(e.MarketSizeCells); w.Write(e.MarketWoodCost); w.Write(e.MarketWork); w.Write(e.MarketHp); w.Write(e.TradeLot); w.Write(e.TradeReturn);
+                    w.Write(e.WorkshopSizeCells); w.Write(e.WorkshopWoodCost); w.Write(e.WorkshopWork); w.Write(e.WorkshopHp);
+                    w.Write(e.RamFood); w.Write(e.RamWood); w.Write(e.RamTicks); w.Write(e.RamHp); w.Write(e.RamDamage); w.Write(e.RamSiegeDamage); w.Write(e.RamInterval);
+                    w.Write(e.RamRange.Raw); w.Write(e.RamSpeed.Raw); w.Write(e.RamVision.Raw);
                 }
                 return s.ToArray();
             }
@@ -158,6 +162,10 @@ namespace Rts.Simulation
                     e.ArcherRange=Fix(r); e.ArcherSpeed=Fix(r); e.ArcherVision=Fix(r);
                     e.CavalryFood=r.ReadInt32(); e.CavalryWood=r.ReadInt32(); e.CavalryMetal=r.ReadInt32(); e.CavalryTicks=r.ReadInt32(); e.CavalryHp=r.ReadInt32(); e.CavalryDamage=r.ReadInt32(); e.CavalryInterval=r.ReadInt32();
                     e.CavalryRange=Fix(r); e.CavalrySpeed=Fix(r); e.CavalryVision=Fix(r);
+                    e.MarketSizeCells=r.ReadInt32(); e.MarketWoodCost=r.ReadInt32(); e.MarketWork=r.ReadInt32(); e.MarketHp=r.ReadInt32(); e.TradeLot=r.ReadInt32(); e.TradeReturn=r.ReadInt32();
+                    e.WorkshopSizeCells=r.ReadInt32(); e.WorkshopWoodCost=r.ReadInt32(); e.WorkshopWork=r.ReadInt32(); e.WorkshopHp=r.ReadInt32();
+                    e.RamFood=r.ReadInt32(); e.RamWood=r.ReadInt32(); e.RamTicks=r.ReadInt32(); e.RamHp=r.ReadInt32(); e.RamDamage=r.ReadInt32(); e.RamSiegeDamage=r.ReadInt32(); e.RamInterval=r.ReadInt32();
+                    e.RamRange=Fix(r); e.RamSpeed=Fix(r); e.RamVision=Fix(r);
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

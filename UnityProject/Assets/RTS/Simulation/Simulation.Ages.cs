@@ -149,6 +149,13 @@ namespace Rts.Simulation
             return barracks && LivingVillagers(faction) >= (e.Civ == CivKind.Primitive ? AdvanceVillagers : Age2Villagers);
         }
 
+        /// <summary>
+        /// True while the automatic economy holds back its cheap groundwork too - houses, drop sites, research, markets.
+        /// Only the first step out of the primitive age is worth that: saving for the second age lasts long, and stopping
+        /// the groundwork for it cost the side its research and its defence (32.9, measured).
+        /// </summary>
+        private bool SavingHard(uint faction) => SavingToAdvance(faction) && world.Economies[faction - 1].Civ == CivKind.Primitive;
+
         private CivKind ChooseCiv(uint faction)
         {
             var core = OwnCore(faction).Definition.Position;

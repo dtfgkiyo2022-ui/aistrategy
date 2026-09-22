@@ -366,7 +366,11 @@ namespace Rts.Simulation
                 && e.ArcherFood >= 0 && e.ArcherWood >= 0 && e.ArcherTicks > 0 && e.ArcherHp > 0 && e.ArcherDamage >= 0 && e.ArcherInterval > 0
                 && e.ArcherRange.Raw >= 0 && e.ArcherRange <= Fix64.FromInt(64) && e.ArcherSpeed.Raw > 0 && e.ArcherSpeed <= Fix64.FromInt(16) && e.ArcherVision.Raw >= 0
                 && e.CavalryFood >= 0 && e.CavalryWood >= 0 && e.CavalryMetal >= 0 && e.CavalryTicks > 0 && e.CavalryHp > 0 && e.CavalryDamage >= 0 && e.CavalryInterval > 0
-                && e.CavalryRange.Raw >= 0 && e.CavalryRange <= Fix64.FromInt(64) && e.CavalrySpeed.Raw > 0 && e.CavalrySpeed <= Fix64.FromInt(16) && e.CavalryVision.Raw >= 0), "Invalid age rules.");
+                && e.CavalryRange.Raw >= 0 && e.CavalryRange <= Fix64.FromInt(64) && e.CavalrySpeed.Raw > 0 && e.CavalrySpeed <= Fix64.FromInt(16) && e.CavalryVision.Raw >= 0
+                && e.MarketSizeCells > 0 && e.MarketSizeCells <= 8 && e.MarketWoodCost >= 0 && e.MarketWork > 0 && e.MarketHp > 0 && e.TradeLot > 0 && e.TradeReturn >= 0
+                && e.WorkshopSizeCells > 0 && e.WorkshopSizeCells <= 8 && e.WorkshopWoodCost >= 0 && e.WorkshopWork > 0 && e.WorkshopHp > 0
+                && e.RamFood >= 0 && e.RamWood >= 0 && e.RamTicks > 0 && e.RamHp > 0 && e.RamDamage >= 0 && e.RamSiegeDamage >= 0 && e.RamInterval > 0
+                && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -519,7 +523,11 @@ namespace Rts.Simulation
                 ArcherFood = e.ArcherFood, ArcherWood = e.ArcherWood, ArcherTicks = e.ArcherTicks, ArcherHp = e.ArcherHp, ArcherDamage = e.ArcherDamage,
                 ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
                 CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,
-                CavalryDamage = e.CavalryDamage, CavalryInterval = e.CavalryInterval, CavalryRange = e.CavalryRange, CavalrySpeed = e.CavalrySpeed, CavalryVision = e.CavalryVision };
+                CavalryDamage = e.CavalryDamage, CavalryInterval = e.CavalryInterval, CavalryRange = e.CavalryRange, CavalrySpeed = e.CavalrySpeed, CavalryVision = e.CavalryVision,
+                MarketSizeCells = e.MarketSizeCells, MarketWoodCost = e.MarketWoodCost, MarketWork = e.MarketWork, MarketHp = e.MarketHp, TradeLot = e.TradeLot, TradeReturn = e.TradeReturn,
+                WorkshopSizeCells = e.WorkshopSizeCells, WorkshopWoodCost = e.WorkshopWoodCost, WorkshopWork = e.WorkshopWork, WorkshopHp = e.WorkshopHp,
+                RamFood = e.RamFood, RamWood = e.RamWood, RamTicks = e.RamTicks, RamHp = e.RamHp, RamDamage = e.RamDamage, RamSiegeDamage = e.RamSiegeDamage,
+                RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

@@ -17,12 +17,15 @@ namespace Rts.Simulation
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, e.ScoutTrainTicks);
             if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, e.CavalryTicks);
+            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, e.RamTicks);
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), InfantryTicksFor(faction));
         }
 
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
         private bool Trains(BuildingState b, UnitKind kind)
         {
+            // V3-5 (32 #9): the siege workshop trains rams, and only rams.
+            if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
             if (!AgesOn) return false;
@@ -43,6 +46,17 @@ namespace Rts.Simulation
         /// <summary>Archers and cavalry fight as infantry with their own numbers (32 #8); it is what they were trained as.</summary>
         private void ApplyClass(int index, UnitKind unit)
         {
+            if (unit == UnitKind.Ram)
+            {
+                var r = world.Config.Economy;
+                ref var ram = ref world.Soldiers[index];
+                ram.Class = unit;
+                ram.Parameters.Hp = r.RamHp; ram.Parameters.Damage = r.RamDamage; ram.Parameters.AttackIntervalTicks = r.RamInterval;
+                ram.Parameters.Range = r.RamRange; ram.Parameters.Speed = r.RamSpeed; ram.Parameters.Vision = r.RamVision;
+                ram.StepDistance = Fix64.FromRaw(ram.Parameters.Speed.Raw / 20);
+                ram.Hp = r.RamHp; ram.Initial.Hp = r.RamHp;
+                return;
+            }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
             var e = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
@@ -141,7 +155,7 @@ namespace Rts.Simulation
             bool scout = kind == UnitKind.Scout;
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
-                : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry);
+                : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry) + QueuedOf(faction, UnitKind.Ram);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

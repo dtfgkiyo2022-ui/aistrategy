@@ -136,6 +136,12 @@ namespace Rts.Simulation
         public Fix64 ArcherRange = Fix64.FromInt(8), ArcherSpeed = Fix64.FromInt(2), ArcherVision = Fix64.FromInt(22);
         public int CavalryFood = 80, CavalryWood = 20, CavalryMetal = 10, CavalryTicks = 300, CavalryHp = 150, CavalryDamage = 12, CavalryInterval = 20;
         public Fix64 CavalryRange = Fix64.FromInt(2), CavalrySpeed = Fix64.FromInt(4), CavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
+        public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
+        /// <summary>V3-5 (32 #9): the siege workshop (second age) and its ram - slow, weak on soldiers, heavy on buildings and cores.</summary>
+        public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
+        public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;
+        public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
     }
 
     public sealed class MapDefinition

@@ -34,6 +34,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
                     return;
+                case EconomyCommandKind.Trade:
+                    TradeAtMarket(faction, c.Give, c.Take);
+                    return;
                 case EconomyCommandKind.Research:
                     if (OwnBuilding(faction, c.ProducerId, out int smith)) StartResearch(faction, ref world.Buildings[smith], c.Tech, true);
                     return;
@@ -48,7 +51,8 @@ namespace Rts.Simulation
                     var kind = c.Building;
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
-                        && !(kind == BuildingKind.Blacksmith && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)) return;
+                        && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
+                        && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;

@@ -15,6 +15,8 @@ namespace Rts.Contracts
         PlaceWall = 11,
         /// <summary>V3-5: starts researching Tech at the blacksmith ProducerId.</summary>
         Research = 12,
+        /// <summary>V3-5: at an own market, gives a lot of Give for Take (needs a finished market).</summary>
+        Trade = 13,
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
         RemoveBelt = 7,
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
@@ -60,6 +62,9 @@ namespace Rts.Contracts
         public CivKind Civ { get; }
         /// <summary>Research: the tech.</summary>
         public TechKind Tech { get; }
+        /// <summary>Trade: what is given and what is taken.</summary>
+        public ResourceKind Give { get; }
+        public ResourceKind Take { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -98,7 +103,16 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, cells, facings, facing, policy, civ, tech, 0, 0)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
+            ResourceKind give, ResourceKind take)
+        {
+            Give = give; Take = take;
             Tech = tech;
             Civ = civ;
             Policy = policy;
@@ -152,6 +166,10 @@ namespace Rts.Contracts
 
         public static EconomyCommand Research(uint faction, ulong sequence, uint blacksmith, TechKind tech)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.Research, 0, 0, blacksmith, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, tech);
+
+        public static EconomyCommand Trade(uint faction, ulong sequence, ResourceKind give, ResourceKind take)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.Trade, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North,
+                EconomyPolicy.Balanced, CivKind.Primitive, 0, give, take);
 
         public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
         {
@@ -363,13 +381,20 @@ namespace Rts.Contracts
         public int CavalryFoodCost { get; }
         public int CavalryWoodCost { get; }
         public int CavalryMetalCost { get; }
+        /// <summary>V3-5 (32 #9): the market and the siege workshop, a trade (give TradeLot, take TradeReturn), and the ram.</summary>
+        public int MarketWoodCost { get; }
+        public int WorkshopWoodCost { get; }
+        public int TradeLot { get; }
+        public int TradeReturn { get; }
+        public int RamFoodCost { get; }
+        public int RamWoodCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -382,8 +407,11 @@ namespace Rts.Contracts
             int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost,
             int stone, int wallStoneCost, int towerWoodCost, int towerStoneCost,
             int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts,
-            int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost)
+            int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
+            int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost)
         {
+            MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
+            RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age = age; Age2FoodCost = age2FoodCost; Age2WoodCost = age2WoodCost; ArcherFoodCost = archerFoodCost; ArcherWoodCost = archerWoodCost;
             CavalryFoodCost = cavalryFoodCost; CavalryWoodCost = cavalryWoodCost; CavalryMetalCost = cavalryMetalCost;
             BlacksmithWoodCost = blacksmithWoodCost; Techs = techs;
