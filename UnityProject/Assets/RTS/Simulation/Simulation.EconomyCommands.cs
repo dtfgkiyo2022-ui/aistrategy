@@ -28,6 +28,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     ReturnToAuto(faction);
                     return;
+                case EconomyCommandKind.SetEconomyPolicy:
+                    if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
+                    return;
                 case EconomyCommandKind.RemoveBelt:
                     RemoveBelt(faction, c.Cell);
                     return;

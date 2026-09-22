@@ -26,7 +26,8 @@ namespace Rts.Simulation
                 if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0 || world.Economies[f].AutoOff) continue;
                 ref var economy = ref world.Economies[f];
                 int villagers = LivingVillagers(faction);
-                if (!economy.CoreHeld && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, rules.AutoVillagerTarget, economy.Food,
+                var plan = PlanOf(faction);
+                if (!economy.CoreHeld && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
                     rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), rules.PopulationCap, rules.QueueLimit))
                 {
                     economy.Food = checked(economy.Food - rules.VillagerFoodCost);
@@ -140,7 +141,7 @@ namespace Rts.Simulation
             var kinds = new ResourceKind[n];
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
-            var kind = EconomyDecision.KindToGather(food, wood);
+            var kind = EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
             int index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind);
             if (index < 0) index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
             if (index < 0) return; // nothing left anywhere: stays idle
@@ -180,6 +181,14 @@ namespace Rts.Simulation
             world.Villagers[index] = new VillagerState { Id = world.NextVillagerId, FactionId = faction, Alive = true,
                 Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>() };
             world.NextVillagerId = checked(world.NextVillagerId + 1);
+        }
+
+        /// <summary>V3-3: the numbers of the faction's economy policy; always the scenario's own numbers without industry.</summary>
+        private EconomyDecision.Plan PlanOf(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return EconomyDecision.PlanFor(IndustryOn ? world.Economies[faction - 1].Policy : EconomyPolicy.Balanced,
+                rules.AutoVillagerTarget, rules.AutoInfantryQueue);
         }
 
         private CoreState OwnCore(uint faction) => world.Cores[world.Factions[faction - 1].CoreId - 1];

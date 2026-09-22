@@ -34,7 +34,7 @@ namespace Rts.Simulation
             if (barracks < 0) return;
             ref var building = ref world.Buildings[barracks];
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
-            if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(rules.AutoInfantryQueue, rules.QueueLimit),
+            if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, rules.InfantryFoodCost, rules.InfantryWoodCost, population, rules.PopulationCap, HasInfantryRoom(faction))
                 || economy.Metal < rules.InfantryMetalCost) return;
             economy.Food = checked(economy.Food - rules.InfantryFoodCost);

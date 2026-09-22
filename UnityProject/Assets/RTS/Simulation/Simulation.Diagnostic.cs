@@ -124,7 +124,7 @@ namespace Rts.Simulation
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
-                w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld);
+                w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
             }
             uint belts = 0;
             foreach (var b in world.Belts) if (b.FactionId != 0) belts++;
