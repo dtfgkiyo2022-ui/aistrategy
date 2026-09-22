@@ -80,9 +80,9 @@ namespace Rts.Presentation
                 return true;
             }
             awaitingGround = false;
-            var selection = view.Selected;
-            Send(PolicyKind.Focus, new ScopeKey(factionId, ScopeKind.Army, selection.Id), new PolicyGoal(GoalKind.Point, 0, point), 0,
-                UiText.T("Attack Army ", "攻撃 軍団 ") + selection.Id + " -> (" + hit.x.ToString("0.0") + ", " + hit.z.ToString("0.0") + ")");
+            foreach (uint army in SelectedArmies())
+                Send(PolicyKind.Focus, new ScopeKey(factionId, ScopeKind.Army, army), new PolicyGoal(GoalKind.Point, 0, point), 0,
+                    UiText.T("Attack Army ", "攻撃 軍団 ") + army + " -> (" + hit.x.ToString("0.0") + ", " + hit.z.ToString("0.0") + ")");
             return true;
         }
 
@@ -124,7 +124,7 @@ namespace Rts.Presentation
             bool armySelected = selection.Kind == SelectionKind.Army;
             string selectionText = view.DescribeSelection();
             GUI.Label(new Rect(buttons.x + 6f, buttons.y + 20f, buttons.width - 12f, 20f),
-                selectionText.Length > 0 ? selectionText : UiText.T("Nothing selected: click an army", "未選択：軍団をクリック"));
+                selectionText.Length > 0 ? selectionText : UiText.T("Nothing selected: click an army or drag a box", "未選択：軍団をクリック、またはドラッグで囲む"));
             GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), UiText.T("WASD move, wheel zoom", "WASDで移動、ホイールで拡大縮小"));
             float y = buttons.y + 24f + HeaderHeight;
 
@@ -133,10 +133,12 @@ namespace Rts.Presentation
                 awaitingGround = true;
             y += ButtonHeight + 4f;
             if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Retreat", "撤退")))
-                Send(PolicyKind.Retreat, ArmyScope(selection), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Retreat Army ", "撤退 軍団 ") + selection.Id);
+                foreach (uint army in SelectedArmies())
+                    Send(PolicyKind.Retreat, ArmyScope(army), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Retreat Army ", "撤退 軍団 ") + army);
             y += ButtonHeight + 4f;
             if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Defend own core", "自コアを守る")))
-                Send(PolicyKind.Defend, ArmyScope(selection), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, UiText.T("Defend Army ", "防衛 軍団 ") + selection.Id + UiText.T(" -> Core ", " → コア ") + ownCoreId);
+                foreach (uint army in SelectedArmies())
+                    Send(PolicyKind.Defend, ArmyScope(army), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, UiText.T("Defend Army ", "防衛 軍団 ") + army + UiText.T(" -> Core ", " → コア ") + ownCoreId);
             y += ButtonHeight + 4f;
 
             GUI.enabled = selection.Kind == SelectionKind.Outpost;
@@ -298,7 +300,15 @@ namespace Rts.Presentation
             }
         }
 
-        private ScopeKey ArmyScope(SelectionTarget selection) { return new ScopeKey(factionId, ScopeKind.Army, selection.Id); }
+        private ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }
+
+        /// <summary>A copy, so sending (which may change the frame) never walks a list that is changing.</summary>
+        private uint[] SelectedArmies()
+        {
+            var armies = new uint[view.SelectedArmies.Count];
+            for (int i = 0; i < armies.Length; i++) armies[i] = view.SelectedArmies[i];
+            return armies;
+        }
 
         private void Send(PolicyKind kind, ScopeKey target, PolicyGoal goal, ushort reservePermille, string description)
         {
