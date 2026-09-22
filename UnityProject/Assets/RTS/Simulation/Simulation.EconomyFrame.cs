@@ -21,7 +21,7 @@ namespace Rts.Simulation
                 var v = world.Villagers[i];
                 if (!v.Alive) continue;
                 if (v.FactionId == faction)
-                    villagers.Add(new VillagerView(v.Id, true, v.Position, Activity(v.Task), v.CarryKind, v.Carry, v.Hp));
+                    villagers.Add(new VillagerView(v.Id, true, v.Position, Activity(v.Task), v.CarryKind, v.Carry, v.Hp, v.Held));
                 else if (IsVisibleTo(faction, v.Position))
                     villagers.Add(new VillagerView(0, false, v.Position, VillagerActivity.Idle, 0, 0, 0));
             }
@@ -35,7 +35,7 @@ namespace Rts.Simulation
                 int size = SizeOf(b.Kind);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
-                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0));
+                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -49,13 +49,13 @@ namespace Rts.Simulation
                 if (b.FactionId == 0) continue;
                 bool own = b.FactionId == faction;
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
-                belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0));
+                belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held));
             }
             return new EconomyView(economy.Food, economy.Wood, population, rules.PopulationCap, economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, rules.InfantryFoodCost,
                 rules.InfantryWoodCost, villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
-                rules.InfantryMetalCost, rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells);
+                rules.InfantryMetalCost, rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

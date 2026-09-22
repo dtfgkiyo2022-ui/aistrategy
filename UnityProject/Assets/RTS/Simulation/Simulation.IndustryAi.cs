@@ -34,6 +34,8 @@ namespace Rts.Simulation
             var m = world.Buildings[mine];
             var s = world.Buildings[smelter];
             if (!m.Complete || !s.Complete) return;
+            // V3-3: the player took this industry over; the automatic economy lays no line and calls its carriers back.
+            if (m.Held || s.Held) { SetHaulers(faction, m.Id, s.Id, 0); return; }
             bool whole = LayLine(faction, m, s);
             SetHaulers(faction, m.Id, s.Id, whole ? 0 : Haulers);
         }
@@ -121,7 +123,7 @@ namespace Rts.Simulation
         /// <summary>A cell a belt could start on: on the map, open, not a resource point, outside every core, no other side's belt.</summary>
         private bool PortIsOpen(int cell, uint faction)
             => cell >= 0 && world.Map.IsPassable(cell) && !IsNodeCell(cell) && !InsideAnyCore(cell)
-               && (world.Belts[cell].FactionId == 0 || world.Belts[cell].FactionId == faction);
+               && (world.Belts[cell].FactionId == 0 || (world.Belts[cell].FactionId == faction && !world.Belts[cell].Held));
 
         /// <summary>
         /// Two routes, mine output -> smelter and smelter output -> core, each the shortest 4-neighbour run of open cells
@@ -213,7 +215,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 ref var v = ref world.Villagers[i];
-                if (!v.Alive || v.FactionId != faction || (v.HaulFrom != mine && v.HaulFrom != smelter)) continue;
+                if (!v.Alive || v.FactionId != faction || v.Held || (v.HaulFrom != mine && v.HaulFrom != smelter)) continue;
                 if (wanted == 0) StopHauling(ref v);
                 else if (v.HaulFrom == mine) fromMine++;
                 else fromSmelter++;
@@ -226,7 +228,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.VillagerCount; i++)
                 {
                     var v = world.Villagers[i];
-                    if (!v.Alive || v.FactionId != faction || v.HaulFrom != 0 || v.Carry > 0
+                    if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.Carry > 0
                         || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
                 }

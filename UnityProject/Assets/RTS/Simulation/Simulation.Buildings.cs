@@ -26,7 +26,8 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
                 hasBarracks = true;
-                if (b.Complete && barracks < 0) { ready = true; barracks = i; }
+                // V3-3: a barracks the player operates is not queued by the automatic economy.
+                if (b.Complete && !b.Held && barracks < 0) { ready = true; barracks = i; }
             }
             if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
                 PlaceBarracks(faction);
@@ -183,7 +184,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.VillagerCount; i++)
                 {
                     var v = world.Villagers[i];
-                    if (!v.Alive || v.FactionId != building.FactionId || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
                 }
                 if (best < 0) return;
