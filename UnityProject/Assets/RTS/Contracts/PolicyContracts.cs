@@ -159,6 +159,15 @@ namespace Rts.Contracts
         public ulong RequestId { get; }
         public ulong IssuerSequence { get; }
         public IReadOnlyList<PolicyOrder> Orders { get; }
+        /// <summary>Only for <see cref="InputKind.Economy"/>; null for every other kind.</summary>
+        public EconomyCommand Economy { get; }
+
+        /// <summary>A direct economy operation, applied on <paramref name="applyTick"/>.</summary>
+        public ScheduledInput(ulong logIndex, long acceptedTick, long applyTick, EconomyCommand economy)
+            : this(logIndex, InputKind.Economy, acceptedTick, applyTick, 0, economy?.IssuerSequence ?? 0, System.Array.Empty<PolicyOrder>(), long.MaxValue, ReasonCode.None,
+                economy ?? throw new System.ArgumentNullException(nameof(economy)))
+        {
+        }
 
         public ScheduledInput(
             ulong logIndex,
@@ -173,7 +182,17 @@ namespace Rts.Contracts
         public ScheduledInput(ulong logIndex, InputKind kind, long acceptedTick, long applyTick,
             ulong requestId, ulong issuerSequence, IReadOnlyList<PolicyOrder> orders,
             long deadlineTick, ReasonCode resolutionReason)
+            : this(logIndex, kind, acceptedTick, applyTick, requestId, issuerSequence, orders, deadlineTick, resolutionReason, null)
         {
+            // An economy input without its operation could be logged but never applied; build it with the economy constructor.
+            if (kind == InputKind.Economy) throw new System.ArgumentException("Economy inputs carry an EconomyCommand.", nameof(kind));
+        }
+
+        private ScheduledInput(ulong logIndex, InputKind kind, long acceptedTick, long applyTick,
+            ulong requestId, ulong issuerSequence, IReadOnlyList<PolicyOrder> orders,
+            long deadlineTick, ReasonCode resolutionReason, EconomyCommand economy)
+        {
+            Economy = economy;
             DeadlineTick = deadlineTick;
             ResolutionReason = resolutionReason;
             LogIndex = logIndex;

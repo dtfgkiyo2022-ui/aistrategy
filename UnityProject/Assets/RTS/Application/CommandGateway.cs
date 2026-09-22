@@ -14,7 +14,7 @@ namespace Rts.Application
         IReadOnlyList<PolicyVersion> Versions(ScopeKey scope);
     }
     /// <summary>Tick driven command boundary. Call Submit/Cancel between Step calls on the host thread.</summary>
-    public sealed class CommandGateway : ICommandPort
+    public sealed class CommandGateway : ICommandPort, IEconomyPort
     {
         private sealed class Request
         {
@@ -68,6 +68,14 @@ namespace Rts.Application
             if (tick != 0) throw new ArgumentException("Attach the gateway at S0.", nameof(simulation));
         }
         public IReadOnlyList<ScheduledInput> Inputs => Array.AsReadOnly(log.ToArray());
+
+        // Ver.3 direct economy operations: logged as they are and applied on the next tick, after this tick's policy inputs.
+        private readonly List<EconomyCommand> economy = new List<EconomyCommand>();
+        public void SubmitEconomy(EconomyCommand command)
+        {
+            if (command == null || command.FactionId < 1 || command.FactionId > 2) throw new ArgumentException("Invalid economy command.", nameof(command));
+            economy.Add(command);
+        }
         internal IFactionPolicyVersions FactionVersions(uint faction)
         {
             if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
@@ -295,6 +303,13 @@ namespace Rts.Application
                 nextLog = checked(nextLog + 1);
             }
             logRejections.Clear();
+            // Faction, then the issuer's sequence; submission order breaks the remaining ties (OrderBy is stable).
+            foreach (var command in economy.OrderBy(c => c.FactionId).ThenBy(c => c.IssuerSequence))
+            {
+                inputs.Add(new ScheduledInput(nextLog, tick, next, command));
+                nextLog = checked(nextLog + 1);
+            }
+            economy.Clear();
             arrivals.Clear();
             simulation.Step(next, inputs); tick = next; log.AddRange(inputs);
             InvalidateAutonomous();

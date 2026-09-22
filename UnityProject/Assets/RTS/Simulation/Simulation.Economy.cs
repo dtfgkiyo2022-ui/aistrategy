@@ -23,7 +23,7 @@ namespace Rts.Simulation
             for (int f = 0; f < 2; f++)
             {
                 uint faction = (uint)f + 1;
-                if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0) continue;
+                if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0 || world.Economies[f].AutoOff) continue;
                 ref var economy = ref world.Economies[f];
                 int villagers = LivingVillagers(faction);
                 if (EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, rules.AutoVillagerTarget, economy.Food,
@@ -46,7 +46,7 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
-                if (v.Task == VillagerTask.Idle) AssignWork(ref v);
+                if (v.Task == VillagerTask.Idle && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = OwnCore(v.FactionId).Definition.Position;
