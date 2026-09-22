@@ -7,6 +7,7 @@ Claude Code はこのファイルのルールを必ず守ってください。
 
 - 企画：`AI指揮型_大規模対戦RTS_企画書.md`
 - 技術設計（MVP Ver.1）：`docs/technical-design.md`
+- 技術設計（MVP Ver.3：内政と文明）：`docs/technical-design-v3.md`（Ver.1 の契約に足すもの。矛盾したら Ver.1 を優先）
 - 進め方：`ROADMAP.md`、タスクは GitHub Issues（マイルストーン＝段階、ラベル＝担当）
 
 資料と矛盾する実装はしない。矛盾に気づいたら、実装せずに報告する。
