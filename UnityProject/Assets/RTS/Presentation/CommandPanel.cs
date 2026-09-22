@@ -268,7 +268,7 @@ namespace Rts.Presentation
             {
                 bool economyMap = mapChoice.EconomyMap;
                 float half = (rect.width - 16f - labelWidth) / 2f;
-                bool now = GUI.Toggle(new Rect(x + labelWidth, y, half - 4f, 24f), economyMap, economyMap ? UiText.T("Random #", "ランダム #") + mapChoice.Seed + UiText.T(" (economy, lines)", "（内政・ライン）") : UiText.T("Classic two roads", "旧来の二本道"), GUI.skin.button);
+                bool now = GUI.Toggle(new Rect(x + labelWidth, y, half - 4f, 24f), economyMap, economyMap ? UiText.T("Random #", "ランダム #") + mapChoice.Seed + UiText.T(" (economy, lines, terrain)", "（内政・ライン・地形）") : UiText.T("Classic two roads", "旧来の二本道"), GUI.skin.button);
                 if (now != economyMap) mapChoice.EconomyMap = now;
                 GUI.enabled = economyMap;
                 if (GUI.Button(new Rect(x + labelWidth + half, y, half - 4f, 24f), UiText.T("New random map", "新しいランダムマップ"))) mapChoice.NewMap();

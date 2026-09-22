@@ -375,10 +375,17 @@ namespace Rts.Presentation
             };
             var open = new Color(0.42f, 0.6f, 0.36f);
             var wall = new Color(0.16f, 0.2f, 0.16f);
+            // V3-4 terrain kinds: forest, river, mountain.
+            var forest = new Color(0.1f, 0.33f, 0.14f);
+            var river = new Color(0.2f, 0.42f, 0.78f);
+            var mountain = new Color(0.5f, 0.48f, 0.46f);
             var pixels = new Color[terrain.WidthCells * terrain.HeightCells];
             for (int z = 0; z < terrain.HeightCells; z++)
                 for (int x = 0; x < terrain.WidthCells; x++)
-                    pixels[z * terrain.WidthCells + x] = terrain.IsBlocked(x, z) ? wall : open;
+                {
+                    byte kind = terrain.KindAt(x, z);
+                    pixels[z * terrain.WidthCells + x] = kind == 1 ? forest : kind == 2 ? river : kind == 3 ? mountain : terrain.IsBlocked(x, z) ? wall : open;
+                }
             texture.SetPixels(pixels);
             texture.Apply();
             fogCellSize = terrain.CellSizeMeters;

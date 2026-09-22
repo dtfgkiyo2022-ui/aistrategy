@@ -22,7 +22,8 @@ namespace Rts.Simulation
                 // Ver.1 scenario keeps its v1/v2 bytes and therefore its Config.Hash.
                 bool economy = c.ResourceNodes.Length > 0 || c.Economy.Enabled;
                 // Binary v4 adds the V3-2 industry rules and the starting belts; a V3-1 economy keeps its v3 bytes.
-                int schema = c.Economy.Industry ? 4 : economy ? 3 : tuned ? 2 : 1;
+                // Binary v5 adds the V3-4 terrain kinds; a map without terrain keeps its v4 bytes.
+                int schema = c.Map.Terrain.Length != 0 ? 5 : c.Economy.Industry ? 4 : economy ? 3 : tuned ? 2 : 1;
                 w.Write(schema); Text(w, c.ScenarioId); w.Write(c.Seed); w.Write(c.TickRateHz); w.Write(c.VerificationTickLimit);
                 var m = c.Map;
                 w.Write(m.WidthMeters); w.Write(m.HeightMeters); w.Write(m.CellSizeMeters); w.Write(m.WidthCells); w.Write(m.HeightCells); w.Write(m.DefaultPassable);
@@ -62,6 +63,7 @@ namespace Rts.Simulation
                     w.Write(e.BufferLimit); w.Write(e.InfantryMetalCost);
                     w.Write((uint)c.Belts.Length); foreach (var b in c.Belts) { w.Write(b.Cell); w.Write(b.FactionId); w.Write((byte)b.Facing); w.Write((byte)b.Item); }
                 }
+                if (schema >= 5) { w.Write((uint)m.Terrain.Length); w.Write(m.Terrain); }
                 return s.ToArray();
             }
         }
@@ -72,7 +74,7 @@ namespace Rts.Simulation
             using (var r = new BinaryReader(s))
             {
                 int schema = r.ReadInt32();
-                if (schema < 1 || schema > 4) throw new InvalidDataException("Unknown scenario binary schema.");
+                if (schema < 1 || schema > 5) throw new InvalidDataException("Unknown scenario binary schema.");
                 var c = new ScenarioDefinition { ScenarioId=Text(r), Seed=r.ReadUInt64(), TickRateHz=r.ReadInt32(), VerificationTickLimit=r.ReadInt64() };
                 c.Map = new MapDefinition { WidthMeters=r.ReadInt32(), HeightMeters=r.ReadInt32(), CellSizeMeters=r.ReadInt32(), WidthCells=r.ReadInt32(), HeightCells=r.ReadInt32(), DefaultPassable=Bool(r), BlockedCellIds=new int[Count(r)] };
                 for(int i=0;i<c.Map.BlockedCellIds.Length;i++) c.Map.BlockedCellIds[i]=r.ReadInt32();
@@ -109,6 +111,11 @@ namespace Rts.Simulation
                     e.SmelterSizeCells=r.ReadInt32(); e.SmelterWoodCost=r.ReadInt32(); e.SmelterWork=r.ReadInt32(); e.SmelterHp=r.ReadInt32(); e.SmeltTicks=r.ReadInt32(); e.OrePerMetal=r.ReadInt32();
                     e.BufferLimit=r.ReadInt32(); e.InfantryMetalCost=r.ReadInt32();
                     c.Belts=new BeltDefinition[Count(r)]; for(int i=0;i<c.Belts.Length;i++) c.Belts[i]=new BeltDefinition { Cell=r.ReadInt32(), FactionId=r.ReadUInt32(), Facing=(Facing)r.ReadByte(), Item=(ResourceKind)r.ReadByte() };
+                }
+                if (schema >= 5)
+                {
+                    int n=Count(r); var terrain=r.ReadBytes(n); if(terrain.Length!=n) throw new EndOfStreamException();
+                    c.Map.Terrain=terrain;
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

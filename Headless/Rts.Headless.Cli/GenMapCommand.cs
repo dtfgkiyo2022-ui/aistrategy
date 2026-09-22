@@ -14,7 +14,8 @@ internal static class GenMapCommand
     internal static int Run(Dictionary<string, string> options)
     {
         ulong seed = ulong.Parse(options.TryGetValue("--seed", out var value) ? value : throw new InvalidDataException("Missing --seed."), CultureInfo.InvariantCulture);
-        var scenario = MapGenerator.Generate(seed, options.ContainsKey("--economy") || options.ContainsKey("--industry"), options.ContainsKey("--industry"));
+        var scenario = options.ContainsKey("--terrain") ? MapGenerator.GenerateTerrain(seed)
+            : MapGenerator.Generate(seed, options.ContainsKey("--economy") || options.ContainsKey("--industry"), options.ContainsKey("--industry"));
         string text = Describe(scenario);
         if (options.TryGetValue("--out", out var path)) File.WriteAllText(path, text, new UTF8Encoding(false));
         else Console.Write(text);
@@ -28,7 +29,11 @@ internal static class GenMapCommand
         var blocked = new bool[columns * rows];
         foreach (int id in map.BlockedCellIds) blocked[id] = true;
         var marks = new char[columns * rows];
-        for (int i = 0; i < marks.Length; i++) marks[i] = blocked[i] ? '#' : '.';
+        for (int i = 0; i < marks.Length; i++)
+        {
+            byte kind = map.Terrain.Length == marks.Length ? map.Terrain[i] : (byte)0;
+            marks[i] = kind == 1 ? 'T' : kind == 2 ? '~' : kind == 3 ? '^' : blocked[i] ? '#' : '.';
+        }
         int Cell(SimPoint p) => (int)(p.Z.Raw / 65536 / size) * columns + (int)(p.X.Raw / 65536 / size);
         foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : n.Kind == ResourceKind.Ore ? 'o' : 'f';
         foreach (var d in s.Soldiers) marks[Cell(d.Position)] = d.FactionId == 1 ? '1' : '2';
@@ -39,8 +44,8 @@ internal static class GenMapCommand
         marks[Cell(s.Cores[1].Position)] = 'E';
 
         var b = new StringBuilder();
-        b.AppendLine(s.ScenarioId + "  (" + (s.Economy.Industry ? MapGenerator.IndustryVersion : MapGenerator.Version) + ", " + columns + "x" + rows + " cells of " + size + " m)");
-        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, 1/2 soldiers, v villagers, # blocked");
+        b.AppendLine(s.ScenarioId + "  (" + (s.Map.Terrain.Length != 0 ? MapGenerator.TerrainVersion : s.Economy.Industry ? MapGenerator.IndustryVersion : MapGenerator.Version) + ", " + columns + "x" + rows + " cells of " + size + " m)");
+        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, T forest, ~ river, ^ mountain, 1/2 soldiers, v villagers, # blocked");
         for (int z = rows - 1; z >= 0; z--)
         {
             for (int x = 0; x < columns; x++) b.Append(marks[z * columns + x]);
