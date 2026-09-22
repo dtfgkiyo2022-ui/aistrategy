@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f, Height = 150f, IndustryRows = 104f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -52,7 +52,7 @@ namespace Rts.Presentation
         private Rect PanelRect()
         {
             var economy = Economy();
-            float height = Height + (economy != null && economy.Industry ? IndustryRows : 0f);
+            float height = Height + (economy != null && economy.Industry ? IndustryRows : 0f) + (economy != null && economy.Ages ? 26f : 0f);
             float room = Screen.width - LeftColumn - RightColumn;
             float width = Mathf.Clamp(room - 8f, MinWidth, MaxWidth);
             float x = room >= MinWidth ? LeftColumn + (room - width) / 2f : Screen.width / 2f - width / 2f;
@@ -89,7 +89,7 @@ namespace Rts.Presentation
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
                     return true;
             }
-            var kind = mode == Mode.Mine ? BuildingKind.Mine : mode == Mode.Smelter ? BuildingKind.Smelter : BuildingKind.Barracks;
+            var kind = KindOf(mode);
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
             Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (the simulation checks the ground).", "（置けるかはシミュレーションが判断します）"));
@@ -123,18 +123,25 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : e.BuildingSizeCells;
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : e.BuildingSizeCells;
         }
 
         private int WoodOf(BuildingKind kind)
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : e.BarracksWoodCost;
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
-            => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所") : UiText.T("Barracks", "兵舎");
+            => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
+                : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : UiText.T("Barracks", "兵舎");
+
+        private static BuildingKind KindOf(Mode m)
+            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : BuildingKind.Barracks;
+
+        private static string CivName(CivKind c)
+            => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
 
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
@@ -186,7 +193,7 @@ namespace Rts.Presentation
                 return;
             }
             if (mode == Mode.RemoveBelt) { layer.ShowBeltPreview(onMap ? new List<int> { cell } : null, false); return; }
-            var kind = mode == Mode.Mine ? BuildingKind.Mine : mode == Mode.Smelter ? BuildingKind.Smelter : BuildingKind.Barracks;
+            var kind = KindOf(mode);
             int size = SizeOf(kind);
             var center = Vector3.zero;
             bool shown = onMap && Footprint(cell, size, out _, out center);
@@ -229,6 +236,23 @@ namespace Rts.Presentation
             }
             else GUI.Label(new Rect(right, y, half, 22f), barracks.HasValue ? UiText.T("Barracks: building ", "兵舎：建設中 ") + Percent(barracks.Value) : UiText.T("No barracks yet", "兵舎はまだありません"));
             y += 26f;
+            if (economy.Ages)
+            {
+                // V3-4: the age, and advancing into a civilisation from the primitive age.
+                if (economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
+                {
+                    string cost = UiText.T(" (", "（食料 ") + economy.AdvanceFoodCost + UiText.T("F ", " 木材 ") + economy.AdvanceWoodCost + UiText.T("W)", "）");
+                    if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Advance: farming", "時代を進める：農耕") + cost))
+                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
+                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
+                }
+                else if (economy.AdvanceRemaining > 0)
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advancing into ", "進めている：") + CivName(economy.AdvancingTo) + UiText.T(", ", "、残り ") + Seconds(economy.AdvanceRemaining));
+                else
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Civilisation: ", "文明：") + CivName(economy.Civ));
+                y += 26f;
+            }
             if (economy.Industry)
             {
                 // V3-3: the economy policy, and handing back what the player holds.
@@ -239,18 +263,30 @@ namespace Rts.Presentation
                 if (GUI.Button(new Rect(x + 3f * (quarter + 4f), y, quarter, 22f), UiText.T("Hand back", "お任せに戻す")))
                     Send(EconomyCommand.ReturnToAuto(faction, ++sequence), UiText.T("Everything you held goes back to the auto economy", "触った物をすべてお任せの内政に戻しました"));
                 y += 26f;
-                ModeButton(new Rect(x, y, half, 22f), Mode.Mine, UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"));
-                ModeButton(new Rect(right, y, half, 22f), Mode.Smelter, UiText.T("Smelter (", "精錬所（木材 ") + economy.SmelterWoodCost + UiText.T(" wood)", "）"));
+                // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
+                if (!economy.Ages || economy.Civ == CivKind.Metallurgy)
+                {
+                    ModeButton(new Rect(x, y, half, 22f), Mode.Mine, UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"));
+                    ModeButton(new Rect(right, y, half, 22f), Mode.Smelter, UiText.T("Smelter (", "精錬所（木材 ") + economy.SmelterWoodCost + UiText.T(" wood)", "）"));
+                }
+                else if (economy.Civ == CivKind.Agrarian)
+                {
+                    ModeButton(new Rect(x, y, half, 22f), Mode.Farm, UiText.T("Farm (", "農場（木材 ") + economy.FarmWoodCost + UiText.T(" wood)", "）"));
+                    GUI.Label(new Rect(right, y, half, 22f), UiText.T("Faster by food and river", "食料の点と川の近くほど速い"));
+                }
+                else GUI.Label(new Rect(x, y, w, 22f), UiText.T("Mines and farms come with a civilisation", "採掘場・農場は、文明に進んでから"));
                 y += 26f;
                 ModeButton(new Rect(x, y, half, 22f), Mode.Belt, mode == Mode.Belt ? UiText.T("Drag on the ground (Esc ends)", "地面をドラッグ（Escで終了）")
                     : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T(" wood per cell)", "／マス）"));
                 ModeButton(new Rect(right, y, half - 96f, 22f), Mode.RemoveBelt, UiText.T("Remove belt", "ベルトを外す"));
                 GUI.Label(new Rect(right + half - 92f, y, 92f, 22f), UiText.T("R: ", "R：") + FacingName(facing));
                 y += 26f;
-                var mine = OwnBuilding(economy, BuildingKind.Mine);
-                GUI.enabled = mine.HasValue && mine.Value.Complete;
-                if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle villagers -> carry from the mine by hand", "待機中の村人 → 採掘場から手で運ぶ")))
-                    SendIdleTo(economy, EconomyTargetKind.Building, mine.Value.Id, UiText.T("carry from the mine", "採掘場から手で運ぶ"));
+                bool farming = economy.Ages && economy.Civ == CivKind.Agrarian;
+                var source = OwnBuilding(economy, farming ? BuildingKind.Farm : BuildingKind.Mine);
+                string from = farming ? UiText.T("the farm", "農場") : UiText.T("the mine", "採掘場");
+                GUI.enabled = source.HasValue && source.Value.Complete;
+                if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle villagers -> carry from ", "待機中の村人 → ") + from + UiText.T(" by hand", "から手で運ぶ")))
+                    SendIdleTo(economy, EconomyTargetKind.Building, source.Value.Id, from + UiText.T(" by hand", "から手で運ぶ"));
                 GUI.enabled = true;
                 y += 26f;
             }
