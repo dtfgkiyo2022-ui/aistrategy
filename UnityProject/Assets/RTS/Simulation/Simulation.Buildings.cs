@@ -90,6 +90,7 @@ namespace Rts.Simulation
             foreach (int cell in Footprint(origin))
             {
                 if (!world.Map.IsPassable(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
                 foreach (var node in world.Nodes)
                     if (Chebyshev(cell, world.Map.Cell(node.Definition.Position)) < NodeClearanceCells) return false;
                 for (int i = 0; i < world.BuildingCount; i++)

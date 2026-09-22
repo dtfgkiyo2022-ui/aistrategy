@@ -127,9 +127,23 @@ namespace Rts.Simulation
         internal int Remaining;
     }
 
+    /// <summary>V3-2 (technical-design-v3 11.2): one belt cell. FactionId 0 means no belt on the cell.</summary>
+    internal struct BeltState
+    {
+        internal uint FactionId;
+        internal Facing Facing;
+        internal int Hp;
+        /// <summary>0 when empty. At most one item per cell.</summary>
+        internal ResourceKind Item;
+        /// <summary>Ticks since the item entered this cell.</summary>
+        internal int Progress;
+    }
+
     internal struct FactionEconomy
     {
         internal int Food, Wood;
+        /// <summary>V3-2 stock; always 0 without industry.</summary>
+        internal int Ore, Metal;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -163,6 +177,10 @@ namespace Rts.Simulation
         internal BuildingState[] Buildings = Array.Empty<BuildingState>();
         internal uint NextBuildingId = 1;
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
+        /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
+        internal BeltState[] Belts = Array.Empty<BeltState>();
+        /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>
+        internal int[] BeltOrder;
         internal MatchResult Result;
 
         internal WorldState(ScenarioDefinition source)
@@ -229,6 +247,12 @@ namespace Rts.Simulation
             Economies = new FactionEconomy[2];
             for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
+            if (e.Industry)
+            {
+                Belts = new BeltState[checked(Config.Map.WidthCells * Config.Map.HeightCells)];
+                foreach (var b in Config.Belts)
+                    Belts[b.Cell] = new BeltState { FactionId = b.FactionId, Facing = b.Facing, Hp = e.BeltHp, Item = b.Item };
+            }
         }
 
         private static ScenarioDefinition CopyAndValidate(ScenarioDefinition s)
@@ -263,7 +287,7 @@ namespace Rts.Simulation
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
-                ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers) };
+                ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts) };
             var e = c.Economy;
             if (e.Enabled)
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
@@ -273,7 +297,11 @@ namespace Rts.Simulation
                     && e.BarracksSizeCells > 0 && e.BarracksSizeCells <= 8 && e.BarracksWoodCost >= 0 && e.BarracksWork > 0 && e.BarracksHp > 0
                     && e.Builders > 0 && e.InfantryFoodCost >= 0 && e.InfantryWoodCost >= 0 && e.InfantryTrainTicks > 0 && e.AutoInfantryQueue >= 0,
                     "Invalid economy rules.");
-            else Require(c.Villagers.Length == 0, "Villagers need an enabled economy.");
+            else Require(c.Villagers.Length == 0 && !e.Industry, "Villagers and industry need an enabled economy.");
+            if (e.Industry)
+                Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
+                    && e.BeltLimit > 0 && e.BeltLimit <= 8192, "Invalid industry rules.");
+            else Require(c.Belts.Length == 0, "Belts need industry.");
             Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
             var villagerCounts = new int[2];
             var villagerGrid = new GridMap(c.Map);
@@ -290,11 +318,22 @@ namespace Rts.Simulation
             for (int i = 0; i < c.ResourceNodes.Length; i++)
             {
                 var n = c.ResourceNodes[i];
-                Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood) && n.Amount > 0, "Invalid resource node.");
+                Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood || (n.Kind == ResourceKind.Ore && e.Industry))
+                    && n.Amount > 0, "Invalid resource node.");
                 ValidatePoint(n.Position, c.Map);
                 // One node per cell; the key is the cell, not the point, so two points in one cell are rejected too.
                 long cell = (n.Position.Z.Raw / 65536 / m.CellSizeMeters) * m.WidthCells + n.Position.X.Raw / 65536 / m.CellSizeMeters;
                 Require(nodeCells.Add(cell), "Two resource nodes share a cell.");
+            }
+            Array.Sort(c.Belts, (a, b) => a.Cell.CompareTo(b.Cell));
+            var beltCounts = new int[2];
+            for (int i = 0; i < c.Belts.Length; i++)
+            {
+                var b = c.Belts[i];
+                Require(b.Cell >= 0 && b.Cell < m.WidthCells * m.HeightCells && (i == 0 || c.Belts[i - 1].Cell != b.Cell)
+                    && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3 && (byte)b.Item <= 4
+                    && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
+                Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
             // Definitions may arrive in any enumeration order; IDs are explicit and contiguous.
             Array.Sort(c.Factions, (a, b) => a.Id.CompareTo(b.Id));
@@ -380,7 +419,8 @@ namespace Rts.Simulation
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
-                InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue };
+                InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
+                Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

@@ -67,6 +67,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            AdvanceBelts();
             int count = world.VillagerCount; // villagers trained below start next tick
             for (int i = 0; i < count; i++)
             {
@@ -97,9 +98,7 @@ namespace Rts.Simulation
                 {
                     var core = OwnCore(v.FactionId);
                     if (!InRange(v.Position, core.Definition.Position, world.Config.Rules.CoreRadius + rules.DropOffMargin)) continue;
-                    ref var economy = ref world.Economies[v.FactionId - 1];
-                    if (v.CarryKind == ResourceKind.Food) economy.Food = checked(economy.Food + v.Carry);
-                    else economy.Wood = checked(economy.Wood + v.Carry);
+                    AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
                     v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
                 }

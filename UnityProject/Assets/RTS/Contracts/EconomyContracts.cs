@@ -8,7 +8,11 @@ namespace Rts.Contracts
     {
         PlaceBuilding = 1, Train = 2, CancelTrain = 3, AssignVillagers = 4,
         /// <summary>Turns the automatic economy of the faction on or off.</summary>
-        SetAutoEconomy = 5
+        SetAutoEconomy = 5,
+        /// <summary>V3-2: one run of belts (Cells with their Facings), as one drag on screen.</summary>
+        PlaceBelt = 6,
+        /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
+        RemoveBelt = 7
     }
 
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
@@ -34,10 +38,25 @@ namespace Rts.Contracts
         public uint TargetId { get; }
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
+        /// <summary>PlaceBelt: the cells of the run, in the order they are placed. Empty for every other kind.</summary>
+        public IReadOnlyList<int> Cells { get; }
+        /// <summary>PlaceBelt: one direction per cell.</summary>
+        public IReadOnlyList<Facing> Facings { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, null, null)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
+        {
+            Cells = ContractList.Copy(cells ?? Array.Empty<int>());
+            Facings = ContractList.Copy(facings ?? Array.Empty<Facing>());
+            if (Cells.Count != Facings.Count) throw new ArgumentException("A belt run needs one facing per cell.");
+            if (Cells.Count > MaxBeltRun) throw new ArgumentException("A belt run is at most " + MaxBeltRun + " cells.");
             FactionId = factionId;
             IssuerSequence = issuerSequence;
             Kind = kind;
@@ -65,6 +84,15 @@ namespace Rts.Contracts
 
         public static EconomyCommand Auto(uint faction, ulong sequence, bool enabled)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoEconomy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
+
+        public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+
+        public static EconomyCommand RemoveBelt(uint faction, ulong sequence, int cell)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBelt, 0, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
+
+        /// <summary>The longest run one PlaceBelt may carry (a drag across the whole map is 128 cells).</summary>
+        public const int MaxBeltRun = 256;
     }
 
     public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5 }
@@ -124,6 +152,24 @@ namespace Rts.Contracts
         }
     }
 
+    /// <summary>
+    /// V3-2: a belt cell, own or enemy on a cell the faction sees now. Item is 0 when the cell is empty; Progress counts the
+    /// ticks since the item entered the cell (it moves on at TicksPerCell), so the display can slide it along.
+    /// </summary>
+    public readonly struct BeltView
+    {
+        public int Cell { get; }
+        public uint FactionId { get; }
+        public Facing Facing { get; }
+        public ResourceKind Item { get; }
+        public int Progress { get; }
+
+        public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress)
+        {
+            Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress;
+        }
+    }
+
     /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
     public sealed class EconomyView
     {
@@ -142,11 +188,30 @@ namespace Rts.Contracts
         public IReadOnlyList<VillagerView> Villagers { get; }
         public IReadOnlyList<BuildingView> Buildings { get; }
         public IReadOnlyList<ResourceView> Resources { get; }
+        /// <summary>V3-2: false on a map without lines (then Ore, Metal and Belts stay empty).</summary>
+        public bool Industry { get; }
+        public int Ore { get; }
+        public int Metal { get; }
+        public int BeltWoodCost { get; }
+        public int BeltTicksPerCell { get; }
+        public IReadOnlyList<BeltView> Belts { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
+            : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
+                barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
+                false, 0, 0, 0, 0, null)
         {
+        }
+
+        public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
+            bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
+            IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources,
+            bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts)
+        {
+            Industry = industry; Ore = ore; Metal = metal; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;
+            Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());
             Food = food; Wood = wood; Population = population; PopulationCap = populationCap;
             VillagerQueued = villagerQueued; VillagerTrainRemaining = villagerTrainRemaining; AutoEconomy = autoEconomy;
             BuildingSizeCells = buildingSizeCells; BarracksWoodCost = barracksWoodCost; VillagerFoodCost = villagerFoodCost;

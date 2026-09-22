@@ -121,6 +121,11 @@ namespace Rts.Replay
                 w.Write(e.FactionId); w.Write(e.IssuerSequence); w.Write((byte)e.Kind); w.Write((byte)e.Building); w.Write(e.Cell); w.Write(e.ProducerId); w.Write((byte)e.Unit);
                 w.Write((uint)e.VillagerIds.Count); foreach(var id in e.VillagerIds) w.Write(id);
                 w.Write((byte)e.TargetKind); w.Write(e.TargetId); w.Write(e.Enabled);
+                // V3-2: only a belt run carries cells, so every V3-1 economy input keeps its exact bytes.
+                if(e.Kind==EconomyCommandKind.PlaceBelt)
+                {
+                    w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
+                }
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -144,7 +149,14 @@ namespace Rts.Replay
                 uint faction=r.ReadUInt32(); ulong issuer=r.ReadUInt64(); var ek=ReplayBinary.Enum<EconomyCommandKind>(r); var building=(BuildingKind)r.ReadByte(); int cell=r.ReadInt32(); uint producer=r.ReadUInt32(); var unit=(UnitKind)r.ReadByte();
                 var villagers=new uint[ReplayBinary.Count(r)]; for(int i=0;i<villagers.Length;i++)villagers[i]=r.ReadUInt32();
                 var target=ReplayBinary.Enum<EconomyTargetKind>(r); uint targetId=r.ReadUInt32(); bool enabled=ReplayBinary.Bool(r);
-                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled));
+                int[] cells=null; Facing[] facings=null;
+                if(ek==EconomyCommandKind.PlaceBelt)
+                {
+                    int n=ReplayBinary.Count(r); if(n>EconomyCommand.MaxBeltRun)throw new InvalidDataException("Belt run length.");
+                    cells=new int[n]; facings=new Facing[n];
+                    for(int i=0;i<n;i++) { cells[i]=r.ReadInt32(); facings[i]=ReplayBinary.Enum<Facing>(r); }
+                }
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

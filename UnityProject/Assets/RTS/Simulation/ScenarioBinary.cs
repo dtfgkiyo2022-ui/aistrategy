@@ -21,7 +21,8 @@ namespace Rts.Simulation
                 // Binary v3 adds the Ver.3 resources and economy rules. Written only when a scenario has them, so every
                 // Ver.1 scenario keeps its v1/v2 bytes and therefore its Config.Hash.
                 bool economy = c.ResourceNodes.Length > 0 || c.Economy.Enabled;
-                int schema = economy ? 3 : tuned ? 2 : 1;
+                // Binary v4 adds the V3-2 industry rules and the starting belts; a V3-1 economy keeps its v3 bytes.
+                int schema = c.Economy.Industry ? 4 : economy ? 3 : tuned ? 2 : 1;
                 w.Write(schema); Text(w, c.ScenarioId); w.Write(c.Seed); w.Write(c.TickRateHz); w.Write(c.VerificationTickLimit);
                 var m = c.Map;
                 w.Write(m.WidthMeters); w.Write(m.HeightMeters); w.Write(m.CellSizeMeters); w.Write(m.WidthCells); w.Write(m.HeightCells); w.Write(m.DefaultPassable);
@@ -52,6 +53,12 @@ namespace Rts.Simulation
                         w.Write((uint)c.Villagers.Length); foreach (var v in c.Villagers) { w.Write(v.Id); w.Write(v.FactionId); Point(w,v.Position); }
                     }
                 }
+                if (schema >= 4)
+                {
+                    var e = c.Economy;
+                    w.Write(e.BeltWoodCost); w.Write(e.BeltTicksPerCell); w.Write(e.BeltHp); w.Write(e.BeltLimit);
+                    w.Write((uint)c.Belts.Length); foreach (var b in c.Belts) { w.Write(b.Cell); w.Write(b.FactionId); w.Write((byte)b.Facing); w.Write((byte)b.Item); }
+                }
                 return s.ToArray();
             }
         }
@@ -62,7 +69,7 @@ namespace Rts.Simulation
             using (var r = new BinaryReader(s))
             {
                 int schema = r.ReadInt32();
-                if (schema < 1 || schema > 3) throw new InvalidDataException("Unknown scenario binary schema.");
+                if (schema < 1 || schema > 4) throw new InvalidDataException("Unknown scenario binary schema.");
                 var c = new ScenarioDefinition { ScenarioId=Text(r), Seed=r.ReadUInt64(), TickRateHz=r.ReadInt32(), VerificationTickLimit=r.ReadInt64() };
                 c.Map = new MapDefinition { WidthMeters=r.ReadInt32(), HeightMeters=r.ReadInt32(), CellSizeMeters=r.ReadInt32(), WidthCells=r.ReadInt32(), HeightCells=r.ReadInt32(), DefaultPassable=Bool(r), BlockedCellIds=new int[Count(r)] };
                 for(int i=0;i<c.Map.BlockedCellIds.Length;i++) c.Map.BlockedCellIds[i]=r.ReadInt32();
@@ -88,6 +95,14 @@ namespace Rts.Simulation
                         e.InfantryFoodCost=r.ReadInt32(); e.InfantryWoodCost=r.ReadInt32(); e.InfantryTrainTicks=r.ReadInt32(); e.AutoInfantryQueue=r.ReadInt32();
                         c.Villagers=new VillagerDefinition[Count(r)]; for(int i=0;i<c.Villagers.Length;i++) c.Villagers[i]=new VillagerDefinition { Id=r.ReadUInt32(), FactionId=r.ReadUInt32(), Position=Point(r) };
                     }
+                }
+                if (schema >= 4)
+                {
+                    // v4 is written only for industry, which needs the economy the v3 block just read.
+                    if (!c.Economy.Enabled) throw new InvalidDataException("Industry without an economy.");
+                    var e=c.Economy;
+                    e.Industry=true; e.BeltWoodCost=r.ReadInt32(); e.BeltTicksPerCell=r.ReadInt32(); e.BeltHp=r.ReadInt32(); e.BeltLimit=r.ReadInt32();
+                    c.Belts=new BeltDefinition[Count(r)]; for(int i=0;i<c.Belts.Length;i++) c.Belts[i]=new BeltDefinition { Cell=r.ReadInt32(), FactionId=r.ReadUInt32(), Facing=(Facing)r.ReadByte(), Item=(ResourceKind)r.ReadByte() };
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

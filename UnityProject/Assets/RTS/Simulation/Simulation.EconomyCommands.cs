@@ -22,6 +22,12 @@ namespace Rts.Simulation
                 case EconomyCommandKind.SetAutoEconomy:
                     economy.AutoOff = !c.Enabled;
                     return;
+                case EconomyCommandKind.PlaceBelt:
+                    PlaceBelts(faction, c);
+                    return;
+                case EconomyCommandKind.RemoveBelt:
+                    RemoveBelt(faction, c.Cell);
+                    return;
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     if (c.Building != BuildingKind.Barracks || economy.Wood < rules.BarracksWoodCost) return;

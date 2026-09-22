@@ -41,9 +41,20 @@ namespace Rts.Simulation
             foreach (var n in world.Nodes)
                 if (n.Remaining > 0) resources.Add(new ResourceView(n.Definition.Id, n.Definition.Kind, n.Definition.Position, n.Remaining));
             int population = LivingVillagers(faction) + LivingSoldiers(faction);
+            // V3-2: own belts in full, enemy belts on cells the faction sees now (without what they carry).
+            var belts = new List<BeltView>();
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                var b = world.Belts[cell];
+                if (b.FactionId == 0) continue;
+                bool own = b.FactionId == faction;
+                if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0));
+            }
             return new EconomyView(economy.Food, economy.Wood, population, rules.PopulationCap, economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, rules.InfantryFoodCost,
-                rules.InfantryWoodCost, villagers, buildings, resources);
+                rules.InfantryWoodCost, villagers, buildings, resources,
+                rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

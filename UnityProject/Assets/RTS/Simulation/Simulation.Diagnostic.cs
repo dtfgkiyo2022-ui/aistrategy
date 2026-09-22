@@ -112,6 +112,24 @@ namespace Rts.Simulation
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }
+            // V3-2: written only with industry, so a V3-1 economy keeps its exact canonical bytes.
+            if (!world.Config.Economy.Industry) return;
+            for (int f = 0; f < world.Economies.Length; f++)
+            {
+                var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal);
+            }
+            uint belts = 0;
+            foreach (var b in world.Belts) if (b.FactionId != 0) belts++;
+            w.Value("Belts.Count", belts);
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                var b = world.Belts[cell];
+                if (b.FactionId == 0) continue;
+                string n = "Belts[" + cell.ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
+                w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress);
+            }
         }
         private sealed class StateWriter : BinaryWriter
         {
