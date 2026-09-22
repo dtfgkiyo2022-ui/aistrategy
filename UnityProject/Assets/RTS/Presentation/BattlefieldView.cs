@@ -72,10 +72,42 @@ namespace Rts.Presentation
 
         public SelectionTarget Selected { get { return selected; } }
 
+        // Box selection: every own army picked by the last drag. Selected is then the first of them, so code that reads
+        // one army still works; the army commands go to each army in this list.
+        private readonly List<uint> selectedArmies = new List<uint>();
+        private readonly List<GameObject> extraRings = new List<GameObject>();
+
+        /// <summary>The selected own armies: one for a click, several after a box, empty without an army.</summary>
+        public IReadOnlyList<uint> SelectedArmies { get { return selectedArmies; } }
+
         public void Select(SelectionTarget target)
         {
             selected = target;
+            selectedArmies.Clear();
+            if (target.Kind == SelectionKind.Army) selectedArmies.Add(target.Id);
             UpdateSelectionRing();
+        }
+
+        /// <summary>Selects these armies together (none clears the selection).</summary>
+        public void SelectArmies(IList<uint> ids)
+        {
+            if (ids.Count == 0) { Select(SelectionTarget.None); return; }
+            Select(new SelectionTarget(SelectionKind.Army, ids[0]));
+            for (int i = 1; i < ids.Count; i++) selectedArmies.Add(ids[i]);
+            PlaceSelectionRing();
+        }
+
+        /// <summary>Own armies whose marker is inside the screen rectangle (screen coordinates, origin bottom left), by id.</summary>
+        public List<uint> ArmiesInScreenRect(Camera camera, Rect screenRect)
+        {
+            var found = new List<uint>();
+            foreach (var pair in armies)
+            {
+                var projected = camera.WorldToScreenPoint(pair.Value.Object.transform.position);
+                if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) found.Add(pair.Key);
+            }
+            found.Sort();
+            return found;
         }
 
         public bool TryPick(Camera camera, Vector2 screenPoint, float radiusPixels, out SelectionTarget target)
@@ -90,6 +122,12 @@ namespace Rts.Presentation
 
         public string DescribeSelection()
         {
+            if (selectedArmies.Count > 1)
+            {
+                int alive = 0;
+                foreach (uint id in selectedArmies) if (armyAlive.TryGetValue(id, out var count)) alive += count;
+                return UiText.T("Selected: Armies ", "選択中：軍団 ") + string.Join(", ", selectedArmies) + UiText.T(" (alive ", "（生存 ") + alive + ")";
+            }
             switch (selected.Kind)
             {
                 case SelectionKind.Army:
@@ -136,12 +174,37 @@ namespace Rts.Presentation
 
         private void PlaceSelectionRing()
         {
-            if (selectionRing == null || selected.Kind == SelectionKind.None) return;
+            if (selectionRing == null || selected.Kind == SelectionKind.None) { PlaceExtraRings(); return; }
             var map = selected.Kind == SelectionKind.Core ? cores : selected.Kind == SelectionKind.Outpost ? outposts : armies;
             if (!map.TryGetValue(selected.Id, out var visual)) { selectionRing.SetActive(false); return; }
             selectionRing.SetActive(true);
             var position = visual.Object.transform.position;
             selectionRing.transform.position = new Vector3(position.x, 0.08f, position.z);
+            PlaceExtraRings();
+        }
+
+        /// <summary>One more ring under each army of a box selection after the first.</summary>
+        private void PlaceExtraRings()
+        {
+            int needed = Mathf.Max(0, selectedArmies.Count - 1);
+            while (extraRings.Count < needed)
+            {
+                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                ring.name = "SelectionRing";
+                ring.transform.SetParent(transform, false);
+                Discard(ring.GetComponent<Collider>());
+                ring.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.9f, 0.2f));
+                ring.transform.localScale = new Vector3(6f, 0.05f, 6f);
+                extraRings.Add(ring);
+            }
+            for (int i = 0; i < extraRings.Count; i++)
+            {
+                bool shown = i < needed && armies.TryGetValue(selectedArmies[i + 1], out var army);
+                extraRings[i].SetActive(shown);
+                if (!shown) continue;
+                var position = armies[selectedArmies[i + 1]].Object.transform.position;
+                extraRings[i].transform.position = new Vector3(position.x, 0.08f, position.z);
+            }
         }
 
         public void Push(FactionFrame frame)
@@ -615,6 +678,9 @@ namespace Rts.Presentation
             foreach (var arrow in arrows.Values) Discard(arrow.Line.gameObject);
             arrows.Clear();
             if (selectionRing != null) { Discard(selectionRing); selectionRing = null; }
+            foreach (var ring in extraRings) Discard(ring);
+            extraRings.Clear();
+            selectedArmies.Clear();
             selected = SelectionTarget.None;
             latestFrame = null;
         }
