@@ -26,12 +26,12 @@ namespace Rts.Simulation
             }
         }
 
-        private void Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin)
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin)
         {
             int alive = 0;
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) alive++;
-            if (alive >= world.Config.Rules.FactionCap) return;
+            if (alive >= world.Config.Rules.FactionCap) return false;
             uint army = 0;
             for (int priority = 0; priority < 3 && army == 0; priority++)
                 foreach (uint id in world.Factions[faction - 1].ArmyIds)
@@ -45,11 +45,11 @@ namespace Rts.Simulation
                     foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
                     if (count < a.Definition.Capacity) { army = id; break; }
                 }
-            if (army == 0) return;
+            if (army == 0) return false;
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
                 if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell)))) cell = i;
-            if (cell < 0) return; // No legal spawn position in an empty, impassable scenario.
+            if (cell < 0) return false; // No legal spawn position in an empty, impassable scenario.
             uint nextId = checked(world.NextSoldierId + 1);
             int index = world.SoldierCount;
             EnsureSoldierCapacity(index + 1);
@@ -74,6 +74,7 @@ namespace Rts.Simulation
             // Only observers who can see the spawn receive the event.
             commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.Reinforcement,
                 (byte)((faction == 1 || IsVisibleTo(1, position) ? 1 : 0) | (faction == 2 || IsVisibleTo(2, position) ? 2 : 0)), nextId - 1, 0, origin, 1, ReasonCode.None));
+            return true;
         }
 
         private void EnsureSoldierCapacity(int required)

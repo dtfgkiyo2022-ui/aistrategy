@@ -103,9 +103,23 @@ namespace Rts.Simulation
         internal int[] Route;
         internal int RouteCursor;
         internal SimPoint RouteGoal;
+        internal uint BuildingId;
     }
 
-    internal enum VillagerTask : byte { Idle = 0, ToNode = 1, Gathering = 2, ToDropOff = 3 }
+    internal enum VillagerTask : byte { Idle = 0, ToNode = 1, Gathering = 2, ToDropOff = 3, ToBuild = 4, Building = 5 }
+
+    internal struct BuildingState
+    {
+        internal uint Id, FactionId;
+        internal BuildingKind Kind;
+        /// <summary>Lower-left cell of the square footprint; its cells are impassable from placement on.</summary>
+        internal int OriginCell;
+        /// <summary>Nearest passable cell outside the footprint, where builders stand and new soldiers appear.</summary>
+        internal int WorkCell;
+        internal bool Alive, Complete;
+        internal int Hp, Progress, Queued;
+        internal long TrainRemaining;
+    }
 
     internal struct ResourceNodeState
     {
@@ -144,6 +158,9 @@ namespace Rts.Simulation
         internal int VillagerCount => checked((int)(NextVillagerId - 1));
         internal FactionEconomy[] Economies;
         internal Fix64 VillagerStep;
+        internal BuildingState[] Buildings = Array.Empty<BuildingState>();
+        internal uint NextBuildingId = 1;
+        internal int BuildingCount => checked((int)(NextBuildingId - 1));
         internal MatchResult Result;
 
         internal WorldState(ScenarioDefinition source)
@@ -250,7 +267,10 @@ namespace Rts.Simulation
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
                     && e.VillagerSpeed.Raw > 0 && e.VillagerSpeed <= Fix64.FromInt(16) && e.CarryCapacity > 0 && e.GatherIntervalTicks > 0
                     && e.VillagerFoodCost >= 0 && e.VillagerTrainTicks > 0 && e.QueueLimit > 0 && e.AutoVillagerTarget >= 0
-                    && e.DropOffMargin.Raw >= 0 && e.DropOffMargin <= Fix64.FromInt(1024), "Invalid economy rules.");
+                    && e.DropOffMargin.Raw >= 0 && e.DropOffMargin <= Fix64.FromInt(1024)
+                    && e.BarracksSizeCells > 0 && e.BarracksSizeCells <= 8 && e.BarracksWoodCost >= 0 && e.BarracksWork > 0 && e.BarracksHp > 0
+                    && e.Builders > 0 && e.InfantryFoodCost >= 0 && e.InfantryWoodCost >= 0 && e.InfantryTrainTicks > 0 && e.AutoInfantryQueue >= 0,
+                    "Invalid economy rules.");
             else Require(c.Villagers.Length == 0, "Villagers need an enabled economy.");
             Array.Sort(c.Villagers, (a, b) => a.Id.CompareTo(b.Id));
             var villagerCounts = new int[2];
@@ -356,7 +376,9 @@ namespace Rts.Simulation
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
-                DropOffMargin = e.DropOffMargin };
+                DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
+                BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
+                InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

@@ -13,6 +13,14 @@ namespace Rts.Decision
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;
 
+        /// <summary>Step 2: one barracks, once there is wood for it.</summary>
+        public static bool ShouldBuildBarracks(bool hasBarracks, int wood, int cost) => !hasBarracks && wood >= cost;
+
+        /// <summary>Step 3: keep a short queue at a finished barracks while food, wood, population and army room allow.</summary>
+        public static bool ShouldTrainInfantry(bool barracksReady, int queued, int queueTarget, int food, int wood, int foodCost, int woodCost,
+            int population, int cap, bool armyRoom)
+            => barracksReady && queued < queueTarget && food >= foodCost && wood >= woodCost && population < cap && armyRoom;
+
         /// <summary>
         /// Step 4: which resource the next idle villager gathers. Keeps the gatherers near two on food for each one on
         /// wood; counting gatherers rather than stock keeps a batch of idle villagers from all picking the same kind.

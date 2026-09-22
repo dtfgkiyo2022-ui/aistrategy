@@ -136,7 +136,7 @@ namespace Rts.Simulation
 
         private void Move()
         {
-            if (world.Config.Map.BlockedCellIds.Length != 0 || !world.Config.Map.DefaultPassable) PrepareArmyPaths();
+            if (world.Config.Map.BlockedCellIds.Length != 0 || !world.Config.Map.DefaultPassable || world.BuildingCount > 0) PrepareArmyPaths();
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];

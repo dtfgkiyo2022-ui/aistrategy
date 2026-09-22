@@ -26,11 +26,14 @@ namespace Rts.Simulation
                 if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0) continue;
                 ref var economy = ref world.Economies[f];
                 int villagers = LivingVillagers(faction);
-                if (!EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, rules.AutoVillagerTarget, economy.Food,
-                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction), rules.PopulationCap, rules.QueueLimit)) continue;
-                economy.Food = checked(economy.Food - rules.VillagerFoodCost);
-                if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
-                economy.Queued++;
+                if (EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, rules.AutoVillagerTarget, economy.Food,
+                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), rules.PopulationCap, rules.QueueLimit))
+                {
+                    economy.Food = checked(economy.Food - rules.VillagerFoodCost);
+                    if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
+                    economy.Queued++;
+                }
+                DecideBuildings(faction);
             }
         }
 
@@ -47,6 +50,7 @@ namespace Rts.Simulation
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = OwnCore(v.FactionId).Definition.Position;
+                else if (v.Task == VillagerTask.ToBuild) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
                 else { v.MoveGoal = v.Position; continue; }
                 v.MoveGoal = VillagerRouteTarget(ref v, goal);
                 var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep));
@@ -100,6 +104,7 @@ namespace Rts.Simulation
                     v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
                 }
             }
+            AdvanceBuildings();
             for (int f = 0; f < 2; f++)
             {
                 ref var economy = ref world.Economies[f];
@@ -121,7 +126,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var other = world.Villagers[i];
-                if (!other.Alive || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0) continue;
+                if (!other.Alive || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0
+                    || other.Task == VillagerTask.ToBuild || other.Task == VillagerTask.Building) continue;
                 if (world.Nodes[other.NodeId - 1].Definition.Kind == ResourceKind.Food) food++; else wood++;
             }
             int n = world.Nodes.Length;
