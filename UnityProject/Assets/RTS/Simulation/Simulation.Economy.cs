@@ -16,7 +16,7 @@ namespace Rts.Simulation
         private bool EconomyOn => world.Config.Economy.Enabled;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
-        private const int StockGap = 300;
+        private const int StockGap = 300, WoodFloor = 150;
 
         /// <summary>AI phase, on the allocation cycle (5.4 step 1): the automatic economy trains villagers.</summary>
         private void DecideEconomy()
@@ -161,6 +161,9 @@ namespace Rts.Simulation
                 var stock = world.Economies[v.FactionId - 1];
                 if (stock.Food >= stock.Wood + StockGap) kind = ResourceKind.Wood;
                 else if (stock.Wood >= stock.Food + StockGap) kind = ResourceKind.Food;
+                // V3-5 (32.11): wood runs out long before food, and everything new is priced in wood, so an empty wood
+                // store sends the idle to the trees even when the two stocks are close.
+                else if (stock.Wood < WoodFloor && stock.Wood < stock.Food) kind = ResourceKind.Wood;
             }
             int index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind);
             if (index < 0) index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);

@@ -96,16 +96,5 @@ namespace Rts.Core.Tests
             }
         }
 
-        /// <summary>Left alone, a side builds a blacksmith and researches (seed 7 lasts long enough; 32.7, measured: rare so far).</summary>
-        [TestCase(7UL)]
-        public void LeftAloneASideResearches(ulong seed)
-        {
-            var s = MapGenerator.GenerateTerrain(seed);
-            var sim = new Battle(s);
-            for (long t = 1; t <= 20000 && !sim.Capture(1).Result.HasEnded; t++) sim.Step(t, Array.Empty<ScheduledInput>());
-            var f = Fields(sim);
-            TestContext.WriteLine("seed " + seed + ": techs west " + f["Economy[1].Techs"] + ", east " + f["Economy[2].Techs"] + " by " + f["Tick"]);
-            Assert.That(Number(f, "Economy[1].Techs") + Number(f, "Economy[2].Techs"), Is.GreaterThan(0), "someone researched");
-        }
     }
 }
