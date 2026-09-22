@@ -149,6 +149,9 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #12): the archery range and the stable - from the second age, in either civilisation, so a side
         /// can field the unit its own civilisation does not train.</summary>
         public int RangeSizeCells = 3, RangeWoodCost = 150, RangeWork = 300, RangeHp = 600;
+        /// <summary>V3-5 (32 #13): thousandths added to a blow that counters its target (archer over infantry, cavalry over
+        /// archer, infantry over cavalry). 0 turns the triangle off.</summary>
+        public int CounterBonusPermille = 500;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
     }
 

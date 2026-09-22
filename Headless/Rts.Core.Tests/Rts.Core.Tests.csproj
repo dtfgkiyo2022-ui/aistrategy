@@ -44,6 +44,7 @@
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="RangeStableTests.cs" />
+    <Compile Include="CounterTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
