@@ -23,7 +23,8 @@ namespace Rts.Presentation
 
         private IMatchClock Clock { get { return clock ?? (clock = clockSource as IMatchClock); } }
 
-        private static Rect ClockRect() { return new Rect(Screen.width / 2f - 200f, 8f, 400f, 58f); }
+        // Under the stock bar that runs across the top (EconomyPanel), so the two never overlap.
+        private static Rect ClockRect() { return new Rect(Screen.width / 2f - 200f, 40f, 400f, 58f); }
 
         private static Rect TimelineRect()
         {
