@@ -86,7 +86,7 @@ namespace Rts.Simulation
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
-                w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining);
+                w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
             }
             w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
             foreach (var r in world.Nodes) w.Value("ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining", r.Remaining);

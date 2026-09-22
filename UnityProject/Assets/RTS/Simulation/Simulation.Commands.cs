@@ -110,7 +110,8 @@ namespace Rts.Simulation
             foreach (var input in inputs)
             {
                 if (input == null || input.AcceptedTick < 0 || input.AcceptedTick >= tick || input.ApplyTick < tick ||
-                    !Enum.IsDefined(typeof(InputKind), input.Kind) || input.LogIndex == 0 || input.LogIndex <= last || input.Orders.Any(o => o == null))
+                    !Enum.IsDefined(typeof(InputKind), input.Kind) || input.LogIndex == 0 || input.LogIndex <= last || input.Orders.Any(o => o == null)
+                    || (input.Kind == InputKind.Economy) != (input.Economy != null) || input.Economy != null && (input.Economy.FactionId < 1 || input.Economy.FactionId > 2))
                     throw new ArgumentException("Inputs must be ordered, received before this tick and not past their apply tick.", nameof(inputs));
                 last = input.LogIndex;
             }
@@ -208,6 +209,7 @@ namespace Rts.Simulation
             {
                 if (input.LogIndex <= world.InputCursor) throw new ArgumentException("LogIndex must increase across ticks.");
                 world.InputCursor = input.LogIndex;
+                if (input.Kind == InputKind.Economy) { ApplyEconomyCommand(input.Economy); continue; }
                 nextRequestId = Math.Max(nextRequestId, checked(input.RequestId + 1));
                 foreach (var o in input.Orders) { nextCommandId = Math.Max(nextCommandId, checked(o.CommandId + 1)); nextBatchId = Math.Max(nextBatchId, checked(o.BatchId + 1)); }
                 if (input.Kind == InputKind.Cancel)

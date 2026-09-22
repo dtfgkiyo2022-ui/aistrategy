@@ -30,6 +30,7 @@
     <Compile Include="MatchOutcomeTests.cs" />
     <Compile Include="MapGeneratorTests.cs" />
     <Compile Include="EconomyTests.cs" />
+    <Compile Include="EconomyCommandTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->

@@ -114,6 +114,14 @@ namespace Rts.Replay
                 w.Write((uint)o.Parents.Count); foreach(var p in o.Parents) { Scope(w,p.Scope); w.Write(p.Revision); }
                 w.Write(o.ObservedTick); w.Write(o.Expiration.ValidUntilTick); w.Write(o.Expiration.MaxObservationAgeTicks); w.Write((byte)o.Expiration.Flags);
             }
+            // Only economy inputs carry this, so every Ver.1 input keeps its exact bytes.
+            if(v.Kind==InputKind.Economy)
+            {
+                var e=v.Economy;
+                w.Write(e.FactionId); w.Write(e.IssuerSequence); w.Write((byte)e.Kind); w.Write((byte)e.Building); w.Write(e.Cell); w.Write(e.ProducerId); w.Write((byte)e.Unit);
+                w.Write((uint)e.VillagerIds.Count); foreach(var id in e.VillagerIds) w.Write(id);
+                w.Write((byte)e.TargetKind); w.Write(e.TargetId); w.Write(e.Enabled);
+            }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
         {
@@ -129,6 +137,14 @@ namespace Rts.Replay
                 long observed=r.ReadInt64(),valid=r.ReadInt64(); int age=r.ReadInt32(); byte flags=r.ReadByte();
                 if(loss>1000 || reserve>1000 || flags>7)throw new InvalidDataException("Order range.");
                 orders[i]=new PolicyOrder(command,batch,source,target,policy,goal,priority,new LossBudget(loss),end,reserve,revision,parents,observed,new Expiration(valid,age,(ExpireFlags)flags));
+            }
+            if(kind==InputKind.Economy)
+            {
+                if(orders.Length!=0)throw new InvalidDataException("Economy input with orders.");
+                uint faction=r.ReadUInt32(); ulong issuer=r.ReadUInt64(); var ek=ReplayBinary.Enum<EconomyCommandKind>(r); var building=(BuildingKind)r.ReadByte(); int cell=r.ReadInt32(); uint producer=r.ReadUInt32(); var unit=(UnitKind)r.ReadByte();
+                var villagers=new uint[ReplayBinary.Count(r)]; for(int i=0;i<villagers.Length;i++)villagers[i]=r.ReadUInt32();
+                var target=ReplayBinary.Enum<EconomyTargetKind>(r); uint targetId=r.ReadUInt32(); bool enabled=ReplayBinary.Bool(r);
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

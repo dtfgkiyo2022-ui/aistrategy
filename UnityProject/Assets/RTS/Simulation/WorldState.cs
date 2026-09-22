@@ -133,6 +133,8 @@ namespace Rts.Simulation
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
+        /// <summary>The player turned the automatic economy off (it is on by default).</summary>
+        internal bool AutoOff;
     }
 
     internal sealed class WorldState

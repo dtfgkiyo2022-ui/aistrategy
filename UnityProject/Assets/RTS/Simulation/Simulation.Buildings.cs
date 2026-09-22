@@ -43,9 +43,14 @@ namespace Rts.Simulation
 
         private void PlaceBarracks(uint faction)
         {
-            var rules = world.Config.Economy;
             int origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
+            PlaceBarracksAt(faction, origin);
+        }
+
+        private void PlaceBarracksAt(uint faction, int origin)
+        {
+            var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             economy.Wood = checked(economy.Wood - rules.BarracksWoodCost);
             int index = world.BuildingCount;

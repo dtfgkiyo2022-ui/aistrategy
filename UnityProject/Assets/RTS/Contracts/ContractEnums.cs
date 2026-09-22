@@ -43,11 +43,14 @@ namespace Rts.Contracts
 
     public enum InputKind : byte
     {
-        Reserve = 1, Resolve = 2, Cancel = 3, Proposal = 4
+        Reserve = 1, Resolve = 2, Cancel = 3, Proposal = 4,
+        /// <summary>Ver.3 direct economy operation; carries <see cref="ScheduledInput.Economy"/> and no orders.</summary>
+        Economy = 5
     }
 
     // UnitKind has no assigned numbers in chapter 5; these are the initial contract values.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2 }
+    // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). V3-1 has two.</summary>
     public enum ResourceKind : byte { Food = 1, Wood = 2 }
