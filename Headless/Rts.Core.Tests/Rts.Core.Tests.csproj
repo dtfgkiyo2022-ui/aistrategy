@@ -38,6 +38,8 @@
     <Compile Include="AgeTests.cs" />
     <Compile Include="CivTests.cs" />
     <Compile Include="TrainingTests.cs" />
+    <Compile Include="DefenceTests.cs" />
+    <Compile Include="ResearchTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />

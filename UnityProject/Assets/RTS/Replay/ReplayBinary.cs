@@ -122,7 +122,7 @@ namespace Rts.Replay
                 w.Write((uint)e.VillagerIds.Count); foreach(var id in e.VillagerIds) w.Write(id);
                 w.Write((byte)e.TargetKind); w.Write(e.TargetId); w.Write(e.Enabled);
                 // V3-2: only a belt run carries cells, so every V3-1 economy input keeps its exact bytes.
-                if(e.Kind==EconomyCommandKind.PlaceBelt)
+                if(e.Kind==EconomyCommandKind.PlaceBelt || e.Kind==EconomyCommandKind.PlaceWall)
                 {
                     w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
                 }
@@ -132,6 +132,8 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
                 if(e.Kind==EconomyCommandKind.AdvanceAge) w.Write((byte)e.Civ);
+                // V3-5: only research carries the tech.
+                if(e.Kind==EconomyCommandKind.Research) w.Write((byte)e.Tech);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -156,7 +158,7 @@ namespace Rts.Replay
                 var villagers=new uint[ReplayBinary.Count(r)]; for(int i=0;i<villagers.Length;i++)villagers[i]=r.ReadUInt32();
                 var target=ReplayBinary.Enum<EconomyTargetKind>(r); uint targetId=r.ReadUInt32(); bool enabled=ReplayBinary.Bool(r);
                 int[] cells=null; Facing[] facings=null;
-                if(ek==EconomyCommandKind.PlaceBelt)
+                if(ek==EconomyCommandKind.PlaceBelt || ek==EconomyCommandKind.PlaceWall)
                 {
                     int n=ReplayBinary.Count(r); if(n>EconomyCommand.MaxBeltRun)throw new InvalidDataException("Belt run length.");
                     cells=new int[n]; facings=new Facing[n];
@@ -165,7 +167,8 @@ namespace Rts.Replay
                 var facing=ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
-                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ));
+                var tech=ek==EconomyCommandKind.Research ? ReplayBinary.Enum<TechKind>(r) : (TechKind)0;
+                return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });

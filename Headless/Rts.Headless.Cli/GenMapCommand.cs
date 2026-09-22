@@ -35,7 +35,7 @@ internal static class GenMapCommand
             marks[i] = kind == 1 ? 'T' : kind == 2 ? '~' : kind == 3 ? '^' : blocked[i] ? '#' : '.';
         }
         int Cell(SimPoint p) => (int)(p.Z.Raw / 65536 / size) * columns + (int)(p.X.Raw / 65536 / size);
-        foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : n.Kind == ResourceKind.Ore ? 'o' : 'f';
+        foreach (var n in s.ResourceNodes) marks[Cell(n.Position)] = n.Kind == ResourceKind.Wood ? 'w' : n.Kind == ResourceKind.Ore ? 'o' : n.Kind == ResourceKind.Stone ? 's' : 'f';
         foreach (var d in s.Soldiers) marks[Cell(d.Position)] = d.FactionId == 1 ? '1' : '2';
         foreach (var v in s.Villagers) marks[Cell(v.Position)] = 'v';
         marks[Cell(s.Outposts[0].Position)] = 'N';
@@ -45,7 +45,7 @@ internal static class GenMapCommand
 
         var b = new StringBuilder();
         b.AppendLine(s.ScenarioId + "  (" + (s.Map.Terrain.Length != 0 ? MapGenerator.TerrainVersion : s.Economy.Industry ? MapGenerator.IndustryVersion : MapGenerator.Version) + ", " + columns + "x" + rows + " cells of " + size + " m)");
-        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, T forest, ~ river, ^ mountain, 1/2 soldiers, v villagers, # blocked");
+        b.AppendLine("W/E cores, N/S outposts, w wood, f food, o ore, s stone, T forest, ~ river, ^ mountain, 1/2 soldiers, v villagers, # blocked");
         for (int z = rows - 1; z >= 0; z--)
         {
             for (int x = 0; x < columns; x++) b.Append(marks[z * columns + x]);

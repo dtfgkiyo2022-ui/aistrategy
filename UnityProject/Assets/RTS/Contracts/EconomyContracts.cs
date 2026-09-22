@@ -11,6 +11,10 @@ namespace Rts.Contracts
         SetAutoEconomy = 5,
         /// <summary>V3-2: one run of belts (Cells with their Facings), as one drag on screen.</summary>
         PlaceBelt = 6,
+        /// <summary>V3-5: one run of wall cells (Cells; Facings unused, all north), as one drag on screen.</summary>
+        PlaceWall = 11,
+        /// <summary>V3-5: starts researching Tech at the blacksmith ProducerId.</summary>
+        Research = 12,
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
         RemoveBelt = 7,
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
@@ -54,6 +58,8 @@ namespace Rts.Contracts
         public EconomyPolicy Policy { get; }
         /// <summary>AdvanceAge: the civilisation to advance into.</summary>
         public CivKind Civ { get; }
+        /// <summary>Research: the tech.</summary>
+        public TechKind Tech { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -85,7 +91,15 @@ namespace Rts.Contracts
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled, cells, facings, facing, policy, civ, 0)
         {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech)
+        {
+            Tech = tech;
             Civ = civ;
             Policy = policy;
             Facing = facing;
@@ -135,6 +149,15 @@ namespace Rts.Contracts
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand Research(uint faction, ulong sequence, uint blacksmith, TechKind tech)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.Research, 0, 0, blacksmith, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, tech);
+
+        public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
+        {
+            var facings = new Facing[cells == null ? 0 : cells.Count];
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWall, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+        }
 
         public static EconomyCommand RemoveBelt(uint faction, ulong sequence, int cell)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBelt, 0, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
@@ -200,6 +223,9 @@ namespace Rts.Contracts
 
         /// <summary>V3-3: an own building the player placed or operated.</summary>
         public bool PlayerHeld { get; }
+        /// <summary>V3-5 blacksmith: the tech being researched (0 when none) and the ticks left.</summary>
+        public TechKind Researching { get; }
+        public long ResearchRemaining { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output)
@@ -209,7 +235,15 @@ namespace Rts.Contracts
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, facing, input, output, playerHeld, 0, 0)
         {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
+            TechKind researching, long researchRemaining)
+        {
+            Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
             Facing = facing; Input = input; Output = output;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
@@ -308,13 +342,24 @@ namespace Rts.Contracts
         public int HouseWoodCost { get; }
         /// <summary>V3-5: a resource drop-off (maps with ages only; 0 otherwise).</summary>
         public int DropSiteWoodCost { get; }
+        /// <summary>V3-5 stone and defences (maps with ages only; 0 otherwise).</summary>
+        public int Stone { get; }
+        public int WallStoneCost { get; }
+        public int TowerWoodCost { get; }
+        public int TowerStoneCost { get; }
+        /// <summary>V3-5 research: the blacksmith's wood, the techs researched (bit 1 &lt;&lt; (TechKind - 1)), and each tech's
+        /// food and wood (index TechKind - 1). Empty without ages.</summary>
+        public int BlacksmithWoodCost { get; }
+        public ulong Techs { get; }
+        public IReadOnlyList<int> TechFoodCosts { get; }
+        public IReadOnlyList<int> TechWoodCosts { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null)
         {
         }
 
@@ -324,8 +369,14 @@ namespace Rts.Contracts
             bool industry, int ore, int metal, int beltWoodCost, int beltTicksPerCell, IReadOnlyList<BeltView> belts,
             int infantryMetalCost, int mineWoodCost, int smelterWoodCost, int mineSizeCells, int smelterSizeCells, bool corePlayerHeld,
             EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost,
-            int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost)
+            int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost,
+            int stone, int wallStoneCost, int towerWoodCost, int towerStoneCost,
+            int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts)
         {
+            BlacksmithWoodCost = blacksmithWoodCost; Techs = techs;
+            TechFoodCosts = ContractList.Copy(techFoodCosts ?? Array.Empty<int>());
+            TechWoodCosts = ContractList.Copy(techWoodCosts ?? Array.Empty<int>());
+            Stone = stone; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
             HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;

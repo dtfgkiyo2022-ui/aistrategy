@@ -35,7 +35,8 @@ namespace Rts.Simulation
                 int size = SizeOf(b.Kind);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
-                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held));
+                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
+                    own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -57,7 +58,9 @@ namespace Rts.Simulation
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, rules.AdvanceFoodCost, rules.AdvanceWoodCost,
-                rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0);
+                rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
+                economy.Stone, rules.Ages ? rules.WallStoneCost : 0, rules.Ages ? rules.TowerWoodCost : 0, rules.Ages ? rules.TowerStoneCost : 0,
+                rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

@@ -178,6 +178,7 @@ namespace Rts.Simulation
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
                 s.IsAttacking = true;
             }
+            if (AgesOn) TowersShoot();
             foreach (int i in world.SoldierTraversal)
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
             foreach (var f in world.Factions)
@@ -264,6 +265,7 @@ namespace Rts.Simulation
                 if (core.Hp > 0) Reveal(faction.VisibleCells, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision);
                 for (int i = 0; i < world.Outposts.Length; i++)
                     if (world.Outposts[i].OwnerFactionId == faction.Id) Reveal(faction.VisibleCells, world.Outposts[i].Definition.Position, world.Config.Rules.OwnedObjectiveVision);
+                if (AgesOn) RevealTowers(ref faction);
                 for (int i = 0; i < faction.VisibleCells.Length; i++) if (faction.VisibleCells[i]) faction.ExploredCells[i] = true;
             }
         }

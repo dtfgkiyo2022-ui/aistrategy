@@ -105,7 +105,7 @@ namespace Rts.Simulation
                     w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
                     if (world.Config.Economy.Ages)
                     {
-                        w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "Interval", b.Interval);
+                        w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "Interval", b.Interval); w.Value(n + "Shots", b.Shots); w.Value(n + "Researching", (byte)b.Researching);
                         var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
@@ -132,6 +132,7 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
+                if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Techs", e.Techs); }
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); }
             }
             uint belts = 0;

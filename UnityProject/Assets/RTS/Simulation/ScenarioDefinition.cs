@@ -114,6 +114,21 @@ namespace Rts.Simulation
         public int HouseSizeCells = 2, HouseWoodCost = 30, HouseWork = 100, HouseHp = 250;
         /// <summary>V3-5 (32 #3): a drop-off where villagers leave what they carry instead of walking to the core.</summary>
         public int DropSiteSizeCells = 2, DropSiteWoodCost = 50, DropSiteWork = 120, DropSiteHp = 300;
+        /// <summary>V3-5 (32 #5): a wall cell (stands at once, no builders), placed within WallReach metres of the own core or a
+        /// finished own building, never so that the own core loses its way to the enemy core.</summary>
+        public int WallStoneCost = 3, WallHp = 400, WallReach = 30;
+        /// <summary>Stone each side starts with (maps with ages).</summary>
+        public int StartStone;
+        /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>
+        public int TowerSizeCells = 2, TowerWoodCost = 50, TowerStoneCost = 100, TowerWork = 250, TowerHp = 800;
+        public int TowerRange = 10, TowerVision = 16, TowerDamage = 6, TowerIntervalTicks = 20;
+        /// <summary>V3-5 (32 #6): the blacksmith, and the price and time of each tech (index TechKind - 1).</summary>
+        public int BlacksmithSizeCells = 3, BlacksmithWoodCost = 150, BlacksmithWork = 300, BlacksmithHp = 700;
+        public int[] TechFood = { 150, 150, 100, 100, 120, 120 };
+        public int[] TechWood = { 100, 100, 50, 100, 80, 80 };
+        public int[] TechTicks = { 600, 600, 400, 400, 500, 500 };
+        /// <summary>What the techs do: attack, HP, ticks per gather, carry, farm and smelt ticks saved.</summary>
+        public int WeaponsDamage = 2, ArmourHp = 20, ToolsGatherTicks = 5, CartsCarry = 5, IrrigationTicks = 10, BlastFurnaceTicks = 20;
     }
 
     public sealed class MapDefinition
