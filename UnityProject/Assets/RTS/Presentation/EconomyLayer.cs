@@ -193,7 +193,8 @@ namespace Rts.Presentation
                     : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f
                     : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : b.Kind == BuildingKind.Blacksmith ? 2.0f
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
-                    : b.Kind == BuildingKind.ArcheryRange ? 2.2f : b.Kind == BuildingKind.Stable ? 2.4f : 3f;
+                    : b.Kind == BuildingKind.ArcheryRange ? 2.2f : b.Kind == BuildingKind.Stable ? 2.4f
+                    : b.Kind == BuildingKind.Castle ? 6f : 3f;
                 float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;

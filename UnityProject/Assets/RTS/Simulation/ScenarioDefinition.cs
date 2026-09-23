@@ -160,6 +160,10 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #15): HP a villager puts back into a damaged finished building each tick, and the share of its
         /// HP (in thousandths) under which the automatic economy sends villagers to repair it.</summary>
         public int RepairHpPerTick = 2, RepairAtPermille = 700;
+        /// <summary>V3-5 (32 #17): the castle of the third age - stone and wood, hard to bring down, shoots further and
+        /// harder than a tower, and trains any of the three line units whatever the civilisation.</summary>
+        public int CastleSizeCells = 4, CastleWoodCost = 200, CastleStoneCost = 300, CastleWork = 600, CastleHp = 2400;
+        public int CastleRange = 14, CastleVision = 20, CastleDamage = 14, CastleIntervalTicks = 20;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
     }
 
