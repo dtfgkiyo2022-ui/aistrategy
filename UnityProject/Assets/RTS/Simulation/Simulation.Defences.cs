@@ -54,23 +54,44 @@ namespace Rts.Simulation
             return false;
         }
 
-        /// <summary>What one tower shot takes off: its damage, heavier with masonry (V3-5, 32 #10).</summary>
-        private int TowerShot(uint faction)
+        /// <summary>
+        /// AI phase (32 #17): in the third age, one castle, once the stone and wood are there. It is the strong point of
+        /// the base, so it goes where a tower would go - near the core, by the same site rule as the other buildings.
+        /// </summary>
+        private void DecideCastle(uint faction)
+        {
+            if (!AgesOn || world.Economies[faction - 1].Age < 3 || SavingToAdvance(faction)) return;
+            if (OwnBuildingIndex(faction, BuildingKind.Castle) >= 0) return;
+            var rules = world.Config.Economy;
+            var e = world.Economies[faction - 1];
+            if (e.Wood < rules.CastleWoodCost || e.Stone < rules.CastleStoneCost) return;
+            int origin = FindSite(faction, rules.CastleSizeCells);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Castle, origin, Facing.North, 0);
+        }
+
+        /// <summary>What one shot of a tower or a castle takes off: its damage, heavier with masonry (V3-5, 32 #10, #17).</summary>
+        private int TowerShot(uint faction, BuildingKind kind)
         {
             var rules = world.Config.Economy;
-            return rules.TowerDamage + (HasTech(faction, TechKind.Masonry) ? rules.MasonryTowerDamage : 0);
+            int damage = kind == BuildingKind.Castle ? rules.CastleDamage : rules.TowerDamage;
+            return damage + (HasTech(faction, TechKind.Masonry) ? rules.MasonryTowerDamage : 0);
         }
+
+        /// <summary>A building that shoots: the tower, and since 32 #17 the castle.</summary>
+        private static bool Shoots(BuildingKind kind) => kind == BuildingKind.Tower || kind == BuildingKind.Castle;
 
         /// <summary>Attack phase, before damage is applied: every finished tower whose clock is up shoots once.</summary>
         private void TowersShoot()
         {
             var rules = world.Config.Economy;
-            var range = Fix64.FromInt(rules.TowerRange);
+            var towerRange = Fix64.FromInt(rules.TowerRange);
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.Kind != BuildingKind.Tower) continue;
+                if (!b.Alive || !b.Complete || !Shoots(b.Kind)) continue;
                 if (b.Timer > 0) { b.Timer--; continue; }
+                var range = b.Kind == BuildingKind.Castle ? Fix64.FromInt(rules.CastleRange) : towerRange;
+                int interval = b.Kind == BuildingKind.Castle ? rules.CastleIntervalTicks : rules.TowerIntervalTicks;
                 var centre = FootprintCenter(b.OriginCell, SizeOf(b.Kind));
                 int best = -1; BigInteger bestDistance = 0;
                 foreach (int s in world.SoldierTraversal)
@@ -82,8 +103,8 @@ namespace Rts.Simulation
                 }
                 if (best >= 0)
                 {
-                    soldierDamage[best] = checked(soldierDamage[best] + TowerShot(b.FactionId));
-                    b.Timer = rules.TowerIntervalTicks - 1;
+                    soldierDamage[best] = checked(soldierDamage[best] + TowerShot(b.FactionId, b.Kind));
+                    b.Timer = interval - 1;
                     b.Shots++;
                     continue;
                 }
@@ -95,20 +116,22 @@ namespace Rts.Simulation
                     if (best < 0 || d < bestDistance) { best = v; bestDistance = d; }
                 }
                 if (best < 0) continue;
-                villagerDamage[best] = checked(villagerDamage[best] + TowerShot(b.FactionId));
-                b.Timer = rules.TowerIntervalTicks - 1;
+                villagerDamage[best] = checked(villagerDamage[best] + TowerShot(b.FactionId, b.Kind));
+                b.Timer = interval - 1;
                 b.Shots++;
             }
         }
 
         private void RevealTowers(ref FactionState faction)
         {
-            var vision = Fix64.FromInt(world.Config.Economy.TowerVision);
+            var rules = world.Config.Economy;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction.Id && b.Kind == BuildingKind.Tower)
-                    Reveal(faction.VisibleCells, FootprintCenter(b.OriginCell, SizeOf(b.Kind)), vision);
+                // V3-5 (32 #17): a castle watches further than a tower.
+                if (b.Alive && b.Complete && b.FactionId == faction.Id && Shoots(b.Kind))
+                    Reveal(faction.VisibleCells, FootprintCenter(b.OriginCell, SizeOf(b.Kind)),
+                        Fix64.FromInt(b.Kind == BuildingKind.Castle ? rules.CastleVision : rules.TowerVision));
             }
         }
 

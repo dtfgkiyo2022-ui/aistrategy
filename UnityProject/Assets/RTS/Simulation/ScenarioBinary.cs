@@ -95,6 +95,8 @@ namespace Rts.Simulation
                     w.Write(e.StableSizeCells); w.Write(e.StableWoodCost); w.Write(e.StableWork); w.Write(e.StableHp);
                     w.Write(e.CounterBonusPermille); w.Write(e.SteelWeaponsDamage); w.Write(e.SteelArmourHp);
                     w.Write(e.RepairHpPerTick); w.Write(e.RepairAtPermille);
+                    w.Write(e.CastleSizeCells); w.Write(e.CastleWoodCost); w.Write(e.CastleStoneCost); w.Write(e.CastleWork); w.Write(e.CastleHp);
+                    w.Write(e.CastleRange); w.Write(e.CastleVision); w.Write(e.CastleDamage); w.Write(e.CastleIntervalTicks);
                 }
                 return s.ToArray();
             }
@@ -178,6 +180,8 @@ namespace Rts.Simulation
                     e.StableSizeCells=r.ReadInt32(); e.StableWoodCost=r.ReadInt32(); e.StableWork=r.ReadInt32(); e.StableHp=r.ReadInt32();
                     e.CounterBonusPermille=r.ReadInt32(); e.SteelWeaponsDamage=r.ReadInt32(); e.SteelArmourHp=r.ReadInt32();
                     e.RepairHpPerTick=r.ReadInt32(); e.RepairAtPermille=r.ReadInt32();
+                    e.CastleSizeCells=r.ReadInt32(); e.CastleWoodCost=r.ReadInt32(); e.CastleStoneCost=r.ReadInt32(); e.CastleWork=r.ReadInt32(); e.CastleHp=r.ReadInt32();
+                    e.CastleRange=r.ReadInt32(); e.CastleVision=r.ReadInt32(); e.CastleDamage=r.ReadInt32(); e.CastleIntervalTicks=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

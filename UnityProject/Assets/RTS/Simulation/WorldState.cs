@@ -362,6 +362,8 @@ namespace Rts.Simulation
                 && e.TechMetal != null && e.TechMetal.Length == 11 && Array.TrueForAll(e.TechMetal, v => v >= 0)
                 && e.SteelWeaponsDamage >= 0 && e.SteelArmourHp >= 0
                 && e.RepairHpPerTick > 0 && e.RepairAtPermille >= 0 && e.RepairAtPermille <= 1000
+                && e.CastleSizeCells > 0 && e.CastleSizeCells <= 8 && e.CastleWoodCost >= 0 && e.CastleStoneCost >= 0 && e.CastleWork > 0 && e.CastleHp > 0
+                && e.CastleRange >= 0 && e.CastleVision >= 0 && e.CastleDamage >= 0 && e.CastleIntervalTicks > 0
                 && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
@@ -534,6 +536,9 @@ namespace Rts.Simulation
                 RangeSizeCells = e.RangeSizeCells, RangeWoodCost = e.RangeWoodCost, RangeWork = e.RangeWork, RangeHp = e.RangeHp,
                 StableSizeCells = e.StableSizeCells, StableWoodCost = e.StableWoodCost, StableWork = e.StableWork, StableHp = e.StableHp,
                 CounterBonusPermille = e.CounterBonusPermille, RepairHpPerTick = e.RepairHpPerTick, RepairAtPermille = e.RepairAtPermille,
+                CastleSizeCells = e.CastleSizeCells, CastleWoodCost = e.CastleWoodCost, CastleStoneCost = e.CastleStoneCost, CastleWork = e.CastleWork,
+                CastleHp = e.CastleHp, CastleRange = e.CastleRange, CastleVision = e.CastleVision, CastleDamage = e.CastleDamage,
+                CastleIntervalTicks = e.CastleIntervalTicks,
                 ArcherFood = e.ArcherFood, ArcherWood = e.ArcherWood, ArcherTicks = e.ArcherTicks, ArcherHp = e.ArcherHp, ArcherDamage = e.ArcherDamage,
                 ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
                 CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,

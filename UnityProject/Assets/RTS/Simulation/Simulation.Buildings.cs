@@ -305,7 +305,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
-                : kind == BuildingKind.ArcheryRange ? e.RangeSizeCells : kind == BuildingKind.Stable ? e.StableSizeCells : e.BarracksSizeCells;
+                : kind == BuildingKind.ArcheryRange ? e.RangeSizeCells : kind == BuildingKind.Stable ? e.StableSizeCells
+                : kind == BuildingKind.Castle ? e.CastleSizeCells : e.BarracksSizeCells;
         }
 
         private int HpOf(BuildingKind kind)
@@ -315,7 +316,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
-                : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp : e.BarracksHp;
+                : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
+                : kind == BuildingKind.Castle ? e.CastleHp : e.BarracksHp;
         }
 
         private int WorkOf(BuildingKind kind)
@@ -325,7 +327,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
-                : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork : e.BarracksWork;
+                : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
+                : kind == BuildingKind.Castle ? e.CastleWork : e.BarracksWork;
         }
 
         private int WoodOf(BuildingKind kind)
@@ -335,14 +338,16 @@ namespace Rts.Simulation
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
-                : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : e.BarracksWoodCost;
         }
 
         /// <summary>V3-5: the stone a building costs (walls and towers).</summary>
         private int StoneOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost : 0;
+            return kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
+                : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
         }
 
         private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));

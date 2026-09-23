@@ -29,6 +29,10 @@ namespace Rts.Simulation
             // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
             if (b.Kind == BuildingKind.ArcheryRange) return kind == UnitKind.Archer && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             if (b.Kind == BuildingKind.Stable) return kind == UnitKind.Cavalry && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
+            if (b.Kind == BuildingKind.Castle)
+                return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
+                    && (kind == UnitKind.Infantry || kind == UnitKind.Archer || kind == UnitKind.Cavalry);
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
             if (!AgesOn) return false;

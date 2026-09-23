@@ -26,7 +26,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, RemoveBelt }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -49,11 +49,11 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most eight rows of buttons under it, then one line of notes.
-        // Eight since V3-5 (32 #16): at its fullest the make tab shows villagers and infantry, the scout and the
-        // civilisation's own unit, the ram, the range and the stable, the market's trades, the next age, the idle
-        // buttons and the carrying one. The build tab reaches seven, the research tab five.
-        private const float TabbedHeight = 22f + 26f + 8f * 26f + 24f;
+        // The panel keeps one height: a row of tabs and at most nine rows of buttons under it, then one line of notes.
+        // Nine since V3-5 (32 #17): at its fullest the make tab shows villagers and infantry, the scout and the
+        // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the next age,
+        // the idle buttons and the carrying one. The build tab reaches eight, the research tab five.
+        private const float TabbedHeight = 22f + 26f + 9f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
@@ -143,7 +143,8 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 3;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
-                : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower ? 2 : e.BuildingSizeCells;
+                : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower ? 2
+                : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
 
         private int WoodOf(BuildingKind kind)
@@ -154,7 +155,8 @@ namespace Rts.Presentation
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
-                : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
@@ -164,6 +166,7 @@ namespace Rts.Presentation
                 : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場")
                 : kind == BuildingKind.Market ? UiText.T("Market", "市場") : kind == BuildingKind.SiegeWorkshop ? UiText.T("Siege workshop", "攻城工房")
                 : kind == BuildingKind.ArcheryRange ? UiText.T("Archery range", "射撃場") : kind == BuildingKind.Stable ? UiText.T("Stable", "厩舎")
+                : kind == BuildingKind.Castle ? UiText.T("Castle", "城")
                 : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
@@ -171,7 +174,8 @@ namespace Rts.Presentation
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
                 : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
-                : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable : BuildingKind.Barracks;
+                : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable
+                : m == Mode.Castle ? BuildingKind.Castle : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
             => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
@@ -342,6 +346,12 @@ namespace Rts.Presentation
                     GUI.Label(new Rect(x, y, w, 22f), UiText.T("Archers beat infantry, cavalry beats archers, infantry beats cavalry",
                         "相性：弓兵は歩兵に強く、騎兵は弓兵に強く、歩兵は騎兵に強い"));
                     y += 26f;
+                    // V3-5 (32 #17): the castle of the third age.
+                    if (economy.Age >= 3)
+                    {
+                        ModeButton(new Rect(x, y, w, 22f), Mode.Castle, UiText.T("Castle (", "城（石") + economy.CastleStoneCost + UiText.T("S ", " 木") + economy.CastleWoodCost + UiText.T("W)", "）"));
+                        y += 26f;
+                    }
                 }
             }
             if (!economy.Industry) return;
@@ -433,6 +443,21 @@ namespace Rts.Presentation
                             + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）") + queued))
                             Send(EconomyCommand.Train(faction, ++sequence, stable.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
                     }
+                    GUI.enabled = true;
+                    y += 26f;
+                }
+                var castle = OwnBuilding(economy, BuildingKind.Castle);
+                if (castle.HasValue)
+                {
+                    GUI.enabled = castle.Value.Complete;
+                    float third = (w - 8f) / 3f;
+                    string queued = castle.Value.Queued == 0 ? "" : " [" + castle.Value.Queued + "]";
+                    if (GUI.Button(new Rect(x, y, third, 22f), UiText.T("Castle: infantry", "城：歩兵") + queued))
+                        Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Infantry), UiText.T("Infantry requested", "歩兵を依頼しました"));
+                    if (GUI.Button(new Rect(x + third + 4f, y, third, 22f), UiText.T("Castle: archer", "城：弓兵")))
+                        Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Archer), UiText.T("Archer requested", "弓兵を依頼しました"));
+                    if (GUI.Button(new Rect(x + 2f * (third + 4f), y, third, 22f), UiText.T("Castle: cavalry", "城：騎兵")))
+                        Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
                     GUI.enabled = true;
                     y += 26f;
                 }
