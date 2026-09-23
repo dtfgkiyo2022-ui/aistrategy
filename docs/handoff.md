@@ -16,7 +16,12 @@
 - 全体テストは約 747 件（`dotnet test Headless/Rts.Headless.slnx --configuration Release`、16〜18分）。**出力は UTF-8 のファイルに落として読む**（`D:/rts-verify/fulltestN.ps1` の形で毎回番号を上げて新規作成し `Start-Process` で起動、`EXITCODE=` を待つ）
 - 報告・合間の一言は**すべて日本語**（オーナーから何度も指摘あり。メモリ `always-japanese-output.md`）
 - **測定テストは短く・毎 tick 見る**（メモリ `measurement-tests-tick-by-tick.md`）。間隔サンプリングは効果が次の一撃で打ち消されて見えない。`Assume` 待ちのテストは条件が揃わないと NUnit で「スキップ」になり、合計に出ず「成功!」と表示されるので**通ったと誤認しやすい**
-- **Codex のモデル使い分けが変わった**（2026-09-23、メモリ `codex-model-selection.md`）：**既定は `gpt-5.6-luna` を `-c model_reasoning_effort="max"` で使う。`gpt-6-astra` はレビューと、Opus／luna で手に負えないものだけ。** それ以前の「実装は terra」という記述は古い
+- **Codex のモデル使い分け（2026-09-23 昼に更新、メモリ `codex-model-selection.md`）**：**実装は常に Codex へ発注し、Claude はレビューと検証に徹する**（役割分担は変わらない）。
+  - **Opus（Claude）で対応が難しい・大きい内容**：`gpt-5.6-luna` を `-c model_reasoning_effort="max"` で
+  - **普通の作業**：`gpt-5.6-luna`（effort は既定のまま。または見合う軽いモデル）
+  - **luna で解決できない場合**：`gpt-6-astra` に切り替えて修正
+  - `-m` は必ず明示する（`~/.codex/config.toml` の既定が astra なので省略すると astra になる）
+  - それ以前の「実装は terra」という記述は古い
 - Codex は 2026-09-23 の一時期、利用上限で使えなかった（復帰 11:38）。復帰後は上の新しい使い分けで発注する
 
 ### V3-5 の進み具合（32章、#は技術設計 32章の表の番号）
@@ -68,7 +73,7 @@ Claude Code のメモリはアカウントに紐づくので、**新しいアカ
 | `git-push-needs-lfs-path.md` | push・commit の前に git-lfs を PATH に通す。`&&` でつながない |
 | `detached-processes-on-windows.md` | 長い実行は PowerShell の `Start-Process`。Bash の背景はセッションが切れると死ぬ |
 | `codex-implements-claude-reviews.md` | 実装は Codex に発注、Claude はレビュー |
-| `codex-model-selection.md` | **2026-09-23 に方針変更**：既定は `gpt-5.6-luna`（`-c model_reasoning_effort="max"`）、`gpt-6-astra` はレビューと Opus／luna で無理なものだけ |
+| `codex-model-selection.md` | **2026-09-23 昼に更新**：難しい/大きい内容は `gpt-5.6-luna`（`-c model_reasoning_effort="max"`）、普通の作業は既定effortのluna、無理なら `gpt-6-astra` |
 | `measurement-tests-tick-by-tick.md` | 測定テストは短く毎 tick 見る。間隔サンプリングは打ち消され、`Assume` 待ちは黙ってスキップされる（「成功!」と出る） |
 | `csharp-strings-via-python-break.md` | **C# の文字列を Python の書き換えで入れない。** `\n` が本物の改行になってコンパイルが落ちる |
 
