@@ -371,6 +371,8 @@ namespace Rts.Contracts
         public ulong Techs { get; }
         public IReadOnlyList<int> TechFoodCosts { get; }
         public IReadOnlyList<int> TechWoodCosts { get; }
+        /// <summary>V3-5 (32 #14): the metal a tech costs - 0 for all but the steel ones.</summary>
+        public IReadOnlyList<int> TechMetalCosts { get; }
         /// <summary>V3-5 (32 #7, #8): the age inside the civilisation (0 primitive, 1, 2), the price of the second age, and the
         /// civilisations' own units.</summary>
         public int Age { get; }
@@ -402,7 +404,7 @@ namespace Rts.Contracts
             IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources)
             : this(food, wood, population, populationCap, villagerQueued, villagerTrainRemaining, autoEconomy, buildingSizeCells,
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
-                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+                false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         {
         }
 
@@ -414,7 +416,7 @@ namespace Rts.Contracts
             EconomyPolicy policy, bool ages, CivKind civ, CivKind advancingTo, long advanceRemaining, int advanceFoodCost, int advanceWoodCost,
             int farmWoodCost, int farmSizeCells, int scoutFoodCost, int houseWoodCost, int dropSiteWoodCost,
             int stone, int wallStoneCost, int towerWoodCost, int towerStoneCost,
-            int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts,
+            int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts, IReadOnlyList<int> techMetalCosts,
             int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
             int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost,
             int age3FoodCost, int age3WoodCost, int rangeWoodCost, int stableWoodCost)
@@ -428,6 +430,7 @@ namespace Rts.Contracts
             BlacksmithWoodCost = blacksmithWoodCost; Techs = techs;
             TechFoodCosts = ContractList.Copy(techFoodCosts ?? Array.Empty<int>());
             TechWoodCosts = ContractList.Copy(techWoodCosts ?? Array.Empty<int>());
+            TechMetalCosts = ContractList.Copy(techMetalCosts ?? Array.Empty<int>());
             Stone = stone; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
             HouseWoodCost = houseWoodCost;
