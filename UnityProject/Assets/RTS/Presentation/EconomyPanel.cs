@@ -510,6 +510,8 @@ namespace Rts.Presentation
                 case TechKind.Siegecraft: return UiText.T("Siegecraft (rams +30)", "攻城術（破城槌+30）");
                 case TechKind.Masonry: return UiText.T("Masonry (towers +4)", "石工（見張り塔+4）");
                 case TechKind.Banking: return UiText.T("Banking (trade +25)", "両替（交換+25）");
+                case TechKind.SteelWeapons: return UiText.T("Steel weapons (attack +3)", "鋼の武器（攻撃+3）");
+                case TechKind.SteelArmour: return UiText.T("Steel armour (HP +30)", "鋼の鎧（HP+30）");
                 default: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
             }
         }
@@ -533,6 +535,8 @@ namespace Rts.Presentation
             var techs = new List<TechKind> { TechKind.Weapons, TechKind.Armour, TechKind.Tools, TechKind.Carts };
             techs.Add(economy.Civ == CivKind.Agrarian ? TechKind.Irrigation : TechKind.BlastFurnace);
             // V3-5 (32 #10): the third age opens three more, the same for both civilisations.
+            // V3-5 (32 #14): the steel pair comes with the second age and is paid in metal.
+            if (economy.Age >= 2) { techs.Add(TechKind.SteelWeapons); techs.Add(TechKind.SteelArmour); }
             if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); }
             for (int i = 0; i < techs.Count; i++)
             {
@@ -540,7 +544,8 @@ namespace Rts.Presentation
                 int index = (int)t - 1;
                 bool done = (economy.Techs & (1UL << index)) != 0;
                 string cost = index < economy.TechFoodCosts.Count
-                    ? UiText.T(" F", " 食") + economy.TechFoodCosts[index] + UiText.T(" W", " 木") + economy.TechWoodCosts[index] : "";
+                    ? UiText.T(" F", " 食") + economy.TechFoodCosts[index] + UiText.T(" W", " 木") + economy.TechWoodCosts[index]
+                        + (index < economy.TechMetalCosts.Count && economy.TechMetalCosts[index] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[index] : "") : "";
                 GUI.enabled = b.Complete && b.Researching == 0 && !done;
                 var r = new Rect(i % 2 == 0 ? x : right, y + (i / 2) * 26f, half, 22f);
                 if (GUI.Button(r, (done ? UiText.T("Done: ", "済：") : "") + TechName(t) + (done ? "" : cost)))

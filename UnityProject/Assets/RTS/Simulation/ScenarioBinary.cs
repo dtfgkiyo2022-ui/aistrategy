@@ -78,7 +78,7 @@ namespace Rts.Simulation
                     w.Write(e.TowerSizeCells); w.Write(e.TowerWoodCost); w.Write(e.TowerStoneCost); w.Write(e.TowerWork); w.Write(e.TowerHp);
                     w.Write(e.TowerRange); w.Write(e.TowerVision); w.Write(e.TowerDamage); w.Write(e.TowerIntervalTicks);
                     w.Write(e.BlacksmithSizeCells); w.Write(e.BlacksmithWoodCost); w.Write(e.BlacksmithWork); w.Write(e.BlacksmithHp);
-                    for (int t = 0; t < 9; t++) { w.Write(e.TechFood[t]); w.Write(e.TechWood[t]); w.Write(e.TechTicks[t]); }
+                    for (int t = 0; t < 11; t++) { w.Write(e.TechFood[t]); w.Write(e.TechWood[t]); w.Write(e.TechTicks[t]); w.Write(e.TechMetal[t]); }
                     w.Write(e.WeaponsDamage); w.Write(e.ArmourHp); w.Write(e.ToolsGatherTicks); w.Write(e.CartsCarry); w.Write(e.IrrigationTicks); w.Write(e.BlastFurnaceTicks);
                     w.Write(e.Age2FoodCost); w.Write(e.Age2WoodCost); w.Write(e.Age2Ticks); w.Write(e.Age2PopulationBonus);
                     w.Write(e.ArcherFood); w.Write(e.ArcherWood); w.Write(e.ArcherTicks); w.Write(e.ArcherHp); w.Write(e.ArcherDamage); w.Write(e.ArcherInterval);
@@ -93,7 +93,7 @@ namespace Rts.Simulation
                     w.Write(e.SiegecraftSiegeDamage); w.Write(e.MasonryTowerDamage); w.Write(e.BankingTradeReturn);
                     w.Write(e.RangeSizeCells); w.Write(e.RangeWoodCost); w.Write(e.RangeWork); w.Write(e.RangeHp);
                     w.Write(e.StableSizeCells); w.Write(e.StableWoodCost); w.Write(e.StableWork); w.Write(e.StableHp);
-                    w.Write(e.CounterBonusPermille);
+                    w.Write(e.CounterBonusPermille); w.Write(e.SteelWeaponsDamage); w.Write(e.SteelArmourHp);
                 }
                 return s.ToArray();
             }
@@ -159,8 +159,8 @@ namespace Rts.Simulation
                     e.TowerSizeCells=r.ReadInt32(); e.TowerWoodCost=r.ReadInt32(); e.TowerStoneCost=r.ReadInt32(); e.TowerWork=r.ReadInt32(); e.TowerHp=r.ReadInt32();
                     e.TowerRange=r.ReadInt32(); e.TowerVision=r.ReadInt32(); e.TowerDamage=r.ReadInt32(); e.TowerIntervalTicks=r.ReadInt32();
                     e.BlacksmithSizeCells=r.ReadInt32(); e.BlacksmithWoodCost=r.ReadInt32(); e.BlacksmithWork=r.ReadInt32(); e.BlacksmithHp=r.ReadInt32();
-                    e.TechFood=new int[9]; e.TechWood=new int[9]; e.TechTicks=new int[9];
-                    for (int t = 0; t < 9; t++) { e.TechFood[t]=r.ReadInt32(); e.TechWood[t]=r.ReadInt32(); e.TechTicks[t]=r.ReadInt32(); }
+                    e.TechFood=new int[11]; e.TechWood=new int[11]; e.TechTicks=new int[11]; e.TechMetal=new int[11];
+                    for (int t = 0; t < 11; t++) { e.TechFood[t]=r.ReadInt32(); e.TechWood[t]=r.ReadInt32(); e.TechTicks[t]=r.ReadInt32(); e.TechMetal[t]=r.ReadInt32(); }
                     e.WeaponsDamage=r.ReadInt32(); e.ArmourHp=r.ReadInt32(); e.ToolsGatherTicks=r.ReadInt32(); e.CartsCarry=r.ReadInt32(); e.IrrigationTicks=r.ReadInt32(); e.BlastFurnaceTicks=r.ReadInt32();
                     e.Age2FoodCost=r.ReadInt32(); e.Age2WoodCost=r.ReadInt32(); e.Age2Ticks=r.ReadInt32(); e.Age2PopulationBonus=r.ReadInt32();
                     e.ArcherFood=r.ReadInt32(); e.ArcherWood=r.ReadInt32(); e.ArcherTicks=r.ReadInt32(); e.ArcherHp=r.ReadInt32(); e.ArcherDamage=r.ReadInt32(); e.ArcherInterval=r.ReadInt32();
@@ -175,7 +175,7 @@ namespace Rts.Simulation
                     e.SiegecraftSiegeDamage=r.ReadInt32(); e.MasonryTowerDamage=r.ReadInt32(); e.BankingTradeReturn=r.ReadInt32();
                     e.RangeSizeCells=r.ReadInt32(); e.RangeWoodCost=r.ReadInt32(); e.RangeWork=r.ReadInt32(); e.RangeHp=r.ReadInt32();
                     e.StableSizeCells=r.ReadInt32(); e.StableWoodCost=r.ReadInt32(); e.StableWork=r.ReadInt32(); e.StableHp=r.ReadInt32();
-                    e.CounterBonusPermille=r.ReadInt32();
+                    e.CounterBonusPermille=r.ReadInt32(); e.SteelWeaponsDamage=r.ReadInt32(); e.SteelArmourHp=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

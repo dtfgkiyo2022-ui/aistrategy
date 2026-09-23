@@ -358,7 +358,9 @@ namespace Rts.Simulation
                 && e.TowerWoodCost >= 0 && e.TowerStoneCost >= 0 && e.TowerWork > 0 && e.TowerHp > 0 && e.TowerRange >= 0 && e.TowerVision >= 0
                 && e.TowerDamage >= 0 && e.TowerIntervalTicks > 0
                 && e.BlacksmithSizeCells > 0 && e.BlacksmithSizeCells <= 8 && e.BlacksmithWoodCost >= 0 && e.BlacksmithWork > 0 && e.BlacksmithHp > 0
-                && e.TechFood != null && e.TechFood.Length == 9 && e.TechWood != null && e.TechWood.Length == 9 && e.TechTicks != null && e.TechTicks.Length == 9
+                && e.TechFood != null && e.TechFood.Length == 11 && e.TechWood != null && e.TechWood.Length == 11 && e.TechTicks != null && e.TechTicks.Length == 11
+                && e.TechMetal != null && e.TechMetal.Length == 11 && Array.TrueForAll(e.TechMetal, v => v >= 0)
+                && e.SteelWeaponsDamage >= 0 && e.SteelArmourHp >= 0
                 && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
@@ -522,6 +524,7 @@ namespace Rts.Simulation
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
                 BlacksmithSizeCells = e.BlacksmithSizeCells, BlacksmithWoodCost = e.BlacksmithWoodCost, BlacksmithWork = e.BlacksmithWork, BlacksmithHp = e.BlacksmithHp,
                 TechFood = (int[])e.TechFood.Clone(), TechWood = (int[])e.TechWood.Clone(), TechTicks = (int[])e.TechTicks.Clone(),
+                TechMetal = (int[])e.TechMetal.Clone(), SteelWeaponsDamage = e.SteelWeaponsDamage, SteelArmourHp = e.SteelArmourHp,
                 WeaponsDamage = e.WeaponsDamage, ArmourHp = e.ArmourHp, ToolsGatherTicks = e.ToolsGatherTicks, CartsCarry = e.CartsCarry,
                 IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks,
                 Age2FoodCost = e.Age2FoodCost, Age2WoodCost = e.Age2WoodCost, Age2Ticks = e.Age2Ticks, Age2PopulationBonus = e.Age2PopulationBonus,

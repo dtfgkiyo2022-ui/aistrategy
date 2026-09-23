@@ -124,9 +124,11 @@ namespace Rts.Simulation
         public int TowerRange = 10, TowerVision = 16, TowerDamage = 6, TowerIntervalTicks = 20;
         /// <summary>V3-5 (32 #6): the blacksmith, and the price and time of each tech (index TechKind - 1).</summary>
         public int BlacksmithSizeCells = 3, BlacksmithWoodCost = 150, BlacksmithWork = 300, BlacksmithHp = 700;
-        public int[] TechFood = { 150, 150, 100, 100, 120, 120, 200, 150, 200 };
-        public int[] TechWood = { 100, 100, 50, 100, 80, 80, 150, 200, 100 };
-        public int[] TechTicks = { 600, 600, 400, 400, 500, 500, 700, 700, 600 };
+        public int[] TechFood = { 150, 150, 100, 100, 120, 120, 200, 150, 200, 200, 200 };
+        public int[] TechWood = { 100, 100, 50, 100, 80, 80, 150, 200, 100, 100, 100 };
+        public int[] TechTicks = { 600, 600, 400, 400, 500, 500, 700, 700, 600, 800, 800 };
+        /// <summary>V3-5 (32 #14): the metal the steel techs cost on top of food and wood; every other tech costs none.</summary>
+        public int[] TechMetal = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 100, 120 };
         /// <summary>What the techs do: attack, HP, ticks per gather, carry, farm and smelt ticks saved.</summary>
         public int WeaponsDamage = 2, ArmourHp = 20, ToolsGatherTicks = 5, CartsCarry = 5, IrrigationTicks = 10, BlastFurnaceTicks = 20;
         /// <summary>V3-5 (32 #10): what the third age's techs do - a heavier ram, harder tower shots, a better trade.</summary>
@@ -152,6 +154,9 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #13): thousandths added to a blow that counters its target (archer over infantry, cavalry over
         /// archer, infantry over cavalry). 0 turns the triangle off.</summary>
         public int CounterBonusPermille = 500;
+        /// <summary>V3-5 (32 #14): what the steel techs give, on top of weapons and armour. They are paid in metal, so the
+        /// stock metallurgy piles up has a use and farming has to mine or trade for one.</summary>
+        public int SteelWeaponsDamage = 3, SteelArmourHp = 30;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
     }
 
