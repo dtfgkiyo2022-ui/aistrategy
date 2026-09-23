@@ -49,9 +49,11 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most seven rows of buttons under it, then one line of notes.
-        // Seven since V3-5 (32 #9): the make tab can show the ram and the market's trades as well.
-        private const float TabbedHeight = 22f + 26f + 7f * 26f + 24f;
+        // The panel keeps one height: a row of tabs and at most eight rows of buttons under it, then one line of notes.
+        // Eight since V3-5 (32 #16): at its fullest the make tab shows villagers and infantry, the scout and the
+        // civilisation's own unit, the ram, the range and the stable, the market's trades, the next age, the idle
+        // buttons and the carrying one. The build tab reaches seven, the research tab five.
+        private const float TabbedHeight = 22f + 26f + 8f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
