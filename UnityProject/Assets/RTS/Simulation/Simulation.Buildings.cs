@@ -246,9 +246,11 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || (v.Task != VillagerTask.ToBuild && v.Task != VillagerTask.Building)) continue;
                 var b = world.Buildings[v.BuildingId - 1];
-                if (!b.Alive || b.Complete) { v.Task = VillagerTask.Idle; continue; }
+                // V3-5 (32 #15): a finished building that is hurt is still work - the villager repairs it instead.
+                if (!b.Alive || (b.Complete && !NeedsRepair(b))) { v.Task = VillagerTask.Idle; continue; }
                 if (v.Task == VillagerTask.ToBuild && InRange(v.Position, world.Map.Center(b.WorkCell), GatherReach)) v.Task = VillagerTask.Building;
             }
+            RepairBuildings();
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
