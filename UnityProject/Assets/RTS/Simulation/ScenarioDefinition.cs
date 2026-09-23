@@ -157,6 +157,9 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #14): what the steel techs give, on top of weapons and armour. They are paid in metal, so the
         /// stock metallurgy piles up has a use and farming has to mine or trade for one.</summary>
         public int SteelWeaponsDamage = 3, SteelArmourHp = 30;
+        /// <summary>V3-5 (32 #15): HP a villager puts back into a damaged finished building each tick, and the share of its
+        /// HP (in thousandths) under which the automatic economy sends villagers to repair it.</summary>
+        public int RepairHpPerTick = 2, RepairAtPermille = 700;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
     }
 
