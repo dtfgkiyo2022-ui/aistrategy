@@ -103,6 +103,7 @@ namespace Rts.Simulation
                     w.Write(e.TechFood[11]); w.Write(e.TechWood[11]); w.Write(e.TechTicks[11]); w.Write(e.TechMetal[11]);
                     for (int t = 0; t < 12; t++) w.Write(e.TechGems[t]);
                     w.Write(e.MercenaryGems); w.Write(e.MercenaryTicks); w.Write(e.MercenaryHp); w.Write(e.MercenaryDamage); w.Write(e.MercenaryInterval);
+                    w.Write(e.AgeVictoryEnabled); w.Write(e.AgeVictoryTicks);
                 }
                 return s.ToArray();
             }
@@ -197,6 +198,7 @@ namespace Rts.Simulation
                         e.TechGems=new int[12]; for (int t = 0; t < 12; t++) e.TechGems[t]=r.ReadInt32();
                         if (s.Position < s.Length) { e.MercenaryGems=r.ReadInt32(); e.MercenaryTicks=r.ReadInt32(); e.MercenaryHp=r.ReadInt32(); e.MercenaryDamage=r.ReadInt32(); e.MercenaryInterval=r.ReadInt32(); }
                     }
+                    if (s.Position < s.Length) { e.AgeVictoryEnabled=Bool(r); e.AgeVictoryTicks=r.ReadInt32(); }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

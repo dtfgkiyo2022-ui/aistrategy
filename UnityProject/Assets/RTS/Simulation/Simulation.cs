@@ -298,7 +298,35 @@ namespace Rts.Simulation
         {
             bool first = world.Cores[world.Factions[0].CoreId - 1].Hp == 0;
             bool second = world.Cores[world.Factions[1].CoreId - 1].Hp == 0;
-            if (first || second) world.Result = new MatchResult(true, first == second ? 0U : first ? 2U : 1U, first && second, false, false);
+            if (first || second)
+            {
+                world.Result = new MatchResult(true, first == second ? 0U : first ? 2U : 1U, first && second, false, false);
+                return;
+            }
+            var rules = world.Config.Economy;
+            if (!rules.Enabled || !rules.Ages || !rules.AgeVictoryEnabled) return;
+            // (#21) Once both sides stand in the third age, being ahead no longer means anything by itself - the fight
+            // alone decides from here, exactly as without the flag. Only one side may still be racing for this win.
+            if (world.Economies[0].Age >= 3 && world.Economies[1].Age >= 3) return;
+            bool firstReady = AgeVictoryReady(0, rules.AgeVictoryTicks);
+            bool secondReady = AgeVictoryReady(1, rules.AgeVictoryTicks);
+            if (firstReady || secondReady)
+                world.Result = new MatchResult(true, firstReady == secondReady ? 0U : firstReady ? 1U : 2U,
+                    firstReady && secondReady, false, false, true);
+        }
+
+        private bool AgeVictoryReady(int index, int requiredTicks)
+        {
+            var economy = world.Economies[index];
+            if (economy.Age < 3 || world.Cores[world.Factions[index].CoreId - 1].Hp <= 0)
+            {
+                economy.AgeVictoryProgress = 0;
+                world.Economies[index] = economy;
+                return false;
+            }
+            economy.AgeVictoryProgress = checked(Math.Min(requiredTicks, economy.AgeVictoryProgress + 1));
+            world.Economies[index] = economy;
+            return economy.AgeVictoryProgress >= requiredTicks;
         }
 
         public FactionFrame Capture(uint factionId)

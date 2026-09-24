@@ -156,6 +156,9 @@ namespace Rts.Simulation
         public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
         /// <summary>V3-5 (32 #10): the third age of a civilisation (trade age for farming, steel age for metallurgy).</summary>
         public int Age3FoodCost = 1200, Age3WoodCost = 800, Age3Ticks = 2400, Age3PopulationBonus = 20;
+        /// <summary>V3-5 (32 #21): optional victory after holding the third age while the core remains alive.</summary>
+        public bool AgeVictoryEnabled;
+        public int AgeVictoryTicks = 3000;
         /// <summary>V3-5 (32 #12): the archery range and the stable - from the second age, in either civilisation, so a side
         /// can field the unit its own civilisation does not train.</summary>
         public int RangeSizeCells = 3, RangeWoodCost = 150, RangeWork = 300, RangeHp = 600;
