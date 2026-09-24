@@ -44,6 +44,7 @@ namespace Rts.Simulation
                 DecideTower(faction);
                 DecideResearch(faction);
                 DecideMarket(faction);
+                DecideTradeRoute(faction);
                 DecideSiege(faction);
                 DecideCrossUnit(faction);
                 DecideCastle(faction);
@@ -62,6 +63,7 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
+                if (IsTradeRouteTask(v.Task) && !TradeRouteActive(v)) { StopTradeRoute(ref v); continue; }
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
@@ -69,6 +71,8 @@ namespace Rts.Simulation
                 else if (v.Task == VillagerTask.ToBuild) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToPickup) goal = world.Map.Center(world.Buildings[v.HaulFrom - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToDeliver) goal = world.Map.Center(world.Buildings[v.HaulTo - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToTradeMarket) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToTradeCore) goal = OwnCore(v.FactionId).Definition.Position;
                 else { v.MoveGoal = v.Position; continue; }
                 v.MoveGoal = VillagerRouteTarget(ref v, goal);
                 var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep));
@@ -94,7 +98,8 @@ namespace Rts.Simulation
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive) continue;
-                if (v.Task == VillagerTask.ToNode)
+                if (IsTradeRouteTask(v.Task)) AdvanceTradeRoute(ref v);
+                else if (v.Task == VillagerTask.ToNode)
                 {
                     var node = world.Nodes[v.NodeId - 1];
                     if (node.Remaining <= 0) { v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; continue; }

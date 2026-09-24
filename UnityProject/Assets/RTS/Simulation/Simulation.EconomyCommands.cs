@@ -37,6 +37,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.Trade:
                     TradeAtMarket(faction, c.Give, c.Take);
                     return;
+                case EconomyCommandKind.TradeRoute:
+                    StartTradeRoute(faction, c.VillagerIds);
+                    return;
                 case EconomyCommandKind.Research:
                     if (OwnBuilding(faction, c.ProducerId, out int smith)) StartResearch(faction, ref world.Buildings[smith], c.Tech, true);
                     return;

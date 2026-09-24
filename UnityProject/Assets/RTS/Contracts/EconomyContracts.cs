@@ -17,6 +17,8 @@ namespace Rts.Contracts
         Research = 12,
         /// <summary>V3-5: at an own market, gives a lot of Give for Take (needs a finished market).</summary>
         Trade = 13,
+        /// <summary>V3-5 32 #18: sends living own villagers between the own market and core.</summary>
+        TradeRoute = 14,
         /// <summary>V3-2: takes the own belt off Cell; what it carried is lost.</summary>
         RemoveBelt = 7,
         /// <summary>V3-3: hands everything the player holds (villagers, buildings, belts, the core) back to the automatic economy.</summary>
@@ -171,6 +173,9 @@ namespace Rts.Contracts
             => new EconomyCommand(faction, sequence, EconomyCommandKind.Trade, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North,
                 EconomyPolicy.Balanced, CivKind.Primitive, 0, give, take);
 
+        public static EconomyCommand TradeRoute(uint faction, ulong sequence, IReadOnlyList<uint> villagers)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.TradeRoute, 0, 0, 0, 0, villagers, EconomyTargetKind.None, 0, false);
+
         public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
         {
             var facings = new Facing[cells == null ? 0 : cells.Count];
@@ -185,7 +190,7 @@ namespace Rts.Contracts
     }
 
     /// <summary>Hauling (V3-2) covers carrying by hand between a mine, a smelter and the core.</summary>
-    public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5, Hauling = 6 }
+    public enum VillagerActivity : byte { Idle = 0, ToResource = 1, Gathering = 2, Returning = 3, ToBuild = 4, Building = 5, Hauling = 6, Trading = 7 }
 
     /// <summary>A villager on screen. Enemy villagers carry only a position (id 0, no HP or load), like enemy soldiers.</summary>
     public readonly struct VillagerView
