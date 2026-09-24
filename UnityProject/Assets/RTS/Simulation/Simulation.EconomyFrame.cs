@@ -79,6 +79,8 @@ namespace Rts.Simulation
             VillagerTask.Building => VillagerActivity.Building,
             VillagerTask.ToPickup => VillagerActivity.Hauling,
             VillagerTask.ToDeliver => VillagerActivity.Hauling,
+            VillagerTask.ToTradeMarket => VillagerActivity.Trading,
+            VillagerTask.ToTradeCore => VillagerActivity.Trading,
             _ => VillagerActivity.Idle
         };
     }

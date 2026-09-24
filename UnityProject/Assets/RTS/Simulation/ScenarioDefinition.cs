@@ -142,6 +142,10 @@ namespace Rts.Simulation
         public Fix64 CavalryRange = Fix64.FromInt(2), CavalrySpeed = Fix64.FromInt(4), CavalryVision = Fix64.FromInt(24);
         /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
         public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
+        /// <summary>V3-5 32 #18: wood gained at the core for each completed trade-route round trip.</summary>
+        public int TradeRouteWood = 25;
+        /// <summary>V3-5 32 #18: minimum eligible trader count.</summary>
+        public int TradeRouteMin = 1;
         /// <summary>V3-5 (32 #9): the siege workshop (second age) and its ram - slow, weak on soldiers, heavy on buildings and cores.</summary>
         public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
         public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;

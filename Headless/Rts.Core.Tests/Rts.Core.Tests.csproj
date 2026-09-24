@@ -41,6 +41,7 @@
     <Compile Include="DefenceTests.cs" />
     <Compile Include="ResearchTests.cs" />
     <Compile Include="MarketTests.cs" />
+    <Compile Include="TradeRouteTests.cs" />
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="RangeStableTests.cs" />

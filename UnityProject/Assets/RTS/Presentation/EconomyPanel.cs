@@ -49,11 +49,11 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most nine rows of buttons under it, then one line of notes.
-        // Nine since V3-5 (32 #17): at its fullest the make tab shows villagers and infantry, the scout and the
+        // The panel keeps one height: a row of tabs and at most ten rows of buttons under it, then one line of notes.
+        // Ten since V3-5 (32 #18): at its fullest the make tab shows villagers and infantry, the scout and the
         // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the next age,
         // the idle buttons and the carrying one. The build tab reaches eight, the research tab five.
-        private const float TabbedHeight = 22f + 26f + 9f * 26f + 24f;
+        private const float TabbedHeight = 22f + 26f + 10f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
@@ -473,6 +473,11 @@ namespace Rts.Presentation
                     GUI.enabled = true;
                     y += 26f;
                 }
+                GUI.enabled = market.HasValue && market.Value.Complete;
+                if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle -> trade route", "待機中の村人 → 交易路")))
+                    SendIdleToTrade(economy);
+                GUI.enabled = true;
+                y += 26f;
             }
             if (economy.Ages && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
             {
@@ -640,6 +645,14 @@ namespace Rts.Presentation
             foreach (var v in economy.Villagers) if (v.IsOwn && v.Activity == VillagerActivity.Idle) idle.Add(v.Id);
             if (idle.Count == 0) { Note(UiText.T("No idle villagers.", "待機中の村人はいません。")); return; }
             Send(EconomyCommand.Assign(faction, ++sequence, idle, target, targetId), idle.Count + UiText.T(" idle villager(s) -> ", " 人の待機中の村人 → ") + what);
+        }
+
+        private void SendIdleToTrade(EconomyView economy)
+        {
+            var idle = new List<uint>();
+            foreach (var v in economy.Villagers) if (v.IsOwn && v.Activity == VillagerActivity.Idle) idle.Add(v.Id);
+            if (idle.Count == 0) { Note(UiText.T("No idle villagers.", "待機中の村人はいません。")); return; }
+            Send(EconomyCommand.TradeRoute(faction, ++sequence, idle), idle.Count + UiText.T(" idle villager(s) -> trade route", " 人の待機中の村人 → 交易路"));
         }
 
         private Vector3 OwnCorePosition()

@@ -97,6 +97,7 @@ namespace Rts.Simulation
                     w.Write(e.RepairHpPerTick); w.Write(e.RepairAtPermille);
                     w.Write(e.CastleSizeCells); w.Write(e.CastleWoodCost); w.Write(e.CastleStoneCost); w.Write(e.CastleWork); w.Write(e.CastleHp);
                     w.Write(e.CastleRange); w.Write(e.CastleVision); w.Write(e.CastleDamage); w.Write(e.CastleIntervalTicks);
+                    w.Write(e.TradeRouteWood); w.Write(e.TradeRouteMin);
                 }
                 return s.ToArray();
             }
@@ -182,6 +183,7 @@ namespace Rts.Simulation
                     e.RepairHpPerTick=r.ReadInt32(); e.RepairAtPermille=r.ReadInt32();
                     e.CastleSizeCells=r.ReadInt32(); e.CastleWoodCost=r.ReadInt32(); e.CastleStoneCost=r.ReadInt32(); e.CastleWork=r.ReadInt32(); e.CastleHp=r.ReadInt32();
                     e.CastleRange=r.ReadInt32(); e.CastleVision=r.ReadInt32(); e.CastleDamage=r.ReadInt32(); e.CastleIntervalTicks=r.ReadInt32();
+                    e.TradeRouteWood=r.ReadInt32(); e.TradeRouteMin=r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

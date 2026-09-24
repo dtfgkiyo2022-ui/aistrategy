@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -9,7 +10,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private const int TradeRich = 600, TradePoor = 150, AutoRams = 2;
+        private const int TradeRich = 600, TradePoor = 150, AutoRams = 2, AutoTradeVillagers = 2;
 
         private static bool Tradable(ResourceKind kind) => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone;
 
@@ -25,6 +26,119 @@ namespace Rts.Simulation
             if (StockOf(world.Economies[faction - 1], give) < rules.TradeLot) return;
             AddStock(faction, give, -rules.TradeLot);
             AddStock(faction, take, rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0));
+        }
+
+        private int OwnFinishedMarketIndex(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Market) return i;
+            }
+            return -1;
+        }
+
+        /// <summary>Assigns the living villagers in an economy command to the deterministic first finished own market.</summary>
+        private void StartTradeRoute(uint faction, IReadOnlyList<uint> villagers)
+        {
+            if (!AgesOn) return;
+            int market = OwnFinishedMarketIndex(faction);
+            if (market < 0) return;
+            uint marketId = world.Buildings[market].Id;
+            foreach (uint id in villagers)
+            {
+                if (id == 0 || id > world.VillagerCount) continue;
+                ref var v = ref world.Villagers[id - 1];
+                if (!v.Alive || v.FactionId != faction) continue;
+                v.NodeId = 0;
+                v.HaulFrom = 0;
+                v.HaulTo = 0;
+                v.BuildingId = marketId;
+                v.Task = VillagerTask.ToTradeMarket;
+                v.Route = System.Array.Empty<int>();
+                v.RouteCursor = 0;
+                v.RouteGoal = v.Position;
+                if (IndustryOn) v.Held = true;
+            }
+        }
+
+        /// <summary>Returns true while both ends of a route remain a living own core and finished own market.</summary>
+        private bool TradeRouteActive(VillagerState v)
+        {
+            if (!AgesOn || !v.Alive || v.BuildingId == 0 || v.BuildingId > world.BuildingCount) return false;
+            var market = world.Buildings[v.BuildingId - 1];
+            return market.Alive && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market
+                && OwnCore(v.FactionId).Hp > 0;
+        }
+
+        private static bool IsTradeRouteTask(VillagerTask task)
+            => task == VillagerTask.ToTradeMarket || task == VillagerTask.ToTradeCore;
+
+        private void StopTradeRoute(ref VillagerState v)
+        {
+            v.Task = VillagerTask.Idle;
+            v.NodeId = 0;
+            v.BuildingId = 0;
+            v.HaulFrom = 0;
+            v.HaulTo = 0;
+            v.Route = System.Array.Empty<int>();
+            v.RouteCursor = 0;
+            v.RouteGoal = v.Position;
+            v.MoveGoal = v.Position;
+        }
+
+        /// <summary>Completes one end of the route. Wood is created only on arrival at the own core.</summary>
+        private void AdvanceTradeRoute(ref VillagerState v)
+        {
+            if (!TradeRouteActive(v)) { StopTradeRoute(ref v); return; }
+            var market = world.Buildings[v.BuildingId - 1];
+            if (v.Task == VillagerTask.ToTradeMarket)
+            {
+                if (InRange(v.Position, world.Map.Center(market.WorkCell), GatherReach)) v.Task = VillagerTask.ToTradeCore;
+                return;
+            }
+            if (v.Task != VillagerTask.ToTradeCore) return;
+            if (!InRange(v.Position, OwnCore(v.FactionId).Definition.Position, world.Config.Rules.CoreRadius)) return;
+            if (v.Carry > 0)
+            {
+                AddStock(v.FactionId, v.CarryKind, v.Carry);
+                v.Carry = 0;
+            }
+            AddStock(v.FactionId, ResourceKind.Wood, world.Config.Economy.TradeRouteWood);
+            v.Task = VillagerTask.ToTradeMarket;
+            v.Route = System.Array.Empty<int>();
+            v.RouteCursor = 0;
+            v.RouteGoal = v.Position;
+        }
+
+        /// <summary>Automatic economy: one idle villager is assigned until two active routes exist.</summary>
+        private void DecideTradeRoute(uint faction)
+        {
+            if (!AgesOn || SavingToAdvance(faction)) return;
+            int market = OwnFinishedMarketIndex(faction);
+            if (market < 0 || world.Buildings[market].Held) return;
+            int active = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && IsTradeRouteTask(v.Task)) active++;
+            }
+            if (active >= AutoTradeVillagers) return;
+            uint marketId = world.Buildings[market].Id;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.Task != VillagerTask.Idle) continue;
+                v.NodeId = 0;
+                v.HaulFrom = 0;
+                v.HaulTo = 0;
+                v.BuildingId = marketId;
+                v.Task = VillagerTask.ToTradeMarket;
+                v.Route = System.Array.Empty<int>();
+                v.RouteCursor = 0;
+                v.RouteGoal = v.Position;
+                return;
+            }
         }
 
         /// <summary>What a soldier deals to a building or a core: a ram its siege damage, everyone else their damage.</summary>
