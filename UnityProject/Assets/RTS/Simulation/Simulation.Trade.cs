@@ -4,8 +4,8 @@ using Rts.Contracts;
 namespace Rts.Simulation
 {
     /// <summary>
-    /// V3-5 markets and siege (technical-design-v3 32 #9). A finished own market trades TradeLot of food, wood or stone for
-    /// TradeReturn of another. The siege workshop (second age) trains rams: they fight as infantry, but strike buildings
+    /// V3-5 markets and siege (technical-design-v3 32 #9, #19). A finished own market trades TradeLot of food, wood or stone for
+    /// TradeReturn of another, or GemsTradeReturn of Gems. Gems can only be received. The siege workshop (second age) trains rams: they fight as infantry, but strike buildings
     /// and cores with RamSiegeDamage. Maps with ages only.
     /// </summary>
     public sealed partial class Simulation
@@ -14,18 +14,22 @@ namespace Rts.Simulation
 
         private static bool Tradable(ResourceKind kind) => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone;
 
+        private static bool TradeTakeable(ResourceKind kind) => Tradable(kind) || kind == ResourceKind.Gems;
+
         private static int StockOf(FactionEconomy e, ResourceKind kind)
-            => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Stone ? e.Stone : 0;
+            => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : 0;
 
         private void TradeAtMarket(uint faction, ResourceKind give, ResourceKind take)
         {
-            if (!AgesOn || give == take || !Tradable(give) || !Tradable(take)) return;
+            if (!AgesOn || give == take || !Tradable(give) || !TradeTakeable(take)) return;
             int market = OwnBuildingIndex(faction, BuildingKind.Market);
             if (market < 0 || !world.Buildings[market].Complete) return;
             var rules = world.Config.Economy;
             if (StockOf(world.Economies[faction - 1], give) < rules.TradeLot) return;
             AddStock(faction, give, -rules.TradeLot);
-            AddStock(faction, take, rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0));
+            int returned = take == ResourceKind.Gems ? rules.GemsTradeReturn
+                : rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0);
+            AddStock(faction, take, returned);
         }
 
         private int OwnFinishedMarketIndex(uint faction)
@@ -168,6 +172,7 @@ namespace Rts.Simulation
             if (!world.Buildings[market].Complete || world.Buildings[market].Held) return;
             var e = world.Economies[faction - 1];
             ResourceKind rich = 0, poor = 0;
+            // Gems are a special final-research currency, not part of the three-resource balancing decision.
             foreach (var kind in new[] { ResourceKind.Food, ResourceKind.Wood, ResourceKind.Stone })
             {
                 if (rich == 0 || StockOf(e, kind) > StockOf(e, rich)) rich = kind;

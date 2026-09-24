@@ -98,6 +98,10 @@ namespace Rts.Simulation
                     w.Write(e.CastleSizeCells); w.Write(e.CastleWoodCost); w.Write(e.CastleStoneCost); w.Write(e.CastleWork); w.Write(e.CastleHp);
                     w.Write(e.CastleRange); w.Write(e.CastleVision); w.Write(e.CastleDamage); w.Write(e.CastleIntervalTicks);
                     w.Write(e.TradeRouteWood); w.Write(e.TradeRouteMin);
+                    // V3-5 #19: append Gems and the twelfth tech slot to schema 5, preserving the earlier field order.
+                    w.Write(e.GemsTradeReturn); w.Write(e.GemArmorHp);
+                    w.Write(e.TechFood[11]); w.Write(e.TechWood[11]); w.Write(e.TechTicks[11]); w.Write(e.TechMetal[11]);
+                    for (int t = 0; t < 12; t++) w.Write(e.TechGems[t]);
                 }
                 return s.ToArray();
             }
@@ -163,7 +167,8 @@ namespace Rts.Simulation
                     e.TowerSizeCells=r.ReadInt32(); e.TowerWoodCost=r.ReadInt32(); e.TowerStoneCost=r.ReadInt32(); e.TowerWork=r.ReadInt32(); e.TowerHp=r.ReadInt32();
                     e.TowerRange=r.ReadInt32(); e.TowerVision=r.ReadInt32(); e.TowerDamage=r.ReadInt32(); e.TowerIntervalTicks=r.ReadInt32();
                     e.BlacksmithSizeCells=r.ReadInt32(); e.BlacksmithWoodCost=r.ReadInt32(); e.BlacksmithWork=r.ReadInt32(); e.BlacksmithHp=r.ReadInt32();
-                    e.TechFood=new int[11]; e.TechWood=new int[11]; e.TechTicks=new int[11]; e.TechMetal=new int[11];
+                    var defaults = new EconomyRules();
+                    e.TechFood=defaults.TechFood; e.TechWood=defaults.TechWood; e.TechTicks=defaults.TechTicks; e.TechMetal=defaults.TechMetal; e.TechGems=defaults.TechGems;
                     for (int t = 0; t < 11; t++) { e.TechFood[t]=r.ReadInt32(); e.TechWood[t]=r.ReadInt32(); e.TechTicks[t]=r.ReadInt32(); e.TechMetal[t]=r.ReadInt32(); }
                     e.WeaponsDamage=r.ReadInt32(); e.ArmourHp=r.ReadInt32(); e.ToolsGatherTicks=r.ReadInt32(); e.CartsCarry=r.ReadInt32(); e.IrrigationTicks=r.ReadInt32(); e.BlastFurnaceTicks=r.ReadInt32();
                     e.Age2FoodCost=r.ReadInt32(); e.Age2WoodCost=r.ReadInt32(); e.Age2Ticks=r.ReadInt32(); e.Age2PopulationBonus=r.ReadInt32();
@@ -184,6 +189,12 @@ namespace Rts.Simulation
                     e.CastleSizeCells=r.ReadInt32(); e.CastleWoodCost=r.ReadInt32(); e.CastleStoneCost=r.ReadInt32(); e.CastleWork=r.ReadInt32(); e.CastleHp=r.ReadInt32();
                     e.CastleRange=r.ReadInt32(); e.CastleVision=r.ReadInt32(); e.CastleDamage=r.ReadInt32(); e.CastleIntervalTicks=r.ReadInt32();
                     e.TradeRouteWood=r.ReadInt32(); e.TradeRouteMin=r.ReadInt32();
+                    if (s.Position < s.Length)
+                    {
+                        e.GemsTradeReturn=r.ReadInt32(); e.GemArmorHp=r.ReadInt32();
+                        e.TechFood[11]=r.ReadInt32(); e.TechWood[11]=r.ReadInt32(); e.TechTicks[11]=r.ReadInt32(); e.TechMetal[11]=r.ReadInt32();
+                        e.TechGems=new int[12]; for (int t = 0; t < 12; t++) e.TechGems[t]=r.ReadInt32();
+                    }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

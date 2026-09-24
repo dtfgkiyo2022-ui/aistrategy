@@ -12,7 +12,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
-            TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour };
+            TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
@@ -33,13 +33,15 @@ namespace Rts.Simulation
         private bool TechOpen(uint faction, TechKind tech)
         {
             var e = world.Economies[faction - 1];
-            if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || tech > TechKind.SteelArmour || HasTech(faction, tech)) return false;
+            if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || tech > TechKind.GemArmor || HasTech(faction, tech)) return false;
             if (tech == TechKind.Irrigation) return e.Civ == CivKind.Agrarian;
             if (tech == TechKind.BlastFurnace) return e.Civ == CivKind.Metallurgy;
             // V3-5 (32 #14): the steel techs want the second age and the metal to pay for them; the earlier ones must be in first.
             if (tech == TechKind.SteelWeapons) return e.Age >= 2 && HasTech(faction, TechKind.Weapons);
             if (tech == TechKind.SteelArmour) return e.Age >= 2 && HasTech(faction, TechKind.Armour);
             // V3-5 (32 #10): siegecraft, masonry and banking are the third age's, and both civilisations may have them.
+            // V3-5 (32 #19): Gems are a separate route from either civilisation's techs, so GemArmor has no prerequisite
+            // beyond the third age.
             if (tech >= TechKind.Siegecraft) return e.Age >= 3;
             return true;
         }
@@ -61,10 +63,11 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int t = (int)tech - 1;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Food < rules.TechFood[t] || economy.Wood < rules.TechWood[t] || economy.Metal < rules.TechMetal[t]) return false;
+            if (economy.Food < rules.TechFood[t] || economy.Wood < rules.TechWood[t] || economy.Metal < rules.TechMetal[t] || economy.Gems < rules.TechGems[t]) return false;
             economy.Food = checked(economy.Food - rules.TechFood[t]);
             economy.Wood = checked(economy.Wood - rules.TechWood[t]);
             economy.Metal = checked(economy.Metal - rules.TechMetal[t]);
+            economy.Gems = checked(economy.Gems - rules.TechGems[t]);
             smith.Researching = tech;
             smith.TrainRemaining = rules.TechTicks[t];
             if (byPlayer && IndustryOn) smith.Held = true;
@@ -84,7 +87,7 @@ namespace Rts.Simulation
                 b.Researching = 0;
                 b.TrainRemaining = 0;
                 world.Economies[b.FactionId - 1].Techs |= 1UL << ((int)tech - 1);
-                if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour) continue;
+                if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour && tech != TechKind.GemArmor) continue;
                 foreach (int s in world.SoldierTraversal)
                     if (world.Soldiers[s].Alive && world.Soldiers[s].Initial.FactionId == b.FactionId) ApplyTech(s, tech);
             }
@@ -97,6 +100,7 @@ namespace Rts.Simulation
             if (HasTech(faction, TechKind.Armour)) ApplyTech(index, TechKind.Armour);
             if (HasTech(faction, TechKind.SteelWeapons)) ApplyTech(index, TechKind.SteelWeapons);
             if (HasTech(faction, TechKind.SteelArmour)) ApplyTech(index, TechKind.SteelArmour);
+            if (HasTech(faction, TechKind.GemArmor)) ApplyTech(index, TechKind.GemArmor);
         }
 
         private void ApplyTech(int index, TechKind tech)
@@ -107,7 +111,7 @@ namespace Rts.Simulation
             else if (tech == TechKind.SteelWeapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.SteelWeaponsDamage);
             else
             {
-                int hp = tech == TechKind.SteelArmour ? rules.SteelArmourHp : rules.ArmourHp;
+                int hp = tech == TechKind.SteelArmour ? rules.SteelArmourHp : tech == TechKind.GemArmor ? rules.GemArmorHp : rules.ArmourHp;
                 s.Parameters.Hp = checked(s.Parameters.Hp + hp);
                 s.Hp = checked(s.Hp + hp);
             }

@@ -49,11 +49,12 @@ namespace Rts.Presentation
             SetMode(Mode.None);
         }
 
-        // The panel keeps one height: a row of tabs and at most ten rows of buttons under it, then one line of notes.
-        // Ten since V3-5 (32 #18): at its fullest the make tab shows villagers and infantry, the scout and the
-        // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the next age,
-        // the idle buttons and the carrying one. The build tab reaches eight, the research tab five.
-        private const float TabbedHeight = 22f + 26f + 10f * 26f + 24f;
+        // The panel keeps one height: a row of tabs and at most eleven rows of buttons under it, then one line of notes.
+        // Eleven since V3-5 (32 #19): at its fullest the make tab shows villagers and infantry, the scout and the
+        // civilisation's own unit, the ram, the range and the stable, the castle, the market's trades, the Gems
+        // exchange, the trade route, the next age, the idle buttons and the carrying one. The build tab reaches eight,
+        // the research tab five.
+        private const float TabbedHeight = 22f + 26f + 11f * 26f + 24f;
 
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
@@ -299,7 +300,7 @@ namespace Rts.Presentation
                 : AgeName(economy.Civ, economy.Age) + "  |  ";
             string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
             if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
-            if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone;
+            if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone + UiText.T("  Gems ", "  宝石 ") + economy.Gems;
             string people = UiText.T("  |  Pop ", "  |  人口 ") + economy.Population + "/" + economy.PopulationCap + UiText.T("  Idle ", "  待機 ") + CountIdle(economy);
             GUI.Label(new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f), age + stock + people);
         }
@@ -472,6 +473,12 @@ namespace Rts.Presentation
                     TradeButton(new Rect(x + 100f + 2f * (third + 4f), y, third, 22f), economy, ResourceKind.Wood, ResourceKind.Stone, UiText.T("Wood->Stone", "木材→石"));
                     GUI.enabled = true;
                     y += 26f;
+                    // V3-5 (32 #19): the only way to get Gems - a steep, one-way exchange (give, never returned).
+                    GUI.enabled = market.Value.Complete;
+                    if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Wood->Gems (", "木材→宝石（") + economy.GemsTradeReturn + UiText.T(")", "）")))
+                        Send(EconomyCommand.Trade(faction, ++sequence, ResourceKind.Wood, ResourceKind.Gems), UiText.T("Wood->Gems traded", "木材→宝石 を交換しました"));
+                    GUI.enabled = true;
+                    y += 26f;
                 }
                 GUI.enabled = market.HasValue && market.Value.Complete;
                 if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Idle -> trade route", "待機中の村人 → 交易路")))
@@ -544,6 +551,7 @@ namespace Rts.Presentation
                 case TechKind.Banking: return UiText.T("Banking (trade +25)", "両替（交換+25）");
                 case TechKind.SteelWeapons: return UiText.T("Steel weapons (attack +3)", "鋼の武器（攻撃+3）");
                 case TechKind.SteelArmour: return UiText.T("Steel armour (HP +30)", "鋼の鎧（HP+30）");
+                case TechKind.GemArmor: return UiText.T("Gem armor (HP +40)", "宝石の鎧（HP+40）");
                 default: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
             }
         }
@@ -569,7 +577,7 @@ namespace Rts.Presentation
             // V3-5 (32 #10): the third age opens three more, the same for both civilisations.
             // V3-5 (32 #14): the steel pair comes with the second age and is paid in metal.
             if (economy.Age >= 2) { techs.Add(TechKind.SteelWeapons); techs.Add(TechKind.SteelArmour); }
-            if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); }
+            if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); techs.Add(TechKind.GemArmor); }
             for (int i = 0; i < techs.Count; i++)
             {
                 var t = techs[i];
@@ -577,7 +585,8 @@ namespace Rts.Presentation
                 bool done = (economy.Techs & (1UL << index)) != 0;
                 string cost = index < economy.TechFoodCosts.Count
                     ? UiText.T(" F", " 食") + economy.TechFoodCosts[index] + UiText.T(" W", " 木") + economy.TechWoodCosts[index]
-                        + (index < economy.TechMetalCosts.Count && economy.TechMetalCosts[index] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[index] : "") : "";
+                        + (index < economy.TechMetalCosts.Count && economy.TechMetalCosts[index] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[index] : "")
+                        + (index < economy.TechGemsCosts.Count && economy.TechGemsCosts[index] > 0 ? UiText.T(" G", " 宝") + economy.TechGemsCosts[index] : "") : "";
                 GUI.enabled = b.Complete && b.Researching == 0 && !done;
                 var r = new Rect(i % 2 == 0 ? x : right, y + (i / 2) * 26f, half, 22f);
                 if (GUI.Button(r, (done ? UiText.T("Done: ", "済：") : "") + TechName(t) + (done ? "" : cost)))
