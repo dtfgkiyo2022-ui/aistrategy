@@ -413,6 +413,8 @@ namespace Rts.Contracts
         /// <summary>V3-5 (32 #17): the castle of the third age.</summary>
         public int CastleWoodCost { get; }
         public int CastleStoneCost { get; }
+        public int MercenaryGemsCost { get; }
+        public int MercenaryTrainTicks { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -435,10 +437,12 @@ namespace Rts.Contracts
             int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
             int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost,
             int age3FoodCost, int age3WoodCost, int rangeWoodCost, int stableWoodCost, int castleWoodCost, int castleStoneCost,
-            int gems = 0, int gemsTradeReturn = 0, IReadOnlyList<int> techGemsCosts = null, int gemArmorHp = 0)
+            int gems = 0, int gemsTradeReturn = 0, IReadOnlyList<int> techGemsCosts = null, int gemArmorHp = 0,
+            int mercenaryGemsCost = 0, int mercenaryTrainTicks = 0)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
+            MercenaryGemsCost = mercenaryGemsCost; MercenaryTrainTicks = mercenaryTrainTicks;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

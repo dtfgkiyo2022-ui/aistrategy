@@ -133,6 +133,7 @@ namespace Rts.Simulation
         internal int Input, Output, Timer;
         /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
         internal int QueuedMetal;
+        internal int QueuedGems;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
         internal int Interval;
         /// <summary>V3-5 (32): the kind of each queued unit, front first; null without ages (then every entry is infantry).</summary>
@@ -365,6 +366,7 @@ namespace Rts.Simulation
                 && e.RepairHpPerTick > 0 && e.RepairAtPermille >= 0 && e.RepairAtPermille <= 1000
                 && e.CastleSizeCells > 0 && e.CastleSizeCells <= 8 && e.CastleWoodCost >= 0 && e.CastleStoneCost >= 0 && e.CastleWork > 0 && e.CastleHp > 0
                 && e.CastleRange >= 0 && e.CastleVision >= 0 && e.CastleDamage >= 0 && e.CastleIntervalTicks > 0
+                && e.MercenaryGems >= 0 && e.MercenaryTicks > 0 && e.MercenaryHp > 0 && e.MercenaryDamage >= 0 && e.MercenaryInterval > 0
                 && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
@@ -542,6 +544,8 @@ namespace Rts.Simulation
                 CastleSizeCells = e.CastleSizeCells, CastleWoodCost = e.CastleWoodCost, CastleStoneCost = e.CastleStoneCost, CastleWork = e.CastleWork,
                 CastleHp = e.CastleHp, CastleRange = e.CastleRange, CastleVision = e.CastleVision, CastleDamage = e.CastleDamage,
                 CastleIntervalTicks = e.CastleIntervalTicks,
+                MercenaryGems = e.MercenaryGems, MercenaryTicks = e.MercenaryTicks, MercenaryHp = e.MercenaryHp,
+                MercenaryDamage = e.MercenaryDamage, MercenaryInterval = e.MercenaryInterval,
                 ArcherFood = e.ArcherFood, ArcherWood = e.ArcherWood, ArcherTicks = e.ArcherTicks, ArcherHp = e.ArcherHp, ArcherDamage = e.ArcherDamage,
                 ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
                 CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,
