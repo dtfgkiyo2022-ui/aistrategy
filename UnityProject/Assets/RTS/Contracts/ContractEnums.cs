@@ -52,7 +52,7 @@ namespace Rts.Contracts
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
     // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; in battle they are infantry with
     // their own HP, damage, range and speed, so the combat AI's infantry rules hold for them.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7 }
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6 }

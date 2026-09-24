@@ -172,6 +172,8 @@ namespace Rts.Simulation
         /// harder than a tower, and trains any of the three line units whatever the civilisation.</summary>
         public int CastleSizeCells = 4, CastleWoodCost = 200, CastleStoneCost = 300, CastleWork = 600, CastleHp = 2400;
         public int CastleRange = 14, CastleVision = 20, CastleDamage = 14, CastleIntervalTicks = 20;
+        /// <summary>V3-5 (32.20): a castle can hire mercenaries with Gems.</summary>
+        public int MercenaryGems = 20, MercenaryTicks = 250, MercenaryHp = 150, MercenaryDamage = 14, MercenaryInterval = 25;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
     }
 

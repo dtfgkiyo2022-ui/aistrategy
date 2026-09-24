@@ -11,14 +11,15 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         /// <summary>Food, wood and metal a unit of <paramref name="kind"/> costs this faction now, and its training ticks.</summary>
-        private (int food, int wood, int metal, int ticks) CostOf(uint faction, UnitKind kind)
+        private (int food, int wood, int metal, int gems, int ticks) CostOf(uint faction, UnitKind kind)
         {
             var e = world.Config.Economy;
-            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, e.ScoutTrainTicks);
-            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, e.ArcherTicks);
-            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, e.CavalryTicks);
-            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, e.RamTicks);
-            return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), InfantryTicksFor(faction));
+            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, e.ScoutTrainTicks);
+            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, e.ArcherTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, e.CavalryTicks);
+            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, e.RamTicks);
+            if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, e.MercenaryTicks);
+            return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, InfantryTicksFor(faction));
         }
 
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
@@ -32,7 +33,7 @@ namespace Rts.Simulation
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
-                    && (kind == UnitKind.Infantry || kind == UnitKind.Archer || kind == UnitKind.Cavalry);
+                    && (kind == UnitKind.Infantry || kind == UnitKind.Archer || kind == UnitKind.Cavalry || kind == UnitKind.Mercenary);
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
             if (!AgesOn) return false;
@@ -64,6 +65,16 @@ namespace Rts.Simulation
                 ram.Hp = r.RamHp; ram.Initial.Hp = r.RamHp;
                 return;
             }
+            if (unit == UnitKind.Mercenary)
+            {
+                var r = world.Config.Economy;
+                ref var mercenary = ref world.Soldiers[index];
+                mercenary.Class = unit;
+                mercenary.Parameters.Hp = r.MercenaryHp; mercenary.Parameters.Damage = r.MercenaryDamage;
+                mercenary.Parameters.AttackIntervalTicks = r.MercenaryInterval;
+                mercenary.Hp = r.MercenaryHp; mercenary.Initial.Hp = r.MercenaryHp;
+                return;
+            }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
             var e = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
@@ -86,7 +97,7 @@ namespace Rts.Simulation
         {
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind);
-            return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal;
+            return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal && e.Gems >= c.gems;
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -97,7 +108,9 @@ namespace Rts.Simulation
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
             e.Metal = checked(e.Metal - c.metal);
+            e.Gems = checked(e.Gems - c.gems);
             b.QueuedMetal = checked(b.QueuedMetal + c.metal);
+            b.QueuedGems = checked(b.QueuedGems + c.gems);
             if (b.Queued == 0) b.TrainRemaining = c.ticks;
             b.Queued++;
             if (AgesOn)
@@ -125,6 +138,9 @@ namespace Rts.Simulation
             int metalBack = Math.Min(c.metal, b.QueuedMetal);
             b.QueuedMetal -= metalBack;
             e.Metal = checked(e.Metal + metalBack);
+            int gemsBack = Math.Min(c.gems, b.QueuedGems);
+            b.QueuedGems -= gemsBack;
+            e.Gems = checked(e.Gems + gemsBack);
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -139,7 +155,9 @@ namespace Rts.Simulation
                 b.QueueKinds = rest;
             }
             int metal = CostOf(faction, done).metal;
+            int gems = CostOf(faction, done).gems;
             if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
+            if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0)).ticks : 0;
         }
 

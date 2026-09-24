@@ -451,14 +451,16 @@ namespace Rts.Presentation
                 if (castle.HasValue)
                 {
                     GUI.enabled = castle.Value.Complete;
-                    float third = (w - 8f) / 3f;
+                    float fourth = (w - 12f) / 4f;
                     string queued = castle.Value.Queued == 0 ? "" : " [" + castle.Value.Queued + "]";
-                    if (GUI.Button(new Rect(x, y, third, 22f), UiText.T("Castle: infantry", "城：歩兵") + queued))
+                    if (GUI.Button(new Rect(x, y, fourth, 22f), UiText.T("Castle: infantry", "城：歩兵") + queued))
                         Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Infantry), UiText.T("Infantry requested", "歩兵を依頼しました"));
-                    if (GUI.Button(new Rect(x + third + 4f, y, third, 22f), UiText.T("Castle: archer", "城：弓兵")))
+                    if (GUI.Button(new Rect(x + fourth + 4f, y, fourth, 22f), UiText.T("Castle: archer", "城：弓兵")))
                         Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Archer), UiText.T("Archer requested", "弓兵を依頼しました"));
-                    if (GUI.Button(new Rect(x + 2f * (third + 4f), y, third, 22f), UiText.T("Castle: cavalry", "城：騎兵")))
+                    if (GUI.Button(new Rect(x + 2f * (fourth + 4f), y, fourth, 22f), UiText.T("Castle: cavalry", "城：騎兵")))
                         Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
+                    if (GUI.Button(new Rect(x + 3f * (fourth + 4f), y, fourth, 22f), UiText.T("Castle: mercenary (", "城：傭兵（") + economy.MercenaryGemsCost + UiText.T(" Gems)", " 宝）")))
+                        Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Mercenary), UiText.T("Mercenary requested", "傭兵を依頼しました"));
                     GUI.enabled = true;
                     y += 26f;
                 }

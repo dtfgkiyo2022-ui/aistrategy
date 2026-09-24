@@ -43,6 +43,7 @@
     <Compile Include="MarketTests.cs" />
     <Compile Include="TradeRouteTests.cs" />
     <Compile Include="GemsTests.cs" />
+    <Compile Include="MercenaryTests.cs" />
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="RangeStableTests.cs" />
