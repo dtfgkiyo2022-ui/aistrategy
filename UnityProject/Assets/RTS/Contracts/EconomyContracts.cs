@@ -367,6 +367,8 @@ namespace Rts.Contracts
         public int DropSiteWoodCost { get; }
         /// <summary>V3-5 stone and defences (maps with ages only; 0 otherwise).</summary>
         public int Stone { get; }
+        /// <summary>V3-5 (32 #19): Gems received from a market (maps with ages only; 0 otherwise).</summary>
+        public int Gems { get; }
         public int WallStoneCost { get; }
         public int TowerWoodCost { get; }
         public int TowerStoneCost { get; }
@@ -378,6 +380,8 @@ namespace Rts.Contracts
         public IReadOnlyList<int> TechWoodCosts { get; }
         /// <summary>V3-5 (32 #14): the metal a tech costs - 0 for all but the steel ones.</summary>
         public IReadOnlyList<int> TechMetalCosts { get; }
+        /// <summary>V3-5 (32 #19): the Gems a tech costs - 15 for GemArmor and 0 for earlier techs.</summary>
+        public IReadOnlyList<int> TechGemsCosts { get; }
         /// <summary>V3-5 (32 #7, #8): the age inside the civilisation (0 primitive, 1, 2), the price of the second age, and the
         /// civilisations' own units.</summary>
         public int Age { get; }
@@ -393,6 +397,8 @@ namespace Rts.Contracts
         public int WorkshopWoodCost { get; }
         public int TradeLot { get; }
         public int TradeReturn { get; }
+        public int GemsTradeReturn { get; }
+        public int GemArmorHp { get; }
         public int RamFoodCost { get; }
         public int RamWoodCost { get; }
 
@@ -428,9 +434,11 @@ namespace Rts.Contracts
             int blacksmithWoodCost, ulong techs, IReadOnlyList<int> techFoodCosts, IReadOnlyList<int> techWoodCosts, IReadOnlyList<int> techMetalCosts,
             int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
             int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost,
-            int age3FoodCost, int age3WoodCost, int rangeWoodCost, int stableWoodCost, int castleWoodCost, int castleStoneCost)
+            int age3FoodCost, int age3WoodCost, int rangeWoodCost, int stableWoodCost, int castleWoodCost, int castleStoneCost,
+            int gems = 0, int gemsTradeReturn = 0, IReadOnlyList<int> techGemsCosts = null, int gemArmorHp = 0)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
+            GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;
@@ -441,7 +449,8 @@ namespace Rts.Contracts
             TechFoodCosts = ContractList.Copy(techFoodCosts ?? Array.Empty<int>());
             TechWoodCosts = ContractList.Copy(techWoodCosts ?? Array.Empty<int>());
             TechMetalCosts = ContractList.Copy(techMetalCosts ?? Array.Empty<int>());
-            Stone = stone; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
+            TechGemsCosts = ContractList.Copy(techGemsCosts ?? Array.Empty<int>());
+            Stone = stone; Gems = gems; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
             HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;

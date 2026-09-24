@@ -55,7 +55,7 @@ namespace Rts.Contracts
     public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -69,7 +69,7 @@ namespace Rts.Contracts
     /// </summary>
     /// <summary>Siegecraft, Masonry and Banking are the third age's techs (V3-5, 32 #10); the rest come with a civilisation.</summary>
     public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6, Siegecraft = 7, Masonry = 8, Banking = 9,
-        SteelWeapons = 10, SteelArmour = 11 }
+        SteelWeapons = 10, SteelArmour = 11, GemArmor = 12 }
 
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
