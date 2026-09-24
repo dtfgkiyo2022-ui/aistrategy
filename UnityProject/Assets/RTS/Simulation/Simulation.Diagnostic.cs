@@ -105,7 +105,7 @@ namespace Rts.Simulation
                     w.Value(n + "Timer", b.Timer); w.Value(n + "NodeId", b.NodeId); w.Value(n + "Held", b.Held);
                     if (world.Config.Economy.Ages)
                     {
-                        w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "Interval", b.Interval); w.Value(n + "Shots", b.Shots); w.Value(n + "Researching", (byte)b.Researching);
+                        w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "QueuedGems", b.QueuedGems); w.Value(n + "Interval", b.Interval); w.Value(n + "Shots", b.Shots); w.Value(n + "Researching", (byte)b.Researching);
                         var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
