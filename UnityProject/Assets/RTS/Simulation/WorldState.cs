@@ -187,6 +187,8 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #7): 0 primitive, 1 on taking a civilisation, 2 after the second age.</summary>
         internal byte Age;
         internal long AdvanceRemaining;
+        /// <summary>Consecutive ticks at age 3 with a living core, for the optional age victory.</summary>
+        internal int AgeVictoryProgress;
         /// <summary>V3-5 (32 #6): researched techs, bit 1 &lt;&lt; (TechKind - 1).</summary>
         internal ulong Techs;
     }
@@ -372,6 +374,7 @@ namespace Rts.Simulation
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
                 && e.Age2FoodCost >= 0 && e.Age2WoodCost >= 0 && e.Age2Ticks > 0 && e.Age2PopulationBonus >= 0
                 && e.Age3FoodCost >= 0 && e.Age3WoodCost >= 0 && e.Age3Ticks > 0 && e.Age3PopulationBonus >= 0
+                && (!e.AgeVictoryEnabled || e.AgeVictoryTicks > 0)
                 && e.SiegecraftSiegeDamage >= 0 && e.MasonryTowerDamage >= 0 && e.BankingTradeReturn >= 0
                 && e.RangeSizeCells > 0 && e.RangeWoodCost >= 0 && e.RangeWork > 0 && e.RangeHp > 0
                 && e.StableSizeCells > 0 && e.StableWoodCost >= 0 && e.StableWork > 0 && e.StableHp > 0
@@ -537,6 +540,7 @@ namespace Rts.Simulation
                 IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks,
                 Age2FoodCost = e.Age2FoodCost, Age2WoodCost = e.Age2WoodCost, Age2Ticks = e.Age2Ticks, Age2PopulationBonus = e.Age2PopulationBonus,
                 Age3FoodCost = e.Age3FoodCost, Age3WoodCost = e.Age3WoodCost, Age3Ticks = e.Age3Ticks, Age3PopulationBonus = e.Age3PopulationBonus,
+                AgeVictoryEnabled = e.AgeVictoryEnabled, AgeVictoryTicks = e.AgeVictoryTicks,
                 SiegecraftSiegeDamage = e.SiegecraftSiegeDamage, MasonryTowerDamage = e.MasonryTowerDamage, BankingTradeReturn = e.BankingTradeReturn,
                 RangeSizeCells = e.RangeSizeCells, RangeWoodCost = e.RangeWoodCost, RangeWork = e.RangeWork, RangeHp = e.RangeHp,
                 StableSizeCells = e.StableSizeCells, StableWoodCost = e.StableWoodCost, StableWork = e.StableWork, StableHp = e.StableHp,

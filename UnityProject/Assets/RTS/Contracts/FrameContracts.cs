@@ -185,19 +185,29 @@ namespace Rts.Contracts
         public bool IsDraw { get; }
         public bool IsFault { get; }
         public bool IsUndecided { get; }
+        public bool IsAgeVictory { get; }
 
         public MatchResult(
             bool hasEnded,
             uint winnerFactionId,
             bool isDraw,
             bool isFault,
-            bool isUndecided)
+            bool isUndecided) : this(hasEnded, winnerFactionId, isDraw, isFault, isUndecided, false) { }
+
+        public MatchResult(
+            bool hasEnded,
+            uint winnerFactionId,
+            bool isDraw,
+            bool isFault,
+            bool isUndecided,
+            bool isAgeVictory)
         {
             HasEnded = hasEnded;
             WinnerFactionId = winnerFactionId;
             IsDraw = isDraw;
             IsFault = isFault;
             IsUndecided = isUndecided;
+            IsAgeVictory = isAgeVictory;
         }
     }
     /// <summary>Development/replay only. Complete canonical state bytes; the serializer schema is defined by the replay implementation.</summary>
