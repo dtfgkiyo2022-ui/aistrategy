@@ -13,7 +13,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -157,6 +157,20 @@ namespace Rts.UnityHost
 
         public void NewMap() { mapSeed = FreshSeed(); matchRestartRequested = true; }
 
+        [SerializeField] private bool monks = false, ageVictory = false;
+
+        public bool Monks
+        {
+            get { return monks; }
+            set { if (value == monks) return; monks = value; matchRestartRequested = true; }
+        }
+
+        public bool AgeVictory
+        {
+            get { return ageVictory; }
+            set { if (value == ageVictory) return; ageVictory = value; matchRestartRequested = true; }
+        }
+
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
 
         public void Begin()
@@ -166,6 +180,11 @@ namespace Rts.UnityHost
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
             var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.GenerateTerrain(mapSeed)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
+            if (economyMap && ScenarioMultiplier == 1)
+            {
+                scenario.Economy.MonksEnabled = monks;
+                scenario.Economy.AgeVictoryEnabled = ageVictory;
+            }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
@@ -204,6 +223,7 @@ namespace Rts.UnityHost
             economyLayer.Bind(view);
             economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
             panel.MapChoice = this;
+            panel.MatchRuleChoice = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
