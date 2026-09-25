@@ -48,6 +48,8 @@
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="MatchLengthMeasurementTests.cs" />
+    <Compile Include="RetreatStuckProbeTests.cs" />
+    <Compile Include="RetreatReturnTests.cs" />
     <Compile Include="RangeStableTests.cs" />
     <Compile Include="CounterTests.cs" />
     <Compile Include="SteelTechTests.cs" />

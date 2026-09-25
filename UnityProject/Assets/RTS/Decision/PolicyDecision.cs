@@ -255,7 +255,7 @@ namespace Rts.Decision
         {
             if (memory.Returning)
             {
-                if (homeArrived)
+                if (homeArrived || ScoutReturnComplete(o, army))
                 {
                     memory.Returning = false; memory.HoldUntilTick = checked(tick + 60); memory.InferiorSince = 0;
                     memory.Assignment = AssignmentKind.Reserve; memory.Goal = Core(o, true);
@@ -327,5 +327,11 @@ namespace Rts.Decision
         }
         public static bool ScoutSeesEnemy(FactionObservation o, SimPoint position, Fix64 vision)
             => o.VisibleEnemies.Any(e => Within(e.Position, position, vision));
+        public static bool ScoutReturnComplete(FactionObservation o, OwnArmyView army)
+            => army.AliveCount > 0 && army.Kind == UnitKind.Scout
+                && !ScoutSeesEnemy(o, army.Position, Fix64.FromInt(32));
+        public static bool ScoutReturnComplete(FactionObservation o, OwnArmyView army, IReadOnlyList<SimPoint> soldiers)
+            => army.AliveCount > 0 && army.Kind == UnitKind.Scout && soldiers.Count > 0
+                && soldiers.All(position => !ScoutSeesEnemy(o, position, Fix64.FromInt(32)));
     }
 }
