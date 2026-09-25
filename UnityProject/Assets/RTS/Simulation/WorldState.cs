@@ -22,6 +22,10 @@ namespace Rts.Simulation
         internal SimPoint LocalGoal;
         /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
         internal UnitKind Class;
+        /// <summary>V3-5 #22: transient conversion progress; never serialized into a scenario or replay state.</summary>
+        internal int ConversionProgress;
+        internal uint ConversionByFaction;
+        internal long ConversionLastAttackTick;
     }
 
     internal struct ArmyState
@@ -332,6 +336,14 @@ namespace Rts.Simulation
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts) };
             var e = c.Economy;
+            // Monk rules are opt-in. Keep disabled scenarios byte-for-byte unchanged, but make an enabled authored
+            // scenario usable even when an older scenario file has no Monk parameter record yet.
+            if (e.MonksEnabled && !Array.Exists(c.UnitParameters, value => value.Kind == UnitKind.Monk))
+            {
+                Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
+                c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Monk, Hp = 100,
+                    Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
+            }
             if (e.Enabled)
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
                     && e.VillagerSpeed.Raw > 0 && e.VillagerSpeed <= Fix64.FromInt(16) && e.CarryCapacity > 0 && e.GatherIntervalTicks > 0
@@ -368,7 +380,8 @@ namespace Rts.Simulation
                 && e.RepairHpPerTick > 0 && e.RepairAtPermille >= 0 && e.RepairAtPermille <= 1000
                 && e.CastleSizeCells > 0 && e.CastleSizeCells <= 8 && e.CastleWoodCost >= 0 && e.CastleStoneCost >= 0 && e.CastleWork > 0 && e.CastleHp > 0
                 && e.CastleRange >= 0 && e.CastleVision >= 0 && e.CastleDamage >= 0 && e.CastleIntervalTicks > 0
-                && e.MercenaryGems >= 0 && e.MercenaryTicks > 0 && e.MercenaryHp > 0 && e.MercenaryDamage >= 0 && e.MercenaryInterval > 0
+                 && e.MercenaryGems >= 0 && e.MercenaryTicks > 0 && e.MercenaryHp > 0 && e.MercenaryDamage >= 0 && e.MercenaryInterval > 0
+                 && (!e.MonksEnabled || (e.ConversionTicks > 0 && e.MonkFoodCost >= 0 && e.MonkGoldCost >= 0 && e.MonkTrainTicks > 0))
                 && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
@@ -442,7 +455,7 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
@@ -559,7 +572,9 @@ namespace Rts.Simulation
                 TradeRouteWood = e.TradeRouteWood, TradeRouteMin = e.TradeRouteMin,
                 WorkshopSizeCells = e.WorkshopSizeCells, WorkshopWoodCost = e.WorkshopWoodCost, WorkshopWork = e.WorkshopWork, WorkshopHp = e.WorkshopHp,
                 RamFood = e.RamFood, RamWood = e.RamWood, RamTicks = e.RamTicks, RamHp = e.RamHp, RamDamage = e.RamDamage, RamSiegeDamage = e.RamSiegeDamage,
-                RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision };
+                 RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision,
+                 MonksEnabled = e.MonksEnabled, ConversionTicks = e.ConversionTicks, MonkFoodCost = e.MonkFoodCost,
+                 MonkGoldCost = e.MonkGoldCost, MonkTrainTicks = e.MonkTrainTicks };
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

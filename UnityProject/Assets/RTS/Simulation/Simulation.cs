@@ -56,7 +56,7 @@ namespace Rts.Simulation
                 Phase("EnemySearchCombat", GenerateIntents);
                 Phase("Movement", () => { Move(); MoveVillagers(); });
                 Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
-                Phase("EnemySearchCombat", () => { Attack(); ResolveDeaths(); });
+                Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
                 Phase("ObjectivesReinforcements", () => { EconomyStep(); CaptureOutposts(); if (!EconomyOn) Reinforce(); });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
@@ -160,14 +160,41 @@ namespace Rts.Simulation
             {
                 ref var s = ref world.Soldiers[i];
                 if (!s.Alive || s.IsRetreating || s.TargetKind == 0 || world.Tick < s.NextAttackTick) continue;
+                if (s.Initial.Kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) continue;
                 int target = checked((int)s.TargetId - 1);
                 if (s.TargetKind == 1)
                 {
                     var enemy = world.Soldiers[target];
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
-                    // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                    soldierDamage[target] = checked(soldierDamage[target]
-                        + Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille));
+                    if (s.Initial.Kind == UnitKind.Monk)
+                    {
+                        // V3-5 #22: conversion is a progress tick, not combat damage. A target accepts at most one
+                        // conversion tick per simulation tick, even when several monks select it.
+                        if (enemy.Initial.Kind == UnitKind.Monk || enemy.Class == UnitKind.Monk) continue;
+                        ref var conversionTarget = ref world.Soldiers[target];
+                        if (conversionTarget.ConversionLastAttackTick != world.Tick)
+                        {
+                            if (conversionTarget.ConversionByFaction != s.Initial.FactionId)
+                            {
+                                conversionTarget.ConversionProgress = 0;
+                                conversionTarget.ConversionByFaction = s.Initial.FactionId;
+                            }
+                            conversionTarget.ConversionProgress = checked(conversionTarget.ConversionProgress + 1);
+                            conversionTarget.ConversionLastAttackTick = world.Tick;
+                        }
+                        else if (conversionTarget.ConversionByFaction != s.Initial.FactionId)
+                        {
+                            // A different faction can take over in the same tick, but the tick still counts only once.
+                            conversionTarget.ConversionProgress = 1;
+                            conversionTarget.ConversionByFaction = s.Initial.FactionId;
+                        }
+                    }
+                    else
+                    {
+                        // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
+                        soldierDamage[target] = checked(soldierDamage[target]
+                            + Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille));
+                    }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
                 else
@@ -186,10 +213,42 @@ namespace Rts.Simulation
             foreach (var f in world.Factions)
                 world.Cores[f.CoreId - 1].Hp = RemainingHp(world.Cores[f.CoreId - 1].Hp, coreDamage[f.CoreId - 1]);
             if (EconomyOn) ApplyRaidDamage();
+            foreach (int i in world.SoldierTraversal)
+            {
+                ref var s = ref world.Soldiers[i];
+                if (s.Alive && s.ConversionLastAttackTick != world.Tick)
+                {
+                    s.ConversionProgress = 0;
+                    s.ConversionByFaction = 0;
+                }
+            }
         }
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
+
+        private void ResolveConversions()
+        {
+            int ticks = world.Config.Economy.ConversionTicks;
+            if (!world.Config.Economy.MonksEnabled || ticks <= 0) return;
+            foreach (int i in world.SoldierTraversal)
+            {
+                ref var target = ref world.Soldiers[i];
+                if (!target.Alive || target.Hp <= 0 || target.ConversionProgress < ticks || target.ConversionByFaction == 0) continue;
+                uint faction = target.ConversionByFaction;
+                UnitKind originalClass = target.Class;
+                UnitKind convertedKind = originalClass != 0 ? originalClass : target.Initial.Kind;
+                UnitKind spawnKind = originalClass != 0 ? UnitKind.Infantry : convertedKind;
+                SimPoint position = target.Position;
+                uint core = world.Factions[faction - 1].CoreId;
+                target.ConversionProgress = 0;
+                target.ConversionByFaction = 0;
+                target.ConversionLastAttackTick = 0;
+                target.Hp = 0;
+                if (Spawn(faction, GoalKind.Core, world.Cores[core - 1].Definition.Id, position, spawnKind))
+                    ApplyClass(world.SoldierCount - 1, originalClass == 0 ? 0 : convertedKind);
+            }
+        }
 
         private void ResolveDeaths()
         {

@@ -30,9 +30,10 @@ namespace Rts.Decision
             return (int)((long)damage * (1000 + bonusPermille) / 1000);
         }
 
-        /// <summary>Infantry, archer or cavalry - the three in the triangle. 0 for a scout, a ram, a mercenary or a villager.</summary>
+        /// <summary>Infantry, archer or cavalry - the three in the triangle. 0 for a scout, ram, mercenary, monk or villager.</summary>
         private static UnitKind Line(UnitKind kind)
             => kind == 0 || kind == UnitKind.Infantry ? UnitKind.Infantry
-                : kind == UnitKind.Archer || kind == UnitKind.Cavalry ? kind : 0;
+                : kind == UnitKind.Archer || kind == UnitKind.Cavalry ? kind
+                : kind == UnitKind.Scout || kind == UnitKind.Ram || kind == UnitKind.Mercenary || kind == UnitKind.Monk ? (UnitKind)0 : (UnitKind)0;
     }
 }
