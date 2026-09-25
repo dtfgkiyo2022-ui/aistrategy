@@ -35,8 +35,8 @@ namespace Rts.Core.Tests
             report.AppendLine();
             report.AppendLine("## 表1: 試合ごとの節目");
             report.AppendLine();
-            report.AppendLine("| seed | 決着tick（分） | 勝者 | 時代到達勝利 | 陣営1文明 | 陣営1 2つ目の時代(分) | 陣営1 3つ目の時代(分) | 陣営2文明 | 陣営2 2つ目の時代(分) | 陣営2 3つ目の時代(分) | 最初の戦闘(分) | 陣営1コア初被弾(分) | 陣営2コア初被弾(分) |");
-            report.AppendLine("|---:|---:|---:|:---:|:---|---:|---:|:---|---:|---:|---:|---:|---:|");
+            report.AppendLine("| seed | 決着tick（分） | 勝者 | 時代到達勝利 | 陣営1文明 | 陣営1 文明入り(分) | 陣営1 2つ目の時代(分) | 陣営1 3つ目の時代(分) | 陣営2文明 | 陣営2 文明入り(分) | 陣営2 2つ目の時代(分) | 陣営2 3つ目の時代(分) | 最初の戦闘(分) | 陣営1コア初被弾(分) | 陣営2コア初被弾(分) |");
+            report.AppendLine("|---:|---:|---:|:---:|:---|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|");
 
             for (ulong seed = 1; seed <= 8; seed++)
             {
@@ -78,7 +78,7 @@ namespace Rts.Core.Tests
             report.AppendLine();
             report.AppendLine($"8試合、決着 {decisive}/8、決着tick合計 {totalTicks.ToString(CultureInfo.InvariantCulture)}、決着tick平均 {(totalTicks / 8.0).ToString("0.0", CultureInfo.InvariantCulture)}。");
 
-            var reportPath = @"D:\rts-verify\matchlen\report.md";
+            var reportPath = Environment.GetEnvironmentVariable("MATCHLEN_REPORT") ?? @"D:\rts-verify\matchlen\report.md";
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
             File.WriteAllText(reportPath, report.ToString(), new UTF8Encoding(false));
             TestContext.WriteLine($"8試合完了: decisive {decisive}/8, decision ticks total {totalTicks.ToString(CultureInfo.InvariantCulture)}, report {reportPath}");
@@ -88,6 +88,9 @@ namespace Rts.Core.Tests
         private static MatchMeasurement Measure(ulong seed)
         {
             var scenario = MapGenerator.GenerateTerrain(seed);
+            // Experiments only: MATCHLEN_VILLAGER_TARGET overrides the automatic economy's villager target.
+            var villagerTarget = Environment.GetEnvironmentVariable("MATCHLEN_VILLAGER_TARGET");
+            if (!string.IsNullOrEmpty(villagerTarget)) scenario.Economy.AutoVillagerTarget = int.Parse(villagerTarget, CultureInfo.InvariantCulture);
             int tickRate = scenario.TickRateHz;
             var sim = new Battle(scenario);
             var match = new MatchMeasurement(seed, tickRate);
@@ -167,7 +170,9 @@ namespace Rts.Core.Tests
                         if (villager.IsOwn) Villagers[i].Ticks[(int)villager.Activity]++;
                     if (economy.Age != faction.LastAge)
                     {
-                        if (economy.Age == 2 && faction.Age2Tick < 0) { faction.Age2Tick = tick; faction.Civ = economy.Civ; }
+                        // Age 0 is the primitive age; 1 is the civilisation just taken, then its second and third ages.
+                        if (economy.Age == 1 && faction.Age1Tick < 0) { faction.Age1Tick = tick; faction.Civ = economy.Civ; }
+                        if (economy.Age == 2 && faction.Age2Tick < 0) faction.Age2Tick = tick;
                         if (economy.Age == 3 && faction.Age3Tick < 0) faction.Age3Tick = tick;
                         faction.LastAge = economy.Age;
                     }
@@ -194,7 +199,7 @@ namespace Rts.Core.Tests
             }
 
             public string SummaryLine() => $"seed {Seed}: {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) : "未決着")} tick ({Minutes(DecisionTick)}分), winner {Winner}, age victory {IsAgeVictory}, civ {Factions[0].Civ}/{Factions[1].Civ}";
-            public string SummaryRow() => $"| {Seed} | {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) + " (" + Minutes(DecisionTick) + ")" : "未決着")} | {(IsDraw ? "引き分け" : Winner == 0 ? "なし" : Winner.ToString(CultureInfo.InvariantCulture))} | {(IsAgeVictory ? "はい" : "いいえ")} | {Factions[0].Civ} | {MinutesOrDash(Factions[0].Age2Tick)} | {MinutesOrDash(Factions[0].Age3Tick)} | {Factions[1].Civ} | {MinutesOrDash(Factions[1].Age2Tick)} | {MinutesOrDash(Factions[1].Age3Tick)} | {MinutesOrDash(Math.Min(FirstBattle(0), FirstBattle(1)))} | {MinutesOrDash(Factions[0].FirstCoreHitTick)} | {MinutesOrDash(Factions[1].FirstCoreHitTick)} |";
+            public string SummaryRow() => $"| {Seed} | {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) + " (" + Minutes(DecisionTick) + ")" : "未決着")} | {(IsDraw ? "引き分け" : Winner == 0 ? "なし" : Winner.ToString(CultureInfo.InvariantCulture))} | {(IsAgeVictory ? "はい" : "いいえ")} | {Factions[0].Civ} | {MinutesOrDash(Factions[0].Age1Tick)} | {MinutesOrDash(Factions[0].Age2Tick)} | {MinutesOrDash(Factions[0].Age3Tick)} | {Factions[1].Civ} | {MinutesOrDash(Factions[1].Age1Tick)} | {MinutesOrDash(Factions[1].Age2Tick)} | {MinutesOrDash(Factions[1].Age3Tick)} | {MinutesOrDash(Math.Min(FirstBattle(0), FirstBattle(1)))} | {MinutesOrDash(Factions[0].FirstCoreHitTick)} | {MinutesOrDash(Factions[1].FirstCoreHitTick)} |";
             private long FirstBattle(int i) => Factions[i].FirstBattleTick < 0 ? long.MaxValue : Factions[i].FirstBattleTick;
             private string MinutesOrDash(long tick) => tick < 0 || tick == long.MaxValue ? "—" : Minutes(tick);
             private string Minutes(long tick) => (tick / (double)TickRate / 60.0).ToString("0.00", CultureInfo.InvariantCulture);
@@ -205,7 +210,7 @@ namespace Rts.Core.Tests
             public int LastAge;
             public CivKind Civ;
             public int CoreHp = -1;
-            public long Age2Tick = -1, Age3Tick = -1, FirstBattleTick = -1, FirstCoreHitTick = -1;
+            public long Age1Tick = -1, Age2Tick = -1, Age3Tick = -1, FirstBattleTick = -1, FirstCoreHitTick = -1;
         }
 
         private sealed class SoldierMeasurement
