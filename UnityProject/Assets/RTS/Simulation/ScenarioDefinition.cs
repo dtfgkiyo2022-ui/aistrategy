@@ -178,6 +178,11 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32.20): a castle can hire mercenaries with Gems.</summary>
         public int MercenaryGems = 20, MercenaryTicks = 250, MercenaryHp = 150, MercenaryDamage = 14, MercenaryInterval = 25;
         public int StableSizeCells = 3, StableWoodCost = 150, StableWork = 300, StableHp = 600;
+        /// <summary>V3-5 #22: optional monks convert enemy soldiers instead of dealing combat damage.</summary>
+        public bool MonksEnabled;
+        public int ConversionTicks = 400;
+        public int MonkFoodCost = 60, MonkGoldCost = 40;
+        public int MonkTrainTicks = 200;
     }
 
     public sealed class MapDefinition

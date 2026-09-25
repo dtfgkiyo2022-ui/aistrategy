@@ -740,14 +740,14 @@ namespace Rts.Presentation
             return go;
         }
 
-        /// <summary>V3-5: archers carry a tall thin bow, cavalry stands wider on a low block, so both read apart from infantry.</summary>
+        /// <summary>V3-5: archers carry a tall thin bow, cavalry stands wider on a low block, and monks carry a staff.</summary>
         private void MarkClass(GameObject go, UnitKind kind)
         {
-            if (kind != UnitKind.Archer && kind != UnitKind.Cavalry && kind != UnitKind.Ram) return;
-            var mark = GameObject.CreatePrimitive(kind == UnitKind.Archer ? PrimitiveType.Cylinder : PrimitiveType.Cube);
-            mark.name = kind == UnitKind.Archer ? "Bow" : kind == UnitKind.Ram ? "Beam" : "Mount";
+            if (kind != UnitKind.Archer && kind != UnitKind.Cavalry && kind != UnitKind.Ram && kind != UnitKind.Monk) return;
+            var mark = GameObject.CreatePrimitive(kind == UnitKind.Archer || kind == UnitKind.Monk ? PrimitiveType.Cylinder : PrimitiveType.Cube);
+            mark.name = kind == UnitKind.Archer ? "Bow" : kind == UnitKind.Ram ? "Beam" : kind == UnitKind.Monk ? "Staff" : "Mount";
             Discard(mark.GetComponent<Collider>());
-            mark.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(kind == UnitKind.Archer ? new Color(0.55f, 0.35f, 0.15f) : new Color(0.35f, 0.25f, 0.15f));
+            mark.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(kind == UnitKind.Archer ? new Color(0.55f, 0.35f, 0.15f) : kind == UnitKind.Monk ? new Color(0.8f, 0.8f, 0.65f) : new Color(0.35f, 0.25f, 0.15f));
             mark.transform.SetParent(go.transform, false);
             var s = go.transform.lossyScale;
             // V3-5 (32 #9): a ram is a long low beam, wider than any soldier, so a siege unit is plain at a glance.
@@ -760,6 +760,11 @@ namespace Rts.Presentation
             {
                 mark.transform.localScale = new Vector3(0.12f / s.x, 1.1f / s.y, 0.12f / s.z);
                 mark.transform.localPosition = new Vector3(0.6f / s.x, 0.4f / s.y, 0f);
+            }
+            else if (kind == UnitKind.Monk)
+            {
+                mark.transform.localScale = new Vector3(0.1f / s.x, 1.3f / s.y, 0.1f / s.z);
+                mark.transform.localPosition = new Vector3(0.45f / s.x, 0.45f / s.y, 0f);
             }
             else
             {

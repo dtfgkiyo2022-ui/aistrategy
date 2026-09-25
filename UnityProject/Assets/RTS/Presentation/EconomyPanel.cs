@@ -394,6 +394,14 @@ namespace Rts.Presentation
             }
             else GUI.Label(new Rect(right, y, half, 22f), UiText.T("Infantry: build a barracks", "歩兵：兵舎を建てると作れる"));
             y += 26f;
+            if (economy.MonksEnabled)
+            {
+                GUI.enabled = barracks.HasValue && barracks.Value.Complete;
+                if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Monk (", "僧侶（食料 ") + economy.MonkFoodCost + UiText.T("F ", " 金") + economy.MonkGoldCost + UiText.T(" gold)", "）")) && barracks.HasValue)
+                    Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Monk), UiText.T("Monk requested", "僧侶を依頼しました"));
+                GUI.enabled = true;
+                y += 26f;
+            }
             if (economy.Ages)
             {
                 // V3-5: scouts from the barracks.

@@ -19,6 +19,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, e.CavalryTicks);
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, e.RamTicks);
             if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, e.MercenaryTicks);
+            if (kind == UnitKind.Monk) return (e.MonkFoodCost, 0, e.MonkGoldCost, 0, e.MonkTrainTicks);
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, InfantryTicksFor(faction));
         }
 
@@ -36,6 +37,7 @@ namespace Rts.Simulation
                     && (kind == UnitKind.Infantry || kind == UnitKind.Archer || kind == UnitKind.Cavalry || kind == UnitKind.Mercenary);
             if (b.Kind != BuildingKind.Barracks) return false;
             if (kind == UnitKind.Infantry) return true;
+            if (kind == UnitKind.Monk) return world.Config.Economy.MonksEnabled;
             if (!AgesOn) return false;
             var e = world.Economies[b.FactionId - 1];
             return kind == UnitKind.Scout
@@ -95,6 +97,7 @@ namespace Rts.Simulation
 
         private bool CanPay(uint faction, UnitKind kind)
         {
+            if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind);
             return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal && e.Gems >= c.gems;
@@ -113,7 +116,7 @@ namespace Rts.Simulation
             b.QueuedGems = checked(b.QueuedGems + c.gems);
             if (b.Queued == 0) b.TrainRemaining = c.ticks;
             b.Queued++;
-            if (AgesOn)
+            if (AgesOn || kind == UnitKind.Monk)
             {
                 var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                 Array.Resize(ref kinds, kinds.Length + 1);
@@ -180,7 +183,8 @@ namespace Rts.Simulation
             bool scout = kind == UnitKind.Scout;
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
-                : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry) + QueuedOf(faction, UnitKind.Ram);
+                : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
+                    + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

@@ -105,6 +105,15 @@ namespace Rts.Simulation
                     w.Write(e.MercenaryGems); w.Write(e.MercenaryTicks); w.Write(e.MercenaryHp); w.Write(e.MercenaryDamage); w.Write(e.MercenaryInterval);
                     w.Write(e.AgeVictoryEnabled); w.Write(e.AgeVictoryTicks);
                 }
+                // V3-5 #22: append optional monk rules after every prior schema block. Defaults remain byte-for-byte
+                // compatible with older maps, while an enabled/custom rule set survives schema 3/4 as well as schema 5.
+                bool monkRules = c.Economy.MonksEnabled || c.Economy.ConversionTicks != 400
+                    || c.Economy.MonkFoodCost != 60 || c.Economy.MonkGoldCost != 40 || c.Economy.MonkTrainTicks != 200;
+                if (monkRules)
+                {
+                    w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
+                    w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
+                }
                 return s.ToArray();
             }
         }
@@ -199,6 +208,12 @@ namespace Rts.Simulation
                         if (s.Position < s.Length) { e.MercenaryGems=r.ReadInt32(); e.MercenaryTicks=r.ReadInt32(); e.MercenaryHp=r.ReadInt32(); e.MercenaryDamage=r.ReadInt32(); e.MercenaryInterval=r.ReadInt32(); }
                     }
                     if (s.Position < s.Length) { e.AgeVictoryEnabled=Bool(r); e.AgeVictoryTicks=r.ReadInt32(); }
+                }
+                if (s.Position < s.Length)
+                {
+                    var e = c.Economy;
+                    e.MonksEnabled = Bool(r); e.ConversionTicks = r.ReadInt32(); e.MonkFoodCost = r.ReadInt32();
+                    e.MonkGoldCost = r.ReadInt32(); e.MonkTrainTicks = r.ReadInt32();
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;
