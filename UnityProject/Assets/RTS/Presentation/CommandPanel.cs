@@ -20,6 +20,7 @@ namespace Rts.Presentation
         private IMatchRestart matchRestart;
         private IOpponentControl opponent;
         private IMapChoice mapChoice;
+        private IMatchRuleChoice matchRuleChoice;
         private bool setupOpen;
         private uint factionId;
         private uint ownCoreId;
@@ -41,6 +42,9 @@ namespace Rts.Presentation
 
         /// <summary>Random economy map or the classic one. Null hides the row.</summary>
         public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
+
+        /// <summary>Optional economy-map rules. Null hides the row.</summary>
+        public IMatchRuleChoice MatchRuleChoice { get { return matchRuleChoice; } set { matchRuleChoice = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -104,7 +108,7 @@ namespace Rts.Presentation
         /// <summary>Called after the player switches the on-screen language, so the host can remember it.</summary>
         public System.Action<bool> LanguageChanged;
         private const float SetupRow = 30f;
-        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 3f + 62f); }
+        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 4f + 62f); }
 
         private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
 
@@ -282,6 +286,24 @@ namespace Rts.Presentation
                 if (now != economyMap) mapChoice.EconomyMap = now;
                 GUI.enabled = economyMap;
                 if (GUI.Button(new Rect(x + labelWidth + half, y, half - 4f, 24f), UiText.T("New random map", "新しいランダムマップ"))) mapChoice.NewMap();
+                GUI.enabled = true;
+            }
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Extra rules", "追加ルール"));
+            if (matchRuleChoice != null)
+            {
+                bool economyMap = mapChoice != null && mapChoice.EconomyMap;
+                float half = (rect.width - 16f - labelWidth) / 2f;
+                GUI.enabled = economyMap;
+                bool monks = matchRuleChoice.Monks;
+                bool monksNow = GUI.Toggle(new Rect(x + labelWidth, y, half - 4f, 24f), monks,
+                    monks ? UiText.T("Monks: on", "僧侶：入") : UiText.T("Monks: off", "僧侶：切"), GUI.skin.button);
+                if (monksNow != monks) matchRuleChoice.Monks = monksNow;
+                bool ageVictory = matchRuleChoice.AgeVictory;
+                bool ageVictoryNow = GUI.Toggle(new Rect(x + labelWidth + half, y, half - 4f, 24f), ageVictory,
+                    ageVictory ? UiText.T("Age victory: on", "時代到達勝利：入") : UiText.T("Age victory: off", "時代到達勝利：切"), GUI.skin.button);
+                if (ageVictoryNow != ageVictory) matchRuleChoice.AgeVictory = ageVictoryNow;
                 GUI.enabled = true;
             }
             y += SetupRow;
