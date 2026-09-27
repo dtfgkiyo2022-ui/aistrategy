@@ -19,6 +19,9 @@ namespace Rts.Simulation
         internal bool Joining, TacticalRoute;
         internal int[] LocalPath;
         internal int LocalCursor, JoinCursor;
+        internal long SlotWaitSinceTick;
+        internal bool SlotWaitTimedOut;
+        internal SimPoint SlotWaitTarget;
         internal SimPoint LocalGoal;
         /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
         internal UnitKind Class;

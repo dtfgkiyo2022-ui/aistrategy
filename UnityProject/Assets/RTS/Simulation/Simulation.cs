@@ -120,7 +120,7 @@ namespace Rts.Simulation
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
                 s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
-                    s.MoveGoal = PolicyDecision.ScoutReturn(observation, s.Position, s.MoveGoal, s.StepDistance);
+                    s.MoveGoal = PolicyDecision.ScoutRetreatHome(observation, s.Position, s.MoveGoal, s.StepDistance);
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
                 PickRaidTarget(ref s);

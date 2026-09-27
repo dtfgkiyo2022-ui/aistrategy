@@ -48,8 +48,17 @@ namespace Rts.Core.Tests
                 }
             }
             string dir = @"D:\rts-verify\110";
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(Path.Combine(dir, $"probe_seed{seed}.txt"), report.ToString(), new UTF8Encoding(false));
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, $"probe_seed{seed}.txt"), report.ToString(), new UTF8Encoding(false));
+            }
+            catch (UnauthorizedAccessException)
+            {
+                string fallback = Path.Combine(Path.GetTempPath(), "rts-verify-110");
+                Directory.CreateDirectory(fallback);
+                File.WriteAllText(Path.Combine(fallback, $"probe_seed{seed}.txt"), report.ToString(), new UTF8Encoding(false));
+            }
             TestContext.WriteLine(report.ToString());
         }
 
