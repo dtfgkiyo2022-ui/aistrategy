@@ -57,6 +57,8 @@
     <Compile Include="CastleTests.cs" />
     <Compile Include="AgeVictoryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
+    <Compile Include="VillagerRebalanceTests.cs" />
+    <Compile Include="MovementStallProbeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>

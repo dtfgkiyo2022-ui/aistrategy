@@ -127,6 +127,22 @@ namespace Rts.Simulation
                     AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
                     if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
+                    if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
+                        && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
+                    {
+                        var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
+                        var kind = WorkKindFor(v);
+                        // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
+                        if (kind != currentKind && kind != ResourceKind.Stone)
+                        {
+                            int index = NearestWorkNode(v.Position, kind);
+                            if (index >= 0)
+                            {
+                                SetWorkNode(ref v, index);
+                                continue;
+                            }
+                        }
+                    }
                     v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
                 }
                 else if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) Haul(ref v);
@@ -149,19 +165,23 @@ namespace Rts.Simulation
 
         private void AssignWork(ref VillagerState v)
         {
+            var kind = WorkKindFor(v);
+            int index = NearestWorkNode(v.Position, kind);
+            if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
+            if (index < 0) return; // nothing left anywhere: stays idle
+            SetWorkNode(ref v, index);
+        }
+
+        private ResourceKind WorkKindFor(VillagerState v)
+        {
             int food = 0, wood = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var other = world.Villagers[i];
-                if (!other.Alive || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0
+                if (!other.Alive || other.Id == v.Id || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0
                     || other.Task == VillagerTask.ToBuild || other.Task == VillagerTask.Building) continue;
                 if (world.Nodes[other.NodeId - 1].Definition.Kind == ResourceKind.Food) food++; else wood++;
             }
-            int n = world.Nodes.Length;
-            var positions = new SimPoint[n];
-            var kinds = new ResourceKind[n];
-            var remaining = new int[n];
-            for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
             var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
             // V3-5 (32.7): on a map with ages the stock speaks too - far more of one than the other sends the idle to the other.
             if (AgesOn && kind != ResourceKind.Stone)
@@ -173,9 +193,21 @@ namespace Rts.Simulation
                 // store sends the idle to the trees even when the two stocks are close.
                 else if (stock.Wood < WoodFloor && stock.Wood < stock.Food) kind = ResourceKind.Wood;
             }
-            int index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind);
-            if (index < 0) index = EconomyDecision.NearestNode(v.Position, positions, kinds, remaining, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
-            if (index < 0) return; // nothing left anywhere: stays idle
+            return kind;
+        }
+
+        private int NearestWorkNode(SimPoint position, ResourceKind kind)
+        {
+            int n = world.Nodes.Length;
+            var positions = new SimPoint[n];
+            var kinds = new ResourceKind[n];
+            var remaining = new int[n];
+            for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
+            return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
+        }
+
+        private void SetWorkNode(ref VillagerState v, int index)
+        {
             v.NodeId = world.Nodes[index].Definition.Id;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }
