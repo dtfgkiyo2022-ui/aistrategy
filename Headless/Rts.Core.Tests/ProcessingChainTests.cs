@@ -117,7 +117,7 @@ namespace Rts.Core.Tests
             return (null, null);
         }
 
-        private static ProcessingMatch StartProcessing(ulong seed)
+        private static ProcessingMatch StartProcessing(ulong seed, int advances = 2, CivKind civ = CivKind.Metallurgy, Action<ScenarioDefinition> beforeSimulation = null)
         {
             var scenario = MapGenerator.Generate(seed, true, true);
             scenario.Map.Terrain = new byte[scenario.Map.WidthCells * scenario.Map.HeightCells];
@@ -131,23 +131,62 @@ namespace Rts.Core.Tests
             scenario.Economy.MineWork = 1; scenario.Economy.SmelterWork = 1; scenario.Economy.CharcoalKilnWork = 1;
             scenario.Economy.SteelworksWork = 1;
             scenario.Cores[0].Hp = 1000000; scenario.Cores[1].Hp = 1000000;
+            beforeSimulation?.Invoke(scenario);
             var match = new ProcessingMatch { Scenario = scenario, Simulation = new Battle(scenario) };
             match.Gateway = new CommandGateway(match.Simulation);
             match.Send(EconomyCommand.Auto(1, ++match.Sequence, false));
             match.Send(EconomyCommand.Auto(2, ++match.Sequence, false));
             match.Steps(1);
-            match.Send(EconomyCommand.Advance(1, ++match.Sequence, CivKind.Metallurgy));
-            match.Steps(2);
-            match.Send(EconomyCommand.Advance(1, ++match.Sequence, CivKind.Metallurgy));
-            match.Steps(2);
-            Assert.That(match.State["Economy[1].Age"], Is.EqualTo("2"), "test setup reaches metallurgy's second age");
+            for (int age = 0; age < advances; age++)
+            {
+                match.Send(EconomyCommand.Advance(1, ++match.Sequence, civ));
+                match.Steps(2);
+            }
+            Assert.That(match.State["Economy[1].Age"], Is.EqualTo(advances.ToString(CultureInfo.InvariantCulture)), "test setup reaches the requested age");
             return match;
         }
 
-        private static ProcessingMatch StartAutomaticProcessing(ulong seed)
+        private static ProcessingMatch StartAutomaticProcessing(ulong seed, Action<ScenarioDefinition> beforeSimulation = null)
         {
-            var match = StartProcessing(seed);
+            var match = StartProcessing(seed, beforeSimulation: beforeSimulation);
             match.Send(EconomyCommand.Auto(1, ++match.Sequence, true));
+            return match;
+        }
+
+        private static uint PlaceBarracks(ProcessingMatch match)
+        {
+            int centre = CellOf(match.Scenario.Cores[0].Position);
+            int size = match.Scenario.Economy.BarracksSizeCells;
+            foreach (int origin in Ring(centre, 5, 18))
+            {
+                long before = Number(match.State, "Buildings.Count");
+                match.Send(EconomyCommand.Place(1, ++match.Sequence, BuildingKind.Barracks, origin, Facing.North));
+                match.Steps(1);
+                if (Number(match.State, "Buildings.Count") == before + 1) return (uint)before + 1;
+            }
+            return 0;
+        }
+
+        private static ProcessingMatch StartTrainingState(CivKind civ, int age)
+        {
+            int steelCell = -1;
+            var match = StartProcessing(97531UL, age, civ, scenario =>
+            {
+                int core = CellOf(scenario.Cores[0].Position);
+                int east = Neighbour(core, Facing.East), west = Neighbour(core, Facing.West);
+                steelCell = east;
+                scenario.Belts = new[]
+                {
+                    new BeltDefinition { Cell = east, FactionId = 1, Facing = Facing.West, Item = ResourceKind.Steel },
+                    new BeltDefinition { Cell = west, FactionId = 1, Facing = Facing.East, Item = ResourceKind.Steel }
+                };
+            });
+            match.Steps(20);
+            var state = match.State;
+            Assert.That(Number(state, "Economy[1].Steel"), Is.GreaterThanOrEqualTo(match.Scenario.Economy.HeavyInfantrySteelCost), "test setup has enough steel");
+            uint barracks = PlaceBarracks(match);
+            Assert.That(barracks, Is.GreaterThan(0u), "test setup placed a barracks");
+            Build(match, barracks);
             return match;
         }
 
@@ -180,6 +219,131 @@ namespace Rts.Core.Tests
             match.Send(EconomyCommand.Assign(1, ++match.Sequence, new uint[] { 1, 2, 3 }, EconomyTargetKind.Building, id));
             for (int i = 0; i < 3000 && match.State["Buildings[" + id + "].Complete"] != "1"; i++) match.Steps(1);
             Assert.That(match.State["Buildings[" + id + "].Complete"], Is.EqualTo("1"), "building " + id + " finished");
+        }
+
+        private static (uint id, int origin, Facing facing) PlaceManualSteelworks(ProcessingMatch match)
+        {
+            int centre = CellOf(match.Scenario.Cores[0].Position);
+            int size = match.Scenario.Economy.SteelworksSizeCells;
+            foreach (int origin in Ring(centre, 5, 24))
+                foreach (Facing facing in new[] { Facing.North, Facing.East, Facing.South, Facing.West })
+                {
+                    long before = Number(match.State, "Buildings.Count");
+                    match.Send(EconomyCommand.Place(1, ++match.Sequence, BuildingKind.Steelworks, origin, facing));
+                    match.Steps(1);
+                    if (Number(match.State, "Buildings.Count") == before + 1)
+                    {
+                        uint id = (uint)before + 1;
+                        Assert.That(match.State["Buildings[" + id + "].Kind"], Is.EqualTo(((byte)BuildingKind.Steelworks).ToString(CultureInfo.InvariantCulture)));
+                        return (id, origin, facing);
+                    }
+                }
+            Assert.Fail("手動の製鋼所を置けなかった");
+            return (0, -1, Facing.North);
+        }
+
+        private static Facing Opposite(Facing facing)
+            => facing == Facing.North ? Facing.South : facing == Facing.East ? Facing.West : facing == Facing.South ? Facing.North : Facing.East;
+
+        private static bool IsInitialBeltCellOpen(ScenarioDefinition scenario, int cell)
+        {
+            if (cell < 0 || cell >= Width * Height || scenario.Map.BlockedCellIds.Contains(cell) || InsideCore(scenario, cell)) return false;
+            if (scenario.ResourceNodes.Any(n => CellOf(n.Position) == cell)) return false;
+            return true;
+        }
+
+        private static bool CanInputRun(ScenarioDefinition scenario, int origin, int size, Facing side, int length)
+        {
+            int cell = OutputCell(origin, size, side);
+            Facing into = Opposite(side);
+            for (int i = 0; i < length; i++)
+            {
+                if (!IsInitialBeltCellOpen(scenario, cell)) return false;
+                cell = Neighbour(cell, Opposite(into));
+            }
+            return true;
+        }
+
+        private static BeltDefinition[] InputRun(ScenarioDefinition scenario, int origin, int size, Facing side, ResourceKind[] items)
+        {
+            Facing into = Opposite(side);
+            Assert.That(CanInputRun(scenario, origin, size, side, items.Length), Is.True,
+                "製鋼所の入力側に初期ベルトを置ける空きマスがない: " + side);
+            int cell = OutputCell(origin, size, side);
+            var result = new BeltDefinition[items.Length];
+            for (int i = 0; i < items.Length; i++)
+            {
+                result[i] = new BeltDefinition { Cell = cell, FactionId = 1, Facing = into, Item = items[i] };
+                cell = Neighbour(cell, Opposite(into));
+            }
+            return result;
+        }
+
+        private static Facing[] InputSides(ScenarioDefinition scenario, int origin, int size, Facing outputFacing, int length)
+        {
+            return new[] { Facing.North, Facing.East, Facing.South, Facing.West }
+                .Where(side => side != outputFacing && CanInputRun(scenario, origin, size, side, length)).ToArray();
+        }
+
+        private static ProcessingMatch ManualSteelworks(ulong seed,
+            Func<ScenarioDefinition, int, Facing, BeltDefinition[]> beltFactory,
+            out uint id, out int origin, out Facing facing)
+        {
+            var first = StartProcessing(seed, 2, CivKind.Metallurgy);
+            var firstPlacement = PlaceManualSteelworks(first);
+            Build(first, firstPlacement.id);
+
+            var second = StartProcessing(seed, 2, CivKind.Metallurgy, scenario =>
+            {
+                scenario.Belts = beltFactory == null ? Array.Empty<BeltDefinition>()
+                    : beltFactory(scenario, firstPlacement.origin, firstPlacement.facing);
+            });
+            var secondPlacement = PlaceManualSteelworks(second);
+            Assert.That(secondPlacement.id, Is.EqualTo(firstPlacement.id), "同じ命令順で製鋼所の ID が変わった");
+            Assert.That(secondPlacement.origin, Is.EqualTo(firstPlacement.origin), "同じ種・同じ命令順で製鋼所の位置が変わった");
+            Assert.That(secondPlacement.facing, Is.EqualTo(firstPlacement.facing), "同じ種・同じ命令順で製鋼所の向きが変わった");
+            Build(second, secondPlacement.id);
+            id = secondPlacement.id; origin = secondPlacement.origin; facing = secondPlacement.facing;
+            return second;
+        }
+
+        private static int PositionCell(Dictionary<string, string> fields, string prefix)
+            => (int)(Number(fields, prefix + "Position.Z.Raw") / 65536 / 2) * Width
+                + (int)(Number(fields, prefix + "Position.X.Raw") / 65536 / 2);
+
+        private static int CellDistanceToFootprint(int cell, int origin, int size)
+        {
+            int x = cell % Width, z = cell / Width, x0 = origin % Width, z0 = origin / Width;
+            int dx = x < x0 ? x0 - x : x >= x0 + size ? x - (x0 + size - 1) : 0;
+            int dz = z < z0 ? z0 - z : z >= z0 + size ? z - (z0 + size - 1) : 0;
+            return dx + dz;
+        }
+
+        private static bool RaidCellHasNoFactionOneTarget(ScenarioDefinition scenario, Dictionary<string, string> fields, int cell)
+        {
+            int buildings = (int)Number(fields, "Buildings.Count");
+            for (int id = 1; id <= buildings; id++)
+            {
+                string p = "Buildings[" + id + "].";
+                if (fields[p + "FactionId"] == "1" && fields[p + "Alive"] == "1"
+                    && CellDistanceToFootprint(cell, (int)Number(fields, p + "OriginCell"),
+                        scenario.Economy.SteelworksSizeCells) <= 1) return false;
+            }
+            int villagers = (int)Number(fields, "Villagers.Count");
+            for (int id = 1; id <= villagers; id++)
+            {
+                string p = "Villagers[" + id + "].";
+                if (fields[p + "FactionId"] == "1" && fields[p + "Alive"] == "1"
+                    && CellDistanceToFootprint(cell, PositionCell(fields, p), 1) <= 1) return false;
+            }
+            int soldiers = (int)Number(fields, "Soldiers.Count");
+            for (int id = 1; id <= soldiers; id++)
+            {
+                string p = "Soldiers[" + id + "].";
+                if (fields[p + "FactionId"] == "1" && fields[p + "Alive"] == "1"
+                    && CellDistanceToFootprint(cell, PositionCell(fields, p), 1) <= 1) return false;
+            }
+            return true;
         }
 
         [Test]
@@ -325,6 +489,280 @@ namespace Rts.Core.Tests
             Assert.That(match.State["ProcessingLines[1].Manager"], Is.EqualTo("0"), "line return did not apply: " + string.Join(", ", match.State.Where(p => p.Key.StartsWith("ProcessingLines[1]", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
             for (int i = 0; i < 1000; i++) match.Steps(1);
             Assert.That(match.State.ContainsKey("Belts[" + cell + "].FactionId"), Is.True, "returning a line to auto fills its missing belt");
+        }
+
+        [Test]
+        public void SteelworksNeedsBothMaterialsAndConsumesThemTogether()
+        {
+            uint metalOnlyId; int metalOnlyOrigin; Facing metalOnlyFacing;
+            var metalOnly = ManualSteelworks(97531UL, (scenario, origin, facing) =>
+            {
+                var side = InputSides(scenario, origin, scenario.Economy.SteelworksSizeCells, facing, 11).FirstOrDefault();
+                Assert.That(CanInputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, side, 11), Is.True, "金属だけの入力ベルトを置ける辺がない");
+                return InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, side,
+                    Enumerable.Repeat(ResourceKind.Metal, 11).ToArray());
+            }, out metalOnlyId, out metalOnlyOrigin, out metalOnlyFacing);
+            string metalPrefix = "Buildings[" + metalOnlyId + "].";
+            metalOnly.Steps(300);
+            var metalState = metalOnly.State;
+            Assert.That(Number(metalState, metalPrefix + "Input"), Is.EqualTo(10), "金属だけで Input が満杯にならなかった");
+            Assert.That(Number(metalState, metalPrefix + "Output"), Is.EqualTo(0), "木炭なしなのに鋼 Output が増えた");
+            Assert.That(Number(metalState, "Economy[1].Steel"), Is.EqualTo(0), "木炭なしなのにコアの鋼が増えた");
+
+            uint charcoalOnlyId; int charcoalOnlyOrigin; Facing charcoalOnlyFacing;
+            var charcoalOnly = ManualSteelworks(97531UL, (scenario, origin, facing) =>
+            {
+                var side = InputSides(scenario, origin, scenario.Economy.SteelworksSizeCells, facing, 1).FirstOrDefault();
+                Assert.That(InputSides(scenario, origin, scenario.Economy.SteelworksSizeCells, facing, 1).Length, Is.GreaterThan(0), "木炭だけの入力ベルトを置ける辺がない");
+                return InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, side, new[] { ResourceKind.Charcoal });
+            }, out charcoalOnlyId, out charcoalOnlyOrigin, out charcoalOnlyFacing);
+            string charcoalPrefix = "Buildings[" + charcoalOnlyId + "].";
+            charcoalOnly.Steps(300);
+            var charcoalState = charcoalOnly.State;
+            Assert.That(Number(charcoalState, charcoalPrefix + "Input"), Is.EqualTo(0), "木炭だけなのに金属 Input が増えた");
+            Assert.That(Number(charcoalState, charcoalPrefix + "InputSecondary"), Is.EqualTo(1), "木炭だけで InputSecondary が増えなかった");
+            Assert.That(Number(charcoalState, charcoalPrefix + "Output"), Is.EqualTo(0), "金属なしなのに鋼 Output が増えた");
+            Assert.That(Number(charcoalState, "Economy[1].Steel"), Is.EqualTo(0), "金属なしなのにコアの鋼が増えた");
+
+            uint bothId; int bothOrigin; Facing bothFacing;
+            var both = ManualSteelworks(97531UL, (scenario, origin, facing) =>
+            {
+                var sides = InputSides(scenario, origin, scenario.Economy.SteelworksSizeCells, facing, 2);
+                Assert.That(sides.Length, Is.GreaterThanOrEqualTo(2), "金属と木炭を別々の辺から入れられない");
+                var metal = InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, sides[0], new[] { ResourceKind.Metal, ResourceKind.Metal });
+                var charcoal = InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, sides[1], new[] { ResourceKind.Charcoal });
+                return metal.Concat(charcoal).ToArray();
+            }, out bothId, out bothOrigin, out bothFacing);
+            // Two metal and one charcoal: one steel takes exactly one of each, and the second metal waits for charcoal.
+            // (Both enter and are taken in the same tick, so the inputs never show 1 and 1; the leftover shows the count.)
+            string bothPrefix = "Buildings[" + bothId + "].";
+            both.Steps(300);
+            var bothState = both.State;
+            Assert.That(Number(bothState, bothPrefix + "Output") + Number(bothState, "Economy[1].Steel"), Is.EqualTo(1), "両材料から鋼が1つできなかった");
+            Assert.That(Number(bothState, bothPrefix + "Input"), Is.EqualTo(1), "鋼1つで金属がちょうど1つ減っていない");
+            Assert.That(Number(bothState, bothPrefix + "InputSecondary"), Is.EqualTo(0), "鋼1つで木炭がちょうど1つ減っていない");
+
+            // A full metal input (10) does not stop charcoal entering from another side. The charcoal run is laid one cell
+            // short of the steelworks and joined by a player command only after the metal input is seen full.
+            uint fullId; int fullOrigin; Facing fullFacing;
+            BeltDefinition joint = default;
+            var full = ManualSteelworks(97531UL, (scenario, origin, facing) =>
+            {
+                var sides = InputSides(scenario, origin, scenario.Economy.SteelworksSizeCells, facing, 11);
+                Assert.That(sides.Length, Is.GreaterThanOrEqualTo(2), "金属と木炭を別々の辺から入れられない");
+                var metal = InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, sides[0], Enumerable.Repeat(ResourceKind.Metal, 11).ToArray());
+                var charcoal = InputRun(scenario, origin, scenario.Economy.SteelworksSizeCells, sides[1], new[] { (ResourceKind)0, ResourceKind.Charcoal });
+                joint = charcoal[0];
+                return metal.Concat(charcoal.Skip(1)).ToArray();
+            }, out fullId, out fullOrigin, out fullFacing);
+            string fullPrefix = "Buildings[" + fullId + "].";
+            full.Steps(300);
+            var fullState = full.State;
+            Assert.That(Number(fullState, fullPrefix + "Input"), Is.EqualTo(10), "金属置き場が10で止まらなかった");
+            Assert.That(Number(fullState, fullPrefix + "InputSecondary") + Number(fullState, fullPrefix + "Output") + Number(fullState, "Economy[1].Steel"),
+                Is.EqualTo(0), "つなぐ前に木炭が入った、または鋼ができた");
+            full.Send(EconomyCommand.PlaceBelt(1, ++full.Sequence, new[] { joint.Cell }, new[] { joint.Facing }));
+            bool charcoalEntered = false;
+            for (int i = 0; i < 300 && !charcoalEntered; i++)
+            {
+                full.Steps(1);
+                var s = full.State;
+                charcoalEntered = Number(s, fullPrefix + "InputSecondary") > 0 || Number(s, fullPrefix + "Output") > 0 || Number(s, "Economy[1].Steel") > 0;
+            }
+            Assert.That(charcoalEntered, Is.True, "金属置き場が満杯のとき、別の辺の木炭が入らなかった");
+        }
+
+        [Test]
+        public void MixedBeltStopsBehindAFullMetalInput()
+        {
+            int[] cells = null;
+            uint id; int origin; Facing facing;
+            var match = ManualSteelworks(97531UL, (scenario, steelworksOrigin, steelworksFacing) =>
+            {
+                var side = InputSides(scenario, steelworksOrigin, scenario.Economy.SteelworksSizeCells, steelworksFacing, 12).FirstOrDefault();
+                var run = InputRun(scenario, steelworksOrigin, scenario.Economy.SteelworksSizeCells, side,
+                    Enumerable.Repeat(ResourceKind.Metal, 11).Concat(new[] { ResourceKind.Charcoal }).ToArray());
+                cells = run.Select(b => b.Cell).ToArray();
+                return run;
+            }, out id, out origin, out facing);
+            string prefix = "Buildings[" + id + "].";
+            match.Steps(300);
+            var state = match.State;
+            Assert.That(Number(state, prefix + "Input"), Is.EqualTo(10), "混ぜたベルトで金属 Input が10で止まらなかった");
+            Assert.That(Number(state, prefix + "InputSecondary"), Is.EqualTo(0), "先頭の金属が詰まったのに後ろの木炭が入った");
+            Assert.That(Number(state, prefix + "Output"), Is.EqualTo(0), "木炭が入っていないのに鋼ができた");
+            Assert.That(Number(state, "Economy[1].Steel"), Is.EqualTo(0), "木炭が入っていないのにコアの鋼が増えた");
+            Assert.That(state["Belts[" + cells[0] + "].Item"], Is.EqualTo(((byte)ResourceKind.Metal).ToString(CultureInfo.InvariantCulture)), "11個目の金属がベルト先頭に残っていない");
+            Assert.That(cells.Skip(1).Any(cell => state.ContainsKey("Belts[" + cell + "].Item")
+                && state["Belts[" + cell + "].Item"] == ((byte)ResourceKind.Charcoal).ToString(CultureInfo.InvariantCulture)),
+                Is.True, "後ろの木炭が先頭詰まりで停止していない");
+        }
+
+        [Test]
+        public void HeavyInfantryIsOnlyTrainableInMetallurgySecondAgeAndUsesSteel()
+        {
+            foreach (var unavailable in new[] { (CivKind.Primitive, 0), (CivKind.Metallurgy, 1), (CivKind.Agrarian, 2) })
+            {
+                var blocked = StartTrainingState(unavailable.Item1, unavailable.Item2);
+                var blockedState = blocked.State;
+                uint blockedBarracks = Enumerable.Range(1, (int)Number(blockedState, "Buildings.Count"))
+                    .Where(id => blockedState["Buildings[" + id + "].FactionId"] == "1"
+                        && blockedState["Buildings[" + id + "].Kind"] == ((byte)BuildingKind.Barracks).ToString(CultureInfo.InvariantCulture)
+                        && blockedState["Buildings[" + id + "].Complete"] == "1")
+                    .Select(id => (uint)id).First();
+                long steelBefore = Number(blockedState, "Economy[1].Steel");
+                blocked.Send(EconomyCommand.Train(1, ++blocked.Sequence, blockedBarracks, UnitKind.HeavyInfantry));
+                blocked.Steps(1);
+                blockedState = blocked.State;
+                Assert.That(Number(blockedState, "Economy[1].Steel"), Is.EqualTo(steelBefore), "heavy infantry paid steel in an unavailable state: " + unavailable.Item1 + " age " + unavailable.Item2);
+                Assert.That(Number(blockedState, "Buildings[" + blockedBarracks + "].Queued"), Is.EqualTo(0), "heavy infantry entered the queue in an unavailable state: " + unavailable.Item1 + " age " + unavailable.Item2);
+            }
+
+            var match = StartTrainingState(CivKind.Metallurgy, 2);
+            var state = match.State;
+            Assert.That(Number(state, "Economy[1].Age"), Is.GreaterThanOrEqualTo(2), "test setup did not reach metallurgy's second age");
+            uint barracks = 0;
+            for (int id = 1; id <= Number(state, "Buildings.Count"); id++)
+                if (state["Buildings[" + id + "].FactionId"] == "1" && state["Buildings[" + id + "].Kind"] == ((byte)BuildingKind.Barracks).ToString(CultureInfo.InvariantCulture)
+                    && state["Buildings[" + id + "].Complete"] == "1") { barracks = (uint)id; break; }
+            Assert.That(barracks, Is.GreaterThan(0u), "test setup did not produce a completed barracks");
+            long steel = Number(state, "Economy[1].Steel");
+            Assert.That(steel, Is.GreaterThanOrEqualTo(match.Scenario.Economy.HeavyInfantrySteelCost), "test setup has no steel");
+            match.Send(EconomyCommand.Auto(1, ++match.Sequence, false));
+            match.Steps(1);
+            steel = Number(match.State, "Economy[1].Steel");
+            for (int i = 0; i < 5; i++) match.Send(EconomyCommand.CancelTrain(1, ++match.Sequence, barracks));
+            match.Steps(1);
+            match.Send(EconomyCommand.Train(1, ++match.Sequence, barracks, UnitKind.HeavyInfantry));
+            match.Steps(1);
+            state = match.State;
+            Assert.That(Number(state, "Buildings[" + barracks + "].QueuedSteel"), Is.EqualTo(match.Scenario.Economy.HeavyInfantrySteelCost), "the heavy infantry queue reserved steel");
+            for (int i = 0; i < match.Scenario.Economy.HeavyInfantryTrainTicks + 10; i++) match.Steps(1);
+            state = match.State;
+            Assert.That(state.Any(p => p.Key.EndsWith(".Class", StringComparison.Ordinal) && p.Value == ((byte)UnitKind.HeavyInfantry).ToString(CultureInfo.InvariantCulture)), Is.True, "heavy infantry was not spawned");
+            string soldier = state.First(p => p.Key.EndsWith(".Class", StringComparison.Ordinal) && p.Value == ((byte)UnitKind.HeavyInfantry).ToString(CultureInfo.InvariantCulture)).Key;
+            string soldierPrefix = soldier.Substring(0, soldier.Length - ".Class".Length);
+            Assert.That(Number(state, soldierPrefix + ".Parameters.Hp"), Is.EqualTo(match.Scenario.Economy.HeavyInfantryHp));
+            // The automatic economy researches weapons meanwhile; that bonus lands on heavy infantry as on any infantry.
+            Assert.That(Number(state, soldierPrefix + ".Parameters.Damage"), Is.GreaterThanOrEqualTo(match.Scenario.Economy.HeavyInfantryDamage));
+        }
+
+        [Test]
+        public void EnemyDestructionDoesNotHandAnAutomaticLineToThePlayer()
+        {
+            int recordedCell = -1, recordedTick = -1;
+            // Both runs share this setup so the line takes the same route: soldiers barely move, and faction 1 has none,
+            // so the one enemy placed on the belt is neither killed nor drawn into a fight before the belt exists.
+            Action<ScenarioDefinition> quiet = scenario =>
+            {
+                for (int i = 0; i < scenario.UnitParameters.Length; i++)
+                    if (scenario.UnitParameters[i].Kind == UnitKind.Infantry)
+                    {
+                        var parameters = scenario.UnitParameters[i];
+                        parameters.Speed = Fix64.FromRaw(1);
+                        // Off the 20-tick AI cycle: at 20 the blow and the automatic re-lay fall in the same tick, and the
+                        // broken belt is never seen missing.
+                        parameters.AttackIntervalTicks = 13;
+                        scenario.UnitParameters[i] = parameters;
+                    }
+                for (int i = 0; i < scenario.Soldiers.Length; i++)
+                    if (scenario.Soldiers[i].FactionId == 1)
+                    {
+                        var own = scenario.Soldiers[i];
+                        own.Alive = false; own.Hp = 0;
+                        scenario.Soldiers[i] = own;
+                    }
+                // Nor does it train any: new soldiers would find and kill the raiders, and make their army retreat.
+                scenario.Economy.AutoInfantryQueue = 0;
+                scenario.Economy.InfantryFoodCost = 1000000; scenario.Economy.ScoutFoodCost = 1000000;
+                scenario.Economy.BeltHp = 1;
+            };
+            var firstRun = StartAutomaticProcessing(97531UL, quiet);
+            for (int tick = 1; tick <= 20000 && recordedCell < 0; tick++)
+            {
+                firstRun.Steps(1);
+                var firstState = firstRun.State;
+                int beltCount = firstState.ContainsKey("ProcessingLines[1].BeltCount")
+                    ? (int)Number(firstState, "ProcessingLines[1].BeltCount") : 0;
+                var candidates = Enumerable.Range(0, beltCount)
+                    .Where(i => firstState.ContainsKey("ProcessingLines[1].Belts[" + i + "].Cell"))
+                    .Select(i => (int)Number(firstState, "ProcessingLines[1].Belts[" + i + "].Cell"))
+                    .Where(cell => firstState.ContainsKey("Belts[" + cell + "].FactionId")
+                        && RaidCellHasNoFactionOneTarget(firstRun.Scenario, firstState, cell))
+                    .OrderByDescending(cell => Math.Abs(cell % Width - CellOf(firstRun.Scenario.Cores[0].Position) % Width)
+                        + Math.Abs(cell / Width - CellOf(firstRun.Scenario.Cores[0].Position) / Width))
+                    .ToArray();
+                if (candidates.Length > 0)
+                {
+                    recordedCell = candidates[0];
+                    recordedTick = tick;
+                }
+            }
+            Assert.That(recordedCell, Is.GreaterThanOrEqualTo(0), "1回目を20000tick進めても、敵の射程内に他の標的がない鋼ラインのベルトが現れなかった");
+            TestContext.WriteLine("first run recorded cell=" + recordedCell + " tick=" + recordedTick);
+            var enemyDefinition = firstRun.Scenario.Soldiers
+                .Where(s => s.FactionId == 2 && s.Kind == UnitKind.Infantry)
+                .OrderByDescending(s => s.ArmyId == 7)
+                .ThenBy(s => s.Id)
+                .FirstOrDefault();
+            int enemyId = enemyDefinition.Id > 0 && enemyDefinition.Id <= int.MaxValue ? (int)enemyDefinition.Id : -1;
+            Assert.That(enemyId, Is.GreaterThan(0), "陣営2の敵兵を準備できなかった");
+            var match = StartAutomaticProcessing(97531UL, scenario =>
+            {
+                quiet(scenario);
+                var raidPoint = new SimPoint(Fix64.FromInt((recordedCell % Width) * 2 + 1), Fix64.FromInt((recordedCell / Width) * 2 + 1));
+                for (int i = 0; i < scenario.Soldiers.Length; i++)
+                {
+                    var enemy = scenario.Soldiers[i];
+                    if (enemy.FactionId != 2) continue;
+                    // The whole army stands on the belt: a lone soldier makes its army retreat, and a retreating soldier never raids.
+                    if (enemy.ArmyId == enemyDefinition.ArmyId) enemy.Position = raidPoint;
+                    else { enemy.Alive = false; enemy.Hp = 0; }
+                    scenario.Soldiers[i] = enemy;
+                }
+                uint armyId = scenario.Soldiers[enemyId - 1].ArmyId;
+                scenario.Armies[armyId - 1].HomeObjective = new PolicyGoal(GoalKind.Outpost, 1, default);
+                var outpost = scenario.Outposts[0];
+                outpost.Position = raidPoint;
+                scenario.Outposts[0] = outpost;
+            });
+            // Destroyed by the enemy: a steel-line belt that a faction 2 soldier aimed at on the previous tick is gone now.
+            int destroyedCell = -1, destroyedTick = -1;
+            var aimedBefore = new HashSet<int>();
+            for (int tick = 1; tick <= 6000 && destroyedCell < 0; tick++)
+            {
+                match.Steps(1);
+                var tickState = match.State;
+                int beltCount = tickState.ContainsKey("ProcessingLines[1].BeltCount") ? (int)Number(tickState, "ProcessingLines[1].BeltCount") : 0;
+                var lineCells = new HashSet<int>(Enumerable.Range(0, beltCount)
+                    .Select(i => (int)Number(tickState, "ProcessingLines[1].Belts[" + i + "].Cell")));
+                foreach (int cell in aimedBefore)
+                    if (lineCells.Contains(cell) && !tickState.ContainsKey("Belts[" + cell + "].FactionId")) { destroyedCell = cell; destroyedTick = tick; break; }
+                aimedBefore.Clear();
+                for (int id = 1; id <= Number(tickState, "Soldiers.Count"); id++)
+                    if (tickState["Soldiers[" + id + "].FactionId"] == "2" && tickState["Soldiers[" + id + "].Alive"] == "1"
+                        && Number(tickState, "Soldiers[" + id + "].TargetKind") == 5)
+                    {
+                        int cell = (int)Number(tickState, "Soldiers[" + id + "].TargetId") - 1;
+                        if (lineCells.Contains(cell) && tickState.ContainsKey("Belts[" + cell + "].FactionId")) aimedBefore.Add(cell);
+                    }
+            }
+            TestContext.WriteLine("destroyed cell=" + destroyedCell + " tick=" + destroyedTick);
+            Assert.That(destroyedCell, Is.GreaterThanOrEqualTo(0), "no enemy soldier destroyed a belt of the automatic steel line (placed at cell " + recordedCell + ")");
+            var state = match.State;
+            Assert.That(state["ProcessingLines[0].Manager"], Is.EqualTo("0"), "enemy damage changed the core line to manual management");
+            Assert.That(state["ProcessingLines[1].Manager"], Is.EqualTo("0"), "enemy damage changed the steel line to manual management");
+            // The enemy stays and may break it again, so one reappearance of the belt is the rebuild.
+            bool beltWasRebuilt = false;
+            for (int i = 0; i < 3000 && !beltWasRebuilt; i++)
+            {
+                match.Steps(1);
+                var rebuiltState = match.State;
+                beltWasRebuilt = rebuiltState.ContainsKey("Belts[" + destroyedCell + "].FactionId");
+                Assert.That(rebuiltState["ProcessingLines[0].Manager"], Is.EqualTo("0"), "the core line became manual while being rebuilt");
+                Assert.That(rebuiltState["ProcessingLines[1].Manager"], Is.EqualTo("0"), "the steel line became manual while being rebuilt");
+            }
+            Assert.That(beltWasRebuilt, Is.True, "automatic management did not rebuild the belt the enemy destroyed at cell " + destroyedCell);
         }
 
         [Test]
