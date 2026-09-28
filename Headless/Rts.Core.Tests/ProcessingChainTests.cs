@@ -130,6 +130,7 @@ namespace Rts.Core.Tests
             scenario.Economy.CharcoalTicks = 2; scenario.Economy.SteelTicks = 3;
             scenario.Economy.MineWork = 1; scenario.Economy.SmelterWork = 1; scenario.Economy.CharcoalKilnWork = 1;
             scenario.Economy.SteelworksWork = 1;
+            scenario.Cores[0].Hp = 1000000; scenario.Cores[1].Hp = 1000000;
             var match = new ProcessingMatch { Scenario = scenario, Simulation = new Battle(scenario) };
             match.Gateway = new CommandGateway(match.Simulation);
             match.Send(EconomyCommand.Auto(1, ++match.Sequence, false));
@@ -140,6 +141,13 @@ namespace Rts.Core.Tests
             match.Send(EconomyCommand.Advance(1, ++match.Sequence, CivKind.Metallurgy));
             match.Steps(2);
             Assert.That(match.State["Economy[1].Age"], Is.EqualTo("2"), "test setup reaches metallurgy's second age");
+            return match;
+        }
+
+        private static ProcessingMatch StartAutomaticProcessing(ulong seed)
+        {
+            var match = StartProcessing(seed);
+            match.Send(EconomyCommand.Auto(1, ++match.Sequence, true));
             return match;
         }
 
@@ -226,11 +234,11 @@ namespace Rts.Core.Tests
         {
             var match = StartProcessing(2468UL);
             var steelworks = PlaceWithRoute(match, BuildingKind.Steelworks, c => InsideCore(match.Scenario, c), new HashSet<int>());
-            Assume.That(steelworks.id, Is.Not.EqualTo(0u));
+            Assert.That(steelworks.id, Is.Not.EqualTo(0u), "steelworks placement must succeed");
             var steelFootprint = new HashSet<int>(Footprint(steelworks.origin, match.Scenario.Economy.SteelworksSizeCells));
             var steelToCore = steelworks.belt;
             var smelter = PlaceWithRoute(match, BuildingKind.Smelter, steelFootprint.Contains, new HashSet<int>(steelFootprint.Concat(steelToCore)));
-            Assume.That(smelter.id, Is.Not.EqualTo(0u));
+            Assert.That(smelter.id, Is.Not.EqualTo(0u), "dedicated smelter placement must succeed");
             var smelterFootprint = new HashSet<int>(Footprint(smelter.origin, match.Scenario.Economy.SmelterSizeCells));
             var mine = match.Scenario.ResourceNodes.Where(n => n.Kind == ResourceKind.Ore).OrderBy(n => n.Id).First();
             var minePlaced = (uint)0; var mineBelt = (int[])null; var mineFacings = (Facing[])null;
@@ -247,11 +255,11 @@ namespace Rts.Core.Tests
                     minePlaced = 3; mineBelt = candidate.cells; mineFacings = candidate.facings; break;
                 }
             }
-            Assume.That(minePlaced, Is.Not.EqualTo(0u));
+            Assert.That(minePlaced, Is.Not.EqualTo(0u), "dedicated mine placement must succeed");
             var kilnTaken = new HashSet<int>(steelFootprint);
             kilnTaken.UnionWith(steelToCore); kilnTaken.UnionWith(smelterFootprint); kilnTaken.UnionWith(smelter.belt);
             var kiln = PlaceWithRoute(match, BuildingKind.CharcoalKiln, steelFootprint.Contains, kilnTaken);
-            Assume.That(kiln.id, Is.Not.EqualTo(0u));
+            Assert.That(kiln.id, Is.Not.EqualTo(0u), "charcoal kiln placement must succeed");
             Build(match, steelworks.id); Build(match, smelter.id); Build(match, minePlaced); Build(match, kiln.id);
             match.Send(EconomyCommand.PlaceBelt(1, ++match.Sequence, mineBelt, mineFacings));
             match.Send(EconomyCommand.PlaceBelt(1, ++match.Sequence, smelter.belt, smelter.facings));
@@ -287,6 +295,36 @@ namespace Rts.Core.Tests
                 left.Step(tick, inputs); right.Step(tick, replayInputs);
             }
             Assert.That(left.CaptureDiagnostic().CanonicalState, Is.EqualTo(right.CaptureDiagnostic().CanonicalState));
+        }
+
+        [Test]
+        public void AutomaticEconomyBuildsASeparateSteelLineAndHumanCanReturnItToAuto()
+        {
+            var match = StartAutomaticProcessing(97531UL);
+            for (int i = 0; i < 9000; i++) match.Steps(1);
+            var state = match.State;
+            Assert.That(Number(state, "ProcessingLines.Count"), Is.GreaterThanOrEqualTo(2), "automatic economy must create the core and steel lines; " + string.Join(", ", state.Where(p => p.Key.StartsWith("ProcessingLines", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
+            var lineState = string.Join(", ", state.Where(p => p.Key.StartsWith("Economy[1]", StringComparison.Ordinal) || p.Key.StartsWith("ProcessingLines[1]", StringComparison.Ordinal)
+                || p.Key.StartsWith("Buildings[10]", StringComparison.Ordinal) || p.Key.StartsWith("Buildings[11]", StringComparison.Ordinal)
+                || p.Key.StartsWith("Buildings[14]", StringComparison.Ordinal) || p.Key.StartsWith("Buildings[15]", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value));
+            Assert.That(Number(state, "Economy[1].Steel"), Is.GreaterThan(0), "automatic steel must reach the core; " + lineState);
+            Assert.That(state.Any(p => p.Key.EndsWith(".Class", StringComparison.Ordinal) && p.Value == ((byte)UnitKind.HeavyInfantry).ToString(CultureInfo.InvariantCulture)), Is.True, "automatic economy must train heavy infantry after steel arrives");
+            Assert.That(state["ProcessingLines[0].Manager"], Is.EqualTo("0"));
+            Assert.That(state["ProcessingLines[1].Manager"], Is.EqualTo("0"));
+            int beltCount = (int)Number(state, "ProcessingLines[1].BeltCount");
+            Assert.That(beltCount, Is.GreaterThan(0), "steel line must have a recorded route");
+            int cell = (int)Number(state, "ProcessingLines[1].Belts[0].Cell");
+            match.Send(EconomyCommand.RemoveBelt(1, ++match.Sequence, cell));
+            match.Steps(1);
+            state = match.State;
+            Assert.That(state["ProcessingLines[1].Manager"], Is.EqualTo("1"), "touching one belt hands the whole line to the player");
+            for (int i = 0; i < 2500; i++) match.Steps(1);
+            Assert.That(match.State.ContainsKey("Belts[" + cell + "].FactionId"), Is.False, "manual lines must not replace a removed belt");
+            match.Send(EconomyCommand.ReturnLineToAuto(1, ++match.Sequence, 2));
+            match.Steps(1);
+            Assert.That(match.State["ProcessingLines[1].Manager"], Is.EqualTo("0"), "line return did not apply: " + string.Join(", ", match.State.Where(p => p.Key.StartsWith("ProcessingLines[1]", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
+            for (int i = 0; i < 1000; i++) match.Steps(1);
+            Assert.That(match.State.ContainsKey("Belts[" + cell + "].FactionId"), Is.True, "returning a line to auto fills its missing belt");
         }
 
         [Test]

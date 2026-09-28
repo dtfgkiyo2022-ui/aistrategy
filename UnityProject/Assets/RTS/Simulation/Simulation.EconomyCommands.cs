@@ -25,6 +25,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
+                case EconomyCommandKind.ReturnLineToAuto:
+                    if (ProcessingOn) ReturnLineToAuto(faction, c.LineId);
+                    return;
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     ReturnToAuto(faction);
                     return;
@@ -48,6 +51,21 @@ namespace Rts.Simulation
                     return;
                 case EconomyCommandKind.RemoveBelt:
                     RemoveBelt(faction, c.Cell);
+                    return;
+                case EconomyCommandKind.RotateBuilding:
+                    if (!ProcessingOn || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    ref var rotating = ref world.Buildings[rotateIndex];
+                    if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
+                    MarkLinesForBuilding(faction, rotating.Id);
+                    rotating.Facing = c.Facing;
+                    return;
+                case EconomyCommandKind.RemoveBuilding:
+                    if (!ProcessingOn || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    ref var removed = ref world.Buildings[removeIndex];
+                    MarkLinesForBuilding(faction, removed.Id);
+                    removed.Alive = false;
+                    foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, true);
+                    TerrainChanged();
                     return;
                 case EconomyCommandKind.PlaceBuilding:
                 {
@@ -89,6 +107,7 @@ namespace Rts.Simulation
                     ref var b = ref world.Buildings[index];
                     if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit)) return;
                     if (IndustryOn) b.Held = true;
+                    MarkLinesForBuilding(faction, b.Id);
                     Enqueue(faction, ref b, c.Unit);
                     return;
                 }
@@ -108,6 +127,7 @@ namespace Rts.Simulation
                     ref var b = ref world.Buildings[index];
                     if (b.Queued == 0) return;
                     if (IndustryOn) b.Held = true;
+                    MarkLinesForBuilding(faction, b.Id);
                     // Today's price back; advancing only ever lowers food and wood, and metal comes back only as paid.
                     CancelLast(faction, ref b);
                     return;
@@ -128,6 +148,8 @@ namespace Rts.Simulation
                     {
                         if (!OwnBuilding(faction, c.TargetId, out buildingIndex)) return;
                         target = world.Buildings[buildingIndex];
+                        MarkLinesForBuilding(faction, target.Id);
+                        MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
                         haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm
                             || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln));
@@ -187,6 +209,11 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++) if (world.Villagers[i].FactionId == faction) world.Villagers[i].Held = false;
             for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].FactionId == faction) world.Buildings[i].Held = false;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) world.Belts[i].Held = false;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (world.ProcessingLines[i].FactionId != faction) continue;
+                world.ProcessingLines[i].Manager = LineManager.Automatic;
+            }
         }
 
         private bool OwnBuilding(uint faction, uint id, out int index)

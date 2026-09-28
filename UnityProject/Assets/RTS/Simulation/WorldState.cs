@@ -179,6 +179,19 @@ namespace Rts.Simulation
         internal bool Held;
     }
 
+    /// <summary>V3-6: one automatic processing chain. The belt arrays are the canonical route chosen for this line.</summary>
+    internal struct ProcessingLineState
+    {
+        internal uint Id, FactionId;
+        internal ProcessingLineKind Kind;
+        internal LineManager Manager;
+        internal uint MineId, SmelterId, KilnId, SteelworksId;
+        internal int[] BeltCells;
+        internal Facing[] BeltFacings;
+    }
+
+    internal enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2 }
+
     internal struct FactionEconomy
     {
         internal int Food, Wood;
@@ -230,6 +243,8 @@ namespace Rts.Simulation
         internal BuildingState[] Buildings = Array.Empty<BuildingState>();
         internal uint NextBuildingId = 1;
         internal int BuildingCount => checked((int)(NextBuildingId - 1));
+        internal ProcessingLineState[] ProcessingLines = Array.Empty<ProcessingLineState>();
+        internal uint NextProcessingLineId = 1;
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
         /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>

@@ -39,8 +39,16 @@ namespace Rts.Simulation
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, PopCapFor(faction), HasInfantryRoom(faction))
                 || economy.Metal < InfantryMetalFor(faction) || (SavingToAdvance(faction) && economy.Civ == CivKind.Primitive)) return;
             // V3-5 (32 #8): in the second age, one in three is the civilisation's own unit when it can be paid.
-            var special = SpecialUnit(faction);
-            var kind = special != 0 && CanPay(faction, special) && 2 * CountClass(faction, special) < CountClass(faction, UnitKind.Infantry) ? special : UnitKind.Infantry;
+            UnitKind kind;
+            // V3-6: steel is the automatic economy's explicit signal to replace an infantry with a heavy infantry.
+            // It is checked before the civilisation's one-in-three special unit so the stock is never silently ignored.
+            if (ProcessingAvailable(faction) && economy.Steel >= world.Config.Economy.HeavyInfantrySteelCost
+                && HasRoomFor(faction, UnitKind.HeavyInfantry) && CanPay(faction, UnitKind.HeavyInfantry)) kind = UnitKind.HeavyInfantry;
+            else
+            {
+                var special = SpecialUnit(faction);
+                kind = special != 0 && CanPay(faction, special) && 2 * CountClass(faction, special) < CountClass(faction, UnitKind.Infantry) ? special : UnitKind.Infantry;
+            }
             Enqueue(faction, ref building, kind);
         }
 

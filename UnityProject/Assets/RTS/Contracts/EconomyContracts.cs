@@ -26,8 +26,17 @@ namespace Rts.Contracts
         /// <summary>V3-3: sets the faction's economy policy (Policy).</summary>
         SetEconomyPolicy = 9,
         /// <summary>V3-4: starts advancing out of the primitive age into Civ, at the core.</summary>
-        AdvanceAge = 10
+        AdvanceAge = 10,
+        /// <summary>V3-6: returns one processing line to the automatic economy.</summary>
+        ReturnLineToAuto = 15,
+        /// <summary>V3-6: changes the output direction of an own processing building.</summary>
+        RotateBuilding = 16,
+        /// <summary>V3-6: removes an own building without refunding its cost.</summary>
+        RemoveBuilding = 17
     }
+
+    /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
+    public enum LineManager : byte { Automatic = 0, Manual = 1 }
 
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
 
@@ -46,6 +55,8 @@ namespace Rts.Contracts
         public int Cell { get; }
         /// <summary>Train and CancelTrain: 0 for the core, otherwise a building id. AssignVillagers: optional haul destination.</summary>
         public uint ProducerId { get; }
+        /// <summary>V3-6: the processing line targeted by ReturnLineToAuto.</summary>
+        public uint LineId => ProducerId;
         /// <summary>AssignVillagers: when the target is a source building, ProducerId is the optional destination building.</summary>
         public uint HaulToId => ProducerId;
         public UnitKind Unit { get; }
@@ -172,6 +183,17 @@ namespace Rts.Contracts
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand ReturnLineToAuto(uint faction, ulong sequence, uint lineId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnLineToAuto, 0, 0, lineId, 0, null, EconomyTargetKind.None, 0, false);
+
+        public static EconomyCommand RotateBuilding(uint faction, ulong sequence, uint buildingId, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RotateBuilding, 0, 0, buildingId, 0, null,
+                EconomyTargetKind.None, 0, false, null, null, facing);
+
+        public static EconomyCommand RemoveBuilding(uint faction, ulong sequence, uint buildingId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBuilding, 0, 0, buildingId, 0, null,
+                EconomyTargetKind.None, 0, false);
 
         public static EconomyCommand Research(uint faction, ulong sequence, uint blacksmith, TechKind tech)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.Research, 0, 0, blacksmith, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, tech);
@@ -330,6 +352,19 @@ namespace Rts.Contracts
         }
     }
 
+    /// <summary>V3-6: the display-facing management state of one automatic processing line.</summary>
+    public readonly struct LineView
+    {
+        public uint Id { get; }
+        public uint FactionId { get; }
+        public LineManager Manager { get; }
+
+        public LineView(uint id, uint factionId, LineManager manager)
+        {
+            Id = id; FactionId = factionId; Manager = manager;
+        }
+    }
+
     /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
     public sealed class EconomyView
     {
@@ -447,6 +482,8 @@ namespace Rts.Contracts
         public int SteelworksSizeCells { get; }
         public int HeavyInfantryFoodCost { get; }
         public int HeavyInfantrySteelCost { get; }
+        /// <summary>V3-6: automatic processing lines and their manager.</summary>
+        public IReadOnlyList<LineView> Lines { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -474,7 +511,7 @@ namespace Rts.Contracts
             bool monksEnabled = false, int monkFoodCost = 0, int monkGoldCost = 0, int monkTrainTicks = 0,
             bool processingChain = false, int charcoalKilnWoodCost = 0, int steelworksWoodCost = 0,
             int charcoalKilnSizeCells = 0, int steelworksSizeCells = 0, int heavyInfantryFoodCost = 0, int heavyInfantrySteelCost = 0,
-            int charcoal = 0, int steel = 0)
+            int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
@@ -483,6 +520,7 @@ namespace Rts.Contracts
             ProcessingChain = processingChain; CharcoalKilnWoodCost = charcoalKilnWoodCost; SteelworksWoodCost = steelworksWoodCost;
             CharcoalKilnSizeCells = charcoalKilnSizeCells; SteelworksSizeCells = steelworksSizeCells;
             HeavyInfantryFoodCost = heavyInfantryFoodCost; HeavyInfantrySteelCost = heavyInfantrySteelCost;
+            Lines = ContractList.Copy(lines ?? Array.Empty<LineView>());
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

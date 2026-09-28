@@ -77,7 +77,8 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnWoodCost : 0, ProcessingOn ? rules.SteelworksWoodCost : 0,
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
-                ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0);
+                ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
+                ProcessingOn ? new List<LineView>(LineViews(faction)) : null);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

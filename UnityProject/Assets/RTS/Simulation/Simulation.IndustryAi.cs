@@ -20,6 +20,82 @@ namespace Rts.Simulation
         {
             if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
+            // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
+            // equivalent on every map that does not carry the new flag.
+            if (!ProcessingOn) { DecideLegacyIndustry(faction); return; }
+            ref var economy = ref world.Economies[faction - 1];
+            int coreIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
+            ref var coreLine = ref world.ProcessingLines[coreIndex];
+            if (!IsAutoLine(coreIndex)) return;
+            if (!BuildingReady(coreLine.MineId))
+            {
+                if (BuildingPending(coreLine.MineId)) return;
+                if (economy.Wood < world.Config.Economy.MineWoodCost) return;
+                uint id = PlaceMine(faction);
+                if (id != 0) SetLineBuilding(coreIndex, BuildingKind.Mine, id);
+                return;
+            }
+            if (!BuildingReady(coreLine.SmelterId))
+            {
+                if (BuildingPending(coreLine.SmelterId)) return;
+                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return;
+                uint id = PlaceSmelter(faction, world.Buildings[coreLine.MineId - 1]);
+                if (id != 0) SetLineBuilding(coreIndex, BuildingKind.Smelter, id);
+                return;
+            }
+            var coreMine = world.Buildings[coreLine.MineId - 1];
+            var coreSmelter = world.Buildings[coreLine.SmelterId - 1];
+            if (!LayCoreLine(faction, coreIndex, coreMine, coreSmelter)) SetLineHaulers(faction, coreLine, Haulers);
+
+            if (!ProcessingAvailable(faction) || !LineBeltsWhole(coreIndex) || !LineBuildingsReady(coreLine)) return;
+            int steelIndex = GetOrCreateLine(faction, ProcessingLineKind.Steel);
+            ref var steelLine = ref world.ProcessingLines[steelIndex];
+            if (!IsAutoLine(steelIndex)) return;
+            // One AI cycle advances exactly one stage of the steel line. A lack of wood leaves that stage pending.
+            if (!BuildingReady(steelLine.MineId))
+            {
+                if (BuildingPending(steelLine.MineId)) return;
+                if (economy.Wood < world.Config.Economy.MineWoodCost) return;
+                uint id = PlaceMine(faction);
+                if (id != 0) SetLineBuilding(steelIndex, BuildingKind.Mine, id);
+                return;
+            }
+            if (!BuildingReady(steelLine.SmelterId))
+            {
+                if (BuildingPending(steelLine.SmelterId)) return;
+                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return;
+                uint id = PlaceSmelter(faction, world.Buildings[steelLine.MineId - 1]);
+                if (id != 0) SetLineBuilding(steelIndex, BuildingKind.Smelter, id);
+                return;
+            }
+            if (!BuildingReady(steelLine.KilnId))
+            {
+                if (BuildingPending(steelLine.KilnId)) return;
+                if (economy.Wood < world.Config.Economy.CharcoalKilnWoodCost) return;
+                uint id = PlaceKiln(faction);
+                if (id != 0) SetLineBuilding(steelIndex, BuildingKind.CharcoalKiln, id);
+                return;
+            }
+            if (!BuildingReady(steelLine.SteelworksId))
+            {
+                if (BuildingPending(steelLine.SteelworksId)) return;
+                if (economy.Wood < world.Config.Economy.SteelworksWoodCost) return;
+                uint id = PlaceSteelworks(faction, steelLine);
+                if (id != 0) SetLineBuilding(steelIndex, BuildingKind.Steelworks, id);
+                return;
+            }
+            var steelMine = world.Buildings[steelLine.MineId - 1];
+            var steelSmelter = world.Buildings[steelLine.SmelterId - 1];
+            var kiln = world.Buildings[steelLine.KilnId - 1];
+            var steelworks = world.Buildings[steelLine.SteelworksId - 1];
+            LaySteelLine(faction, steelIndex, steelMine, steelSmelter, kiln, steelworks);
+            // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
+            // resource input, even after all four belt routes are complete.
+            SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private void DecideLegacyIndustry(uint faction)
+        {
             ref var economy = ref world.Economies[faction - 1];
             int mine = OwnBuildingIndex(faction, BuildingKind.Mine), smelter = OwnBuildingIndex(faction, BuildingKind.Smelter);
             if (mine < 0)
@@ -35,9 +111,8 @@ namespace Rts.Simulation
             var m = world.Buildings[mine];
             var s = world.Buildings[smelter];
             if (!m.Complete || !s.Complete) return;
-            // V3-3: the player took this industry over; the automatic economy lays no line and calls its carriers back.
             if (m.Held || s.Held) { SetHaulers(faction, m.Id, s.Id, 0); return; }
-            bool whole = LayLine(faction, m, s);
+            bool whole = LayLineLegacy(faction, m, s);
             SetHaulers(faction, m.Id, s.Id, whole ? 0 : Haulers);
         }
 
@@ -52,7 +127,7 @@ namespace Rts.Simulation
         }
 
         /// <summary>Ore points by distance to the core, then id; on each, the four footprints and the sides toward the core first.</summary>
-        private void PlaceMine(uint faction)
+        private uint PlaceMine(uint faction)
         {
             var core = OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.MineSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -79,14 +154,15 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             PlaceBuildingAt(faction, BuildingKind.Mine, origin, side, id);
-                            return;
+                            return world.NextBuildingId - 1;
                         }
                     }
             }
+            return 0;
         }
 
         /// <summary>Rings around the point halfway from the mine to the core, like the barracks search.</summary>
-        private void PlaceSmelter(uint faction, BuildingState mine)
+        private uint PlaceSmelter(uint faction, BuildingState mine)
         {
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
@@ -106,9 +182,75 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             PlaceBuildingAt(faction, BuildingKind.Smelter, origin, side, 0);
-                            return;
+                            return world.NextBuildingId - 1;
                         }
                     }
+            return 0;
+        }
+
+        /// <summary>Places the charcoal kiln in the same deterministic rings as a barracks, around the nearest wood point.</summary>
+        private uint PlaceKiln(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int bestNode = -1;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0) continue;
+                if (bestNode < 0 || DistanceSquared(node.Definition.Position, core) < DistanceSquared(world.Nodes[bestNode].Definition.Position, core)
+                    || DistanceSquared(node.Definition.Position, core) == DistanceSquared(world.Nodes[bestNode].Definition.Position, core)
+                    && node.Definition.Id < world.Nodes[bestNode].Definition.Id) bestNode = i;
+            }
+            if (bestNode < 0) return 0;
+            int centre = world.Map.Cell(world.Nodes[bestNode].Definition.Position);
+            int origin = FindProcessingSite(faction, centre, world.Config.Economy.CharcoalKilnSizeCells);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.CharcoalKilnSizeCells), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, world.Config.Economy.CharcoalKilnSizeCells, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.CharcoalKiln, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        /// <summary>Places the steelworks at the midpoint of the dedicated smelter, kiln and core.</summary>
+        private uint PlaceSteelworks(uint faction, ProcessingLineState line)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            var smelter = world.Buildings[line.SmelterId - 1];
+            var kiln = world.Buildings[line.KilnId - 1];
+            var smelterPoint = FootprintCenter(smelter.OriginCell, SizeOf(smelter.Kind));
+            var kilnPoint = FootprintCenter(kiln.OriginCell, SizeOf(kiln.Kind));
+            var middle = new SimPoint(Fix64.FromRaw((smelterPoint.X.Raw + kilnPoint.X.Raw + core.X.Raw) / 3),
+                Fix64.FromRaw((smelterPoint.Z.Raw + kilnPoint.Z.Raw + core.Z.Raw) / 3));
+            int centre = world.Map.Cell(middle);
+            int origin = FindProcessingSite(faction, centre, world.Config.Economy.SteelworksSizeCells);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.SteelworksSizeCells), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, world.Config.Economy.SteelworksSizeCells, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Steelworks, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private int FindProcessingSite(uint faction, int centre, int size)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (SiteIsClear(origin, coreCell, size) && KeepsMapConnected(faction, origin, size)) return origin;
+                    }
+            return -1;
         }
 
         /// <summary>The four sides, the one pointing most toward <paramref name="to"/> first (ties in N, E, S, W order).</summary>
@@ -126,12 +268,7 @@ namespace Rts.Simulation
             => cell >= 0 && world.Map.IsPassable(cell) && !IsNodeCell(cell) && !InsideAnyCore(cell)
                && (world.Belts[cell].FactionId == 0 || (world.Belts[cell].FactionId == faction && !world.Belts[cell].Held));
 
-        /// <summary>
-        /// Two routes, mine output -> smelter and smelter output -> core, each the shortest 4-neighbour run of open cells
-        /// (own belts count as open, so the line laid last cycle is found again). Lays the missing belts while wood lasts.
-        /// True when every cell of both routes carries an own belt facing along the route.
-        /// </summary>
-        private bool LayLine(uint faction, BuildingState mine, BuildingState smelter)
+        private bool LayLineLegacy(uint faction, BuildingState mine, BuildingState smelter)
         {
             int cells = world.Belts.Length;
             var taken = new bool[cells];
@@ -140,12 +277,61 @@ namespace Rts.Simulation
             foreach (int c in toSmelter.cells) taken[c] = true;
             var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => FeedsOwnCore(next, faction));
             if (toCore.cells == null) return false;
+            return LayRoutes(faction, toSmelter, toCore);
+        }
+
+        private bool LayCoreLine(uint faction, int lineIndex, BuildingState mine, BuildingState smelter)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
+            if (toSmelter.cells == null) return false;
+            foreach (int c in toSmelter.cells) taken[c] = true;
+            var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => FeedsOwnCore(next, faction));
+            if (toCore.cells == null) return false;
+            SetLineBelts(lineIndex, toSmelter, toCore);
+            return LayRoutes(faction, toSmelter, toCore);
+        }
+
+        private bool LaySteelLine(uint faction, int lineIndex, BuildingState mine, BuildingState smelter, BuildingState kiln, BuildingState steelworks)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
+            if (toSmelter.cells == null) return false;
+            foreach (int c in toSmelter.cells) taken[c] = true;
+            var metal = BeltRoute(faction, OutputCell(smelter), taken, next => InFootprint(steelworks, next));
+            if (metal.cells == null) return false;
+            foreach (int c in metal.cells) taken[c] = true;
+            Facing metalSide = metal.facings[metal.facings.Length - 1];
+            var charcoal = BeltRoute(faction, OutputCell(kiln), taken,
+                (from, next) => InFootprint(steelworks, next) && FacingFrom(from, next) != metalSide);
+            if (charcoal.cells == null) return false;
+            foreach (int c in charcoal.cells) taken[c] = true;
+            var steel = BeltRoute(faction, OutputCell(steelworks), taken, next => FeedsOwnCore(next, faction));
+            if (steel.cells == null) return false;
+            SetLineBelts(lineIndex, toSmelter, metal, charcoal, steel);
+            return LayRoutes(faction, toSmelter, metal, charcoal, steel);
+        }
+
+        private bool[] TakenForOtherLines(uint faction, int currentLine)
+        {
+            var taken = new bool[world.Belts.Length];
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (i == currentLine || world.ProcessingLines[i].FactionId != faction) continue;
+                foreach (int cell in world.ProcessingLines[i].BeltCells)
+                    if (cell >= 0 && cell < taken.Length && world.Belts[cell].FactionId == faction) taken[cell] = true;
+            }
+            return taken;
+        }
+
+        private bool LayRoutes(uint faction, params (int[] cells, Facing[] facings)[] routes)
+        {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
-            for (int i = 0; i < cells; i++) if (world.Belts[i].FactionId == faction) owned++;
+            for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             bool whole = true;
-            foreach (var (route, facings) in new[] { toSmelter, toCore })
+            foreach (var (route, facings) in routes)
                 for (int i = 0; i < route.Length; i++)
                 {
                     ref var belt = ref world.Belts[route[i]];
@@ -160,6 +346,12 @@ namespace Rts.Simulation
             return whole;
         }
 
+        private Facing FacingFrom(int from, int to)
+        {
+            int width = world.Config.Map.WidthCells;
+            return to == from + width ? Facing.North : to == from + 1 ? Facing.East : to == from - width ? Facing.South : Facing.West;
+        }
+
         private bool InFootprint(BuildingState b, int cell)
         {
             int width = world.Config.Map.WidthCells, size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
@@ -169,6 +361,9 @@ namespace Rts.Simulation
 
         /// <summary>Breadth-first from <paramref name="start"/> in N, E, S, W order; null when no route exists.</summary>
         private (int[] cells, Facing[] facings) BeltRoute(uint faction, int start, bool[] taken, Func<int, bool> into)
+            => BeltRoute(faction, start, taken, (from, next) => into(next));
+
+        private (int[] cells, Facing[] facings) BeltRoute(uint faction, int start, bool[] taken, Func<int, int, bool> into)
         {
             if (!PortIsOpen(start, faction) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
@@ -184,7 +379,7 @@ namespace Rts.Simulation
                 {
                     int next = BeltNext(cell, side);
                     if (next < 0) continue;
-                    if (into(next))
+                    if (into(cell, next))
                     {
                         int length = 0;
                         for (int c = cell; c != -1; c = from[c]) length++;

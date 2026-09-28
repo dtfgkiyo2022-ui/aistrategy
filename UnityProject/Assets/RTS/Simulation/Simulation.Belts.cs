@@ -153,6 +153,7 @@ namespace Rts.Simulation
                     || !world.Map.IsPassable(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held };
+                if (held) MarkLinesForBelt(faction, cell);
                 owned++;
                 world.BeltOrder = null;
             }
@@ -162,6 +163,7 @@ namespace Rts.Simulation
         private void RemoveBelt(uint faction, int cell)
         {
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
+            MarkLinesForBelt(faction, cell);
             world.Belts[cell] = default;
             world.BeltOrder = null;
         }

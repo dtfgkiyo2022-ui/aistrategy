@@ -157,6 +157,25 @@ namespace Rts.Simulation
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
             }
+            if (world.Config.Economy.ProcessingChain)
+            {
+                w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
+                w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                {
+                    var line = world.ProcessingLines[i];
+                    string n = "ProcessingLines[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
+                    w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
+                    w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
+                    w.Value(n + "BeltCount", (uint)line.BeltCells.Length);
+                    for (int j = 0; j < line.BeltCells.Length; j++)
+                    {
+                        w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Cell", line.BeltCells[j]);
+                        w.Value(n + "Belts[" + j.ToString(CultureInfo.InvariantCulture) + "].Facing", (byte)line.BeltFacings[j]);
+                    }
+                }
+            }
         }
         private sealed class StateWriter : BinaryWriter
         {
