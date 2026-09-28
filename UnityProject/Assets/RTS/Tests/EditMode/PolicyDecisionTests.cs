@@ -37,7 +37,7 @@ namespace Rts.Tests.EditMode
             return o.OwnArmies.Select(a => new ArmyDecisionInput(a,
                 policy == 0 ? default : new PolicyView(1,CommandSource.Human,policy,G(2),new LossBudget(1000),0),
                 a.Id == 3, default, o.Objectives.Select(v => new ObjectiveRoute(new PolicyGoal(v.Kind,v.Id,default),
-                    (int)(PolicyDecision.Distance(a.Position,v.Position) / 65536 / 65536))).ToArray())).ToArray();
+                    (int)(TestDistanceReference.Squared(a.Position,v.Position) / 65536 / 65536))).ToArray())).ToArray();
         }
         private static ArmyDecisionMemory[] Allocate(FactionObservation o, ushort reserve, uint[] abandon = null, PolicyKind policy = 0)
             => PolicyDecision.Allocate(o,20,Inputs(o,policy),reserve,abandon ?? Array.Empty<uint>(),Array.Empty<AttackMemory>(),Array.Empty<PolicyOrder>(),out _);
