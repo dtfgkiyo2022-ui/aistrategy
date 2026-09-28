@@ -11,16 +11,18 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         /// <summary>Food, wood and metal a unit of <paramref name="kind"/> costs this faction now, and its training ticks.</summary>
-        private (int food, int wood, int metal, int gems, int ticks) CostOf(uint faction, UnitKind kind)
+        private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
         {
             var e = world.Config.Economy;
-            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, e.ScoutTrainTicks);
-            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, e.ArcherTicks);
-            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, e.CavalryTicks);
-            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, e.RamTicks);
-            if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, e.MercenaryTicks);
-            if (kind == UnitKind.Monk) return (e.MonkFoodCost, 0, e.MonkGoldCost, 0, e.MonkTrainTicks);
-            return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, InfantryTicksFor(faction));
+            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, 0, e.ScoutTrainTicks);
+            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, e.CavalryTicks);
+            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, e.RamTicks);
+            if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, 0, e.MercenaryTicks);
+            if (kind == UnitKind.Monk)
+                return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)
+                    : (e.MonkFoodCost, 0, e.MonkGoldCost, 0, 0, e.MonkTrainTicks);
+            return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
         }
 
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
@@ -100,7 +102,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind);
-            return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal && e.Gems >= c.gems;
+            return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold;
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -112,8 +114,10 @@ namespace Rts.Simulation
             e.Wood = checked(e.Wood - c.wood);
             e.Metal = checked(e.Metal - c.metal);
             e.Gems = checked(e.Gems - c.gems);
+            e.Gold = checked(e.Gold - c.gold);
             b.QueuedMetal = checked(b.QueuedMetal + c.metal);
             b.QueuedGems = checked(b.QueuedGems + c.gems);
+            b.QueuedGold = checked(b.QueuedGold + c.gold);
             if (b.Queued == 0) b.TrainRemaining = c.ticks;
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
@@ -144,6 +148,9 @@ namespace Rts.Simulation
             int gemsBack = Math.Min(c.gems, b.QueuedGems);
             b.QueuedGems -= gemsBack;
             e.Gems = checked(e.Gems + gemsBack);
+            int goldBack = Math.Min(c.gold, b.QueuedGold);
+            b.QueuedGold -= goldBack;
+            e.Gold = checked(e.Gold + goldBack);
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -159,8 +166,11 @@ namespace Rts.Simulation
             }
             int metal = CostOf(faction, done).metal;
             int gems = CostOf(faction, done).gems;
+            int gold = CostOf(faction, done).gold;
             if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
+            if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
+                b.QueuedGold = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGold - gold);
             b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0)).ticks : 0;
         }
 
@@ -206,6 +216,16 @@ namespace Rts.Simulation
             if (!AgesOn || SavingToAdvance(faction) || barracks.Queued >= world.Config.Economy.QueueLimit) return false;
             if (QueuedOf(faction, UnitKind.Scout) > 0 || !HasRoomFor(faction, UnitKind.Scout) || !CanPay(faction, UnitKind.Scout)) return false;
             Enqueue(faction, ref barracks, UnitKind.Scout);
+            return true;
+        }
+
+        /// <summary>Gold-enabled automatic economy keeps one monk planned, except while saving for the third age.</summary>
+        private bool DecideMonk(uint faction, ref BuildingState barracks)
+        {
+            if (!world.Config.Economy.GoldEnabled || !world.Config.Economy.MonksEnabled || SavingToAdvance(faction)
+                || barracks.Queued >= world.Config.Economy.QueueLimit || QueuedOf(faction, UnitKind.Monk) > 0
+                || LivingClass(faction, UnitKind.Monk) > 0 || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk)) return false;
+            Enqueue(faction, ref barracks, UnitKind.Monk);
             return true;
         }
     }

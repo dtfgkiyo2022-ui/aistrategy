@@ -33,6 +33,7 @@ namespace Rts.Simulation
                 PlaceBarracks(faction);
             if (barracks < 0) return;
             ref var building = ref world.Buildings[barracks];
+            if (DecideMonk(faction, ref building)) return;
             if (DecideScout(faction, ref building)) return;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
