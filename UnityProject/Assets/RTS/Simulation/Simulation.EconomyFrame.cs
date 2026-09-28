@@ -36,7 +36,8 @@ namespace Rts.Simulation
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
-                    own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0));
+                    own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
+                    own && ProcessingOn ? b.InputSecondary : 0));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -67,11 +68,18 @@ namespace Rts.Simulation
                 rules.Ages ? rules.RamFood : 0, rules.Ages ? rules.RamWood : 0,
                 rules.Ages ? rules.Age3FoodCost : 0, rules.Ages ? rules.Age3WoodCost : 0,
                 rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0,
-                 rules.Ages ? rules.CastleWoodCost : 0, rules.Ages ? rules.CastleStoneCost : 0,
-                 rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
-                 rules.Ages ? rules.MercenaryGems : 0, rules.Ages ? rules.MercenaryTicks : 0,
-                 rules.MonksEnabled, rules.MonksEnabled ? rules.MonkFoodCost : 0, rules.MonksEnabled ? rules.MonkGoldCost : 0,
-                 rules.MonksEnabled ? rules.MonkTrainTicks : 0, rules.GoldEnabled ? economy.Gold : 0);
+                rules.Ages ? rules.CastleWoodCost : 0, rules.Ages ? rules.CastleStoneCost : 0,
+                rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
+                rules.Ages ? rules.MercenaryGems : 0, rules.Ages ? rules.MercenaryTicks : 0,
+                rules.MonksEnabled, rules.MonksEnabled ? rules.MonkFoodCost : 0, rules.MonksEnabled ? rules.MonkGoldCost : 0,
+                rules.MonksEnabled ? rules.MonkTrainTicks : 0,
+                rules.ProcessingChain,
+                ProcessingOn ? rules.CharcoalKilnWoodCost : 0, ProcessingOn ? rules.SteelworksWoodCost : 0,
+                ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
+                ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
+                ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
+                ProcessingOn ? new List<LineView>(LineViews(faction)) : null,
+                rules.GoldEnabled ? economy.Gold : 0);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

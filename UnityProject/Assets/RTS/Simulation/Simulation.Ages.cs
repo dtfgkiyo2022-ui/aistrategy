@@ -18,6 +18,9 @@ namespace Rts.Simulation
         /// <summary>Mines and smelters: on an ages map only in the metallurgy civilisation.</summary>
         private bool MetalworkAllowed(uint faction) => !AgesOn || world.Economies[faction - 1].Civ == CivKind.Metallurgy;
 
+        private bool ProcessingAvailable(uint faction)
+            => ProcessingOn && AgesOn && world.Economies[faction - 1].Civ == CivKind.Metallurgy && world.Economies[faction - 1].Age >= 2;
+
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;
 

@@ -25,6 +25,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
+                case EconomyCommandKind.ReturnLineToAuto:
+                    if (ProcessingOn) ReturnLineToAuto(faction, c.LineId);
+                    return;
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     ReturnToAuto(faction);
                     return;
@@ -49,10 +52,26 @@ namespace Rts.Simulation
                 case EconomyCommandKind.RemoveBelt:
                     RemoveBelt(faction, c.Cell);
                     return;
+                case EconomyCommandKind.RotateBuilding:
+                    if (!ProcessingOn || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    ref var rotating = ref world.Buildings[rotateIndex];
+                    if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
+                    MarkLinesForBuilding(faction, rotating.Id);
+                    rotating.Facing = c.Facing;
+                    return;
+                case EconomyCommandKind.RemoveBuilding:
+                    if (!ProcessingOn || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    ref var removed = ref world.Buildings[removeIndex];
+                    MarkLinesForBuilding(faction, removed.Id);
+                    removed.Alive = false;
+                    foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, true);
+                    TerrainChanged();
+                    return;
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                        && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -88,6 +107,7 @@ namespace Rts.Simulation
                     ref var b = ref world.Buildings[index];
                     if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit)) return;
                     if (IndustryOn) b.Held = true;
+                    MarkLinesForBuilding(faction, b.Id);
                     Enqueue(faction, ref b, c.Unit);
                     return;
                 }
@@ -107,6 +127,7 @@ namespace Rts.Simulation
                     ref var b = ref world.Buildings[index];
                     if (b.Queued == 0) return;
                     if (IndustryOn) b.Held = true;
+                    MarkLinesForBuilding(faction, b.Id);
                     // Today's price back; advancing only ever lowers food and wood, and metal comes back only as paid.
                     CancelLast(faction, ref b);
                     return;
@@ -115,6 +136,7 @@ namespace Rts.Simulation
                 {
                     int nodeIndex = -1, buildingIndex = -1;
                     bool haul = false;
+                    BuildingState target = default;
                     if (c.TargetKind == EconomyTargetKind.ResourceNode)
                     {
                         if (c.TargetId == 0 || c.TargetId > world.Nodes.Length || world.Nodes[c.TargetId - 1].Remaining <= 0) return;
@@ -125,9 +147,12 @@ namespace Rts.Simulation
                     else if (c.TargetKind == EconomyTargetKind.Building)
                     {
                         if (!OwnBuilding(faction, c.TargetId, out buildingIndex)) return;
-                        var target = world.Buildings[buildingIndex];
+                        target = world.Buildings[buildingIndex];
+                        MarkLinesForBuilding(faction, target.Id);
+                        MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm);
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm
+                            || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln));
                         if (target.Complete && !haul) return;
                     }
                     else return;
@@ -136,10 +161,24 @@ namespace Rts.Simulation
                         if (id == 0 || id > world.VillagerCount) continue;
                         ref var v = ref world.Villagers[id - 1];
                         if (!v.Alive || v.FactionId != faction) continue;
-                        v.HaulFrom = 0; v.HaulTo = 0;
+                        v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                         if (IndustryOn) v.Held = true;
                         if (haul)
                         {
+                            if (target.Kind == BuildingKind.CharcoalKiln)
+                            {
+                                if (c.HaulToId == 0)
+                                {
+                                    if (!AssignKilnWood(ref v, c.TargetId)) continue;
+                                    continue;
+                                }
+                            }
+                            if (c.HaulToId != 0)
+                            {
+                                if (!OwnBuilding(faction, c.HaulToId, out int destinationIndex) || !world.Buildings[destinationIndex].Complete
+                                    || !CanHaulTo(target.Kind, world.Buildings[destinationIndex].Kind, OutputKind(target.Kind))) continue;
+                                v.HaulTo = c.HaulToId;
+                            }
                             v.NodeId = 0;
                             v.HaulFrom = c.TargetId;
                             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToPickup;
@@ -170,6 +209,11 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++) if (world.Villagers[i].FactionId == faction) world.Villagers[i].Held = false;
             for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].FactionId == faction) world.Buildings[i].Held = false;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) world.Belts[i].Held = false;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (world.ProcessingLines[i].FactionId != faction) continue;
+                world.ProcessingLines[i].Manager = LineManager.Automatic;
+            }
         }
 
         private bool OwnBuilding(uint faction, uint id, out int index)

@@ -38,10 +38,13 @@ namespace Rts.Simulation
             Detour = 4, PlacementFairness = 8, GuaranteedOuter = 16
         }
 
-        /// <summary>Generates the unchanged terrain first, then optionally appends an all-or-nothing gold layout.</summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold)
+        /// <summary>
+        /// Generates the unchanged terrain first, then optionally appends an all-or-nothing gold layout. The optional V3-6
+        /// processing-chain rules change no placement.
+        /// </summary>
+        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold, bool processingChain = false)
         {
-            var scenario = GenerateTerrain(seed, out _);
+            var scenario = GenerateTerrain(seed, out _, processingChain);
             if (gold) TryAddGold(scenario, seed, out _);
             return scenario;
         }

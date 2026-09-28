@@ -11,6 +11,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
+        private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
 
         /// <summary>Economy step, before gathering (11.3): downstream belts first, so a full line moves without gaps.</summary>
         private void AdvanceBelts()
@@ -127,6 +128,8 @@ namespace Rts.Simulation
                 case ResourceKind.Metal: economy.Metal = checked(economy.Metal + amount); break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
+                case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
+                case ResourceKind.Steel: economy.Steel = checked(economy.Steel + amount); break;
                 case ResourceKind.Gold: economy.Gold = checked(economy.Gold + amount); break;
             }
         }
@@ -151,6 +154,7 @@ namespace Rts.Simulation
                     || !world.Map.IsPassable(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held };
+                if (held) MarkLinesForBelt(faction, cell);
                 owned++;
                 world.BeltOrder = null;
             }
@@ -160,6 +164,7 @@ namespace Rts.Simulation
         private void RemoveBelt(uint faction, int cell)
         {
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
+            MarkLinesForBelt(faction, cell);
             world.Belts[cell] = default;
             world.BeltOrder = null;
         }
