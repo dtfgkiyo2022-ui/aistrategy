@@ -32,6 +32,29 @@ namespace Rts.Tests.Headless
             }
         }
 
+        private sealed class RejectingProvider : IPolicyProvider
+        {
+            internal readonly List<long> AskedTicks = new List<long>();
+            private readonly List<ulong> open = new List<ulong>();
+            private readonly ReasonCode reason;
+
+            internal RejectingProvider(ReasonCode reason) { this.reason = reason; }
+            public void Request(PolicyRequest request) { AskedTicks.Add(request.StartedTick); open.Add(request.RequestId); }
+            public IReadOnlyList<PolicyReply> Poll(long tick)
+            {
+                var replies = open.OrderBy(id => id).Select(id => new PolicyReply(id, tick, Array.Empty<PolicyOrder>(), reason)).ToArray();
+                open.Clear();
+                return replies;
+            }
+        }
+
+        private sealed class WaitingProvider : IPolicyProvider
+        {
+            internal readonly List<long> AskedTicks = new List<long>();
+            public void Request(PolicyRequest request) { AskedTicks.Add(request.StartedTick); }
+            public IReadOnlyList<PolicyReply> Poll(long tick) => Array.Empty<PolicyReply>();
+        }
+
         private static UserPolicyIntent Intent(uint faction) =>
             new UserPolicyIntent(0, new ScopeKey(faction, ScopeKind.All, 0), PolicyKind.MaintainReserve, default(PolicyGoal),
                 50, new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 100, new Expiration(long.MaxValue, 0, ExpireFlags.None));
@@ -102,6 +125,52 @@ namespace Rts.Tests.Headless
             // The heartbeat is 6000 ticks, so anything after the opening ask can only be a change.
             Assert.That(provider.AskedTicks.Count, Is.GreaterThan(1));
             Assert.That(provider.AskedTicks.Skip(1).First(), Is.LessThanOrEqualTo(firstContactTick + 20));
+        }
+
+        [Test]
+        public void OnChangeAsksAgainAfterAnOutstandingProposalExpires()
+        {
+            var provider = new WaitingProvider();
+            var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create());
+            var gateway = new CommandGateway(sim, provider, null, AutonomousPollSchedule.OnChange(600));
+            gateway.EnableAutonomous(Intent(1));
+            gateway.Step();
+
+            // Advance the same target's revision while the autonomous request is still waiting.
+            gateway.Submit(Intent(1));
+            gateway.Step();
+            Assert.That(sim.Revision(new ScopeKey(1, ScopeKind.All, 0)), Is.EqualTo(1));
+            for (int i = 0; i < 19; i++) gateway.Step();
+
+            Assert.That(provider.AskedTicks, Is.EqualTo(new long[] { 0, 20 }));
+        }
+
+        [Test]
+        public void RepeatedInvalidationDoesNotAskMoreOftenThanOneDecisionOpportunity()
+        {
+            var provider = new WaitingProvider();
+            var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create());
+            var gateway = new CommandGateway(sim, provider, null, AutonomousPollSchedule.OnChange(600));
+            gateway.EnableAutonomous(Intent(1));
+            for (int i = 0; i < 521; i++) gateway.Step();
+
+            var gaps = provider.AskedTicks.Zip(provider.AskedTicks.Skip(1), (a, b) => b - a).ToArray();
+            Assert.That(provider.AskedTicks, Is.EqualTo(new long[] { 0, 260, 520 }));
+            Assert.That(gaps, Is.All.GreaterThanOrEqualTo(20));
+        }
+
+        [Test]
+        public void OnChangeDoesNotRetryARejectedProposalBeforeTheHeartbeat()
+        {
+            var provider = new RejectingProvider(ReasonCode.InvalidPayload);
+            var sim = new Rts.Simulation.Simulation(WeekTwoScenario.Create());
+            var gateway = new CommandGateway(sim, provider, null, AutonomousPollSchedule.OnChange(600));
+            gateway.EnableAutonomous(Intent(1));
+            for (int i = 0; i < 1201; i++) gateway.Step();
+
+            var gaps = provider.AskedTicks.Zip(provider.AskedTicks.Skip(1), (a, b) => b - a).ToArray();
+            Assert.That(provider.AskedTicks, Is.EqualTo(new long[] { 0, 600, 1200 }));
+            Assert.That(gaps, Is.All.GreaterThanOrEqualTo(600));
         }
 
         [Test]
