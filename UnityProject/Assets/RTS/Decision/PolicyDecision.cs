@@ -1,7 +1,7 @@
 using System;
+using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using Rts.Contracts;
 
 namespace Rts.Decision
@@ -9,8 +9,6 @@ namespace Rts.Decision
     /// <summary>Pure observation-based rules. No world, internal enemy IDs, or mutable shared state.</summary>
     public static class PolicyDecision
     {
-        public static BigInteger Distance(SimPoint a, SimPoint b)
-        { var x = new BigInteger(a.X.Raw) - b.X.Raw; var z = new BigInteger(a.Z.Raw) - b.Z.Raw; return x * x + z * z; }
         /// <summary>
         /// Exact squared distance as a 128-bit value type. BigInteger allocated on almost every call here, and these
         /// run for every enemy and route on every tick. Exact for every pair of positions.
@@ -342,21 +340,14 @@ namespace Rts.Decision
             var away = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
             var left = new SimPoint(Fix64.FromRaw(checked(position.X.Raw - dz)), Fix64.FromRaw(checked(position.Z.Raw + dx)));
             var right = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dz)), Fix64.FromRaw(checked(position.Z.Raw - dx)));
-            // A fast scout can be chased by an equally fast unit.  At the 12 m boundary a homeward diagonal
-            // step can round just under the safety radius, so use the exact enemy-opposite step while close.
-            if (stepDistance.Raw >= Fix64.FromRatio(1, 4).Raw && Within(position, enemy, Fix64.FromInt(12)))
-            {
-                var flee = FixMath.MoveTowards(position, away, stepDistance);
-                if (SafeFromEnemies(position, flee, enemies)) return flee;
-            }
             if (SafeFromEnemies(position, homeward, enemies)) return home;
             SimPoint best = position;
-            BigInteger bestDistance = Distance(position, home);
+            Wide bestDistance = DistanceSquared(position, home);
             foreach (var direction in new[] { away, left, right })
             {
                 var candidate = FixMath.MoveTowards(position, direction, stepDistance);
                 if (!SafeFromEnemies(position, candidate, enemies)) continue;
-                var distance = Distance(candidate, home);
+                var distance = DistanceSquared(candidate, home);
                 if (distance < bestDistance) { best = candidate; bestDistance = distance; }
             }
             return SamePoint(best, position) ? FixMath.MoveTowards(position, away, stepDistance) : best;
@@ -365,7 +356,7 @@ namespace Rts.Decision
         private static bool SafeFromEnemies(SimPoint current, SimPoint candidate, IReadOnlyList<VisibleEnemy> enemies)
         {
             foreach (var enemy in enemies)
-                if (Distance(candidate, enemy.Position) < Distance(current, enemy.Position)) return false;
+                if (DistanceSquared(candidate, enemy.Position) < DistanceSquared(current, enemy.Position)) return false;
             return true;
         }
 
