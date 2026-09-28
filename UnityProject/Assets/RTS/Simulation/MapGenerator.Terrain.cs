@@ -140,6 +140,12 @@ namespace Rts.Simulation
             // 7. Soldiers and villagers as on the economy maps; the rules of mapgen-2.
             PlaceStartingUnits(s, wx, wz, ex, ez);
             s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true };
+            // Match pacing (technical-design-v3 32.25, 32.27): the combination closest to the 15-25 minute target.
+            s.Economy.AutoVillagerTarget = 20;
+            s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;
+            s.Economy.Age2FoodCost = 480; s.Economy.Age2WoodCost = 300;
+            s.Economy.Age3FoodCost = 720; s.Economy.Age3WoodCost = 480;
+            for (int i = 0; i < s.Cores.Length; i++) s.Cores[i].Hp = 6000;
             s.Rules.FactionCap = s.Economy.PopulationCap;
             return s;
         }
