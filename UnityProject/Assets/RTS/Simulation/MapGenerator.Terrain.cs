@@ -28,9 +28,6 @@ namespace Rts.Simulation
         /// <summary>The terrain map of <paramref name="seed"/>: economy, industry and terrain on.</summary>
         public static ScenarioDefinition GenerateTerrain(ulong seed) => GenerateTerrain(seed, out _, false);
 
-        /// <summary>Age map with the optional V3-6 processing-chain rules enabled, without changing map generation.</summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed, bool processingChain) => GenerateTerrain(seed, out _, processingChain);
-
         public static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans)
             => GenerateTerrain(seed, out leans, false);
 

@@ -186,7 +186,7 @@ namespace Rts.Core.Tests
         public void DisabledProcessingChainIsByteForByteTheExistingScenario()
         {
             var implicitOff = MapGenerator.GenerateTerrain(8675309UL);
-            var explicitOff = MapGenerator.GenerateTerrain(8675309UL, false);
+            var explicitOff = MapGenerator.GenerateTerrain(8675309UL, gold: false, processingChain: false);
             Assert.That(ScenarioBinary.Encode(explicitOff), Is.EqualTo(ScenarioBinary.Encode(implicitOff)));
 
             var a = new Battle(implicitOff);
@@ -202,8 +202,8 @@ namespace Rts.Core.Tests
         [Test]
         public void ProcessingChainKeepsMapPlacementAndRoundTripsItsTail()
         {
-            var off = MapGenerator.GenerateTerrain(42UL, false);
-            var on = MapGenerator.GenerateTerrain(42UL, true);
+            var off = MapGenerator.GenerateTerrain(42UL, gold: false, processingChain: false);
+            var on = MapGenerator.GenerateTerrain(42UL, gold: false, processingChain: true);
             Assert.That(on.Map.BlockedCellIds, Is.EqualTo(off.Map.BlockedCellIds));
             Assert.That(on.Cores.Select(c => c.Position), Is.EqualTo(off.Cores.Select(c => c.Position)));
             Assert.That(on.Outposts.Select(o => o.Position), Is.EqualTo(off.Outposts.Select(o => o.Position)));
@@ -218,7 +218,7 @@ namespace Rts.Core.Tests
         [Test]
         public void ProcessingChainSimulationReplaysIdentically()
         {
-            var scenario = MapGenerator.GenerateTerrain(99UL, true);
+            var scenario = MapGenerator.GenerateTerrain(99UL, gold: false, processingChain: true);
             var left = new Battle(scenario);
             var right = new Battle(ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)));
             for (long tick = 1; tick <= 300; tick++)
@@ -285,7 +285,7 @@ namespace Rts.Core.Tests
             Assert.That(copy.Economy.ProducerId, Is.EqualTo(47u));
             Assert.That(copy.Economy.HaulToId, Is.EqualTo(command.HaulToId));
 
-            var scenario = MapGenerator.GenerateTerrain(13579UL, true);
+            var scenario = MapGenerator.GenerateTerrain(13579UL, gold: false, processingChain: true);
             var left = new Battle(scenario);
             var right = new Battle(ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)));
             for (long tick = 1; tick <= 120; tick++)
@@ -328,11 +328,11 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void ProcessingChainResourceNumbersLeaveGoldSlotSevenFree()
+        public void ProcessingChainResourceNumbersFollowGold()
         {
+            Assert.That((byte)ResourceKind.Gold, Is.EqualTo(7));
             Assert.That((byte)ResourceKind.Charcoal, Is.EqualTo(8));
             Assert.That((byte)ResourceKind.Steel, Is.EqualTo(9));
-            Assert.That(Enum.IsDefined(typeof(ResourceKind), (byte)7), Is.False);
         }
     }
 }

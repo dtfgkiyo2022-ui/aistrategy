@@ -59,6 +59,8 @@
     <Compile Include="AgeVictoryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
     <Compile Include="VillagerRebalanceTests.cs" />
+    <Compile Include="FishingTests.cs" />
+    <Compile Include="GoldTests.cs" />
     <Compile Include="MovementStallProbeTests.cs" />
     <Compile Include="MovementStallTests.cs" />
     <Compile Include="GridMapCacheTests.cs" />

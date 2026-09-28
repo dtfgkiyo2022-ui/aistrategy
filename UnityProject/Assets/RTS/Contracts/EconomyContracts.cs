@@ -484,6 +484,7 @@ namespace Rts.Contracts
         public int HeavyInfantrySteelCost { get; }
         /// <summary>V3-6: automatic processing lines and their manager.</summary>
         public IReadOnlyList<LineView> Lines { get; }
+        public int Gold { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -511,7 +512,8 @@ namespace Rts.Contracts
             bool monksEnabled = false, int monkFoodCost = 0, int monkGoldCost = 0, int monkTrainTicks = 0,
             bool processingChain = false, int charcoalKilnWoodCost = 0, int steelworksWoodCost = 0,
             int charcoalKilnSizeCells = 0, int steelworksSizeCells = 0, int heavyInfantryFoodCost = 0, int heavyInfantrySteelCost = 0,
-            int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null)
+            int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
+            int gold = 0)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
@@ -521,6 +523,7 @@ namespace Rts.Contracts
             CharcoalKilnSizeCells = charcoalKilnSizeCells; SteelworksSizeCells = steelworksSizeCells;
             HeavyInfantryFoodCost = heavyInfantryFoodCost; HeavyInfantrySteelCost = heavyInfantrySteelCost;
             Lines = ContractList.Copy(lines ?? Array.Empty<LineView>());
+            Gold = gold;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

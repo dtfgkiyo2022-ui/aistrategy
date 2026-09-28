@@ -90,7 +90,12 @@ namespace Rts.Simulation
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
             }
             w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
-            foreach (var r in world.Nodes) w.Value("ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining", r.Remaining);
+            foreach (var r in world.Nodes)
+            {
+                string n = "ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Remaining", r.Remaining);
+                if (world.Config.Economy.FishingEnabled) w.Value(n + "Fishing", r.Fishing);
+            }
             w.Value("NextBuildingId", world.NextBuildingId);
             w.Value("Buildings.Count", (uint)world.BuildingCount);
             for (int i = 0; i < world.BuildingCount; i++)
@@ -107,6 +112,7 @@ namespace Rts.Simulation
                     if (world.Config.Economy.Ages)
                     {
                         w.Value(n + "QueuedMetal", b.QueuedMetal); w.Value(n + "QueuedGems", b.QueuedGems); w.Value(n + "Interval", b.Interval); w.Value(n + "Shots", b.Shots); w.Value(n + "Researching", (byte)b.Researching);
+                        if (world.Config.Economy.GoldEnabled) w.Value(n + "QueuedGold", b.QueuedGold);
                         var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
@@ -144,6 +150,7 @@ namespace Rts.Simulation
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
                 if (world.Config.Economy.ProcessingChain) { w.Value(n + "Charcoal", e.Charcoal); w.Value(n + "Steel", e.Steel); }
                 if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Gems", e.Gems); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }
+                if (world.Config.Economy.GoldEnabled) w.Value(n + "Gold", e.Gold);
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); w.Value(n + "AgeVictoryProgress", e.AgeVictoryProgress); }
             }
             uint belts = 0;

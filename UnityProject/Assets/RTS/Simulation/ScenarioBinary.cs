@@ -109,14 +109,29 @@ namespace Rts.Simulation
                 // compatible with older maps, while an enabled/custom rule set survives schema 3/4 as well as schema 5.
                 bool monkRules = c.Economy.MonksEnabled || c.Economy.ConversionTicks != 400
                     || c.Economy.MonkFoodCost != 60 || c.Economy.MonkGoldCost != 40 || c.Economy.MonkTrainTicks != 200;
+                // The optional tails nest in order - monk, Age2SaveArmyFloor, fishing, gold, processing chain: each later
+                // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
                 bool processingRules = c.Economy.ProcessingChain;
-                bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || processingRules;
+                bool goldRules = c.Economy.GoldEnabled || processingRules;
+                bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
+                    || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
+                bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
                 if (floorRules) monkRules = true;
                 if (monkRules)
                 {
                     w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
                     w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
                     if (floorRules) w.Write(c.Economy.Age2SaveArmyFloor);
+                    if (fishingRules)
+                    {
+                        w.Write(c.Economy.FishingEnabled); w.Write(c.Economy.FishRegrowTicks);
+                        w.Write(c.Economy.FishAgrarianBonusPermille); w.Write(c.Economy.FishReach);
+                    }
+                    if (goldRules)
+                    {
+                        w.Write(c.Economy.GoldEnabled); w.Write(c.Economy.Age3GoldCostAgrarian); w.Write(c.Economy.Age3GoldCostMetallurgy); w.Write(c.Economy.GoldGatherers);
+                        w.Write(c.Economy.GoldAmount); w.Write(c.Economy.GoldDangerMeters);
+                    }
                     if (processingRules)
                     {
                         var e = c.Economy;
@@ -232,14 +247,25 @@ namespace Rts.Simulation
                         e.Age2SaveArmyFloor = r.ReadInt32();
                         if (s.Position < s.Length)
                         {
-                            e.ProcessingChain = true;
-                            e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
-                            e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
-                            e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
-                            e.SteelworksHp = r.ReadInt32(); e.SteelTicks = r.ReadInt32();
-                            e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
-                            e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
-                            e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
+                            e.FishingEnabled = Bool(r); e.FishRegrowTicks = r.ReadInt32();
+                            e.FishAgrarianBonusPermille = r.ReadInt32(); e.FishReach = r.ReadInt32();
+                            if (s.Position < s.Length)
+                            {
+                                e.GoldEnabled = Bool(r); e.Age3GoldCostAgrarian = r.ReadInt32(); e.Age3GoldCostMetallurgy = r.ReadInt32();
+                                e.GoldGatherers = r.ReadInt32();
+                                e.GoldAmount = r.ReadInt32(); e.GoldDangerMeters = r.ReadInt32();
+                                if (s.Position < s.Length)
+                                {
+                                    e.ProcessingChain = true;
+                                    e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
+                                    e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
+                                    e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
+                                    e.SteelworksHp = r.ReadInt32(); e.SteelTicks = r.ReadInt32();
+                                    e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
+                                    e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
+                                    e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
+                                }
+                            }
                         }
                     }
                 }
