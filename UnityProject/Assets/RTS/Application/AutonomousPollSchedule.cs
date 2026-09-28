@@ -18,17 +18,21 @@ namespace Rts.Application
     /// </summary>
     public sealed class AutonomousPollSchedule
     {
+        // Section 11 defines the next autonomous decision opportunity as the 20-tick allocation cycle.
+        internal const long DecisionOpportunityTicks = 20;
+
         /// <summary>Ver.1 behaviour: ask on every allocation cycle (every 20 ticks) when nothing is outstanding.</summary>
         public static AutonomousPollSchedule EveryCycle { get; } = new AutonomousPollSchedule(0);
 
         /// <summary>
         /// Ask when the observation changes in a way that could change the policy - the first enemy contact, more
-        /// contacts than before, an outpost changing hands, or own core HP dropping - and otherwise at most once every
+        /// contacts than before, an outpost changing hands, or own core HP dropping. An invalidated autonomous proposal
+        /// is also asked again at the next decision opportunity; otherwise this is at most once every
         /// <paramref name="maxIntervalTicks"/>. 600 ticks is 30 seconds at 20 Hz.
         /// </summary>
         public static AutonomousPollSchedule OnChange(long maxIntervalTicks = 600)
         {
-            if (maxIntervalTicks < 20) throw new ArgumentOutOfRangeException(nameof(maxIntervalTicks), "The heartbeat cannot be shorter than one allocation cycle.");
+            if (maxIntervalTicks < DecisionOpportunityTicks) throw new ArgumentOutOfRangeException(nameof(maxIntervalTicks), "The heartbeat cannot be shorter than one allocation cycle.");
             return new AutonomousPollSchedule(maxIntervalTicks);
         }
 
