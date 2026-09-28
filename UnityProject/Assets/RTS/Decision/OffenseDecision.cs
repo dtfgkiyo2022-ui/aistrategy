@@ -65,7 +65,8 @@ namespace Rts.Decision
                 var a = own[i]; var m = result[i];
                 if (m.Returning)
                 {
-                    if (a.HomeArrived) { m.Returning = false; m.HoldUntilTick = tick + 60; m.InferiorTicks = 0; m.InferiorSince = 0; m.Assignment = AssignmentKind.Reserve; m.Goal = PolicyDecision.Core(o, true); }
+                    if (a.HomeArrived || PolicyDecision.ScoutReturnComplete(o, inputs[i].Army, a.Soldiers))
+                    { m.Returning = false; m.HoldUntilTick = tick + 60; m.InferiorTicks = 0; m.InferiorSince = 0; m.Assignment = AssignmentKind.Reserve; m.Goal = PolicyDecision.Core(o, true); }
                 }
                 else if (inputs[i].Policy.CommandId != 0 || tick < m.HoldUntilTick || a.Soldiers.Count == 0) { m.InferiorTicks = 0; m.InferiorSince = 0; }
                 else

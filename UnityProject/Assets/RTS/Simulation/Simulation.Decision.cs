@@ -9,6 +9,7 @@ namespace Rts.Simulation
 {
     public sealed partial class Simulation
     {
+        public const int HomeArrivalRadius = 24;
         private long lastAllocationTick;
         private readonly int[] reserveShortfall = new int[2];
         private AttackMemory[][] attackMemory;
@@ -24,9 +25,17 @@ namespace Rts.Simulation
         }
         private bool HomeArrived(ArmyState a)
         {
-            var live = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
+            var live = (a.AutoStartIds ?? System.Array.Empty<uint>())
+                .Where(id => world.Soldiers[id - 1].Alive).ToArray();
             var home = world.Cores[world.Factions[a.Definition.FactionId - 1].CoreId - 1].Definition.Position;
-            return live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, home, Fix64.FromInt(4)));
+            return live.All(id => InRange(world.Soldiers[id - 1].Position, home, Fix64.FromInt(HomeArrivalRadius)));
+        }
+        private bool ReturnComplete(FactionObservation observation, ArmyState a)
+        {
+            if (HomeArrived(a)) return true;
+            var live = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
+            return live.Length > 0 && live.All(id => world.Soldiers[id - 1].Initial.Kind == UnitKind.Scout)
+                && live.All(id => !PolicyDecision.ScoutSeesEnemy(observation, world.Soldiers[id - 1].Position, world.Soldiers[id - 1].Parameters.Vision));
         }
         private void HoldArmy(uint id)
         {
@@ -84,7 +93,7 @@ namespace Rts.Simulation
                     var a = world.Armies[i.Army.Id - 1];
                     var live = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).OrderBy(id => id).ToArray();
                     return new OffenseArmyInput(i.Army.Id, live.Select(id => world.Soldiers[id - 1].Position).ToArray(), live.Length == 0 ? 0 : world.Soldiers[live[0] - 1].StepDistance.Raw,
-                        false, HomeArrived(a), a.AutoStartIds.Length, a.AutoStartIds.Count(id => !world.Soldiers[id - 1].Alive));
+                        false, ReturnComplete(observation, a), a.AutoStartIds.Length, a.AutoStartIds.Count(id => !world.Soldiers[id - 1].Alive));
                 }).ToArray();
                 var offenseRoutes = OffenseRoutes(observation, inputs);
                 var assessed = inputs.Select(i => i.Memory).ToArray();

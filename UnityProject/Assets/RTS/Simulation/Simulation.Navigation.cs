@@ -5,6 +5,9 @@ namespace Rts.Simulation
 {
     public sealed partial class Simulation
     {
+        // Ten seconds is enough for a normal slot correction; a late unit then follows the advancing formation.
+        private const long FormationWaitTicks = 200;
+
         private SimPoint GoalPosition(PolicyGoal goal) => goal.Kind == GoalKind.Point ? goal.Point
             : goal.Kind == GoalKind.Outpost ? world.Outposts[goal.Id - 1].Definition.Position
             : world.Cores[goal.Id - 1].Definition.Position;
@@ -34,7 +37,12 @@ namespace Rts.Simulation
                 if (!a.HasPathGoal || !SamePoint(a.PathGoal, goal))
                 {
                     a.PathGoal = goal; a.HasPathGoal = true; a.PathCursor = 0;
-                    foreach (uint id in a.SoldierIds) { world.Soldiers[id - 1].Joining = false; world.Soldiers[id - 1].TacticalRoute = false; world.Soldiers[id - 1].LocalPath = null; }
+                    foreach (uint id in a.SoldierIds)
+                    {
+                        world.Soldiers[id - 1].Joining = false; world.Soldiers[id - 1].SlotWaitTimedOut = false;
+                        world.Soldiers[id - 1].SlotWaitSinceTick = 0; world.Soldiers[id - 1].SlotWaitTarget = default;
+                        world.Soldiers[id - 1].TacticalRoute = false; world.Soldiers[id - 1].LocalPath = null;
+                    }
                     a.Path = world.Map.FindPath(world.Map.Cell(world.Soldiers[first].Position), goal);
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
@@ -47,8 +55,10 @@ namespace Rts.Simulation
                     ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
                     if (!soldier.Alive) continue;
                     var intended = soldier.MoveGoal;
-                    if (SamePoint(intended, soldier.Position)) continue;
-                    if (!SamePoint(intended, goal))
+                    bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning;
+                    bool atPosition = SamePoint(intended, soldier.Position);
+                    if (atPosition && !returning) continue;
+                    if (!SamePoint(intended, goal) && !(returning && atPosition))
                     {
                         // Tactical destinations can cross walls too. Reuse the route while its cell is unchanged.
                         if (!soldier.TacticalRoute || world.Map.Cell(soldier.LocalGoal) != world.Map.Cell(intended))
@@ -82,12 +92,24 @@ namespace Rts.Simulation
                     }
                     participants = true;
                     // Collapse at bends; keep slots only when the next center is reachable from the slot.
-                    var target = new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
+                    // Returning armies use the route centre instead of a one-metre formation offset, which can press
+                    // a late scout against an obstacle while the rest of the army waits for its slot.
+                    var target = returning ? center : new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
                     if (!Clear(center, target) || !Clear(soldier.Position, target)
                         || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]))) target = center;
                     if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal) ? goal : center;
                     soldier.MoveGoal = target;
-                    if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10))) arrived = false;
+                    if (!SamePoint(soldier.SlotWaitTarget, target))
+                    {
+                        soldier.SlotWaitTarget = target; soldier.SlotWaitSinceTick = world.Tick; soldier.SlotWaitTimedOut = false;
+                    }
+                    if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10)))
+                    {
+                        if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= FormationWaitTicks)
+                            soldier.SlotWaitTimedOut = true;
+                        if (!soldier.SlotWaitTimedOut) arrived = false;
+                    }
+                    else { soldier.SlotWaitSinceTick = 0; soldier.SlotWaitTimedOut = false; }
                 }
                 if (participants && arrived && a.PathCursor + 1 < a.Path.Length) a.PathCursor++;
             }

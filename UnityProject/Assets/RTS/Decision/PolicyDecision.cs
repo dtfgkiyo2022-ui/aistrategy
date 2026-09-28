@@ -253,7 +253,7 @@ namespace Rts.Decision
         {
             if (memory.Returning)
             {
-                if (homeArrived)
+                if (homeArrived || ScoutReturnComplete(o, army))
                 {
                     memory.Returning = false; memory.HoldUntilTick = checked(tick + 60); memory.InferiorSince = 0;
                     memory.Assignment = AssignmentKind.Reserve; memory.Goal = Core(o, true);
@@ -315,7 +315,8 @@ namespace Rts.Decision
         }
         public static SimPoint ScoutReturn(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance = default)
         {
-            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance)).OrderBy(e => DistanceSquared(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
+            var enemy = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance))
+                .OrderBy(e => DistanceSquared(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
             if (enemy.Length == 0) return home;
             var e = enemy[0].Position;
             long dx = checked(position.X.Raw - e.X.Raw), dz = checked(position.Z.Raw - e.Z.Raw);
@@ -323,7 +324,50 @@ namespace Rts.Decision
             // A destination on the visible-enemy-to-scout ray; normal movement speed still applies.
             return new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
         }
+
+        public static SimPoint ScoutRetreatHome(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance = default)
+        {
+            var enemies = o.VisibleEnemies.Where(e => Within(e.Position, position, Fix64.FromInt(12) + stepDistance))
+                .OrderBy(e => DistanceSquared(e.Position, position)).ThenBy(e => e.ContactId).ToArray();
+            if (enemies.Length == 0) return home;
+
+            // Keep the homeward step when it is safe; otherwise choose a lateral/away step that never approaches a
+            // nearby enemy. This preserves return progress instead of reflecting between two enemy-facing points.
+            SimPoint homeward = FixMath.MoveTowards(position, home, stepDistance);
+            var enemy = enemies[0].Position;
+            long dx = checked(position.X.Raw - enemy.X.Raw), dz = checked(position.Z.Raw - enemy.Z.Raw);
+            if (dx == 0 && dz == 0) dx = home.X.Raw >= position.X.Raw ? 1 : -1;
+            var away = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
+            var left = new SimPoint(Fix64.FromRaw(checked(position.X.Raw - dz)), Fix64.FromRaw(checked(position.Z.Raw + dx)));
+            var right = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dz)), Fix64.FromRaw(checked(position.Z.Raw - dx)));
+            if (SafeFromEnemies(position, homeward, enemies)) return home;
+            SimPoint best = position;
+            Wide bestDistance = DistanceSquared(position, home);
+            foreach (var direction in new[] { away, left, right })
+            {
+                var candidate = FixMath.MoveTowards(position, direction, stepDistance);
+                if (!SafeFromEnemies(position, candidate, enemies)) continue;
+                var distance = DistanceSquared(candidate, home);
+                if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+            }
+            return SamePoint(best, position) ? FixMath.MoveTowards(position, away, stepDistance) : best;
+        }
+
+        private static bool SafeFromEnemies(SimPoint current, SimPoint candidate, IReadOnlyList<VisibleEnemy> enemies)
+        {
+            foreach (var enemy in enemies)
+                if (DistanceSquared(candidate, enemy.Position) < DistanceSquared(current, enemy.Position)) return false;
+            return true;
+        }
+
+        private static bool SamePoint(SimPoint a, SimPoint b) => a.X.Raw == b.X.Raw && a.Z.Raw == b.Z.Raw;
         public static bool ScoutSeesEnemy(FactionObservation o, SimPoint position, Fix64 vision)
             => o.VisibleEnemies.Any(e => Within(e.Position, position, vision));
+        public static bool ScoutReturnComplete(FactionObservation o, OwnArmyView army)
+            => army.AliveCount > 0 && army.Kind == UnitKind.Scout
+                && !ScoutSeesEnemy(o, army.Position, Fix64.FromInt(32));
+        public static bool ScoutReturnComplete(FactionObservation o, OwnArmyView army, IReadOnlyList<SimPoint> soldiers)
+            => army.AliveCount > 0 && army.Kind == UnitKind.Scout && soldiers.Count > 0
+                && soldiers.All(position => !ScoutSeesEnemy(o, position, Fix64.FromInt(32)));
     }
 }

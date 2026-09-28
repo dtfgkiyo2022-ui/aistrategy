@@ -94,10 +94,11 @@ namespace Rts.Core.Tests
             var f = Fields(sim);
             for (int faction = 1; faction <= 2; faction++)
             {
-                int alive = 0;
+                int total = 0;
                 for (int i = 1; i <= Number(f, "Villagers.Count"); i++)
-                    if (f["Villagers[" + i + "].FactionId"] == faction.ToString(CultureInfo.InvariantCulture) && f["Villagers[" + i + "].Alive"] == "1") alive++;
-                Assert.That(alive, Is.EqualTo(scenario.Economy.AutoVillagerTarget), "faction " + faction + " villagers");
+                    if (f["Villagers[" + i + "].FactionId"] == faction.ToString(CultureInfo.InvariantCulture)) total++;
+                // The economy basics: villagers trained, counting those an enemy killed later (raids reach them by 6000).
+                Assert.That(total, Is.EqualTo(scenario.Economy.AutoVillagerTarget), "faction " + faction + " villagers");
                 // Food: 200 at start, minus 7 villagers at 50, plus gathering. Wood only ever grows in PR2.
                 Assert.That(Number(f, "Economy[" + faction + "].Wood"), Is.GreaterThan(scenario.Economy.StartWood), "faction " + faction + " gathered wood");
                 Assert.That(Number(f, "Economy[" + faction + "].Food"), Is.GreaterThan(scenario.Economy.StartFood - 7 * scenario.Economy.VillagerFoodCost), "faction " + faction + " gathered food");

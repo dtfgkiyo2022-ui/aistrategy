@@ -48,6 +48,8 @@
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="MatchLengthMeasurementTests.cs" />
+    <Compile Include="RetreatStuckProbeTests.cs" />
+    <Compile Include="RetreatReturnTests.cs" />
     <Compile Include="RangeStableTests.cs" />
     <Compile Include="CounterTests.cs" />
     <Compile Include="SteelTechTests.cs" />
@@ -55,6 +57,9 @@
     <Compile Include="CastleTests.cs" />
     <Compile Include="AgeVictoryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
+    <Compile Include="VillagerRebalanceTests.cs" />
+    <Compile Include="MovementStallProbeTests.cs" />
+    <Compile Include="MovementStallTests.cs" />
     <Compile Include="GridMapCacheTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
