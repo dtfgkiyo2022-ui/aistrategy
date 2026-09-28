@@ -102,7 +102,12 @@ namespace Rts.Simulation
                 else if (v.Task == VillagerTask.ToNode)
                 {
                     var node = world.Nodes[v.NodeId - 1];
-                    if (node.Remaining <= 0) { v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; continue; }
+                    if (node.Remaining <= 0)
+                    {
+                        if (v.Carry == 0 && ProcessingKilnTarget(v) && AssignKilnWood(ref v, v.HaulTo)) continue;
+                        if (v.Carry == 0 && ProcessingKilnTarget(v)) v.HaulTo = 0;
+                        v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; continue;
+                    }
                     if (InRange(v.Position, node.Definition.Position, GatherReach))
                     {
                         v.Task = VillagerTask.Gathering;
@@ -112,7 +117,12 @@ namespace Rts.Simulation
                 else if (v.Task == VillagerTask.Gathering)
                 {
                     ref var node = ref world.Nodes[v.NodeId - 1];
-                    if (node.Remaining <= 0) { v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; continue; }
+                    if (node.Remaining <= 0)
+                    {
+                        if (v.Carry == 0 && ProcessingKilnTarget(v) && AssignKilnWood(ref v, v.HaulTo)) continue;
+                        if (v.Carry == 0 && ProcessingKilnTarget(v)) v.HaulTo = 0;
+                        v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle; continue;
+                    }
                     if (world.Tick < v.NextGatherTick) continue;
                     node.Remaining--;
                     v.CarryKind = node.Definition.Kind;
@@ -124,6 +134,14 @@ namespace Rts.Simulation
                 {
                     var drop = DropOff(v);
                     if (!InRange(v.Position, drop.point, drop.reach)) continue;
+                    if (ProcessingKilnTarget(v))
+                    {
+                        if (!TryDeliverWoodToKiln(ref v)) AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        if (v.Carry > 0) continue; // a full kiln is a deliberate hand-haul wait state
+                        if (v.HaulTo != 0 && AssignKilnWood(ref v, v.HaulTo)) continue;
+                        v.HaulTo = 0; v.Task = VillagerTask.Idle;
+                        continue;
+                    }
                     AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
                     if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
@@ -170,6 +188,40 @@ namespace Rts.Simulation
             if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
             if (index < 0) return; // nothing left anywhere: stays idle
             SetWorkNode(ref v, index);
+        }
+
+        private bool ProcessingKilnTarget(VillagerState v)
+            => ProcessingOn && (v.Carry == 0 || v.CarryKind == ResourceKind.Wood) && v.HaulTo > 0 && v.HaulTo <= world.BuildingCount
+               && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.CharcoalKiln;
+
+        private bool AssignKilnWood(ref VillagerState v, uint kilnId)
+        {
+            if (!ProcessingOn || kilnId == 0 || kilnId > world.BuildingCount) return false;
+            var kiln = world.Buildings[kilnId - 1];
+            if (!kiln.Alive || !kiln.Complete || kiln.FactionId != v.FactionId) return false;
+            int index = NearestWorkNode(v.Position, ResourceKind.Wood);
+            if (index < 0) return false;
+            v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
+            v.NodeId = world.Nodes[index].Definition.Id;
+            v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
+            return true;
+        }
+
+        private bool TryDeliverWoodToKiln(ref VillagerState v)
+        {
+            if (!ProcessingKilnTarget(v)) return false;
+            ref var kiln = ref world.Buildings[v.HaulTo - 1];
+            if (!kiln.Alive || !kiln.Complete)
+            {
+                v.HaulTo = 0;
+                AddStock(v.FactionId, v.CarryKind, v.Carry);
+                v.Carry = 0;
+                return true;
+            }
+            int put = Math.Min(v.Carry, world.Config.Economy.BufferLimit - kiln.Input);
+            kiln.Input += put;
+            v.Carry -= put;
+            return true;
         }
 
         private ResourceKind WorkKindFor(VillagerState v)

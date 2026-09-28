@@ -116,6 +116,8 @@ namespace Rts.Simulation
         /// <summary>V3-2 carrying by hand (12.3): the mine or smelter it takes from (0 = not carrying), and the smelter
         /// it takes ore to (0 = the core).</summary>
         internal uint HaulFrom, HaulTo;
+        /// <summary>V3-6: a charcoal-kiln worker's selected wood point.</summary>
+        internal uint HaulNodeId;
         /// <summary>V3-3 (19): the player assigned this villager; the automatic economy leaves it alone.</summary>
         internal bool Held;
     }
@@ -137,9 +139,11 @@ namespace Rts.Simulation
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
         internal Facing Facing;
-        internal int Input, Output, Timer;
+        internal int Input, InputSecondary, Output, Timer;
         /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
         internal int QueuedMetal;
+        /// <summary>V3-6: steel paid by heavy infantry still in a queue.</summary>
+        internal int QueuedSteel;
         internal int QueuedGems;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
         internal int Interval;
@@ -179,7 +183,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone and Gems (V3-5) only with ages.</summary>
-        internal int Ore, Metal, Stone, Gems;
+        internal int Ore, Metal, Stone, Gems, Charcoal, Steel;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -294,7 +298,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Charcoal = 0, Steel = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -361,8 +365,19 @@ namespace Rts.Simulation
                     && e.BeltLimit > 0 && e.BeltLimit <= 8192
                     && e.MineSizeCells > 0 && e.MineSizeCells <= 8 && e.MineWoodCost >= 0 && e.MineWork > 0 && e.MineHp > 0 && e.MineIntervalTicks > 0
                     && e.SmelterSizeCells > 0 && e.SmelterSizeCells <= 8 && e.SmelterWoodCost >= 0 && e.SmelterWork > 0 && e.SmelterHp > 0
-                    && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0, "Invalid industry rules.");
-            else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0, "Belts and metal costs need industry.");
+                    && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0,
+                    "Invalid industry rules.");
+            else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0 && !e.ProcessingChain, "Belts and metal costs need industry.");
+            if (e.ProcessingChain)
+                Require(e.Industry && e.CharcoalKilnSizeCells > 0 && e.CharcoalKilnSizeCells <= 8 && e.CharcoalKilnWoodCost >= 0
+                    && e.CharcoalKilnWork > 0 && e.CharcoalKilnHp > 0 && e.CharcoalTicks > 0
+                    && e.SteelworksSizeCells > 0 && e.SteelworksSizeCells <= 8 && e.SteelworksWoodCost >= 0
+                    && e.SteelworksWork > 0 && e.SteelworksHp > 0 && e.SteelTicks > 0
+                    && e.HeavyInfantryFoodCost >= 0 && e.HeavyInfantryWoodCost >= 0 && e.HeavyInfantrySteelCost >= 0
+                    && e.HeavyInfantryTrainTicks > 0 && e.HeavyInfantryHp > 0 && e.HeavyInfantryDamage >= 0
+                    && e.HeavyInfantryAttackIntervalTicks > 0 && e.HeavyInfantrySpeed.Raw > 0 && e.HeavyInfantrySpeed <= Fix64.FromInt(16)
+                    && e.HeavyInfantryRange.Raw >= 0 && e.HeavyInfantryRange <= Fix64.FromInt(64)
+                    && e.HeavyInfantryVision.Raw >= 0, "Invalid processing-chain rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
@@ -444,7 +459,8 @@ namespace Rts.Simulation
             {
                 var b = c.Belts[i];
                 Require(b.Cell >= 0 && b.Cell < m.WidthCells * m.HeightCells && (i == 0 || c.Belts[i - 1].Cell != b.Cell)
-                    && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3 && (byte)b.Item <= 4
+                    && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3
+                    && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel)))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -533,10 +549,19 @@ namespace Rts.Simulation
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
                 InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
-                Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
-                MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
-                SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
-                SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
+                 Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                 MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
+                 SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
+                 SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
+                 ProcessingChain = e.ProcessingChain, CharcoalKilnSizeCells = e.CharcoalKilnSizeCells, CharcoalKilnWoodCost = e.CharcoalKilnWoodCost,
+                 CharcoalKilnWork = e.CharcoalKilnWork, CharcoalKilnHp = e.CharcoalKilnHp, CharcoalTicks = e.CharcoalTicks,
+                 SteelworksSizeCells = e.SteelworksSizeCells, SteelworksWoodCost = e.SteelworksWoodCost, SteelworksWork = e.SteelworksWork,
+                 SteelworksHp = e.SteelworksHp, SteelTicks = e.SteelTicks,
+                 HeavyInfantryFoodCost = e.HeavyInfantryFoodCost, HeavyInfantryWoodCost = e.HeavyInfantryWoodCost,
+                 HeavyInfantrySteelCost = e.HeavyInfantrySteelCost, HeavyInfantryTrainTicks = e.HeavyInfantryTrainTicks,
+                 HeavyInfantryHp = e.HeavyInfantryHp, HeavyInfantryDamage = e.HeavyInfantryDamage,
+                 HeavyInfantryAttackIntervalTicks = e.HeavyInfantryAttackIntervalTicks, HeavyInfantrySpeed = e.HeavyInfantrySpeed,
+                 HeavyInfantryVision = e.HeavyInfantryVision, HeavyInfantryRange = e.HeavyInfantryRange,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                 AgrarianInfantryFood = e.AgrarianInfantryFood, AgrarianInfantryWood = e.AgrarianInfantryWood, AgrarianInfantryTicks = e.AgrarianInfantryTicks,
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,

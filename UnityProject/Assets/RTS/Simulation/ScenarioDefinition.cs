@@ -92,6 +92,18 @@ namespace Rts.Simulation
         public int InfantryMetalCost;
 
         /// <summary>
+        /// V3-6 processing chain. This is deliberately separate from Industry: false keeps existing industry maps
+        /// byte-for-byte unchanged, while true opts into charcoal, steel, the two processing buildings and heavy infantry.
+        /// </summary>
+        public bool ProcessingChain;
+        public int CharcoalKilnSizeCells = 2, CharcoalKilnWoodCost = 80, CharcoalKilnWork = 200, CharcoalKilnHp = 200, CharcoalTicks = 60;
+        public int SteelworksSizeCells = 3, SteelworksWoodCost = 150, SteelworksWork = 300, SteelworksHp = 300, SteelTicks = 80;
+        /// <summary>V3-6 provisional values: heavy infantry is about twice the forged infantry HP and 1.5x its attack.</summary>
+        public int HeavyInfantryFoodCost = 60, HeavyInfantryWoodCost = 0, HeavyInfantrySteelCost = 2, HeavyInfantryTrainTicks = 320;
+        public int HeavyInfantryHp = 280, HeavyInfantryDamage = 20, HeavyInfantryAttackIntervalTicks = 20;
+        public Fix64 HeavyInfantrySpeed = Fix64.FromRaw(98304), HeavyInfantryVision = Fix64.FromInt(20), HeavyInfantryRange = Fix64.FromInt(2);
+
+        /// <summary>
         /// V3-4 (technical-design-v3 26): everyone starts in the primitive age and advances into a civilisation. Mines,
         /// smelters and the metal cost of infantry then belong to the metallurgy civilisation only. False keeps V3-2/V3-3.
         /// </summary>

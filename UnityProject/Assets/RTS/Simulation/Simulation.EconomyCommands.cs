@@ -53,6 +53,7 @@ namespace Rts.Simulation
                 {
                     var kind = c.Building;
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                        && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -115,6 +116,7 @@ namespace Rts.Simulation
                 {
                     int nodeIndex = -1, buildingIndex = -1;
                     bool haul = false;
+                    BuildingState target = default;
                     if (c.TargetKind == EconomyTargetKind.ResourceNode)
                     {
                         if (c.TargetId == 0 || c.TargetId > world.Nodes.Length || world.Nodes[c.TargetId - 1].Remaining <= 0) return;
@@ -125,9 +127,10 @@ namespace Rts.Simulation
                     else if (c.TargetKind == EconomyTargetKind.Building)
                     {
                         if (!OwnBuilding(faction, c.TargetId, out buildingIndex)) return;
-                        var target = world.Buildings[buildingIndex];
+                        target = world.Buildings[buildingIndex];
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm);
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm
+                            || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln));
                         if (target.Complete && !haul) return;
                     }
                     else return;
@@ -136,10 +139,24 @@ namespace Rts.Simulation
                         if (id == 0 || id > world.VillagerCount) continue;
                         ref var v = ref world.Villagers[id - 1];
                         if (!v.Alive || v.FactionId != faction) continue;
-                        v.HaulFrom = 0; v.HaulTo = 0;
+                        v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                         if (IndustryOn) v.Held = true;
                         if (haul)
                         {
+                            if (target.Kind == BuildingKind.CharcoalKiln)
+                            {
+                                if (c.HaulToId == 0)
+                                {
+                                    if (!AssignKilnWood(ref v, c.TargetId)) continue;
+                                    continue;
+                                }
+                            }
+                            if (c.HaulToId != 0)
+                            {
+                                if (!OwnBuilding(faction, c.HaulToId, out int destinationIndex) || !world.Buildings[destinationIndex].Complete
+                                    || !CanHaulTo(target.Kind, world.Buildings[destinationIndex].Kind, OutputKind(target.Kind))) continue;
+                                v.HaulTo = c.HaulToId;
+                            }
                             v.NodeId = 0;
                             v.HaulFrom = c.TargetId;
                             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToPickup;

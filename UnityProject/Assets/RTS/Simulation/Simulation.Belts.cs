@@ -11,6 +11,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
+        private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
 
         /// <summary>Economy step, before gathering (11.3): downstream belts first, so a full line moves without gaps.</summary>
         private void AdvanceBelts()
@@ -127,6 +128,8 @@ namespace Rts.Simulation
                 case ResourceKind.Metal: economy.Metal = checked(economy.Metal + amount); break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
+                case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
+                case ResourceKind.Steel: economy.Steel = checked(economy.Steel + amount); break;
             }
         }
 

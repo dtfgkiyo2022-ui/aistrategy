@@ -46,6 +46,26 @@ namespace Rts.Simulation
                     }
                     if (b.Timer > 0 && --b.Timer == 0) b.Output++;
                 }
+                else if (ProcessingOn && b.Kind == BuildingKind.CharcoalKiln)
+                {
+                    if (b.Timer == 0 && b.Input >= 2 && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= 2;
+                        b.Timer = rules.CharcoalTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                }
+                else if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
+                {
+                    // Both materials are consumed as one atomic operation on the same tick.
+                    if (b.Timer == 0 && b.Input >= 1 && b.InputSecondary >= 1 && b.Output < rules.BufferLimit)
+                    {
+                        b.Input--;
+                        b.InputSecondary--;
+                        b.Timer = rules.SteelTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                }
             }
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -62,7 +82,8 @@ namespace Rts.Simulation
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)
-            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.Farm ? ResourceKind.Food : ResourceKind.Metal;
+            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.Farm ? ResourceKind.Food
+                : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -95,9 +116,15 @@ namespace Rts.Simulation
                 if (!b.Alive) continue;
                 int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
-                if (b.FactionId != faction || !b.Complete || b.Kind != BuildingKind.Smelter || item != ResourceKind.Ore || b.Input >= rules.BufferLimit) return false;
-                b.Input++;
-                return true;
+                if (b.FactionId != faction || !b.Complete) return false;
+                if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (ProcessingOn && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
+                {
+                    if (item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
+                return false;
             }
             return false;
         }
@@ -135,7 +162,7 @@ namespace Rts.Simulation
             ref var source = ref world.Buildings[v.HaulFrom - 1];
             if (!source.Alive || !source.Complete)
             {
-                v.HaulFrom = 0; v.HaulTo = 0;
+                v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                 v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
                 return;
             }
@@ -149,18 +176,45 @@ namespace Rts.Simulation
                 v.Carry += take;
                 v.CarryKind = kind;
                 if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && source.Output > 0)) return;
-                v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;
+                // An explicit V3-6 destination (smelter metal or kiln charcoal to a steelworks) survives pickup;
+                // the old automatic mine-to-smelter choice is used only when no destination was assigned.
+                if (v.HaulTo == 0) v.HaulTo = source.Kind == BuildingKind.Mine ? OwnSmelter(v.FactionId) : 0;
                 v.Task = v.HaulTo != 0 ? VillagerTask.ToDeliver : VillagerTask.ToDropOff;
                 return;
             }
             ref var target = ref world.Buildings[v.HaulTo - 1];
             if (!target.Alive || !target.Complete) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
             if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
-            int put = Math.Min(v.Carry, rules.BufferLimit - target.Input);
-            target.Input += put;
+            int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
             v.Carry -= put;
             if (v.Carry == 0) v.Task = VillagerTask.ToPickup;
         }
+
+        private int PutIntoProcessingTarget(ref BuildingState target, ResourceKind kind, int amount)
+        {
+            var rules = world.Config.Economy;
+            if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
+            if (ProcessingOn && target.Kind == BuildingKind.Steelworks)
+            {
+                if (kind == ResourceKind.Metal)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Charcoal)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
+            return 0;
+        }
+
+        private bool CanHaulTo(BuildingKind source, BuildingKind destination, ResourceKind kind)
+            => ProcessingOn && destination == BuildingKind.Steelworks
+               && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
+                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal));
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)
@@ -176,7 +230,7 @@ namespace Rts.Simulation
         /// <summary>Stops carrying by hand: a load in hand goes to the core first.</summary>
         private static void StopHauling(ref VillagerState v)
         {
-            v.HaulFrom = 0; v.HaulTo = 0;
+            v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
             if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
         }
 

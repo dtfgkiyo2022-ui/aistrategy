@@ -20,6 +20,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, e.RamTicks);
             if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, e.MercenaryTicks);
             if (kind == UnitKind.Monk) return (e.MonkFoodCost, 0, e.MonkGoldCost, 0, e.MonkTrainTicks);
+            if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, e.HeavyInfantryWoodCost, e.HeavyInfantrySteelCost, 0, e.HeavyInfantryTrainTicks);
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, InfantryTicksFor(faction));
         }
 
@@ -42,7 +43,8 @@ namespace Rts.Simulation
             var e = world.Economies[b.FactionId - 1];
             return kind == UnitKind.Scout
                 || (kind == UnitKind.Archer && e.Civ == CivKind.Agrarian && e.Age >= 2)
-                || (kind == UnitKind.Cavalry && e.Civ == CivKind.Metallurgy && e.Age >= 2);
+                || (kind == UnitKind.Cavalry && e.Civ == CivKind.Metallurgy && e.Age >= 2)
+                || (kind == UnitKind.HeavyInfantry && ProcessingAvailable(b.FactionId));
         }
 
         /// <summary>The civilisation's own unit once it is in its second age (archers or cavalry), else 0.</summary>
@@ -77,6 +79,19 @@ namespace Rts.Simulation
                 mercenary.Hp = r.MercenaryHp; mercenary.Initial.Hp = r.MercenaryHp;
                 return;
             }
+            if (unit == UnitKind.HeavyInfantry)
+            {
+                var r = world.Config.Economy;
+                ref var heavy = ref world.Soldiers[index];
+                heavy.Class = unit;
+                heavy.Parameters.Hp = r.HeavyInfantryHp; heavy.Parameters.Damage = r.HeavyInfantryDamage;
+                heavy.Parameters.AttackIntervalTicks = r.HeavyInfantryAttackIntervalTicks;
+                heavy.Parameters.Range = r.HeavyInfantryRange; heavy.Parameters.Speed = r.HeavyInfantrySpeed;
+                heavy.Parameters.Vision = r.HeavyInfantryVision;
+                heavy.StepDistance = Fix64.FromRaw(heavy.Parameters.Speed.Raw / 20);
+                heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
+                return;
+            }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
             var e = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
@@ -100,7 +115,8 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind);
-            return e.Food >= c.food && e.Wood >= c.wood && e.Metal >= c.metal && e.Gems >= c.gems;
+            int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : e.Metal;
+            return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems;
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -110,9 +126,17 @@ namespace Rts.Simulation
             ref var e = ref world.Economies[faction - 1];
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
-            e.Metal = checked(e.Metal - c.metal);
+            if (kind == UnitKind.HeavyInfantry)
+            {
+                e.Steel = checked(e.Steel - c.metal);
+                b.QueuedSteel = checked(b.QueuedSteel + c.metal);
+            }
+            else
+            {
+                e.Metal = checked(e.Metal - c.metal);
+                b.QueuedMetal = checked(b.QueuedMetal + c.metal);
+            }
             e.Gems = checked(e.Gems - c.gems);
-            b.QueuedMetal = checked(b.QueuedMetal + c.metal);
             b.QueuedGems = checked(b.QueuedGems + c.gems);
             if (b.Queued == 0) b.TrainRemaining = c.ticks;
             b.Queued++;
@@ -138,9 +162,18 @@ namespace Rts.Simulation
             if (b.QueueKinds != null && b.QueueKinds.Length > 0) Array.Resize(ref b.QueueKinds, b.QueueKinds.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
-            int metalBack = Math.Min(c.metal, b.QueuedMetal);
-            b.QueuedMetal -= metalBack;
-            e.Metal = checked(e.Metal + metalBack);
+            if (kind == UnitKind.HeavyInfantry)
+            {
+                int steelBack = Math.Min(c.metal, b.QueuedSteel);
+                b.QueuedSteel -= steelBack;
+                e.Steel = checked(e.Steel + steelBack);
+            }
+            else
+            {
+                int metalBack = Math.Min(c.metal, b.QueuedMetal);
+                b.QueuedMetal -= metalBack;
+                e.Metal = checked(e.Metal + metalBack);
+            }
             int gemsBack = Math.Min(c.gems, b.QueuedGems);
             b.QueuedGems -= gemsBack;
             e.Gems = checked(e.Gems + gemsBack);
@@ -159,7 +192,8 @@ namespace Rts.Simulation
             }
             int metal = CostOf(faction, done).metal;
             int gems = CostOf(faction, done).gems;
-            if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
+            if (done == UnitKind.HeavyInfantry) b.QueuedSteel = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSteel - metal);
+            else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0)).ticks : 0;
         }
@@ -184,7 +218,7 @@ namespace Rts.Simulation
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
-                    + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
+                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

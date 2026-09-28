@@ -111,6 +111,10 @@ namespace Rts.Simulation
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
                     }
+                    if (world.Config.Economy.ProcessingChain)
+                    {
+                        w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
+                    }
                 }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
@@ -124,6 +128,7 @@ namespace Rts.Simulation
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
                 w.Value(n + "BuildingId", v.BuildingId);
                 if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); w.Value(n + "Held", v.Held); }
+                if (world.Config.Economy.ProcessingChain) w.Value(n + "HaulNodeId", v.HaulNodeId);
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
                 for (int j = 0; j < v.Route.Length; j++) w.Value(n + "Route[" + j.ToString(CultureInfo.InvariantCulture) + "]", v.Route[j]);
             }
@@ -137,6 +142,7 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
+                if (world.Config.Economy.ProcessingChain) { w.Value(n + "Charcoal", e.Charcoal); w.Value(n + "Steel", e.Steel); }
                 if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Gems", e.Gems); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); w.Value(n + "AgeVictoryProgress", e.AgeVictoryProgress); }
             }

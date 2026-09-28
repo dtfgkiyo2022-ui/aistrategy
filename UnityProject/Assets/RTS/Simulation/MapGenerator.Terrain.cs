@@ -26,9 +26,15 @@ namespace Rts.Simulation
         public enum CoreLean : byte { Mountain = 0, River = 1 }
 
         /// <summary>The terrain map of <paramref name="seed"/>: economy, industry and terrain on.</summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed) => GenerateTerrain(seed, out _);
+        public static ScenarioDefinition GenerateTerrain(ulong seed) => GenerateTerrain(seed, out _, false);
+
+        /// <summary>Age map with the optional V3-6 processing-chain rules enabled, without changing map generation.</summary>
+        public static ScenarioDefinition GenerateTerrain(ulong seed, bool processingChain) => GenerateTerrain(seed, out _, processingChain);
 
         public static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans)
+            => GenerateTerrain(seed, out leans, false);
+
+        private static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans, bool processingChain)
         {
             var rng = new SplitMix64(seed);
             var s = WeekOneScenario.Create();
@@ -139,7 +145,7 @@ namespace Rts.Simulation
 
             // 7. Soldiers and villagers as on the economy maps; the rules of mapgen-2.
             PlaceStartingUnits(s, wx, wz, ex, ez);
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true };
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain };
             // Match pacing (technical-design-v3 32.25, 32.27): the combination closest to the 15-25 minute target.
             s.Economy.AutoVillagerTarget = 20;
             s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;

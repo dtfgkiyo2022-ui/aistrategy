@@ -109,13 +109,23 @@ namespace Rts.Simulation
                 // compatible with older maps, while an enabled/custom rule set survives schema 3/4 as well as schema 5.
                 bool monkRules = c.Economy.MonksEnabled || c.Economy.ConversionTicks != 400
                     || c.Economy.MonkFoodCost != 60 || c.Economy.MonkGoldCost != 40 || c.Economy.MonkTrainTicks != 200;
-                // The next optional tail is nested after the monk tail; write the monk defaults as its envelope when needed.
-                if (c.Economy.Age2SaveArmyFloor != 0) monkRules = true;
+                bool processingRules = c.Economy.ProcessingChain;
+                bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || processingRules;
+                if (floorRules) monkRules = true;
                 if (monkRules)
                 {
                     w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
                     w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
-                    if (c.Economy.Age2SaveArmyFloor != 0) w.Write(c.Economy.Age2SaveArmyFloor);
+                    if (floorRules) w.Write(c.Economy.Age2SaveArmyFloor);
+                    if (processingRules)
+                    {
+                        var e = c.Economy;
+                        w.Write(e.CharcoalKilnSizeCells); w.Write(e.CharcoalKilnWoodCost); w.Write(e.CharcoalKilnWork); w.Write(e.CharcoalKilnHp); w.Write(e.CharcoalTicks);
+                        w.Write(e.SteelworksSizeCells); w.Write(e.SteelworksWoodCost); w.Write(e.SteelworksWork); w.Write(e.SteelworksHp); w.Write(e.SteelTicks);
+                        w.Write(e.HeavyInfantryFoodCost); w.Write(e.HeavyInfantryWoodCost); w.Write(e.HeavyInfantrySteelCost); w.Write(e.HeavyInfantryTrainTicks);
+                        w.Write(e.HeavyInfantryHp); w.Write(e.HeavyInfantryDamage); w.Write(e.HeavyInfantryAttackIntervalTicks);
+                        w.Write(e.HeavyInfantrySpeed.Raw); w.Write(e.HeavyInfantryVision.Raw); w.Write(e.HeavyInfantryRange.Raw);
+                    }
                 }
                 return s.ToArray();
             }
@@ -217,7 +227,21 @@ namespace Rts.Simulation
                     var e = c.Economy;
                     e.MonksEnabled = Bool(r); e.ConversionTicks = r.ReadInt32(); e.MonkFoodCost = r.ReadInt32();
                     e.MonkGoldCost = r.ReadInt32(); e.MonkTrainTicks = r.ReadInt32();
-                    if (s.Position < s.Length) e.Age2SaveArmyFloor = r.ReadInt32();
+                    if (s.Position < s.Length)
+                    {
+                        e.Age2SaveArmyFloor = r.ReadInt32();
+                        if (s.Position < s.Length)
+                        {
+                            e.ProcessingChain = true;
+                            e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
+                            e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
+                            e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
+                            e.SteelworksHp = r.ReadInt32(); e.SteelTicks = r.ReadInt32();
+                            e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
+                            e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
+                            e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
+                        }
+                    }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

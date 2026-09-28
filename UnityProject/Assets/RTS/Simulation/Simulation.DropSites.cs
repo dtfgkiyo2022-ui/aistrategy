@@ -18,6 +18,12 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             var point = OwnCore(v.FactionId).Definition.Position;
             var reach = world.Config.Rules.CoreRadius + rules.DropOffMargin;
+            if (ProcessingOn && v.HaulTo > 0 && v.HaulTo <= world.BuildingCount)
+            {
+                var target = world.Buildings[v.HaulTo - 1];
+                if (target.Alive && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
+                    return (world.Map.Center(target.WorkCell), GatherReach);
+            }
             if (!AgesOn) return (point, reach);
             BigInteger best = DistanceSquared(v.Position, point);
             for (int i = 0; i < world.BuildingCount; i++)
