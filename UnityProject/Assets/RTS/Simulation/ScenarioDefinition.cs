@@ -137,6 +137,8 @@ namespace Rts.Simulation
         public int SiegecraftSiegeDamage = 30, MasonryTowerDamage = 4, BankingTradeReturn = 25;
         /// <summary>V3-5 (32 #7): the second age inside a civilisation (city age for farming, iron age for metallurgy).</summary>
         public int Age2FoodCost = 800, Age2WoodCost = 500, Age2Ticks = 1800, Age2PopulationBonus = 20;
+        /// <summary>0 keeps the stock-half rule; otherwise saving for the next age waits for this many living soldiers.</summary>
+        public int Age2SaveArmyFloor;
         /// <summary>V3-5 (32 #8): archers (farming, second age) shoot from afar; cavalry (metallurgy, second age) is quick and hard.</summary>
         public int ArcherFood = 40, ArcherWood = 50, ArcherTicks = 250, ArcherHp = 60, ArcherDamage = 7, ArcherInterval = 25;
         public Fix64 ArcherRange = Fix64.FromInt(8), ArcherSpeed = Fix64.FromInt(2), ArcherVision = Fix64.FromInt(22);
