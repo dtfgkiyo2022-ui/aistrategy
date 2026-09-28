@@ -389,6 +389,7 @@ namespace Rts.Simulation
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
                 && e.Age2FoodCost >= 0 && e.Age2WoodCost >= 0 && e.Age2Ticks > 0 && e.Age2PopulationBonus >= 0
+                && e.Age2SaveArmyFloor >= 0
                 && e.Age3FoodCost >= 0 && e.Age3WoodCost >= 0 && e.Age3Ticks > 0 && e.Age3PopulationBonus >= 0
                 && (!e.AgeVictoryEnabled || e.AgeVictoryTicks > 0)
                 && e.SiegecraftSiegeDamage >= 0 && e.MasonryTowerDamage >= 0 && e.BankingTradeReturn >= 0
@@ -555,6 +556,7 @@ namespace Rts.Simulation
                 WeaponsDamage = e.WeaponsDamage, ArmourHp = e.ArmourHp, ToolsGatherTicks = e.ToolsGatherTicks, CartsCarry = e.CartsCarry,
                 IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks,
                 Age2FoodCost = e.Age2FoodCost, Age2WoodCost = e.Age2WoodCost, Age2Ticks = e.Age2Ticks, Age2PopulationBonus = e.Age2PopulationBonus,
+                Age2SaveArmyFloor = e.Age2SaveArmyFloor,
                 Age3FoodCost = e.Age3FoodCost, Age3WoodCost = e.Age3WoodCost, Age3Ticks = e.Age3Ticks, Age3PopulationBonus = e.Age3PopulationBonus,
                 AgeVictoryEnabled = e.AgeVictoryEnabled, AgeVictoryTicks = e.AgeVictoryTicks,
                 SiegecraftSiegeDamage = e.SiegecraftSiegeDamage, MasonryTowerDamage = e.MasonryTowerDamage, BankingTradeReturn = e.BankingTradeReturn,
