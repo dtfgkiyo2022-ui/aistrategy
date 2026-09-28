@@ -419,6 +419,7 @@ namespace Rts.Contracts
         public int MonkFoodCost { get; }
         public int MonkGoldCost { get; }
         public int MonkTrainTicks { get; }
+        public int Gold { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -441,14 +442,16 @@ namespace Rts.Contracts
             int age, int age2FoodCost, int age2WoodCost, int archerFoodCost, int archerWoodCost, int cavalryFoodCost, int cavalryWoodCost, int cavalryMetalCost,
             int marketWoodCost, int workshopWoodCost, int tradeLot, int tradeReturn, int ramFoodCost, int ramWoodCost,
             int age3FoodCost, int age3WoodCost, int rangeWoodCost, int stableWoodCost, int castleWoodCost, int castleStoneCost,
-            int gems = 0, int gemsTradeReturn = 0, IReadOnlyList<int> techGemsCosts = null, int gemArmorHp = 0,
-             int mercenaryGemsCost = 0, int mercenaryTrainTicks = 0,
-             bool monksEnabled = false, int monkFoodCost = 0, int monkGoldCost = 0, int monkTrainTicks = 0)
+             int gems = 0, int gemsTradeReturn = 0, IReadOnlyList<int> techGemsCosts = null, int gemArmorHp = 0,
+              int mercenaryGemsCost = 0, int mercenaryTrainTicks = 0,
+             bool monksEnabled = false, int monkFoodCost = 0, int monkGoldCost = 0, int monkTrainTicks = 0,
+             int gold = 0)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
             MercenaryGemsCost = mercenaryGemsCost; MercenaryTrainTicks = mercenaryTrainTicks;
             MonksEnabled = monksEnabled; MonkFoodCost = monkFoodCost; MonkGoldCost = monkGoldCost; MonkTrainTicks = monkTrainTicks;
+            Gold = gold;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

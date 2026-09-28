@@ -141,6 +141,7 @@ namespace Rts.Simulation
         /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
         internal int QueuedMetal;
         internal int QueuedGems;
+        internal int QueuedGold;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
         internal int Interval;
         /// <summary>V3-5 (32): the kind of each queued unit, front first; null without ages (then every entry is infantry).</summary>
@@ -179,8 +180,8 @@ namespace Rts.Simulation
     internal struct FactionEconomy
     {
         internal int Food, Wood;
-        /// <summary>V3-2 stock; always 0 without industry. Stone and Gems (V3-5) only with ages.</summary>
-        internal int Ore, Metal, Stone, Gems;
+        /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages.</summary>
+        internal int Ore, Metal, Stone, Gems, Gold;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -308,7 +309,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -420,6 +421,8 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
+                && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -446,7 +449,7 @@ namespace Rts.Simulation
             {
                 var n = c.ResourceNodes[i];
                 Require(n.Id == i + 1 && (n.Kind == ResourceKind.Food || n.Kind == ResourceKind.Wood || (n.Kind == ResourceKind.Ore && e.Industry)
-                    || (n.Kind == ResourceKind.Stone && e.Ages))
+                    || (n.Kind == ResourceKind.Stone && e.Ages) || (n.Kind == ResourceKind.Gold && e.GoldEnabled))
                     && n.Amount > 0, "Invalid resource node.");
                 ValidatePoint(n.Position, c.Map);
                 // One node per cell; the key is the cell, not the point, so two points in one cell are rejected too.
@@ -595,7 +598,9 @@ namespace Rts.Simulation
                  MonksEnabled = e.MonksEnabled, ConversionTicks = e.ConversionTicks, MonkFoodCost = e.MonkFoodCost,
                  MonkGoldCost = e.MonkGoldCost, MonkTrainTicks = e.MonkTrainTicks,
                  FishingEnabled = e.FishingEnabled, FishRegrowTicks = e.FishRegrowTicks,
-                 FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach };
+                 FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach,
+                  GoldEnabled = e.GoldEnabled, Age3GoldCostAgrarian = e.Age3GoldCostAgrarian, Age3GoldCostMetallurgy = e.Age3GoldCostMetallurgy, GoldGatherers = e.GoldGatherers,
+                 GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
         }
 
         private bool NearRiver(SimPoint point, int reachMeters)

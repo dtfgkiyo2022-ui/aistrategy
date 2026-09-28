@@ -128,6 +128,24 @@ namespace Rts.Simulation
                     w.Write(c.Economy.FishingEnabled); w.Write(c.Economy.FishRegrowTicks);
                     w.Write(c.Economy.FishAgrarianBonusPermille); w.Write(c.Economy.FishReach);
                 }
+                // Gold is the next optional append. Keep both earlier optional records present when needed so the
+                // old nested decoder remains unambiguous, while the completely-off form stays byte-for-byte identical.
+                bool goldRules = c.Economy.GoldEnabled;
+                if (goldRules && !monkRules)
+                {
+                    w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
+                    w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
+                }
+                if (goldRules && !fishingRules)
+                {
+                    w.Write(c.Economy.FishingEnabled); w.Write(c.Economy.FishRegrowTicks);
+                    w.Write(c.Economy.FishAgrarianBonusPermille); w.Write(c.Economy.FishReach);
+                }
+                if (goldRules)
+                {
+                    w.Write(c.Economy.GoldEnabled); w.Write(c.Economy.Age3GoldCostAgrarian); w.Write(c.Economy.Age3GoldCostMetallurgy); w.Write(c.Economy.GoldGatherers);
+                    w.Write(c.Economy.GoldAmount); w.Write(c.Economy.GoldDangerMeters);
+                }
                 return s.ToArray();
             }
         }
@@ -232,6 +250,22 @@ namespace Rts.Simulation
                     {
                         e.FishingEnabled = Bool(r); e.FishRegrowTicks = r.ReadInt32();
                         e.FishAgrarianBonusPermille = r.ReadInt32(); e.FishReach = r.ReadInt32();
+                        if (s.Position < s.Length)
+                        {
+                            e.GoldEnabled = Bool(r);
+                            // Gold binaries written before the civilisation-specific price split contained one
+                            // third-age price. Accept them as the price for both civilisations.
+                            if (s.Length - s.Position >= 20)
+                            {
+                                e.Age3GoldCostAgrarian = r.ReadInt32(); e.Age3GoldCostMetallurgy = r.ReadInt32();
+                            }
+                            else
+                            {
+                                int legacy = r.ReadInt32(); e.Age3GoldCostAgrarian = legacy; e.Age3GoldCostMetallurgy = legacy;
+                            }
+                            e.GoldGatherers = r.ReadInt32();
+                            e.GoldAmount = r.ReadInt32(); e.GoldDangerMeters = r.ReadInt32();
+                        }
                     }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");

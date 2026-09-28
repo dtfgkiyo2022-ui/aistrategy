@@ -19,7 +19,7 @@ namespace Rts.Tests.EditMode
         [TestCase(typeof(ExpireFlags), "None=0,SubjectGone=1,OwnershipChanged=2,ObservationTooOld=4")]
         [TestCase(typeof(InputKind), "Reserve=1,Resolve=2,Cancel=3,Proposal=4,Economy=5")]
         [TestCase(typeof(UnitKind), "Infantry=1,Scout=2,Villager=4,Archer=5,Cavalry=6,Ram=7,Mercenary=8,Monk=9")]
-        [TestCase(typeof(ResourceKind), "Food=1,Wood=2,Ore=3,Metal=4,Stone=5,Gems=6")]
+        [TestCase(typeof(ResourceKind), "Food=1,Wood=2,Ore=3,Metal=4,Stone=5,Gems=6,Gold=7")]
         [TestCase(typeof(Facing), "North=0,East=1,South=2,West=3")]
         [TestCase(typeof(BuildingKind), "Barracks=1,Mine=2,Smelter=3,Farm=4,House=5,DropSite=6,Wall=7,Tower=8,Blacksmith=9,Market=10,SiegeWorkshop=11,ArcheryRange=12,Stable=13,Castle=14")]
         [TestCase(typeof(TechKind), "Weapons=1,Armour=2,Tools=3,Carts=4,Irrigation=5,BlastFurnace=6,Siegecraft=7,Masonry=8,Banking=9,SteelWeapons=10,SteelArmour=11,GemArmor=12")]

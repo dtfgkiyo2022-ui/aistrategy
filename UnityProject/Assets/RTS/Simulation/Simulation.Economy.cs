@@ -16,7 +16,7 @@ namespace Rts.Simulation
         private bool EconomyOn => world.Config.Economy.Enabled;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
-        private const int StockGap = 300, WoodFloor = 150;
+        private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
 
         /// <summary>AI phase, on the allocation cycle (5.4 step 1): the automatic economy trains villagers.</summary>
         private void DecideEconomy()
@@ -63,6 +63,11 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 v.IsMoving = false;
                 if (!v.Alive) continue;
+                if (IsGoldWork(v) && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering) && !GoldTargetUsable(v))
+                {
+                    if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
+                    else { v.Task = VillagerTask.Idle; v.NodeId = 0; v.Route = Array.Empty<int>(); v.RouteCursor = 0; }
+                }
                 if (IsTradeRouteTask(v.Task) && !TradeRouteActive(v)) { StopTradeRoute(ref v); continue; }
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
                 SimPoint goal;
@@ -193,8 +198,11 @@ namespace Rts.Simulation
                 var other = world.Villagers[i];
                 if (!other.Alive || other.Id == v.Id || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0
                     || other.Task == VillagerTask.ToBuild || other.Task == VillagerTask.Building) continue;
-                if (world.Nodes[other.NodeId - 1].Definition.Kind == ResourceKind.Food) food++; else wood++;
+                var otherKind = world.Nodes[other.NodeId - 1].Definition.Kind;
+                if (otherKind == ResourceKind.Food) food++; else if (otherKind == ResourceKind.Wood) wood++;
             }
+            ResourceKind current = v.NodeId == 0 ? 0 : world.Nodes[v.NodeId - 1].Definition.Kind;
+            if (GoldNeeded(v.FactionId) > 0 && GoldGathererRoom(v, food, wood)) return ResourceKind.Gold;
             var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
             // V3-5 (32.7): on a map with ages the stock speaks too - far more of one than the other sends the idle to the other.
             if (AgesOn && kind != ResourceKind.Stone)
@@ -211,12 +219,102 @@ namespace Rts.Simulation
 
         private int NearestWorkNode(SimPoint position, ResourceKind kind)
         {
+            if (kind == ResourceKind.Gold) return NearestGoldNode(position);
             int n = world.Nodes.Length;
             var positions = new SimPoint[n];
             var kinds = new ResourceKind[n];
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
             return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
+        }
+
+        private int NearestGoldNode(SimPoint position)
+        {
+            int best = -1; long bestDistance = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0) continue;
+                if (world.Map.SharedRoute(world.Map.Cell(position), node.Definition.Position).Length == 0) continue;
+                long dx = node.Definition.Position.X.Raw - position.X.Raw, dz = node.Definition.Position.Z.Raw - position.Z.Raw;
+                long distance = checked(dx * dx + dz * dz);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
+                { best = i; bestDistance = distance; }
+            }
+            return best;
+        }
+
+        private bool IsGoldWork(VillagerState v) => world.Config.Economy.GoldEnabled && v.NodeId > 0
+            && v.NodeId <= world.Nodes.Length && world.Nodes[v.NodeId - 1].Definition.Kind == ResourceKind.Gold;
+
+        private bool GoldTargetUsable(VillagerState v)
+        {
+            var node = world.Nodes[v.NodeId - 1];
+            if (node.Remaining <= 0 || world.Map.SharedRoute(world.Map.Cell(v.Position), node.Definition.Position).Length == 0) return false;
+            int danger = world.Config.Economy.GoldDangerMeters;
+            long limit = checked(Fix64.FromInt(danger).Raw * Fix64.FromInt(danger).Raw);
+            var faction = world.Factions[v.FactionId - 1];
+            foreach (int i in world.SoldierTraversal)
+            {
+                var enemy = world.Soldiers[i];
+                if (!enemy.Alive || enemy.Initial.FactionId == v.FactionId) continue;
+                int cell = world.Map.Cell(enemy.Position);
+                if (cell < 0 || !faction.VisibleCells[cell]) continue;
+                long dx = enemy.Position.X.Raw - node.Definition.Position.X.Raw, dz = enemy.Position.Z.Raw - node.Definition.Position.Z.Raw;
+                if (checked(dx * dx + dz * dz) <= limit) return false;
+            }
+            return true;
+        }
+
+        private int GoldNeeded(uint faction)
+        {
+            var rules = world.Config.Economy;
+            if (!rules.GoldEnabled) return 0;
+            var e = world.Economies[faction - 1];
+            int demand = 0;
+            if (e.Civ != CivKind.Primitive && e.Age == 2 && SavingToAdvance(faction))
+                demand = e.Civ == CivKind.Metallurgy ? rules.Age3GoldCostMetallurgy : rules.Age3GoldCostAgrarian;
+            else if (!SavingToAdvance(faction) && MonkPlanned(faction)) demand = rules.MonkGoldCost;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && IsGoldWork(v)) demand -= v.Carry;
+            }
+            return Math.Max(0, demand - e.Gold);
+        }
+
+        private bool MonkPlanned(uint faction)
+            => world.Config.Economy.MonksEnabled && CompleteBarracks(faction) && QueuedOf(faction, UnitKind.Monk) == 0 && LivingClass(faction, UnitKind.Monk) == 0;
+
+        private bool CompleteBarracks(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) return true;
+            }
+            return false;
+        }
+
+        private int LivingClass(uint faction, UnitKind kind)
+        {
+            int count = 0;
+            foreach (int i in world.SoldierTraversal)
+                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction
+                    && (world.Soldiers[i].Class == kind || world.Soldiers[i].Initial.Kind == kind)) count++;
+            return count;
+        }
+
+        private bool GoldGathererRoom(VillagerState v, int food, int wood)
+        {
+            int gold = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var other = world.Villagers[i];
+                if (other.Alive && other.FactionId == v.FactionId && IsGoldWork(other)) gold++;
+            }
+            if (gold >= world.Config.Economy.GoldGatherers) return false;
+            return food >= MinimumFoodGatherers && wood >= MinimumWoodGatherers;
         }
 
         private void SetWorkNode(ref VillagerState v, int index)
