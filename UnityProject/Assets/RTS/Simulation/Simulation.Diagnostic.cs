@@ -90,7 +90,12 @@ namespace Rts.Simulation
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
             }
             w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
-            foreach (var r in world.Nodes) w.Value("ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining", r.Remaining);
+            foreach (var r in world.Nodes)
+            {
+                string n = "ResourceNodes[" + r.Definition.Id.ToString(CultureInfo.InvariantCulture) + "].";
+                w.Value(n + "Remaining", r.Remaining);
+                if (world.Config.Economy.FishingEnabled) w.Value(n + "Fishing", r.Fishing);
+            }
             w.Value("NextBuildingId", world.NextBuildingId);
             w.Value("Buildings.Count", (uint)world.BuildingCount);
             for (int i = 0; i < world.BuildingCount; i++)

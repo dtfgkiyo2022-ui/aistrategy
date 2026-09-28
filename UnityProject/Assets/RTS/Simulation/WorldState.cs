@@ -159,6 +159,7 @@ namespace Rts.Simulation
     {
         internal ResourceNodeDefinition Definition;
         internal int Remaining;
+        internal bool Fishing;
     }
 
     /// <summary>V3-2 (technical-design-v3 11.2): one belt cell. FactionId 0 means no belt on the cell.</summary>
@@ -218,6 +219,8 @@ namespace Rts.Simulation
         internal long Tick;
         internal ulong InputCursor;
         internal ResourceNodeState[] Nodes;
+        /// <summary>Fishing resource IDs, sorted by node ID and fixed at match start.</summary>
+        internal uint[] FishingNodeIds = Array.Empty<uint>();
         internal VillagerState[] Villagers;
         internal uint NextVillagerId;
         internal int VillagerCount => checked((int)(NextVillagerId - 1));
@@ -285,6 +288,17 @@ namespace Rts.Simulation
             var e = Config.Economy;
             Nodes = new ResourceNodeState[Config.ResourceNodes.Length];
             for (int i = 0; i < Nodes.Length; i++) Nodes[i] = new ResourceNodeState { Definition = Config.ResourceNodes[i], Remaining = Config.ResourceNodes[i].Amount };
+            if (e.FishingEnabled && e.Ages)
+            {
+                var fishing = new System.Collections.Generic.List<uint>();
+                for (int i = 0; i < Nodes.Length; i++)
+                {
+                    if (Nodes[i].Definition.Kind != ResourceKind.Food || !NearRiver(Nodes[i].Definition.Position, e.FishReach)) continue;
+                    Nodes[i].Fishing = true;
+                    fishing.Add(Nodes[i].Definition.Id);
+                }
+                FishingNodeIds = fishing.ToArray();
+            }
             Villagers = new VillagerState[Config.Villagers.Length];
             for (int i = 0; i < Villagers.Length; i++)
             {
@@ -404,6 +418,8 @@ namespace Rts.Simulation
                 && e.WorkshopSizeCells > 0 && e.WorkshopSizeCells <= 8 && e.WorkshopWoodCost >= 0 && e.WorkshopWork > 0 && e.WorkshopHp > 0
                 && e.RamFood >= 0 && e.RamWood >= 0 && e.RamTicks > 0 && e.RamHp > 0 && e.RamDamage >= 0 && e.RamSiegeDamage >= 0 && e.RamInterval > 0
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
+            Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
+                && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
             if (c.Map.Terrain.Length != 0)
             {
@@ -577,7 +593,24 @@ namespace Rts.Simulation
                 RamFood = e.RamFood, RamWood = e.RamWood, RamTicks = e.RamTicks, RamHp = e.RamHp, RamDamage = e.RamDamage, RamSiegeDamage = e.RamSiegeDamage,
                  RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision,
                  MonksEnabled = e.MonksEnabled, ConversionTicks = e.ConversionTicks, MonkFoodCost = e.MonkFoodCost,
-                 MonkGoldCost = e.MonkGoldCost, MonkTrainTicks = e.MonkTrainTicks };
+                 MonkGoldCost = e.MonkGoldCost, MonkTrainTicks = e.MonkTrainTicks,
+                 FishingEnabled = e.FishingEnabled, FishRegrowTicks = e.FishRegrowTicks,
+                 FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach };
+        }
+
+        private bool NearRiver(SimPoint point, int reachMeters)
+        {
+            long reach = Fix64.FromInt(reachMeters).Raw;
+            long limit = checked(reach * reach);
+            var terrain = Config.Map.Terrain;
+            for (int cell = 0; cell < terrain.Length; cell++)
+            {
+                if (terrain[cell] != (byte)TerrainKind.River) continue;
+                var centre = Map.Center(cell);
+                long dx = checked(point.X.Raw - centre.X.Raw), dz = checked(point.Z.Raw - centre.Z.Raw);
+                if (checked(dx * dx + dz * dz) <= limit) return true;
+            }
+            return false;
         }
 
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(

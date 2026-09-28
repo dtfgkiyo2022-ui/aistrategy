@@ -114,6 +114,20 @@ namespace Rts.Simulation
                     w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
                     w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
                 }
+                // V3-5 fishing is another optional append. If it is present, retain the preceding optional monk
+                // record (with defaults when necessary) so older nested decoding remains unambiguous.
+                bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
+                    || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6;
+                if (fishingRules && !monkRules)
+                {
+                    w.Write(c.Economy.MonksEnabled); w.Write(c.Economy.ConversionTicks); w.Write(c.Economy.MonkFoodCost);
+                    w.Write(c.Economy.MonkGoldCost); w.Write(c.Economy.MonkTrainTicks);
+                }
+                if (fishingRules)
+                {
+                    w.Write(c.Economy.FishingEnabled); w.Write(c.Economy.FishRegrowTicks);
+                    w.Write(c.Economy.FishAgrarianBonusPermille); w.Write(c.Economy.FishReach);
+                }
                 return s.ToArray();
             }
         }
@@ -214,6 +228,11 @@ namespace Rts.Simulation
                     var e = c.Economy;
                     e.MonksEnabled = Bool(r); e.ConversionTicks = r.ReadInt32(); e.MonkFoodCost = r.ReadInt32();
                     e.MonkGoldCost = r.ReadInt32(); e.MonkTrainTicks = r.ReadInt32();
+                    if (s.Position < s.Length)
+                    {
+                        e.FishingEnabled = Bool(r); e.FishRegrowTicks = r.ReadInt32();
+                        e.FishAgrarianBonusPermille = r.ReadInt32(); e.FishReach = r.ReadInt32();
+                    }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;

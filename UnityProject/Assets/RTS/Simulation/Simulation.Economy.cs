@@ -89,6 +89,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();
             AdvanceAges();
@@ -106,7 +107,7 @@ namespace Rts.Simulation
                     if (InRange(v.Position, node.Definition.Position, GatherReach))
                     {
                         v.Task = VillagerTask.Gathering;
-                        v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId));
+                        v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId, v.NodeId));
                     }
                 }
                 else if (v.Task == VillagerTask.Gathering)
@@ -117,7 +118,7 @@ namespace Rts.Simulation
                     node.Remaining--;
                     v.CarryKind = node.Definition.Kind;
                     v.Carry++;
-                    v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId));
+                    v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId, v.NodeId));
                     if (v.Carry >= CarryFor(v.FactionId) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
@@ -160,6 +161,18 @@ namespace Rts.Simulation
                 SpawnVillager(faction);
                 economy.Queued--;
                 economy.TrainRemaining = economy.Queued > 0 ? rules.VillagerTrainTicks : 0;
+            }
+        }
+
+        /// <summary>Fishing is finite: at each configured multiple, one unit returns up to the original amount.</summary>
+        private void RegrowFishing()
+        {
+            var rules = world.Config.Economy;
+            if (!rules.FishingEnabled || world.Tick % rules.FishRegrowTicks != 0) return;
+            foreach (uint id in world.FishingNodeIds)
+            {
+                ref var node = ref world.Nodes[id - 1];
+                if (node.Remaining < node.Definition.Amount) node.Remaining++;
             }
         }
 

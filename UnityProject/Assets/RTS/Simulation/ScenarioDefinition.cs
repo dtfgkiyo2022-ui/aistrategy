@@ -183,6 +183,10 @@ namespace Rts.Simulation
         public int ConversionTicks = 400;
         public int MonkFoodCost = 60, MonkGoldCost = 40;
         public int MonkTrainTicks = 200;
+
+        /// <summary>Optional river fishing on age maps. Defaults are deliberately omitted from the scenario binary.</summary>
+        public bool FishingEnabled;
+        public int FishRegrowTicks = 100, FishAgrarianBonusPermille = 300, FishReach = 6;
     }
 
     public sealed class MapDefinition

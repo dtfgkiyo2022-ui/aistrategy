@@ -16,8 +16,15 @@ namespace Rts.Simulation
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
-        private int GatherTicksFor(uint faction)
-            => world.Config.Economy.GatherIntervalTicks - (HasTech(faction, TechKind.Tools) ? world.Config.Economy.ToolsGatherTicks : 0);
+        private int GatherTicksFor(uint faction, uint nodeId)
+        {
+            var rules = world.Config.Economy;
+            int interval = rules.GatherIntervalTicks - (HasTech(faction, TechKind.Tools) ? rules.ToolsGatherTicks : 0);
+            if (rules.FishingEnabled && nodeId > 0 && world.Nodes[nodeId - 1].Fishing
+                && world.Economies[faction - 1].Civ == CivKind.Agrarian)
+                interval = interval * (1000 - rules.FishAgrarianBonusPermille) / 1000;
+            return Math.Max(1, interval);
+        }
 
         private int CarryFor(uint faction)
             => world.Config.Economy.CarryCapacity + (HasTech(faction, TechKind.Carts) ? world.Config.Economy.CartsCarry : 0);
