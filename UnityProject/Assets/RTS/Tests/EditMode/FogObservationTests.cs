@@ -186,7 +186,7 @@ namespace Rts.Tests.EditMode
             for (int t = 1; t <= 8; t++)
             {
                 Until(sim, t);
-                Assert.That(PolicyDecision.Distance(sim.Capture(1).Units.Single(u => u.IsOwn).Position, P(69)), Is.GreaterThanOrEqualTo(PolicyDecision.Distance(P(0), P(12))));
+                Assert.That(TestDistanceReference.Squared(sim.Capture(1).Units.Single(u => u.IsOwn).Position, P(69)), Is.GreaterThanOrEqualTo(TestDistanceReference.Squared(P(0), P(12))));
                 Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(t == 8 ? CommandStatus.Completed : CommandStatus.Executing));
             }
         }
@@ -213,7 +213,7 @@ namespace Rts.Tests.EditMode
             Set(sim, "Soldiers", 1, "Position", new SimPoint(scout.X + Fix64.FromInt(12), scout.Z)); Until(sim, 2); Until(sim, 3);
             var returning = sim.Capture(1).Units.Single(u => u.IsOwn);
             Assert.That(returning.IsRetreating, Is.True); Assert.That(returning.Position.X, Is.LessThan(scout.X + Fix64.FromInt(1)));
-            Assert.That(PolicyDecision.Distance(returning.Position, sim.Capture(1).Observation.VisibleEnemies.Single().Position), Is.GreaterThanOrEqualTo(PolicyDecision.Distance(P(0), P(12))));
+            Assert.That(TestDistanceReference.Squared(returning.Position, sim.Capture(1).Observation.VisibleEnemies.Single().Position), Is.GreaterThanOrEqualTo(TestDistanceReference.Squared(P(0), P(12))));
             Set(sim, "Soldiers", 1, "Position", P(231)); Until(sim, 4); Until(sim, 5);
             Assert.That(sim.Capture(1).Units.Single(u => u.IsOwn).Position.X, Is.LessThan(returning.Position.X));
             Until(sim, 240); Assert.That(sim.Capture(1).Commands.Single().Status, Is.EqualTo(CommandStatus.Completed));

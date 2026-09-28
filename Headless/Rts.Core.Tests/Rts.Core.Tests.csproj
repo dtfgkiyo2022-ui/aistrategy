@@ -55,6 +55,7 @@
     <Compile Include="CastleTests.cs" />
     <Compile Include="AgeVictoryTests.cs" />
     <Compile Include="EconomyCommandTests.cs" />
+    <Compile Include="GridMapCacheTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>
@@ -83,5 +84,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/PresetControllerTests.cs" Link="Tests/PresetControllerTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/GraceMeasurementTests.cs" Link="Tests/GraceMeasurementTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DecisionArithmeticTests.cs" Link="Tests/DecisionArithmeticTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/TestDistanceReference.cs" Link="Tests/TestDistanceReference.cs" />
   </ItemGroup>
 </Project>

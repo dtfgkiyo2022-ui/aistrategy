@@ -1,7 +1,7 @@
 using System;
+using System.Numerics;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using Rts.Contracts;
 
 namespace Rts.Decision
@@ -9,8 +9,6 @@ namespace Rts.Decision
     /// <summary>Pure observation-based rules. No world, internal enemy IDs, or mutable shared state.</summary>
     public static class PolicyDecision
     {
-        public static BigInteger Distance(SimPoint a, SimPoint b)
-        { var x = new BigInteger(a.X.Raw) - b.X.Raw; var z = new BigInteger(a.Z.Raw) - b.Z.Raw; return x * x + z * z; }
         /// <summary>
         /// Exact squared distance as a 128-bit value type. BigInteger allocated on almost every call here, and these
         /// run for every enemy and route on every tick. Exact for every pair of positions.

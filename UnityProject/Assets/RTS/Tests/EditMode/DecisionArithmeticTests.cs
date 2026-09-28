@@ -175,5 +175,44 @@ namespace Rts.Tests.EditMode
             }
             Assert.Throws<OverflowException>(() => Wide.Subtract(Wide.Multiply(1, 1), Wide.Multiply(2, 2)));
         }
+
+        [Test]
+        public void WideAddCarriesAndRejectsThe129thBit()
+        {
+            var carried = Wide.Add(new Wide(0, ulong.MaxValue), Wide.FromUInt64(1));
+            Assert.That(carried.Hi, Is.EqualTo(1UL));
+            Assert.That(carried.Lo, Is.Zero);
+            Assert.Throws<OverflowException>(() => Wide.Add(new Wide(ulong.MaxValue, ulong.MaxValue), Wide.FromUInt64(1)));
+            Assert.Throws<OverflowException>(() => Wide.Add(new Wide(ulong.MaxValue, 1), new Wide(0, ulong.MaxValue)));
+        }
+
+        [Test]
+        public void SegmentLengthMatchesBigIntegerAcrossThe64BitBoundary()
+        {
+            foreach (long delta in new[] { (1L << 32) - 1, 1L << 32, (1L << 32) + 1 })
+            {
+                var a = P(0, 0); var b = P(delta, 0);
+                Assert.That(PolicyDecision.DistanceSquared(a, b).ToBigInteger(), Is.EqualTo(ReferenceDistance(a, b)), "delta=" + delta);
+                Assert.That(PolicyDecision.SegmentLength(a, b), Is.EqualTo(delta), "delta=" + delta);
+            }
+            var diagonal = P(1L << 32, 1L << 32);
+            Assert.That(PolicyDecision.SegmentLength(P(0, 0), diagonal),
+                Is.EqualTo((long)FixMath.IntegerSqrt(ReferenceDistance(P(0, 0), diagonal))));
+        }
+
+        [Test]
+        public void NearRouteMatchesTheReferenceAtTheFastPathBoundary()
+        {
+            long limit = 1L << 30;
+            var route = new List<SimPoint> { P(0, 0), P(limit - 1, 0) };
+            foreach (long x in new[] { limit - 2, limit - 1, limit, limit + 1 })
+            {
+                var point = P(x, Fix64.FromInt(24).Raw);
+                Assert.That(PolicyDecision.NearRoute(point, route, 24), Is.EqualTo(ReferenceNearRoute(point, route, 24)), "x=" + x);
+            }
+            var wideRoute = new List<SimPoint> { P(0, 0), P(limit, 0) };
+            var widePoint = P(limit / 2, Fix64.FromInt(24).Raw);
+            Assert.That(PolicyDecision.NearRoute(widePoint, wideRoute, 24), Is.EqualTo(ReferenceNearRoute(widePoint, wideRoute, 24)));
+        }
     }
 }
