@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using NUnit.Framework;
 using Rts.Contracts;
@@ -42,9 +43,27 @@ namespace Rts.Core.Tests
             {
                 var match = Measure(seed);
                 matches.Add(match);
-                report.AppendLine(match.SummaryRow());
                 TestContext.WriteLine(match.SummaryLine());
             }
+
+            var decisiveMinutes = matches.Where(m => m.HasEnded).Select(m => m.DecisionTick / (double)m.TickRate / 60.0).ToList();
+            decisiveMinutes.Sort();
+            report.Clear();
+            report.AppendLine("# Match length measurement");
+            report.AppendLine();
+            report.AppendLine("Tick rate is read from `ScenarioDefinition.TickRateHz` for each generated scenario.");
+            report.AppendLine();
+            report.AppendLine("## 表1: 試合ごとの節目");
+            report.AppendLine();
+            report.AppendLine("## 要約");
+            report.AppendLine();
+            report.AppendLine("| 決着時間（分）の一覧 | 中央値（分） | 15〜25分 | 未決着 | 6分未満 | 2つ目の時代：農耕 | 2つ目の時代：冶金 | 3つ目の時代：農耕 | 3つ目の時代：冶金 |");
+            report.AppendLine("|:---|---:|---:|---:|---:|---:|---:|---:|---:|");
+            report.AppendLine($"| {string.Join(", ", decisiveMinutes.Select(v => v.ToString("0.00", CultureInfo.InvariantCulture)))} | {Median(decisiveMinutes)} | {matches.Count(m => m.HasEnded && Minutes(m) >= 15.0 && Minutes(m) <= 25.0)} | {matches.Count(m => !m.HasEnded)} | {matches.Count(m => m.HasEnded && Minutes(m) < 6.0)} | {CountAge(matches, 2, CivKind.Agrarian)} | {CountAge(matches, 2, CivKind.Metallurgy)} | {CountAge(matches, 3, CivKind.Agrarian)} | {CountAge(matches, 3, CivKind.Metallurgy)} |");
+            report.AppendLine();
+            report.AppendLine("| seed | 豎ｺ逹tick・亥・・・| 蜍晁・| 譎ゆｻ｣蛻ｰ驕泌享蛻ｩ | 髯｣蝟ｶ1譁・・ | 髯｣蝟ｶ1 譁・・蜈･繧・蛻・ | 髯｣蝟ｶ1 2縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ1 3縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ2譁・・ | 髯｣蝟ｶ2 譁・・蜈･繧・蛻・ | 髯｣蝟ｶ2 2縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ2 3縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 譛蛻昴・謌ｦ髣・蛻・ | 髯｣蝟ｶ1繧ｳ繧｢蛻晁｢ｫ蠑ｾ(蛻・ | 髯｣蝟ｶ2繧ｳ繧｢蛻晁｢ｫ蠑ｾ(蛻・ |");
+            report.AppendLine("|---:|---:|---:|:---:|:---|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|");
+            foreach (var match in matches) report.AppendLine(match.SummaryRow());
 
             report.AppendLine();
             report.AppendLine("## 表2: 兵士の時間内訳");
@@ -88,9 +107,7 @@ namespace Rts.Core.Tests
         private static MatchMeasurement Measure(ulong seed)
         {
             var scenario = MapGenerator.GenerateTerrain(seed);
-            // Experiments only: MATCHLEN_VILLAGER_TARGET overrides the automatic economy's villager target.
-            var villagerTarget = Environment.GetEnvironmentVariable("MATCHLEN_VILLAGER_TARGET");
-            if (!string.IsNullOrEmpty(villagerTarget)) scenario.Economy.AutoVillagerTarget = int.Parse(villagerTarget, CultureInfo.InvariantCulture);
+            ApplyExperimentalOverrides(scenario);
             int tickRate = scenario.TickRateHz;
             var sim = new Battle(scenario);
             var match = new MatchMeasurement(seed, tickRate);
@@ -109,6 +126,54 @@ namespace Rts.Core.Tests
             match.Finish(previous[0].Result);
             _ = sim.CaptureDiagnostic();
             return match;
+        }
+
+        private static void ApplyExperimentalOverrides(ScenarioDefinition scenario)
+        {
+            var villagerTarget = Environment.GetEnvironmentVariable("MATCHLEN_VILLAGER_TARGET");
+            if (!string.IsNullOrEmpty(villagerTarget)) scenario.Economy.AutoVillagerTarget = int.Parse(villagerTarget, CultureInfo.InvariantCulture);
+
+            var agePrice = Environment.GetEnvironmentVariable("MATCHLEN_AGE_PRICE_PERMILLE");
+            if (!string.IsNullOrEmpty(agePrice))
+            {
+                int permille = int.Parse(agePrice, CultureInfo.InvariantCulture);
+                scenario.Economy.AdvanceFoodCost = ScalePrice(scenario.Economy.AdvanceFoodCost, permille);
+                scenario.Economy.AdvanceWoodCost = ScalePrice(scenario.Economy.AdvanceWoodCost, permille);
+                scenario.Economy.Age2FoodCost = ScalePrice(scenario.Economy.Age2FoodCost, permille);
+                scenario.Economy.Age2WoodCost = ScalePrice(scenario.Economy.Age2WoodCost, permille);
+                scenario.Economy.Age3FoodCost = ScalePrice(scenario.Economy.Age3FoodCost, permille);
+                scenario.Economy.Age3WoodCost = ScalePrice(scenario.Economy.Age3WoodCost, permille);
+            }
+
+            var saveArmyFloor = Environment.GetEnvironmentVariable("MATCHLEN_SAVE_ARMY_FLOOR");
+            if (!string.IsNullOrEmpty(saveArmyFloor)) scenario.Economy.Age2SaveArmyFloor = int.Parse(saveArmyFloor, CultureInfo.InvariantCulture);
+
+            var coreHp = Environment.GetEnvironmentVariable("MATCHLEN_CORE_HP");
+            if (!string.IsNullOrEmpty(coreHp))
+            {
+                int hp = int.Parse(coreHp, CultureInfo.InvariantCulture);
+                for (int i = 0; i < scenario.Cores.Length; i++) scenario.Cores[i].Hp = hp;
+            }
+        }
+
+        private static int ScalePrice(int price, int permille) => checked((int)((long)price * permille / 1000L));
+
+        private static double Minutes(MatchMeasurement match) => match.DecisionTick / (double)match.TickRate / 60.0;
+
+        private static string Median(List<double> sorted)
+        {
+            if (sorted.Count == 0) return "-";
+            double value = sorted.Count % 2 == 1 ? sorted[sorted.Count / 2] : (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]) / 2.0;
+            return value.ToString("0.00", CultureInfo.InvariantCulture);
+        }
+
+        private static int CountAge(List<MatchMeasurement> matches, int age, CivKind civ)
+        {
+            int count = 0;
+            foreach (var match in matches)
+                foreach (var faction in match.Factions)
+                    if (faction.Civ == civ && (age == 2 ? faction.Age2Tick >= 0 : faction.Age3Tick >= 0)) count++;
+            return count;
         }
 
         private sealed class MatchMeasurement

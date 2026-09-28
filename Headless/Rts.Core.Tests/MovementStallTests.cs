@@ -20,9 +20,9 @@ namespace Rts.Core.Tests
 
             var next = PolicyDecision.ScoutRetreatHome(observation, position, home, Fix64.FromRatio(1, 5));
 
-            Assert.That(PolicyDecision.Distance(next, home), Is.LessThan(PolicyDecision.Distance(position, home)));
-            Assert.That(PolicyDecision.Distance(next, enemy[0].Position), Is.GreaterThanOrEqualTo(
-                PolicyDecision.Distance(position, enemy[0].Position)));
+            Assert.That(Rts.Tests.EditMode.TestDistanceReference.Squared(next, home), Is.LessThan(Rts.Tests.EditMode.TestDistanceReference.Squared(position, home)));
+            Assert.That(Rts.Tests.EditMode.TestDistanceReference.Squared(next, enemy[0].Position), Is.GreaterThanOrEqualTo(
+                Rts.Tests.EditMode.TestDistanceReference.Squared(position, enemy[0].Position)));
         }
 
         [Test]
@@ -36,8 +36,8 @@ namespace Rts.Core.Tests
 
             var next = PolicyDecision.ScoutRetreatHome(observation, position, home, Fix64.FromRatio(1, 5));
 
-            Assert.That(PolicyDecision.Distance(next, enemy[0].Position), Is.GreaterThanOrEqualTo(
-                PolicyDecision.Distance(position, enemy[0].Position)));
+            Assert.That(Rts.Tests.EditMode.TestDistanceReference.Squared(next, enemy[0].Position), Is.GreaterThanOrEqualTo(
+                Rts.Tests.EditMode.TestDistanceReference.Squared(position, enemy[0].Position)));
             Assert.That(next, Is.Not.EqualTo(position));
         }
     }

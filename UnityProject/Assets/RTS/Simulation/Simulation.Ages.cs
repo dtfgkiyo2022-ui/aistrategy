@@ -144,7 +144,10 @@ namespace Rts.Simulation
             if (e.Civ != CivKind.Primitive)
             {
                 var (food, wood, gold, _) = AdvancePrice(e);
-                if (!CivLineStarted(faction) || 2 * (e.Food + e.Wood + e.Gold) < food + wood + gold) return false;
+                if (!CivLineStarted(faction)) return false;
+                if (world.Config.Economy.Age2SaveArmyFloor == 0
+                    ? 2 * (e.Food + e.Wood + e.Gold) < food + wood + gold
+                    : LivingSoldiers(faction) < world.Config.Economy.Age2SaveArmyFloor) return false;
             }
             bool barracks = false;
             for (int i = 0; i < world.BuildingCount; i++)

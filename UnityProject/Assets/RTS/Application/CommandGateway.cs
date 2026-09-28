@@ -134,14 +134,22 @@ namespace Rts.Application
         private void InvalidateAutonomous()
         {
             foreach (var r in autonomous.Where(r => !r.Completed && r.Invalidated == ReasonCode.None))
-                if (r.Snapshot.Versions.Any(v => simulation.Revision(v.Scope) != v.Revision)) r.Invalidated = ReasonCode.StaleVersion;
-                else if (tick > r.Snapshot.DeadlineTick) r.Invalidated = ReasonCode.Deadline;
+                if (r.Snapshot.Versions.Any(v => simulation.Revision(v.Scope) != v.Revision))
+                {
+                    r.Invalidated = ReasonCode.StaleVersion;
+                    ReaskAfterAutonomousInvalidation(r.Snapshot.Scope);
+                }
+                else if (tick > r.Snapshot.DeadlineTick)
+                {
+                    r.Invalidated = ReasonCode.Deadline;
+                    ReaskAfterAutonomousInvalidation(r.Snapshot.Scope);
+                }
         }
         private void PollAutonomous()
         {
             InvalidateAutonomous();
             // Allocation only runs on the 20 tick cycle, so asking off the cycle cannot change anything sooner.
-            if (tick % 20 != 0) return;
+            if (tick % AutonomousPollSchedule.DecisionOpportunityTicks != 0) return;
             for (int i = 0; i < autonomousTargets.Count; i++)
             {
                 var intent = autonomousTargets[i];
@@ -203,6 +211,13 @@ namespace Rts.Application
             }
 
             internal void Asked(long tick) { wants = false; lastAskTick = tick; }
+
+            internal void Invalidated() { wants = true; }
+        }
+        private void ReaskAfterAutonomousInvalidation(ScopeKey scope)
+        {
+            int index = autonomousTargets.FindIndex(i => i.Target.Equals(scope));
+            if (index >= 0) watches[index].Invalidated();
         }
         private void Receive(PolicyReply reply)
         {
@@ -218,6 +233,9 @@ namespace Rts.Application
                 // Rejections are external control inputs too, even though AI requests have no reservation.
                 logRejections.Add(new ScheduledInput(0, InputKind.Proposal, tick, tick + 1, snapshot.RequestId, 0,
                     Array.Empty<PolicyOrder>(), snapshot.DeadlineTick, reason == ReasonCode.None ? ReasonCode.InvalidPayload : reason));
+                // An empty answer or a rejected/malformed proposal does not invalidate the observation watch.
+                // OnChange will retry on the ordinary observation-change or heartbeat trigger. Version changes
+                // and deadline expiry are handled by InvalidateAutonomous, which is the only reask trigger here.
                 return;
             }
             var orders = reply.Orders.Select(o => new PolicyOrder(0, 0, CommandSource.Ai, snapshot.Scope,
