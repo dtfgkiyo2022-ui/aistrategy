@@ -34,12 +34,17 @@ namespace Rts.Core.Tests
             report.AppendLine();
             report.AppendLine("Tick rate is read from `ScenarioDefinition.TickRateHz` for each generated scenario.");
             report.AppendLine();
+            var seeds = ReadSeeds();
+            bool goldEnabled = IsEnabled("MATCHLEN_GOLD");
+            bool fishingEnabled = IsEnabled("MATCHLEN_FISHING");
+            report.AppendLine($"条件: 漁={(fishingEnabled ? "オン" : "オフ")}、金={(goldEnabled ? "オン" : "オフ")}、種={SeedRangeText(seeds)}（{seeds.Count}試合）。");
+            report.AppendLine();
             report.AppendLine("## 表1: 試合ごとの節目");
             report.AppendLine();
             report.AppendLine("| seed | 決着tick（分） | 勝者 | 時代到達勝利 | 陣営1文明 | 陣営1 文明入り(分) | 陣営1 2つ目の時代(分) | 陣営1 3つ目の時代(分) | 陣営2文明 | 陣営2 文明入り(分) | 陣営2 2つ目の時代(分) | 陣営2 3つ目の時代(分) | 最初の戦闘(分) | 陣営1コア初被弾(分) | 陣営2コア初被弾(分) |");
             report.AppendLine("|---:|---:|---:|:---:|:---|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|");
 
-            for (ulong seed = 1; seed <= 8; seed++)
+            foreach (ulong seed in seeds)
             {
                 var match = Measure(seed);
                 matches.Add(match);
@@ -53,17 +58,32 @@ namespace Rts.Core.Tests
             report.AppendLine();
             report.AppendLine("Tick rate is read from `ScenarioDefinition.TickRateHz` for each generated scenario.");
             report.AppendLine();
+            report.AppendLine($"条件: 漁={(fishingEnabled ? "オン" : "オフ")}、金={(goldEnabled ? "オン" : "オフ")}、種={SeedRangeText(seeds)}（{seeds.Count}試合）。");
+            report.AppendLine();
             report.AppendLine("## 表1: 試合ごとの節目");
             report.AppendLine();
+            report.AppendLine("| seed | 決着tick（分） | 勝者 | 勝者の文明 | 金の点数 | 漁場の点数 | 時代到達勝利 | 陣営1文明 | 陣営1 文明入り(分) | 陣営1 2つ目の時代(分) | 陣営1 3つ目の時代(分) | 陣営2文明 | 陣営2 文明入り(分) | 陣営2 2つ目の時代(分) | 陣営2 3つ目の時代(分) | 最初の戦闘(分) | 陣営1コア初被弾(分) | 陣営2コア初被弾(分) |");
+            report.AppendLine("|---:|---:|---:|:---|---:|---:|:---:|:---|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|");
+            foreach (var match in matches) report.AppendLine(match.SummaryRow());
             report.AppendLine("## 要約");
             report.AppendLine();
-            report.AppendLine("| 決着時間（分）の一覧 | 中央値（分） | 15〜25分 | 未決着 | 6分未満 | 2つ目の時代：農耕 | 2つ目の時代：冶金 | 3つ目の時代：農耕 | 3つ目の時代：冶金 |");
-            report.AppendLine("|:---|---:|---:|---:|---:|---:|---:|---:|---:|");
-            report.AppendLine($"| {string.Join(", ", decisiveMinutes.Select(v => v.ToString("0.00", CultureInfo.InvariantCulture)))} | {Median(decisiveMinutes)} | {matches.Count(m => m.HasEnded && Minutes(m) >= 15.0 && Minutes(m) <= 25.0)} | {matches.Count(m => !m.HasEnded)} | {matches.Count(m => m.HasEnded && Minutes(m) < 6.0)} | {CountAge(matches, 2, CivKind.Agrarian)} | {CountAge(matches, 2, CivKind.Metallurgy)} | {CountAge(matches, 3, CivKind.Agrarian)} | {CountAge(matches, 3, CivKind.Metallurgy)} |");
+            report.AppendLine("| 決着時間（分）の一覧 | 中央値（分） | 15〜25分 | 未決着 | 6分未満 | 2つ目の時代：農耕 | 2つ目の時代：冶金 | 3つ目の時代：農耕 | 3つ目の時代：冶金 | 勝者文明:農耕 | 勝者文明:冶金 | 未決着 | 漁食料平均:農耕 | 漁食料平均:冶金 |");
+            report.AppendLine("|:---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|");
+            report.AppendLine($"| {string.Join(", ", decisiveMinutes.Select(v => v.ToString("0.00", CultureInfo.InvariantCulture)))} | {Median(decisiveMinutes)} | {matches.Count(m => m.HasEnded && Minutes(m) >= 15.0 && Minutes(m) <= 25.0)} | {matches.Count(m => !m.HasEnded)} | {matches.Count(m => m.HasEnded && Minutes(m) < 6.0)} | {CountAge(matches, 2, CivKind.Agrarian)} | {CountAge(matches, 2, CivKind.Metallurgy)} | {CountAge(matches, 3, CivKind.Agrarian)} | {CountAge(matches, 3, CivKind.Metallurgy)} | {WinnerCivCount(matches, CivKind.Agrarian)} | {WinnerCivCount(matches, CivKind.Metallurgy)} | {matches.Count(m => !m.HasEnded)} | {AverageFishing(matches, CivKind.Agrarian)} | {AverageFishing(matches, CivKind.Metallurgy)} |");
             report.AppendLine();
-            report.AppendLine("| seed | 豎ｺ逹tick・亥・・・| 蜍晁・| 譎ゆｻ｣蛻ｰ驕泌享蛻ｩ | 髯｣蝟ｶ1譁・・ | 髯｣蝟ｶ1 譁・・蜈･繧・蛻・ | 髯｣蝟ｶ1 2縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ1 3縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ2譁・・ | 髯｣蝟ｶ2 譁・・蜈･繧・蛻・ | 髯｣蝟ｶ2 2縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 髯｣蝟ｶ2 3縺､逶ｮ縺ｮ譎ゆｻ｣(蛻・ | 譛蛻昴・謌ｦ髣・蛻・ | 髯｣蝟ｶ1繧ｳ繧｢蛻晁｢ｫ蠑ｾ(蛻・ | 髯｣蝟ｶ2繧ｳ繧｢蛻晁｢ｫ蠑ｾ(蛻・ |");
-            report.AppendLine("|---:|---:|---:|:---:|:---|---:|---:|---:|:---|---:|---:|---:|---:|---:|---:|");
-            foreach (var match in matches) report.AppendLine(match.SummaryRow());
+
+            report.AppendLine();
+            report.AppendLine("## 漁と金");
+            report.AppendLine();
+            report.AppendLine("| seed | 陣営 | 漁で得た食料 | 漁場で働いた村人tick | 集めた金 | コアの金最大 | 3つ目の時代に金を払ったか |");
+            report.AppendLine("|---:|---:|---:|---:|---:|---:|:---|");
+            foreach (var match in matches) for (int faction = 1; faction <= 2; faction++) report.AppendLine(match.Factions[faction - 1].EconomyRow(match.Seed, faction));
+            if (goldEnabled)
+            {
+                report.AppendLine(); report.AppendLine("## 金あり地図の比較"); report.AppendLine();
+                report.AppendLine("| seed | 金以外の資源点・コア・前哨 |"); report.AppendLine("|---:|:---|");
+                foreach (var match in matches) report.AppendLine($"| {match.Seed} | {match.GoldMapComparison} |");
+            }
 
             report.AppendLine();
             report.AppendLine("## 表2: 兵士の時間内訳");
@@ -95,31 +115,34 @@ namespace Rts.Core.Tests
             report.AppendLine();
             report.AppendLine("## 合計");
             report.AppendLine();
-            report.AppendLine($"8試合、決着 {decisive}/8、決着tick合計 {totalTicks.ToString(CultureInfo.InvariantCulture)}、決着tick平均 {(totalTicks / 8.0).ToString("0.0", CultureInfo.InvariantCulture)}。");
+            report.AppendLine($"{matches.Count}試合、決着 {decisive}/{matches.Count}、決着tick合計 {totalTicks.ToString(CultureInfo.InvariantCulture)}、決着tick平均 {(totalTicks / (double)matches.Count).ToString("0.0", CultureInfo.InvariantCulture)}。");
 
             var reportPath = Environment.GetEnvironmentVariable("MATCHLEN_REPORT") ?? @"D:\rts-verify\matchlen\report.md";
             Directory.CreateDirectory(Path.GetDirectoryName(reportPath));
             File.WriteAllText(reportPath, report.ToString(), new UTF8Encoding(false));
-            TestContext.WriteLine($"8試合完了: decisive {decisive}/8, decision ticks total {totalTicks.ToString(CultureInfo.InvariantCulture)}, report {reportPath}");
-            Assert.That(matches.Count, Is.EqualTo(8));
+            TestContext.WriteLine($"{matches.Count}試合完了: decisive {decisive}/{matches.Count}, decision ticks total {totalTicks.ToString(CultureInfo.InvariantCulture)}, report {reportPath}");
+            Assert.That(matches.Count, Is.EqualTo(seeds.Count));
         }
 
         private static MatchMeasurement Measure(ulong seed)
         {
-            var scenario = MapGenerator.GenerateTerrain(seed);
+            bool gold = IsEnabled("MATCHLEN_GOLD");
+            var scenario = MapGenerator.GenerateTerrain(seed, gold: gold);
             ApplyExperimentalOverrides(scenario);
             int tickRate = scenario.TickRateHz;
             var sim = new Battle(scenario);
-            var match = new MatchMeasurement(seed, tickRate);
+            var match = new MatchMeasurement(seed, tickRate, scenario, gold);
             var previous = new FactionFrame[2];
             previous[0] = sim.Capture(1); previous[1] = sim.Capture(2);
             match.Initialize(previous);
+            match.ObserveDiagnostic(sim.CaptureDiagnostic());
 
             for (long tick = 1; tick <= MaxTicks && !previous[0].Result.HasEnded; tick++)
             {
                 sim.Step(tick, Array.Empty<ScheduledInput>());
                 var current = new[] { sim.Capture(1), sim.Capture(2) };
                 match.Observe(tick, current);
+                match.ObserveDiagnostic(sim.CaptureDiagnostic());
                 previous = current;
             }
 
@@ -130,6 +153,7 @@ namespace Rts.Core.Tests
 
         private static void ApplyExperimentalOverrides(ScenarioDefinition scenario)
         {
+            if (IsEnabled("MATCHLEN_FISHING")) scenario.Economy.FishingEnabled = true;
             var villagerTarget = Environment.GetEnvironmentVariable("MATCHLEN_VILLAGER_TARGET");
             if (!string.IsNullOrEmpty(villagerTarget)) scenario.Economy.AutoVillagerTarget = int.Parse(villagerTarget, CultureInfo.InvariantCulture);
 
@@ -156,7 +180,41 @@ namespace Rts.Core.Tests
             }
         }
 
+        private static bool IsEnabled(string name) => Environment.GetEnvironmentVariable(name) == "1";
+
+        private static List<ulong> ReadSeeds()
+        {
+            string value = Environment.GetEnvironmentVariable("MATCHLEN_SEEDS");
+            if (string.IsNullOrWhiteSpace(value)) return Enumerable.Range(1, 8).Select(i => (ulong)i).ToList();
+            var parts = value.Split(new[] { '-' }, 2);
+            ulong first = ulong.Parse(parts[0], CultureInfo.InvariantCulture);
+            ulong last = parts.Length == 1 ? first : ulong.Parse(parts[1], CultureInfo.InvariantCulture);
+            if (first < 1 || last < first) throw new ArgumentException("MATCHLEN_SEEDS must be a range such as 1-8.");
+            var result = new List<ulong>();
+            for (ulong seed = first; seed <= last; seed++) { result.Add(seed); if (seed == ulong.MaxValue) break; }
+            return result;
+        }
+
+        private static string SeedRangeText(List<ulong> seeds) => seeds.Count == 0 ? "なし" : seeds.Count == 1 ? seeds[0].ToString(CultureInfo.InvariantCulture) : seeds[0].ToString(CultureInfo.InvariantCulture) + "-" + seeds[seeds.Count - 1].ToString(CultureInfo.InvariantCulture);
+
         private static int ScalePrice(int price, int permille) => checked((int)((long)price * permille / 1000L));
+
+        private static int WinnerCivCount(List<MatchMeasurement> matches, CivKind civ) => matches.Count(m => m.HasEnded && ((m.Winner == 1 && m.Factions[0].Civ == civ) || (m.Winner == 2 && m.Factions[1].Civ == civ)));
+        private static string AverageFishing(List<MatchMeasurement> matches, CivKind civ)
+        {
+            var values = matches.SelectMany(m => m.Factions).Where(f => f.Civ == civ).Select(f => (double)f.FishingFood).ToList();
+            return values.Count == 0 ? "—" : values.Average().ToString("0.0", CultureInfo.InvariantCulture);
+        }
+
+        private static string CompareGoldMap(ulong seed)
+        {
+            var withGold = MapGenerator.GenerateTerrain(seed, gold: true);
+            var withoutGold = MapGenerator.GenerateTerrain(seed);
+            bool resources = withGold.ResourceNodes.Where(n => n.Kind != ResourceKind.Gold).SequenceEqual(withoutGold.ResourceNodes);
+            bool cores = withGold.Cores.SequenceEqual(withoutGold.Cores);
+            bool outposts = withGold.Outposts.SequenceEqual(withoutGold.Outposts);
+            return resources && cores && outposts ? "同じ（金を追加しただけ）" : "違う（資源点=" + (resources ? "同じ" : "違う") + "、コア=" + (cores ? "同じ" : "違う") + "、前哨=" + (outposts ? "同じ" : "違う") + "）";
+        }
 
         private static double Minutes(MatchMeasurement match) => match.DecisionTick / (double)match.TickRate / 60.0;
 
@@ -190,7 +248,14 @@ namespace Rts.Core.Tests
             public uint Winner;
             public bool IsAgeVictory;
             public bool IsDraw;
-            public MatchMeasurement(ulong seed, int tickRate) { Seed = seed; TickRate = tickRate; }
+            public readonly string GoldMapComparison;
+            private readonly ScenarioDefinition scenario;
+            private Dictionary<string, string> previousDiagnostic;
+            public MatchMeasurement(ulong seed, int tickRate, ScenarioDefinition scenario, bool gold)
+            {
+                Seed = seed; TickRate = tickRate; this.scenario = scenario;
+                GoldMapComparison = gold ? CompareGoldMap(seed) : "対象外（金なし）";
+            }
 
             public void Initialize(FactionFrame[] frames)
             {
@@ -263,9 +328,69 @@ namespace Rts.Core.Tests
                 if (!HasEnded) { HasEnded = result.HasEnded; Winner = result.WinnerFactionId; IsAgeVictory = result.IsAgeVictory; IsDraw = result.IsDraw; }
             }
 
+            public void ObserveDiagnostic(DiagnosticState state)
+            {
+                var fields = DiagnosticComparison.Fields(state).ToDictionary(p => p.Key, p => p.Value);
+                if (fieldsFishingNodeIds.Count == 0)
+                    foreach (var node in scenario.ResourceNodes)
+                    {
+                        string fishingKey = "ResourceNodes[" + node.Id.ToString(CultureInfo.InvariantCulture) + "].Fishing";
+                        if (fields.ContainsKey(fishingKey) && fields[fishingKey] == "1") fieldsFishingNodeIds.Add(node.Id);
+                    }
+                if (previousDiagnostic != null)
+                {
+                    foreach (var node in scenario.ResourceNodes)
+                    {
+                        string key = "ResourceNodes[" + node.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining";
+                        if (!fields.ContainsKey(key) || !previousDiagnostic.ContainsKey(key)) continue;
+                        int delta = int.Parse(previousDiagnostic[key], CultureInfo.InvariantCulture) - int.Parse(fields[key], CultureInfo.InvariantCulture);
+                        if (delta <= 0) continue;
+                        for (int faction = 1; faction <= 2; faction++)
+                        {
+                            bool working = false;
+                            for (int v = 1; ; v++)
+                            {
+                                string prefix = "Villagers[" + v.ToString(CultureInfo.InvariantCulture) + "].";
+                                string factionKey = prefix + "FactionId";
+                                if (!fields.ContainsKey(factionKey)) break;
+                                if (fields[factionKey] == faction.ToString(CultureInfo.InvariantCulture) && fields[prefix + "NodeId"] == node.Id.ToString(CultureInfo.InvariantCulture) && fields[prefix + "Task"] == "2") { working = true; break; }
+                            }
+                            if (working)
+                            {
+                                if (node.Kind == ResourceKind.Gold) Factions[faction - 1].GoldGathered += delta;
+                                if (node.Kind == ResourceKind.Food && FishingNode(node)) Factions[faction - 1].FishingFood += delta;
+                                break;
+                            }
+                        }
+                    }
+                }
+                for (int faction = 1; faction <= 2; faction++)
+                {
+                    string prefix = "Economy[" + faction.ToString(CultureInfo.InvariantCulture) + "].";
+                    string goldKey = prefix + "Gold";
+                    if (fields.ContainsKey(goldKey)) Factions[faction - 1].MaxGold = Math.Max(Factions[faction - 1].MaxGold, int.Parse(fields[goldKey], CultureInfo.InvariantCulture));
+                    for (int v = 1; ; v++)
+                    {
+                        string vp = "Villagers[" + v.ToString(CultureInfo.InvariantCulture) + "].";
+                        if (!fields.ContainsKey(vp + "FactionId")) break;
+                        if (fields[vp + "FactionId"] == faction.ToString(CultureInfo.InvariantCulture) && fields[vp + "Task"] == "2" && fields.ContainsKey(vp + "NodeId"))
+                        {
+                            uint id = uint.Parse(fields[vp + "NodeId"], CultureInfo.InvariantCulture);
+                            var node = scenario.ResourceNodes.FirstOrDefault(n => n.Id == id);
+                            if (node.Id != 0 && FishingNode(node)) Factions[faction - 1].FishingWorkerTicks++;
+                        }
+                    }
+                }
+                previousDiagnostic = fields;
+            }
+
+            private bool FishingNode(ResourceNodeDefinition node) => scenario.Economy.FishingEnabled && node.Kind == ResourceKind.Food && fieldsFishingNodeIds.Contains(node.Id);
+            private readonly HashSet<uint> fieldsFishingNodeIds = new HashSet<uint>();
+
             public string SummaryLine() => $"seed {Seed}: {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) : "未決着")} tick ({Minutes(DecisionTick)}分), winner {Winner}, age victory {IsAgeVictory}, civ {Factions[0].Civ}/{Factions[1].Civ}";
-            public string SummaryRow() => $"| {Seed} | {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) + " (" + Minutes(DecisionTick) + ")" : "未決着")} | {(IsDraw ? "引き分け" : Winner == 0 ? "なし" : Winner.ToString(CultureInfo.InvariantCulture))} | {(IsAgeVictory ? "はい" : "いいえ")} | {Factions[0].Civ} | {MinutesOrDash(Factions[0].Age1Tick)} | {MinutesOrDash(Factions[0].Age2Tick)} | {MinutesOrDash(Factions[0].Age3Tick)} | {Factions[1].Civ} | {MinutesOrDash(Factions[1].Age1Tick)} | {MinutesOrDash(Factions[1].Age2Tick)} | {MinutesOrDash(Factions[1].Age3Tick)} | {MinutesOrDash(Math.Min(FirstBattle(0), FirstBattle(1)))} | {MinutesOrDash(Factions[0].FirstCoreHitTick)} | {MinutesOrDash(Factions[1].FirstCoreHitTick)} |";
+            public string SummaryRow() => $"| {Seed} | {(HasEnded ? DecisionTick.ToString(CultureInfo.InvariantCulture) + " (" + Minutes(DecisionTick) + ")" : "未決着")} | {(IsDraw ? "引き分け" : Winner == 0 ? "なし" : Winner.ToString(CultureInfo.InvariantCulture))} | {WinnerCiv()} | {scenario.ResourceNodes.Count(n => n.Kind == ResourceKind.Gold)} | {(scenario.Economy.FishingEnabled ? fieldsFishingNodeIds.Count.ToString(CultureInfo.InvariantCulture) : "-")} | {(IsAgeVictory ? "はい" : "いいえ")} | {Factions[0].Civ} | {MinutesOrDash(Factions[0].Age1Tick)} | {MinutesOrDash(Factions[0].Age2Tick)} | {MinutesOrDash(Factions[0].Age3Tick)} | {Factions[1].Civ} | {MinutesOrDash(Factions[1].Age1Tick)} | {MinutesOrDash(Factions[1].Age2Tick)} | {MinutesOrDash(Factions[1].Age3Tick)} | {MinutesOrDash(Math.Min(FirstBattle(0), FirstBattle(1)))} | {MinutesOrDash(Factions[0].FirstCoreHitTick)} | {MinutesOrDash(Factions[1].FirstCoreHitTick)} |";
             private long FirstBattle(int i) => Factions[i].FirstBattleTick < 0 ? long.MaxValue : Factions[i].FirstBattleTick;
+            private string WinnerCiv() => Winner == 1 ? Factions[0].Civ.ToString() : Winner == 2 ? Factions[1].Civ.ToString() : "—";
             private string MinutesOrDash(long tick) => tick < 0 || tick == long.MaxValue ? "—" : Minutes(tick);
             private string Minutes(long tick) => (tick / (double)TickRate / 60.0).ToString("0.00", CultureInfo.InvariantCulture);
         }
@@ -276,6 +401,9 @@ namespace Rts.Core.Tests
             public CivKind Civ;
             public int CoreHp = -1;
             public long Age1Tick = -1, Age2Tick = -1, Age3Tick = -1, FirstBattleTick = -1, FirstCoreHitTick = -1;
+            public long FishingFood, FishingWorkerTicks, GoldGathered;
+            public int MaxGold;
+            public string EconomyRow(ulong seed, int faction) => $"| {seed} | {faction} | {FishingFood} | {FishingWorkerTicks} | {GoldGathered} | {MaxGold} | {(Civ == CivKind.Metallurgy && Age3Tick >= 0 ? "はい" : "いいえ")} |";
         }
 
         private sealed class SoldierMeasurement
