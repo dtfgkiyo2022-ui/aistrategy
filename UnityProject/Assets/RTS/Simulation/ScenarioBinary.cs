@@ -152,6 +152,11 @@ namespace Rts.Simulation
                         w.Write(c.Economy.LumberCampSizeCells); w.Write(c.Economy.LumberCampWoodCost); w.Write(c.Economy.LumberCampWork);
                         w.Write(c.Economy.LumberCampHp); w.Write(c.Economy.LumberCampIntervalTicks);
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
+                        w.Write(c.Economy.FletcherSizeCells); w.Write(c.Economy.FletcherWoodCost); w.Write(c.Economy.FletcherWork); w.Write(c.Economy.FletcherHp); w.Write(c.Economy.FletcherTicks);
+                        w.Write(c.Economy.FletcherWoodInput); w.Write(c.Economy.FletcherFoodInput);
+                        w.Write(c.Economy.SkirmishArcherFoodCost); w.Write(c.Economy.SkirmishArcherBowGearCost); w.Write(c.Economy.SkirmishArcherTrainTicks);
+                        w.Write(c.Economy.SkirmishArcherHp); w.Write(c.Economy.SkirmishArcherDamage); w.Write(c.Economy.SkirmishArcherAttackIntervalTicks);
+                        w.Write(c.Economy.SkirmishArcherSpeed.Raw); w.Write(c.Economy.SkirmishArcherVision.Raw); w.Write(c.Economy.SkirmishArcherRange.Raw);
                     }
                 }
                 return s.ToArray();
@@ -308,6 +313,14 @@ namespace Rts.Simulation
             e.LumberCampSizeCells = r.ReadInt32(); e.LumberCampWoodCost = r.ReadInt32(); e.LumberCampWork = r.ReadInt32();
             e.LumberCampHp = r.ReadInt32(); e.LumberCampIntervalTicks = r.ReadInt32();
             e.MarketFoodFloor = r.ReadInt32(); e.MarketWoodReserve = r.ReadInt32(); e.MarketStoneReserve = r.ReadInt32();
+            if (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                e.FletcherSizeCells = r.ReadInt32(); e.FletcherWoodCost = r.ReadInt32(); e.FletcherWork = r.ReadInt32(); e.FletcherHp = r.ReadInt32(); e.FletcherTicks = r.ReadInt32();
+                e.FletcherWoodInput = r.ReadInt32(); e.FletcherFoodInput = r.ReadInt32();
+                e.SkirmishArcherFoodCost = r.ReadInt32(); e.SkirmishArcherBowGearCost = r.ReadInt32(); e.SkirmishArcherTrainTicks = r.ReadInt32();
+                e.SkirmishArcherHp = r.ReadInt32(); e.SkirmishArcherDamage = r.ReadInt32(); e.SkirmishArcherAttackIntervalTicks = r.ReadInt32();
+                e.SkirmishArcherSpeed = Fix(r); e.SkirmishArcherVision = Fix(r); e.SkirmishArcherRange = Fix(r);
+            }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

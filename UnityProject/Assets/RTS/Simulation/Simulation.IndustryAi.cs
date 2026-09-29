@@ -19,7 +19,12 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
-            if (ForestryAllowed(faction)) { DecideLumberCamp(faction); return; }
+            if (ForestryAllowed(faction))
+            {
+                if (world.Economies[faction - 1].Age < 2) { DecideLumberCamp(faction); return; }
+                DecideForestryLines(faction);
+                return;
+            }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -141,6 +146,113 @@ namespace Rts.Simulation
                 whole = LayBelts(faction, route.cells, route.facings);
             }
             SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+        }
+
+        /// <summary>V3-7 #2: after the first camp, keep a separate core-wood line and a bow-gear line.</summary>
+        private void DecideForestryLines(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int coreIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreWood);
+            ref var coreLine = ref world.ProcessingLines[coreIndex];
+            if (!BindForestryCamp(faction, coreIndex, ref coreLine, 0)) return;
+            if (IsAutoLine(coreIndex))
+            {
+                var coreCamp = world.Buildings[coreLine.LumberCampId - 1];
+                if (!coreCamp.Complete) return;
+                bool coreWhole = LayForestryCoreLine(faction, coreIndex, coreCamp);
+                SetLineHaulers(faction, coreLine, coreWhole ? 0 : 1);
+            }
+
+            uint bowCampId = FindCamp(faction, coreLine.LumberCampId);
+            if (bowCampId == 0)
+            {
+                // Keep the market, the next age and ordinary construction funded; only the surplus opens the second line.
+                if (economy.Food < rules.MarketFoodFloor || economy.Wood < rules.MarketWoodReserve + rules.LumberCampWoodCost + rules.FletcherWoodCost) return;
+                PlaceLumberCamp(faction);
+                return;
+            }
+            int bowIndex = GetOrCreateLine(faction, ProcessingLineKind.BowGear);
+            ref var bowLine = ref world.ProcessingLines[bowIndex];
+            if (bowLine.LumberCampId == 0 || !BuildingAlive(bowLine.LumberCampId)) SetLineBuilding(bowIndex, BuildingKind.LumberCamp, bowCampId);
+            if (bowLine.Manager == LineManager.Automatic && world.Buildings[bowLine.LumberCampId - 1].Held) bowLine.Manager = LineManager.Manual;
+            if (!IsAutoLine(bowIndex)) return;
+            if (!BuildingReady(bowLine.FletcherId))
+            {
+                if (BuildingPending(bowLine.FletcherId)) return;
+                if (economy.Wood < rules.FletcherWoodCost) return;
+                uint id = PlaceFletcher(faction, world.Buildings[bowLine.LumberCampId - 1]);
+                if (id != 0) SetLineBuilding(bowIndex, BuildingKind.Fletcher, id);
+                return;
+            }
+            var bowCamp = world.Buildings[bowLine.LumberCampId - 1];
+            var fletcher = world.Buildings[bowLine.FletcherId - 1];
+            if (!bowCamp.Complete || !fletcher.Complete) return;
+            bool bowWhole = LayBowLine(faction, bowIndex, bowCamp, fletcher);
+            SetLineHaulers(faction, bowLine, bowWhole ? 0 : 1);
+        }
+
+        private bool BindForestryCamp(uint faction, int lineIndex, ref ProcessingLineState line, uint exclude)
+        {
+            if (line.LumberCampId != 0 && BuildingAlive(line.LumberCampId)) return true;
+            uint id = FindCamp(faction, exclude);
+            if (id == 0)
+            {
+                DecideLumberCamp(faction);
+                return false;
+            }
+            SetLineBuilding(lineIndex, BuildingKind.LumberCamp, id);
+            line = world.ProcessingLines[lineIndex];
+            if (world.Buildings[id - 1].Held) line.Manager = LineManager.Manual;
+            return true;
+        }
+
+        private uint FindCamp(uint faction, uint exclude)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.LumberCamp && b.Id != exclude) return b.Id;
+            }
+            return 0;
+        }
+
+        private bool BuildingAlive(uint id) => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive;
+
+        private uint PlaceFletcher(uint faction, BuildingState camp)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = world.Map.Cell(FootprintCenter(camp.OriginCell, SizeOf(camp.Kind)));
+            int origin = FindProcessingSite(faction, centre, world.Config.Economy.FletcherSizeCells);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.FletcherSizeCells), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, world.Config.Economy.FletcherSizeCells, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Fletcher, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayForestryCoreLine(uint faction, int lineIndex, BuildingState camp)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(camp), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
+        private bool LayBowLine(uint faction, int lineIndex, BuildingState camp, BuildingState fletcher)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var toFletcher = BeltRoute(faction, OutputCell(camp), taken, next => InFootprint(fletcher, next));
+            if (toFletcher.cells == null) return false;
+            foreach (int c in toFletcher.cells) taken[c] = true;
+            var toCore = BeltRoute(faction, OutputCell(fletcher), taken, next => FeedsOwnCore(next, faction));
+            if (toCore.cells == null) return false;
+            SetLineBelts(lineIndex, toFletcher, toCore);
+            return LayRoutes(faction, toFletcher, toCore);
         }
 
         /// <summary>Places the camp over the nearest remaining wood point, with deterministic footprint and port order.</summary>

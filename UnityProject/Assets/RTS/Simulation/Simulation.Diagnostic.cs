@@ -117,9 +117,10 @@ namespace Rts.Simulation
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
                     }
-                    if (world.Config.Economy.ProcessingChain)
+                    if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
+                        if (world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2) w.Value(n + "QueuedBowGear", b.QueuedBowGear);
                     }
                 }
             }
@@ -149,6 +150,7 @@ namespace Rts.Simulation
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Ore", e.Ore); w.Value(n + "Metal", e.Metal); w.Value(n + "CoreHeld", e.CoreHeld); w.Value(n + "Policy", (byte)e.Policy);
                 if (world.Config.Economy.ProcessingChain) { w.Value(n + "Charcoal", e.Charcoal); w.Value(n + "Steel", e.Steel); }
+                if (world.Config.Economy.Forestry && e.Age >= 2) w.Value(n + "BowGear", e.BowGear);
                 if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Gems", e.Gems); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }
                 if (world.Config.Economy.GoldEnabled) w.Value(n + "Gold", e.Gold);
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); w.Value(n + "AgeVictoryProgress", e.AgeVictoryProgress); }
@@ -164,7 +166,7 @@ namespace Rts.Simulation
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
             }
-            if (world.Config.Economy.ProcessingChain)
+            if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);

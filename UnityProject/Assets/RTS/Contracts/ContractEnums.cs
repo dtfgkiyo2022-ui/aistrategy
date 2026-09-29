@@ -52,11 +52,11 @@ namespace Rts.Contracts
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
     // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; in battle they are infantry with
     // their own HP, damage, range and speed, so the combat AI's infantry rules hold for them.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10 }
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -80,7 +80,7 @@ namespace Rts.Contracts
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
-        ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17 }
+        ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18 }
 
     public enum EventKind : byte
     {
