@@ -413,6 +413,9 @@ namespace Rts.Simulation
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                 && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
+                && (!e.Forestry || (e.Industry && e.LumberCampSizeCells > 0 && e.LumberCampSizeCells <= 8 && e.LumberCampWoodCost >= 0
+                    && e.LumberCampWork > 0 && e.LumberCampHp > 0 && e.LumberCampIntervalTicks > 0
+                    && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0))
                 && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0
                 && e.BasePopulation > 0 && e.HousePopulation >= 0 && e.HouseSizeCells > 0 && e.HouseSizeCells <= 8
                 && e.HouseWoodCost >= 0 && e.HouseWork > 0 && e.HouseHp > 0
@@ -452,6 +455,7 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -601,6 +605,9 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
+                Forestry = e.Forestry, LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
+                LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,
+                MarketFoodFloor = e.MarketFoodFloor, MarketWoodReserve = e.MarketWoodReserve, MarketStoneReserve = e.MarketStoneReserve,
                 ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks,
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,

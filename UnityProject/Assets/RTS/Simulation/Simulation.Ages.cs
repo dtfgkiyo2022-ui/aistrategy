@@ -15,6 +15,8 @@ namespace Rts.Simulation
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
+        private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
+
         /// <summary>Mines and smelters: on an ages map only in the metallurgy civilisation.</summary>
         private bool MetalworkAllowed(uint faction) => !AgesOn || world.Economies[faction - 1].Civ == CivKind.Metallurgy;
 
@@ -26,6 +28,9 @@ namespace Rts.Simulation
 
         /// <summary>Farms: the agrarian civilisation only.</summary>
         private bool FarmingAllowed(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
+
+        private bool ForestryAllowed(uint faction)
+            => ForestryOn && world.Economies[faction - 1].Civ == CivKind.Forestry && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -82,7 +87,8 @@ namespace Rts.Simulation
             if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
             var (food, wood, gold, _) = AdvancePrice(e);
             if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
-            if (e.Civ == CivKind.Primitive) return civ == CivKind.Agrarian || civ == CivKind.Metallurgy;
+            if (e.Civ == CivKind.Primitive)
+                return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry;
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
@@ -178,7 +184,9 @@ namespace Rts.Simulation
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
-            return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            // Forest selection deliberately does not score terrain yet (that is the later third pass). The opt-in
+            // forest scenario exposes the third branch and lets the automatic economy exercise its complete path.
+            return ForestryOn ? CivKind.Forestry : EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
         }
     }
 }

@@ -29,6 +29,15 @@ namespace Rts.Simulation
                     node.Remaining--;
                     b.Output++;
                 }
+                else if (b.Kind == BuildingKind.LumberCamp)
+                {
+                    ref var node = ref world.Nodes[b.NodeId - 1];
+                    if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
+                    if (++b.Timer < rules.LumberCampIntervalTicks) continue;
+                    b.Timer = 0;
+                    node.Remaining--;
+                    b.Output++;
+                }
                 else if (b.Kind == BuildingKind.Farm)
                 {
                     // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
@@ -82,7 +91,7 @@ namespace Rts.Simulation
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)
-            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.Farm ? ResourceKind.Food
+            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Farm ? ResourceKind.Food
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
@@ -134,16 +143,22 @@ namespace Rts.Simulation
         /// ground with no belt and outside every core.
         /// </summary>
         private bool MineSiteIsClear(int origin, out uint nodeId)
+            => ResourceBuildingSiteIsClear(origin, world.Config.Economy.MineSizeCells, ResourceKind.Ore, out nodeId);
+
+        private bool LumberCampSiteIsClear(int origin, out uint nodeId)
+            => ResourceBuildingSiteIsClear(origin, world.Config.Economy.LumberCampSizeCells, ResourceKind.Wood, out nodeId);
+
+        private bool ResourceBuildingSiteIsClear(int origin, int size, ResourceKind required, out uint nodeId)
         {
             nodeId = 0;
-            var footprint = Footprint(origin, world.Config.Economy.MineSizeCells);
+            var footprint = Footprint(origin, size);
             foreach (int cell in footprint)
             {
                 if (!world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
                 foreach (var node in world.Nodes)
                 {
                     if (world.Map.Cell(node.Definition.Position) != cell) continue;
-                    if (node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0 || nodeId != 0) return false;
+                    if (node.Definition.Kind != required || node.Remaining <= 0 || nodeId != 0) return false;
                     nodeId = node.Definition.Id;
                 }
             }

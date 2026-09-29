@@ -156,8 +156,18 @@ namespace Rts.Simulation
         private bool CivLineStarted(uint faction)
         {
             var civ = world.Economies[faction - 1].Civ;
-            if (civ == CivKind.Metallurgy) return OwnBuildingIndex(faction, BuildingKind.Mine) >= 0 && OwnBuildingIndex(faction, BuildingKind.Smelter) >= 0;
-            return civ == CivKind.Agrarian && OwnBuildingIndex(faction, BuildingKind.Farm) >= 0;
+            switch (civ)
+            {
+                case CivKind.Agrarian:
+                    return OwnBuildingIndex(faction, BuildingKind.Farm) >= 0;
+                case CivKind.Metallurgy:
+                    return OwnBuildingIndex(faction, BuildingKind.Mine) >= 0
+                        && OwnBuildingIndex(faction, BuildingKind.Smelter) >= 0;
+                case CivKind.Forestry:
+                    return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
+                default:
+                    return false;
+            }
         }
 
         /// <summary>AI phase: up to AutoTowers towers by the core, one at a time, once in a civilisation and not saving.</summary>

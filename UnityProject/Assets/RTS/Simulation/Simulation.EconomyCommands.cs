@@ -71,6 +71,7 @@ namespace Rts.Simulation
                 {
                     var kind = c.Building;
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                        && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
@@ -84,6 +85,7 @@ namespace Rts.Simulation
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
                     uint node = 0;
                     bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
+                        : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
@@ -151,7 +153,7 @@ namespace Rts.Simulation
                         MarkLinesForBuilding(faction, target.Id);
                         MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Farm
                             || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln));
                         if (target.Complete && !haul) return;
                     }
