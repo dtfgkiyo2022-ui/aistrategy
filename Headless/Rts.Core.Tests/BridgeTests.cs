@@ -7,6 +7,7 @@ using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Decision;
 using Rts.Replay;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -36,6 +37,43 @@ namespace Rts.Core.Tests
         private static void Steps(CommandGateway gateway, Battle sim, int count)
         {
             for (int i = 0; i < count && !sim.Capture(1).Result.HasEnded; i++) gateway.Step();
+        }
+
+        [TestCase(0, 4, 0, 0, 0, 3, CivKind.Agrarian)]
+        [TestCase(0, 3, 0, 0, 1, 3, CivKind.Bridge)]
+        [TestCase(0, 3, 0, 1, 1, 3, CivKind.Masonry)]
+        [TestCase(0, 3, 1, 1, 1, 3, CivKind.Forestry)]
+        [TestCase(2, 3, 2, 2, 2, 3, CivKind.Metallurgy)]
+        public void EngineerTerrainScoreUsesTheFiveWayStableTieOrder(int ore, int food, int forest, int stone, int bridge,
+            int guaranteedFood, CivKind expected)
+        {
+            Assert.That(EconomyDecision.ChooseCiv(ore, food, forest, stone, bridge, guaranteedFood), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void EngineerChoiceEvaluationRestoresTheDiagnosticState()
+        {
+            var s = Scenario(7);
+            var sim = new Battle(s);
+            var before = Fields(sim);
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(choose, Is.Not.Null);
+            choose.Invoke(sim, new object[] { 1u });
+            Assert.That(Fields(sim), Is.EqualTo(before), "候補の仮開通が状態診断を変更しない");
+        }
+
+        [Test]
+        public void TerrainSeedsContainBothEngineerAndNonEngineerChoices()
+        {
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            var choices = new HashSet<CivKind>();
+            for (ulong seed = 1; seed <= 100; seed++)
+            {
+                var sim = new Battle(MapGenerator.GenerateTerrain(seed, bridge: true));
+                for (uint faction = 1; faction <= 2; faction++) choices.Add((CivKind)choose.Invoke(sim, new object[] { faction }));
+            }
+            Assert.That(choices, Does.Contain(CivKind.Bridge));
+            Assert.That(choices.Any(civ => civ != CivKind.Bridge), Is.True);
         }
 
         [Test]

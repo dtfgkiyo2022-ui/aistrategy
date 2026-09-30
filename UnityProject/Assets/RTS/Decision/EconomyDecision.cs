@@ -70,6 +70,24 @@ namespace Rts.Decision
             return CivKind.Masonry;
         }
 
+        /// <summary>
+        /// V3-11 #4: compares the four terrain scores and the engineer score. The engineer score is already a
+        /// small, thresholded integer (not metres or raw path cells). Ties keep the requested stable order:
+        /// agrarian, metallurgy, forestry, masonry, then bridge.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int bridgePointsNear, int guaranteedFood)
+        {
+            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= bridgePointsNear)
+                return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= bridgePointsNear)
+                return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= bridgePointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= bridgePointsNear) return CivKind.Masonry;
+            return CivKind.Bridge;
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

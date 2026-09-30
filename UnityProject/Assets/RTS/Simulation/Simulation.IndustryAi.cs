@@ -14,8 +14,11 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int Haulers = 2;
-        // V3-11 #2 provisional policy: one cell is two metres on the default map, so the bridge must save 4 m.
+        // V3-11 #2/#4 provisional policy: one cell is two metres on the default map, so the bridge must save 4 m.
         private const int BridgeShorteningThresholdCells = 2;
+        // The choice score is deliberately capped and tiered so path length never enters the resource-point score
+        // with its original magnitude.  0/1/2/3 correspond to <4 m, 4-15 m, 16-31 m and 32 m or more on the default map.
+        private const int BridgeScoreTier2Cells = 8, BridgeScoreTier3Cells = 16;
         private const int BridgeDangerMeters = 16;
         private const long BridgeRebuildWaitTicks = 200;
         private static readonly Facing[] Sides = { Facing.North, Facing.East, Facing.South, Facing.West };
@@ -195,7 +198,10 @@ namespace Rts.Simulation
             }
             // Any human bridge operation owns the bridge policy for the rest of this match. This covers a manually
             // removed bridge too: the automatic economy must not replace it at a different location.
-            if (HasManualBridge(faction) || HasAutomaticBridge(faction)) return;
+            if (HasManualBridge(faction) || ActiveBridgeCount(faction) >= AutomaticBridgeLimit(faction)) return;
+            // With no surviving automatic bridge, retain the old single-line behaviour: the destroyed line itself
+            // waits 200 ticks. Once another automatic bridge survives, cooldowns are independent and this one may
+            // be rebuilt without stopping the surviving route.
             if (AutomaticBridgeRebuildBlocked(faction)) return;
             ref var bridgeEconomy = ref world.Economies[faction - 1];
             if (bridgeEconomy.Wood < world.Config.Economy.BridgeWoodCost) return;
@@ -214,33 +220,50 @@ namespace Rts.Simulation
             return false;
         }
 
-        private bool HasAutomaticBridge(uint faction)
-        {
-            for (int i = 0; i < world.BuildingCount; i++)
-            {
-                var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.Bridge && !b.Held) return true;
-            }
-            return false;
-        }
-
         private bool AutomaticBridgeRebuildBlocked(uint faction)
         {
+            bool hasActive = false, hasCooldown = false;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.FactionId == faction && b.Kind == BuildingKind.Bridge && !b.Alive && !b.Held && b.DestroyedTick > 0
-                    && world.Tick - b.DestroyedTick < BridgeRebuildWaitTicks) return true;
+                if (b.FactionId != faction || b.Kind != BuildingKind.Bridge || b.Held) continue;
+                if (b.Alive) hasActive = true;
+                else if (b.DestroyedTick > 0 && world.Tick - b.DestroyedTick < BridgeRebuildWaitTicks) hasCooldown = true;
             }
-            return false;
+            return hasCooldown && !hasActive;
+        }
+
+        private int AutomaticBridgeLimit(uint faction)
+        {
+            // A single observed resource line keeps the legacy one-bridge behaviour (and avoids opening a second
+            // route merely because the fixed core objectives exist). Two or more observed public resource points
+            // justify the provisional three-route limit used by the multi-bridge policy.
+            int observedResources = 0;
+            var explored = world.Factions[faction - 1].ExploredCells;
+            foreach (var node in world.Nodes)
+            {
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (node.Remaining > 0 && cell >= 0 && explored[cell]) observedResources++;
+            }
+            return observedResources >= 2 ? MaxActiveBridges : 1;
         }
 
         private bool TryFindBridgeCandidate(uint faction, out int[] bestCells, out Facing bestFacing, out int bestWorkCell)
+            => TryFindBridgeCandidate(faction, true, true, true, out bestCells, out bestFacing, out bestWorkCell, out _);
+
+        /// <summary>Finds the best legal bridge. The start-of-match evaluator uses the same search with the camp and
+        /// civilisation gates disabled; it still requires a legal river crossing and a reachable building bank.</summary>
+        private bool TryFindBridgeCandidate(uint faction, bool requireCamp, bool requireCiv, bool avoidDanger,
+            out int[] bestCells, out Facing bestFacing, out int bestWorkCell, out int bestOwnSaving)
         {
-            bestCells = null; bestFacing = Facing.North; bestWorkCell = -1;
-            var destinations = BridgeDestinations(faction);
-            if (destinations.Count < 2) return false;
-            var observedEnemyCells = ObservedEnemyCells(faction);
+            bestCells = null; bestFacing = Facing.North; bestWorkCell = -1; bestOwnSaving = 0;
+            var destinations = BridgeDestinations(faction, includeKnownEnemyCore: requireCamp);
+            if (destinations.Count == 0) return false;
+            // The start-of-match score is explicitly core-to-destination. Once the civ is active, retain the
+            // previous operational search over the known objective set so an already useful bridge line is not lost.
+            var sources = requireCamp ? destinations : BridgeSources(faction);
+            if (sources.Count == 0) return false;
+            var observedEnemyCells = avoidDanger ? ObservedEnemyCells(faction) : new List<int>();
             int bestAdjusted = 0, bestOwn = 0, bestEnemy = 0, bestFirst = int.MaxValue, bestLength = int.MaxValue;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int max = world.Config.Economy.MaxBridgeLength;
@@ -264,12 +287,13 @@ namespace Rts.Simulation
                             if (length == 0 || length > max || last < 0 || last >= width * height || !world.Map.IsPassable(last) || IsRiverCell(last)) continue;
                             var candidate = new int[length];
                             for (int i = 0; i < length; i++) candidate[i] = first + delta * i;
-                            if (!TryValidateBridge(faction, candidate, direction == 0 ? Facing.East : Facing.South, out _, out int workCell)) continue;
-                            if (ObservedEnemyNear(faction, workCell)) continue;
+                            if (!TryValidateBridge(faction, candidate, direction == 0 ? Facing.East : Facing.South, out _, out int workCell,
+                                requireCamp, requireCiv)) continue;
+                            if (avoidDanger && ObservedEnemyNear(faction, workCell)) continue;
                             if (BridgeOnRebuildCooldown(faction, candidate)) continue;
-                            int ownSaving = MaximumBridgeSaving(candidate, destinations, destinations);
+                            int ownSaving = MaximumBridgeSaving(candidate, sources, destinations);
                             if (ownSaving < BridgeShorteningThresholdCells) continue;
-                            int enemySaving = MaximumBridgeSaving(candidate, observedEnemyCells, destinations);
+                            int enemySaving = avoidDanger ? MaximumBridgeSaving(candidate, observedEnemyCells, destinations) : 0;
                             int adjusted = checked(ownSaving - enemySaving / 2); // enemy shortcut is a discount, based only on observed enemies
                             if (adjusted <= 0) continue;
                             if (bestCells == null || adjusted > bestAdjusted || adjusted == bestAdjusted && ownSaving > bestOwn
@@ -279,12 +303,13 @@ namespace Rts.Simulation
                             {
                                 bestCells = candidate; bestFacing = direction == 0 ? Facing.East : Facing.South; bestWorkCell = workCell;
                                 bestAdjusted = adjusted; bestOwn = ownSaving; bestEnemy = enemySaving; bestFirst = candidate[0]; bestLength = length;
+                                bestOwnSaving = ownSaving;
                             }
                         }
             return bestCells != null;
         }
 
-        private List<int> BridgeDestinations(uint faction)
+        private List<int> BridgeDestinations(uint faction, bool includeKnownEnemyCore)
         {
             var result = new List<int>();
             var seen = new HashSet<int>();
@@ -292,18 +317,26 @@ namespace Rts.Simulation
             {
                 if (cell >= 0 && world.Map.IsPassable(cell) && seen.Add(cell)) result.Add(cell);
             }
+            // Cores and outposts are fixed public objectives; resource nodes enter only after this faction has
+            // observed their cells. The source side remains the own core, so the enemy core is only a known goal,
+            // never a source of hidden unit information.
             Add(world.Map.Cell(OwnCore(faction).Definition.Position));
-            // The enemy core is a fixed, known objective and makes a bridge useful for the actual offensive route;
-            // enemy positions are still consulted only through ObservedEnemyCells below.
-            Add(world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position));
-            foreach (var outpost in world.Outposts)
-                if (outpost.OwnerFactionId == faction) Add(world.Map.Cell(outpost.Definition.Position));
+            if (includeKnownEnemyCore) Add(world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position));
+            foreach (var outpost in world.Outposts) Add(world.Map.Cell(outpost.Definition.Position));
             var explored = world.Factions[faction - 1].ExploredCells;
             foreach (var node in world.Nodes)
             {
                 int cell = world.Map.Cell(node.Definition.Position);
                 if (node.Remaining > 0 && cell >= 0 && explored[cell]) Add(cell);
             }
+            return result;
+        }
+
+        private List<int> BridgeSources(uint faction)
+        {
+            var result = new List<int>(1);
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            if (core >= 0 && world.Map.IsPassable(core)) result.Add(core);
             return result;
         }
 
@@ -337,7 +370,12 @@ namespace Rts.Simulation
             for (int s = 0; s < sources.Count; s++)
                 for (int d = 0; d < destinations.Count; d++)
                     without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0 : BridgeRouteLength(sources[s], destinations[d]);
-            foreach (int cell in bridgeCells) world.Map.SetPassable(cell, true);
+            var original = new bool[bridgeCells.Length];
+            for (int i = 0; i < bridgeCells.Length; i++)
+            {
+                original[i] = world.Map.IsPassable(bridgeCells[i]);
+                world.Map.SetPassable(bridgeCells[i], true);
+            }
             try
             {
                 for (int s = 0; s < sources.Count; s++)
@@ -351,8 +389,20 @@ namespace Rts.Simulation
                         if (saving > best) best = saving;
                     }
             }
-            finally { foreach (int cell in bridgeCells) world.Map.SetPassable(cell, false); }
+            finally
+            {
+                for (int i = 0; i < bridgeCells.Length; i++) world.Map.SetPassable(bridgeCells[i], original[i]);
+            }
             return best;
+        }
+
+        /// <summary>Converts a route-cell saving into the small integer used beside resource-point scores.</summary>
+        private static int EngineerBridgeScore(int savingCells)
+        {
+            if (savingCells < BridgeShorteningThresholdCells) return 0;
+            if (savingCells < BridgeScoreTier2Cells) return 1;
+            if (savingCells < BridgeScoreTier3Cells) return 2;
+            return 3;
         }
 
         private int BridgeRouteLength(int start, int destination)

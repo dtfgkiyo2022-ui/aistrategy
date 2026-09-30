@@ -195,13 +195,15 @@ namespace Rts.Simulation
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
-            // Keep the old pure two-score decision, including its exact tie rule, when both new flags are off.
-            if (!ForestryOn && !MasonryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
+            if (!ForestryOn && !MasonryOn && !BridgeOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
-            if (!MasonryOn) return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
-            int stone = CountUsableMasonryStone(faction, core);
-            return EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
+            if (!MasonryOn && !BridgeOn) return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
+            int stone = MasonryOn ? CountUsableMasonryStone(faction, core) : 0;
+            if (!BridgeOn) return EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
+            int bridge = CountUsableBridgeSaving(faction, core);
+            return EconomyDecision.ChooseCiv(ore, food, forest, stone, bridge, GuaranteedFoodPoints);
         }
 
         /// <summary>
@@ -277,6 +279,22 @@ namespace Rts.Simulation
             }
             return count;
         }
+
+        /// <summary>
+        /// V3-11 #4: the engineer terrain score is the best legal one-bridge shortening from this core to a public
+        /// outpost or an observed resource. The candidate search temporarily opens the exact river cells and restores
+        /// their previous passability in a finally block; the returned value is a 0..3 tier, never a raw distance.
+        /// </summary>
+        private int CountUsableBridgeSaving(uint faction, SimPoint core)
+        {
+            if (!BridgeOn) return 0;
+            if (!TryFindBridgeCandidate(faction, requireCamp: false, requireCiv: false, avoidDanger: false,
+                out _, out _, out _, out int savingCells)) return 0;
+            return EngineerBridgeScore(savingCells);
+        }
+
+        // Kept as a descriptive counterpart to CountUsableForestWood and CountUsableMasonryStone for headless probes.
+        private int CountUsableBridgeScore(uint faction, SimPoint core) => CountUsableBridgeSaving(faction, core);
 
         private bool HasUsableQuarrySite(uint faction, int nodeCell, uint nodeId)
         {

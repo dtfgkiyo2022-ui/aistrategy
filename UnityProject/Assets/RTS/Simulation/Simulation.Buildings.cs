@@ -14,6 +14,9 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int SiteSearchRadiusCells = 30, CoreClearanceCells = 4, NodeClearanceCells = 2, BuildingClearanceCells = 2;
+        // V3-11 #4 provisional simultaneous bridge limit. It is deliberately a simulation rule rather than a
+        // contract field, so enabling bridges does not alter the old scenario bytes.
+        private const int MaxActiveBridges = 3;
 
         /// <summary>AI phase, after villager training (5.4 steps 2 and 3).</summary>
         private void DecideBuildings(uint faction)
@@ -112,7 +115,8 @@ namespace Rts.Simulation
         }
 
         /// <summary>V3-11 #2: the hand-placement rules are also the rules used by the automatic candidate search.</summary>
-        private bool TryValidateBridge(uint faction, IReadOnlyList<int> requested, Facing facing, out int[] cells, out int workCell)
+        private bool TryValidateBridge(uint faction, IReadOnlyList<int> requested, Facing facing, out int[] cells, out int workCell,
+            bool requireCamp = true, bool requireCiv = true)
         {
             cells = null;
             workCell = -1;
@@ -120,7 +124,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].Complete && world.Buildings[i].FactionId == faction
                     && world.Buildings[i].Kind == BuildingKind.EngineerCamp) { campReady = true; break; }
-            if (!BridgeAllowed(faction) || !campReady || (byte)facing > 3 || requested == null
+            if ((requireCiv ? !BridgeAllowed(faction) : !BridgeOn) || requireCamp && !campReady
+                || requireCamp && ActiveBridgeCount(faction) >= MaxActiveBridges || (byte)facing > 3 || requested == null
                 || requested.Count == 0 || requested.Count > world.Config.Economy.MaxBridgeLength) return false;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             cells = new int[requested.Count];
@@ -147,7 +152,7 @@ namespace Rts.Simulation
                 foreach (var node in world.Nodes)
                     if (world.Map.Cell(node.Definition.Position) == cell) { cells = null; return false; }
                 for (int i = 0; i < world.BuildingCount; i++)
-                    if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) { cells = null; return false; }
+                        if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) { cells = null; return false; }
             }
             for (int i = 0; i < world.VillagerCount && workCell < 0; i++)
             {
@@ -159,6 +164,14 @@ namespace Rts.Simulation
             }
             if (workCell < 0) { cells = null; return false; }
             return true;
+        }
+
+        private int ActiveBridgeCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Bridge) count++;
+            return count;
         }
 
         /// <summary>
