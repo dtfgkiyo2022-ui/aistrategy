@@ -108,7 +108,7 @@ namespace Rts.Presentation
         /// <summary>Called after the player switches the on-screen language, so the host can remember it.</summary>
         public System.Action<bool> LanguageChanged;
         private const float SetupRow = 30f;
-        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 4f + 62f); }
+        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 5f + 62f); }
 
         private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
 
@@ -304,6 +304,19 @@ namespace Rts.Presentation
                 bool ageVictoryNow = GUI.Toggle(new Rect(x + labelWidth + half, y, half - 4f, 24f), ageVictory,
                     ageVictory ? UiText.T("Age victory: on", "時代到達勝利：入") : UiText.T("Age victory: off", "時代到達勝利：切"), GUI.skin.button);
                 if (ageVictoryNow != ageVictory) matchRuleChoice.AgeVictory = ageVictoryNow;
+                GUI.enabled = true;
+            }
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Civilisations", "文明"));
+            if (matchRuleChoice != null)
+            {
+                GUI.enabled = mapChoice != null && mapChoice.EconomyMap;
+                bool all = matchRuleChoice.AllCivilisations;
+                bool allNow = GUI.Toggle(new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f), all,
+                    all ? UiText.T("All 7 (+ forestry, masonry, caravan, cavalry, bridge)", "7つ全部（＋森林・石工・隊商・騎馬・工兵）")
+                        : UiText.T("First 2 only (agrarian, metallurgy)", "最初の2つだけ（農耕・冶金）"), GUI.skin.button);
+                if (allNow != all) matchRuleChoice.AllCivilisations = allNow;
                 GUI.enabled = true;
             }
             y += SetupRow;

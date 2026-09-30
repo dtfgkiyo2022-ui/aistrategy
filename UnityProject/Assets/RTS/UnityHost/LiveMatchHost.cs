@@ -171,6 +171,15 @@ namespace Rts.UnityHost
             set { if (value == ageVictory) return; ageVictory = value; matchRestartRequested = true; }
         }
 
+        // Off by default so the usual match keeps the first two civilisations; on opens all seven for trying them.
+        [SerializeField] private bool allCivilisations = false;
+
+        public bool AllCivilisations
+        {
+            get { return allCivilisations; }
+            set { if (value == allCivilisations) return; allCivilisations = value; matchRestartRequested = true; }
+        }
+
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
 
         public void Begin()
@@ -184,6 +193,14 @@ namespace Rts.UnityHost
             {
                 scenario.Economy.MonksEnabled = monks;
                 scenario.Economy.AgeVictoryEnabled = ageVictory;
+                if (allCivilisations)
+                {
+                    scenario.Economy.Forestry = true;
+                    scenario.Economy.Masonry = true;
+                    scenario.Economy.Caravan = true;
+                    scenario.Economy.Cavalry = true;
+                    scenario.Economy.Bridge = true;
+                }
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
