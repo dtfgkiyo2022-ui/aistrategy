@@ -59,13 +59,18 @@ namespace Rts.Decision
             for (int i = 0; i < objectives.Count; i++)
             {
                 var path = FindPath(width, height, passable, observed, coreCell, objectives[i], null);
-                if (path.Length == 0) continue;
+                int pathDistance = RouteDistance.Measure(width, height, passable, observed, coreCell, objectives[i], null);
+                if (path.Length == 0 || pathDistance < 0) continue;
                 reachable++;
                 var banned = NarrowBand(width, height, passable, observed, path);
                 if (banned == null) continue;
-                var alternative = FindPath(width, height, passable, observed, coreCell, objectives[i], banned);
-                if (alternative.Length == 0) blocked++;
-                else if (alternative.Length > path.Length) dependent++;
+                var alternativePassable = (bool[])passable.Clone();
+                for (int cell = 0; cell < alternativePassable.Length; cell++)
+                    if (banned[cell]) alternativePassable[cell] = false;
+                int alternativeDistance = RouteDistance.Measure(width, height, alternativePassable, observed,
+                    coreCell, objectives[i], null);
+                if (alternativeDistance < 0) blocked++;
+                else if (alternativeDistance > pathDistance) dependent++;
             }
 
             // Convert route measurements to the same small score range as resource-point counts. Reachability is the
