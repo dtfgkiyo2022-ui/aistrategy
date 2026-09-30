@@ -63,7 +63,7 @@ namespace Rts.Simulation
                     if (!(ProcessingOn || ForestryOn || MasonryOn || BridgeOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
-                    if (removed.Kind == BuildingKind.Bridge) KillBridgeOccupants(removed);
+                    if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     removed.Alive = false;
                     foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
                     TerrainChanged();

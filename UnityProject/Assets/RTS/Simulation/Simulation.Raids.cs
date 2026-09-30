@@ -130,6 +130,7 @@ namespace Rts.Simulation
                 b.Alive = false;
                 if (b.Kind == BuildingKind.Bridge)
                 {
+                    b.DestroyedTick = world.Tick;
                     KillBridgeOccupants(b);
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, false);
                 }

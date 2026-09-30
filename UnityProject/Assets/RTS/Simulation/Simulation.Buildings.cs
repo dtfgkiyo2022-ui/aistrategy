@@ -104,41 +104,51 @@ namespace Rts.Simulation
 
         private bool TryPlaceBridge(uint faction, EconomyCommand command)
         {
+            if (!TryValidateBridge(faction, command.Cells, command.Facing, out int[] cells, out int workCell)) return false;
+            if (world.Economies[faction - 1].Wood < WoodOf(BuildingKind.Bridge, faction)) return false;
+            PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
+            world.Buildings[world.BuildingCount - 1].Held = true;
+            return true;
+        }
+
+        /// <summary>V3-11 #2: the hand-placement rules are also the rules used by the automatic candidate search.</summary>
+        private bool TryValidateBridge(uint faction, IReadOnlyList<int> requested, Facing facing, out int[] cells, out int workCell)
+        {
+            cells = null;
+            workCell = -1;
             bool campReady = false;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].Complete && world.Buildings[i].FactionId == faction
                     && world.Buildings[i].Kind == BuildingKind.EngineerCamp) { campReady = true; break; }
-            if (!BridgeAllowed(faction) || !campReady || (byte)command.Facing > 3
-                || command.Cells == null || command.Cells.Count == 0 || command.Cells.Count > world.Config.Economy.MaxBridgeLength
-                || world.Economies[faction - 1].Wood < WoodOf(BuildingKind.Bridge, faction)) return false;
+            if (!BridgeAllowed(faction) || !campReady || (byte)facing > 3 || requested == null
+                || requested.Count == 0 || requested.Count > world.Config.Economy.MaxBridgeLength) return false;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
-            var cells = new int[command.Cells.Count];
-            for (int i = 0; i < cells.Length; i++) cells[i] = command.Cells[i];
+            cells = new int[requested.Count];
+            for (int i = 0; i < cells.Length; i++) cells[i] = requested[i];
             int first = cells[0], second = cells.Length == 1 ? first + 1 : cells[1], delta = second - first;
             bool horizontal = delta == 1 || delta == -1;
             bool vertical = delta == width || delta == -width;
-            if (!horizontal && !vertical) return false;
+            if (!horizontal && !vertical) { cells = null; return false; }
             var seen = new HashSet<int>();
             for (int i = 0; i < cells.Length; i++)
             {
                 int cell = cells[i];
-                if (cell < 0 || cell >= width * height || !seen.Add(cell) || !IsRiverCell(cell) || world.Map.IsPassable(cell)) return false;
-                if (i > 0 && cells[i] != cells[i - 1] + delta) return false;
+                if (cell < 0 || cell >= width * height || !seen.Add(cell) || !IsRiverCell(cell) || world.Map.IsPassable(cell)) { cells = null; return false; }
+                if (i > 0 && cells[i] != cells[i - 1] + delta) { cells = null; return false; }
             }
             int before = first - delta, after = cells[cells.Length - 1] + delta;
             if (before < 0 || before >= width * height || after < 0 || after >= width * height
                 || horizontal && (before / width != first / width || after / width != first / width)
                 || vertical && (before % width != first % width || after % width != first % width)
                 || !world.Map.IsPassable(before) || !world.Map.IsPassable(after)
-                || IsRiverCell(before) || IsRiverCell(after)) return false;
+                || IsRiverCell(before) || IsRiverCell(after)) { cells = null; return false; }
             foreach (int cell in cells)
             {
                 foreach (var node in world.Nodes)
-                    if (world.Map.Cell(node.Definition.Position) == cell) return false;
+                    if (world.Map.Cell(node.Definition.Position) == cell) { cells = null; return false; }
                 for (int i = 0; i < world.BuildingCount; i++)
-                    if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) return false;
+                    if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) { cells = null; return false; }
             }
-            int workCell = -1;
             for (int i = 0; i < world.VillagerCount && workCell < 0; i++)
             {
                 var villager = world.Villagers[i];
@@ -147,9 +157,7 @@ namespace Rts.Simulation
                 if (world.Map.FindPath(start, world.Map.Center(before)).Length > 0) workCell = before;
                 else if (world.Map.FindPath(start, world.Map.Center(after)).Length > 0) workCell = after;
             }
-            if (workCell < 0) return false;
-            PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
-            world.Buildings[world.BuildingCount - 1].Held = true;
+            if (workCell < 0) { cells = null; return false; }
             return true;
         }
 

@@ -84,6 +84,83 @@ namespace Rts.Core.Tests
             Assert.That(bridgeCells.All(cell => !Passable(sim, cell)), Is.True);
         }
 
+        [Test]
+        public void AutomaticBridgeIsBuiltForAUsefulObservedDestination()
+        {
+            var s = Scenario(7);
+            s.Rules.OwnedObjectiveVision = Fix64.FromInt(512);
+            var cells = FindBridgeCells(s, new Battle(s), 1);
+            Assert.That(cells, Is.Not.Null);
+            int width = s.Map.WidthCells, delta = cells.Length > 1 ? cells[1] - cells[0] : 1;
+            int targetCell = cells[0] - delta;
+            var target = new SimPoint(Fix64.FromInt((targetCell % width) * s.Map.CellSizeMeters + s.Map.CellSizeMeters / 2),
+                Fix64.FromInt((targetCell / width) * s.Map.CellSizeMeters + s.Map.CellSizeMeters / 2));
+            var node = s.ResourceNodes[0];
+            node.Position = target;
+            node.Amount = 100000;
+            s.ResourceNodes = new[] { node };
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Bridge));
+            Steps(gateway, sim, 7000);
+            Assert.That(sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Bridge && !b.PlayerHeld), Is.True);
+        }
+
+        [Test]
+        public void AutomaticBridgeWaitsBeforeRebuildingADestroyedBridge()
+        {
+            var s = Scenario(7);
+            s.Rules.OwnedObjectiveVision = Fix64.FromInt(512);
+            var cells = FindBridgeCells(s, new Battle(s), 1);
+            Assert.That(cells, Is.Not.Null);
+            int delta = cells.Length > 1 ? cells[1] - cells[0] : 1;
+            var node = s.ResourceNodes[0];
+            int target = cells[0] - delta;
+            node.Position = new SimPoint(Fix64.FromInt((target % s.Map.WidthCells) * s.Map.CellSizeMeters + s.Map.CellSizeMeters / 2),
+                Fix64.FromInt((target / s.Map.WidthCells) * s.Map.CellSizeMeters + s.Map.CellSizeMeters / 2));
+            node.Amount = 100000;
+            s.ResourceNodes = new[] { node };
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Bridge));
+            Steps(gateway, sim, 7000);
+            var bridge = sim.Capture(1).Economy.Buildings.First(b => b.Kind == BuildingKind.Bridge && !b.PlayerHeld);
+            SetBuildingHp(sim, bridge.Id, 0);
+            MoveFactionUnits(sim, 2, s.Cores[1].Position);
+            Steps(gateway, sim, 1);
+            Assert.That(sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Bridge), Is.False);
+            Steps(gateway, sim, 100);
+            Assert.That(sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Bridge), Is.False);
+            Steps(gateway, sim, 140);
+            Assert.That(sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Bridge && !b.PlayerHeld), Is.True);
+        }
+
+        [Test]
+        public void ManualBridgePreventsAutomaticReplacement()
+        {
+            var s = Scenario(7);
+            s.Rules.OwnedObjectiveVision = Fix64.FromInt(512);
+            var cells = FindBridgeCells(s, new Battle(s), 1);
+            Assert.That(cells, Is.Not.Null);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, 4);
+            uint camp = 0;
+            for (int i = 0; i < 500 && camp == 0; i++)
+            {
+                Steps(gateway, sim, 1);
+                camp = sim.Capture(1).Economy.Buildings.FirstOrDefault(b => b.Kind == BuildingKind.EngineerCamp && b.Complete).Id;
+            }
+            Assert.That(camp, Is.Not.EqualTo(0u));
+            gateway.SubmitEconomy(EconomyCommand.PlaceBridge(1, ++sequence, cells, Facing.East));
+            Steps(gateway, sim, 3000);
+            var bridges = sim.Capture(1).Economy.Buildings.Where(b => b.Kind == BuildingKind.Bridge).ToArray();
+            Assert.That(bridges.Length, Is.EqualTo(1));
+            Assert.That(bridges[0].PlayerHeld, Is.True);
+        }
+
         private static int[] FindBridgeCells(ScenarioDefinition s, Battle sim, uint faction)
         {
             var blocked = new bool[s.Map.WidthCells * s.Map.HeightCells];
@@ -113,6 +190,39 @@ namespace Rts.Core.Tests
             var world = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(sim);
             var map = world.GetType().GetField("Map", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(world);
             return (bool)map.GetType().GetMethod("IsPassable").Invoke(map, new object[] { cell });
+        }
+
+        private static void SetBuildingHp(Battle sim, uint id, int hp)
+        {
+            var world = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(sim);
+            var buildings = (Array)world.GetType().GetField("Buildings", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(world);
+            object state = buildings.GetValue((int)id - 1);
+            state.GetType().GetField("Hp", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(state, hp);
+            buildings.SetValue(state, (int)id - 1);
+        }
+
+        private static void MoveFactionUnits(Battle sim, uint faction, SimPoint point)
+        {
+            var world = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(world);
+            for (int i = 0; i < soldiers.Length; i++)
+            {
+                object state = soldiers.GetValue(i);
+                var initial = state.GetType().GetField("Initial", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(state);
+                if ((uint)initial.GetType().GetField("FactionId", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(initial) != faction) continue;
+                state.GetType().GetField("Position", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(state, point);
+                state.GetType().GetField("MoveGoal", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(state, point);
+                soldiers.SetValue(state, i);
+            }
+            var villagers = (Array)world.GetType().GetField("Villagers", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(world);
+            for (int i = 0; i < villagers.Length; i++)
+            {
+                object state = villagers.GetValue(i);
+                if ((uint)state.GetType().GetField("FactionId", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(state) != faction) continue;
+                state.GetType().GetField("Position", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(state, point);
+                state.GetType().GetField("MoveGoal", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(state, point);
+                villagers.SetValue(state, i);
+            }
         }
     }
 }

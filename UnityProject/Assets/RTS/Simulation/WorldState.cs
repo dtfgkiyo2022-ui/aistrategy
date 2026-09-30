@@ -137,6 +137,8 @@ namespace Rts.Simulation
         internal int WorkCell;
         internal bool Alive, Complete;
         internal int Hp, Progress, Queued;
+        /// <summary>V3-11 #2: tick at which an automatic bridge was destroyed; 0 means it has not been destroyed.</summary>
+        internal long DestroyedTick;
         internal long TrainRemaining;
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>

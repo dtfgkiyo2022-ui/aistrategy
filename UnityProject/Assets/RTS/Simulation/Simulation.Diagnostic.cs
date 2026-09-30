@@ -119,6 +119,7 @@ namespace Rts.Simulation
                     }
                     if (b.Kind == BuildingKind.Bridge)
                     {
+                        w.Value(n + "DestroyedTick", b.DestroyedTick);
                         var bridgeCells = b.BridgeCells ?? Array.Empty<int>();
                         w.Value(n + "BridgeCells.Count", (uint)bridgeCells.Length);
                         for (int j = 0; j < bridgeCells.Length; j++)
