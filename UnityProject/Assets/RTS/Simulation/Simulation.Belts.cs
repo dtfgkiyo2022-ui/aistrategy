@@ -152,7 +152,7 @@ namespace Rts.Simulation
                 var facing = c.Facings[i];
                 if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
-                    || !world.Map.IsPassable(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
+                    || !world.Map.IsPassable(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held };
                 if (held) MarkLinesForBelt(faction, cell);

@@ -69,6 +69,7 @@
     <Compile Include="MovementStallProbeTests.cs" />
     <Compile Include="MovementStallTests.cs" />
     <Compile Include="GridMapCacheTests.cs" />
+    <Compile Include="BridgeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>

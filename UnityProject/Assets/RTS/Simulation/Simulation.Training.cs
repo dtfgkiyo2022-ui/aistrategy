@@ -18,7 +18,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, e.CavalryTicks);
             if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, e.LightCavalryTicks);
-            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, e.RamTicks);
+            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
             if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
                 return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)

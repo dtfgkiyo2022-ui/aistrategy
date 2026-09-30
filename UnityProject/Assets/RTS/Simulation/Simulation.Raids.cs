@@ -135,7 +135,13 @@ namespace Rts.Simulation
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || b.Hp != 0) continue;
                 b.Alive = false;
-                foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                if (b.Kind == BuildingKind.Bridge)
+                {
+                    b.DestroyedTick = world.Tick;
+                    KillBridgeOccupants(b);
+                    foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, false);
+                }
+                else foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                 opened = true;
             }
             if (opened) TerrainChanged();
@@ -158,6 +164,14 @@ namespace Rts.Simulation
         /// <summary>The point of the footprint square closest to <paramref name="from"/>, for range checks.</summary>
         private SimPoint NearestFootprintPoint(BuildingState b, SimPoint from)
         {
+            if (b.Kind == BuildingKind.Bridge)
+            {
+                var cells = Footprint(b);
+                int best = cells.Length == 0 ? -1 : cells[0];
+                for (int i = 1; i < cells.Length; i++)
+                    if (DistanceSquared(from, world.Map.Center(cells[i])) < DistanceSquared(from, world.Map.Center(best))) best = cells[i];
+                return best < 0 ? from : world.Map.Center(best);
+            }
             int width = world.Config.Map.WidthCells, size = SizeOf(b.Kind);
             long cell = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
             long minX = b.OriginCell % width * cell, minZ = b.OriginCell / width * cell;
@@ -165,6 +179,26 @@ namespace Rts.Simulation
             long x = from.X.Raw < minX ? minX : from.X.Raw > maxX ? maxX : from.X.Raw;
             long z = from.Z.Raw < minZ ? minZ : from.Z.Raw > maxZ ? maxZ : from.Z.Raw;
             return new SimPoint(Fix64.FromRaw(x), Fix64.FromRaw(z));
+        }
+
+        private void KillBridgeOccupants(BuildingState bridge)
+        {
+            var cells = Footprint(bridge);
+            for (int i = 0; i < world.SoldierCount; i++)
+                if (world.Soldiers[i].Alive && Array.IndexOf(cells, world.Map.Cell(world.Soldiers[i].Position)) >= 0)
+                {
+                    world.Soldiers[i].Hp = 0;
+                    world.Soldiers[i].Alive = false;
+                    for (uint faction = 1; faction <= 2; faction++)
+                        if (world.Soldiers[i].Initial.FactionId != faction && IsVisibleTo(faction, world.Soldiers[i].Position))
+                            world.Factions[faction - 1].ContactIds[i] = 0;
+                }
+            for (int i = 0; i < world.VillagerCount; i++)
+                if (world.Villagers[i].Alive && Array.IndexOf(cells, world.Map.Cell(world.Villagers[i].Position)) >= 0)
+                {
+                    world.Villagers[i].Hp = 0;
+                    world.Villagers[i].Alive = false;
+                }
         }
     }
 }

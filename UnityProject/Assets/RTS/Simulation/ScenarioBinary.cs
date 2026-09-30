@@ -13,6 +13,7 @@ namespace Rts.Simulation
         private const int MasonryTailMarker = 0x4D534F4E; // "MSON", after the forestry tail when present.
         private const int CaravanTailMarker = 0x4352564E; // "CRVN", after forestry/masonry tails when present.
         private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the caravan tail when present.
+        private const int BridgeTailMarker = 0x42524447; // "BRDG", after the masonry tail (always written with it) and the cavalry tail.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -117,7 +118,9 @@ namespace Rts.Simulation
                 // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
             bool processingRules = c.Economy.ProcessingChain;
             bool forestryRules = c.Economy.Forestry;
-            bool masonryRules = c.Economy.Masonry;
+            bool bridgeRules = c.Economy.Bridge;
+            // The bridge civilisation carries the shared market reserves through the masonry tail, as it did on its own branch.
+            bool masonryRules = c.Economy.Masonry || bridgeRules;
             bool caravanRules = c.Economy.Caravan;
             bool cavalryRules = c.Economy.Cavalry;
             bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules;
@@ -193,6 +196,17 @@ namespace Rts.Simulation
                         w.Write(c.Economy.LightCavalryRange.Raw); w.Write(c.Economy.LightCavalrySpeed.Raw); w.Write(c.Economy.LightCavalryVision.Raw);
                         w.Write(c.Economy.CavalryDrillFood); w.Write(c.Economy.CavalryDrillWood); w.Write(c.Economy.CavalryDrillTicks);
                         w.Write(c.Economy.CavalryDrillSpeed.Raw);
+                    }
+                    if (bridgeRules)
+                    {
+                        w.Write(BridgeTailMarker);
+                        w.Write(c.Economy.Bridge);
+                        w.Write(c.Economy.EngineerCampSizeCells); w.Write(c.Economy.EngineerCampWoodCost); w.Write(c.Economy.EngineerCampWork); w.Write(c.Economy.EngineerCampHp);
+                        w.Write(c.Economy.BridgeWoodCost); w.Write(c.Economy.BridgeWork); w.Write(c.Economy.BridgeHp); w.Write(c.Economy.MaxBridgeLength);
+                        w.Write(c.Economy.BridgeworksFoodCost); w.Write(c.Economy.BridgeworksWoodCost); w.Write(c.Economy.BridgeworksTicks);
+                        w.Write(c.Economy.BridgeworksHpBonus); w.Write(c.Economy.BridgeworksWorkReduction);
+                        w.Write(c.Economy.SiegeDeploymentFoodCost); w.Write(c.Economy.SiegeDeploymentWoodCost); w.Write(c.Economy.SiegeDeploymentTicks);
+                        w.Write(c.Economy.SiegeDeploymentRamTicksReduction); w.Write(c.Economy.SiegeDeploymentRamCapacityBonus);
                     }
                 }
                 return s.ToArray();
@@ -372,6 +386,17 @@ namespace Rts.Simulation
                 e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
             }
         }
+        private static void ReadBridgeTail(BinaryReader r, EconomyRules e)
+        {
+            // The encoder always writes every bridge value, so they are read unconditionally (see ReadCavalryTail).
+            e.Bridge = Bool(r);
+            e.EngineerCampSizeCells = r.ReadInt32(); e.EngineerCampWoodCost = r.ReadInt32(); e.EngineerCampWork = r.ReadInt32(); e.EngineerCampHp = r.ReadInt32();
+            e.BridgeWoodCost = r.ReadInt32(); e.BridgeWork = r.ReadInt32(); e.BridgeHp = r.ReadInt32(); e.MaxBridgeLength = r.ReadInt32();
+            e.BridgeworksFoodCost = r.ReadInt32(); e.BridgeworksWoodCost = r.ReadInt32(); e.BridgeworksTicks = r.ReadInt32();
+            e.BridgeworksHpBonus = r.ReadInt32(); e.BridgeworksWorkReduction = r.ReadInt32();
+            e.SiegeDeploymentFoodCost = r.ReadInt32(); e.SiegeDeploymentWoodCost = r.ReadInt32(); e.SiegeDeploymentTicks = r.ReadInt32();
+            e.SiegeDeploymentRamTicksReduction = r.ReadInt32(); e.SiegeDeploymentRamCapacityBonus = r.ReadInt32();
+        }
         /// <summary>Every marked civilisation tail, in any order the encoder wrote them, until the end of the record.</summary>
         private static void ReadMarkedTails(BinaryReader r, EconomyRules e)
         {
@@ -383,10 +408,12 @@ namespace Rts.Simulation
             else if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
             else if (marker == CaravanTailMarker) ReadCaravanTail(r, e);
             else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
+            else if (marker == BridgeTailMarker) ReadBridgeTail(r, e);
             else throw new InvalidDataException("Invalid optional tail marker.");
         }
         private static bool IsTailMarker(int value)
-            => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker;
+            => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker
+                || value == BridgeTailMarker;
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
         {
             e.Caravan = Bool(r);

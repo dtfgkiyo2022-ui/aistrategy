@@ -501,7 +501,8 @@ namespace Rts.Simulation
                 || world.Economies[faction - 1].Civ == CivKind.Forestry
                 || world.Economies[faction - 1].Civ == CivKind.Masonry
                 || world.Economies[faction - 1].Civ == CivKind.Caravan
-                || world.Economies[faction - 1].Civ == CivKind.Cavalry;
+                || world.Economies[faction - 1].Civ == CivKind.Cavalry
+                || world.Economies[faction - 1].Civ == CivKind.Bridge;
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
             // Caravan's first market is the base condition for the civilisation, so allow that one building before
@@ -560,7 +561,7 @@ namespace Rts.Simulation
                 return;
             }
             ref var b = ref world.Buildings[workshop];
-            if (!b.Complete || b.Held || b.Queued > 0 || CountClass(faction, UnitKind.Ram) >= AutoRams) return;
+            if (!b.Complete || b.Held || b.Queued > 0 || CountClass(faction, UnitKind.Ram) >= AutoRamLimitFor(faction)) return;
             if (HasRoomFor(faction, UnitKind.Ram) && CanPay(faction, UnitKind.Ram)) Enqueue(faction, ref b, UnitKind.Ram);
         }
     }

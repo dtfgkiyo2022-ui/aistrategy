@@ -26,6 +26,8 @@ namespace Rts.Simulation
 
         private bool CavalryOn => AgesOn && world.Config.Economy.Cavalry;
 
+        private bool BridgeOn => AgesOn && world.Config.Economy.Bridge;
+
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
 
@@ -49,6 +51,9 @@ namespace Rts.Simulation
 
         private bool CaravanAllowed(uint faction)
             => CaravanOn && world.Economies[faction - 1].Civ == CivKind.Caravan && world.Economies[faction - 1].Age >= 1;
+
+        private bool BridgeAllowed(uint faction)
+            => BridgeOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -108,7 +113,7 @@ namespace Rts.Simulation
             if (e.Civ == CivKind.Primitive)
                 return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
                     || MasonryOn && civ == CivKind.Masonry || CaravanOn && civ == CivKind.Caravan
-                    || CavalryOn && civ == CivKind.Cavalry;
+                    || CavalryOn && civ == CivKind.Cavalry || BridgeOn && civ == CivKind.Bridge;
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
@@ -204,15 +209,16 @@ namespace Rts.Simulation
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
-            // Keep the old pure two-score decision, including its exact tie rule, when both new flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             // A civilisation whose flag is off scores zero, which never steals a tie from an older one.
             int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
             int stone = MasonryOn ? CountUsableMasonryStone(faction, core) : 0;
             int caravan = CaravanOn ? CountUsableCaravanOutposts(faction, core) : 0;
             int cavalry = CavalryOn ? CountCavalryMobility(faction, core) : 0;
-            return EconomyDecision.ChooseCiv(ore, food, forest, stone, caravan, cavalry, GuaranteedFoodPoints);
+            int bridge = BridgeOn ? CountUsableBridgeSaving(faction, core) : 0;
+            return EconomyDecision.ChooseCiv(ore, food, forest, stone, caravan, cavalry, bridge, GuaranteedFoodPoints);
         }
 
         /// <summary>
@@ -317,6 +323,22 @@ namespace Rts.Simulation
             }
             return count;
         }
+
+        /// <summary>
+        /// V3-11 #4: the engineer terrain score is the best legal one-bridge shortening from this core to a public
+        /// outpost or an observed resource. The candidate search temporarily opens the exact river cells and restores
+        /// their previous passability in a finally block; the returned value is a 0..3 tier, never a raw distance.
+        /// </summary>
+        private int CountUsableBridgeSaving(uint faction, SimPoint core)
+        {
+            if (!BridgeOn) return 0;
+            if (!TryFindBridgeCandidate(faction, requireCamp: false, requireCiv: false, avoidDanger: false,
+                out _, out _, out _, out int savingCells)) return 0;
+            return EngineerBridgeScore(savingCells);
+        }
+
+        // Kept as a descriptive counterpart to CountUsableForestWood and CountUsableMasonryStone for headless probes.
+        private int CountUsableBridgeScore(uint faction, SimPoint core) => CountUsableBridgeSaving(faction, core);
 
         private bool HasUsableQuarrySite(uint faction, int nodeCell, uint nodeId)
         {

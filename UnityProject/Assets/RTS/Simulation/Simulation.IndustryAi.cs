@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
 
@@ -13,6 +14,13 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int Haulers = 2;
+        // V3-11 #2/#4 provisional policy: one cell is two metres on the default map, so the bridge must save 4 m.
+        private const int BridgeShorteningThresholdCells = 2;
+        // The choice score is deliberately capped and tiered so path length never enters the resource-point score
+        // with its original magnitude.  0/1/2/3 correspond to <4 m, 4-15 m, 16-31 m and 32 m or more on the default map.
+        private const int BridgeScoreTier2Cells = 8, BridgeScoreTier3Cells = 16;
+        private const int BridgeDangerMeters = 16;
+        private const long BridgeRebuildWaitTicks = 200;
         private static readonly Facing[] Sides = { Facing.North, Facing.East, Facing.South, Facing.West };
 
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
@@ -26,6 +34,7 @@ namespace Rts.Simulation
                 return;
             }
             if (MasonryAllowed(faction)) { DecideQuarry(faction); return; }
+            if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -173,6 +182,276 @@ namespace Rts.Simulation
                 whole = LayBelts(faction, route.cells, route.facings);
             }
             SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+        }
+
+        /// <summary>V3-11: build the camp, then choose and build one useful bridge at a time.</summary>
+        private void DecideEngineerCamp(uint faction)
+        {
+            int camp = OwnBuildingIndex(faction, BuildingKind.EngineerCamp);
+            if (camp < 0)
+            {
+                ref var economy = ref world.Economies[faction - 1];
+                if (economy.Wood < world.Config.Economy.EngineerCampWoodCost) return;
+                int origin = FindSite(faction, world.Config.Economy.EngineerCampSizeCells);
+                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.EngineerCamp, origin, Facing.North, 0);
+                return;
+            }
+            // Any human bridge operation owns the bridge policy for the rest of this match. This covers a manually
+            // removed bridge too: the automatic economy must not replace it at a different location.
+            if (HasManualBridge(faction) || ActiveBridgeCount(faction) >= AutomaticBridgeLimit(faction)) return;
+            // With no surviving automatic bridge, retain the old single-line behaviour: the destroyed line itself
+            // waits 200 ticks. Once another automatic bridge survives, cooldowns are independent and this one may
+            // be rebuilt without stopping the surviving route.
+            if (AutomaticBridgeRebuildBlocked(faction)) return;
+            ref var bridgeEconomy = ref world.Economies[faction - 1];
+            if (bridgeEconomy.Wood < world.Config.Economy.BridgeWoodCost) return;
+            if (!TryFindBridgeCandidate(faction, out int[] cells, out Facing facing, out int workCell)) return;
+            if (!TryValidateBridge(faction, cells, facing, out cells, out workCell)) return;
+            PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], facing, 0, cells, workCell);
+        }
+
+        private bool HasManualBridge(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.FactionId == faction && b.Kind == BuildingKind.Bridge && b.Held) return true;
+            }
+            return false;
+        }
+
+        private bool AutomaticBridgeRebuildBlocked(uint faction)
+        {
+            bool hasActive = false, hasCooldown = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.FactionId != faction || b.Kind != BuildingKind.Bridge || b.Held) continue;
+                if (b.Alive) hasActive = true;
+                else if (b.DestroyedTick > 0 && world.Tick - b.DestroyedTick < BridgeRebuildWaitTicks) hasCooldown = true;
+            }
+            return hasCooldown && !hasActive;
+        }
+
+        private int AutomaticBridgeLimit(uint faction)
+        {
+            // A single observed resource line keeps the legacy one-bridge behaviour (and avoids opening a second
+            // route merely because the fixed core objectives exist). Two or more observed public resource points
+            // justify the provisional three-route limit used by the multi-bridge policy.
+            int observedResources = 0;
+            var explored = world.Factions[faction - 1].ExploredCells;
+            foreach (var node in world.Nodes)
+            {
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (node.Remaining > 0 && cell >= 0 && explored[cell]) observedResources++;
+            }
+            return observedResources >= 2 ? MaxActiveBridges : 1;
+        }
+
+        private bool TryFindBridgeCandidate(uint faction, out int[] bestCells, out Facing bestFacing, out int bestWorkCell)
+            => TryFindBridgeCandidate(faction, true, true, true, out bestCells, out bestFacing, out bestWorkCell, out _);
+
+        /// <summary>Finds the best legal bridge. The start-of-match evaluator uses the same search with the camp and
+        /// civilisation gates disabled; it still requires a legal river crossing and a reachable building bank.</summary>
+        private bool TryFindBridgeCandidate(uint faction, bool requireCamp, bool requireCiv, bool avoidDanger,
+            out int[] bestCells, out Facing bestFacing, out int bestWorkCell, out int bestOwnSaving)
+        {
+            bestCells = null; bestFacing = Facing.North; bestWorkCell = -1; bestOwnSaving = 0;
+            var destinations = BridgeDestinations(faction, includeKnownEnemyCore: requireCamp);
+            if (destinations.Count == 0) return false;
+            // The start-of-match score is explicitly core-to-destination. Once the civ is active, retain the
+            // previous operational search over the known objective set so an already useful bridge line is not lost.
+            var sources = requireCamp ? destinations : BridgeSources(faction);
+            if (sources.Count == 0) return false;
+            var observedEnemyCells = avoidDanger ? ObservedEnemyCells(faction) : new List<int>();
+            int bestAdjusted = 0, bestOwn = 0, bestEnemy = 0, bestFirst = int.MaxValue, bestLength = int.MaxValue;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int max = world.Config.Economy.MaxBridgeLength;
+            // Positive directions and z/x order are the deterministic candidate order. Reverse input is equivalent
+            // for placement, and the first candidate wins every remaining tie.
+            int[] deltas = { 1, width };
+            for (int direction = 0; direction < deltas.Length; direction++)
+                for (int z = 0; z < height; z++)
+                    for (int x = 0; x < width; x++)
+                        {
+                            int first = z * width + x, delta = deltas[direction];
+                            if (!IsRiverCell(first) || world.Map.IsPassable(first)) continue;
+                            int before = first - delta;
+                            if (before < 0 || before >= width * height || !world.Map.IsPassable(before) || IsRiverCell(before)) continue;
+                            int length = 0, last = first;
+                            while (length < max && last >= 0 && last < width * height && IsRiverCell(last) && !world.Map.IsPassable(last))
+                            {
+                                if (direction == 0 && last / width != z || direction == 1 && last % width != x) break;
+                                length++; last += delta;
+                            }
+                            if (length == 0 || length > max || last < 0 || last >= width * height || !world.Map.IsPassable(last) || IsRiverCell(last)) continue;
+                            var candidate = new int[length];
+                            for (int i = 0; i < length; i++) candidate[i] = first + delta * i;
+                            if (!TryValidateBridge(faction, candidate, direction == 0 ? Facing.East : Facing.South, out _, out int workCell,
+                                requireCamp, requireCiv)) continue;
+                            if (avoidDanger && ObservedEnemyNear(faction, workCell)) continue;
+                            if (BridgeOnRebuildCooldown(faction, candidate)) continue;
+                            int ownSaving = MaximumBridgeSaving(candidate, sources, destinations);
+                            if (ownSaving < BridgeShorteningThresholdCells) continue;
+                            int enemySaving = avoidDanger ? MaximumBridgeSaving(candidate, observedEnemyCells, destinations) : 0;
+                            int adjusted = checked(ownSaving - enemySaving / 2); // enemy shortcut is a discount, based only on observed enemies
+                            if (adjusted <= 0) continue;
+                            if (bestCells == null || adjusted > bestAdjusted || adjusted == bestAdjusted && ownSaving > bestOwn
+                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving < bestEnemy
+                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate[0] < bestFirst
+                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate[0] == bestFirst && length < bestLength)
+                            {
+                                bestCells = candidate; bestFacing = direction == 0 ? Facing.East : Facing.South; bestWorkCell = workCell;
+                                bestAdjusted = adjusted; bestOwn = ownSaving; bestEnemy = enemySaving; bestFirst = candidate[0]; bestLength = length;
+                                bestOwnSaving = ownSaving;
+                            }
+                        }
+            return bestCells != null;
+        }
+
+        private List<int> BridgeDestinations(uint faction, bool includeKnownEnemyCore)
+        {
+            var result = new List<int>();
+            var seen = new HashSet<int>();
+            void Add(int cell)
+            {
+                if (cell >= 0 && world.Map.IsPassable(cell) && seen.Add(cell)) result.Add(cell);
+            }
+            // Cores and outposts are fixed public objectives; resource nodes enter only after this faction has
+            // observed their cells. The source side remains the own core, so the enemy core is only a known goal,
+            // never a source of hidden unit information.
+            Add(world.Map.Cell(OwnCore(faction).Definition.Position));
+            if (includeKnownEnemyCore) Add(world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position));
+            foreach (var outpost in world.Outposts) Add(world.Map.Cell(outpost.Definition.Position));
+            var explored = world.Factions[faction - 1].ExploredCells;
+            foreach (var node in world.Nodes)
+            {
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (node.Remaining > 0 && cell >= 0 && explored[cell]) Add(cell);
+            }
+            return result;
+        }
+
+        private List<int> BridgeSources(uint faction)
+        {
+            var result = new List<int>(1);
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            if (core >= 0 && world.Map.IsPassable(core)) result.Add(core);
+            return result;
+        }
+
+        private List<int> ObservedEnemyCells(uint faction)
+        {
+            var result = new List<int>();
+            var seen = new HashSet<int>();
+            var visible = world.Factions[faction - 1].VisibleCells;
+            for (int i = 0; i < world.SoldierCount; i++)
+            {
+                var soldier = world.Soldiers[i];
+                if (!soldier.Alive || soldier.Initial.FactionId == faction) continue;
+                int cell = world.Map.Cell(soldier.Position);
+                if (cell >= 0 && visible[cell] && world.Map.IsPassable(cell) && seen.Add(cell)) result.Add(cell);
+            }
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                if (!villager.Alive || villager.FactionId == faction) continue;
+                int cell = world.Map.Cell(villager.Position);
+                if (cell >= 0 && visible[cell] && world.Map.IsPassable(cell) && seen.Add(cell)) result.Add(cell);
+            }
+            return result;
+        }
+
+        private int MaximumBridgeSaving(int[] bridgeCells, List<int> sources, List<int> destinations)
+        {
+            if (sources.Count == 0) return 0;
+            int best = 0, mapCells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            var without = new int[sources.Count * destinations.Count];
+            for (int s = 0; s < sources.Count; s++)
+                for (int d = 0; d < destinations.Count; d++)
+                    without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0 : BridgeRouteLength(sources[s], destinations[d]);
+            var original = new bool[bridgeCells.Length];
+            for (int i = 0; i < bridgeCells.Length; i++)
+            {
+                original[i] = world.Map.IsPassable(bridgeCells[i]);
+                world.Map.SetPassable(bridgeCells[i], true);
+            }
+            try
+            {
+                for (int s = 0; s < sources.Count; s++)
+                    for (int d = 0; d < destinations.Count; d++)
+                    {
+                        int before = without[s * destinations.Count + d];
+                        if (before == 0) continue;
+                        int after = BridgeRouteLength(sources[s], destinations[d]);
+                        if (after < 0) continue;
+                        int saving = before < 0 ? checked(mapCells - after) : before - after;
+                        if (saving > best) best = saving;
+                    }
+            }
+            finally
+            {
+                for (int i = 0; i < bridgeCells.Length; i++) world.Map.SetPassable(bridgeCells[i], original[i]);
+            }
+            return best;
+        }
+
+        /// <summary>Converts a route-cell saving into the small integer used beside resource-point scores.</summary>
+        private static int EngineerBridgeScore(int savingCells)
+        {
+            if (savingCells < BridgeShorteningThresholdCells) return 0;
+            if (savingCells < BridgeScoreTier2Cells) return 1;
+            if (savingCells < BridgeScoreTier3Cells) return 2;
+            return 3;
+        }
+
+        private int BridgeRouteLength(int start, int destination)
+        {
+            var route = world.Map.SharedRoute(start, world.Map.Center(destination));
+            return route.Length == 0 ? -1 : route.Length - 1;
+        }
+
+        private bool ObservedEnemyNear(uint faction, int cell)
+        {
+            long radius = Fix64.FromInt(BridgeDangerMeters).Raw;
+            long limit = checked(radius * radius);
+            var point = world.Map.Center(cell);
+            var visible = world.Factions[faction - 1].VisibleCells;
+            for (int i = 0; i < world.SoldierCount; i++)
+            {
+                var enemy = world.Soldiers[i];
+                if (!enemy.Alive || enemy.Initial.FactionId == faction) continue;
+                int enemyCell = world.Map.Cell(enemy.Position);
+                if (enemyCell < 0 || !visible[enemyCell]) continue;
+                long dx = enemy.Position.X.Raw - point.X.Raw, dz = enemy.Position.Z.Raw - point.Z.Raw;
+                if (checked(dx * dx + dz * dz) <= limit) return true;
+            }
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var enemy = world.Villagers[i];
+                if (!enemy.Alive || enemy.FactionId == faction) continue;
+                int enemyCell = world.Map.Cell(enemy.Position);
+                if (enemyCell < 0 || !visible[enemyCell]) continue;
+                long dx = enemy.Position.X.Raw - point.X.Raw, dz = enemy.Position.Z.Raw - point.Z.Raw;
+                if (checked(dx * dx + dz * dz) <= limit) return true;
+            }
+            return false;
+        }
+
+        private bool BridgeOnRebuildCooldown(uint faction, int[] cells)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.FactionId != faction || b.Kind != BuildingKind.Bridge || b.Alive || b.Held || b.DestroyedTick <= 0
+                    || world.Tick - b.DestroyedTick >= BridgeRebuildWaitTicks) continue;
+                var old = b.BridgeCells ?? Array.Empty<int>();
+                if (old.Length != cells.Length) continue;
+                bool same = true;
+                foreach (int cell in cells) if (Array.IndexOf(old, cell) < 0) { same = false; break; }
+                if (same) return true;
+            }
+            return false;
         }
 
         /// <summary>V3-7 #2: after the first camp, keep a separate core-wood line and a bow-gear line.</summary>

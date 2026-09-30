@@ -187,6 +187,8 @@ namespace Rts.Simulation
                     return CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) >= 0;
                 case CivKind.Cavalry:
                     return CavalryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Stable) >= 0;
+                case CivKind.Bridge:
+                    return BridgeAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.EngineerCamp) >= 0;
                 default:
                     return false;
             }

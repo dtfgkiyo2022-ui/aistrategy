@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Rts.Contracts;
 using Rts.Decision;
 
@@ -13,6 +14,9 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int SiteSearchRadiusCells = 30, CoreClearanceCells = 4, NodeClearanceCells = 2, BuildingClearanceCells = 2;
+        // V3-11 #4 provisional simultaneous bridge limit. It is deliberately a simulation rule rather than a
+        // contract field, so enabling bridges does not alter the old scenario bytes.
+        private const int MaxActiveBridges = 3;
 
         /// <summary>AI phase, after villager training (5.4 steps 2 and 3).</summary>
         private void DecideBuildings(uint faction)
@@ -75,16 +79,22 @@ namespace Rts.Simulation
 
         /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId)
+            => PlaceBuildingAt(faction, kind, origin, facing, nodeId, null, -1);
+
+        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1)
         {
             ref var economy = ref world.Economies[faction - 1];
             economy.Wood = checked(economy.Wood - WoodOf(kind, faction));
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
-            var footprint = Footprint(origin, SizeOf(kind));
+            var footprint = kind == BuildingKind.Bridge ? bridgeCells : Footprint(origin, SizeOf(kind));
+            if (footprint == null || footprint.Length == 0) return;
             foreach (int cell in footprint) world.Map.SetPassable(cell, false);
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
-                WorkCell = NearestPassableCell(FootprintCenter(origin, SizeOf(kind))), Alive = true, Hp = HpOf(kind), Facing = facing, NodeId = nodeId };
+                BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
+                WorkCell = requestedWorkCell >= 0 ? requestedWorkCell : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind))),
+                Alive = true, Hp = HpOf(kind, faction), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
@@ -93,6 +103,75 @@ namespace Rts.Simulation
             EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
+        }
+
+        private bool TryPlaceBridge(uint faction, EconomyCommand command)
+        {
+            if (!TryValidateBridge(faction, command.Cells, command.Facing, out int[] cells, out int workCell)) return false;
+            if (world.Economies[faction - 1].Wood < WoodOf(BuildingKind.Bridge, faction)) return false;
+            PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
+            world.Buildings[world.BuildingCount - 1].Held = true;
+            return true;
+        }
+
+        /// <summary>V3-11 #2: the hand-placement rules are also the rules used by the automatic candidate search.</summary>
+        private bool TryValidateBridge(uint faction, IReadOnlyList<int> requested, Facing facing, out int[] cells, out int workCell,
+            bool requireCamp = true, bool requireCiv = true)
+        {
+            cells = null;
+            workCell = -1;
+            bool campReady = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].Complete && world.Buildings[i].FactionId == faction
+                    && world.Buildings[i].Kind == BuildingKind.EngineerCamp) { campReady = true; break; }
+            if ((requireCiv ? !BridgeAllowed(faction) : !BridgeOn) || requireCamp && !campReady
+                || requireCamp && ActiveBridgeCount(faction) >= MaxActiveBridges || (byte)facing > 3 || requested == null
+                || requested.Count == 0 || requested.Count > world.Config.Economy.MaxBridgeLength) return false;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            cells = new int[requested.Count];
+            for (int i = 0; i < cells.Length; i++) cells[i] = requested[i];
+            int first = cells[0], second = cells.Length == 1 ? first + 1 : cells[1], delta = second - first;
+            bool horizontal = delta == 1 || delta == -1;
+            bool vertical = delta == width || delta == -width;
+            if (!horizontal && !vertical) { cells = null; return false; }
+            var seen = new HashSet<int>();
+            for (int i = 0; i < cells.Length; i++)
+            {
+                int cell = cells[i];
+                if (cell < 0 || cell >= width * height || !seen.Add(cell) || !IsRiverCell(cell) || world.Map.IsPassable(cell)) { cells = null; return false; }
+                if (i > 0 && cells[i] != cells[i - 1] + delta) { cells = null; return false; }
+            }
+            int before = first - delta, after = cells[cells.Length - 1] + delta;
+            if (before < 0 || before >= width * height || after < 0 || after >= width * height
+                || horizontal && (before / width != first / width || after / width != first / width)
+                || vertical && (before % width != first % width || after % width != first % width)
+                || !world.Map.IsPassable(before) || !world.Map.IsPassable(after)
+                || IsRiverCell(before) || IsRiverCell(after)) { cells = null; return false; }
+            foreach (int cell in cells)
+            {
+                foreach (var node in world.Nodes)
+                    if (world.Map.Cell(node.Definition.Position) == cell) { cells = null; return false; }
+                for (int i = 0; i < world.BuildingCount; i++)
+                        if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), cell) >= 0) { cells = null; return false; }
+            }
+            for (int i = 0; i < world.VillagerCount && workCell < 0; i++)
+            {
+                var villager = world.Villagers[i];
+                if (!villager.Alive || villager.FactionId != faction) continue;
+                int start = world.Map.Cell(villager.Position);
+                if (world.Map.FindPath(start, world.Map.Center(before)).Length > 0) workCell = before;
+                else if (world.Map.FindPath(start, world.Map.Center(after)).Length > 0) workCell = after;
+            }
+            if (workCell < 0) { cells = null; return false; }
+            return true;
+        }
+
+        private int ActiveBridgeCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Bridge) count++;
+            return count;
         }
 
         /// <summary>
@@ -126,7 +205,7 @@ namespace Rts.Simulation
         {
             foreach (int cell in Footprint(origin, size))
             {
-                if (!world.Map.IsPassable(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
                 if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
                 foreach (var node in world.Nodes)
                     if (Chebyshev(cell, world.Map.Cell(node.Definition.Position)) < NodeClearanceCells) return false;
@@ -262,6 +341,7 @@ namespace Rts.Simulation
                 if (v.Task == VillagerTask.ToBuild && InRange(v.Position, world.Map.Center(b.WorkCell), GatherReach)) v.Task = VillagerTask.Building;
             }
             RepairBuildings();
+            bool opened = false;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
@@ -274,10 +354,16 @@ namespace Rts.Simulation
                 if (b.Progress < WorkOf(b.Kind, b.FactionId)) continue;
                 b.Progress = WorkOf(b.Kind, b.FactionId);
                 b.Complete = true;
+                if (b.Kind == BuildingKind.Bridge)
+                {
+                    foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                    opened = true;
+                }
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
                         world.Villagers[j].Task = VillagerTask.Idle;
             }
+            if (opened) TerrainChanged();
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
@@ -320,10 +406,12 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
                 : kind == BuildingKind.ArcheryRange ? e.RangeSizeCells : kind == BuildingKind.Stable ? e.StableSizeCells
-                : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.Caravanserai ? e.CaravanseraiSizeCells : e.BarracksSizeCells;
+                : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.Caravanserai ? e.CaravanseraiSizeCells
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampSizeCells
+                : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
-        private int HpOf(BuildingKind kind)
+        private int HpOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
@@ -333,7 +421,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
-                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp : e.BarracksHp;
+                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -355,7 +444,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
-                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork : e.BarracksWork;
+                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -369,9 +459,15 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
+
+        // Keep the age-tech effect local to bridge buildings. Existing non-bridge building rules,
+        // including flag-off maps, continue to use their original values unchanged.
+        private int BridgeHpForBuilding(uint faction)
+            => BridgeOn && world.Economies[faction - 1].Civ == CivKind.Bridge ? BridgeHpFor(faction) : world.Config.Economy.BridgeHp;
 
         /// <summary>V3-5: the stone a building costs (walls and towers).</summary>
         private int StoneOf(BuildingKind kind, uint faction)
@@ -382,7 +478,7 @@ namespace Rts.Simulation
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
 
-        private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));
+        private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>() : Footprint(b.OriginCell, SizeOf(b.Kind));
 
         private int[] Footprint(int origin, int size)
         {
@@ -399,6 +495,21 @@ namespace Rts.Simulation
             long half = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw * (size - 1) / 2;
             return new SimPoint(Fix64.FromRaw(corner.X.Raw + half), Fix64.FromRaw(corner.Z.Raw + half));
         }
+
+        private SimPoint BridgeCenter(int[] cells)
+        {
+            if (cells == null || cells.Length == 0) return world.Map.Center(0);
+            var first = world.Map.Center(cells[0]);
+            var last = world.Map.Center(cells[cells.Length - 1]);
+            return new SimPoint(Fix64.FromRaw((first.X.Raw + last.X.Raw) / 2), Fix64.FromRaw((first.Z.Raw + last.Z.Raw) / 2));
+        }
+
+        private SimPoint BuildingCenter(BuildingState building)
+            => building.Kind == BuildingKind.Bridge ? BridgeCenter(building.BridgeCells) : FootprintCenter(building.OriginCell, SizeOf(building.Kind));
+
+        private bool IsRiverCell(int cell)
+            => world.Config.Map.Terrain.Length != 0 && cell >= 0 && cell < world.Config.Map.Terrain.Length
+                && world.Config.Map.Terrain[cell] == (byte)TerrainKind.River;
 
         private int NearestPassableCell(SimPoint from)
         {

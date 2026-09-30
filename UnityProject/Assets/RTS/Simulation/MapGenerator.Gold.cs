@@ -43,9 +43,9 @@ namespace Rts.Simulation
         /// processing-chain rules change no placement.
         /// </summary>
         /// <summary>Generates the same terrain and random sequence, optionally enabling masonry after generation.</summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold = false, bool processingChain = false, bool masonry = false)
+        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold = false, bool processingChain = false, bool masonry = false, bool bridge = false)
         {
-            var scenario = GenerateTerrain(seed, out _, processingChain);
+            var scenario = GenerateTerrain(seed, out _, processingChain, bridge);
             if (gold) TryAddGold(scenario, seed, out _);
             scenario.Economy.Masonry = masonry;
             return scenario;

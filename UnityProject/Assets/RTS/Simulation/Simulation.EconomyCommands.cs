@@ -63,19 +63,26 @@ namespace Rts.Simulation
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
+                    if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     removed.Alive = false;
-                    foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, true);
+                    foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
                     TerrainChanged();
                     return;
                 case EconomyCommandKind.PlaceBuilding:
                 {
                     var kind = c.Building;
+                    if (kind == BuildingKind.Bridge)
+                    {
+                        TryPlaceBridge(faction, c);
+                        return;
+                    }
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
+                        && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)

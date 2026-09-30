@@ -140,10 +140,14 @@ namespace Rts.Simulation
         internal BuildingKind Kind;
         /// <summary>Lower-left cell of the square footprint; its cells are impassable from placement on.</summary>
         internal int OriginCell;
+        /// <summary>V3-11 #1: the exact river cells occupied by a bridge; null for every other building.</summary>
+        internal int[] BridgeCells;
         /// <summary>Nearest passable cell outside the footprint, where builders stand and new soldiers appear.</summary>
         internal int WorkCell;
         internal bool Alive, Complete;
         internal int Hp, Progress, Queued;
+        /// <summary>V3-11 #2: tick at which an automatic bridge was destroyed; 0 means it has not been destroyed.</summary>
+        internal long DestroyedTick;
         internal long TrainRemaining;
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
@@ -494,6 +498,15 @@ namespace Rts.Simulation
                 && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0
                 && e.MasonryDefenceCostPermille > 0 && e.MasonryDefenceCostPermille <= 1000
                 && e.MasonryDefenceWorkPermille > 0 && e.MasonryDefenceWorkPermille <= 1000), "Masonry requires valid ages, industry and quarry rules.");
+            Require(!e.Bridge || (e.Ages && e.Industry && e.EngineerCampSizeCells > 0 && e.EngineerCampSizeCells <= 8
+                && e.EngineerCampWoodCost >= 0 && e.EngineerCampWork > 0 && e.EngineerCampHp > 0
+                && e.BridgeWoodCost >= 0 && e.BridgeWork > 0 && e.BridgeHp > 0
+                && e.MaxBridgeLength > 0 && e.MaxBridgeLength <= 256
+                && e.BridgeworksFoodCost >= 0 && e.BridgeworksWoodCost >= 0 && e.BridgeworksTicks > 0
+                && e.BridgeworksHpBonus >= 0 && e.BridgeworksWorkReduction >= 0
+                && e.SiegeDeploymentFoodCost >= 0 && e.SiegeDeploymentWoodCost >= 0 && e.SiegeDeploymentTicks > 0
+                && e.SiegeDeploymentRamTicksReduction >= 0 && e.SiegeDeploymentRamTicksReduction < e.RamTicks
+                && e.SiegeDeploymentRamCapacityBonus >= 0), "Bridge requires valid ages, industry and bridge rules.");
             Require(!e.Caravan || (e.Ages && e.CaravanseraiSizeCells > 0 && e.CaravanseraiSizeCells <= 8
                 && e.CaravanseraiWoodCost >= 0 && e.CaravanseraiWork > 0 && e.CaravanseraiHp > 0
                 && e.CaravanOutpostReach >= 0 && e.CaravanMinimumDistance > 0 && e.CaravanRewardDistanceStep > 0
@@ -663,7 +676,15 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                 Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
+                 Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge,
+                 EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
+                 EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
+                  BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
+                  BridgeworksFoodCost = e.BridgeworksFoodCost, BridgeworksWoodCost = e.BridgeworksWoodCost, BridgeworksTicks = e.BridgeworksTicks,
+                  BridgeworksHpBonus = e.BridgeworksHpBonus, BridgeworksWorkReduction = e.BridgeworksWorkReduction,
+                  SiegeDeploymentFoodCost = e.SiegeDeploymentFoodCost, SiegeDeploymentWoodCost = e.SiegeDeploymentWoodCost, SiegeDeploymentTicks = e.SiegeDeploymentTicks,
+                  SiegeDeploymentRamTicksReduction = e.SiegeDeploymentRamTicksReduction, SiegeDeploymentRamCapacityBonus = e.SiegeDeploymentRamCapacityBonus,
+                 QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
                  QuarryWork = e.QuarryWork, QuarryHp = e.QuarryHp, QuarryIntervalTicks = e.QuarryIntervalTicks,
                  LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
                 LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,

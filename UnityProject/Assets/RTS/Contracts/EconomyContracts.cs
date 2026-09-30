@@ -217,6 +217,17 @@ namespace Rts.Contracts
             return new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceWall, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
         }
 
+        /// <summary>V3-11 #1: places a short straight bridge on the supplied river cells.</summary>
+        public static EconomyCommand PlaceBridge(uint faction, ulong sequence, IReadOnlyList<int> cells, Facing facing)
+        {
+            var bridgeCells = cells ?? System.Array.Empty<int>();
+            var facings = new Facing[bridgeCells.Count];
+            for (int i = 0; i < facings.Length; i++) facings[i] = facing;
+            return new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBuilding, BuildingKind.Bridge,
+                bridgeCells.Count == 0 ? 0 : bridgeCells[0], 0, 0, null, EconomyTargetKind.None, 0, false,
+                bridgeCells, facings, facing);
+        }
+
         public static EconomyCommand RemoveBelt(uint faction, ulong sequence, int cell)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBelt, 0, cell, 0, 0, null, EconomyTargetKind.None, 0, false);
 

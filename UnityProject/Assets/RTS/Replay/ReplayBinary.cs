@@ -121,8 +121,9 @@ namespace Rts.Replay
                 w.Write(e.FactionId); w.Write(e.IssuerSequence); w.Write((byte)e.Kind); w.Write((byte)e.Building); w.Write(e.Cell); w.Write(e.ProducerId); w.Write((byte)e.Unit);
                 w.Write((uint)e.VillagerIds.Count); foreach(var id in e.VillagerIds) w.Write(id);
                 w.Write((byte)e.TargetKind); w.Write(e.TargetId); w.Write(e.Enabled);
-                // V3-2: only a belt run carries cells, so every V3-1 economy input keeps its exact bytes.
-                if(e.Kind==EconomyCommandKind.PlaceBelt || e.Kind==EconomyCommandKind.PlaceWall)
+                // V3-2/V3-11: belt, wall and bridge placement carry their exact cell sequence.
+                if(e.Kind==EconomyCommandKind.PlaceBelt || e.Kind==EconomyCommandKind.PlaceWall
+                    || e.Kind==EconomyCommandKind.PlaceBuilding && e.Building==BuildingKind.Bridge)
                 {
                     w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
                 }
@@ -160,7 +161,8 @@ namespace Rts.Replay
                 var villagers=new uint[ReplayBinary.Count(r)]; for(int i=0;i<villagers.Length;i++)villagers[i]=r.ReadUInt32();
                 var target=ReplayBinary.Enum<EconomyTargetKind>(r); uint targetId=r.ReadUInt32(); bool enabled=ReplayBinary.Bool(r);
                 int[] cells=null; Facing[] facings=null;
-                if(ek==EconomyCommandKind.PlaceBelt || ek==EconomyCommandKind.PlaceWall)
+                if(ek==EconomyCommandKind.PlaceBelt || ek==EconomyCommandKind.PlaceWall
+                    || ek==EconomyCommandKind.PlaceBuilding && building==BuildingKind.Bridge)
                 {
                     int n=ReplayBinary.Count(r); if(n>EconomyCommand.MaxBeltRun)throw new InvalidDataException("Belt run length.");
                     cells=new int[n]; facings=new Facing[n];
@@ -169,7 +171,9 @@ namespace Rts.Replay
                 var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
-                var tech=ek==EconomyCommandKind.Research ? ReplayBinary.Enum<TechKind>(r) : (TechKind)0;
+                // Bridge-civilisation research intentionally uses the two values just outside
+                // TechKind; keep the established enum unchanged while allowing those replay bytes.
+                var tech=ek==EconomyCommandKind.Research ? Tech(r) : (TechKind)0;
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take));
@@ -180,5 +184,11 @@ namespace Rts.Replay
         private static ScopeKey Scope(BinaryReader r)=>new ScopeKey(r.ReadUInt32(),ReplayBinary.Enum<ScopeKind>(r),r.ReadUInt32());
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); w.Write(g.Point.X.Raw); w.Write(g.Point.Z.Raw); }
         private static PolicyGoal Goal(BinaryReader r)=>new PolicyGoal(ReplayBinary.Enum<GoalKind>(r),r.ReadUInt32(),new SimPoint(Fix64.FromRaw(r.ReadInt64()),Fix64.FromRaw(r.ReadInt64())));
+        private static TechKind Tech(BinaryReader r)
+        {
+            byte value = r.ReadByte();
+            if (value < (byte)TechKind.Weapons || value > (byte)BridgeTech.SiegeDeployment) throw new InvalidDataException("Unknown TechKind.");
+            return (TechKind)value;
+        }
     }
 }
