@@ -32,7 +32,9 @@ namespace Rts.Contracts
         /// <summary>V3-6: changes the output direction of an own processing building.</summary>
         RotateBuilding = 16,
         /// <summary>V3-6: removes an own building without refunding its cost.</summary>
-        RemoveBuilding = 17
+        RemoveBuilding = 17,
+        /// <summary>V3-9 #1: sends living own villagers between a fixed market and caravanserai.</summary>
+        CaravanRoute = 18
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -204,6 +206,10 @@ namespace Rts.Contracts
 
         public static EconomyCommand TradeRoute(uint faction, ulong sequence, IReadOnlyList<uint> villagers)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.TradeRoute, 0, 0, 0, 0, villagers, EconomyTargetKind.None, 0, false);
+
+        /// <summary>V3-9 #1: sends villagers to the fixed market/Outpost pair stored by caravanseraiId.</summary>
+        public static EconomyCommand CaravanRoute(uint faction, ulong sequence, uint caravanseraiId, IReadOnlyList<uint> villagers)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.CaravanRoute, 0, 0, caravanseraiId, 0, villagers, EconomyTargetKind.None, 0, false);
 
         public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
         {

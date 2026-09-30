@@ -112,6 +112,8 @@ namespace Rts.Simulation
         public bool Forestry;
         /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
         public bool Masonry;
+        /// <summary>V3-9 #1: enables the caravan civilisation. False keeps prior age maps unchanged.</summary>
+        public bool Caravan;
         /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
         public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
@@ -128,6 +130,10 @@ namespace Rts.Simulation
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>
         public int MarketFoodFloor = 150, MarketWoodReserve = 300, MarketStoneReserve = 100;
+        /// <summary>V3-9 #1 provisional caravanserai values. The route pair and reward are fixed when the building is placed.</summary>
+        public int CaravanseraiSizeCells = 2, CaravanseraiWoodCost = 80, CaravanseraiWork = 200, CaravanseraiHp = 400;
+        public int CaravanOutpostReach = 20, CaravanMinimumDistance = 20, CaravanRewardDistanceStep = 10, CaravanRewardMaxWood = 30;
+        public int CaravanAutoVillagers = 2;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

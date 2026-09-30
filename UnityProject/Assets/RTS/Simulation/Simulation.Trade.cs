@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Numerics;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -54,6 +56,7 @@ namespace Rts.Simulation
                 if (id == 0 || id > world.VillagerCount) continue;
                 ref var v = ref world.Villagers[id - 1];
                 if (!v.Alive || v.FactionId != faction) continue;
+                ClearCaravan(ref v);
                 v.NodeId = 0;
                 v.HaulFrom = 0;
                 v.HaulTo = 0;
@@ -77,6 +80,167 @@ namespace Rts.Simulation
 
         private static bool IsTradeRouteTask(VillagerTask task)
             => task == VillagerTask.ToTradeMarket || task == VillagerTask.ToTradeCore;
+
+        private static bool IsCaravanTask(VillagerTask task)
+            => task == VillagerTask.ToCaravanMarket || task == VillagerTask.ToCaravanserai || task == VillagerTask.ToCaravanCore;
+
+        private static void ClearCaravan(ref VillagerState v)
+        {
+            v.CaravanMarketId = 0; v.CaravanseraiId = 0; v.CaravanOutpostId = 0; v.CaravanStage = 0; v.CaravanWood = 0;
+        }
+
+        private void StopCaravan(ref VillagerState v)
+        {
+            ClearCaravan(ref v);
+            v.Task = VillagerTask.Idle;
+            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position; v.MoveGoal = v.Position;
+        }
+
+        private bool CaravanMarketValid(VillagerState v)
+        {
+            if (!CaravanOn || v.CaravanMarketId == 0 || v.CaravanMarketId > world.BuildingCount) return false;
+            var market = world.Buildings[v.CaravanMarketId - 1];
+            return market.Alive && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market;
+        }
+
+        private bool CaravanPairValid(VillagerState v)
+        {
+            if (!CaravanMarketValid(v) || v.CaravanseraiId == 0 || v.CaravanseraiId > world.BuildingCount) return false;
+            var host = world.Buildings[v.CaravanseraiId - 1];
+            if (!host.Alive || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai
+                || host.CaravanMarketId != v.CaravanMarketId || host.CaravanOutpostId != v.CaravanOutpostId) return false;
+            if (v.CaravanOutpostId == 0 || v.CaravanOutpostId > world.Outposts.Length) return false;
+            return world.Outposts[v.CaravanOutpostId - 1].OwnerFactionId == v.FactionId;
+        }
+
+        private void EndCaravanAtCore(ref VillagerState v)
+        {
+            v.CaravanWood = 0; // The registered market was lost, so unbanked cargo is not recoverable.
+            v.Task = VillagerTask.ToCaravanCore;
+            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+        }
+
+        private void StartCaravanRoute(uint faction, uint caravanseraiId, IReadOnlyList<uint> villagers)
+        {
+            if (!CaravanAllowed(faction) || caravanseraiId == 0 || caravanseraiId > world.BuildingCount) return;
+            var host = world.Buildings[caravanseraiId - 1];
+            if (!host.Alive || !host.Complete || host.FactionId != faction || host.Kind != BuildingKind.Caravanserai) return;
+            uint marketId = host.CaravanMarketId;
+            uint outpostId = host.CaravanOutpostId;
+            if (marketId == 0 || marketId > world.BuildingCount || outpostId == 0 || outpostId > world.Outposts.Length) return;
+            var market = world.Buildings[marketId - 1];
+            if (!market.Alive || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
+                || world.Outposts[outpostId - 1].OwnerFactionId != faction) return;
+            foreach (uint id in villagers)
+            {
+                if (id == 0 || id > world.VillagerCount) continue;
+                ref var v = ref world.Villagers[id - 1];
+                if (!v.Alive || v.FactionId != faction) continue;
+                // Re-sending the same (or another) caravan order never resets an active route. In particular, it
+                // must not clear a dedicated load that is already on the return leg.
+                if (IsCaravanTask(v.Task) || v.CaravanWood > 0) continue;
+                v.NodeId = 0; v.HaulFrom = 0; v.HaulTo = 0; v.BuildingId = 0;
+                ClearCaravan(ref v);
+                v.CaravanMarketId = marketId; v.CaravanseraiId = caravanseraiId; v.CaravanOutpostId = outpostId; v.CaravanStage = 1;
+                // A normal gathering load is delivered first. The pending caravan fields survive that delivery,
+                // while the dedicated CaravanWood slot remains empty until the host is reached.
+                if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
+                else { v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position; }
+                if (IndustryOn) v.Held = true;
+            }
+        }
+
+        private bool TryCaravanseraiPlacement(uint faction, int origin, out uint outpostId, out uint marketId,
+            out Fix64 distance, out int reward)
+        {
+            outpostId = 0; marketId = 0; distance = default; reward = 0;
+            if (!CaravanAllowed(faction)) return false;
+            int market = OwnFinishedMarketIndex(faction);
+            if (market < 0) return false;
+            var marketState = world.Buildings[market];
+            var centre = FootprintCenter(origin, world.Config.Economy.CaravanseraiSizeCells);
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                var post = world.Outposts[i];
+                if (post.OwnerFactionId != faction || !InRange(centre, post.Definition.Position, Fix64.FromInt(world.Config.Economy.CaravanOutpostReach))) continue;
+                bool occupied = false;
+                for (int b = 0; b < world.BuildingCount; b++)
+                {
+                    var existing = world.Buildings[b];
+                    if (existing.Alive && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
+                        && existing.CaravanOutpostId == post.Definition.Id) { occupied = true; break; }
+                }
+                if (occupied) continue;
+                distance = FixedDistance(FootprintCenter(marketState.OriginCell, SizeOf(marketState.Kind)), centre);
+                if (distance < Fix64.FromInt(world.Config.Economy.CaravanMinimumDistance)) continue;
+                outpostId = post.Definition.Id; marketId = marketState.Id;
+                long units = distance.Raw / Fix64.FromInt(world.Config.Economy.CaravanRewardDistanceStep).Raw;
+                reward = (int)Math.Max(1, Math.Min(world.Config.Economy.CaravanRewardMaxWood, units));
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Distance is integer fixed-point: sqrt(rawX²+rawZ²) is already a Q47.16 raw distance.
+        /// BigInteger prevents the squared coordinates from overflowing; the integer square root floors fractional raw units.</summary>
+        private static Fix64 FixedDistance(SimPoint a, SimPoint b)
+        {
+            long dx = checked(a.X.Raw - b.X.Raw), dz = checked(a.Z.Raw - b.Z.Raw);
+            return Fix64.FromRaw((long)FixMath.IntegerSqrt(new BigInteger(dx) * dx + new BigInteger(dz) * dz));
+        }
+
+        private int FindCaravanseraiSite(uint faction, uint outpostId)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = world.Config.Economy.CaravanseraiSizeCells;
+            var post = world.Outposts[outpostId - 1].Definition.Position;
+            int centre = world.Map.Cell(post), cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!SiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), size)
+                            || !KeepsMapConnected(faction, origin, size)) continue;
+                        uint ignoredOutpost, ignoredMarket; Fix64 ignoredDistance; int ignoredReward;
+                        if (TryCaravanseraiPlacement(faction, origin, out ignoredOutpost, out ignoredMarket, out ignoredDistance, out ignoredReward)
+                            && ignoredOutpost == outpostId) return origin;
+                    }
+            return -1;
+        }
+
+        private void InitializeCaravanserai(uint faction, int index, uint outpostId, uint marketId, Fix64 distance, int reward)
+        {
+            ref var host = ref world.Buildings[index];
+            host.CaravanOutpostId = outpostId; host.CaravanMarketId = marketId; host.CaravanDistance = distance; host.CaravanWoodReward = reward;
+        }
+
+        private void DecideCaravanserai(uint faction)
+        {
+            if (!CaravanAllowed(faction) || SavingToAdvance(faction)) return;
+            if (OwnFinishedMarketIndex(faction) < 0) return;
+            var e = world.Economies[faction - 1];
+            if (e.Wood < WoodOf(BuildingKind.Caravanserai, faction)) return;
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                var post = world.Outposts[i];
+                if (post.OwnerFactionId != faction) continue;
+                bool exists = false;
+                for (int b = 0; b < world.BuildingCount; b++)
+                    if (world.Buildings[b].Alive && world.Buildings[b].FactionId == faction && world.Buildings[b].Kind == BuildingKind.Caravanserai
+                        && world.Buildings[b].CaravanOutpostId == post.Definition.Id) { exists = true; break; }
+                if (exists) continue;
+                int origin = FindCaravanseraiSite(faction, post.Definition.Id);
+                if (origin < 0) continue;
+                uint outpostId, marketId; Fix64 distance; int reward;
+                if (!TryCaravanseraiPlacement(faction, origin, out outpostId, out marketId, out distance, out reward)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Caravanserai, origin, Facing.North, 0);
+                InitializeCaravanserai(faction, world.BuildingCount - 1, outpostId, marketId, distance, reward);
+                return;
+            }
+        }
 
         private void StopTradeRoute(ref VillagerState v)
         {
@@ -115,6 +279,46 @@ namespace Rts.Simulation
             v.RouteGoal = v.Position;
         }
 
+        private void AdvanceCaravanRoute(ref VillagerState v)
+        {
+            if (v.Task == VillagerTask.ToCaravanCore)
+            {
+                if (InRange(v.Position, OwnCore(v.FactionId).Definition.Position, world.Config.Rules.CoreRadius)) StopCaravan(ref v);
+                return;
+            }
+            if (!CaravanMarketValid(v)) { EndCaravanAtCore(ref v); return; }
+            if (v.Task == VillagerTask.ToCaravanserai)
+            {
+                // Loss of the Outpost or host cancels only the new outbound leg. Any already loaded cargo is
+                // never here: loading changes the task to the return leg in the same tick.
+                if (!CaravanPairValid(v))
+                {
+                    v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                    return;
+                }
+                var host = world.Buildings[v.CaravanseraiId - 1];
+                if (InRange(v.Position, world.Map.Center(host.WorkCell), GatherReach))
+                {
+                    // The dedicated slot is the idempotence guard: one host arrival can create one load only.
+                    if (v.CaravanWood == 0) v.CaravanWood = host.CaravanWoodReward;
+                    v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket;
+                    v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                }
+                return;
+            }
+            if (v.Task != VillagerTask.ToCaravanMarket) return;
+            var market = world.Buildings[v.CaravanMarketId - 1];
+            if (!InRange(v.Position, world.Map.Center(market.WorkCell), GatherReach)) return;
+            if (v.CaravanWood > 0)
+            {
+                AddStock(v.FactionId, ResourceKind.Wood, v.CaravanWood);
+                v.CaravanWood = 0;
+            }
+            if (!CaravanPairValid(v)) { StopCaravan(ref v); return; }
+            v.CaravanStage = 2; v.Task = VillagerTask.ToCaravanserai;
+            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+        }
+
         /// <summary>Automatic economy: one idle villager is assigned until two active routes exist.</summary>
         private void DecideTradeRoute(uint faction)
         {
@@ -145,6 +349,34 @@ namespace Rts.Simulation
             }
         }
 
+        /// <summary>Automatic economy: after a host exists, assign only idle, unheld villagers to its fixed pair.</summary>
+        private void DecideCaravanRoute(uint faction)
+        {
+            if (!CaravanAllowed(faction) || SavingToAdvance(faction)) return;
+            int hostIndex = -1;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Caravanserai && !b.Held)
+                { hostIndex = i; break; }
+            }
+            if (hostIndex < 0) return;
+            int active = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && IsCaravanTask(v.Task)) active++;
+            }
+            if (active >= world.Config.Economy.CaravanAutoVillagers) return;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.Task != VillagerTask.Idle) continue;
+                StartCaravanRoute(faction, world.Buildings[hostIndex].Id, new[] { v.Id });
+                return;
+            }
+        }
+
         /// <summary>What a soldier deals to a building or a core: a ram its siege damage, everyone else their damage.</summary>
         private int SiegeDamage(SoldierState s)
         {
@@ -159,14 +391,18 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideMarket(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction)) return;
+            bool caravanNeedsBaseMarket = CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) < 0;
+            if (!AgesOn || (!CivLineStarted(faction) && !caravanNeedsBaseMarket)) return;
             var rules = world.Config.Economy;
             bool foodMarketCiv = world.Economies[faction - 1].Civ == CivKind.Metallurgy
                 || world.Economies[faction - 1].Civ == CivKind.Forestry
-                || world.Economies[faction - 1].Civ == CivKind.Masonry;
+                || world.Economies[faction - 1].Civ == CivKind.Masonry
+                || world.Economies[faction - 1].Civ == CivKind.Caravan;
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
-            if (!foodMarketCiv && SavingToAdvance(faction)) return;
+            // Caravan's first market is the base condition for the civilisation, so allow that one building before
+            // CivLineStarted becomes true. A caravanserai still waits for the finished market below.
+            if (!foodMarketCiv && !caravanNeedsBaseMarket && SavingToAdvance(faction)) return;
             int market = OwnBuildingIndex(faction, BuildingKind.Market);
             if (market < 0)
             {

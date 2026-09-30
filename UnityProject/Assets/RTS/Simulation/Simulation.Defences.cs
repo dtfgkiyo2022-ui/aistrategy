@@ -167,6 +167,10 @@ namespace Rts.Simulation
                     return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
                 case CivKind.Masonry:
                     return MasonryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Quarry) >= 0;
+                case CivKind.Caravan:
+                    // The market is the caravan base condition. The caravanserai is deliberately not used here,
+                    // otherwise the market required by the host would form a circular prerequisite.
+                    return CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) >= 0;
                 default:
                     return false;
             }

@@ -123,6 +123,11 @@ namespace Rts.Simulation
                         if (world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2) w.Value(n + "QueuedBowGear", b.QueuedBowGear);
                     }
                 }
+                if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
+                {
+                    w.Value(n + "CaravanOutpostId", b.CaravanOutpostId); w.Value(n + "CaravanMarketId", b.CaravanMarketId);
+                    w.Value(n + "CaravanDistance.Raw", b.CaravanDistance.Raw); w.Value(n + "CaravanWoodReward", b.CaravanWoodReward);
+                }
             }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);
@@ -134,6 +139,11 @@ namespace Rts.Simulation
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
                 w.Value(n + "BuildingId", v.BuildingId);
+                if (world.Config.Economy.Caravan)
+                {
+                    w.Value(n + "CaravanMarketId", v.CaravanMarketId); w.Value(n + "CaravanseraiId", v.CaravanseraiId);
+                    w.Value(n + "CaravanOutpostId", v.CaravanOutpostId); w.Value(n + "CaravanStage", v.CaravanStage); w.Value(n + "CaravanWood", v.CaravanWood);
+                }
                 if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); w.Value(n + "Held", v.Held); }
                 if (world.Config.Economy.ProcessingChain) w.Value(n + "HaulNodeId", v.HaulNodeId);
                 w.Value(n + "Route.Count", (uint)v.Route.Length);
