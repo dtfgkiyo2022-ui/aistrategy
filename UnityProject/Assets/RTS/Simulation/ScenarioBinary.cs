@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Rts.Contracts;
@@ -14,6 +15,22 @@ namespace Rts.Simulation
         private const int CaravanTailMarker = 0x4352564E; // "CRVN", after forestry/masonry tails when present.
         private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the caravan tail when present.
         private const int BridgeTailMarker = 0x42524447; // "BRDG", after the masonry tail (always written with it) and the cavalry tail.
+        private const int ExtensionMarker = 0x4E545845; // "EXTN", after every existing civilisation tail.
+        private const int ExtensionSchemaVersion = 1;
+
+        // Keep this an ordered array. Adding the eighth civilisation's record is one row here; neither reflection nor
+        // dictionary enumeration may determine the binary order. ID 1 is deliberately a test-only integer payload.
+        private sealed class ExtensionRegistration
+        {
+            internal readonly int Id, Version, DataLength;
+            internal ExtensionRegistration(int id, int version, int dataLength) { Id = id; Version = version; DataLength = dataLength; }
+        }
+
+        private static readonly ExtensionRegistration[] ExtensionRegistrations =
+        {
+            new ExtensionRegistration(1, 1, sizeof(int))
+        };
+
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -123,7 +140,12 @@ namespace Rts.Simulation
             bool masonryRules = c.Economy.Masonry || bridgeRules;
             bool caravanRules = c.Economy.Caravan;
             bool cavalryRules = c.Economy.Cavalry;
-            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules;
+            // The extension section is read only at the end of the whole optional envelope; the monk/floor/fishing/gold
+            // levels are told apart by "bytes remain". So a record with extensions writes the full envelope, exactly as
+            // the civilisation tails do - otherwise a monk-only record would read the EXTN marker as its floor value.
+            bool extensionRules = c.Extensions.Length > 0;
+            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules
+                || extensionRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -209,6 +231,7 @@ namespace Rts.Simulation
                         w.Write(c.Economy.SiegeDeploymentRamTicksReduction); w.Write(c.Economy.SiegeDeploymentRamCapacityBonus);
                     }
                 }
+                WriteExtensionSection(w, c.Extensions);
                 return s.ToArray();
             }
         }
@@ -304,7 +327,7 @@ namespace Rts.Simulation
                     }
                     if (s.Position < s.Length) { e.AgeVictoryEnabled=Bool(r); e.AgeVictoryTicks=r.ReadInt32(); }
                 }
-                if (s.Position < s.Length)
+                if (s.Position < s.Length && !NextIsExtension(r))
                 {
                     var e = c.Economy;
                     e.MonksEnabled = Bool(r); e.ConversionTicks = r.ReadInt32(); e.MonkFoodCost = r.ReadInt32();
@@ -325,7 +348,8 @@ namespace Rts.Simulation
                                 {
                                     long tailStart = s.Position;
                                     int marker = r.ReadInt32();
-                                    if (IsTailMarker(marker)) { ReadMarkedTail(r, e, marker); ReadMarkedTails(r, e); }
+                                    if (marker == ExtensionMarker) s.Position = tailStart;
+                                    else if (IsTailMarker(marker)) { ReadMarkedTail(r, e, marker); ReadMarkedTails(r, e); }
                                     else
                                     {
                                         s.Position = tailStart;
@@ -344,6 +368,7 @@ namespace Rts.Simulation
                     }
                 }
                 }
+                if (s.Position < s.Length) ReadExtensionSection(r, c);
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;
             }
@@ -400,7 +425,13 @@ namespace Rts.Simulation
         /// <summary>Every marked civilisation tail, in any order the encoder wrote them, until the end of the record.</summary>
         private static void ReadMarkedTails(BinaryReader r, EconomyRules e)
         {
-            while (r.BaseStream.Position < r.BaseStream.Length) ReadMarkedTail(r, e, r.ReadInt32());
+            while (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                long markerPosition = r.BaseStream.Position;
+                int marker = r.ReadInt32();
+                if (marker == ExtensionMarker) { r.BaseStream.Position = markerPosition; return; }
+                ReadMarkedTail(r, e, marker);
+            }
         }
         private static void ReadMarkedTail(BinaryReader r, EconomyRules e, int marker)
         {
@@ -414,6 +445,100 @@ namespace Rts.Simulation
         private static bool IsTailMarker(int value)
             => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker
                 || value == BridgeTailMarker;
+
+        private static void WriteExtensionSection(BinaryWriter w, ScenarioExtensionData[] extensions)
+        {
+            if (extensions == null) throw new InvalidDataException("Missing scenario extensions.");
+            if (extensions.Length == 0) return;
+            var byRegistration = new ScenarioExtensionData[ExtensionRegistrations.Length];
+            for (int i = 0; i < extensions.Length; i++)
+            {
+                var extension = extensions[i];
+                if (extension == null || extension.Data == null) throw new InvalidDataException("Invalid scenario extension.");
+                int registrationIndex = FindExtensionRegistration(extension.Id);
+                if (registrationIndex < 0) throw new InvalidDataException("Unknown scenario extension.");
+                if (byRegistration[registrationIndex] != null) throw new InvalidDataException("Duplicate scenario extension.");
+                var registration = ExtensionRegistrations[registrationIndex];
+                if (extension.Version != registration.Version || extension.Data.Length != registration.DataLength)
+                    throw new InvalidDataException("Invalid scenario extension version or length.");
+                byRegistration[registrationIndex] = extension;
+            }
+
+            using (var payload = new MemoryStream())
+            using (var payloadWriter = new BinaryWriter(payload))
+            {
+                for (int i = 0; i < byRegistration.Length; i++)
+                {
+                    var extension = byRegistration[i];
+                    if (extension == null) continue;
+                    payloadWriter.Write(extension.Id);
+                    payloadWriter.Write(extension.Version);
+                    payloadWriter.Write(extension.Data.Length);
+                    payloadWriter.Write(extension.Data);
+                }
+                payloadWriter.Flush();
+                if (payload.Length > int.MaxValue) throw new InvalidDataException("Scenario extension section is too large.");
+                w.Write(ExtensionMarker);
+                w.Write(ExtensionSchemaVersion);
+                w.Write((int)payload.Length);
+                w.Write(payload.ToArray());
+            }
+        }
+
+        private static void ReadExtensionSection(BinaryReader r, ScenarioDefinition c)
+        {
+            int marker = ReadExtensionInt32(r);
+            if (marker != ExtensionMarker) throw new InvalidDataException("Invalid scenario extension marker.");
+            int version = ReadExtensionInt32(r);
+            if (version != ExtensionSchemaVersion) throw new InvalidDataException("Unknown scenario extension schema.");
+            int length = ReadExtensionInt32(r);
+            long sectionEnd = checked(r.BaseStream.Position + (long)length);
+            if (length < 0 || sectionEnd > r.BaseStream.Length) throw new InvalidDataException("Scenario extension length.");
+
+            var seen = new bool[ExtensionRegistrations.Length];
+            var extensions = new List<ScenarioExtensionData>();
+            while (r.BaseStream.Position < sectionEnd)
+            {
+                if (sectionEnd - r.BaseStream.Position < 3L * sizeof(int))
+                    throw new InvalidDataException("Truncated scenario extension record.");
+                int id = ReadExtensionInt32(r), featureVersion = ReadExtensionInt32(r), dataLength = ReadExtensionInt32(r);
+                int registrationIndex = FindExtensionRegistration(id);
+                if (registrationIndex < 0) throw new InvalidDataException("Unknown scenario extension.");
+                if (seen[registrationIndex]) throw new InvalidDataException("Duplicate scenario extension.");
+                var registration = ExtensionRegistrations[registrationIndex];
+                if (featureVersion != registration.Version || dataLength != registration.DataLength || dataLength < 0
+                    || dataLength > sectionEnd - r.BaseStream.Position)
+                    throw new InvalidDataException("Invalid scenario extension version or length.");
+                var data = r.ReadBytes(dataLength);
+                if (data.Length != dataLength) throw new InvalidDataException("Truncated scenario extension data.");
+                seen[registrationIndex] = true;
+                extensions.Add(new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data });
+            }
+            if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
+            c.Extensions = extensions.ToArray();
+        }
+
+        private static int ReadExtensionInt32(BinaryReader r)
+        {
+            if (r.BaseStream.Length - r.BaseStream.Position < sizeof(int)) throw new InvalidDataException("Truncated scenario extension.");
+            return r.ReadInt32();
+        }
+
+        private static bool NextIsExtension(BinaryReader r)
+        {
+            if (r.BaseStream.Length - r.BaseStream.Position < sizeof(int)) return false;
+            long position = r.BaseStream.Position;
+            bool result = r.ReadInt32() == ExtensionMarker;
+            r.BaseStream.Position = position;
+            return result;
+        }
+
+        private static int FindExtensionRegistration(int id)
+        {
+            for (int i = 0; i < ExtensionRegistrations.Length; i++)
+                if (ExtensionRegistrations[i].Id == id) return i;
+            return -1;
+        }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
         {
             e.Caravan = Bool(r);

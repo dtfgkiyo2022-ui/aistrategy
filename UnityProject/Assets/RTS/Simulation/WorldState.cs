@@ -390,7 +390,8 @@ namespace Rts.Simulation
                     DefaultReservePermille = r.DefaultReservePermille },
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
-                ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts) };
+                ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
+                Extensions = Copy(s.Extensions) };
             var e = c.Economy;
             // Monk rules are opt-in. Keep disabled scenarios byte-for-byte unchanged, but make an enabled authored
             // scenario usable even when an older scenario file has no Monk parameter record yet.
@@ -747,6 +748,19 @@ namespace Rts.Simulation
                  FishAgrarianBonusPermille = e.FishAgrarianBonusPermille, FishReach = e.FishReach,
                   GoldEnabled = e.GoldEnabled, Age3GoldCostAgrarian = e.Age3GoldCostAgrarian, Age3GoldCostMetallurgy = e.Age3GoldCostMetallurgy, GoldGatherers = e.GoldGatherers,
                  GoldAmount = e.GoldAmount, GoldDangerMeters = e.GoldDangerMeters };
+        }
+
+        private static ScenarioExtensionData[] Copy(ScenarioExtensionData[] source)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            var copy = new ScenarioExtensionData[source.Length];
+            for (int i = 0; i < source.Length; i++)
+            {
+                if (source[i] == null) throw new ArgumentException("Missing scenario extension.", nameof(source));
+                copy[i] = new ScenarioExtensionData { Id = source[i].Id, Version = source[i].Version,
+                    Data = source[i].Data == null ? null : (byte[])source[i].Data.Clone() };
+            }
+            return copy;
         }
 
         private bool NearRiver(SimPoint point, int reachMeters)

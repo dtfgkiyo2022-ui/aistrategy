@@ -27,6 +27,16 @@ namespace Rts.Simulation
         public VillagerDefinition[] Villagers = Array.Empty<VillagerDefinition>();
         /// <summary>Ver.3 V3-2: belts at S0 (with what they carry). Only allowed when the economy has industry.</summary>
         public BeltDefinition[] Belts = Array.Empty<BeltDefinition>();
+        /// <summary>Optional length-delimited records for rules introduced after the civilisation tails.</summary>
+        public ScenarioExtensionData[] Extensions = Array.Empty<ScenarioExtensionData>();
+    }
+
+    /// <summary>One registered scenario extension. Its payload is opaque to simulation rules.</summary>
+    public sealed class ScenarioExtensionData
+    {
+        public int Id;
+        public int Version;
+        public byte[] Data = Array.Empty<byte>();
     }
 
     public struct BeltDefinition

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
+using Rts.Decision;
 
 namespace Rts.Simulation
 {
@@ -366,33 +367,24 @@ namespace Rts.Simulation
         {
             if (sources.Count == 0) return 0;
             int best = 0, mapCells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            var basePassable = new bool[mapCells];
+            var known = new bool[mapCells];
+            for (int cell = 0; cell < mapCells; cell++) { basePassable[cell] = world.Map.IsPassable(cell); known[cell] = true; }
             var without = new int[sources.Count * destinations.Count];
             for (int s = 0; s < sources.Count; s++)
                 for (int d = 0; d < destinations.Count; d++)
-                    without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0 : BridgeRouteLength(sources[s], destinations[d]);
-            var original = new bool[bridgeCells.Length];
-            for (int i = 0; i < bridgeCells.Length; i++)
-            {
-                original[i] = world.Map.IsPassable(bridgeCells[i]);
-                world.Map.SetPassable(bridgeCells[i], true);
-            }
-            try
-            {
-                for (int s = 0; s < sources.Count; s++)
-                    for (int d = 0; d < destinations.Count; d++)
-                    {
-                        int before = without[s * destinations.Count + d];
-                        if (before == 0) continue;
-                        int after = BridgeRouteLength(sources[s], destinations[d]);
-                        if (after < 0) continue;
-                        int saving = before < 0 ? checked(mapCells - after) : before - after;
-                        if (saving > best) best = saving;
-                    }
-            }
-            finally
-            {
-                for (int i = 0; i < bridgeCells.Length; i++) world.Map.SetPassable(bridgeCells[i], original[i]);
-            }
+                    without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0
+                        : BridgeRouteLength(sources[s], destinations[d], basePassable, known, null);
+            for (int s = 0; s < sources.Count; s++)
+                for (int d = 0; d < destinations.Count; d++)
+                {
+                    int before = without[s * destinations.Count + d];
+                    if (before == 0) continue;
+                    int after = BridgeRouteLength(sources[s], destinations[d], basePassable, known, bridgeCells);
+                    if (after < 0) continue;
+                    int saving = before < 0 ? checked(mapCells - after) : before - after;
+                    if (saving > best) best = saving;
+                }
             return best;
         }
 
@@ -405,10 +397,11 @@ namespace Rts.Simulation
             return 3;
         }
 
-        private int BridgeRouteLength(int start, int destination)
+        private int BridgeRouteLength(int start, int destination, bool[] basePassable, bool[] known,
+            IReadOnlyList<int> temporarilyOpen)
         {
-            var route = world.Map.SharedRoute(start, world.Map.Center(destination));
-            return route.Length == 0 ? -1 : route.Length - 1;
+            return RouteDistance.Measure(world.Config.Map.WidthCells, world.Config.Map.HeightCells,
+                basePassable, known, start, destination, temporarilyOpen);
         }
 
         private bool ObservedEnemyNear(uint faction, int cell)
