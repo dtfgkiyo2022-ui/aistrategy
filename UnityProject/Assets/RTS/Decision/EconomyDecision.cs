@@ -1,4 +1,5 @@
 using Rts.Contracts;
+using System.Collections.Generic;
 
 namespace Rts.Decision
 {
@@ -9,6 +10,35 @@ namespace Rts.Decision
     /// </summary>
     public static class EconomyDecision
     {
+        /// <summary>A civilisation candidate and the score used to compare it.</summary>
+        public readonly struct CivScore
+        {
+            public CivKind Civ { get; }
+            public int Score { get; }
+            public int Priority { get; }
+
+            public CivScore(CivKind civ, int score, int priority)
+            {
+                Civ = civ;
+                Score = score;
+                Priority = priority;
+            }
+        }
+
+        /// <summary>Returns the highest-scoring candidate, keeping the explicit priority on ties.</summary>
+        public static CivKind ChooseCiv(IReadOnlyList<CivScore> candidates)
+        {
+            if (candidates == null || candidates.Count == 0) return CivKind.Primitive;
+            CivScore best = candidates[0];
+            for (int i = 1; i < candidates.Count; i++)
+            {
+                CivScore candidate = candidates[i];
+                if (candidate.Score > best.Score || candidate.Score == best.Score && candidate.Priority < best.Priority)
+                    best = candidate;
+            }
+            return best.Civ;
+        }
+
         /// <summary>The numbers a policy sets for the automatic economy (technical-design-v3 20). The steps stay the same.</summary>
         public readonly struct Plan
         {
@@ -49,12 +79,12 @@ namespace Rts.Decision
         /// the old two-score tie (agrarian) unchanged even when the forest score is zero.
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int guaranteedFood)
-        {
-            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear) return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear) return CivKind.Metallurgy;
-            return CivKind.Forestry;
-        }
+            => ChooseCiv(new[]
+            {
+                new CivScore(CivKind.Agrarian, foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0, 0),
+                new CivScore(CivKind.Metallurgy, orePointsNear, 1),
+                new CivScore(CivKind.Forestry, forestPointsNear, 2)
+            });
 
         /// <summary>
         /// V3-8 #2: compares ore, food beyond the guaranteed points, usable forest points and usable stone points.
@@ -62,13 +92,13 @@ namespace Rts.Decision
         /// zero masonry score leave the three-way decision byte-for-byte equivalent to the preceding overload.
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear, int guaranteedFood)
-        {
-            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear) return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear) return CivKind.Metallurgy;
-            if (forestPointsNear >= stonePointsNear) return CivKind.Forestry;
-            return CivKind.Masonry;
-        }
+            => ChooseCiv(new[]
+            {
+                new CivScore(CivKind.Agrarian, foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0, 0),
+                new CivScore(CivKind.Metallurgy, orePointsNear, 1),
+                new CivScore(CivKind.Forestry, forestPointsNear, 2),
+                new CivScore(CivKind.Masonry, stonePointsNear, 3)
+            });
 
         /// <summary>
         /// V3-9 #3: compares the terrain scores including the number of usable caravan outposts. A zero caravan
@@ -76,7 +106,14 @@ namespace Rts.Decision
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
             int caravanPointsNear, int guaranteedFood)
-            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, 0, guaranteedFood);
+            => ChooseCiv(new[]
+            {
+                new CivScore(CivKind.Agrarian, foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0, 0),
+                new CivScore(CivKind.Metallurgy, orePointsNear, 1),
+                new CivScore(CivKind.Forestry, forestPointsNear, 2),
+                new CivScore(CivKind.Masonry, stonePointsNear, 3),
+                new CivScore(CivKind.Caravan, caravanPointsNear, 4)
+            });
 
         /// <summary>
         /// V3-10 #3: adds the cavalry mobility score (already converted to a small 0-5 range). Ties keep the older
@@ -84,7 +121,15 @@ namespace Rts.Decision
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
             int caravanPointsNear, int cavalryPointsNear, int guaranteedFood)
-            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, cavalryPointsNear, 0, guaranteedFood);
+            => ChooseCiv(new[]
+            {
+                new CivScore(CivKind.Agrarian, foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0, 0),
+                new CivScore(CivKind.Metallurgy, orePointsNear, 1),
+                new CivScore(CivKind.Forestry, forestPointsNear, 2),
+                new CivScore(CivKind.Masonry, stonePointsNear, 3),
+                new CivScore(CivKind.Caravan, caravanPointsNear, 4),
+                new CivScore(CivKind.Cavalry, cavalryPointsNear, 5)
+            });
 
         /// <summary>
         /// V3-11 #4: adds the engineer score (the best one-bridge shortening, already tiered to 0-3). Ties keep the
@@ -92,19 +137,16 @@ namespace Rts.Decision
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
             int caravanPointsNear, int cavalryPointsNear, int bridgePointsNear, int guaranteedFood)
-        {
-            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear
-                && agrarian >= cavalryPointsNear && agrarian >= bridgePointsNear) return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear
-                && orePointsNear >= cavalryPointsNear && orePointsNear >= bridgePointsNear) return CivKind.Metallurgy;
-            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear && forestPointsNear >= cavalryPointsNear
-                && forestPointsNear >= bridgePointsNear) return CivKind.Forestry;
-            if (stonePointsNear >= caravanPointsNear && stonePointsNear >= cavalryPointsNear && stonePointsNear >= bridgePointsNear) return CivKind.Masonry;
-            if (caravanPointsNear >= cavalryPointsNear && caravanPointsNear >= bridgePointsNear) return CivKind.Caravan;
-            if (cavalryPointsNear >= bridgePointsNear) return CivKind.Cavalry;
-            return CivKind.Bridge;
-        }
+            => ChooseCiv(new[]
+            {
+                new CivScore(CivKind.Agrarian, foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0, 0),
+                new CivScore(CivKind.Metallurgy, orePointsNear, 1),
+                new CivScore(CivKind.Forestry, forestPointsNear, 2),
+                new CivScore(CivKind.Masonry, stonePointsNear, 3),
+                new CivScore(CivKind.Caravan, caravanPointsNear, 4),
+                new CivScore(CivKind.Cavalry, cavalryPointsNear, 5),
+                new CivScore(CivKind.Bridge, bridgePointsNear, 6)
+            });
 
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)

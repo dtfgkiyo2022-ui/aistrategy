@@ -111,9 +111,7 @@ namespace Rts.Simulation
             var (food, wood, gold, _) = AdvancePrice(e);
             if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
             if (e.Civ == CivKind.Primitive)
-                return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
-                    || MasonryOn && civ == CivKind.Masonry || CaravanOn && civ == CivKind.Caravan
-                    || CavalryOn && civ == CivKind.Cavalry || BridgeOn && civ == CivKind.Bridge;
+                return CivEnabled(faction, civ);
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
@@ -212,13 +210,16 @@ namespace Rts.Simulation
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
             if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
-            // A civilisation whose flag is off scores zero, which never steals a tie from an older one.
-            int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
-            int stone = MasonryOn ? CountUsableMasonryStone(faction, core) : 0;
-            int caravan = CaravanOn ? CountUsableCaravanOutposts(faction, core) : 0;
-            int cavalry = CavalryOn ? CountCavalryMobility(faction, core) : 0;
-            int bridge = BridgeOn ? CountUsableBridgeSaving(faction, core) : 0;
-            return EconomyDecision.ChooseCiv(ore, food, forest, stone, caravan, cavalry, bridge, GuaranteedFoodPoints);
+            // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
+            // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.
+            var candidates = new EconomyDecision.CivScore[CivRegistrations.Length];
+            for (int i = 0; i < CivRegistrations.Length; i++)
+            {
+                var row = CivRegistrations[i];
+                candidates[i] = new EconomyDecision.CivScore(row.Civ,
+                    row.Enabled(this, faction) ? row.Score(this, faction, core, ore, food) : 0, row.Priority);
+            }
+            return EconomyDecision.ChooseCiv((System.Collections.Generic.IReadOnlyList<EconomyDecision.CivScore>)candidates);
         }
 
         /// <summary>

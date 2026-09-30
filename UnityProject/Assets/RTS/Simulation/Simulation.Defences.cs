@@ -168,31 +168,7 @@ namespace Rts.Simulation
         /// economy puts stone, towers and research after it, so wood and villagers go to the line first.
         /// </summary>
         private bool CivLineStarted(uint faction)
-        {
-            var civ = world.Economies[faction - 1].Civ;
-            switch (civ)
-            {
-                case CivKind.Agrarian:
-                    return OwnBuildingIndex(faction, BuildingKind.Farm) >= 0;
-                case CivKind.Metallurgy:
-                    return OwnBuildingIndex(faction, BuildingKind.Mine) >= 0
-                        && OwnBuildingIndex(faction, BuildingKind.Smelter) >= 0;
-                case CivKind.Forestry:
-                    return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
-                case CivKind.Masonry:
-                    return MasonryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Quarry) >= 0;
-                case CivKind.Caravan:
-                    // The market is the caravan base condition. The caravanserai is deliberately not used here,
-                    // otherwise the market required by the host would form a circular prerequisite.
-                    return CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) >= 0;
-                case CivKind.Cavalry:
-                    return CavalryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Stable) >= 0;
-                case CivKind.Bridge:
-                    return BridgeAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.EngineerCamp) >= 0;
-                default:
-                    return false;
-            }
-        }
+            => CivLineStartedFromRegistry(faction);
 
         /// <summary>AI phase: up to AutoTowers towers by the core, one at a time, once in a civilisation and not saving.</summary>
         private void DecideTower(uint faction)
