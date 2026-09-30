@@ -5,6 +5,7 @@ using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Decision;
 using Rts.Replay;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -184,6 +185,37 @@ namespace Rts.Core.Tests
             return (SimPoint)map.GetType().GetMethod("Center", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Invoke(map, new object[] { cell });
         }
 
+        [TestCase(0, CivKind.Agrarian)]
+        [TestCase(1, CivKind.Caravan)]
+        [TestCase(2, CivKind.Caravan)]
+        public void CaravanScoreUsesZeroOneOrMultipleUsableOutposts(int caravan, CivKind expected)
+        {
+            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 0, caravan, 3), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void MultipleSeedsIncludeARecognisedCaravanTerrainChoice()
+        {
+            var choices = new HashSet<CivKind>();
+            var score = typeof(Battle).GetMethod("CountUsableCaravanOutposts", Private);
+            var choose = typeof(Battle).GetMethod("ChooseCiv", Private);
+            Assert.That(score, Is.Not.Null);
+            Assert.That(choose, Is.Not.Null);
+            for (ulong seed = 1; seed <= 50; seed++)
+            {
+                var s = MapGenerator.GenerateTerrain(seed);
+                s.Economy.Ages = true;
+                s.Economy.Caravan = true;
+                s.Economy.CaravanOutpostReach = 24;
+                var sim = new Battle(s);
+                int caravan = (int)score.Invoke(sim, new object[] { 1u, s.Cores[0].Position });
+                var civ = (CivKind)choose.Invoke(sim, new object[] { 1u });
+                TestContext.WriteLine("seed " + seed + ": usable outposts=" + caravan + " -> " + civ);
+                choices.Add(civ);
+            }
+            Assert.That(choices, Does.Contain(CivKind.Caravan), "隊商が選ばれる地図がある");
+        }
+
         [Test]
         public void CaravanTailRoundTripsInEveryForestryMasonryCombination()
         {
@@ -229,6 +261,11 @@ namespace Rts.Core.Tests
             Assert.That(storedOutpost, Is.EqualTo(1u));
             Assert.That(storedDistance.Raw, Is.GreaterThan(0));
             Assert.That(storedReward, Is.InRange(1, 30));
+            var hostView = sim.Capture(1).Economy.Buildings.First(b => b.Id == host);
+            Assert.That(hostView.CaravanMarketId, Is.EqualTo(market));
+            Assert.That(hostView.CaravanOutpostId, Is.EqualTo(1u));
+            Assert.That(hostView.CaravanWoodReward, Is.EqualTo(storedReward));
+            Assert.That(hostView.CaravanStopReason, Is.EqualTo(CaravanStopReason.Normal));
 
             uint second = PlaceMarket(sim, gateway, s, ref sequence);
             Assert.That(second, Is.Not.EqualTo(0u));
@@ -254,7 +291,16 @@ namespace Rts.Core.Tests
                 gateway.Step();
                 object villager = State(sim, "Villagers", 1);
                 int cargo = Get<int>(villager, "CaravanWood");
-                if (cargo > 0) { loaded = true; Assert.That(sim.Capture(1).Economy.Wood, Is.EqualTo(before)); }
+                if (cargo > 0)
+                {
+                    loaded = true;
+                    Assert.That(sim.Capture(1).Economy.Wood, Is.EqualTo(before));
+                    var villagerView = sim.Capture(1).Economy.Villagers.First(v => v.Id == 1);
+                    Assert.That(villagerView.CaravanMarketId, Is.EqualTo(market));
+                    Assert.That(villagerView.CaravanseraiId, Is.EqualTo(host));
+                    Assert.That(villagerView.CaravanWood, Is.EqualTo(cargo));
+                    Assert.That(villagerView.CaravanStopReason, Is.EqualTo(CaravanStopReason.Normal));
+                }
                 if (sim.Capture(1).Economy.Wood == before + reward) { paid = true; break; }
             }
             Assert.That(loaded, Is.True, "隊商宿到着時に専用荷物へ積載される");

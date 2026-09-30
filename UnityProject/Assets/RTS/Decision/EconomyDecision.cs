@@ -71,8 +71,8 @@ namespace Rts.Decision
         }
 
         /// <summary>
-        /// V3-9 #1: the caravan score is deliberately zero in the first pass because terrain evaluation is deferred.
-        /// A positive score is still supported for the later terrain pass; zero never steals an older tie.
+        /// V3-9 #3: compares the terrain scores including the number of usable caravan outposts. A zero caravan
+        /// score never steals an older tie, preserving the preceding four-way ordering when caravan terrain is absent.
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
             int caravanPointsNear, int guaranteedFood)

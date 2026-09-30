@@ -239,6 +239,14 @@ namespace Rts.Contracts
         public int Hp { get; }
         /// <summary>V3-3: the player assigned this own villager; the automatic economy leaves it alone.</summary>
         public bool PlayerHeld { get; }
+        /// <summary>V3-9 #3: fixed caravan pair, stage, dedicated cargo and stop reason.</summary>
+        public uint CaravanMarketId { get; }
+        public uint CaravanseraiId { get; }
+        public uint CaravanOutpostId { get; }
+        public int CaravanStage { get; }
+        public int CaravanWood { get; }
+        public int CaravanGems { get; }
+        public CaravanStopReason CaravanStopReason { get; }
 
         public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp)
             : this(id, isOwn, position, activity, carryKind, carry, hp, false)
@@ -246,8 +254,17 @@ namespace Rts.Contracts
         }
 
         public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp, bool playerHeld)
+            : this(id, isOwn, position, activity, carryKind, carry, hp, playerHeld, 0, 0, 0, 0, 0, 0, CaravanStopReason.None)
+        {
+        }
+
+        public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp, bool playerHeld,
+            uint caravanMarketId, uint caravanseraiId, uint caravanOutpostId, int caravanStage, int caravanWood, int caravanGems,
+            CaravanStopReason caravanStopReason)
         {
             Id = id; IsOwn = isOwn; Position = position; Activity = activity; CarryKind = carryKind; Carry = carry; Hp = hp; PlayerHeld = playerHeld;
+            CaravanMarketId = caravanMarketId; CaravanseraiId = caravanseraiId; CaravanOutpostId = caravanOutpostId;
+            CaravanStage = caravanStage; CaravanWood = caravanWood; CaravanGems = caravanGems; CaravanStopReason = caravanStopReason;
         }
     }
 
@@ -276,6 +293,12 @@ namespace Rts.Contracts
         public int Output { get; }
         /// <summary>V3-7: BowGear reserved by SkirmishArcher training.</summary>
         public int QueuedBowGear { get; }
+        /// <summary>V3-9 #3: the fixed market/outpost pair and the provisional reward.</summary>
+        public uint CaravanMarketId { get; }
+        public uint CaravanOutpostId { get; }
+        public Fix64 CaravanDistance { get; }
+        public int CaravanWoodReward { get; }
+        public CaravanStopReason CaravanStopReason { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
@@ -312,11 +335,22 @@ namespace Rts.Contracts
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear = 0)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, facing, input, output,
+                playerHeld, researching, researchRemaining, inputSecondary, queuedBowGear, 0, 0, default, 0, CaravanStopReason.None)
+        {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
+            TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
+            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
             Facing = facing; Input = input; InputSecondary = inputSecondary; Output = output;
             QueuedBowGear = queuedBowGear;
+            CaravanMarketId = caravanMarketId; CaravanOutpostId = caravanOutpostId; CaravanDistance = caravanDistance;
+            CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }

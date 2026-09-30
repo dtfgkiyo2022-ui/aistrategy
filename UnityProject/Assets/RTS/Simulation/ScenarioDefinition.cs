@@ -132,7 +132,9 @@ namespace Rts.Simulation
         public int MarketFoodFloor = 150, MarketWoodReserve = 300, MarketStoneReserve = 100;
         /// <summary>V3-9 #1 provisional caravanserai values. The route pair and reward are fixed when the building is placed.</summary>
         public int CaravanseraiSizeCells = 2, CaravanseraiWoodCost = 80, CaravanseraiWork = 200, CaravanseraiHp = 400;
-        public int CaravanOutpostReach = 20, CaravanMinimumDistance = 20, CaravanRewardDistanceStep = 10, CaravanRewardMaxWood = 30;
+        // 24m leaves enough room for a two-cell host footprint around the snapped outpost centre while keeping
+        // the host tied to its registered outpost. This is a provisional placement value, not a reward distance.
+        public int CaravanOutpostReach = 24, CaravanMinimumDistance = 20, CaravanRewardDistanceStep = 10, CaravanRewardMaxWood = 30;
         public int CaravanAutoVillagers = 2;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;

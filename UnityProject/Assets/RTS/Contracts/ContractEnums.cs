@@ -75,6 +75,9 @@ namespace Rts.Contracts
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 
+    /// <summary>V3-9 #3: the display-facing reason a caravan route is stopped.</summary>
+    public enum CaravanStopReason : byte { None = 0, Normal = 1, Danger = 2, OutpostLost = 3, MarketLost = 4, HostLost = 5 }
+
     /// <summary>Ver.3 direction of a belt or a building's output (technical-design-v3 11.2). North is +z, east is +x.</summary>
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
