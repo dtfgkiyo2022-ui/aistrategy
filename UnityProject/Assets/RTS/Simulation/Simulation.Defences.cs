@@ -185,6 +185,8 @@ namespace Rts.Simulation
                     // The market is the caravan base condition. The caravanserai is deliberately not used here,
                     // otherwise the market required by the host would form a circular prerequisite.
                     return CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) >= 0;
+                case CivKind.Cavalry:
+                    return CavalryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Stable) >= 0;
                 default:
                     return false;
             }

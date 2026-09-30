@@ -445,8 +445,9 @@ namespace Rts.Simulation
                 && e.TowerWoodCost >= 0 && e.TowerStoneCost >= 0 && e.TowerWork > 0 && e.TowerHp > 0 && e.TowerRange >= 0 && e.TowerVision >= 0
                 && e.TowerDamage >= 0 && e.TowerIntervalTicks > 0
                 && e.BlacksmithSizeCells > 0 && e.BlacksmithSizeCells <= 8 && e.BlacksmithWoodCost >= 0 && e.BlacksmithWork > 0 && e.BlacksmithHp > 0
-                && e.TechFood != null && e.TechFood.Length == 12 && e.TechWood != null && e.TechWood.Length == 12 && e.TechTicks != null && e.TechTicks.Length == 12
-                && e.TechMetal != null && e.TechMetal.Length == 12 && e.TechGems != null && e.TechGems.Length == 12
+                && e.TechFood != null && e.TechFood.Length == (e.Cavalry ? 13 : 12) && e.TechWood != null && e.TechWood.Length == (e.Cavalry ? 13 : 12)
+                && e.TechTicks != null && e.TechTicks.Length == (e.Cavalry ? 13 : 12)
+                && e.TechMetal != null && e.TechMetal.Length == (e.Cavalry ? 13 : 12) && e.TechGems != null && e.TechGems.Length == (e.Cavalry ? 13 : 12)
                 && Array.TrueForAll(e.TechMetal, v => v >= 0) && Array.TrueForAll(e.TechGems, v => v >= 0)
                 && e.SteelWeaponsDamage >= 0 && e.SteelArmourHp >= 0 && e.GemArmorHp >= 0
                 && e.RepairHpPerTick > 0 && e.RepairAtPermille >= 0 && e.RepairAtPermille <= 1000
@@ -469,6 +470,10 @@ namespace Rts.Simulation
                 && e.ArcherRange.Raw >= 0 && e.ArcherRange <= Fix64.FromInt(64) && e.ArcherSpeed.Raw > 0 && e.ArcherSpeed <= Fix64.FromInt(16) && e.ArcherVision.Raw >= 0
                 && e.CavalryFood >= 0 && e.CavalryWood >= 0 && e.CavalryMetal >= 0 && e.CavalryTicks > 0 && e.CavalryHp > 0 && e.CavalryDamage >= 0 && e.CavalryInterval > 0
                 && e.CavalryRange.Raw >= 0 && e.CavalryRange <= Fix64.FromInt(64) && e.CavalrySpeed.Raw > 0 && e.CavalrySpeed <= Fix64.FromInt(16) && e.CavalryVision.Raw >= 0
+                && (!e.Cavalry || (e.LightCavalryFood >= 0 && e.LightCavalryWood >= 0 && e.LightCavalryTicks > 0
+                    && e.LightCavalryHp > 0 && e.LightCavalryDamage >= 0 && e.LightCavalryInterval > 0
+                    && e.LightCavalryRange.Raw >= 0 && e.LightCavalryRange <= Fix64.FromInt(64)
+                    && e.LightCavalrySpeed.Raw > 0 && e.LightCavalrySpeed <= Fix64.FromInt(16) && e.LightCavalryVision.Raw >= 0))
                 && e.MarketSizeCells > 0 && e.MarketSizeCells <= 8 && e.MarketWoodCost >= 0 && e.MarketWork > 0 && e.MarketHp > 0 && e.TradeLot > 0 && e.TradeReturn >= 0 && e.GemsTradeReturn >= 0
                  && e.TradeRouteWood > 0 && e.TradeRouteMin > 0
                 && e.WorkshopSizeCells > 0 && e.WorkshopSizeCells <= 8 && e.WorkshopWoodCost >= 0 && e.WorkshopWork > 0 && e.WorkshopHp > 0
@@ -477,6 +482,13 @@ namespace Rts.Simulation
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
+            Require(!e.Cavalry || e.Ages, "Cavalry requires ages.");
+            if (e.Cavalry)
+                Require(e.CavalryDrillFood >= 0 && e.CavalryDrillWood >= 0 && e.CavalryDrillTicks > 0
+                    && e.CavalryDrillSpeed.Raw > 0 && e.CavalryDrillSpeed <= Fix64.FromInt(16)
+                    && c.Economy.TechFood.Length >= 13 && c.Economy.TechWood.Length >= 13
+                    && c.Economy.TechTicks.Length >= 13 && c.Economy.TechMetal.Length >= 13
+                    && c.Economy.TechGems.Length >= 13, "Invalid cavalry drill rules.");
             Require(!e.Masonry || (e.Ages && e.Industry && e.QuarrySizeCells > 0 && e.QuarrySizeCells <= 8 && e.QuarryWoodCost >= 0
                 && e.QuarryWork > 0 && e.QuarryHp > 0 && e.QuarryIntervalTicks > 0
                 && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0
@@ -611,6 +623,21 @@ namespace Rts.Simulation
         private static EconomyRules CopyEconomy(EconomyRules e)
         {
             Require(e != null, "Missing economy rules.");
+            var techFood = (int[])e.TechFood.Clone();
+            var techWood = (int[])e.TechWood.Clone();
+            var techTicks = (int[])e.TechTicks.Clone();
+            var techMetal = (int[])e.TechMetal.Clone();
+            var techGems = (int[])e.TechGems.Clone();
+            if (e.Cavalry)
+            {
+                if (techFood.Length < 13) Array.Resize(ref techFood, 13);
+                if (techWood.Length < 13) Array.Resize(ref techWood, 13);
+                if (techTicks.Length < 13) Array.Resize(ref techTicks, 13);
+                if (techMetal.Length < 13) Array.Resize(ref techMetal, 13);
+                if (techGems.Length < 13) Array.Resize(ref techGems, 13);
+                techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
+                techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
+            }
             return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
@@ -631,12 +658,12 @@ namespace Rts.Simulation
                  HeavyInfantryHp = e.HeavyInfantryHp, HeavyInfantryDamage = e.HeavyInfantryDamage,
                  HeavyInfantryAttackIntervalTicks = e.HeavyInfantryAttackIntervalTicks, HeavyInfantrySpeed = e.HeavyInfantrySpeed,
                  HeavyInfantryVision = e.HeavyInfantryVision, HeavyInfantryRange = e.HeavyInfantryRange,
-                Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
+                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                 AgrarianInfantryFood = e.AgrarianInfantryFood, AgrarianInfantryWood = e.AgrarianInfantryWood, AgrarianInfantryTicks = e.AgrarianInfantryTicks,
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                 Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
+                 Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
                  QuarryWork = e.QuarryWork, QuarryHp = e.QuarryHp, QuarryIntervalTicks = e.QuarryIntervalTicks,
                  LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
                 LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,
@@ -660,8 +687,8 @@ namespace Rts.Simulation
                 TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
                 BlacksmithSizeCells = e.BlacksmithSizeCells, BlacksmithWoodCost = e.BlacksmithWoodCost, BlacksmithWork = e.BlacksmithWork, BlacksmithHp = e.BlacksmithHp,
-                TechFood = (int[])e.TechFood.Clone(), TechWood = (int[])e.TechWood.Clone(), TechTicks = (int[])e.TechTicks.Clone(),
-                TechMetal = (int[])e.TechMetal.Clone(), TechGems = (int[])e.TechGems.Clone(), SteelWeaponsDamage = e.SteelWeaponsDamage, SteelArmourHp = e.SteelArmourHp,
+                TechFood = techFood, TechWood = techWood, TechTicks = techTicks,
+                TechMetal = techMetal, TechGems = techGems, SteelWeaponsDamage = e.SteelWeaponsDamage, SteelArmourHp = e.SteelArmourHp,
                 GemArmorHp = e.GemArmorHp,
                 WeaponsDamage = e.WeaponsDamage, ArmourHp = e.ArmourHp, ToolsGatherTicks = e.ToolsGatherTicks, CartsCarry = e.CartsCarry,
                 IrrigationTicks = e.IrrigationTicks, BlastFurnaceTicks = e.BlastFurnaceTicks,
@@ -682,6 +709,11 @@ namespace Rts.Simulation
                 ArcherInterval = e.ArcherInterval, ArcherRange = e.ArcherRange, ArcherSpeed = e.ArcherSpeed, ArcherVision = e.ArcherVision,
                 CavalryFood = e.CavalryFood, CavalryWood = e.CavalryWood, CavalryMetal = e.CavalryMetal, CavalryTicks = e.CavalryTicks, CavalryHp = e.CavalryHp,
                 CavalryDamage = e.CavalryDamage, CavalryInterval = e.CavalryInterval, CavalryRange = e.CavalryRange, CavalrySpeed = e.CavalrySpeed, CavalryVision = e.CavalryVision,
+                LightCavalryFood = e.LightCavalryFood, LightCavalryWood = e.LightCavalryWood, LightCavalryTicks = e.LightCavalryTicks,
+                LightCavalryHp = e.LightCavalryHp, LightCavalryDamage = e.LightCavalryDamage, LightCavalryInterval = e.LightCavalryInterval,
+                LightCavalryRange = e.LightCavalryRange, LightCavalrySpeed = e.LightCavalrySpeed, LightCavalryVision = e.LightCavalryVision,
+                CavalryDrillFood = e.CavalryDrillFood, CavalryDrillWood = e.CavalryDrillWood, CavalryDrillTicks = e.CavalryDrillTicks,
+                CavalryDrillSpeed = e.CavalryDrillSpeed,
                 MarketSizeCells = e.MarketSizeCells, MarketWoodCost = e.MarketWoodCost, MarketWork = e.MarketWork, MarketHp = e.MarketHp, TradeLot = e.TradeLot, TradeReturn = e.TradeReturn,
                 GemsTradeReturn = e.GemsTradeReturn,
                 TradeRouteWood = e.TradeRouteWood, TradeRouteMin = e.TradeRouteMin,

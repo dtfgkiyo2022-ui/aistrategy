@@ -83,6 +83,8 @@ namespace Rts.Simulation
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
                         // V3-5 (32 #12): the archery range and the stable, from the second age, whatever the civilisation.
                         && !((kind == BuildingKind.ArcheryRange || kind == BuildingKind.Stable) && AgesOn && world.Economies[faction - 1].Age >= 2)
+                        // V3-10 #1: the cavalry civilisation may place the existing stable from its first age.
+                        && !(kind == BuildingKind.Stable && CavalryAllowed(faction) && world.Economies[faction - 1].Age >= 1)
                         // V3-5 (32 #17): the castle belongs to the third age.
                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                         && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;

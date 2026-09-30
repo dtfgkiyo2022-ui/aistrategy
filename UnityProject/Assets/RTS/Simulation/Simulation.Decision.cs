@@ -84,6 +84,15 @@ namespace Rts.Simulation
                         int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
                         routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, path.Select(world.Map.Center).ToArray()));
                     }
+                    if (OffenseDecision.IsMobileArmyKind(view.Kind))
+                        foreach (var target in observation.RaidTargets.OrderBy(t => t.Kind).ThenBy(t => t.Id))
+                        {
+                            var path = world.Map.FindPath(start, target.Position);
+                            int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), target.Position, Fix64.FromInt(4))
+                                ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
+                            routes.Add(new ObjectiveRoute(new PolicyGoal(GoalKind.Point, target.Id, target.Position), distance,
+                                path.Select(world.Map.Center).ToArray()));
+                        }
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }
                 var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).ToArray();

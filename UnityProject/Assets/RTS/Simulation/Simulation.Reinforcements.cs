@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -26,15 +27,22 @@ namespace Rts.Simulation
             }
         }
 
-        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin) => Spawn(faction, kind, objective, origin, UnitKind.Infantry);
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin) => Spawn(faction, kind, objective, origin, UnitKind.Infantry, UnitKind.Infantry);
 
         /// <summary>
         /// A new soldier of <paramref name="unit"/> next to <paramref name="origin"/>. Infantry joins the home army of the
         /// objective, then the reserve, then any other non-scout army (Ver.1); a scout joins a scout army (V3-5).
         /// </summary>
         private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit)
+            => Spawn(faction, kind, objective, origin, unit, unit);
+
+        /// <summary>Spawn <paramref name="unit"/> while using <paramref name="assignmentUnit"/> for formation routing.</summary>
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit, UnitKind assignmentUnit)
         {
             bool scout = unit == UnitKind.Scout;
+            bool mobile = assignmentUnit == UnitKind.LightCavalry;
+            bool keepReserveForMobile = CavalryAllowed(faction) && !mobile && world.Soldiers.Any(s => s.Alive
+                && s.Initial.FactionId == faction && s.Class == UnitKind.LightCavalry);
             int alive = 0;
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) alive++;
@@ -46,7 +54,12 @@ namespace Rts.Simulation
                     var a = world.Armies[id - 1];
                     if ((a.Definition.Role == "scout") != scout) continue;
                     var home = a.Definition.HomeObjective;
-                    int rank = home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
+                    // Light cavalry is a mobile reserve, not reinforcement for the north/south core line.
+                    // The existing infantry/cavalry allocation order is unchanged for every other unit.
+                    int rank = mobile
+                        ? a.Definition.Role == "reserve" ? 0 : 1
+                        : keepReserveForMobile && a.Definition.Role == "reserve" ? 2
+                        : home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
                     if (rank != priority) continue;
                     int count = 0;
                     foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;

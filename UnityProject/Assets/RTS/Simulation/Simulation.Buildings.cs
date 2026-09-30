@@ -290,7 +290,8 @@ namespace Rts.Simulation
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
-                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry)) continue;
+                var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
+                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);

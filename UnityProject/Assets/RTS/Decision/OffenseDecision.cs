@@ -10,6 +10,8 @@ namespace Rts.Decision
         public const int RallyDistanceMeters = 40;
         // Chapter 9.2 comparison value: require a tighter group before advancing.
         public const int RallyRadiusMeters = 8;
+        /// <summary>The one army-kind gate shared by coordinated offense and cavalry mobility.</summary>
+        public static bool IsMobileArmyKind(UnitKind kind) => kind == UnitKind.LightCavalry;
         private static bool Same(PolicyGoal a, PolicyGoal b) => a.Kind == b.Kind && a.Id == b.Id;
         public static long Length(IReadOnlyList<SimPoint> cells)
         {
@@ -88,7 +90,9 @@ namespace Rts.Decision
             s.AdvancingArmyIds = Ordered(remaining);
             if (whole || advance.Count > 0 && remaining.Length == 0) End(s, tick, true);
         }
-        private static bool Eligible(ArmyDecisionInput a, ArmyDecisionMemory m, long tick) => a.Army.Kind == UnitKind.Infantry && a.Army.AliveCount > 0 && a.Policy.Kind == 0 && !m.Returning && tick >= m.HoldUntilTick && m.Assignment == AssignmentKind.Advance;
+        private static bool Eligible(ArmyDecisionInput a, ArmyDecisionMemory m, long tick) =>
+            (a.Army.Kind == UnitKind.Infantry || IsMobileArmyKind(a.Army.Kind)) && a.Army.AliveCount > 0
+            && a.Policy.Kind == 0 && !m.Returning && tick >= m.HoldUntilTick && m.Assignment == AssignmentKind.Advance;
         private static bool Reachable(OffenseRouteInput r, IEnumerable<uint> ids) => r != null && r.ToTarget.Count > 0 && ids.All(id => r.ToRally.Any(p => p.Goal.Id == id && p.Cells.Count > 0));
         private static long MaxDistance(OffenseRouteInput r, IEnumerable<uint> ids) => ids.Select(id => Length(r.ToRally.First(p => p.Goal.Id == id).Cells)).DefaultIfEmpty(0).Max();
         private static void Start(FactionOffenseMemory s, OffenseRouteInput r, uint[] ids, IReadOnlyList<OffenseArmyInput> own, long tick, bool newTarget)
@@ -181,6 +185,9 @@ namespace Rts.Decision
             for (int i = 0; i < inputs.Count; i++)
                 if (ids.Contains(inputs[i].Army.Id))
                 {
+                    // A point goal selected from observed raid candidates is an intentional mission. Keep it while
+                    // it is present; allocation replaces it when the candidate disappears or the route is lost.
+                    if (s.Phase == OffensivePhase.Idle && IsMobileArmyKind(inputs[i].Army.Kind) && result[i].Goal.Kind == GoalKind.Point) continue;
                     result[i].Assignment = AssignmentKind.Advance;
                     result[i].Goal = s.Phase == OffensivePhase.Idle ? waitGoal : s.Phase == OffensivePhase.Advancing && (s.AdvancingArmyIds.Contains(inputs[i].Army.Id) || s.PlannedArmyIds.Contains(inputs[i].Army.Id)) ? s.Goal : new PolicyGoal(GoalKind.Point, 0, s.RallyPoint);
                 }

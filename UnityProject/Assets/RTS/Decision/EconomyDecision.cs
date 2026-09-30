@@ -76,13 +76,24 @@ namespace Rts.Decision
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
             int caravanPointsNear, int guaranteedFood)
+            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, 0, guaranteedFood);
+
+        /// <summary>
+        /// V3-10 #3: adds the cavalry mobility score (already converted to a small 0-5 range). Ties keep the older
+        /// order agrarian &gt; metallurgy &gt; forestry &gt; masonry &gt; caravan &gt; cavalry, so a zero score never steals one.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int caravanPointsNear, int cavalryPointsNear, int guaranteedFood)
         {
             int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear) return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear) return CivKind.Metallurgy;
-            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear) return CivKind.Forestry;
-            if (stonePointsNear >= caravanPointsNear) return CivKind.Masonry;
-            return CivKind.Caravan;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear
+                && agrarian >= cavalryPointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear
+                && orePointsNear >= cavalryPointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear && forestPointsNear >= cavalryPointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= caravanPointsNear && stonePointsNear >= cavalryPointsNear) return CivKind.Masonry;
+            if (caravanPointsNear >= cavalryPointsNear) return CivKind.Caravan;
+            return CivKind.Cavalry;
         }
 
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>

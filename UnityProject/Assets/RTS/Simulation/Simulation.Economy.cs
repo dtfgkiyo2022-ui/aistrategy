@@ -54,6 +54,7 @@ namespace Rts.Simulation
                 DecideRepair(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
+                DecideCavalryStable(faction);
             }
         }
 

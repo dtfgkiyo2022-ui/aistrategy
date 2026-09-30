@@ -500,7 +500,8 @@ namespace Rts.Simulation
             bool foodMarketCiv = world.Economies[faction - 1].Civ == CivKind.Metallurgy
                 || world.Economies[faction - 1].Civ == CivKind.Forestry
                 || world.Economies[faction - 1].Civ == CivKind.Masonry
-                || world.Economies[faction - 1].Civ == CivKind.Caravan;
+                || world.Economies[faction - 1].Civ == CivKind.Caravan
+                || world.Economies[faction - 1].Civ == CivKind.Cavalry;
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
             // Caravan's first market is the base condition for the civilisation, so allow that one building before
