@@ -19,6 +19,8 @@ namespace Rts.Simulation
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
+        private bool BridgeOn => AgesOn && world.Config.Economy.Bridge;
+
         /// <summary>Mines and smelters: on an ages map only in the metallurgy civilisation.</summary>
         private bool MetalworkAllowed(uint faction) => !AgesOn || world.Economies[faction - 1].Civ == CivKind.Metallurgy;
 
@@ -36,6 +38,9 @@ namespace Rts.Simulation
 
         private bool MasonryAllowed(uint faction)
             => MasonryOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;
+
+        private bool BridgeAllowed(uint faction)
+            => BridgeOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -94,7 +99,7 @@ namespace Rts.Simulation
             if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
             if (e.Civ == CivKind.Primitive)
                 return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
-                    || MasonryOn && civ == CivKind.Masonry;
+                    || MasonryOn && civ == CivKind.Masonry || BridgeOn && civ == CivKind.Bridge;
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }

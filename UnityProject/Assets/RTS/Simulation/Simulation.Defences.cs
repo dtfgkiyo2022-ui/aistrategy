@@ -167,6 +167,8 @@ namespace Rts.Simulation
                     return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
                 case CivKind.Masonry:
                     return MasonryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Quarry) >= 0;
+                case CivKind.Bridge:
+                    return BridgeAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.EngineerCamp) >= 0;
                 default:
                     return false;
             }

@@ -117,6 +117,13 @@ namespace Rts.Simulation
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
                     }
+                    if (b.Kind == BuildingKind.Bridge)
+                    {
+                        var bridgeCells = b.BridgeCells ?? Array.Empty<int>();
+                        w.Value(n + "BridgeCells.Count", (uint)bridgeCells.Length);
+                        for (int j = 0; j < bridgeCells.Length; j++)
+                            w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
+                    }
                     if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);

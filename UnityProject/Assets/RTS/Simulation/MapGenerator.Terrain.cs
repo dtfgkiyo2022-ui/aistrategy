@@ -28,7 +28,7 @@ namespace Rts.Simulation
         public static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans)
             => GenerateTerrain(seed, out leans, false);
 
-        private static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans, bool processingChain)
+        private static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans, bool processingChain, bool bridge = false)
         {
             var rng = new SplitMix64(seed);
             var s = WeekOneScenario.Create();
@@ -139,7 +139,7 @@ namespace Rts.Simulation
 
             // 7. Soldiers and villagers as on the economy maps; the rules of mapgen-2.
             PlaceStartingUnits(s, wx, wz, ex, ez);
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain };
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain, Bridge = bridge };
             // Match pacing (technical-design-v3 32.25, 32.27): the combination closest to the 15-25 minute target.
             s.Economy.AutoVillagerTarget = 20;
             s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;

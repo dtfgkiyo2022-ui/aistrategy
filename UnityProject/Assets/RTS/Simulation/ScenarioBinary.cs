@@ -11,6 +11,7 @@ namespace Rts.Simulation
         public const string RulesVersion = "week3-reinforcements-4";
         private const int ForestryTailMarker = 0x46525354; // "FRST", after the existing optional tail chain.
         private const int MasonryTailMarker = 0x4D534F4E; // "MSON", after the forestry tail when present.
+        private const int BridgeTailMarker = 0x42524447; // "BRDG", after the masonry tail when present.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -115,7 +116,8 @@ namespace Rts.Simulation
                 // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
             bool processingRules = c.Economy.ProcessingChain;
             bool forestryRules = c.Economy.Forestry;
-            bool masonryRules = c.Economy.Masonry;
+            bool bridgeRules = c.Economy.Bridge;
+            bool masonryRules = c.Economy.Masonry || bridgeRules;
             bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
@@ -169,6 +171,13 @@ namespace Rts.Simulation
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
                         // V3-8 #2: the masonry-only defence discounts live in this existing tail, not a nested tail.
                         w.Write(c.Economy.MasonryDefenceCostPermille); w.Write(c.Economy.MasonryDefenceWorkPermille);
+                    }
+                    if (bridgeRules)
+                    {
+                        w.Write(BridgeTailMarker);
+                        w.Write(c.Economy.Bridge);
+                        w.Write(c.Economy.EngineerCampSizeCells); w.Write(c.Economy.EngineerCampWoodCost); w.Write(c.Economy.EngineerCampWork); w.Write(c.Economy.EngineerCampHp);
+                        w.Write(c.Economy.BridgeWoodCost); w.Write(c.Economy.BridgeWork); w.Write(c.Economy.BridgeHp); w.Write(c.Economy.MaxBridgeLength);
                     }
                 }
                 return s.ToArray();
@@ -294,9 +303,10 @@ namespace Rts.Simulation
                                         {
                                             if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
                                             ReadMasonryTail(r, e);
+                                            ReadBridgeTailIfPresent(r, e);
                                         }
                                     }
-                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); }
+                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadBridgeTailIfPresent(r, e); }
                                     else
                                     {
                                         s.Position = tailStart;
@@ -318,9 +328,10 @@ namespace Rts.Simulation
                                                 {
                                                     if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
                                                     ReadMasonryTail(r, e);
+                                                    ReadBridgeTailIfPresent(r, e);
                                                 }
                                             }
-                                            else if (finalMarker == MasonryTailMarker) ReadMasonryTail(r, e);
+                                            else if (finalMarker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadBridgeTailIfPresent(r, e); }
                                             else throw new InvalidDataException("Invalid optional tail.");
                                         }
                                     }
@@ -363,10 +374,21 @@ namespace Rts.Simulation
             e.QuarryHp = r.ReadInt32(); e.QuarryIntervalTicks = r.ReadInt32();
             e.MarketFoodFloor = r.ReadInt32(); e.MarketWoodReserve = r.ReadInt32(); e.MarketStoneReserve = r.ReadInt32();
             // Older masonry tails ended here. Defaults keep those old records readable.
-            if (r.BaseStream.Position < r.BaseStream.Length)
+            if (r.BaseStream.Position <= r.BaseStream.Length - 8)
             {
+                long next = r.BaseStream.Position;
+                if (r.ReadInt32() == BridgeTailMarker) { r.BaseStream.Position = next; return; }
+                r.BaseStream.Position = next;
                 e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
             }
+        }
+        private static void ReadBridgeTailIfPresent(BinaryReader r, EconomyRules e)
+        {
+            if (r.BaseStream.Position >= r.BaseStream.Length) return;
+            if (r.ReadInt32() != BridgeTailMarker) throw new InvalidDataException("Invalid bridge tail.");
+            e.Bridge = Bool(r);
+            e.EngineerCampSizeCells = r.ReadInt32(); e.EngineerCampWoodCost = r.ReadInt32(); e.EngineerCampWork = r.ReadInt32(); e.EngineerCampHp = r.ReadInt32();
+            e.BridgeWoodCost = r.ReadInt32(); e.BridgeWork = r.ReadInt32(); e.BridgeHp = r.ReadInt32(); e.MaxBridgeLength = r.ReadInt32();
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

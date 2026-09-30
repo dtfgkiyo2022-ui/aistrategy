@@ -33,7 +33,7 @@ namespace Rts.Simulation
                 bool own = b.FactionId == faction;
                 if (!own && !BuildingVisibleTo(faction, b)) continue;
                 int size = SizeOf(b.Kind);
-                buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
+                buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,

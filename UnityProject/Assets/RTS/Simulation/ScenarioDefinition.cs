@@ -112,6 +112,12 @@ namespace Rts.Simulation
         public bool Forestry;
         /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
         public bool Masonry;
+        /// <summary>V3-11 #1: enables the engineer-and-bridging civilisation. False keeps prior age maps unchanged.</summary>
+        public bool Bridge;
+        /// <summary>V3-11 #1 provisional engineer camp values; the first pass matches a lumber camp.</summary>
+        public int EngineerCampSizeCells = 2, EngineerCampWoodCost = 80, EngineerCampWork = 200, EngineerCampHp = 400;
+        /// <summary>V3-11 #1 provisional short bridge values. BridgeWoodCost is paid once per bridge.</summary>
+        public int BridgeWoodCost = 40, BridgeWork = 120, BridgeHp = 400, MaxBridgeLength = 6;
         /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
         public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>

@@ -26,6 +26,7 @@ namespace Rts.Simulation
                 return;
             }
             if (MasonryAllowed(faction)) { DecideQuarry(faction); return; }
+            if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -173,6 +174,17 @@ namespace Rts.Simulation
                 whole = LayBelts(faction, route.cells, route.facings);
             }
             SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+        }
+
+        /// <summary>V3-11 #1: the automatic economy builds only the bridge civilisation's prerequisite camp.</summary>
+        private void DecideEngineerCamp(uint faction)
+        {
+            int camp = OwnBuildingIndex(faction, BuildingKind.EngineerCamp);
+            if (camp >= 0) return;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < world.Config.Economy.EngineerCampWoodCost) return;
+            int origin = FindSite(faction, world.Config.Economy.EngineerCampSizeCells);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.EngineerCamp, origin, Facing.North, 0);
         }
 
         /// <summary>V3-7 #2: after the first camp, keep a separate core-wood line and a bow-gear line.</summary>

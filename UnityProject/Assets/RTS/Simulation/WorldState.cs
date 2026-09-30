@@ -131,6 +131,8 @@ namespace Rts.Simulation
         internal BuildingKind Kind;
         /// <summary>Lower-left cell of the square footprint; its cells are impassable from placement on.</summary>
         internal int OriginCell;
+        /// <summary>V3-11 #1: the exact river cells occupied by a bridge; null for every other building.</summary>
+        internal int[] BridgeCells;
         /// <summary>Nearest passable cell outside the footprint, where builders stand and new soldiers appear.</summary>
         internal int WorkCell;
         internal bool Alive, Complete;
@@ -469,6 +471,10 @@ namespace Rts.Simulation
                 && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0
                 && e.MasonryDefenceCostPermille > 0 && e.MasonryDefenceCostPermille <= 1000
                 && e.MasonryDefenceWorkPermille > 0 && e.MasonryDefenceWorkPermille <= 1000), "Masonry requires valid ages, industry and quarry rules.");
+            Require(!e.Bridge || (e.Ages && e.Industry && e.EngineerCampSizeCells > 0 && e.EngineerCampSizeCells <= 8
+                && e.EngineerCampWoodCost >= 0 && e.EngineerCampWork > 0 && e.EngineerCampHp > 0
+                && e.BridgeWoodCost >= 0 && e.BridgeWork > 0 && e.BridgeHp > 0
+                && e.MaxBridgeLength > 0 && e.MaxBridgeLength <= 256), "Bridge requires valid ages, industry and bridge rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -619,7 +625,11 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                 Forestry = e.Forestry, Masonry = e.Masonry, QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
+                 Forestry = e.Forestry, Masonry = e.Masonry, Bridge = e.Bridge,
+                 EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
+                 EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
+                 BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
+                 QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
                  QuarryWork = e.QuarryWork, QuarryHp = e.QuarryHp, QuarryIntervalTicks = e.QuarryIntervalTicks,
                  LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
                 LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,

@@ -163,7 +163,8 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             bool foodMarketCiv = world.Economies[faction - 1].Civ == CivKind.Metallurgy
                 || world.Economies[faction - 1].Civ == CivKind.Forestry
-                || world.Economies[faction - 1].Civ == CivKind.Masonry;
+                || world.Economies[faction - 1].Civ == CivKind.Masonry
+                || world.Economies[faction - 1].Civ == CivKind.Bridge;
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
             if (!foodMarketCiv && SavingToAdvance(faction)) return;
