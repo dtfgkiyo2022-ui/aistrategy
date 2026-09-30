@@ -34,6 +34,7 @@ namespace Rts.Decision
         private static UnitKind Line(UnitKind kind)
             => kind == 0 || kind == UnitKind.Infantry || kind == UnitKind.HeavyInfantry || kind == UnitKind.SkirmishArcher ? UnitKind.Infantry
                 : kind == UnitKind.Archer || kind == UnitKind.Cavalry ? kind
+                : kind == UnitKind.LightCavalry ? UnitKind.Cavalry
                 : kind == UnitKind.Scout || kind == UnitKind.Ram || kind == UnitKind.Mercenary || kind == UnitKind.Monk ? (UnitKind)0 : (UnitKind)0;
     }
 }

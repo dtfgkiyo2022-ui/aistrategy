@@ -112,6 +112,8 @@ namespace Rts.Simulation
         public bool Forestry;
         /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
         public bool Masonry;
+        /// <summary>V3-10 #1: enables the cavalry civilisation and its early stable/light cavalry rules.</summary>
+        public bool Cavalry;
         /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
         public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
@@ -175,6 +177,10 @@ namespace Rts.Simulation
         public Fix64 ArcherRange = Fix64.FromInt(8), ArcherSpeed = Fix64.FromInt(2), ArcherVision = Fix64.FromInt(22);
         public int CavalryFood = 80, CavalryWood = 20, CavalryMetal = 10, CavalryTicks = 300, CavalryHp = 150, CavalryDamage = 12, CavalryInterval = 20;
         public Fix64 CavalryRange = Fix64.FromInt(2), CavalrySpeed = Fix64.FromInt(4), CavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-10 #1 provisional light cavalry: cheaper and quicker than cavalry, with lower HP and damage.</summary>
+        public int LightCavalryFood = 50, LightCavalryWood = 10, LightCavalryTicks = 180, LightCavalryHp = 90,
+            LightCavalryDamage = 8, LightCavalryInterval = 20;
+        public Fix64 LightCavalryRange = Fix64.FromInt(2), LightCavalrySpeed = Fix64.FromInt(4), LightCavalryVision = Fix64.FromInt(24);
         /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
         public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
         /// <summary>V3-5 (32 #19): a market gives this many Gems when a normal lot is exchanged for Gems.</summary>

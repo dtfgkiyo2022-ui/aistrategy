@@ -50,9 +50,9 @@ namespace Rts.Contracts
 
     // UnitKind has no assigned numbers in chapter 5; these are the initial contract values.
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
-    // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; in battle they are infantry with
-    // their own HP, damage, range and speed, so the combat AI's infantry rules hold for them.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11 }
+    // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; LightCavalry is the V3-10 early
+    // stable unit. They carry their own parameters and class; the counter line maps LightCavalry to Cavalry.
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
@@ -62,7 +62,7 @@ namespace Rts.Contracts
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
     /// More civilisations and later ages are added after the first ones are tried (the value is not an age number).
     /// </summary>
-    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4 }
+    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4, Cavalry = 5 }
 
     /// <summary>
     /// V3-5 research at a blacksmith (technical-design-v3 32 #6). A faction's researched techs are a bit set of

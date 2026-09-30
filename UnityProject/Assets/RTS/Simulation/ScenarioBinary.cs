@@ -11,6 +11,7 @@ namespace Rts.Simulation
         public const string RulesVersion = "week3-reinforcements-4";
         private const int ForestryTailMarker = 0x46525354; // "FRST", after the existing optional tail chain.
         private const int MasonryTailMarker = 0x4D534F4E; // "MSON", after the forestry tail when present.
+        private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the existing optional tail chain.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -116,7 +117,8 @@ namespace Rts.Simulation
             bool processingRules = c.Economy.ProcessingChain;
             bool forestryRules = c.Economy.Forestry;
             bool masonryRules = c.Economy.Masonry;
-            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules;
+            bool cavalryRules = c.Economy.Cavalry;
+            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || cavalryRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -169,6 +171,14 @@ namespace Rts.Simulation
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
                         // V3-8 #2: the masonry-only defence discounts live in this existing tail, not a nested tail.
                         w.Write(c.Economy.MasonryDefenceCostPermille); w.Write(c.Economy.MasonryDefenceWorkPermille);
+                    }
+                    if (cavalryRules)
+                    {
+                        w.Write(CavalryTailMarker);
+                        w.Write(c.Economy.Cavalry);
+                        w.Write(c.Economy.LightCavalryFood); w.Write(c.Economy.LightCavalryWood); w.Write(c.Economy.LightCavalryTicks);
+                        w.Write(c.Economy.LightCavalryHp); w.Write(c.Economy.LightCavalryDamage); w.Write(c.Economy.LightCavalryInterval);
+                        w.Write(c.Economy.LightCavalryRange.Raw); w.Write(c.Economy.LightCavalrySpeed.Raw); w.Write(c.Economy.LightCavalryVision.Raw);
                     }
                 }
                 return s.ToArray();
@@ -287,42 +297,21 @@ namespace Rts.Simulation
                                 {
                                     long tailStart = s.Position;
                                     int marker = r.ReadInt32();
-                                    if (marker == ForestryTailMarker)
-                                    {
-                                        ReadForestryTail(r, e);
-                                        if (s.Position < s.Length)
-                                        {
-                                            if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
-                                            ReadMasonryTail(r, e);
-                                        }
-                                    }
-                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); }
+                                    if (marker == ForestryTailMarker) { ReadForestryTail(r, e); ReadOptionalTailChain(r, e); }
+                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadOptionalTailChain(r, e); }
+                                    else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
                                     else
                                     {
                                         s.Position = tailStart;
                                         e.ProcessingChain = true;
-                                    e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
-                                    e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
-                                    e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
-                                    e.SteelworksHp = r.ReadInt32(); e.SteelTicks = r.ReadInt32();
-                                    e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
-                                    e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
-                                    e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
-                                        if (s.Position < s.Length)
-                                        {
-                                            int finalMarker = r.ReadInt32();
-                                            if (finalMarker == ForestryTailMarker)
-                                            {
-                                                ReadForestryTail(r, e);
-                                                if (s.Position < s.Length)
-                                                {
-                                                    if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
-                                                    ReadMasonryTail(r, e);
-                                                }
-                                            }
-                                            else if (finalMarker == MasonryTailMarker) ReadMasonryTail(r, e);
-                                            else throw new InvalidDataException("Invalid optional tail.");
-                                        }
+                                        e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
+                                        e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
+                                        e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
+                                        e.SteelworksHp = r.ReadInt32(); e.SteelTicks = r.ReadInt32();
+                                        e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
+                                        e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
+                                        e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
+                                        ReadOptionalTailChain(r, e);
                                     }
                                 }
                         }
@@ -347,7 +336,7 @@ namespace Rts.Simulation
             if (r.BaseStream.Position < r.BaseStream.Length)
             {
                 long next = r.BaseStream.Position;
-                if (r.ReadInt32() == MasonryTailMarker) { r.BaseStream.Position = next; return; }
+                if (IsTailMarker(r.ReadInt32())) { r.BaseStream.Position = next; return; }
                 r.BaseStream.Position = next;
                 e.FletcherSizeCells = r.ReadInt32(); e.FletcherWoodCost = r.ReadInt32(); e.FletcherWork = r.ReadInt32(); e.FletcherHp = r.ReadInt32(); e.FletcherTicks = r.ReadInt32();
                 e.FletcherWoodInput = r.ReadInt32(); e.FletcherFoodInput = r.ReadInt32();
@@ -367,6 +356,26 @@ namespace Rts.Simulation
             {
                 e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
             }
+        }
+        private static void ReadOptionalTailChain(BinaryReader r, EconomyRules e)
+        {
+            while (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                int marker = r.ReadInt32();
+                if (marker == ForestryTailMarker) ReadForestryTail(r, e);
+                else if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
+                else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
+                else throw new InvalidDataException("Invalid optional tail.");
+            }
+        }
+        private static bool IsTailMarker(int value)
+            => value == ForestryTailMarker || value == MasonryTailMarker || value == CavalryTailMarker;
+        private static void ReadCavalryTail(BinaryReader r, EconomyRules e)
+        {
+            e.Cavalry = Bool(r);
+            e.LightCavalryFood = r.ReadInt32(); e.LightCavalryWood = r.ReadInt32(); e.LightCavalryTicks = r.ReadInt32();
+            e.LightCavalryHp = r.ReadInt32(); e.LightCavalryDamage = r.ReadInt32(); e.LightCavalryInterval = r.ReadInt32();
+            e.LightCavalryRange = Fix(r); e.LightCavalrySpeed = Fix(r); e.LightCavalryVision = Fix(r);
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

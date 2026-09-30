@@ -70,6 +70,21 @@ namespace Rts.Decision
             return CivKind.Masonry;
         }
 
+        /// <summary>
+        /// V3-10 #1: cavalry is registered as a sixth choice, but has no terrain score yet. A zero score keeps the
+        /// existing agrarian/metallurgy/forestry/masonry order unchanged until the third cavalry request adds terrain evaluation.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int cavalryPointsNear, int guaranteedFood)
+        {
+            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= cavalryPointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= cavalryPointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= cavalryPointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= cavalryPointsNear) return CivKind.Masonry;
+            return CivKind.Cavalry;
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

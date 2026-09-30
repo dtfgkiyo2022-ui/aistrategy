@@ -45,5 +45,15 @@ namespace Rts.Simulation
             if (AutoPerCross * CountClass(faction, unit) >= CountClass(faction, UnitKind.Infantry)) return;
             if (HasRoomFor(faction, unit) && CanPay(faction, unit)) Enqueue(faction, ref b, unit);
         }
+
+        /// <summary>V3-10 #1: the cavalry civilisation gets the existing stable early; it never queues light cavalry automatically.</summary>
+        private void DecideCavalryStable(uint faction)
+        {
+            if (!CavalryAllowed(faction) || !CompleteBarracks(faction) || OwnBuildingIndex(faction, BuildingKind.Stable) >= 0) return;
+            var rules = world.Config.Economy;
+            if (world.Economies[faction - 1].Wood < rules.StableWoodCost) return;
+            int origin = FindSite(faction, rules.StableSizeCells);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Stable, origin, Facing.North, 0);
+        }
     }
 }

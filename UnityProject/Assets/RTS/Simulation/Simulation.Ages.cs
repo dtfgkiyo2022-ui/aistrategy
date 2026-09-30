@@ -19,6 +19,11 @@ namespace Rts.Simulation
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
+        private bool CavalryOn => AgesOn && world.Config.Economy.Cavalry;
+
+        private bool CavalryAllowed(uint faction)
+            => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
+
         /// <summary>Mines and smelters: on an ages map only in the metallurgy civilisation.</summary>
         private bool MetalworkAllowed(uint faction) => !AgesOn || world.Economies[faction - 1].Civ == CivKind.Metallurgy;
 
@@ -94,7 +99,7 @@ namespace Rts.Simulation
             if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
             if (e.Civ == CivKind.Primitive)
                 return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
-                    || MasonryOn && civ == CivKind.Masonry;
+                    || MasonryOn && civ == CivKind.Masonry || CavalryOn && civ == CivKind.Cavalry;
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
@@ -191,12 +196,17 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when both new flags are off.
-            if (!ForestryOn && !MasonryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CavalryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
-            if (!MasonryOn) return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
+            if (!MasonryOn)
+                return CavalryOn
+                    ? EconomyDecision.ChooseCiv(ore, food, forest, 0, 0, GuaranteedFoodPoints)
+                    : EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
             int stone = CountUsableMasonryStone(faction, core);
-            return EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
+            return CavalryOn
+                ? EconomyDecision.ChooseCiv(ore, food, forest, stone, 0, GuaranteedFoodPoints)
+                : EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
         }
 
         /// <summary>
