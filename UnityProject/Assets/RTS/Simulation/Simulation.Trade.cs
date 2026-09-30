@@ -497,12 +497,7 @@ namespace Rts.Simulation
             bool caravanNeedsBaseMarket = CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) < 0;
             if (!AgesOn || (!CivLineStarted(faction) && !caravanNeedsBaseMarket)) return;
             var rules = world.Config.Economy;
-            bool foodMarketCiv = world.Economies[faction - 1].Civ == CivKind.Metallurgy
-                || world.Economies[faction - 1].Civ == CivKind.Forestry
-                || world.Economies[faction - 1].Civ == CivKind.Masonry
-                || world.Economies[faction - 1].Civ == CivKind.Caravan
-                || world.Economies[faction - 1].Civ == CivKind.Cavalry
-                || world.Economies[faction - 1].Civ == CivKind.Bridge;
+            bool foodMarketCiv = CivUsesFoodMarket(faction);
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
             // Caravan's first market is the base condition for the civilisation, so allow that one building before
