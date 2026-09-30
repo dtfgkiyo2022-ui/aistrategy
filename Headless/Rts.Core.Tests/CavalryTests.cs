@@ -206,5 +206,55 @@ namespace Rts.Core.Tests
                 Array.Empty<PolicyOrder>(), out _)[0];
             Assert.That(chosen.Goal.Kind, Is.Not.EqualTo(GoalKind.Point));
         }
+
+        [Test]
+        public void CavalryTerrainScoreRewardsOpenRoutesAndRejectsAThreeCellChoke()
+        {
+            const int width = 11, height = 11, core = 5 * width + 1;
+            var open = new bool[width * height];
+            var observed = new bool[width * height];
+            Array.Fill(open, true); Array.Fill(observed, true);
+            var openScore = CavalryTerrainScoring.Score(width, height, open, observed, core,
+                new[] { 5 * width + 9, 2 * width + 9, 8 * width + 9 }, 1);
+            Assert.That(openScore.ReachableObjectives, Is.EqualTo(3));
+            Assert.That(openScore.ChokeDependentObjectives, Is.EqualTo(0));
+            Assert.That(openScore.Points, Is.EqualTo(5));
+            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 0, openScore.Points, 3), Is.EqualTo(CivKind.Cavalry));
+
+            var choke = (bool[])open.Clone();
+            for (int z = 0; z < height; z++) if (z != 5) choke[z * width + 5] = false;
+            var chokeScore = CavalryTerrainScoring.Score(width, height, choke, observed, core, new[] { 5 * width + 9 }, 1);
+            Assert.That(chokeScore.ReachableObjectives, Is.EqualTo(1));
+            Assert.That(chokeScore.ChokeBlockedObjectives, Is.EqualTo(1));
+            Assert.That(chokeScore.Points, Is.EqualTo(1));
+            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 2, chokeScore.Points, 3), Is.EqualTo(CivKind.Masonry));
+
+            var unseen = (bool[])observed.Clone();
+            unseen[5 * width + 9] = false;
+            var unseenScore = CavalryTerrainScoring.Score(width, height, open, unseen, core, new[] { 5 * width + 9 }, 1);
+            Assert.That(unseenScore.ReachableObjectives, Is.EqualTo(0));
+            Assert.That(unseenScore.Points, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TerrainSeedsProduceBothCavalryAndNonCavalryChoices()
+        {
+            var choices = new HashSet<CivKind>();
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var scenario = MapGenerator.GenerateTerrain(seed);
+                scenario.Economy.Cavalry = true;
+                scenario.Economy.StartFood = 2500;
+                scenario.Economy.StartWood = 2500;
+                scenario.Cores[0].Hp = 1000000;
+                scenario.Cores[1].Hp = 1000000;
+                var sim = new Battle(scenario);
+                for (long tick = 1; tick <= 16000 && sim.Capture(1).Economy.Civ == CivKind.Primitive; tick++)
+                    sim.Step(tick, Array.Empty<ScheduledInput>());
+                choices.Add(sim.Capture(1).Economy.Civ);
+            }
+            Assert.That(choices, Does.Contain(CivKind.Cavalry));
+            Assert.That(choices.Any(c => c != CivKind.Cavalry), Is.True);
+        }
     }
 }

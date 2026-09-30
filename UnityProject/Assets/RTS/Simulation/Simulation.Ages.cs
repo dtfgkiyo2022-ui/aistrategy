@@ -11,7 +11,10 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, CivStoneReach = 44, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
+        // Mapgen's guaranteed clear core radius is 16m = 8 cells. The mobility score starts outside that ring while
+        // still staying inside the initial observation supplied by the starting soldiers.
+        private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, CivStoneReach = 44, CivCavalryCoreExclusion = 8,
+            GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
@@ -199,14 +202,44 @@ namespace Rts.Simulation
             if (!ForestryOn && !MasonryOn && !CavalryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
+            int cavalry = CavalryOn ? CountCavalryMobility(faction, core) : 0;
             if (!MasonryOn)
                 return CavalryOn
-                    ? EconomyDecision.ChooseCiv(ore, food, forest, 0, 0, GuaranteedFoodPoints)
+                    ? EconomyDecision.ChooseCiv(ore, food, forest, 0, cavalry, GuaranteedFoodPoints)
                     : EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
             int stone = CountUsableMasonryStone(faction, core);
             return CavalryOn
-                ? EconomyDecision.ChooseCiv(ore, food, forest, stone, 0, GuaranteedFoodPoints)
+                ? EconomyDecision.ChooseCiv(ore, food, forest, stone, cavalry, GuaranteedFoodPoints)
                 : EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
+        }
+
+        /// <summary>
+        /// V3-10 #3: only terrain and objectives visible from the starting core are used. Resources and outposts are
+        /// de-duplicated by cell in sorted order; the scoring itself is the deterministic integer BFS in Decision.
+        /// </summary>
+        private int CountCavalryMobility(uint faction, SimPoint core)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int count = checked(width * height), coreCell = world.Map.Cell(core);
+            var observed = world.Factions[faction - 1].VisibleCells;
+            var passable = new bool[count];
+            System.Array.Fill(passable, world.Config.Map.DefaultPassable);
+            foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
+            var objectives = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                int cell = world.Map.Cell(world.Outposts[i].Definition.Position);
+                if (cell >= 0 && observed[cell] && !objectives.Contains(cell)) objectives.Add(cell);
+            }
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Remaining <= 0) continue;
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (cell >= 0 && observed[cell] && !objectives.Contains(cell)) objectives.Add(cell);
+            }
+            objectives.Sort();
+            return CavalryTerrainScoring.Score(width, height, passable, observed, coreCell, objectives, CivCavalryCoreExclusion).Points;
         }
 
         /// <summary>

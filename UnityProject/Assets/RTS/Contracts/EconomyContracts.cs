@@ -368,6 +368,22 @@ namespace Rts.Contracts
         }
     }
 
+    /// <summary>Display-only summary of the current automatic cavalry raid mission.</summary>
+    public readonly struct CavalryMissionView
+    {
+        public RaidTargetKind TargetKind { get; }
+        public uint TargetId { get; }
+        public SimPoint TargetPosition { get; }
+        public long ArrivalTicks { get; }
+        public bool IsRetreating { get; }
+
+        public CavalryMissionView(RaidTargetKind targetKind, uint targetId, SimPoint targetPosition, long arrivalTicks, bool isRetreating)
+        {
+            TargetKind = targetKind; TargetId = targetId; TargetPosition = targetPosition;
+            ArrivalTicks = arrivalTicks; IsRetreating = isRetreating;
+        }
+    }
+
     /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
     public sealed class EconomyView
     {
@@ -401,6 +417,8 @@ namespace Rts.Contracts
         public int SkirmishArcherFoodCost { get; }
         public int SkirmishArcherBowGearCost { get; }
         public int SkirmishArcherTrainTicks { get; }
+        /// <summary>V3-10 #3: current observed cavalry raid target, ETA, and retreat state.</summary>
+        public CavalryMissionView CavalryMission { get; }
         public int BeltWoodCost { get; }
         public int BeltTicksPerCell { get; }
         public IReadOnlyList<BeltView> Belts { get; }
@@ -525,7 +543,8 @@ namespace Rts.Contracts
             int charcoalKilnSizeCells = 0, int steelworksSizeCells = 0, int heavyInfantryFoodCost = 0, int heavyInfantrySteelCost = 0,
             int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
             int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
-            int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0)
+            int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0,
+            CavalryMissionView cavalryMission = default(CavalryMissionView))
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
@@ -538,6 +557,7 @@ namespace Rts.Contracts
             Gold = gold;
             BowGear = bowGear; FletcherWoodCost = fletcherWoodCost; FletcherSizeCells = fletcherSizeCells; FletcherTicks = fletcherTicks;
             SkirmishArcherFoodCost = skirmishArcherFoodCost; SkirmishArcherBowGearCost = skirmishArcherBowGearCost; SkirmishArcherTrainTicks = skirmishArcherTrainTicks;
+            CavalryMission = cavalryMission;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;
