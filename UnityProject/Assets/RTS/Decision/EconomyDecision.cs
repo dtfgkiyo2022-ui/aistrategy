@@ -70,6 +70,21 @@ namespace Rts.Decision
             return CivKind.Masonry;
         }
 
+        /// <summary>
+        /// V3-9 #3: compares the terrain scores including the number of usable caravan outposts. A zero caravan
+        /// score never steals an older tie, preserving the preceding four-way ordering when caravan terrain is absent.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int caravanPointsNear, int guaranteedFood)
+        {
+            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= caravanPointsNear) return CivKind.Masonry;
+            return CivKind.Caravan;
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

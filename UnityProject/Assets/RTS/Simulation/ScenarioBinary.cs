@@ -11,6 +11,7 @@ namespace Rts.Simulation
         public const string RulesVersion = "week3-reinforcements-4";
         private const int ForestryTailMarker = 0x46525354; // "FRST", after the existing optional tail chain.
         private const int MasonryTailMarker = 0x4D534F4E; // "MSON", after the forestry tail when present.
+        private const int CaravanTailMarker = 0x4352564E; // "CRVN", after forestry/masonry tails when present.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -116,7 +117,8 @@ namespace Rts.Simulation
             bool processingRules = c.Economy.ProcessingChain;
             bool forestryRules = c.Economy.Forestry;
             bool masonryRules = c.Economy.Masonry;
-            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules;
+            bool caravanRules = c.Economy.Caravan;
+            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -169,6 +171,16 @@ namespace Rts.Simulation
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
                         // V3-8 #2: the masonry-only defence discounts live in this existing tail, not a nested tail.
                         w.Write(c.Economy.MasonryDefenceCostPermille); w.Write(c.Economy.MasonryDefenceWorkPermille);
+                    }
+                    if (caravanRules)
+                    {
+                        // This marker is read before the payload, so a masonry tail's optional two defence values
+                        // cannot consume the caravan flag. The pair and distance are runtime state, not scenario data.
+                        w.Write(CaravanTailMarker);
+                        w.Write(c.Economy.Caravan);
+                        w.Write(c.Economy.CaravanseraiSizeCells); w.Write(c.Economy.CaravanseraiWoodCost); w.Write(c.Economy.CaravanseraiWork);
+                        w.Write(c.Economy.CaravanseraiHp); w.Write(c.Economy.CaravanOutpostReach); w.Write(c.Economy.CaravanMinimumDistance);
+                        w.Write(c.Economy.CaravanRewardDistanceStep); w.Write(c.Economy.CaravanRewardMaxWood); w.Write(c.Economy.CaravanAutoVillagers);
                     }
                 }
                 return s.ToArray();
@@ -290,13 +302,10 @@ namespace Rts.Simulation
                                     if (marker == ForestryTailMarker)
                                     {
                                         ReadForestryTail(r, e);
-                                        if (s.Position < s.Length)
-                                        {
-                                            if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
-                                            ReadMasonryTail(r, e);
-                                        }
+                                        ReadMarkedTails(r, e);
                                     }
-                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); }
+                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadMarkedTails(r, e); }
+                                    else if (marker == CaravanTailMarker) { ReadCaravanTail(r, e); }
                                     else
                                     {
                                         s.Position = tailStart;
@@ -314,13 +323,10 @@ namespace Rts.Simulation
                                             if (finalMarker == ForestryTailMarker)
                                             {
                                                 ReadForestryTail(r, e);
-                                                if (s.Position < s.Length)
-                                                {
-                                                    if (r.ReadInt32() != MasonryTailMarker) throw new InvalidDataException("Invalid masonry tail.");
-                                                    ReadMasonryTail(r, e);
-                                                }
+                                                ReadMarkedTails(r, e);
                                             }
-                                            else if (finalMarker == MasonryTailMarker) ReadMasonryTail(r, e);
+                                            else if (finalMarker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadMarkedTails(r, e); }
+                                            else if (finalMarker == CaravanTailMarker) ReadCaravanTail(r, e);
                                             else throw new InvalidDataException("Invalid optional tail.");
                                         }
                                     }
@@ -347,7 +353,8 @@ namespace Rts.Simulation
             if (r.BaseStream.Position < r.BaseStream.Length)
             {
                 long next = r.BaseStream.Position;
-                if (r.ReadInt32() == MasonryTailMarker) { r.BaseStream.Position = next; return; }
+                int marker = r.ReadInt32();
+                if (marker == MasonryTailMarker || marker == CaravanTailMarker) { r.BaseStream.Position = next; return; }
                 r.BaseStream.Position = next;
                 e.FletcherSizeCells = r.ReadInt32(); e.FletcherWoodCost = r.ReadInt32(); e.FletcherWork = r.ReadInt32(); e.FletcherHp = r.ReadInt32(); e.FletcherTicks = r.ReadInt32();
                 e.FletcherWoodInput = r.ReadInt32(); e.FletcherFoodInput = r.ReadInt32();
@@ -365,8 +372,28 @@ namespace Rts.Simulation
             // Older masonry tails ended here. Defaults keep those old records readable.
             if (r.BaseStream.Position < r.BaseStream.Length)
             {
+                long next = r.BaseStream.Position;
+                if (r.ReadInt32() == CaravanTailMarker) { r.BaseStream.Position = next; return; }
+                r.BaseStream.Position = next;
                 e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
             }
+        }
+        private static void ReadMarkedTails(BinaryReader r, EconomyRules e)
+        {
+            while (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                int marker = r.ReadInt32();
+                if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
+                else if (marker == CaravanTailMarker) ReadCaravanTail(r, e);
+                else throw new InvalidDataException("Invalid optional tail marker.");
+            }
+        }
+        private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
+        {
+            e.Caravan = Bool(r);
+            e.CaravanseraiSizeCells = r.ReadInt32(); e.CaravanseraiWoodCost = r.ReadInt32(); e.CaravanseraiWork = r.ReadInt32();
+            e.CaravanseraiHp = r.ReadInt32(); e.CaravanOutpostReach = r.ReadInt32(); e.CaravanMinimumDistance = r.ReadInt32();
+            e.CaravanRewardDistanceStep = r.ReadInt32(); e.CaravanRewardMaxWood = r.ReadInt32(); e.CaravanAutoVillagers = r.ReadInt32();
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

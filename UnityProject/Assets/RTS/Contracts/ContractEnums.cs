@@ -62,7 +62,7 @@ namespace Rts.Contracts
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
     /// More civilisations and later ages are added after the first ones are tried (the value is not an age number).
     /// </summary>
-    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4 }
+    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4, Caravan = 5 }
 
     /// <summary>
     /// V3-5 research at a blacksmith (technical-design-v3 32 #6). A faction's researched techs are a bit set of
@@ -75,12 +75,15 @@ namespace Rts.Contracts
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 
+    /// <summary>V3-9 #3: the display-facing reason a caravan route is stopped.</summary>
+    public enum CaravanStopReason : byte { None = 0, Normal = 1, Danger = 2, OutpostLost = 3, MarketLost = 4, HostLost = 5 }
+
     /// <summary>Ver.3 direction of a belt or a building's output (technical-design-v3 11.2). North is +z, east is +x.</summary>
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
-        ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19 }
+        ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19, Caravanserai = 20 }
 
     public enum EventKind : byte
     {
