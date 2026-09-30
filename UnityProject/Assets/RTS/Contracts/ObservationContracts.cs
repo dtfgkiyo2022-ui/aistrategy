@@ -21,7 +21,8 @@ namespace Rts.Contracts
             IReadOnlyList<VisibleEnemy> visibleEnemies,
             IReadOnlyList<EnemyContact> contacts,
             IReadOnlyList<KnownObjective> objectives,
-            int enemyFactionCap = 40)
+            int enemyFactionCap = 40,
+            IReadOnlyList<ObservedRaidTarget> raidTargets = null)
         {
             FactionId = factionId;
             Tick = tick;
@@ -30,6 +31,24 @@ namespace Rts.Contracts
             VisibleEnemies = ContractList.Copy(visibleEnemies);
             Contacts = ContractList.Copy(contacts);
             Objectives = ContractList.Copy(objectives);
+            RaidTargets = ContractList.Copy(raidTargets ?? Array.Empty<ObservedRaidTarget>());
+        }
+
+        /// <summary>Targets assembled from information visible to this faction only.</summary>
+        public IReadOnlyList<ObservedRaidTarget> RaidTargets { get; }
+    }
+
+    /// <summary>A deliberate raid candidate. Id is observer-local and carries no hidden world identity.</summary>
+    public readonly struct ObservedRaidTarget
+    {
+        public uint Id { get; }
+        public RaidTargetKind Kind { get; }
+        public SimPoint Position { get; }
+        public int StrengthEstimate { get; }
+
+        public ObservedRaidTarget(uint id, RaidTargetKind kind, SimPoint position, int strengthEstimate = 0)
+        {
+            Id = id; Kind = kind; Position = position; StrengthEstimate = strengthEstimate;
         }
     }
 

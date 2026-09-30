@@ -394,6 +394,25 @@ namespace Rts.Simulation
             return frames[factionId - 1];
         }
 
+        private UnitKind ArmyKind(ArmyState army)
+        {
+            var counts = new Dictionary<UnitKind, int>();
+            UnitKind first = army.Definition.Role == "scout" ? UnitKind.Scout : UnitKind.Infantry;
+            foreach (uint soldierId in army.SoldierIds)
+            {
+                var soldier = world.Soldiers[soldierId - 1];
+                if (!soldier.Alive) continue;
+                var kind = soldier.Class != 0 ? soldier.Class : soldier.Initial.Kind;
+                if (counts.Count == 0) first = soldier.Initial.Kind;
+                counts[kind] = counts.TryGetValue(kind, out int count) ? count + 1 : 1;
+            }
+            UnitKind result = first;
+            int best = 0;
+            foreach (var pair in counts)
+                if (pair.Value > best) { best = pair.Value; result = pair.Key; }
+            return CavalryOn ? result : first;
+        }
+
         private void PublishFrames()
         {
             for (uint f = 1; f <= 2; f++)
@@ -424,12 +443,12 @@ namespace Rts.Simulation
                     var a = world.Armies[id - 1];
                     int count = 0;
                     SimPoint position = world.Cores[world.Factions[f - 1].CoreId - 1].Definition.Position;
-                    UnitKind kind = a.Definition.Role == "scout" ? UnitKind.Scout : UnitKind.Infantry;
+                    UnitKind kind = ArmyKind(a);
                     foreach (uint soldierId in a.SoldierIds)
                     {
                         var s = world.Soldiers[soldierId - 1];
                         if (!s.Alive) continue;
-                        if (count++ == 0) { position = s.Position; kind = s.Initial.Kind; }
+                        if (count++ == 0) position = s.Position;
                     }
                     armies.Add(new OwnArmyView(id, f, kind, position, count, a.Definition.HomeObjective));
 

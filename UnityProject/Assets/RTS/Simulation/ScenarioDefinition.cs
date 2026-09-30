@@ -181,6 +181,9 @@ namespace Rts.Simulation
         public int LightCavalryFood = 50, LightCavalryWood = 10, LightCavalryTicks = 180, LightCavalryHp = 90,
             LightCavalryDamage = 8, LightCavalryInterval = 20;
         public Fix64 LightCavalryRange = Fix64.FromInt(2), LightCavalrySpeed = Fix64.FromInt(4), LightCavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-10 #2 provisional second-age cavalry drill: faster light-cavalry movement and replenishment.</summary>
+        public int CavalryDrillFood = 150, CavalryDrillWood = 100, CavalryDrillTicks = 500;
+        public Fix64 CavalryDrillSpeed = Fix64.FromInt(1);
         /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
         public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
         /// <summary>V3-5 (32 #19): a market gives this many Gems when a normal lot is exchanged for Gems.</summary>

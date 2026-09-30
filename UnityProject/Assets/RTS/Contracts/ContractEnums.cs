@@ -30,6 +30,12 @@ namespace Rts.Contracts
         None = 0, Point = 1, Outpost = 2, Core = 3
     }
 
+    /// <summary>Observation-only kind of a deliberate cavalry raid target.</summary>
+    public enum RaidTargetKind : byte
+    {
+        Resource = 1, Carrier = 2, IsolatedArmy = 3
+    }
+
     public enum EndKind : byte
     {
         UntilReplaced = 1, Arrived = 2, ObjectiveOwned = 3, AtTick = 4, LossReached = 5

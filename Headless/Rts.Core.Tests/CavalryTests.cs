@@ -147,5 +147,64 @@ namespace Rts.Core.Tests
             Steps(cavalry.gateway, cavalry.sim, 14000);
             Assert.That(cavalry.sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2));
         }
+
+        [Test]
+        public void AutomaticCavalryProducesAMobileMajorityArmy()
+        {
+            var cavalry = AtCavalryAge1(true);
+            Steps(cavalry.gateway, cavalry.sim, 12000);
+            var fields = Fields(cavalry.sim);
+            var light = fields.Where(p => p.Key.StartsWith("Soldiers[", StringComparison.Ordinal) && p.Key.EndsWith("].Class", StringComparison.Ordinal)
+                    && p.Value == ((byte)UnitKind.LightCavalry).ToString(CultureInfo.InvariantCulture))
+                .Select(p => p.Key.Substring(9, p.Key.IndexOf(']', 9) - 9)).ToArray();
+            Assert.That(light.Length, Is.GreaterThan(0));
+            var armyIds = light.Select(id => fields["Soldiers[" + id + "].ArmyId"]).Distinct().ToArray();
+            Assert.That(armyIds.Length, Is.EqualTo(1));
+            string army = armyIds[0];
+            int lightCount = fields.Count(p => p.Key.EndsWith("].Class", StringComparison.Ordinal) && p.Value == ((byte)UnitKind.LightCavalry).ToString(CultureInfo.InvariantCulture)
+                && fields.TryGetValue("Soldiers[" + p.Key.Substring(9, p.Key.IndexOf(']', 9) - 9) + "].ArmyId", out var id) && id == army);
+            int infantryCount = fields.Count(p => p.Key.EndsWith("].Class", StringComparison.Ordinal) && p.Value == "0"
+                && fields.TryGetValue("Soldiers[" + p.Key.Substring(9, p.Key.IndexOf(']', 9) - 9) + "].ArmyId", out var id) && id == army);
+            Assert.That(lightCount, Is.GreaterThan(infantryCount));
+        }
+
+        [Test]
+        public void MobileDecisionChoosesOnlyObservedRaidTargetsAndKeepsHumanOrders()
+        {
+            SimPoint p(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
+            var own = new OwnArmyView(1, 1, UnitKind.LightCavalry, p(10, 10), 4, new PolicyGoal(GoalKind.Core, 1, default));
+            var target = new ObservedRaidTarget(71, RaidTargetKind.Carrier, p(40, 10), 1);
+            var observation = new FactionObservation(1, 20, new[] { own }, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(),
+                new[] { new KnownObjective(GoalKind.Core, 1, p(10, 10), true, 1, true, 100, 20) }, 40, new[] { target });
+            var route = new ObjectiveRoute(new PolicyGoal(GoalKind.Point, target.Id, target.Position), 30, new[] { own.Position, target.Position });
+            var input = new ArmyDecisionInput(own, default, false, new ArmyDecisionMemory(AssignmentKind.Advance, default, false, 0, 0), new[] { route });
+            var chosen = PolicyDecision.Allocate(observation, 20, new[] { input }, 0, Array.Empty<uint>(), Array.Empty<AttackMemory>(),
+                Array.Empty<PolicyOrder>(), out _)[0];
+            Assert.That(chosen.Assignment, Is.EqualTo(AssignmentKind.Advance));
+            Assert.That(chosen.Goal.Kind, Is.EqualTo(GoalKind.Point));
+            Assert.That(chosen.Goal.Id, Is.EqualTo(target.Id));
+
+            var humanGoal = new PolicyGoal(GoalKind.Outpost, 2, default);
+            var human = new PolicyView(9, CommandSource.Human, PolicyKind.Focus, humanGoal, default, 0);
+            var humanInput = new ArmyDecisionInput(own, human, false, new ArmyDecisionMemory(AssignmentKind.Reserve, humanGoal, false, 0, 0), new[] { route });
+            var held = PolicyDecision.Allocate(observation, 20, new[] { humanInput }, 0, Array.Empty<uint>(), Array.Empty<AttackMemory>(),
+                Array.Empty<PolicyOrder>(), out _)[0];
+            Assert.That(held.Goal.Kind, Is.EqualTo(GoalKind.Outpost));
+            Assert.That(held.Goal.Id, Is.EqualTo(2u));
+        }
+
+        [Test]
+        public void UnobservedRaidInformationIsNotAValidMobileMission()
+        {
+            SimPoint p(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
+            var own = new OwnArmyView(1, 1, UnitKind.LightCavalry, p(10, 10), 4, new PolicyGoal(GoalKind.Core, 1, default));
+            var hiddenRoute = new ObjectiveRoute(new PolicyGoal(GoalKind.Point, 99, p(80, 10)), 70, new[] { own.Position, p(80, 10) });
+            var observation = new FactionObservation(1, 20, new[] { own }, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(),
+                new[] { new KnownObjective(GoalKind.Core, 1, p(10, 10), true, 1, true, 100, 20) });
+            var input = new ArmyDecisionInput(own, default, false, new ArmyDecisionMemory(AssignmentKind.Advance, default, false, 0, 0), new[] { hiddenRoute });
+            var chosen = PolicyDecision.Allocate(observation, 20, new[] { input }, 0, Array.Empty<uint>(), Array.Empty<AttackMemory>(),
+                Array.Empty<PolicyOrder>(), out _)[0];
+            Assert.That(chosen.Goal.Kind, Is.Not.EqualTo(GoalKind.Point));
+        }
     }
 }
