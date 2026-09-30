@@ -178,6 +178,10 @@ namespace Rts.Simulation
                         w.Write(c.Economy.Bridge);
                         w.Write(c.Economy.EngineerCampSizeCells); w.Write(c.Economy.EngineerCampWoodCost); w.Write(c.Economy.EngineerCampWork); w.Write(c.Economy.EngineerCampHp);
                         w.Write(c.Economy.BridgeWoodCost); w.Write(c.Economy.BridgeWork); w.Write(c.Economy.BridgeHp); w.Write(c.Economy.MaxBridgeLength);
+                        w.Write(c.Economy.BridgeworksFoodCost); w.Write(c.Economy.BridgeworksWoodCost); w.Write(c.Economy.BridgeworksTicks);
+                        w.Write(c.Economy.BridgeworksHpBonus); w.Write(c.Economy.BridgeworksWorkReduction);
+                        w.Write(c.Economy.SiegeDeploymentFoodCost); w.Write(c.Economy.SiegeDeploymentWoodCost); w.Write(c.Economy.SiegeDeploymentTicks);
+                        w.Write(c.Economy.SiegeDeploymentRamTicksReduction); w.Write(c.Economy.SiegeDeploymentRamCapacityBonus);
                     }
                 }
                 return s.ToArray();
@@ -389,6 +393,15 @@ namespace Rts.Simulation
             e.Bridge = Bool(r);
             e.EngineerCampSizeCells = r.ReadInt32(); e.EngineerCampWoodCost = r.ReadInt32(); e.EngineerCampWork = r.ReadInt32(); e.EngineerCampHp = r.ReadInt32();
             e.BridgeWoodCost = r.ReadInt32(); e.BridgeWork = r.ReadInt32(); e.BridgeHp = r.ReadInt32(); e.MaxBridgeLength = r.ReadInt32();
+            // The first bridge tail ended here. Defaults keep those records readable; the new values
+            // are present only in the V3-11 #3 extension.
+            if (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                e.BridgeworksFoodCost = r.ReadInt32(); e.BridgeworksWoodCost = r.ReadInt32(); e.BridgeworksTicks = r.ReadInt32();
+                e.BridgeworksHpBonus = r.ReadInt32(); e.BridgeworksWorkReduction = r.ReadInt32();
+                e.SiegeDeploymentFoodCost = r.ReadInt32(); e.SiegeDeploymentWoodCost = r.ReadInt32(); e.SiegeDeploymentTicks = r.ReadInt32();
+                e.SiegeDeploymentRamTicksReduction = r.ReadInt32(); e.SiegeDeploymentRamCapacityBonus = r.ReadInt32();
+            }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

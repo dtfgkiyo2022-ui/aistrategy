@@ -91,7 +91,7 @@ namespace Rts.Simulation
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = requestedWorkCell >= 0 ? requestedWorkCell : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind))),
-                Alive = true, Hp = HpOf(kind), Facing = facing, NodeId = nodeId };
+                Alive = true, Hp = HpOf(kind, faction), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
@@ -396,7 +396,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
-        private int HpOf(BuildingKind kind)
+        private int HpOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
@@ -406,7 +406,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
-                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Bridge ? e.BridgeHp : e.BarracksHp;
+                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -428,7 +428,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
-                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Bridge ? e.BridgeWork : e.BarracksWork;
+                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -445,6 +445,11 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
+
+        // Keep the age-tech effect local to bridge buildings. Existing non-bridge building rules,
+        // including flag-off maps, continue to use their original values unchanged.
+        private int BridgeHpForBuilding(uint faction)
+            => BridgeOn && world.Economies[faction - 1].Civ == CivKind.Bridge ? BridgeHpFor(faction) : world.Config.Economy.BridgeHp;
 
         /// <summary>V3-5: the stone a building costs (walls and towers).</summary>
         private int StoneOf(BuildingKind kind, uint faction)

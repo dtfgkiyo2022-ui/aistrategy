@@ -118,6 +118,12 @@ namespace Rts.Simulation
         public int EngineerCampSizeCells = 2, EngineerCampWoodCost = 80, EngineerCampWork = 200, EngineerCampHp = 400;
         /// <summary>V3-11 #1 provisional short bridge values. BridgeWoodCost is paid once per bridge.</summary>
         public int BridgeWoodCost = 40, BridgeWork = 120, BridgeHp = 400, MaxBridgeLength = 6;
+        /// <summary>V3-11 #3 provisional bridge-civilisation tech values. The first tech hardens and speeds bridges.</summary>
+        public int BridgeworksFoodCost = 200, BridgeworksWoodCost = 150, BridgeworksTicks = 700;
+        public int BridgeworksHpBonus = 200, BridgeworksWorkReduction = 40;
+        /// <summary>The third-age bridge tech reuses the existing siege workshop and ram, making ram deployment quicker and larger.</summary>
+        public int SiegeDeploymentFoodCost = 250, SiegeDeploymentWoodCost = 200, SiegeDeploymentTicks = 800;
+        public int SiegeDeploymentRamTicksReduction = 100, SiegeDeploymentRamCapacityBonus = 1;
         /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
         public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>

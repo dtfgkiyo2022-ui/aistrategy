@@ -171,7 +171,9 @@ namespace Rts.Replay
                 var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
-                var tech=ek==EconomyCommandKind.Research ? ReplayBinary.Enum<TechKind>(r) : (TechKind)0;
+                // Bridge-civilisation research intentionally uses the two values just outside
+                // TechKind; keep the established enum unchanged while allowing those replay bytes.
+                var tech=ek==EconomyCommandKind.Research ? Tech(r) : (TechKind)0;
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take));
@@ -182,5 +184,11 @@ namespace Rts.Replay
         private static ScopeKey Scope(BinaryReader r)=>new ScopeKey(r.ReadUInt32(),ReplayBinary.Enum<ScopeKind>(r),r.ReadUInt32());
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); w.Write(g.Point.X.Raw); w.Write(g.Point.Z.Raw); }
         private static PolicyGoal Goal(BinaryReader r)=>new PolicyGoal(ReplayBinary.Enum<GoalKind>(r),r.ReadUInt32(),new SimPoint(Fix64.FromRaw(r.ReadInt64()),Fix64.FromRaw(r.ReadInt64())));
+        private static TechKind Tech(BinaryReader r)
+        {
+            byte value = r.ReadByte();
+            if (value < (byte)TechKind.Weapons || value > (byte)BridgeTech.SiegeDeployment) throw new InvalidDataException("Unknown TechKind.");
+            return (TechKind)value;
+        }
     }
 }

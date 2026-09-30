@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Replay;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
 
@@ -159,6 +162,160 @@ namespace Rts.Core.Tests
             var bridges = sim.Capture(1).Economy.Buildings.Where(b => b.Kind == BuildingKind.Bridge).ToArray();
             Assert.That(bridges.Length, Is.EqualTo(1));
             Assert.That(bridges[0].PlayerHeld, Is.True);
+        }
+
+        [Test]
+        public void BridgeSecondAgeResearchChangesBridgeHpAndConstructionWork()
+        {
+            var s = Scenario(7);
+            s.Economy.BridgeWork = 100;
+            s.Economy.BridgeworksWorkReduction = 40;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, 4);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, 4);
+            Assert.That(sim.Capture(1).Economy.Age, Is.EqualTo(2));
+
+            uint camp = Place(gateway, sim, s, BuildingKind.EngineerCamp, ref sequence);
+            Assume.That(camp, Is.Not.EqualTo(0u));
+            BuildUp(gateway, sim, camp, ref sequence);
+            uint smith = Place(gateway, sim, s, BuildingKind.Blacksmith, ref sequence);
+            Assume.That(smith, Is.Not.EqualTo(0u));
+            BuildUp(gateway, sim, smith, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.Research(1, ++sequence, smith, BridgeTech.Bridgeworks));
+            Steps(gateway, sim, 1);
+            Assert.That(sim.Capture(1).Economy.Buildings.First(b => b.Id == smith).Researching,
+                Is.EqualTo(BridgeTech.Bridgeworks));
+            Steps(gateway, sim, s.Economy.BridgeworksTicks + 1);
+            Assert.That(sim.Capture(1).Economy.Techs & (1UL << 12), Is.Not.EqualTo(0UL), "bridgeworks is researched outside TechKind");
+
+            var cells = FindBridgeCells(s, sim, 1);
+            Assume.That(cells, Is.Not.Null);
+            gateway.SubmitEconomy(EconomyCommand.PlaceBridge(1, ++sequence, cells, Facing.East));
+            Steps(gateway, sim, 2000);
+            var bridge = sim.Capture(1).Economy.Buildings.First(b => b.Kind == BuildingKind.Bridge && b.PlayerHeld);
+            Assert.That(bridge.MaxHp, Is.EqualTo(s.Economy.BridgeHp + s.Economy.BridgeworksHpBonus));
+            Assert.That(bridge.Work, Is.EqualTo(s.Economy.BridgeWork - s.Economy.BridgeworksWorkReduction));
+            Assert.That(bridge.Hp, Is.EqualTo(bridge.MaxHp));
+
+            using (var stream = new MemoryStream())
+            {
+                var build = new BuildIdentity();
+                ReplayRunner.Record(stream, s, gateway.Inputs, sim.Capture(1).Tick, build);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, build);
+                Assert.That(replay.FirstMismatchTick, Is.Null, "bridge research replay is deterministic");
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void BridgeThirdAgeResearchSpeedsExistingSiegeWorkshopRams()
+        {
+            var s = Scenario(7);
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, s.Economy.AdvanceTicks + 4);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, s.Economy.Age2Ticks + 4);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Bridge));
+            Steps(gateway, sim, s.Economy.Age3Ticks + 4);
+            Assert.That(sim.Capture(1).Economy.Age, Is.EqualTo(3));
+
+            uint smith = Place(gateway, sim, s, BuildingKind.Blacksmith, ref sequence);
+            Assume.That(smith, Is.Not.EqualTo(0u));
+            BuildUp(gateway, sim, smith, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.Research(1, ++sequence, smith, BridgeTech.SiegeDeployment));
+            Steps(gateway, sim, 1);
+            Steps(gateway, sim, s.Economy.SiegeDeploymentTicks + 1);
+
+            uint workshop = Place(gateway, sim, s, BuildingKind.SiegeWorkshop, ref sequence);
+            Assume.That(workshop, Is.Not.EqualTo(0u));
+            BuildUp(gateway, sim, workshop, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.Train(1, ++sequence, workshop, UnitKind.Ram));
+            Steps(gateway, sim, 1);
+            var queued = sim.Capture(1).Economy.Buildings.First(b => b.Id == workshop);
+            Assert.That(queued.TrainRemaining, Is.EqualTo(s.Economy.RamTicks - s.Economy.SiegeDeploymentRamTicksReduction - 1));
+        }
+
+        [Test]
+        public void ExistingVillagerAndRamRouteSearchGetsShorterWhenTheBridgeOpens()
+        {
+            var s = Scenario(7);
+            var cells = FindBridgeCells(s, new Battle(s), 1);
+            Assume.That(cells, Is.Not.Null);
+            int width = s.Map.WidthCells;
+            int delta = cells.Length > 1 ? cells[1] - cells[0] : 1;
+            int start = cells[0] - delta, goal = cells[cells.Length - 1] + delta;
+            var withoutBridge = new GridMap(s.Map);
+            int without = withoutBridge.SharedRoute(start, withoutBridge.Center(goal)).Length;
+            var opened = new MapDefinition
+            {
+                WidthMeters = s.Map.WidthMeters, HeightMeters = s.Map.HeightMeters, CellSizeMeters = s.Map.CellSizeMeters,
+                WidthCells = s.Map.WidthCells, HeightCells = s.Map.HeightCells, DefaultPassable = s.Map.DefaultPassable,
+                BlockedCellIds = s.Map.BlockedCellIds.Where(cell => !cells.Contains(cell)).ToArray(),
+                Terrain = (byte[])s.Map.Terrain.Clone()
+            };
+            var withBridge = new GridMap(opened);
+            int with = withBridge.SharedRoute(start, withBridge.Center(goal)).Length;
+            Assume.That(without, Is.GreaterThan(0));
+            Assert.That(with, Is.GreaterThan(0));
+            Assert.That(with, Is.LessThan(without), "the existing shared route is shorter across the bridge");
+
+            // Both movement consumers use this same cell route. Convert the route length to their
+            // configured travel ticks to show the expected difference for a villager and a ram.
+            long villagerWithout = TravelTicks(without, s.Economy.VillagerSpeed, s.Map.CellSizeMeters);
+            long villagerWith = TravelTicks(with, s.Economy.VillagerSpeed, s.Map.CellSizeMeters);
+            long ramWithout = TravelTicks(without, s.Economy.RamSpeed, s.Map.CellSizeMeters);
+            long ramWith = TravelTicks(with, s.Economy.RamSpeed, s.Map.CellSizeMeters);
+            Assert.That(villagerWith, Is.LessThan(villagerWithout), "resource round trip leg is shorter for villagers");
+            Assert.That(ramWith, Is.LessThan(ramWithout), "reinforcement/siege arrival leg is shorter for rams");
+        }
+
+        private static long TravelTicks(int routeCells, Fix64 speed, int cellSize)
+            => checked((long)Math.Max(0, routeCells - 1) * cellSize * 20 * Fix64.FromInt(1).Raw / speed.Raw);
+
+        private static Dictionary<string, string> Fields(Battle sim)
+            => DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        private static long Number(Dictionary<string, string> fields, string name)
+            => long.Parse(fields[name], CultureInfo.InvariantCulture);
+
+        private static uint Place(CommandGateway gateway, Battle sim, ScenarioDefinition s, BuildingKind kind, ref ulong sequence)
+        {
+            const int width = 128;
+            int core = (int)(s.Cores[0].Position.Z.Raw / 65536 / 2) * width + (int)(s.Cores[0].Position.X.Raw / 65536 / 2);
+            int cx = core % width, cz = core / width;
+            for (int radius = 5; radius <= 14; radius++)
+                for (int dz = -radius; dz <= radius; dz++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius || cx + dx < 0 || cz + dz < 0
+                            || cx + dx > width - 4 || cz + dz > 60) continue;
+                        long before = Number(Fields(sim), "Buildings.Count");
+                        gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, kind, (cz + dz) * width + cx + dx, Facing.North));
+                        Steps(gateway, sim, 1);
+                        var fields = Fields(sim);
+                        if (Number(fields, "Buildings.Count") > before
+                            && fields["Buildings[" + (before + 1) + "].Kind"] == ((byte)kind).ToString(CultureInfo.InvariantCulture)) return (uint)(before + 1);
+                    }
+            return 0;
+        }
+
+        private static void BuildUp(CommandGateway gateway, Battle sim, uint building, ref ulong sequence)
+        {
+            gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new uint[] { 1, 2, 3 }, EconomyTargetKind.Building, building));
+            for (int i = 0; i < 4000 && !sim.Capture(1).Economy.Buildings.First(b => b.Id == building).Complete; i += 20) Steps(gateway, sim, 20);
+            Assert.That(sim.Capture(1).Economy.Buildings.First(b => b.Id == building).Complete, Is.True);
         }
 
         private static int[] FindBridgeCells(ScenarioDefinition s, Battle sim, uint faction)

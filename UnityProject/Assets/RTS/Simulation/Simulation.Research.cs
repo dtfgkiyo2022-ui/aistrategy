@@ -12,7 +12,8 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
-            TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor };
+            BridgeTech.Bridgeworks, TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor,
+            BridgeTech.SiegeDeployment };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
@@ -40,7 +41,10 @@ namespace Rts.Simulation
         private bool TechOpen(uint faction, TechKind tech)
         {
             var e = world.Economies[faction - 1];
-            if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || tech > TechKind.GemArmor || HasTech(faction, tech)) return false;
+            if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || HasTech(faction, tech)) return false;
+            if (tech == BridgeTech.Bridgeworks) return e.Civ == CivKind.Bridge && e.Age >= 2;
+            if (tech == BridgeTech.SiegeDeployment) return e.Civ == CivKind.Bridge && e.Age >= 3;
+            if (tech > TechKind.GemArmor) return false;
             if (tech == TechKind.Irrigation) return e.Civ == CivKind.Agrarian;
             if (tech == TechKind.BlastFurnace) return e.Civ == CivKind.Metallurgy;
             // V3-5 (32 #14): the steel techs want the second age and the metal to pay for them; the earlier ones must be in first.
@@ -52,6 +56,50 @@ namespace Rts.Simulation
             if (tech >= TechKind.Siegecraft) return e.Age >= 3;
             return true;
         }
+
+        private bool IsBridgeTech(TechKind tech) => tech == BridgeTech.Bridgeworks || tech == BridgeTech.SiegeDeployment;
+
+        private int TechFoodCost(TechKind tech)
+            => tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksFoodCost
+                : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentFoodCost
+                : world.Config.Economy.TechFood[(int)tech - 1];
+
+        private int TechWoodCost(TechKind tech)
+            => tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksWoodCost
+                : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentWoodCost
+                : world.Config.Economy.TechWood[(int)tech - 1];
+
+        private int TechMetalCost(TechKind tech)
+            => IsBridgeTech(tech) ? 0 : world.Config.Economy.TechMetal[(int)tech - 1];
+
+        private int TechGemsCost(TechKind tech)
+            => IsBridgeTech(tech) ? 0 : world.Config.Economy.TechGems[(int)tech - 1];
+
+        private int TechTicks(TechKind tech)
+            => tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksTicks
+                : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentTicks
+                : world.Config.Economy.TechTicks[(int)tech - 1];
+
+        private int BridgeHpFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return checked(rules.BridgeHp + (HasTech(faction, BridgeTech.Bridgeworks) ? rules.BridgeworksHpBonus : 0));
+        }
+
+        private int BridgeWorkFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return Math.Max(1, rules.BridgeWork - (HasTech(faction, BridgeTech.Bridgeworks) ? rules.BridgeworksWorkReduction : 0));
+        }
+
+        private int RamTicksFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return Math.Max(1, rules.RamTicks - (HasTech(faction, BridgeTech.SiegeDeployment) ? rules.SiegeDeploymentRamTicksReduction : 0));
+        }
+
+        private int AutoRamLimitFor(uint faction)
+            => AutoRams + (HasTech(faction, BridgeTech.SiegeDeployment) ? world.Config.Economy.SiegeDeploymentRamCapacityBonus : 0);
 
         private bool BeingResearched(uint faction, TechKind tech)
         {
@@ -68,15 +116,15 @@ namespace Rts.Simulation
         {
             if (!AgesOn || smith.Kind != BuildingKind.Blacksmith || !smith.Complete || smith.Researching != 0 || !TechOpen(faction, tech) || BeingResearched(faction, tech)) return false;
             var rules = world.Config.Economy;
-            int t = (int)tech - 1;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Food < rules.TechFood[t] || economy.Wood < rules.TechWood[t] || economy.Metal < rules.TechMetal[t] || economy.Gems < rules.TechGems[t]) return false;
-            economy.Food = checked(economy.Food - rules.TechFood[t]);
-            economy.Wood = checked(economy.Wood - rules.TechWood[t]);
-            economy.Metal = checked(economy.Metal - rules.TechMetal[t]);
-            economy.Gems = checked(economy.Gems - rules.TechGems[t]);
+            int food = TechFoodCost(tech), wood = TechWoodCost(tech), metal = TechMetalCost(tech), gems = TechGemsCost(tech);
+            if (economy.Food < food || economy.Wood < wood || economy.Metal < metal || economy.Gems < gems) return false;
+            economy.Food = checked(economy.Food - food);
+            economy.Wood = checked(economy.Wood - wood);
+            economy.Metal = checked(economy.Metal - metal);
+            economy.Gems = checked(economy.Gems - gems);
             smith.Researching = tech;
-            smith.TrainRemaining = rules.TechTicks[t];
+            smith.TrainRemaining = TechTicks(tech);
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -94,6 +142,16 @@ namespace Rts.Simulation
                 b.Researching = 0;
                 b.TrainRemaining = 0;
                 world.Economies[b.FactionId - 1].Techs |= 1UL << ((int)tech - 1);
+                if (tech == BridgeTech.Bridgeworks)
+                {
+                    var bonus = world.Config.Economy.BridgeworksHpBonus;
+                    for (int j = 0; j < world.BuildingCount; j++)
+                    {
+                        ref var bridge = ref world.Buildings[j];
+                        if (bridge.Alive && bridge.FactionId == b.FactionId && bridge.Kind == BuildingKind.Bridge)
+                            bridge.Hp = checked(bridge.Hp + bonus);
+                    }
+                }
                 if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour && tech != TechKind.GemArmor) continue;
                 foreach (int s in world.SoldierTraversal)
                     if (world.Soldiers[s].Alive && world.Soldiers[s].Initial.FactionId == b.FactionId) ApplyTech(s, tech);

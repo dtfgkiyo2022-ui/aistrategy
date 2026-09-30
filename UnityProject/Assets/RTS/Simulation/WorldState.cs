@@ -476,7 +476,12 @@ namespace Rts.Simulation
             Require(!e.Bridge || (e.Ages && e.Industry && e.EngineerCampSizeCells > 0 && e.EngineerCampSizeCells <= 8
                 && e.EngineerCampWoodCost >= 0 && e.EngineerCampWork > 0 && e.EngineerCampHp > 0
                 && e.BridgeWoodCost >= 0 && e.BridgeWork > 0 && e.BridgeHp > 0
-                && e.MaxBridgeLength > 0 && e.MaxBridgeLength <= 256), "Bridge requires valid ages, industry and bridge rules.");
+                && e.MaxBridgeLength > 0 && e.MaxBridgeLength <= 256
+                && e.BridgeworksFoodCost >= 0 && e.BridgeworksWoodCost >= 0 && e.BridgeworksTicks > 0
+                && e.BridgeworksHpBonus >= 0 && e.BridgeworksWorkReduction >= 0
+                && e.SiegeDeploymentFoodCost >= 0 && e.SiegeDeploymentWoodCost >= 0 && e.SiegeDeploymentTicks > 0
+                && e.SiegeDeploymentRamTicksReduction >= 0 && e.SiegeDeploymentRamTicksReduction < e.RamTicks
+                && e.SiegeDeploymentRamCapacityBonus >= 0), "Bridge requires valid ages, industry and bridge rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -630,7 +635,11 @@ namespace Rts.Simulation
                  Forestry = e.Forestry, Masonry = e.Masonry, Bridge = e.Bridge,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
-                 BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
+                  BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
+                  BridgeworksFoodCost = e.BridgeworksFoodCost, BridgeworksWoodCost = e.BridgeworksWoodCost, BridgeworksTicks = e.BridgeworksTicks,
+                  BridgeworksHpBonus = e.BridgeworksHpBonus, BridgeworksWorkReduction = e.BridgeworksWorkReduction,
+                  SiegeDeploymentFoodCost = e.SiegeDeploymentFoodCost, SiegeDeploymentWoodCost = e.SiegeDeploymentWoodCost, SiegeDeploymentTicks = e.SiegeDeploymentTicks,
+                  SiegeDeploymentRamTicksReduction = e.SiegeDeploymentRamTicksReduction, SiegeDeploymentRamCapacityBonus = e.SiegeDeploymentRamCapacityBonus,
                  QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
                  QuarryWork = e.QuarryWork, QuarryHp = e.QuarryHp, QuarryIntervalTicks = e.QuarryIntervalTicks,
                  LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,

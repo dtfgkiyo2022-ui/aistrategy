@@ -72,6 +72,17 @@ namespace Rts.Contracts
     public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6, Siegecraft = 7, Masonry = 8, Banking = 9,
         SteelWeapons = 10, SteelArmour = 11, GemArmor = 12 }
 
+    /// <summary>
+    /// V3-11 #3: bridge civilisation research values live outside <see cref="TechKind"/> so the
+    /// established tech numbers, names and meanings remain unchanged. They still use the existing
+    /// research command and faction tech bitset; the values are intentionally after the last slot.
+    /// </summary>
+    public static class BridgeTech
+    {
+        public const TechKind Bridgeworks = (TechKind)13;
+        public const TechKind SiegeDeployment = (TechKind)14;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 

@@ -221,7 +221,7 @@ namespace Rts.Simulation
                 return;
             }
             ref var b = ref world.Buildings[workshop];
-            if (!b.Complete || b.Held || b.Queued > 0 || CountClass(faction, UnitKind.Ram) >= AutoRams) return;
+            if (!b.Complete || b.Held || b.Queued > 0 || CountClass(faction, UnitKind.Ram) >= AutoRamLimitFor(faction)) return;
             if (HasRoomFor(faction, UnitKind.Ram) && CanPay(faction, UnitKind.Ram)) Enqueue(faction, ref b, UnitKind.Ram);
         }
     }
