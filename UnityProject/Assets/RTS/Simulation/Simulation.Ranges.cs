@@ -35,7 +35,7 @@ namespace Rts.Simulation
             int index = OwnBuildingIndex(faction, kind);
             if (index < 0)
             {
-                if (world.Economies[faction - 1].Wood < WoodOf(kind)) return;
+                if (world.Economies[faction - 1].Wood < WoodOf(kind, faction)) return;
                 int origin = FindSite(faction, SizeOf(kind));
                 if (origin >= 0) PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
                 return;

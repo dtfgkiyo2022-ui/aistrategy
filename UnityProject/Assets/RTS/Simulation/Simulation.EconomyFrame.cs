@@ -34,7 +34,7 @@ namespace Rts.Simulation
                 if (!own && !BuildingVisibleTo(faction, b)) continue;
                 int size = SizeOf(b.Kind);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, FootprintCenter(b.OriginCell, size), size * world.Config.Map.CellSizeMeters,
-                    own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
+                    own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
                     own && (ProcessingOn || ForestryOn) ? b.InputSecondary : 0,
@@ -61,7 +61,7 @@ namespace Rts.Simulation
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, rules.AdvanceFoodCost, rules.AdvanceWoodCost,
                 rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
-                economy.Stone, rules.Ages ? rules.WallStoneCost : 0, rules.Ages ? rules.TowerWoodCost : 0, rules.Ages ? rules.TowerStoneCost : 0,
+                 economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? WoodOf(BuildingKind.Tower, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
                 rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
                 economy.Age, rules.Ages ? rules.Age2FoodCost : 0, rules.Ages ? rules.Age2WoodCost : 0, rules.Ages ? rules.ArcherFood : 0, rules.Ages ? rules.ArcherWood : 0,
                 rules.Ages ? rules.CavalryFood : 0, rules.Ages ? rules.CavalryWood : 0, rules.Ages ? rules.CavalryMetal : 0,
@@ -69,7 +69,7 @@ namespace Rts.Simulation
                 rules.Ages ? rules.RamFood : 0, rules.Ages ? rules.RamWood : 0,
                 rules.Ages ? rules.Age3FoodCost : 0, rules.Ages ? rules.Age3WoodCost : 0,
                 rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0,
-                rules.Ages ? rules.CastleWoodCost : 0, rules.Ages ? rules.CastleStoneCost : 0,
+                 rules.Ages ? WoodOf(BuildingKind.Castle, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,
                 rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
                 rules.Ages ? rules.MercenaryGems : 0, rules.Ages ? rules.MercenaryTicks : 0,
                 rules.MonksEnabled, rules.MonksEnabled ? rules.MonkFoodCost : 0, rules.MonksEnabled ? rules.MonkGoldCost : 0,

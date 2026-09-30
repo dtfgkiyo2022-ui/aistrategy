@@ -110,6 +110,10 @@ namespace Rts.Simulation
         public bool Ages;
         /// <summary>V3-7: enables the forestry civilisation and its lumber camps. False keeps the prior age maps unchanged.</summary>
         public bool Forestry;
+        /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
+        public bool Masonry;
+        /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
+        public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
         public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
         /// <summary>V3-4 agrarian (27, 26.2): infantry is cheaper and quicker to train.</summary>
@@ -142,6 +146,8 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #5): a wall cell (stands at once, no builders), placed within WallReach metres of the own core or a
         /// finished own building, never so that the own core loses its way to the enemy core.</summary>
         public int WallStoneCost = 3, WallHp = 400, WallReach = 30;
+        /// <summary>V3-8 #2: masonry's fraction of wall, tower and castle costs after discount. Integer floor is used.</summary>
+        public int MasonryDefenceCostPermille = 750, MasonryDefenceWorkPermille = 800;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

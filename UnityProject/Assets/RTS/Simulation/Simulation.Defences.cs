@@ -25,10 +25,10 @@ namespace Rts.Simulation
             bool changed = false;
             foreach (int cell in c.Cells)
             {
-                if (economy.Stone < rules.WallStoneCost) break;
+                if (economy.Stone < StoneOf(BuildingKind.Wall, faction)) break;
                 if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0
                     || IsNodeCell(cell) || InsideAnyCore(cell) || !NearOwnBase(faction, cell, rules.WallReach) || !KeepsMapConnected(faction, cell, 1)) continue;
-                economy.Stone = checked(economy.Stone - rules.WallStoneCost);
+                economy.Stone = checked(economy.Stone - StoneOf(BuildingKind.Wall, faction));
                 int index = world.BuildingCount;
                 if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
                 world.Map.SetPassable(cell, false);
@@ -64,7 +64,7 @@ namespace Rts.Simulation
             if (OwnBuildingIndex(faction, BuildingKind.Castle) >= 0) return;
             var rules = world.Config.Economy;
             var e = world.Economies[faction - 1];
-            if (e.Wood < rules.CastleWoodCost || e.Stone < rules.CastleStoneCost) return;
+            if (e.Wood < WoodOf(BuildingKind.Castle, faction) || e.Stone < StoneOf(BuildingKind.Castle, faction)) return;
             int origin = FindSite(faction, rules.CastleSizeCells);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Castle, origin, Facing.North, 0);
         }
@@ -138,7 +138,7 @@ namespace Rts.Simulation
         /// <summary>Once in a civilisation, the automatic economy keeps StoneGatherers villagers on stone (for its towers).</summary>
         private bool StoneWanted(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction)) return false;
+            if (!AgesOn || MasonryAllowed(faction) || !CivLineStarted(faction)) return false;
             int onStone = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -165,6 +165,8 @@ namespace Rts.Simulation
                         && OwnBuildingIndex(faction, BuildingKind.Smelter) >= 0;
                 case CivKind.Forestry:
                     return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
+                case CivKind.Masonry:
+                    return MasonryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Quarry) >= 0;
                 default:
                     return false;
             }
@@ -176,7 +178,7 @@ namespace Rts.Simulation
             if (!AgesOn || !CivLineStarted(faction)) return;
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
-            if (economy.Wood < rules.TowerWoodCost || economy.Stone < rules.TowerStoneCost) return;
+            if (economy.Wood < WoodOf(BuildingKind.Tower, faction) || economy.Stone < StoneOf(BuildingKind.Tower, faction)) return;
             int towers = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
