@@ -42,10 +42,12 @@ namespace Rts.Simulation
         /// Generates the unchanged terrain first, then optionally appends an all-or-nothing gold layout. The optional V3-6
         /// processing-chain rules change no placement.
         /// </summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold, bool processingChain = false)
+        /// <summary>Generates the same terrain and random sequence, optionally enabling masonry after generation.</summary>
+        public static ScenarioDefinition GenerateTerrain(ulong seed, bool gold = false, bool processingChain = false, bool masonry = false)
         {
             var scenario = GenerateTerrain(seed, out _, processingChain);
             if (gold) TryAddGold(scenario, seed, out _);
+            scenario.Economy.Masonry = masonry;
             return scenario;
         }
 

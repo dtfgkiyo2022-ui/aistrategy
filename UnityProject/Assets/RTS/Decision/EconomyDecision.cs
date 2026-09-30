@@ -56,6 +56,20 @@ namespace Rts.Decision
             return CivKind.Forestry;
         }
 
+        /// <summary>
+        /// V3-8 #2: compares ore, food beyond the guaranteed points, usable forest points and usable stone points.
+        /// Ties keep the older order first (agrarian, metallurgy, forestry), then masonry. Keeping masonry last makes a
+        /// zero masonry score leave the three-way decision byte-for-byte equivalent to the preceding overload.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear, int guaranteedFood)
+        {
+            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear) return CivKind.Forestry;
+            return CivKind.Masonry;
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

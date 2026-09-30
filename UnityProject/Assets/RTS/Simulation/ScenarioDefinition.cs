@@ -146,6 +146,8 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #5): a wall cell (stands at once, no builders), placed within WallReach metres of the own core or a
         /// finished own building, never so that the own core loses its way to the enemy core.</summary>
         public int WallStoneCost = 3, WallHp = 400, WallReach = 30;
+        /// <summary>V3-8 #2: masonry's fraction of wall, tower and castle costs after discount. Integer floor is used.</summary>
+        public int MasonryDefenceCostPermille = 750, MasonryDefenceWorkPermille = 800;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

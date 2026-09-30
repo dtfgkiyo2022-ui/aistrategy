@@ -77,8 +77,8 @@ namespace Rts.Simulation
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId)
         {
             ref var economy = ref world.Economies[faction - 1];
-            economy.Wood = checked(economy.Wood - WoodOf(kind));
-            economy.Stone = checked(economy.Stone - StoneOf(kind));
+            economy.Wood = checked(economy.Wood - WoodOf(kind, faction));
+            economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
             var footprint = Footprint(origin, SizeOf(kind));
@@ -271,8 +271,8 @@ namespace Rts.Simulation
                     var v = world.Villagers[j];
                     if (v.Alive && v.Task == VillagerTask.Building && v.BuildingId == b.Id) b.Progress++;
                 }
-                if (b.Progress < WorkOf(b.Kind)) continue;
-                b.Progress = WorkOf(b.Kind);
+                if (b.Progress < WorkOf(b.Kind, b.FactionId)) continue;
+                b.Progress = WorkOf(b.Kind, b.FactionId);
                 b.Complete = true;
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
@@ -335,10 +335,19 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Castle ? e.CastleHp : e.BarracksHp;
         }
 
-        private int WorkOf(BuildingKind kind)
+        private bool IsMasonryDefence(uint faction, BuildingKind kind)
+            => MasonryAllowed(faction) && (kind == BuildingKind.Wall || kind == BuildingKind.Tower || kind == BuildingKind.Castle);
+
+        private int MasonryDiscount(int value, int permille)
+        {
+            // All defence discounts use integer multiplication followed by floor division by 1000; no floating point or rounding is involved.
+            return checked(value * permille / 1000);
+        }
+
+        private int WorkOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
+            int work = kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
                 : kind == BuildingKind.Fletcher ? e.FletcherWork
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
@@ -346,12 +355,13 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
                 : kind == BuildingKind.Castle ? e.CastleWork : e.BarracksWork;
+            return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
-        private int WoodOf(BuildingKind kind)
+        private int WoodOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
+            int wood = kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.Fletcher ? e.FletcherWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
@@ -359,14 +369,16 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : e.BarracksWoodCost;
+            return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 
         /// <summary>V3-5: the stone a building costs (walls and towers).</summary>
-        private int StoneOf(BuildingKind kind)
+        private int StoneOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
+            int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
+            return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
 
         private int[] Footprint(BuildingState b) => Footprint(b.OriginCell, SizeOf(b.Kind));

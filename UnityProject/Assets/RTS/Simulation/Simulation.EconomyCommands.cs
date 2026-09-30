@@ -82,7 +82,7 @@ namespace Rts.Simulation
                         && !((kind == BuildingKind.ArcheryRange || kind == BuildingKind.Stable) && AgesOn && world.Economies[faction - 1].Age >= 2)
                         // V3-5 (32 #17): the castle belongs to the third age.
                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)) return;
-                    if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind)) return;
+                    if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
                     uint node = 0;

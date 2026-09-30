@@ -25,9 +25,6 @@ namespace Rts.Simulation
         /// <summary>What the ground near a core favours (28.2 step 4).</summary>
         public enum CoreLean : byte { Mountain = 0, River = 1 }
 
-        /// <summary>The terrain map of <paramref name="seed"/>: economy, industry and terrain on.</summary>
-        public static ScenarioDefinition GenerateTerrain(ulong seed) => GenerateTerrain(seed, out _, false);
-
         public static ScenarioDefinition GenerateTerrain(ulong seed, out CoreLean[] leans)
             => GenerateTerrain(seed, out leans, false);
 

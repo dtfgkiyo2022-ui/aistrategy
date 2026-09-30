@@ -167,6 +167,8 @@ namespace Rts.Simulation
                         w.Write(c.Economy.QuarrySizeCells); w.Write(c.Economy.QuarryWoodCost); w.Write(c.Economy.QuarryWork);
                         w.Write(c.Economy.QuarryHp); w.Write(c.Economy.QuarryIntervalTicks);
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
+                        // V3-8 #2: the masonry-only defence discounts live in this existing tail, not a nested tail.
+                        w.Write(c.Economy.MasonryDefenceCostPermille); w.Write(c.Economy.MasonryDefenceWorkPermille);
                     }
                 }
                 return s.ToArray();
@@ -360,6 +362,11 @@ namespace Rts.Simulation
             e.QuarrySizeCells = r.ReadInt32(); e.QuarryWoodCost = r.ReadInt32(); e.QuarryWork = r.ReadInt32();
             e.QuarryHp = r.ReadInt32(); e.QuarryIntervalTicks = r.ReadInt32();
             e.MarketFoodFloor = r.ReadInt32(); e.MarketWoodReserve = r.ReadInt32(); e.MarketStoneReserve = r.ReadInt32();
+            // Older masonry tails ended here. Defaults keep those old records readable.
+            if (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
+            }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

@@ -11,7 +11,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
+        private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, CivStoneReach = 44, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
@@ -190,11 +190,13 @@ namespace Rts.Simulation
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
-            // Keep the old pure two-score decision, including its exact tie rule, when forestry is off.
-            if (!ForestryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            // Keep the old pure two-score decision, including its exact tie rule, when both new flags are off.
+            if (!ForestryOn && !MasonryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
-            int forest = CountUsableForestWood(faction, core);
-            return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
+            int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
+            if (!MasonryOn) return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
+            int stone = CountUsableMasonryStone(faction, core);
+            return EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
         }
 
         /// <summary>
@@ -248,6 +250,47 @@ namespace Rts.Simulation
                 || (x + 1 < width && terrain[cell + 1] == (byte)TerrainKind.Forest)
                 || (z > 0 && terrain[cell - width] == (byte)TerrainKind.Forest)
                 || (z + 1 < height && terrain[cell + width] == (byte)TerrainKind.Forest);
+        }
+
+        /// <summary>
+        /// Counts only nearby stone points whose quarry can actually be placed now. This is deliberately the masonry
+        /// counterpart of CountUsableForestWood: guaranteed stone that has no legal, connected quarry site is not a reason
+        /// to choose masonry. The narrow-passage score is left for a later pass because it needs a separate stable path
+        /// metric; keeping this first pass to the existing quarry legality rules avoids changing map generation or routing.
+        /// </summary>
+        private int CountUsableMasonryStone(uint faction, SimPoint core)
+        {
+            int count = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0
+                    || !InRange(node.Definition.Position, core, Fix64.FromInt(CivStoneReach))) continue;
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (!HasUsableQuarrySite(faction, cell, node.Definition.Id)) continue;
+                count++;
+            }
+            return count;
+        }
+
+        private bool HasUsableQuarrySite(uint faction, int nodeCell, uint nodeId)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.QuarrySizeCells;
+            int nx = nodeCell % width, nz = nodeCell / width;
+            var core = OwnCore(faction).Definition.Position;
+            for (int dz = 0; dz < size; dz++)
+                for (int dx = 0; dx < size; dx++)
+                {
+                    int x0 = nx - dx, z0 = nz - dz;
+                    if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                    int origin = z0 * width + x0;
+                    if (!QuarrySiteIsClear(origin, out uint covered) || covered != nodeId
+                        || !KeepsMapConnected(faction, origin, size)) continue;
+                    foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        if (PortIsOpen(OutputCell(origin, size, side), faction)) return true;
+                }
+            return false;
         }
     }
 }
