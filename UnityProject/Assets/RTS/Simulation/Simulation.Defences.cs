@@ -69,6 +69,20 @@ namespace Rts.Simulation
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Castle, origin, Facing.North, 0);
         }
 
+        /// <summary>V3-9 #2: the caravan civilisation hires one mercenary once its third-age castle has Gems.</summary>
+        private void DecideCaravanMercenary(uint faction)
+        {
+            if (!CaravanAllowed(faction) || world.Economies[faction - 1].Age < 3) return;
+            int index = OwnBuildingIndex(faction, BuildingKind.Castle);
+            if (index < 0) return;
+            ref var castle = ref world.Buildings[index];
+            var rules = world.Config.Economy;
+            if (!castle.Complete || castle.Held || castle.Queued >= rules.QueueLimit) return;
+            if (QueuedOf(faction, UnitKind.Mercenary) > 0 || LivingClass(faction, UnitKind.Mercenary) > 0) return;
+            if (!HasRoomFor(faction, UnitKind.Mercenary) || !CanPay(faction, UnitKind.Mercenary)) return;
+            Enqueue(faction, ref castle, UnitKind.Mercenary);
+        }
+
         /// <summary>What one shot of a tower or a castle takes off: its damage, heavier with masonry (V3-5, 32 #10, #17).</summary>
         private int TowerShot(uint faction, BuildingKind kind)
         {
@@ -167,6 +181,10 @@ namespace Rts.Simulation
                     return ForestryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.LumberCamp) >= 0;
                 case CivKind.Masonry:
                     return MasonryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Quarry) >= 0;
+                case CivKind.Caravan:
+                    // The market is the caravan base condition. The caravanserai is deliberately not used here,
+                    // otherwise the market required by the host would form a circular prerequisite.
+                    return CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) >= 0;
                 case CivKind.Cavalry:
                     return CavalryAllowed(faction) && OwnBuildingIndex(faction, BuildingKind.Stable) >= 0;
                 default:

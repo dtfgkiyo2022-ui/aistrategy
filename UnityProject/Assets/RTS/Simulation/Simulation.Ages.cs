@@ -22,6 +22,8 @@ namespace Rts.Simulation
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
+        private bool CaravanOn => AgesOn && world.Config.Economy.Caravan;
+
         private bool CavalryOn => AgesOn && world.Config.Economy.Cavalry;
 
         private bool CavalryAllowed(uint faction)
@@ -44,6 +46,9 @@ namespace Rts.Simulation
 
         private bool MasonryAllowed(uint faction)
             => MasonryOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;
+
+        private bool CaravanAllowed(uint faction)
+            => CaravanOn && world.Economies[faction - 1].Civ == CivKind.Caravan && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -102,7 +107,8 @@ namespace Rts.Simulation
             if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
             if (e.Civ == CivKind.Primitive)
                 return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
-                    || MasonryOn && civ == CivKind.Masonry || CavalryOn && civ == CivKind.Cavalry;
+                    || MasonryOn && civ == CivKind.Masonry || CaravanOn && civ == CivKind.Caravan
+                    || CavalryOn && civ == CivKind.Cavalry;
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
         }
@@ -199,18 +205,14 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when both new flags are off.
-            if (!ForestryOn && !MasonryOn && !CavalryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
+            // A civilisation whose flag is off scores zero, which never steals a tie from an older one.
             int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
+            int stone = MasonryOn ? CountUsableMasonryStone(faction, core) : 0;
+            int caravan = CaravanOn ? CountUsableCaravanOutposts(faction, core) : 0;
             int cavalry = CavalryOn ? CountCavalryMobility(faction, core) : 0;
-            if (!MasonryOn)
-                return CavalryOn
-                    ? EconomyDecision.ChooseCiv(ore, food, forest, 0, cavalry, GuaranteedFoodPoints)
-                    : EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
-            int stone = CountUsableMasonryStone(faction, core);
-            return CavalryOn
-                ? EconomyDecision.ChooseCiv(ore, food, forest, stone, cavalry, GuaranteedFoodPoints)
-                : EconomyDecision.ChooseCiv(ore, food, forest, stone, GuaranteedFoodPoints);
+            return EconomyDecision.ChooseCiv(ore, food, forest, stone, caravan, cavalry, GuaranteedFoodPoints);
         }
 
         /// <summary>
@@ -333,6 +335,64 @@ namespace Rts.Simulation
                     foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         if (PortIsOpen(OutputCell(origin, size, side), faction)) return true;
                 }
+            return false;
+        }
+
+        /// <summary>
+        /// Counts maintainable (neutral or already-owned) outposts that have at least one legal caravanserai site. The score is evaluated before the
+        /// civilisation is selected, so a finished market cannot exist yet; the market-independent part of the
+        /// placement rule is therefore used here (outpost reach, clear footprint and map connectivity). Once the
+        /// caravan civilisation is selected, TryCaravanseraiPlacement applies the fixed market and minimum-distance
+        /// checks to the same candidate cells. This keeps the choice about maintainable outposts rather than merely
+        /// the number of outposts.
+        /// </summary>
+        private int CountUsableCaravanOutposts(uint faction, SimPoint core)
+        {
+            int count = 0;
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                var post = world.Outposts[i];
+                // At civilisation choice the map's outposts are normally neutral. They are valid future
+                // maintenance candidates; an outpost already owned by the other faction is not.
+                if (post.OwnerFactionId != 0 && post.OwnerFactionId != faction) continue;
+                if (HasUsableCaravanseraiSite(faction, post.Definition.Id, core)) count++;
+            }
+            return count;
+        }
+
+        private bool HasUsableCaravanseraiSite(uint faction, uint outpostId, SimPoint core)
+        {
+            if (outpostId == 0 || outpostId > world.Outposts.Length) return false;
+
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.CaravanseraiSizeCells;
+            int postCell = world.Map.Cell(world.Outposts[outpostId - 1].Definition.Position);
+            int cx = postCell % width, cz = postCell / width;
+            int coreCell = world.Map.Cell(core);
+
+            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (System.Math.Max(System.Math.Abs(dx), System.Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!SiteIsClear(origin, coreCell, size) || !KeepsMapConnected(faction, origin, size)) continue;
+
+                        var centre = FootprintCenter(origin, size);
+                        if (!InRange(centre, world.Outposts[outpostId - 1].Definition.Position,
+                            Fix64.FromInt(world.Config.Economy.CaravanOutpostReach))) continue;
+
+                        bool occupied = false;
+                        for (int b = 0; b < world.BuildingCount; b++)
+                        {
+                            var existing = world.Buildings[b];
+                            if (existing.Alive && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
+                                && existing.CaravanOutpostId == outpostId) { occupied = true; break; }
+                        }
+                        if (!occupied) return true;
+                    }
             return false;
         }
     }

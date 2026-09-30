@@ -71,17 +71,28 @@ namespace Rts.Decision
         }
 
         /// <summary>
-        /// V3-10 #1: cavalry is registered as a sixth choice, but has no terrain score yet. A zero score keeps the
-        /// existing agrarian/metallurgy/forestry/masonry order unchanged until the third cavalry request adds terrain evaluation.
+        /// V3-9 #3: compares the terrain scores including the number of usable caravan outposts. A zero caravan
+        /// score never steals an older tie, preserving the preceding four-way ordering when caravan terrain is absent.
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
-            int cavalryPointsNear, int guaranteedFood)
+            int caravanPointsNear, int guaranteedFood)
+            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, 0, guaranteedFood);
+
+        /// <summary>
+        /// V3-10 #3: adds the cavalry mobility score (already converted to a small 0-5 range). Ties keep the older
+        /// order agrarian &gt; metallurgy &gt; forestry &gt; masonry &gt; caravan &gt; cavalry, so a zero score never steals one.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int caravanPointsNear, int cavalryPointsNear, int guaranteedFood)
         {
             int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= cavalryPointsNear) return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= cavalryPointsNear) return CivKind.Metallurgy;
-            if (forestPointsNear >= stonePointsNear && forestPointsNear >= cavalryPointsNear) return CivKind.Forestry;
-            if (stonePointsNear >= cavalryPointsNear) return CivKind.Masonry;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear
+                && agrarian >= cavalryPointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear
+                && orePointsNear >= cavalryPointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear && forestPointsNear >= cavalryPointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= caravanPointsNear && stonePointsNear >= cavalryPointsNear) return CivKind.Masonry;
+            if (caravanPointsNear >= cavalryPointsNear) return CivKind.Caravan;
             return CivKind.Cavalry;
         }
 

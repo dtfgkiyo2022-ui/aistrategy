@@ -11,7 +11,8 @@ namespace Rts.Simulation
         public const string RulesVersion = "week3-reinforcements-4";
         private const int ForestryTailMarker = 0x46525354; // "FRST", after the existing optional tail chain.
         private const int MasonryTailMarker = 0x4D534F4E; // "MSON", after the forestry tail when present.
-        private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the existing optional tail chain.
+        private const int CaravanTailMarker = 0x4352564E; // "CRVN", after forestry/masonry tails when present.
+        private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the caravan tail when present.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -117,8 +118,9 @@ namespace Rts.Simulation
             bool processingRules = c.Economy.ProcessingChain;
             bool forestryRules = c.Economy.Forestry;
             bool masonryRules = c.Economy.Masonry;
+            bool caravanRules = c.Economy.Caravan;
             bool cavalryRules = c.Economy.Cavalry;
-            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || cavalryRules;
+            bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -171,6 +173,16 @@ namespace Rts.Simulation
                         w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
                         // V3-8 #2: the masonry-only defence discounts live in this existing tail, not a nested tail.
                         w.Write(c.Economy.MasonryDefenceCostPermille); w.Write(c.Economy.MasonryDefenceWorkPermille);
+                    }
+                    if (caravanRules)
+                    {
+                        // This marker is read before the payload, so a masonry tail's optional two defence values
+                        // cannot consume the caravan flag. The pair and distance are runtime state, not scenario data.
+                        w.Write(CaravanTailMarker);
+                        w.Write(c.Economy.Caravan);
+                        w.Write(c.Economy.CaravanseraiSizeCells); w.Write(c.Economy.CaravanseraiWoodCost); w.Write(c.Economy.CaravanseraiWork);
+                        w.Write(c.Economy.CaravanseraiHp); w.Write(c.Economy.CaravanOutpostReach); w.Write(c.Economy.CaravanMinimumDistance);
+                        w.Write(c.Economy.CaravanRewardDistanceStep); w.Write(c.Economy.CaravanRewardMaxWood); w.Write(c.Economy.CaravanAutoVillagers);
                     }
                     if (cavalryRules)
                     {
@@ -299,9 +311,7 @@ namespace Rts.Simulation
                                 {
                                     long tailStart = s.Position;
                                     int marker = r.ReadInt32();
-                                    if (marker == ForestryTailMarker) { ReadForestryTail(r, e); ReadOptionalTailChain(r, e); }
-                                    else if (marker == MasonryTailMarker) { ReadMasonryTail(r, e); ReadOptionalTailChain(r, e); }
-                                    else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
+                                    if (IsTailMarker(marker)) { ReadMarkedTail(r, e, marker); ReadMarkedTails(r, e); }
                                     else
                                     {
                                         s.Position = tailStart;
@@ -313,7 +323,7 @@ namespace Rts.Simulation
                                         e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
                                         e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
                                         e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
-                                        ReadOptionalTailChain(r, e);
+                                        ReadMarkedTails(r, e);
                                     }
                                 }
                         }
@@ -356,33 +366,44 @@ namespace Rts.Simulation
             // Older masonry tails ended here. Defaults keep those old records readable.
             if (r.BaseStream.Position < r.BaseStream.Length)
             {
+                long next = r.BaseStream.Position;
+                if (IsTailMarker(r.ReadInt32())) { r.BaseStream.Position = next; return; }
+                r.BaseStream.Position = next;
                 e.MasonryDefenceCostPermille = r.ReadInt32(); e.MasonryDefenceWorkPermille = r.ReadInt32();
             }
         }
-        private static void ReadOptionalTailChain(BinaryReader r, EconomyRules e)
+        /// <summary>Every marked civilisation tail, in any order the encoder wrote them, until the end of the record.</summary>
+        private static void ReadMarkedTails(BinaryReader r, EconomyRules e)
         {
-            while (r.BaseStream.Position < r.BaseStream.Length)
-            {
-                int marker = r.ReadInt32();
-                if (marker == ForestryTailMarker) ReadForestryTail(r, e);
-                else if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
-                else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
-                else throw new InvalidDataException("Invalid optional tail.");
-            }
+            while (r.BaseStream.Position < r.BaseStream.Length) ReadMarkedTail(r, e, r.ReadInt32());
+        }
+        private static void ReadMarkedTail(BinaryReader r, EconomyRules e, int marker)
+        {
+            if (marker == ForestryTailMarker) ReadForestryTail(r, e);
+            else if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
+            else if (marker == CaravanTailMarker) ReadCaravanTail(r, e);
+            else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
+            else throw new InvalidDataException("Invalid optional tail marker.");
         }
         private static bool IsTailMarker(int value)
-            => value == ForestryTailMarker || value == MasonryTailMarker || value == CavalryTailMarker;
+            => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker;
+        private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
+        {
+            e.Caravan = Bool(r);
+            e.CaravanseraiSizeCells = r.ReadInt32(); e.CaravanseraiWoodCost = r.ReadInt32(); e.CaravanseraiWork = r.ReadInt32();
+            e.CaravanseraiHp = r.ReadInt32(); e.CaravanOutpostReach = r.ReadInt32(); e.CaravanMinimumDistance = r.ReadInt32();
+            e.CaravanRewardDistanceStep = r.ReadInt32(); e.CaravanRewardMaxWood = r.ReadInt32(); e.CaravanAutoVillagers = r.ReadInt32();
+        }
         private static void ReadCavalryTail(BinaryReader r, EconomyRules e)
         {
+            // The encoder always writes the drill values, so they are read unconditionally: a "bytes remain" test here
+            // would swallow the marker of a later tail.
             e.Cavalry = Bool(r);
             e.LightCavalryFood = r.ReadInt32(); e.LightCavalryWood = r.ReadInt32(); e.LightCavalryTicks = r.ReadInt32();
             e.LightCavalryHp = r.ReadInt32(); e.LightCavalryDamage = r.ReadInt32(); e.LightCavalryInterval = r.ReadInt32();
             e.LightCavalryRange = Fix(r); e.LightCavalrySpeed = Fix(r); e.LightCavalryVision = Fix(r);
-            if (r.BaseStream.Position < r.BaseStream.Length)
-            {
-                e.CavalryDrillFood = r.ReadInt32(); e.CavalryDrillWood = r.ReadInt32(); e.CavalryDrillTicks = r.ReadInt32();
-                e.CavalryDrillSpeed = Fix(r);
-            }
+            e.CavalryDrillFood = r.ReadInt32(); e.CavalryDrillWood = r.ReadInt32(); e.CavalryDrillTicks = r.ReadInt32();
+            e.CavalryDrillSpeed = Fix(r);
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }

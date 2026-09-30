@@ -320,7 +320,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
                 : kind == BuildingKind.ArcheryRange ? e.RangeSizeCells : kind == BuildingKind.Stable ? e.StableSizeCells
-                : kind == BuildingKind.Castle ? e.CastleSizeCells : e.BarracksSizeCells;
+                : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.Caravanserai ? e.CaravanseraiSizeCells : e.BarracksSizeCells;
         }
 
         private int HpOf(BuildingKind kind)
@@ -333,7 +333,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
-                : kind == BuildingKind.Castle ? e.CastleHp : e.BarracksHp;
+                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp : e.BarracksHp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -355,7 +355,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
-                : kind == BuildingKind.Castle ? e.CastleWork : e.BarracksWork;
+                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -369,7 +369,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 

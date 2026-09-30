@@ -219,7 +219,7 @@ namespace Rts.Core.Tests
             Assert.That(openScore.ReachableObjectives, Is.EqualTo(3));
             Assert.That(openScore.ChokeDependentObjectives, Is.EqualTo(0));
             Assert.That(openScore.Points, Is.EqualTo(5));
-            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 0, openScore.Points, 3), Is.EqualTo(CivKind.Cavalry));
+            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 0, 0, openScore.Points, 3), Is.EqualTo(CivKind.Cavalry));
 
             var choke = (bool[])open.Clone();
             for (int z = 0; z < height; z++) if (z != 5) choke[z * width + 5] = false;
@@ -227,7 +227,7 @@ namespace Rts.Core.Tests
             Assert.That(chokeScore.ReachableObjectives, Is.EqualTo(1));
             Assert.That(chokeScore.ChokeBlockedObjectives, Is.EqualTo(1));
             Assert.That(chokeScore.Points, Is.EqualTo(1));
-            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 2, chokeScore.Points, 3), Is.EqualTo(CivKind.Masonry));
+            Assert.That(EconomyDecision.ChooseCiv(0, 3, 0, 2, 0, chokeScore.Points, 3), Is.EqualTo(CivKind.Masonry));
 
             var unseen = (bool[])observed.Clone();
             unseen[5 * width + 9] = false;
