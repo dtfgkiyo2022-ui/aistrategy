@@ -372,6 +372,62 @@ namespace Rts.Core.Tests
             }
         }
 
+        [Test]
+        public void ReorderedAutomaticAdvanceKeepsEveryTickStateHash()
+        {
+            var cases = new (string name, Func<ScenarioDefinition> create)[]
+            {
+                ("bridge-on seed 27", () => Scenario(27)),
+                ("cavalry-on seed 1", CavalryHashScenario),
+                ("all optional flags off seed 1", () => MapGenerator.GenerateTerrain(1))
+            };
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(choose, Is.Not.Null);
+
+            foreach (var testCase in cases)
+            {
+                var optimized = new Battle(testCase.create());
+                var oldOrder = new Battle(testCase.create());
+                Assert.That(Hash(optimized), Is.EqualTo(Hash(oldOrder)), testCase.name + " initial state");
+
+                for (long tick = 1; tick <= 20000; tick++)
+                {
+                    if (oldOrder.Capture(1).Result.HasEnded) break;
+                    if (tick % 20 == 0) InvokeOldChooseOrder(oldOrder, choose);
+                    optimized.Step(tick, Array.Empty<ScheduledInput>());
+                    oldOrder.Step(tick, Array.Empty<ScheduledInput>());
+                    Assert.That(Hash(optimized), Is.EqualTo(Hash(oldOrder)), testCase.name + " tick " + tick);
+                }
+            }
+        }
+
+        private static void InvokeOldChooseOrder(Battle sim, MethodInfo choose)
+        {
+            for (uint faction = 1; faction <= 2; faction++)
+                if (sim.Capture(faction).Economy.Civ == CivKind.Primitive) choose.Invoke(sim, new object[] { faction });
+        }
+
+        private static string Hash(Battle sim) => Convert.ToHexString(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState));
+
+        private static ScenarioDefinition CavalryHashScenario()
+        {
+            var s = MapGenerator.GenerateTerrain(1);
+            s.Economy.Cavalry = true;
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.StableWork = 1;
+            s.Economy.LightCavalryTicks = 1;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
         private static long TravelTicks(int routeCells, Fix64 speed, int cellSize)
             => checked((long)Math.Max(0, routeCells - 1) * cellSize * 20 * Fix64.FromInt(1).Raw / speed.Raw);
 

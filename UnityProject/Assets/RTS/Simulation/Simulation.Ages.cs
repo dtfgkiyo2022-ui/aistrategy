@@ -105,15 +105,22 @@ namespace Rts.Simulation
         /// </summary>
         private bool CanAdvance(uint faction, CivKind civ)
         {
-            if (!AgesOn) return false;
+            if (!CanAdvanceWithoutCiv(faction)) return false;
             var e = world.Economies[faction - 1];
-            if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
-            var (food, wood, gold, _) = AdvancePrice(e);
-            if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
             if (e.Civ == CivKind.Primitive)
                 return CivEnabled(faction, civ);
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
             return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
+        }
+
+        /// <summary>Checks every advance prerequisite that does not depend on the civilisation choice.</summary>
+        private bool CanAdvanceWithoutCiv(uint faction)
+        {
+            if (!AgesOn) return false;
+            var e = world.Economies[faction - 1];
+            if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
+            var (food, wood, gold, _) = AdvancePrice(e);
+            return e.Food >= food && e.Wood >= wood && e.Gold >= gold;
         }
 
         private (int food, int wood, int gold, int ticks) AdvancePrice(FactionEconomy e)
@@ -161,8 +168,9 @@ namespace Rts.Simulation
         {
             // The core the player runs by hand (V3-3, 19) is theirs to advance too.
             var e = world.Economies[faction - 1];
+            if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvanceWithoutCiv(faction)) return;
             var civ = e.Civ == CivKind.Primitive ? ChooseCiv(faction) : e.Civ;
-            if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvance(faction, civ)) return;
+            if (!CanAdvance(faction, civ)) return;
             StartAdvance(faction, civ);
         }
 
