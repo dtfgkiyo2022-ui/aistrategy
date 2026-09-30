@@ -239,6 +239,7 @@ namespace Rts.UnityHost
             economyLayer.Clear();
             economyLayer.Bind(view);
             economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+            economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
