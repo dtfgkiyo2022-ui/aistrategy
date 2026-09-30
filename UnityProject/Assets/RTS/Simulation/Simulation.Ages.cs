@@ -11,7 +11,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private const int CivOreReach = 44, CivFoodReach = 30, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
+        private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
@@ -184,9 +184,64 @@ namespace Rts.Simulation
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
-            // Forest selection deliberately does not score terrain yet (that is the later third pass). The opt-in
-            // forest scenario exposes the third branch and lets the automatic economy exercise its complete path.
-            return ForestryOn ? CivKind.Forestry : EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            // Keep the old pure two-score decision, including its exact tie rule, when forestry is off.
+            if (!ForestryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+
+            int forest = CountUsableForestWood(faction, core);
+            return EconomyDecision.ChooseCiv(ore, food, forest, GuaranteedFoodPoints);
+        }
+
+        /// <summary>
+        /// Counts only wood points that are useful for forestry: the point is near the core, touches a forest cell,
+        /// and at least one of the same lumber-camp placements used by PlaceLumberCamp is currently valid. The
+        /// placement check also verifies that closing the camp footprint does not cut the map off from the core's
+        /// destinations. This keeps the terrain score about a buildable, connected line rather than guaranteed wood.
+        /// </summary>
+        private int CountUsableForestWood(uint faction, SimPoint core)
+        {
+            int count = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0
+                    || !InRange(node.Definition.Position, core, Fix64.FromInt(CivForestReach))) continue;
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (!TouchesForest(cell) || !HasUsableLumberCampSite(faction, cell, node.Definition.Id)) continue;
+                count++;
+            }
+            return count;
+        }
+
+        private bool HasUsableLumberCampSite(uint faction, int nodeCell, uint nodeId)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.LumberCampSizeCells;
+            int nx = nodeCell % width, nz = nodeCell / width;
+            var core = OwnCore(faction).Definition.Position;
+            for (int dz = 0; dz < size; dz++)
+                for (int dx = 0; dx < size; dx++)
+                {
+                    int x0 = nx - dx, z0 = nz - dz;
+                    if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                    int origin = z0 * width + x0;
+                    if (!LumberCampSiteIsClear(origin, out uint covered) || covered != nodeId
+                        || !KeepsMapConnected(faction, origin, size)) continue;
+                    foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        if (PortIsOpen(OutputCell(origin, size, side), faction)) return true;
+                }
+            return false;
+        }
+
+        private bool TouchesForest(int cell)
+        {
+            var terrain = world.Config.Map.Terrain;
+            if (terrain.Length == 0 || cell < 0 || cell >= terrain.Length) return false;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int x = cell % width, z = cell / width;
+            return (x > 0 && terrain[cell - 1] == (byte)TerrainKind.Forest)
+                || (x + 1 < width && terrain[cell + 1] == (byte)TerrainKind.Forest)
+                || (z > 0 && terrain[cell - width] == (byte)TerrainKind.Forest)
+                || (z + 1 < height && terrain[cell + width] == (byte)TerrainKind.Forest);
         }
     }
 }

@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Decision;
 using Rts.Replay;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -77,6 +79,56 @@ namespace Rts.Core.Tests
             return -1;
         }
 
+        [TestCase(0, 3, 0, CivKind.Agrarian)]
+        [TestCase(5, 3, 0, CivKind.Metallurgy)]
+        [TestCase(0, 3, 1, CivKind.Forestry)]
+        [TestCase(0, 3, 0, CivKind.Agrarian)] // no usable camp remains: food's guaranteed points still win
+        [TestCase(3, 3, 2, CivKind.Metallurgy)]
+        [TestCase(1, 3, 4, CivKind.Forestry)]
+        public void ThreeTerrainScoresChooseTheExpectedCivilisation(int ore, int food, int forest, CivKind expected)
+        {
+            Assert.That(EconomyDecision.ChooseCiv(ore, food, forest, 3), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void FirstFiftyForestryMapsExposeAllThreeTerrainChoices()
+        {
+            var choices = new HashSet<CivKind>();
+            var score = typeof(Battle).GetMethod("CountUsableForestWood", BindingFlags.Instance | BindingFlags.NonPublic);
+            for (ulong seed = 1; seed <= 50; seed++)
+            {
+                var s = ForestScenario(seed);
+                var sim = new Battle(s);
+                var reported = new bool[2];
+                for (long tick = 1; tick <= 16000 && (!reported[0] || !reported[1]); tick++)
+                {
+                    sim.Step(tick, Array.Empty<ScheduledInput>());
+                    for (int side = 0; side < 2; side++)
+                    {
+                        if (reported[side]) continue;
+                        var economy = sim.Capture((uint)side + 1).Economy;
+                        if (economy.Civ == CivKind.Primitive) continue;
+                        int forest = (int)score.Invoke(sim, new object[] { (uint)side + 1, s.Cores[side].Position });
+                        int ore = s.ResourceNodes.Count(n => n.Kind == ResourceKind.Ore && InRange(n.Position, s.Cores[side].Position, 44));
+                        int food = s.ResourceNodes.Count(n => n.Kind == ResourceKind.Food && InRange(n.Position, s.Cores[side].Position, 30));
+                        TestContext.WriteLine("seed " + seed + " faction " + (side + 1) + ": ore=" + ore + ", food=" + food + ", forest=" + forest + " -> " + economy.Civ);
+                        choices.Add(economy.Civ);
+                        reported[side] = true;
+                    }
+                }
+            }
+            Assert.That(choices, Does.Contain(CivKind.Agrarian));
+            Assert.That(choices, Does.Contain(CivKind.Metallurgy));
+            Assert.That(choices, Does.Contain(CivKind.Forestry));
+        }
+
+        private static bool InRange(SimPoint a, SimPoint b, int meters)
+        {
+            long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
+            long limit = (long)meters * 65536;
+            return dx * dx + dz * dz <= limit * limit;
+        }
+
         [Test]
         public void ForestryTailRoundTripsAndTheFlagOffBytesStaySeparate()
         {
@@ -127,7 +179,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void AutomaticForestryBuildsItsCampWithoutTerrainScoring()
+        public void AutomaticForestryUsesTerrainScoringAndBuildsItsCamp()
         {
             var s = ForestScenario(3);
             var sim = new Battle(s);
@@ -138,6 +190,72 @@ namespace Rts.Core.Tests
             Assert.That(f["Economy[1].Civ"], Is.EqualTo(((byte)CivKind.Forestry).ToString(CultureInfo.InvariantCulture)));
             int buildings = (int)Number(f, "Buildings.Count");
             Assert.That(Enumerable.Range(1, buildings).Any(i => f["Buildings[" + i + "].Kind"] == ((byte)BuildingKind.LumberCamp).ToString(CultureInfo.InvariantCulture)), Is.True);
+        }
+
+        [TestCase(CivKind.Agrarian, CivKind.Forestry, 6UL)]
+        [TestCase(CivKind.Metallurgy, CivKind.Forestry, 7UL)]
+        [TestCase(CivKind.Forestry, CivKind.Forestry, 8UL)]
+        public void ForestryCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east, ulong seed)
+        {
+            var s = ForestSecondAgeScenario(seed);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 1, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "west reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "east reaches the second age");
+        }
+
+        [Test]
+        public void NormalForestryStartReplaysForTwentyThousandTicks()
+        {
+            // No economy command is injected; the fixture only shortens the two age clocks so this replay test reaches
+            // the bow line within its fixed 20,000-tick budget.
+            var s = ForestSecondAgeScenario(12);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から第2時代まで進む");
+
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, s, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [TestCase(1UL)]
+        [TestCase(2UL)]
+        [TestCase(3UL)]
+        public void ForestryOffKeepsTheOldCivilisationDecision(ulong seed)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            Assert.That(s.Economy.Forestry, Is.False);
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            var expected = new CivKind[2];
+            for (int side = 0; side < 2; side++)
+            {
+                var core = s.Cores[side].Position;
+                int ore = s.ResourceNodes.Count(n => n.Kind == ResourceKind.Ore && InRange(n.Position, core, 44));
+                int food = s.ResourceNodes.Count(n => n.Kind == ResourceKind.Food && InRange(n.Position, core, 30));
+                expected[side] = EconomyDecision.ChooseCiv(ore, food, 3);
+            }
+            var sim = new Battle(s);
+            Steps(new CommandGateway(sim), sim, 20000);
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(expected[0]));
+            Assert.That(sim.Capture(2).Economy.Civ, Is.EqualTo(expected[1]));
         }
 
         [Test]
