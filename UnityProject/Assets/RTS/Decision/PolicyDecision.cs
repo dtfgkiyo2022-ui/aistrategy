@@ -126,6 +126,36 @@ namespace Rts.Decision
             return EnemyStrengthEstimate.InRegion(o, p => NearRoute(p, route.Cells, 24), goal);
         }
 
+        private static bool SamePointGoal(PolicyGoal goal, ObservedRaidTarget target)
+            => goal.Kind == GoalKind.Point && goal.Id == target.Id
+                && goal.Point.X.Raw == target.Position.X.Raw && goal.Point.Z.Raw == target.Position.Z.Raw;
+
+        private static bool TryRaidGoal(FactionObservation observation, ArmyDecisionInput army, out PolicyGoal goal)
+        {
+            goal = default;
+            if (!OffenseDecision.IsMobileArmyKind(army.Army.Kind) || observation.RaidTargets.Count == 0) return false;
+            var choice = observation.RaidTargets
+                .Select(target => new
+                {
+                    Target = target,
+                    Route = army.Routes.FirstOrDefault(r => r.Goal.Kind == GoalKind.Point && r.Goal.Id == target.Id),
+                })
+                .Where(x => x.Route.Distance != int.MaxValue && x.Route.Cells.Count > 0)
+                .Select(x => new
+                {
+                    x.Target, x.Route,
+                    Risk = checked(x.Target.StrengthEstimate + EnemyStrengthEstimate.InRegion(observation,
+                        p => NearRoute(p, x.Route.Cells, 24)))
+                })
+                // Risk is deliberately based on visible contacts only; route length is the arrival-time tie breaker.
+                .OrderBy(x => x.Risk * 1000L / Math.Max(1, army.Army.AliveCount) + x.Route.Distance)
+                .ThenBy(x => x.Target.Kind).ThenBy(x => x.Target.Id)
+                .FirstOrDefault();
+            if (choice == null) return false;
+            goal = new PolicyGoal(GoalKind.Point, choice.Target.Id, choice.Target.Position);
+            return true;
+        }
+
         public static ContactApproachMemory[] UpdateApproaches(FactionObservation o, IReadOnlyList<ContactApproachMemory> old)
             => UpdateApproaches(o, old, Array.Empty<ContactApproachRoute>());
         public static ContactApproachMemory[] UpdateApproaches(FactionObservation o, IReadOnlyList<ContactApproachMemory> old,
@@ -178,14 +208,14 @@ namespace Rts.Decision
             if (danger > 0)
             {
                 int defenders = armies.Where(Locked).Where(a => a.Policy.Kind == PolicyKind.Defend && a.Policy.Goal.Kind == core.Kind && a.Policy.Goal.Id == core.Id).Sum(a => a.Army.AliveCount);
-                foreach (int i in candidates.Where(i => armies[i].Army.Kind != UnitKind.Scout).OrderBy(i => committedReserves.Contains(armies[i].Army.Id) ? 0 : armies[i].IsReserveRole ? 1 : 2).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
+                foreach (int i in candidates.Where(i => armies[i].Army.Kind != UnitKind.Scout && !OffenseDecision.IsMobileArmyKind(armies[i].Army.Kind)).OrderBy(i => committedReserves.Contains(armies[i].Army.Id) ? 0 : armies[i].IsReserveRole ? 1 : 2).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
                 {
                     if (defenders >= danger && held >= target && !committedReserves.Contains(armies[i].Army.Id)) break;
                     used[i] = true; result[i].Assignment = AssignmentKind.CoreDefense; result[i].Goal = core;
                     defenders += armies[i].Army.AliveCount; held += armies[i].Army.AliveCount;
                 }
             }
-            foreach (int i in candidates.Where(i => !used[i] && armies[i].Army.Kind != UnitKind.Scout)
+            foreach (int i in candidates.Where(i => !used[i] && armies[i].Army.Kind != UnitKind.Scout && !OffenseDecision.IsMobileArmyKind(armies[i].Army.Kind))
                 .OrderBy(i => armies[i].IsReserveRole ? 0 : 1).ThenBy(i => Route(armies[i], core)).ThenBy(i => armies[i].Army.Id))
             {
                 if (held >= target) break;
@@ -206,8 +236,8 @@ namespace Rts.Decision
             foreach (var post in posts)
             {
                 if (armies.Any(a => a.Army.AliveCount > 0 && a.Policy.Kind == PolicyKind.Defend && a.Policy.Goal.Kind == post.Kind && a.Policy.Goal.Id == post.Id)) continue;
-                int i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout && armies[j].Army.HomeObjective.Kind == post.Kind && armies[j].Army.HomeObjective.Id == post.Id).DefaultIfEmpty(-1).First();
-                if (i < 0) i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout)
+                int i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout && !OffenseDecision.IsMobileArmyKind(armies[j].Army.Kind) && armies[j].Army.HomeObjective.Kind == post.Kind && armies[j].Army.HomeObjective.Id == post.Id).DefaultIfEmpty(-1).First();
+                if (i < 0) i = candidates.Where(j => !used[j] && armies[j].Army.Kind != UnitKind.Scout && !OffenseDecision.IsMobileArmyKind(armies[j].Army.Kind))
                     .OrderBy(j => Route(armies[j], new PolicyGoal(post.Kind, post.Id, default)))
                     .ThenBy(j => armies[j].Army.Id).DefaultIfEmpty(-1).First();
                 if (i < 0) continue;
@@ -217,9 +247,28 @@ namespace Rts.Decision
             {
                 var a = armies[i];
                 if (a.Policy.Kind == PolicyKind.Focus) result[i].Goal = a.Policy.Goal;
-                else if (coordinated) { result[i].Assignment = AssignmentKind.Advance; }
+                else if (coordinated && !(OffenseDecision.IsMobileArmyKind(a.Army.Kind) && a.Policy.Kind == 0)) { result[i].Assignment = AssignmentKind.Advance; }
                 else
                 {
+                    if (OffenseDecision.IsMobileArmyKind(a.Army.Kind) && a.Policy.Kind == 0)
+                    {
+                        var currentRaid = observation.RaidTargets.FirstOrDefault(t => SamePointGoal(result[i].Goal, t));
+                        bool keepRaid = currentRaid.Id != 0 && result[i].OffensiveSince != 0 && tick - result[i].OffensiveSince < 600
+                            && a.Routes.Any(r => r.Goal.Kind == GoalKind.Point && r.Goal.Id == currentRaid.Id && r.Distance != int.MaxValue);
+                        if (keepRaid)
+                        {
+                            result[i].Assignment = AssignmentKind.Advance;
+                            continue;
+                        }
+                        if (TryRaidGoal(observation, a, out var raidGoal))
+                        {
+                            var previousGoal = result[i].Goal;
+                            result[i].Assignment = AssignmentKind.Advance;
+                            result[i].Goal = raidGoal;
+                            result[i].OffensiveSince = !Same(previousGoal, raidGoal) ? tick : result[i].OffensiveSince;
+                            continue;
+                        }
+                    }
                     // Retain a still-valid auto target for 600 ticks.  It is intentionally not renewed.
                     var current = result[i].Goal;
                     bool owned = observation.Objectives.Any(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown && o.OwnerFactionId == observation.FactionId);

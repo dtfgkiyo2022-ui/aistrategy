@@ -71,20 +71,38 @@ namespace Rts.Decision
         }
 
         /// <summary>
-        /// V3-11 #4: compares the four terrain scores and the engineer score. The engineer score is already a
-        /// small, thresholded integer (not metres or raw path cells). Ties keep the requested stable order:
-        /// agrarian, metallurgy, forestry, masonry, then bridge.
+        /// V3-9 #3: compares the terrain scores including the number of usable caravan outposts. A zero caravan
+        /// score never steals an older tie, preserving the preceding four-way ordering when caravan terrain is absent.
         /// </summary>
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
-            int bridgePointsNear, int guaranteedFood)
+            int caravanPointsNear, int guaranteedFood)
+            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, 0, guaranteedFood);
+
+        /// <summary>
+        /// V3-10 #3: adds the cavalry mobility score (already converted to a small 0-5 range). Ties keep the older
+        /// order agrarian &gt; metallurgy &gt; forestry &gt; masonry &gt; caravan &gt; cavalry, so a zero score never steals one.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int caravanPointsNear, int cavalryPointsNear, int guaranteedFood)
+            => ChooseCiv(orePointsNear, foodPointsNear, forestPointsNear, stonePointsNear, caravanPointsNear, cavalryPointsNear, 0, guaranteedFood);
+
+        /// <summary>
+        /// V3-11 #4: adds the engineer score (the best one-bridge shortening, already tiered to 0-3). Ties keep the
+        /// older order agrarian &gt; metallurgy &gt; forestry &gt; masonry &gt; caravan &gt; cavalry &gt; bridge.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int stonePointsNear,
+            int caravanPointsNear, int cavalryPointsNear, int bridgePointsNear, int guaranteedFood)
         {
             int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
-            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= bridgePointsNear)
-                return CivKind.Agrarian;
-            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= bridgePointsNear)
-                return CivKind.Metallurgy;
-            if (forestPointsNear >= stonePointsNear && forestPointsNear >= bridgePointsNear) return CivKind.Forestry;
-            if (stonePointsNear >= bridgePointsNear) return CivKind.Masonry;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear && agrarian >= stonePointsNear && agrarian >= caravanPointsNear
+                && agrarian >= cavalryPointsNear && agrarian >= bridgePointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear && orePointsNear >= stonePointsNear && orePointsNear >= caravanPointsNear
+                && orePointsNear >= cavalryPointsNear && orePointsNear >= bridgePointsNear) return CivKind.Metallurgy;
+            if (forestPointsNear >= stonePointsNear && forestPointsNear >= caravanPointsNear && forestPointsNear >= cavalryPointsNear
+                && forestPointsNear >= bridgePointsNear) return CivKind.Forestry;
+            if (stonePointsNear >= caravanPointsNear && stonePointsNear >= cavalryPointsNear && stonePointsNear >= bridgePointsNear) return CivKind.Masonry;
+            if (caravanPointsNear >= cavalryPointsNear && caravanPointsNear >= bridgePointsNear) return CivKind.Caravan;
+            if (cavalryPointsNear >= bridgePointsNear) return CivKind.Cavalry;
             return CivKind.Bridge;
         }
 

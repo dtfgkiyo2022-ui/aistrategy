@@ -376,7 +376,8 @@ namespace Rts.Simulation
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
-                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry)) continue;
+                var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
+                if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
@@ -405,7 +406,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
                 : kind == BuildingKind.ArcheryRange ? e.RangeSizeCells : kind == BuildingKind.Stable ? e.StableSizeCells
-                : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.EngineerCamp ? e.EngineerCampSizeCells
+                : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.Caravanserai ? e.CaravanseraiSizeCells
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampSizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
@@ -419,7 +421,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
-                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+                : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -441,7 +444,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
-                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+                : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -455,7 +459,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
+                : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 

@@ -43,6 +43,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.TradeRoute:
                     StartTradeRoute(faction, c.VillagerIds);
                     return;
+                case EconomyCommandKind.CaravanRoute:
+                    StartCaravanRoute(faction, c.ProducerId, c.VillagerIds);
+                    return;
                 case EconomyCommandKind.Research:
                     if (OwnBuilding(faction, c.ProducerId, out int smith)) StartResearch(faction, ref world.Buildings[smith], c.Tech, true);
                     return;
@@ -53,14 +56,14 @@ namespace Rts.Simulation
                     RemoveBelt(faction, c.Cell);
                     return;
                 case EconomyCommandKind.RotateBuilding:
-                    if (!(ProcessingOn || ForestryOn || MasonryOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
                     ref var rotating = ref world.Buildings[rotateIndex];
                     if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
                     MarkLinesForBuilding(faction, rotating.Id);
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || MasonryOn || BridgeOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
@@ -87,18 +90,34 @@ namespace Rts.Simulation
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
                         // V3-5 (32 #12): the archery range and the stable, from the second age, whatever the civilisation.
                         && !((kind == BuildingKind.ArcheryRange || kind == BuildingKind.Stable) && AgesOn && world.Economies[faction - 1].Age >= 2)
+                        // V3-10 #1: the cavalry civilisation may place the existing stable from its first age.
+                        && !(kind == BuildingKind.Stable && CavalryAllowed(faction) && world.Economies[faction - 1].Age >= 1)
                         // V3-5 (32 #17): the castle belongs to the third age.
-                        && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)) return;
+                        && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
+                        && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;
+                    if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
                     uint node = 0;
+                    uint caravanOutpost = 0, caravanMarket = 0;
+                    Fix64 caravanDistance = default;
+                    int caravanReward = 0;
+                    if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
                     bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
+                    if (kind == BuildingKind.Caravanserai)
+                    {
+                        ref var host = ref world.Buildings[world.BuildingCount - 1];
+                        host.CaravanOutpostId = caravanOutpost;
+                        host.CaravanMarketId = caravanMarket;
+                        host.CaravanDistance = caravanDistance;
+                        host.CaravanWoodReward = caravanReward;
+                    }
                     world.Buildings[world.BuildingCount - 1].Held = IndustryOn; // V3-3: the player's building
                     return;
                 }
@@ -173,6 +192,7 @@ namespace Rts.Simulation
                         if (id == 0 || id > world.VillagerCount) continue;
                         ref var v = ref world.Villagers[id - 1];
                         if (!v.Alive || v.FactionId != faction) continue;
+                        ClearCaravan(ref v);
                         v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                         if (IndustryOn) v.Held = true;
                         if (haul)

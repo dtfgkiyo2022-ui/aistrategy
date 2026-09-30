@@ -44,13 +44,17 @@ namespace Rts.Simulation
                 DecideTower(faction);
                 DecideResearch(faction);
                 DecideMarket(faction);
+                DecideCaravanserai(faction);
+                DecideCaravanRoute(faction);
                 DecideTradeRoute(faction);
                 DecideSiege(faction);
                 DecideCrossUnit(faction);
                 DecideCastle(faction);
+                DecideCaravanMercenary(faction);
                 DecideRepair(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
+                DecideCavalryStable(faction);
             }
         }
 
@@ -69,6 +73,19 @@ namespace Rts.Simulation
                     else { v.Task = VillagerTask.Idle; v.NodeId = 0; v.Route = Array.Empty<int>(); v.RouteCursor = 0; }
                 }
                 if (IsTradeRouteTask(v.Task) && !TradeRouteActive(v)) { StopTradeRoute(ref v); continue; }
+                if (IsCaravanTask(v.Task))
+                {
+                    if (!CaravanMarketValid(v)) { EndCaravanAtCore(ref v); }
+                    else if (v.Task == VillagerTask.ToCaravanserai && !CaravanPairValid(v))
+                    {
+                        v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                    }
+                    else
+                    {
+                        StopCaravanOutboundForDanger(ref v);
+                        if (HoldCaravanAtMarket(ref v)) continue;
+                    }
+                }
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
@@ -78,6 +95,9 @@ namespace Rts.Simulation
                 else if (v.Task == VillagerTask.ToDeliver) goal = world.Map.Center(world.Buildings[v.HaulTo - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToTradeMarket) goal = world.Map.Center(world.Buildings[v.BuildingId - 1].WorkCell);
                 else if (v.Task == VillagerTask.ToTradeCore) goal = OwnCore(v.FactionId).Definition.Position;
+                else if (v.Task == VillagerTask.ToCaravanMarket) goal = world.Map.Center(world.Buildings[v.CaravanMarketId - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToCaravanserai) goal = world.Map.Center(world.Buildings[v.CaravanseraiId - 1].WorkCell);
+                else if (v.Task == VillagerTask.ToCaravanCore) goal = OwnCore(v.FactionId).Definition.Position;
                 else { v.MoveGoal = v.Position; continue; }
                 v.MoveGoal = VillagerRouteTarget(ref v, goal);
                 var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep));
@@ -105,6 +125,7 @@ namespace Rts.Simulation
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive) continue;
                 if (IsTradeRouteTask(v.Task)) AdvanceTradeRoute(ref v);
+                else if (IsCaravanTask(v.Task)) AdvanceCaravanRoute(ref v);
                 else if (v.Task == VillagerTask.ToNode)
                 {
                     var node = world.Nodes[v.NodeId - 1];
@@ -150,6 +171,12 @@ namespace Rts.Simulation
                     }
                     AddStock(v.FactionId, v.CarryKind, v.Carry);
                     v.Carry = 0;
+                    if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
+                    {
+                        v.Task = VillagerTask.ToCaravanMarket;
+                        v.NodeId = 0; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                        continue;
+                    }
                     if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
                     if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
                         && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)

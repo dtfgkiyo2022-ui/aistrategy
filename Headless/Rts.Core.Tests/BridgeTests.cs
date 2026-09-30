@@ -47,7 +47,7 @@ namespace Rts.Core.Tests
         public void EngineerTerrainScoreUsesTheFiveWayStableTieOrder(int ore, int food, int forest, int stone, int bridge,
             int guaranteedFood, CivKind expected)
         {
-            Assert.That(EconomyDecision.ChooseCiv(ore, food, forest, stone, bridge, guaranteedFood), Is.EqualTo(expected));
+            Assert.That(EconomyDecision.ChooseCiv(ore, food, forest, stone, 0, 0, bridge, guaranteedFood), Is.EqualTo(expected));
         }
 
         [Test]
@@ -229,7 +229,7 @@ namespace Rts.Core.Tests
             Assert.That(sim.Capture(1).Economy.Buildings.First(b => b.Id == smith).Researching,
                 Is.EqualTo(BridgeTech.Bridgeworks));
             Steps(gateway, sim, s.Economy.BridgeworksTicks + 1);
-            Assert.That(sim.Capture(1).Economy.Techs & (1UL << 12), Is.Not.EqualTo(0UL), "bridgeworks is researched outside TechKind");
+            Assert.That(sim.Capture(1).Economy.Techs & (1UL << 13), Is.Not.EqualTo(0UL), "bridgeworks is researched outside TechKind");
 
             var cells = FindBridgeCells(s, sim, 1);
             Assume.That(cells, Is.Not.Null);

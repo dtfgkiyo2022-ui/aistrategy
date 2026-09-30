@@ -112,6 +112,10 @@ namespace Rts.Simulation
         public bool Forestry;
         /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
         public bool Masonry;
+        /// <summary>V3-9 #1: enables the caravan civilisation. False keeps prior age maps unchanged.</summary>
+        public bool Caravan;
+        /// <summary>V3-10 #1: enables the cavalry civilisation and its early stable/light cavalry rules.</summary>
+        public bool Cavalry;
         /// <summary>V3-11 #1: enables the engineer-and-bridging civilisation. False keeps prior age maps unchanged.</summary>
         public bool Bridge;
         /// <summary>V3-11 #1 provisional engineer camp values; the first pass matches a lumber camp.</summary>
@@ -140,6 +144,12 @@ namespace Rts.Simulation
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>
         public int MarketFoodFloor = 150, MarketWoodReserve = 300, MarketStoneReserve = 100;
+        /// <summary>V3-9 #1 provisional caravanserai values. The route pair and reward are fixed when the building is placed.</summary>
+        public int CaravanseraiSizeCells = 2, CaravanseraiWoodCost = 80, CaravanseraiWork = 200, CaravanseraiHp = 400;
+        // 24m leaves enough room for a two-cell host footprint around the snapped outpost centre while keeping
+        // the host tied to its registered outpost. This is a provisional placement value, not a reward distance.
+        public int CaravanOutpostReach = 24, CaravanMinimumDistance = 20, CaravanRewardDistanceStep = 10, CaravanRewardMaxWood = 30;
+        public int CaravanAutoVillagers = 2;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;
@@ -187,6 +197,13 @@ namespace Rts.Simulation
         public Fix64 ArcherRange = Fix64.FromInt(8), ArcherSpeed = Fix64.FromInt(2), ArcherVision = Fix64.FromInt(22);
         public int CavalryFood = 80, CavalryWood = 20, CavalryMetal = 10, CavalryTicks = 300, CavalryHp = 150, CavalryDamage = 12, CavalryInterval = 20;
         public Fix64 CavalryRange = Fix64.FromInt(2), CavalrySpeed = Fix64.FromInt(4), CavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-10 #1 provisional light cavalry: cheaper and quicker than cavalry, with lower HP and damage.</summary>
+        public int LightCavalryFood = 50, LightCavalryWood = 10, LightCavalryTicks = 180, LightCavalryHp = 90,
+            LightCavalryDamage = 8, LightCavalryInterval = 20;
+        public Fix64 LightCavalryRange = Fix64.FromInt(2), LightCavalrySpeed = Fix64.FromInt(4), LightCavalryVision = Fix64.FromInt(24);
+        /// <summary>V3-10 #2 provisional second-age cavalry drill: faster light-cavalry movement and replenishment.</summary>
+        public int CavalryDrillFood = 150, CavalryDrillWood = 100, CavalryDrillTicks = 500;
+        public Fix64 CavalryDrillSpeed = Fix64.FromInt(1);
         /// <summary>V3-5 (32 #9): a market trades TradeLot of food, wood or stone for TradeReturn of another.</summary>
         public int MarketSizeCells = 3, MarketWoodCost = 175, MarketWork = 300, MarketHp = 700, TradeLot = 100, TradeReturn = 60;
         /// <summary>V3-5 (32 #19): a market gives this many Gems when a normal lot is exchanged for Gems.</summary>

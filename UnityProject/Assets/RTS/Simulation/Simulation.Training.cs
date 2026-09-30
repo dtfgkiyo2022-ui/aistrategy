@@ -17,6 +17,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, 0, e.ScoutTrainTicks);
             if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, e.CavalryTicks);
+            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, e.LightCavalryTicks);
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
             if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
@@ -35,7 +36,9 @@ namespace Rts.Simulation
             if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
             if (b.Kind == BuildingKind.ArcheryRange) return kind == UnitKind.Archer && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
-            if (b.Kind == BuildingKind.Stable) return kind == UnitKind.Cavalry && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            if (b.Kind == BuildingKind.Stable)
+                return (kind == UnitKind.Cavalry && AgesOn && world.Economies[b.FactionId - 1].Age >= 2)
+                    || (kind == UnitKind.LightCavalry && CavalryAllowed(b.FactionId) && world.Economies[b.FactionId - 1].Age >= 1);
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
@@ -108,6 +111,19 @@ namespace Rts.Simulation
                 skirmisher.Parameters.Vision = r.SkirmishArcherVision;
                 skirmisher.StepDistance = Fix64.FromRaw(skirmisher.Parameters.Speed.Raw / 20);
                 skirmisher.Hp = skirmisher.Parameters.Hp; skirmisher.Initial.Hp = skirmisher.Parameters.Hp;
+                return;
+            }
+            if (unit == UnitKind.LightCavalry)
+            {
+                var r = world.Config.Economy;
+                ref var light = ref world.Soldiers[index];
+                light.Class = unit;
+                light.Parameters.Hp = r.LightCavalryHp; light.Parameters.Damage = r.LightCavalryDamage;
+                light.Parameters.AttackIntervalTicks = r.LightCavalryInterval;
+                light.Parameters.Range = r.LightCavalryRange; light.Parameters.Speed = r.LightCavalrySpeed;
+                light.Parameters.Vision = r.LightCavalryVision;
+                light.StepDistance = Fix64.FromRaw(light.Parameters.Speed.Raw / 20);
+                light.Hp = light.Parameters.Hp; light.Initial.Hp = light.Parameters.Hp;
                 return;
             }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
@@ -256,7 +272,8 @@ namespace Rts.Simulation
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
-                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
+                    + QueuedOf(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
+                    + (CaravanAllowed(faction) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

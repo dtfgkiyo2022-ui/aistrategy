@@ -11,11 +11,17 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        // Kept outside TechKind so the existing contract enum numbers and names remain unchanged. The cavalry tail
+        // supplies the thirteenth slot only when that optional civilisation is enabled.
+        private const TechKind CavalryDrillTech = (TechKind)13;
+        private const ulong CavalryDrillBit = 1UL << 12;
         private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
             BridgeTech.Bridgeworks, TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor,
-            BridgeTech.SiegeDeployment };
+            CavalryDrillTech, BridgeTech.SiegeDeployment };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
+
+        private bool HasCavalryDrill(uint faction) => CavalryAllowed(faction) && (world.Economies[faction - 1].Techs & CavalryDrillBit) != 0;
 
         private int GatherTicksFor(uint faction, uint nodeId)
         {
@@ -41,6 +47,7 @@ namespace Rts.Simulation
         private bool TechOpen(uint faction, TechKind tech)
         {
             var e = world.Economies[faction - 1];
+            if (tech == CavalryDrillTech) return CavalryAllowed(faction) && e.Age >= 2 && !HasCavalryDrill(faction);
             if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || HasTech(faction, tech)) return false;
             if (tech == BridgeTech.Bridgeworks) return e.Civ == CivKind.Bridge && e.Age >= 2;
             if (tech == BridgeTech.SiegeDeployment) return e.Civ == CivKind.Bridge && e.Age >= 3;
@@ -166,13 +173,22 @@ namespace Rts.Simulation
             if (HasTech(faction, TechKind.SteelWeapons)) ApplyTech(index, TechKind.SteelWeapons);
             if (HasTech(faction, TechKind.SteelArmour)) ApplyTech(index, TechKind.SteelArmour);
             if (HasTech(faction, TechKind.GemArmor)) ApplyTech(index, TechKind.GemArmor);
+            if (HasCavalryDrill(faction)) ApplyTech(index, CavalryDrillTech);
         }
 
         private void ApplyTech(int index, TechKind tech)
         {
             var rules = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
-            if (tech == TechKind.Weapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.WeaponsDamage);
+            if (tech == CavalryDrillTech)
+            {
+                if (s.Class == UnitKind.LightCavalry || s.Class == UnitKind.Cavalry)
+                {
+                    s.Parameters.Speed = Fix64.FromRaw(checked(s.Parameters.Speed.Raw + rules.CavalryDrillSpeed.Raw));
+                    s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
+                }
+            }
+            else if (tech == TechKind.Weapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.WeaponsDamage);
             else if (tech == TechKind.SteelWeapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.SteelWeaponsDamage);
             else
             {

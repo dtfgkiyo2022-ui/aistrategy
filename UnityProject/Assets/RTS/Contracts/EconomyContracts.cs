@@ -32,7 +32,9 @@ namespace Rts.Contracts
         /// <summary>V3-6: changes the output direction of an own processing building.</summary>
         RotateBuilding = 16,
         /// <summary>V3-6: removes an own building without refunding its cost.</summary>
-        RemoveBuilding = 17
+        RemoveBuilding = 17,
+        /// <summary>V3-9 #1: sends living own villagers between a fixed market and caravanserai.</summary>
+        CaravanRoute = 18
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -205,6 +207,10 @@ namespace Rts.Contracts
         public static EconomyCommand TradeRoute(uint faction, ulong sequence, IReadOnlyList<uint> villagers)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.TradeRoute, 0, 0, 0, 0, villagers, EconomyTargetKind.None, 0, false);
 
+        /// <summary>V3-9 #1: sends villagers to the fixed market/Outpost pair stored by caravanseraiId.</summary>
+        public static EconomyCommand CaravanRoute(uint faction, ulong sequence, uint caravanseraiId, IReadOnlyList<uint> villagers)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.CaravanRoute, 0, 0, caravanseraiId, 0, villagers, EconomyTargetKind.None, 0, false);
+
         public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
         {
             var facings = new Facing[cells == null ? 0 : cells.Count];
@@ -244,6 +250,14 @@ namespace Rts.Contracts
         public int Hp { get; }
         /// <summary>V3-3: the player assigned this own villager; the automatic economy leaves it alone.</summary>
         public bool PlayerHeld { get; }
+        /// <summary>V3-9 #3: fixed caravan pair, stage, dedicated cargo and stop reason.</summary>
+        public uint CaravanMarketId { get; }
+        public uint CaravanseraiId { get; }
+        public uint CaravanOutpostId { get; }
+        public int CaravanStage { get; }
+        public int CaravanWood { get; }
+        public int CaravanGems { get; }
+        public CaravanStopReason CaravanStopReason { get; }
 
         public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp)
             : this(id, isOwn, position, activity, carryKind, carry, hp, false)
@@ -251,8 +265,17 @@ namespace Rts.Contracts
         }
 
         public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp, bool playerHeld)
+            : this(id, isOwn, position, activity, carryKind, carry, hp, playerHeld, 0, 0, 0, 0, 0, 0, CaravanStopReason.None)
+        {
+        }
+
+        public VillagerView(uint id, bool isOwn, SimPoint position, VillagerActivity activity, ResourceKind carryKind, int carry, int hp, bool playerHeld,
+            uint caravanMarketId, uint caravanseraiId, uint caravanOutpostId, int caravanStage, int caravanWood, int caravanGems,
+            CaravanStopReason caravanStopReason)
         {
             Id = id; IsOwn = isOwn; Position = position; Activity = activity; CarryKind = carryKind; Carry = carry; Hp = hp; PlayerHeld = playerHeld;
+            CaravanMarketId = caravanMarketId; CaravanseraiId = caravanseraiId; CaravanOutpostId = caravanOutpostId;
+            CaravanStage = caravanStage; CaravanWood = caravanWood; CaravanGems = caravanGems; CaravanStopReason = caravanStopReason;
         }
     }
 
@@ -281,6 +304,12 @@ namespace Rts.Contracts
         public int Output { get; }
         /// <summary>V3-7: BowGear reserved by SkirmishArcher training.</summary>
         public int QueuedBowGear { get; }
+        /// <summary>V3-9 #3: the fixed market/outpost pair and the provisional reward.</summary>
+        public uint CaravanMarketId { get; }
+        public uint CaravanOutpostId { get; }
+        public Fix64 CaravanDistance { get; }
+        public int CaravanWoodReward { get; }
+        public CaravanStopReason CaravanStopReason { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
@@ -317,11 +346,22 @@ namespace Rts.Contracts
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear = 0)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, facing, input, output,
+                playerHeld, researching, researchRemaining, inputSecondary, queuedBowGear, 0, 0, default, 0, CaravanStopReason.None)
+        {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
+            TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
+            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
             Facing = facing; Input = input; InputSecondary = inputSecondary; Output = output;
             QueuedBowGear = queuedBowGear;
+            CaravanMarketId = caravanMarketId; CaravanOutpostId = caravanOutpostId; CaravanDistance = caravanDistance;
+            CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
@@ -379,6 +419,22 @@ namespace Rts.Contracts
         }
     }
 
+    /// <summary>Display-only summary of the current automatic cavalry raid mission.</summary>
+    public readonly struct CavalryMissionView
+    {
+        public RaidTargetKind TargetKind { get; }
+        public uint TargetId { get; }
+        public SimPoint TargetPosition { get; }
+        public long ArrivalTicks { get; }
+        public bool IsRetreating { get; }
+
+        public CavalryMissionView(RaidTargetKind targetKind, uint targetId, SimPoint targetPosition, long arrivalTicks, bool isRetreating)
+        {
+            TargetKind = targetKind; TargetId = targetId; TargetPosition = targetPosition;
+            ArrivalTicks = arrivalTicks; IsRetreating = isRetreating;
+        }
+    }
+
     /// <summary>The economy part of a faction frame. Null in a match without an economy.</summary>
     public sealed class EconomyView
     {
@@ -412,6 +468,8 @@ namespace Rts.Contracts
         public int SkirmishArcherFoodCost { get; }
         public int SkirmishArcherBowGearCost { get; }
         public int SkirmishArcherTrainTicks { get; }
+        /// <summary>V3-10 #3: current observed cavalry raid target, ETA, and retreat state.</summary>
+        public CavalryMissionView CavalryMission { get; }
         public int BeltWoodCost { get; }
         public int BeltTicksPerCell { get; }
         public IReadOnlyList<BeltView> Belts { get; }
@@ -536,7 +594,8 @@ namespace Rts.Contracts
             int charcoalKilnSizeCells = 0, int steelworksSizeCells = 0, int heavyInfantryFoodCost = 0, int heavyInfantrySteelCost = 0,
             int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
             int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
-            int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0)
+            int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0,
+            CavalryMissionView cavalryMission = default(CavalryMissionView))
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
@@ -549,6 +608,7 @@ namespace Rts.Contracts
             Gold = gold;
             BowGear = bowGear; FletcherWoodCost = fletcherWoodCost; FletcherSizeCells = fletcherSizeCells; FletcherTicks = fletcherTicks;
             SkirmishArcherFoodCost = skirmishArcherFoodCost; SkirmishArcherBowGearCost = skirmishArcherBowGearCost; SkirmishArcherTrainTicks = skirmishArcherTrainTicks;
+            CavalryMission = cavalryMission;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

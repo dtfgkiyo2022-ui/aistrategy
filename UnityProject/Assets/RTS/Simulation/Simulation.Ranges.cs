@@ -1,3 +1,4 @@
+using System.Linq;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -44,6 +45,31 @@ namespace Rts.Simulation
             if (!b.Complete || b.Held || b.Queued > 0) return;
             if (AutoPerCross * CountClass(faction, unit) >= CountClass(faction, UnitKind.Infantry)) return;
             if (HasRoomFor(faction, unit) && CanPay(faction, unit)) Enqueue(faction, ref b, unit);
+        }
+
+        private const int AutoLightCavalryMinimum = 4;
+
+        /// <summary>V3-10 #2: the cavalry civilisation keeps a small, independent mobile reserve in the existing stable.</summary>
+        private void DecideCavalryStable(uint faction)
+        {
+            if (!CavalryAllowed(faction) || !CompleteBarracks(faction)) return;
+            var rules = world.Config.Economy;
+            int index = OwnBuildingIndex(faction, BuildingKind.Stable);
+            if (index < 0)
+            {
+                if (world.Economies[faction - 1].Wood < rules.StableWoodCost) return;
+                int origin = FindSite(faction, rules.StableSizeCells);
+                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Stable, origin, Facing.North, 0);
+                return;
+            }
+            ref var stable = ref world.Buildings[index];
+            if (!stable.Complete || stable.Held || stable.Queued >= rules.QueueLimit || SavingToAdvance(faction)) return;
+            int planned = LivingClass(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.LightCavalry);
+            int mobileCapacity = world.Factions[faction - 1].ArmyIds.Select(id => world.Armies[id - 1])
+                .Where(a => a.Definition.Role == "reserve").Select(a => a.Definition.Capacity).DefaultIfEmpty(AutoLightCavalryMinimum).Max();
+            int target = System.Math.Max(AutoLightCavalryMinimum, mobileCapacity / 2 + 1);
+            if (planned >= target || !HasRoomFor(faction, UnitKind.LightCavalry) || !CanPay(faction, UnitKind.LightCavalry)) return;
+            Enqueue(faction, ref stable, UnitKind.LightCavalry);
         }
     }
 }
