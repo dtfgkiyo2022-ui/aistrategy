@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
@@ -43,6 +44,25 @@ namespace Rts.Core.Tests
             Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2);
             Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(CivKind.Cavalry));
             return (scenario, sim, gateway);
+        }
+
+        private static ScenarioDefinition CavalryMatchScenario(ulong seed)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Cavalry = true;
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.StableWork = 1;
+            s.Economy.LightCavalryTicks = 1;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
         }
 
         private static uint PlaceStable(ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ref ulong sequence)
@@ -255,6 +275,60 @@ namespace Rts.Core.Tests
             }
             Assert.That(choices, Does.Contain(CivKind.Cavalry));
             Assert.That(choices.Any(c => c != CivKind.Cavalry), Is.True);
+        }
+
+        [TestCase(CivKind.Cavalry, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Cavalry)]
+        [TestCase(CivKind.Cavalry, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Cavalry)]
+        public void CavalryCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east)
+        {
+            var s = CavalryMatchScenario(21);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", undecided=" + result.IsUndecided
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+        }
+
+        [Test]
+        public void NormalCavalryStartReplaysForTwentyThousandTicks()
+        {
+            // Seed 1 is a normal-start probe where the automatic choice includes cavalry.
+            var s = CavalryMatchScenario(1);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            var fields = Fields(sim);
+            bool lightCavalry = fields.Any(p => p.Key.EndsWith("].Class", StringComparison.Ordinal)
+                && p.Value == ((byte)UnitKind.LightCavalry).ToString(CultureInfo.InvariantCulture));
+            TestContext.WriteLine("normal seed 1: civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age
+                + ", light-cavalry=" + lightCavalry);
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Cavalry || sim.Capture(2).Economy.Civ == CivKind.Cavalry,
+                "通常開始で騎馬が選ばれる");
+            Assert.That(lightCavalry, Is.True, "通常開始から軽騎兵が作られる");
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, s, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
         }
     }
 }
