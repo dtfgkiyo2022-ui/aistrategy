@@ -42,6 +42,20 @@ namespace Rts.Decision
         public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int guaranteedFood)
             => orePointsNear > foodPointsNear - guaranteedFood ? CivKind.Metallurgy : CivKind.Agrarian;
 
+        /// <summary>
+        /// V3-7 #3: compares the three terrain scores. Food points guaranteed to every faction are removed from
+        /// the agrarian score; forest points are already filtered by the simulation to points with a usable camp site.
+        /// Ties are deliberately stable: agrarian wins first, then metallurgy, then forestry. The first rule keeps
+        /// the old two-score tie (agrarian) unchanged even when the forest score is zero.
+        /// </summary>
+        public static CivKind ChooseCiv(int orePointsNear, int foodPointsNear, int forestPointsNear, int guaranteedFood)
+        {
+            int agrarian = foodPointsNear > guaranteedFood ? foodPointsNear - guaranteedFood : 0;
+            if (agrarian >= orePointsNear && agrarian >= forestPointsNear) return CivKind.Agrarian;
+            if (orePointsNear >= forestPointsNear) return CivKind.Metallurgy;
+            return CivKind.Forestry;
+        }
+
         /// <summary>Step 1: one villager at a time, until the target, while food and population allow.</summary>
         public static bool ShouldTrainVillager(int villagers, int queued, int target, int food, int cost, int population, int cap, int queueLimit)
             => queued == 0 && queued < queueLimit && villagers + queued < target && food >= cost && population + queued < cap;

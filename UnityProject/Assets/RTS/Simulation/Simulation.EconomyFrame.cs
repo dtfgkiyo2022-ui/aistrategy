@@ -37,7 +37,8 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? HpOf(b.Kind) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && ProcessingOn ? b.InputSecondary : 0));
+                    own && (ProcessingOn || ForestryOn) ? b.InputSecondary : 0,
+                    own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -78,8 +79,11 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                ProcessingOn ? new List<LineView>(LineViews(faction)) : null,
-                rules.GoldEnabled ? economy.Gold : 0);
+                (ProcessingOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                rules.GoldEnabled ? economy.Gold : 0,
+                ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
+                ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
+                ForestryOn ? rules.SkirmishArcherBowGearCost : 0, ForestryOn ? rules.SkirmishArcherTrainTicks : 0);
         }
 
         private static VillagerActivity Activity(VillagerTask task) => task switch

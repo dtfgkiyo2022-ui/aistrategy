@@ -44,7 +44,8 @@ namespace Rts.Simulation
             {
                 var line = world.ProcessingLines[i];
                 if (line.FactionId != faction) continue;
-                if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId) return i;
+                if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
+                    || line.LumberCampId == buildingId || line.FletcherId == buildingId) return i;
             }
             return -1;
         }
@@ -89,7 +90,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -100,6 +101,10 @@ namespace Rts.Simulation
         {
             if (line.Kind == ProcessingLineKind.CoreMetal)
                 return BuildingReady(line.MineId) && BuildingReady(line.SmelterId);
+            if (line.Kind == ProcessingLineKind.CoreWood)
+                return BuildingReady(line.LumberCampId);
+            if (line.Kind == ProcessingLineKind.BowGear)
+                return BuildingReady(line.LumberCampId) && BuildingReady(line.FletcherId);
             return BuildingReady(line.MineId) && BuildingReady(line.SmelterId) && BuildingReady(line.KilnId) && BuildingReady(line.SteelworksId);
         }
 
@@ -116,6 +121,8 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.Smelter) line.SmelterId = id;
             else if (kind == BuildingKind.CharcoalKiln) line.KilnId = id;
             else if (kind == BuildingKind.Steelworks) line.SteelworksId = id;
+            else if (kind == BuildingKind.LumberCamp) line.LumberCampId = id;
+            else if (kind == BuildingKind.Fletcher) line.FletcherId = id;
         }
 
         private bool LineContainsBelt(int index, int cell)
@@ -157,6 +164,17 @@ namespace Rts.Simulation
                 if (line.MineId != 0 && line.SmelterId != 0) SetHaulers(faction, line.MineId, line.SmelterId, wanted);
                 return;
             }
+            if (line.Kind == ProcessingLineKind.CoreWood)
+            {
+                SetSimpleHaulers(faction, line.LumberCampId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.BowGear)
+            {
+                SetSimpleHaulers(faction, line.LumberCampId, line.FletcherId, wanted);
+                SetSimpleHaulers(faction, line.FletcherId, 0, wanted);
+                return;
+            }
             int current = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -183,6 +201,37 @@ namespace Rts.Simulation
                 chosen.NodeId = 0; chosen.HaulFrom = 0; chosen.HaulTo = line.KilnId; chosen.HaulNodeId = 0;
                 chosen.Task = chosen.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
                 AssignKilnWood(ref chosen, line.KilnId);
+                current++;
+            }
+        }
+
+        private void SetSimpleHaulers(uint faction, uint sourceId, uint destinationId, int wanted)
+        {
+            if (sourceId == 0) return;
+            int current = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != sourceId) continue;
+                if (wanted == 0) StopHauling(ref v); else if (v.HaulTo == destinationId) current++;
+            }
+            if (current >= wanted) return;
+            var spot = world.Map.Center(world.Buildings[sourceId - 1].WorkCell);
+            while (current < wanted)
+            {
+                int best = -1;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.HaulTo != 0 || v.Carry > 0
+                        || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
+                    if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)
+                        || DistanceSquared(v.Position, spot) == DistanceSquared(world.Villagers[best].Position, spot) && v.Id < world.Villagers[best].Id) best = i;
+                }
+                if (best < 0) return;
+                ref var chosen = ref world.Villagers[best];
+                chosen.NodeId = 0; chosen.HaulFrom = sourceId; chosen.HaulTo = destinationId; chosen.HaulNodeId = 0;
+                chosen.Task = VillagerTask.ToPickup;
                 current++;
             }
         }

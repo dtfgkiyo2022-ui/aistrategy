@@ -144,6 +144,8 @@ namespace Rts.Simulation
         internal int QueuedMetal;
         /// <summary>V3-6: steel paid by heavy infantry still in a queue.</summary>
         internal int QueuedSteel;
+        /// <summary>V3-7: bow gear paid by a skirmish archer still in a queue.</summary>
+        internal int QueuedBowGear;
         internal int QueuedGems;
         internal int QueuedGold;
         /// <summary>V3-4 farm: ticks per food, fixed when it is placed (27).</summary>
@@ -187,18 +189,18 @@ namespace Rts.Simulation
         internal uint Id, FactionId;
         internal ProcessingLineKind Kind;
         internal LineManager Manager;
-        internal uint MineId, SmelterId, KilnId, SteelworksId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
 
-    internal enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2 }
+    internal enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4 }
 
     internal struct FactionEconomy
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -328,7 +330,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -413,6 +415,15 @@ namespace Rts.Simulation
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                 && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
+                && (!e.Forestry || (e.Industry && e.LumberCampSizeCells > 0 && e.LumberCampSizeCells <= 8 && e.LumberCampWoodCost >= 0
+                    && e.LumberCampWork > 0 && e.LumberCampHp > 0 && e.LumberCampIntervalTicks > 0
+                    && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0
+                    && e.FletcherSizeCells > 0 && e.FletcherSizeCells <= 8 && e.FletcherWoodCost >= 0 && e.FletcherWork > 0 && e.FletcherHp > 0
+                    && e.FletcherTicks > 0 && e.FletcherWoodInput > 0 && e.FletcherFoodInput > 0
+                    && e.SkirmishArcherFoodCost >= 0 && e.SkirmishArcherBowGearCost >= 0 && e.SkirmishArcherTrainTicks > 0
+                    && e.SkirmishArcherHp > 0 && e.SkirmishArcherDamage >= 0 && e.SkirmishArcherAttackIntervalTicks > 0
+                    && e.SkirmishArcherSpeed.Raw > 0 && e.SkirmishArcherSpeed <= Fix64.FromInt(16)
+                    && e.SkirmishArcherRange.Raw >= 0 && e.SkirmishArcherRange <= Fix64.FromInt(64) && e.SkirmishArcherVision.Raw >= 0))
                 && e.ScoutFoodCost >= 0 && e.ScoutWoodCost >= 0 && e.ScoutTrainTicks > 0
                 && e.BasePopulation > 0 && e.HousePopulation >= 0 && e.HouseSizeCells > 0 && e.HouseSizeCells <= 8
                 && e.HouseWoodCost >= 0 && e.HouseWork > 0 && e.HouseHp > 0
@@ -452,6 +463,7 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -494,7 +506,8 @@ namespace Rts.Simulation
                 var b = c.Belts[i];
                 Require(b.Cell >= 0 && b.Cell < m.WidthCells * m.HeightCells && (i == 0 || c.Belts[i - 1].Cell != b.Cell)
                     && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3
-                    && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel)))
+                    && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
+                        || (e.Forestry && b.Item == ResourceKind.BowGear))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -601,6 +614,15 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
+                Forestry = e.Forestry, LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
+                LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,
+                MarketFoodFloor = e.MarketFoodFloor, MarketWoodReserve = e.MarketWoodReserve, MarketStoneReserve = e.MarketStoneReserve,
+                FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
+                FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
+                SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,
+                SkirmishArcherTrainTicks = e.SkirmishArcherTrainTicks, SkirmishArcherHp = e.SkirmishArcherHp, SkirmishArcherDamage = e.SkirmishArcherDamage,
+                SkirmishArcherAttackIntervalTicks = e.SkirmishArcherAttackIntervalTicks, SkirmishArcherSpeed = e.SkirmishArcherSpeed,
+                SkirmishArcherVision = e.SkirmishArcherVision, SkirmishArcherRange = e.SkirmishArcherRange,
                 ScoutFoodCost = e.ScoutFoodCost, ScoutWoodCost = e.ScoutWoodCost, ScoutTrainTicks = e.ScoutTrainTicks,
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,

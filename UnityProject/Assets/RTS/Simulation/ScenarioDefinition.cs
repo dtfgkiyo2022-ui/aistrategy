@@ -108,6 +108,8 @@ namespace Rts.Simulation
         /// smelters and the metal cost of infantry then belong to the metallurgy civilisation only. False keeps V3-2/V3-3.
         /// </summary>
         public bool Ages;
+        /// <summary>V3-7: enables the forestry civilisation and its lumber camps. False keeps the prior age maps unchanged.</summary>
+        public bool Forestry;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
         public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
         /// <summary>V3-4 agrarian (27, 26.2): infantry is cheaper and quicker to train.</summary>
@@ -118,6 +120,17 @@ namespace Rts.Simulation
         /// for each food point within FarmFoodReach metres and once more with river within FarmRiverReach, never under FarmMinTicks.</summary>
         public int FarmSizeCells = 2, FarmWoodCost = 80, FarmWork = 200, FarmHp = 400;
         public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
+        /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
+        public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
+        /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>
+        public int MarketFoodFloor = 150, MarketWoodReserve = 300, MarketStoneReserve = 100;
+        /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
+        public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
+        public int FletcherWoodInput = 1, FletcherFoodInput = 1;
+        /// <summary>V3-7 #2 provisional skirmish archer values. It is born as infantry and keeps the infantry combat path.</summary>
+        public int SkirmishArcherFoodCost = 50, SkirmishArcherBowGearCost = 1, SkirmishArcherTrainTicks = 250;
+        public int SkirmishArcherHp = 50, SkirmishArcherDamage = 7, SkirmishArcherAttackIntervalTicks = 25;
+        public Fix64 SkirmishArcherSpeed = Fix64.FromInt(3), SkirmishArcherVision = Fix64.FromInt(22), SkirmishArcherRange = Fix64.FromInt(8);
         /// <summary>V3-5 (32): scouts trained at a barracks on a map with ages.</summary>
         public int ScoutFoodCost = 40, ScoutWoodCost = 0, ScoutTrainTicks = 200;
         /// <summary>V3-5 (32 #2): the population cap starts at BasePopulation and each finished house adds HousePopulation,

@@ -24,6 +24,7 @@ namespace Rts.Simulation
                     : (e.MonkFoodCost, 0, e.MonkGoldCost, 0, 0, e.MonkTrainTicks);
             // V3-6: heavy infantry pays steel in the metal slot (CanPay, Enqueue and the queue book it as steel).
             if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, e.HeavyInfantryWoodCost, e.HeavyInfantrySteelCost, 0, 0, e.HeavyInfantryTrainTicks);
+            if (kind == UnitKind.SkirmishArcher) return (e.SkirmishArcherFoodCost, 0, e.SkirmishArcherBowGearCost, 0, 0, e.SkirmishArcherTrainTicks);
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
         }
 
@@ -47,7 +48,8 @@ namespace Rts.Simulation
             return kind == UnitKind.Scout
                 || (kind == UnitKind.Archer && e.Civ == CivKind.Agrarian && e.Age >= 2)
                 || (kind == UnitKind.Cavalry && e.Civ == CivKind.Metallurgy && e.Age >= 2)
-                || (kind == UnitKind.HeavyInfantry && ProcessingAvailable(b.FactionId));
+                || (kind == UnitKind.HeavyInfantry && ProcessingAvailable(b.FactionId))
+                || (kind == UnitKind.SkirmishArcher && ForestryAllowed(b.FactionId) && e.Age >= 2);
         }
 
         /// <summary>The civilisation's own unit once it is in its second age (archers or cavalry), else 0.</summary>
@@ -95,6 +97,19 @@ namespace Rts.Simulation
                 heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
                 return;
             }
+            if (unit == UnitKind.SkirmishArcher)
+            {
+                var r = world.Config.Economy;
+                ref var skirmisher = ref world.Soldiers[index];
+                skirmisher.Class = unit;
+                skirmisher.Parameters.Hp = r.SkirmishArcherHp; skirmisher.Parameters.Damage = r.SkirmishArcherDamage;
+                skirmisher.Parameters.AttackIntervalTicks = r.SkirmishArcherAttackIntervalTicks;
+                skirmisher.Parameters.Range = r.SkirmishArcherRange; skirmisher.Parameters.Speed = r.SkirmishArcherSpeed;
+                skirmisher.Parameters.Vision = r.SkirmishArcherVision;
+                skirmisher.StepDistance = Fix64.FromRaw(skirmisher.Parameters.Speed.Raw / 20);
+                skirmisher.Hp = skirmisher.Parameters.Hp; skirmisher.Initial.Hp = skirmisher.Parameters.Hp;
+                return;
+            }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
             var e = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
@@ -118,7 +133,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind);
-            int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : e.Metal;
+            int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold;
         }
 
@@ -133,6 +148,11 @@ namespace Rts.Simulation
             {
                 e.Steel = checked(e.Steel - c.metal);
                 b.QueuedSteel = checked(b.QueuedSteel + c.metal);
+            }
+            else if (kind == UnitKind.SkirmishArcher)
+            {
+                e.BowGear = checked(e.BowGear - c.metal);
+                b.QueuedBowGear = checked(b.QueuedBowGear + c.metal);
             }
             else
             {
@@ -173,6 +193,12 @@ namespace Rts.Simulation
                 b.QueuedSteel -= steelBack;
                 e.Steel = checked(e.Steel + steelBack);
             }
+            else if (kind == UnitKind.SkirmishArcher)
+            {
+                int bowGearBack = Math.Min(c.metal, b.QueuedBowGear);
+                b.QueuedBowGear -= bowGearBack;
+                e.BowGear = checked(e.BowGear + bowGearBack);
+            }
             else
             {
                 int metalBack = Math.Min(c.metal, b.QueuedMetal);
@@ -202,6 +228,7 @@ namespace Rts.Simulation
             int gems = CostOf(faction, done).gems;
             int gold = CostOf(faction, done).gold;
             if (done == UnitKind.HeavyInfantry) b.QueuedSteel = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSteel - metal);
+            else if (done == UnitKind.SkirmishArcher) b.QueuedBowGear = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedBowGear - metal);
             else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
@@ -229,7 +256,7 @@ namespace Rts.Simulation
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
-                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
+                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

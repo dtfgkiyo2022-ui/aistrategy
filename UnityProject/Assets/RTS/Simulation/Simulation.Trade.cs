@@ -159,8 +159,13 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideMarket(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction) || SavingToAdvance(faction)) return;
+            if (!AgesOn || !CivLineStarted(faction)) return;
             var rules = world.Config.Economy;
+            bool foodMarketCiv = world.Economies[faction - 1].Civ == CivKind.Metallurgy
+                || world.Economies[faction - 1].Civ == CivKind.Forestry;
+            // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
+            // farm get a market before saving can close the door, so food remains available after wild food dries up.
+            if (!foodMarketCiv && SavingToAdvance(faction)) return;
             int market = OwnBuildingIndex(faction, BuildingKind.Market);
             if (market < 0)
             {
@@ -171,6 +176,13 @@ namespace Rts.Simulation
             }
             if (!world.Buildings[market].Complete || world.Buildings[market].Held) return;
             var e = world.Economies[faction - 1];
+            if (foodMarketCiv)
+            {
+                if (e.Food >= rules.MarketFoodFloor) return;
+                ResourceKind give = FoodTradeSource(e, rules);
+                if (give != 0) TradeAtMarket(faction, give, ResourceKind.Food);
+                return;
+            }
             ResourceKind rich = 0, poor = 0;
             // Gems are a special final-research currency, not part of the three-resource balancing decision.
             foreach (var kind in new[] { ResourceKind.Food, ResourceKind.Wood, ResourceKind.Stone })
@@ -179,6 +191,18 @@ namespace Rts.Simulation
                 if (poor == 0 || StockOf(e, kind) < StockOf(e, poor)) poor = kind;
             }
             if (rich != poor && StockOf(e, rich) >= TradeRich && StockOf(e, poor) < TradePoor) TradeAtMarket(faction, rich, poor);
+        }
+
+        /// <summary>Chooses a deterministic food trade source while preserving the next-age/building budget.</summary>
+        private static ResourceKind FoodTradeSource(FactionEconomy e, EconomyRules rules)
+        {
+            bool wood = e.Wood >= rules.MarketWoodReserve + rules.TradeLot;
+            bool stone = e.Stone >= rules.MarketStoneReserve + rules.TradeLot;
+            if (!wood) return stone ? ResourceKind.Stone : (ResourceKind)0;
+            if (!stone) return ResourceKind.Wood;
+            int woodSurplus = e.Wood - rules.MarketWoodReserve;
+            int stoneSurplus = e.Stone - rules.MarketStoneReserve;
+            return woodSurplus >= stoneSurplus ? ResourceKind.Wood : ResourceKind.Stone;
         }
 
         /// <summary>AI phase, in the second age: a siege workshop, then up to AutoRams rams at a time.</summary>

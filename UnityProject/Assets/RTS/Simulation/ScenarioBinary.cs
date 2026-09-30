@@ -9,6 +9,7 @@ namespace Rts.Simulation
     public static class ScenarioBinary
     {
         public const string RulesVersion = "week3-reinforcements-4";
+        private const int ForestryTailMarker = 0x46525354; // "FRST", after the existing optional tail chain.
         public static byte[] Encode(ScenarioDefinition source)
         {
             var c = new WorldState(source).Config;
@@ -112,7 +113,8 @@ namespace Rts.Simulation
                 // The optional tails nest in order - monk, Age2SaveArmyFloor, fishing, gold, processing chain: each later
                 // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
                 bool processingRules = c.Economy.ProcessingChain;
-                bool goldRules = c.Economy.GoldEnabled || processingRules;
+                bool forestryRules = c.Economy.Forestry;
+                bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -140,6 +142,21 @@ namespace Rts.Simulation
                         w.Write(e.HeavyInfantryFoodCost); w.Write(e.HeavyInfantryWoodCost); w.Write(e.HeavyInfantrySteelCost); w.Write(e.HeavyInfantryTrainTicks);
                         w.Write(e.HeavyInfantryHp); w.Write(e.HeavyInfantryDamage); w.Write(e.HeavyInfantryAttackIntervalTicks);
                         w.Write(e.HeavyInfantrySpeed.Raw); w.Write(e.HeavyInfantryVision.Raw); w.Write(e.HeavyInfantryRange.Raw);
+                    }
+                    if (forestryRules)
+                    {
+                        // A marker distinguishes this final extension from the older processing-chain tail. When
+                        // processing is off, the earlier optional envelopes still end at this marker safely.
+                        w.Write(ForestryTailMarker);
+                        w.Write(c.Economy.Forestry);
+                        w.Write(c.Economy.LumberCampSizeCells); w.Write(c.Economy.LumberCampWoodCost); w.Write(c.Economy.LumberCampWork);
+                        w.Write(c.Economy.LumberCampHp); w.Write(c.Economy.LumberCampIntervalTicks);
+                        w.Write(c.Economy.MarketFoodFloor); w.Write(c.Economy.MarketWoodReserve); w.Write(c.Economy.MarketStoneReserve);
+                        w.Write(c.Economy.FletcherSizeCells); w.Write(c.Economy.FletcherWoodCost); w.Write(c.Economy.FletcherWork); w.Write(c.Economy.FletcherHp); w.Write(c.Economy.FletcherTicks);
+                        w.Write(c.Economy.FletcherWoodInput); w.Write(c.Economy.FletcherFoodInput);
+                        w.Write(c.Economy.SkirmishArcherFoodCost); w.Write(c.Economy.SkirmishArcherBowGearCost); w.Write(c.Economy.SkirmishArcherTrainTicks);
+                        w.Write(c.Economy.SkirmishArcherHp); w.Write(c.Economy.SkirmishArcherDamage); w.Write(c.Economy.SkirmishArcherAttackIntervalTicks);
+                        w.Write(c.Economy.SkirmishArcherSpeed.Raw); w.Write(c.Economy.SkirmishArcherVision.Raw); w.Write(c.Economy.SkirmishArcherRange.Raw);
                     }
                 }
                 return s.ToArray();
@@ -256,7 +273,13 @@ namespace Rts.Simulation
                                 e.GoldAmount = r.ReadInt32(); e.GoldDangerMeters = r.ReadInt32();
                                 if (s.Position < s.Length)
                                 {
-                                    e.ProcessingChain = true;
+                                    long tailStart = s.Position;
+                                    int marker = r.ReadInt32();
+                                    if (marker == ForestryTailMarker) { ReadForestryTail(r, e); }
+                                    else
+                                    {
+                                        s.Position = tailStart;
+                                        e.ProcessingChain = true;
                                     e.CharcoalKilnSizeCells = r.ReadInt32(); e.CharcoalKilnWoodCost = r.ReadInt32(); e.CharcoalKilnWork = r.ReadInt32();
                                     e.CharcoalKilnHp = r.ReadInt32(); e.CharcoalTicks = r.ReadInt32();
                                     e.SteelworksSizeCells = r.ReadInt32(); e.SteelworksWoodCost = r.ReadInt32(); e.SteelworksWork = r.ReadInt32();
@@ -264,10 +287,16 @@ namespace Rts.Simulation
                                     e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
                                     e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
                                     e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
+                                        if (s.Position < s.Length)
+                                        {
+                                            if (r.ReadInt32() != ForestryTailMarker) throw new InvalidDataException("Invalid forestry tail.");
+                                            ReadForestryTail(r, e);
+                                        }
+                                    }
                                 }
-                            }
                         }
                     }
+                }
                 }
                 if(s.Position!=s.Length) throw new InvalidDataException("Trailing scenario data.");
                 return new WorldState(c).Config;
@@ -278,6 +307,21 @@ namespace Rts.Simulation
         private static Fix64 Fix(BinaryReader r)=>Fix64.FromRaw(r.ReadInt64());
         private static SimPoint Point(BinaryReader r)=>new SimPoint(Fix(r),Fix(r));
         private static PolicyGoal Goal(BinaryReader r)=>new PolicyGoal((GoalKind)r.ReadByte(),r.ReadUInt32(),Point(r));
+        private static void ReadForestryTail(BinaryReader r, EconomyRules e)
+        {
+            e.Forestry = Bool(r);
+            e.LumberCampSizeCells = r.ReadInt32(); e.LumberCampWoodCost = r.ReadInt32(); e.LumberCampWork = r.ReadInt32();
+            e.LumberCampHp = r.ReadInt32(); e.LumberCampIntervalTicks = r.ReadInt32();
+            e.MarketFoodFloor = r.ReadInt32(); e.MarketWoodReserve = r.ReadInt32(); e.MarketStoneReserve = r.ReadInt32();
+            if (r.BaseStream.Position < r.BaseStream.Length)
+            {
+                e.FletcherSizeCells = r.ReadInt32(); e.FletcherWoodCost = r.ReadInt32(); e.FletcherWork = r.ReadInt32(); e.FletcherHp = r.ReadInt32(); e.FletcherTicks = r.ReadInt32();
+                e.FletcherWoodInput = r.ReadInt32(); e.FletcherFoodInput = r.ReadInt32();
+                e.SkirmishArcherFoodCost = r.ReadInt32(); e.SkirmishArcherBowGearCost = r.ReadInt32(); e.SkirmishArcherTrainTicks = r.ReadInt32();
+                e.SkirmishArcherHp = r.ReadInt32(); e.SkirmishArcherDamage = r.ReadInt32(); e.SkirmishArcherAttackIntervalTicks = r.ReadInt32();
+                e.SkirmishArcherSpeed = Fix(r); e.SkirmishArcherVision = Fix(r); e.SkirmishArcherRange = Fix(r);
+            }
+        }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }
         private static void Text(BinaryWriter w,string v) { var b=Encoding.UTF8.GetBytes(v); if(b.Length>1048576) throw new InvalidDataException("String size."); w.Write((uint)b.Length); w.Write(b); }

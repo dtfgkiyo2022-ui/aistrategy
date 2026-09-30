@@ -268,6 +268,8 @@ namespace Rts.Contracts
         /// <summary>V3-6: the second material slot (charcoal at a steelworks); zero for earlier buildings.</summary>
         public int InputSecondary { get; }
         public int Output { get; }
+        /// <summary>V3-7: BowGear reserved by SkirmishArcher training.</summary>
+        public int QueuedBowGear { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
@@ -303,11 +305,12 @@ namespace Rts.Contracts
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
-            TechKind researching, long researchRemaining, int inputSecondary)
+            TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
             Facing = facing; Input = input; InputSecondary = inputSecondary; Output = output;
+            QueuedBowGear = queuedBowGear;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
@@ -390,6 +393,14 @@ namespace Rts.Contracts
         /// <summary>V3-6: processing-chain stock; zero and unwritten from the simulation without the flag.</summary>
         public int Charcoal { get; }
         public int Steel { get; }
+        /// <summary>V3-7: bow gear stock and the forestry second-age production values.</summary>
+        public int BowGear { get; }
+        public int FletcherWoodCost { get; }
+        public int FletcherSizeCells { get; }
+        public int FletcherTicks { get; }
+        public int SkirmishArcherFoodCost { get; }
+        public int SkirmishArcherBowGearCost { get; }
+        public int SkirmishArcherTrainTicks { get; }
         public int BeltWoodCost { get; }
         public int BeltTicksPerCell { get; }
         public IReadOnlyList<BeltView> Belts { get; }
@@ -513,7 +524,8 @@ namespace Rts.Contracts
             bool processingChain = false, int charcoalKilnWoodCost = 0, int steelworksWoodCost = 0,
             int charcoalKilnSizeCells = 0, int steelworksSizeCells = 0, int heavyInfantryFoodCost = 0, int heavyInfantrySteelCost = 0,
             int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
-            int gold = 0)
+            int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
+            int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0)
         {
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
@@ -524,6 +536,8 @@ namespace Rts.Contracts
             HeavyInfantryFoodCost = heavyInfantryFoodCost; HeavyInfantrySteelCost = heavyInfantrySteelCost;
             Lines = ContractList.Copy(lines ?? Array.Empty<LineView>());
             Gold = gold;
+            BowGear = bowGear; FletcherWoodCost = fletcherWoodCost; FletcherSizeCells = fletcherSizeCells; FletcherTicks = fletcherTicks;
+            SkirmishArcherFoodCost = skirmishArcherFoodCost; SkirmishArcherBowGearCost = skirmishArcherBowGearCost; SkirmishArcherTrainTicks = skirmishArcherTrainTicks;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;

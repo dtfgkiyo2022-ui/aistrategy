@@ -29,6 +29,15 @@ namespace Rts.Simulation
                     node.Remaining--;
                     b.Output++;
                 }
+                else if (b.Kind == BuildingKind.LumberCamp)
+                {
+                    ref var node = ref world.Nodes[b.NodeId - 1];
+                    if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
+                    if (++b.Timer < rules.LumberCampIntervalTicks) continue;
+                    b.Timer = 0;
+                    node.Remaining--;
+                    b.Output++;
+                }
                 else if (b.Kind == BuildingKind.Farm)
                 {
                     // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
@@ -66,6 +75,23 @@ namespace Rts.Simulation
                     }
                     if (b.Timer > 0 && --b.Timer == 0) b.Output++;
                 }
+                else if (ForestryOn && b.Kind == BuildingKind.Fletcher)
+                {
+                    // Wood and food are consumed together.  Food may arrive from the core stock,
+                    // while belts and hand hauling can fill either input slot.
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.InputSecondary < rules.BufferLimit && economy.Food > 0)
+                    {
+                        economy.Food--; b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.FletcherWoodInput && b.InputSecondary >= rules.FletcherFoodInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.FletcherWoodInput;
+                        b.InputSecondary -= rules.FletcherFoodInput;
+                        b.Timer = rules.FletcherTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                }
             }
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -82,8 +108,9 @@ namespace Rts.Simulation
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)
-            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.Farm ? ResourceKind.Food
-                : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel : ResourceKind.Metal;
+            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Farm ? ResourceKind.Food
+                : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
+                : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -124,6 +151,11 @@ namespace Rts.Simulation
                     if (item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
+                if (ForestryOn && b.Kind == BuildingKind.Fletcher)
+                {
+                    if (item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Food && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
                 return false;
             }
             return false;
@@ -134,16 +166,22 @@ namespace Rts.Simulation
         /// ground with no belt and outside every core.
         /// </summary>
         private bool MineSiteIsClear(int origin, out uint nodeId)
+            => ResourceBuildingSiteIsClear(origin, world.Config.Economy.MineSizeCells, ResourceKind.Ore, out nodeId);
+
+        private bool LumberCampSiteIsClear(int origin, out uint nodeId)
+            => ResourceBuildingSiteIsClear(origin, world.Config.Economy.LumberCampSizeCells, ResourceKind.Wood, out nodeId);
+
+        private bool ResourceBuildingSiteIsClear(int origin, int size, ResourceKind required, out uint nodeId)
         {
             nodeId = 0;
-            var footprint = Footprint(origin, world.Config.Economy.MineSizeCells);
+            var footprint = Footprint(origin, size);
             foreach (int cell in footprint)
             {
                 if (!world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
                 foreach (var node in world.Nodes)
                 {
                     if (world.Map.Cell(node.Definition.Position) != cell) continue;
-                    if (node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0 || nodeId != 0) return false;
+                    if (node.Definition.Kind != required || node.Remaining <= 0 || nodeId != 0) return false;
                     nodeId = node.Definition.Id;
                 }
             }
@@ -208,13 +246,18 @@ namespace Rts.Simulation
                     int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
                 }
             }
+            if (ForestryOn && target.Kind == BuildingKind.Fletcher && kind == ResourceKind.Wood)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             return 0;
         }
 
         private bool CanHaulTo(BuildingKind source, BuildingKind destination, ResourceKind kind)
-            => ProcessingOn && destination == BuildingKind.Steelworks
+            => (ProcessingOn && destination == BuildingKind.Steelworks
                && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
-                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal));
+                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+               || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood);
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)
