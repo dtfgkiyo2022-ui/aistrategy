@@ -25,6 +25,7 @@ namespace Rts.Simulation
                 DecideForestryLines(faction);
                 return;
             }
+            if (MasonryAllowed(faction)) { DecideQuarry(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -136,6 +137,32 @@ namespace Rts.Simulation
                 return;
             }
             var b = world.Buildings[camp];
+            if (!b.Complete || b.Held) return;
+            var taken = new bool[world.Belts.Length];
+            var route = BeltRoute(faction, OutputCell(b), taken, next => FeedsOwnCore(next, faction));
+            bool whole = false;
+            if (route.cells != null)
+            {
+                foreach (int c in route.cells) taken[c] = true;
+                whole = LayBelts(faction, route.cells, route.facings);
+            }
+            SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+        }
+
+        /// <summary>
+        /// V3-8 first pass: one quarry on the nearest usable stone point, then the same core route and hand-haul fallback
+        /// as a lumber camp. Terrain quality is deliberately not scored until the second masonry pass.
+        /// </summary>
+        private void DecideQuarry(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int quarry = OwnBuildingIndex(faction, BuildingKind.Quarry);
+            if (quarry < 0)
+            {
+                if (economy.Wood >= world.Config.Economy.QuarryWoodCost) PlaceQuarry(faction);
+                return;
+            }
+            var b = world.Buildings[quarry];
             if (!b.Complete || b.Held) return;
             var taken = new bool[world.Belts.Length];
             var route = BeltRoute(faction, OutputCell(b), taken, next => FeedsOwnCore(next, faction));
@@ -283,6 +310,41 @@ namespace Rts.Simulation
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
                             PlaceBuildingAt(faction, BuildingKind.LumberCamp, origin, side, nodeId);
+                            return world.NextBuildingId - 1;
+                        }
+                    }
+            }
+            return 0;
+        }
+
+        /// <summary>Places the quarry over the nearest remaining stone point, with the same fixed search as a lumber camp.</summary>
+        private uint PlaceQuarry(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int size = world.Config.Economy.QuarrySizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            var order = new int[world.Nodes.Length];
+            for (int i = 0; i < order.Length; i++) order[i] = i;
+            Array.Sort(order, (a, b) =>
+            {
+                int c = DistanceSquared(world.Nodes[a].Definition.Position, core).CompareTo(DistanceSquared(world.Nodes[b].Definition.Position, core));
+                return c != 0 ? c : world.Nodes[a].Definition.Id.CompareTo(world.Nodes[b].Definition.Id);
+            });
+            foreach (int n in order)
+            {
+                var node = world.Nodes[n];
+                if (node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0) continue;
+                int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
+                for (int dz = 0; dz < size; dz++)
+                    for (int dx = 0; dx < size; dx++)
+                    {
+                        int x0 = nx - dx, z0 = nz - dz;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!QuarrySiteIsClear(origin, out uint nodeId) || !KeepsMapConnected(faction, origin, size)) continue;
+                        foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        {
+                            if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            PlaceBuildingAt(faction, BuildingKind.Quarry, origin, side, nodeId);
                             return world.NextBuildingId - 1;
                         }
                     }

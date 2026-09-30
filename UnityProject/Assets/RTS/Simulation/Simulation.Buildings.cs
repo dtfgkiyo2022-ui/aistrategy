@@ -89,6 +89,7 @@ namespace Rts.Simulation
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
+            else if (kind == BuildingKind.Quarry) world.Buildings[index].Interval = world.Config.Economy.QuarryIntervalTicks;
             EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
@@ -311,7 +312,7 @@ namespace Rts.Simulation
         private int SizeOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
                 : kind == BuildingKind.Steelworks ? e.SteelworksSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
                 : kind == BuildingKind.Fletcher ? e.FletcherSizeCells
                 : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells
@@ -324,7 +325,7 @@ namespace Rts.Simulation
         private int HpOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
+            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
                 : kind == BuildingKind.Fletcher ? e.FletcherHp
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
@@ -337,7 +338,7 @@ namespace Rts.Simulation
         private int WorkOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
+            return kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
                 : kind == BuildingKind.Fletcher ? e.FletcherWork
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
@@ -350,7 +351,7 @@ namespace Rts.Simulation
         private int WoodOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.Fletcher ? e.FletcherWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost

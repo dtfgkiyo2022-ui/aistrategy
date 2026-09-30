@@ -38,6 +38,15 @@ namespace Rts.Simulation
                     node.Remaining--;
                     b.Output++;
                 }
+                else if (b.Kind == BuildingKind.Quarry)
+                {
+                    ref var node = ref world.Nodes[b.NodeId - 1];
+                    if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
+                    if (++b.Timer < rules.QuarryIntervalTicks) continue;
+                    b.Timer = 0;
+                    node.Remaining--;
+                    b.Output++;
+                }
                 else if (b.Kind == BuildingKind.Farm)
                 {
                     // V3-4 (27): food from nothing, at the pace its ground set when it was placed.
@@ -108,7 +117,7 @@ namespace Rts.Simulation
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)
-            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Farm ? ResourceKind.Food
+            => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Quarry ? ResourceKind.Stone : kind == BuildingKind.Farm ? ResourceKind.Food
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
                 : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : ResourceKind.Metal;
 
@@ -170,6 +179,9 @@ namespace Rts.Simulation
 
         private bool LumberCampSiteIsClear(int origin, out uint nodeId)
             => ResourceBuildingSiteIsClear(origin, world.Config.Economy.LumberCampSizeCells, ResourceKind.Wood, out nodeId);
+
+        private bool QuarrySiteIsClear(int origin, out uint nodeId)
+            => ResourceBuildingSiteIsClear(origin, world.Config.Economy.QuarrySizeCells, ResourceKind.Stone, out nodeId);
 
         private bool ResourceBuildingSiteIsClear(int origin, int size, ResourceKind required, out uint nodeId)
         {

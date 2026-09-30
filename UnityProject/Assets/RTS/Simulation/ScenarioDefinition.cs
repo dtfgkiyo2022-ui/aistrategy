@@ -110,6 +110,10 @@ namespace Rts.Simulation
         public bool Ages;
         /// <summary>V3-7: enables the forestry civilisation and its lumber camps. False keeps the prior age maps unchanged.</summary>
         public bool Forestry;
+        /// <summary>V3-8: enables the masonry civilisation and its quarries. False keeps prior age maps unchanged.</summary>
+        public bool Masonry;
+        /// <summary>V3-8 provisional quarry values; they intentionally match the lumber camp for the first pass.</summary>
+        public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
         public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
         /// <summary>V3-4 agrarian (27, 26.2): infantry is cheaper and quicker to train.</summary>

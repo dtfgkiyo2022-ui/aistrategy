@@ -61,6 +61,7 @@
     <Compile Include="VillagerRebalanceTests.cs" />
     <Compile Include="FishingTests.cs" />
     <Compile Include="ForestryTests.cs" />
+    <Compile Include="MasonryTests.cs" />
     <Compile Include="GoldTests.cs" />
     <Compile Include="MovementStallProbeTests.cs" />
     <Compile Include="MovementStallTests.cs" />

@@ -464,6 +464,9 @@ namespace Rts.Simulation
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
+            Require(!e.Masonry || (e.Ages && e.Industry && e.QuarrySizeCells > 0 && e.QuarrySizeCells <= 8 && e.QuarryWoodCost >= 0
+                && e.QuarryWork > 0 && e.QuarryHp > 0 && e.QuarryIntervalTicks > 0
+                && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0), "Masonry requires valid ages, industry and quarry rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -614,7 +617,9 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                Forestry = e.Forestry, LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
+                 Forestry = e.Forestry, Masonry = e.Masonry, QuarrySizeCells = e.QuarrySizeCells, QuarryWoodCost = e.QuarryWoodCost,
+                 QuarryWork = e.QuarryWork, QuarryHp = e.QuarryHp, QuarryIntervalTicks = e.QuarryIntervalTicks,
+                 LumberCampSizeCells = e.LumberCampSizeCells, LumberCampWoodCost = e.LumberCampWoodCost,
                 LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,
                 MarketFoodFloor = e.MarketFoodFloor, MarketWoodReserve = e.MarketWoodReserve, MarketStoneReserve = e.MarketStoneReserve,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
