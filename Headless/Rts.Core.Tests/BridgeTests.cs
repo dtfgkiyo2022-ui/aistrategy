@@ -319,6 +319,59 @@ namespace Rts.Core.Tests
             Assert.That(ramWith, Is.LessThan(ramWithout), "reinforcement/siege arrival leg is shorter for rams");
         }
 
+        [TestCase(CivKind.Bridge, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Bridge)]
+        [TestCase(CivKind.Bridge, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Bridge)]
+        public void BridgeCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east)
+        {
+            var s = Scenario(21);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", undecided=" + result.IsUndecided
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+        }
+
+        [Test]
+        public void NormalBridgeStartReplaysForTwentyThousandTicks()
+        {
+            // Seed 27 is the normal-start probe where the eastern faction selects the bridge civilisation.
+            var s = Scenario(27);
+            var sim = new Battle(s);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            var economies = new[] { sim.Capture(1).Economy, sim.Capture(2).Economy };
+            TestContext.WriteLine("normal seed 27: civs=" + economies[0].Civ + "/" + economies[1].Civ
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + economies[0].Age + "/" + economies[1].Age);
+            Assert.That(economies.Any(e => e.Civ == CivKind.Bridge), Is.True, "通常開始で工兵が選ばれる");
+            Assert.That(economies.Any(e => e.Buildings.Any(b => b.Kind == BuildingKind.EngineerCamp && b.Complete)),
+                Is.True, "工兵所が完成する");
+            Assert.That(economies.Any(e => e.Buildings.Any(b => b.Kind == BuildingKind.Bridge && b.Complete)),
+                Is.True, "橋が完成する");
+            Assert.That(economies[0].Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(economies[1].Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, s, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
         private static long TravelTicks(int routeCells, Fix64 speed, int cellSize)
             => checked((long)Math.Max(0, routeCells - 1) * cellSize * 20 * Fix64.FromInt(1).Raw / speed.Raw);
 
