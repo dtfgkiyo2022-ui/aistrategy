@@ -256,7 +256,8 @@ namespace Rts.Simulation
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
-                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk);
+                    + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
+                    + (CaravanAllowed(faction) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

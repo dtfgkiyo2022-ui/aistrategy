@@ -143,6 +143,7 @@ namespace Rts.Simulation
                 {
                     w.Value(n + "CaravanMarketId", v.CaravanMarketId); w.Value(n + "CaravanseraiId", v.CaravanseraiId);
                     w.Value(n + "CaravanOutpostId", v.CaravanOutpostId); w.Value(n + "CaravanStage", v.CaravanStage); w.Value(n + "CaravanWood", v.CaravanWood);
+                    w.Value(n + "CaravanGems", v.CaravanGems); w.Value(n + "CaravanDangerStopped", v.CaravanDangerStopped); w.Value(n + "CaravanSafeTicks", v.CaravanSafeTicks);
                 }
                 if (world.Config.Economy.Industry) { w.Value(n + "HaulFrom", v.HaulFrom); w.Value(n + "HaulTo", v.HaulTo); w.Value(n + "Held", v.Held); }
                 if (world.Config.Economy.ProcessingChain) w.Value(n + "HaulNodeId", v.HaulNodeId);

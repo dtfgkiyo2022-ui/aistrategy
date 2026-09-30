@@ -50,6 +50,7 @@ namespace Rts.Simulation
                 DecideSiege(faction);
                 DecideCrossUnit(faction);
                 DecideCastle(faction);
+                DecideCaravanMercenary(faction);
                 DecideRepair(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
@@ -77,6 +78,11 @@ namespace Rts.Simulation
                     else if (v.Task == VillagerTask.ToCaravanserai && !CaravanPairValid(v))
                     {
                         v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                    }
+                    else
+                    {
+                        StopCaravanOutboundForDanger(ref v);
+                        if (HoldCaravanAtMarket(ref v)) continue;
                     }
                 }
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);

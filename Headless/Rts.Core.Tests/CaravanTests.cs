@@ -73,6 +73,27 @@ namespace Rts.Core.Tests
             return 0;
         }
 
+        private static uint PlaceNearCore(Battle sim, CommandGateway gateway, ScenarioDefinition s, BuildingKind kind, ref ulong sequence)
+        {
+            int width = s.Map.WidthCells;
+            int core = Cell(s, s.Cores[0].Position);
+            int cx = core % width, cz = core / width;
+            int size = kind == BuildingKind.Castle ? s.Economy.CastleSizeCells : 1;
+            for (int r = 5; r <= 18; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x = cx + dx, z = cz + dz;
+                        if (x < 0 || z < 0 || x + size > width || z + size > s.Map.HeightCells) continue;
+                        gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, kind, z * width + x, Facing.North));
+                        Steps(gateway, sim, 1);
+                        uint id = FindBuilding(sim, kind);
+                        if (id != 0) return id;
+                    }
+            return 0;
+        }
+
         private static uint FinishBuilding(Battle sim, CommandGateway gateway, uint id, ref ulong sequence)
         {
             gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new uint[] { 1, 2, 3 }, EconomyTargetKind.Building, id));
@@ -88,9 +109,9 @@ namespace Rts.Core.Tests
             return id;
         }
 
-        private static uint PlaceCaravanserai(Battle sim, CommandGateway gateway, ScenarioDefinition s, ref ulong sequence)
+        private static uint PlaceCaravanserai(Battle sim, CommandGateway gateway, ScenarioDefinition s, ref ulong sequence, int outpostIndex = 0)
         {
-            int width = s.Map.WidthCells, post = Cell(s, s.Outposts[0].Position);
+            int width = s.Map.WidthCells, post = Cell(s, s.Outposts[outpostIndex].Position);
             int cx = post % width, cz = post / width;
             for (int r = 0; r <= 18; r++)
                 for (int dz = -r; dz <= r; dz++)
@@ -115,6 +136,53 @@ namespace Rts.Core.Tests
         }
         private static T Get<T>(object value, string field) => (T)value.GetType().GetField(field, Private).GetValue(value);
         private static void Set<T>(object value, string field, T data) => value.GetType().GetField(field, Private).SetValue(value, data);
+        private static void SetEconomy(Battle sim, uint faction, string field, object value)
+        {
+            var economies = (Array)World(sim).GetType().GetField("Economies", Private).GetValue(World(sim));
+            object economy = economies.GetValue((int)faction - 1);
+            economy.GetType().GetField(field, Private).SetValue(economy, value);
+            economies.SetValue(economy, (int)faction - 1);
+        }
+
+        private static void SetEnemyPosition(Battle sim, SimPoint position, bool alive)
+        {
+            object world = World(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+            bool changed = false;
+            for (int i = 0; i < soldiers.Length; i++)
+            {
+                object soldier = soldiers.GetValue(i);
+                var initial = Get<SoldierDefinition>(soldier, "Initial");
+                if (initial.FactionId != 2) continue;
+                Set(soldier, "Alive", alive); Set(soldier, "Hp", alive ? 100 : 0); Set(soldier, "Position", position); Set(soldier, "MoveGoal", position);
+                soldiers.SetValue(soldier, i);
+                changed = true;
+            }
+            if (!changed) throw new AssertionException("テスト用の敵兵が見つからない");
+        }
+
+        private static void SetFactionCellVisible(Battle sim, ScenarioDefinition s, SimPoint position, bool visible)
+        {
+            object world = World(sim);
+            var factions = (Array)world.GetType().GetField("Factions", Private).GetValue(world);
+            object faction = factions.GetValue(0);
+            var cells = Get<bool[]>(faction, "VisibleCells");
+            cells[Cell(s, position)] = visible;
+            factions.SetValue(faction, 0);
+        }
+
+        private static void StoreVillager(Battle sim, object value)
+        {
+            object world = World(sim);
+            var villagers = (Array)world.GetType().GetField("Villagers", Private).GetValue(world);
+            villagers.SetValue(value, (int)Get<uint>(value, "Id") - 1);
+        }
+
+        private static SimPoint MapCenter(Battle sim, int cell)
+        {
+            object map = World(sim).GetType().GetField("Map", Private).GetValue(World(sim));
+            return (SimPoint)map.GetType().GetMethod("Center", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).Invoke(map, new object[] { cell });
+        }
 
         [Test]
         public void CaravanTailRoundTripsInEveryForestryMasonryCombination()
@@ -191,6 +259,46 @@ namespace Rts.Core.Tests
             }
             Assert.That(loaded, Is.True, "隊商宿到着時に専用荷物へ積載される");
             Assert.That(paid, Is.True, "市場帰着時だけ固定報酬が入金される");
+        }
+
+        [Test]
+        public void ObservedDangerStopsOutboundCaravanAndClearTicksResumeIt()
+        {
+            var s = Scenario(41); var sim = new Battle(s); var gateway = new CommandGateway(sim); ulong sequence = 0;
+            EnterCaravan(gateway, sim, ref sequence);
+            uint market = PlaceMarket(sim, gateway, s, ref sequence); FinishBuilding(sim, gateway, market, ref sequence);
+            uint host = PlaceCaravanserai(sim, gateway, s, ref sequence); FinishBuilding(sim, gateway, host, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.CaravanRoute(1, ++sequence, host, new uint[] { 1 }));
+            gateway.Step();
+            object v = State(sim, "Villagers", 1);
+            SimPoint hostWork = MapCenter(sim, Get<int>(State(sim, "Buildings", host), "WorkCell"));
+            Set(v, "Task", Enum.ToObject(v.GetType().GetField("Task", Private).FieldType, 11));
+            Set(v, "CaravanStage", (byte)2); Set(v, "Position", hostWork);
+            StoreVillager(sim, v);
+            SetEnemyPosition(sim, hostWork, true); SetFactionCellVisible(sim, s, hostWork, false);
+            Assert.That((bool)typeof(Battle).GetMethod("CaravanDangerous", Private).Invoke(sim, new[] { v }), Is.False, "未観測の敵は停止理由にしない");
+            SetFactionCellVisible(sim, s, hostWork, true);
+            Assert.That((bool)typeof(Battle).GetMethod("CaravanDangerous", Private).Invoke(sim, new[] { v }), Is.True);
+            object[] stopArgs = { v };
+            typeof(Battle).GetMethod("StopCaravanOutboundForDanger", Private).Invoke(sim, stopArgs);
+            v = stopArgs[0]; StoreVillager(sim, v);
+            Assert.That(Get<bool>(v, "CaravanDangerStopped"), Is.True, "観測済みの敵で自主停止する");
+            Assert.That(Get<byte>(v, "CaravanStage"), Is.EqualTo(3));
+
+            SimPoint marketWork = MapCenter(sim, Get<int>(State(sim, "Buildings", market), "WorkCell"));
+            v = State(sim, "Villagers", 1);
+            Set(v, "Task", Enum.ToObject(v.GetType().GetField("Task", Private).FieldType, 10));
+            Set(v, "CaravanStage", (byte)3); Set(v, "Position", marketWork); Set(v, "CaravanWood", 0); Set(v, "CaravanGems", 0);
+            StoreVillager(sim, v); SetEnemyPosition(sim, hostWork, false); SetFactionCellVisible(sim, s, hostWork, false);
+            for (int i = 0; i < 19; i++)
+            {
+                object[] holdArgs = { State(sim, "Villagers", 1) };
+                Assert.That((bool)typeof(Battle).GetMethod("HoldCaravanAtMarket", Private).Invoke(sim, holdArgs), Is.True);
+                StoreVillager(sim, holdArgs[0]);
+            }
+            object[] resumeArgs = { State(sim, "Villagers", 1) };
+            Assert.That((bool)typeof(Battle).GetMethod("HoldCaravanAtMarket", Private).Invoke(sim, resumeArgs), Is.False, "安全継続tick後に再開する");
+            Assert.That(Get<bool>(resumeArgs[0], "CaravanDangerStopped"), Is.False);
         }
 
         [Test]
@@ -275,6 +383,71 @@ namespace Rts.Core.Tests
                 Assert.That(replay.FirstMismatchTick, Is.Null);
                 Assert.That(replay.IsFault, Is.False);
             }
+        }
+
+        [Test]
+        public void AutomaticCaravanAssignmentDistributesAcrossFinishedHostsInIdOrder()
+        {
+            var s = Scenario(38); s.Economy.CaravanAutoVillagers = 1; s.Outposts[1].OwnerFactionId = 1;
+            var sim = new Battle(s); var gateway = new CommandGateway(sim); ulong sequence = 0;
+            EnterCaravan(gateway, sim, ref sequence);
+            uint market = PlaceMarket(sim, gateway, s, ref sequence); FinishBuilding(sim, gateway, market, ref sequence);
+            uint first = PlaceCaravanserai(sim, gateway, s, ref sequence, 0); FinishBuilding(sim, gateway, first, ref sequence);
+            uint second = PlaceCaravanserai(sim, gateway, s, ref sequence, 1); FinishBuilding(sim, gateway, second, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.ReturnToAuto(1, ++sequence));
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            Steps(gateway, sim, 80);
+            var assigned = Enumerable.Range(1, sim.Capture(1).Economy.Villagers.Count)
+                .Select(id => State(sim, "Villagers", (uint)id))
+                .Where(v => IsCaravanTask(Get<byte>(v, "Task")))
+                .Select(v => Get<uint>(v, "CaravanseraiId"))
+                .Distinct().ToArray();
+            Assert.That(assigned, Does.Contain(first));
+            Assert.That(assigned, Does.Contain(second));
+        }
+
+        [Test]
+        public void SecondAgeCaravanLoadsOneGemAndPaysItOnceOnReturn()
+        {
+            var s = Scenario(39); var sim = new Battle(s); var gateway = new CommandGateway(sim); ulong sequence = 0;
+            EnterCaravan(gateway, sim, ref sequence);
+            uint market = PlaceMarket(sim, gateway, s, ref sequence); FinishBuilding(sim, gateway, market, ref sequence);
+            uint host = PlaceCaravanserai(sim, gateway, s, ref sequence); FinishBuilding(sim, gateway, host, ref sequence);
+            SetEconomy(sim, 1, "Age", (byte)2);
+            int beforeGems = sim.Capture(1).Economy.Gems;
+            gateway.SubmitEconomy(EconomyCommand.CaravanRoute(1, ++sequence, host, new uint[] { 1 }));
+            bool loaded = false;
+            for (int i = 0; i < 1600 && !loaded; i++)
+            {
+                gateway.Step();
+                object v = State(sim, "Villagers", 1);
+                loaded = Get<int>(v, "CaravanWood") > 0;
+                if (loaded) Assert.That(Get<int>(v, "CaravanGems"), Is.EqualTo(1));
+            }
+            Assert.That(loaded, Is.True);
+            for (int i = 0; i < 1600 && sim.Capture(1).Economy.Gems == beforeGems; i++) gateway.Step();
+            Assert.That(sim.Capture(1).Economy.Gems, Is.EqualTo(beforeGems + 1));
+            // The route is intentionally repeatable; this only guards against a second deposit for the same load.
+            for (int i = 0; i < 5; i++) gateway.Step();
+            Assert.That(sim.Capture(1).Economy.Gems, Is.EqualTo(beforeGems + 1));
+        }
+
+        [Test]
+        public void CaravanAutomaticallyHiresOneMercenaryFromAThirdAgeCastle()
+        {
+            var s = Scenario(40); s.Economy.StartStone = 100000; var sim = new Battle(s); var gateway = new CommandGateway(sim); ulong sequence = 0;
+            EnterCaravan(gateway, sim, ref sequence);
+            SetEconomy(sim, 1, "Age", (byte)3);
+            SetEconomy(sim, 1, "Gems", 20);
+            uint castle = PlaceNearCore(sim, gateway, s, BuildingKind.Castle, ref sequence);
+            Assert.That(castle, Is.Not.EqualTo(0u));
+            FinishBuilding(sim, gateway, castle, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.ReturnToAuto(1, ++sequence));
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            Steps(gateway, sim, 20);
+            object state = State(sim, "Buildings", castle);
+            Assert.That(Get<int>(state, "Queued"), Is.EqualTo(1));
+            Assert.That(sim.Capture(1).Economy.Gems, Is.EqualTo(0));
         }
     }
 }

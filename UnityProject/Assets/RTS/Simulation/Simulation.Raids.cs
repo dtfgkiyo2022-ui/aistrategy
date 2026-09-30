@@ -127,6 +127,7 @@ namespace Rts.Simulation
                     // Ordinary Carry follows the historical V3 rule, but a caravan load is an unpaid route
                     // balance and is lost with the trader.
                     world.Villagers[i].CaravanWood = 0;
+                    world.Villagers[i].CaravanGems = 0;
                 }
             bool opened = false;
             for (int i = 0; i < world.BuildingCount; i++)

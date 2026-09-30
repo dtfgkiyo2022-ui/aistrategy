@@ -13,6 +13,9 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int TradeRich = 600, TradePoor = 150, AutoRams = 2, AutoTradeVillagers = 2;
+        // V3-9 #2 provisional caravan safety policy. The values are deliberately small and tick-based:
+        // danger is only what the faction currently sees, and a route needs 20 clear ticks before restarting.
+        private const int CaravanDangerMeters = 1, CaravanSafetyTicks = 20, CaravanGemsReward = 1;
 
         private static bool Tradable(ResourceKind kind) => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone;
 
@@ -86,7 +89,8 @@ namespace Rts.Simulation
 
         private static void ClearCaravan(ref VillagerState v)
         {
-            v.CaravanMarketId = 0; v.CaravanseraiId = 0; v.CaravanOutpostId = 0; v.CaravanStage = 0; v.CaravanWood = 0;
+            v.CaravanMarketId = 0; v.CaravanseraiId = 0; v.CaravanOutpostId = 0; v.CaravanStage = 0;
+            v.CaravanWood = 0; v.CaravanGems = 0; v.CaravanDangerStopped = false; v.CaravanSafeTicks = 0;
         }
 
         private void StopCaravan(ref VillagerState v)
@@ -111,6 +115,71 @@ namespace Rts.Simulation
                 || host.CaravanMarketId != v.CaravanMarketId || host.CaravanOutpostId != v.CaravanOutpostId) return false;
             if (v.CaravanOutpostId == 0 || v.CaravanOutpostId > world.Outposts.Length) return false;
             return world.Outposts[v.CaravanOutpostId - 1].OwnerFactionId == v.FactionId;
+        }
+
+        private bool ObservedEnemyNear(uint faction, SimPoint point)
+        {
+            long limit = Fix64.FromInt(CaravanDangerMeters).Raw;
+            BigInteger squaredLimit = new BigInteger(limit) * limit;
+            var observation = world.Factions[faction - 1];
+            foreach (int i in world.SoldierTraversal)
+            {
+                var enemy = world.Soldiers[i];
+                if (!enemy.Alive || enemy.Initial.FactionId == faction) continue;
+                int cell = world.Map.Cell(enemy.Position);
+                if (cell < 0 || cell >= observation.VisibleCells.Length || !observation.VisibleCells[cell]) continue;
+                long dx = checked(enemy.Position.X.Raw - point.X.Raw), dz = checked(enemy.Position.Z.Raw - point.Z.Raw);
+                if (new BigInteger(dx) * dx + new BigInteger(dz) * dz <= squaredLimit) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Only visible enemy soldiers are considered. Unknown enemies never stop a caravan.</summary>
+        private bool CaravanDangerous(VillagerState v)
+        {
+            if (!CaravanOn || v.CaravanMarketId == 0 || v.CaravanMarketId > world.BuildingCount
+                || v.CaravanseraiId == 0 || v.CaravanseraiId > world.BuildingCount) return false;
+            var market = world.Buildings[v.CaravanMarketId - 1];
+            var host = world.Buildings[v.CaravanseraiId - 1];
+            if (ObservedEnemyNear(v.FactionId, v.Position)) return true;
+            if (market.Alive && ObservedEnemyNear(v.FactionId, world.Map.Center(market.WorkCell))) return true;
+            return host.Alive && ObservedEnemyNear(v.FactionId, world.Map.Center(host.WorkCell));
+        }
+
+        private bool HoldCaravanAtMarket(ref VillagerState v)
+        {
+            if (v.Task != VillagerTask.ToCaravanMarket || (v.CaravanStage != 1 && v.CaravanStage != 3)
+                || v.CaravanWood > 0 || v.CaravanGems > 0
+                || !CaravanMarketValid(v)) return false;
+            var market = world.Buildings[v.CaravanMarketId - 1];
+            if (!InRange(v.Position, world.Map.Center(market.WorkCell), GatherReach)) return false;
+            if (CaravanDangerous(v))
+            {
+                v.CaravanDangerStopped = true;
+                v.CaravanSafeTicks = 0;
+                v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                return true;
+            }
+            if (!v.CaravanDangerStopped) return false;
+            v.CaravanSafeTicks = checked(v.CaravanSafeTicks + 1);
+            if (v.CaravanSafeTicks < CaravanSafetyTicks)
+            {
+                v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                return true;
+            }
+            v.CaravanDangerStopped = false;
+            v.CaravanSafeTicks = 0;
+            return false;
+        }
+
+        private void StopCaravanOutboundForDanger(ref VillagerState v)
+        {
+            if (v.Task != VillagerTask.ToCaravanserai || !CaravanDangerous(v)) return;
+            v.CaravanDangerStopped = true;
+            v.CaravanSafeTicks = 0;
+            // This is a voluntary retreat, not an ownership-loss stop: keep the fixed pair and return empty-handed.
+            v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket;
+            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
         }
 
         private void EndCaravanAtCore(ref VillagerState v)
@@ -300,7 +369,11 @@ namespace Rts.Simulation
                 if (InRange(v.Position, world.Map.Center(host.WorkCell), GatherReach))
                 {
                     // The dedicated slot is the idempotence guard: one host arrival can create one load only.
-                    if (v.CaravanWood == 0) v.CaravanWood = host.CaravanWoodReward;
+                    if (v.CaravanWood == 0 && v.CaravanGems == 0)
+                    {
+                        v.CaravanWood = host.CaravanWoodReward;
+                        if (world.Economies[v.FactionId - 1].Age >= 2) v.CaravanGems = CaravanGemsReward;
+                    }
                     v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket;
                     v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
                 }
@@ -314,7 +387,13 @@ namespace Rts.Simulation
                 AddStock(v.FactionId, ResourceKind.Wood, v.CaravanWood);
                 v.CaravanWood = 0;
             }
+            if (v.CaravanGems > 0)
+            {
+                AddStock(v.FactionId, ResourceKind.Gems, v.CaravanGems);
+                v.CaravanGems = 0;
+            }
             if (!CaravanPairValid(v)) { StopCaravan(ref v); return; }
+            if (v.CaravanDangerStopped) return;
             v.CaravanStage = 2; v.Task = VillagerTask.ToCaravanserai;
             v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
         }
@@ -349,32 +428,56 @@ namespace Rts.Simulation
             }
         }
 
-        /// <summary>Automatic economy: after a host exists, assign only idle, unheld villagers to its fixed pair.</summary>
-        private void DecideCaravanRoute(uint faction)
+        private int ActiveCaravanRoutes(uint faction, uint hostId)
         {
-            if (!CaravanAllowed(faction) || SavingToAdvance(faction)) return;
-            int hostIndex = -1;
-            for (int i = 0; i < world.BuildingCount; i++)
-            {
-                var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Caravanserai && !b.Held)
-                { hostIndex = i; break; }
-            }
-            if (hostIndex < 0) return;
             int active = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var v = world.Villagers[i];
-                if (v.Alive && v.FactionId == faction && IsCaravanTask(v.Task)) active++;
+                if (v.Alive && v.FactionId == faction && IsCaravanTask(v.Task) && v.CaravanseraiId == hostId) active++;
             }
-            if (active >= world.Config.Economy.CaravanAutoVillagers) return;
-            for (int i = 0; i < world.VillagerCount; i++)
+            return active;
+        }
+
+        private bool TryAssignCaravanVillager(uint faction, uint hostId)
+        {
+            // First use idle villagers. A deterministic villager-ID order makes ties stable.
+            for (int pass = 0; pass < 2; pass++)
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != faction || v.Held || IsCaravanTask(v.Task)) continue;
+                    bool idle = v.Task == VillagerTask.Idle;
+                    if ((pass == 0) != idle) continue;
+                    if (pass == 1 && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff) continue;
+                    // On the second pass this is an automatic gathering villager. StartCaravanRoute preserves
+                    // an ordinary load by sending it through ToDropOff before the caravan leaves.
+                    StartCaravanRoute(faction, hostId, new[] { v.Id });
+                    return true;
+                }
+            return false;
+        }
+
+        /// <summary>Automatic economy: distribute one villager at a time across every finished fixed route.</summary>
+        private void DecideCaravanRoute(uint faction)
+        {
+            if (!CaravanAllowed(faction)) return;
+            int hostIndex = -1, least = int.MaxValue;
+            for (int i = 0; i < world.BuildingCount; i++)
             {
-                var v = world.Villagers[i];
-                if (!v.Alive || v.FactionId != faction || v.Held || v.Task != VillagerTask.Idle) continue;
-                StartCaravanRoute(faction, world.Buildings[hostIndex].Id, new[] { v.Id });
-                return;
+                var b = world.Buildings[i];
+                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Caravanserai || b.Held) continue;
+                if (b.CaravanMarketId == 0 || b.CaravanMarketId > world.BuildingCount || b.CaravanOutpostId == 0
+                    || b.CaravanOutpostId > world.Outposts.Length) continue;
+                var market = world.Buildings[b.CaravanMarketId - 1];
+                if (!market.Alive || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
+                    || world.Outposts[b.CaravanOutpostId - 1].OwnerFactionId != faction) continue;
+                int active = ActiveCaravanRoutes(faction, b.Id);
+                if (active < world.Config.Economy.CaravanAutoVillagers && active < least)
+                { hostIndex = i; least = active; }
             }
+            if (hostIndex < 0) return;
+            TryAssignCaravanVillager(faction, world.Buildings[hostIndex].Id);
         }
 
         /// <summary>What a soldier deals to a building or a core: a ram its siege damage, everyone else their damage.</summary>

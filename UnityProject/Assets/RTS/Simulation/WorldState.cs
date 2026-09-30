@@ -124,7 +124,10 @@ namespace Rts.Simulation
         internal uint CaravanMarketId, CaravanseraiId, CaravanOutpostId;
         /// <summary>0 none, 1 initial market approach, 2 outbound to the host, 3 loaded return to market.</summary>
         internal byte CaravanStage;
-        internal int CaravanWood;
+        internal int CaravanWood, CaravanGems;
+        /// <summary>V3-9 #2: a danger stop is autonomous and distinct from losing the registered Outpost.</summary>
+        internal bool CaravanDangerStopped;
+        internal int CaravanSafeTicks;
     }
 
     /// <summary>ToPickup and ToDeliver are V3-2 carrying by hand; a load for the core goes by ToDropOff.</summary>
