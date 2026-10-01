@@ -90,6 +90,62 @@ namespace Rts.Simulation
             }
         }
 
+        /// <summary>
+        /// Counts the observed, currently legal shaft edges used by the civilisation-choice score. The footprint,
+        /// core clearance, resource/building clearance and passability are the same checks as a real shaft placement;
+        /// the current civilisation is deliberately not checked because this runs before the choice is made.
+        /// </summary>
+        private int CountUsableMountainShaftEdgeUnits(uint faction, SimPoint core)
+        {
+            var explored = world.Factions[faction - 1].ExploredCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.MountainSizeCells;
+            int coreCell = world.Map.Cell(core);
+            int edgeUnits = 0;
+            int coreX = coreCell % width, coreZ = coreCell / width;
+            int radius = CivStoneReach / world.Config.Map.CellSizeMeters + size + 1;
+            int minX = Math.Max(0, coreX - radius), maxX = Math.Min(width - size, coreX + radius);
+            int minZ = Math.Max(0, coreZ - radius), maxZ = Math.Min(height - size, coreZ + radius);
+            for (int z = minZ; z <= maxZ; z++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    int origin = z * width + x;
+                    if (!InRange(FootprintCenter(origin, size), core, Fix64.FromInt(CivStoneReach))) continue;
+                    int adjacent = MountainAdjacentCount(origin, size);
+                    if (adjacent == 0 || !MountainScoreCellsExplored(explored, origin, size, adjacent)) continue;
+                    if (!SiteIsClear(origin, coreCell, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                    edgeUnits = checked(edgeUnits + Math.Min(adjacent, world.Config.Economy.MountainMaxAdjacentCells));
+                }
+            return edgeUnits;
+        }
+
+        private bool MountainScoreCellsExplored(bool[] explored, int origin, int size, int adjacent)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            foreach (int cell in Footprint(origin, size))
+                if (cell < 0 || cell >= explored.Length || !explored[cell]) return false;
+
+            int x0 = origin % width, z0 = origin / width;
+            var mountainCells = new HashSet<int>();
+            for (int z = z0; z < z0 + size; z++)
+                for (int x = x0; x < x0 + size; x++)
+                {
+                    if (x > 0) AddMountainCell(mountainCells, (z * width) + x - 1);
+                    if (x + 1 < width) AddMountainCell(mountainCells, (z * width) + x + 1);
+                    if (z > 0) AddMountainCell(mountainCells, ((z - 1) * width) + x);
+                    if (z + 1 < height) AddMountainCell(mountainCells, ((z + 1) * width) + x);
+                }
+            if (mountainCells.Count != adjacent) return false;
+            foreach (int cell in mountainCells)
+                if (!explored[cell]) return false;
+            return true;
+
+            void AddMountainCell(HashSet<int> cells, int cell)
+            {
+                if (world.Config.Map.Terrain[cell] == (byte)TerrainKind.Mountain) cells.Add(cell);
+            }
+        }
+
         private int MountainInterval(BuildingState shaft)
         {
             var rules = world.Config.Economy;

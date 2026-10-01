@@ -138,7 +138,17 @@ namespace Rts.Simulation
 
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
-        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// Mountain's choice score is based on the first legal shaft edges the faction could have known at
+        /// civilisation choice. A site with several observed mountain neighbours is worth several edge units;
+        /// this keeps a compact, high-value cliff from being treated like a single isolated mountain cell while
+        /// still returning the same small 0/2/3 score scale used by the registration table.
+        /// </summary>
+        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            int edgeUnits = s.CountUsableMountainShaftEdgeUnits(faction, core);
+            return edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
+        }
 
         private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
