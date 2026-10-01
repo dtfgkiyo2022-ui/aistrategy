@@ -169,6 +169,8 @@ namespace Rts.Simulation
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
         internal TechKind Researching;
+        /// <summary>V3-15 #1: a mine shaft alternates stone and ore; false means stone is next.</summary>
+        internal bool MountainOreNext;
         /// <summary>V3-2 mine: the ore point under its footprint.</summary>
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
@@ -517,6 +519,13 @@ namespace Rts.Simulation
                 && e.AcademyToolsFoodCost >= 0 && e.AcademyToolsWoodCost >= 0 && e.AcademyToolsGoldCost > 0 && e.AcademyToolsTicks > 0
                 && e.AcademyCartsFoodCost >= 0 && e.AcademyCartsWoodCost >= 0 && e.AcademyCartsGoldCost > 0 && e.AcademyCartsTicks > 0),
                 "Academy requires valid age and academy rules.");
+            Require(!e.Mountain || (e.Enabled && e.Ages && e.Industry && e.MountainSizeCells > 0 && e.MountainSizeCells <= 8
+                && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
+                && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
+                && e.MountainMinIntervalTicks > 0 && e.MountainMinIntervalTicks <= e.MountainBaseIntervalTicks
+                && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
+                && e.MountainStoneYield > 0 && e.MountainOreYield > 0),
+                "Mountain requires valid age, industry and mine-shaft rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -702,6 +711,11 @@ namespace Rts.Simulation
                  AcademyToolsFoodCost = e.AcademyToolsFoodCost, AcademyToolsWoodCost = e.AcademyToolsWoodCost, AcademyToolsGoldCost = e.AcademyToolsGoldCost,
                  AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
                  AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
+                 Mountain = e.Mountain, MountainSizeCells = e.MountainSizeCells, MountainWoodCost = e.MountainWoodCost,
+                 MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
+                 MountainIntervalStepTicks = e.MountainIntervalStepTicks, MountainMinIntervalTicks = e.MountainMinIntervalTicks,
+                 MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
+                 MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,

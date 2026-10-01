@@ -130,6 +130,8 @@ namespace Rts.Simulation
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2) w.Value(n + "QueuedBowGear", b.QueuedBowGear);
                     }
+                    if (world.Config.Economy.Mountain && b.Kind == BuildingKind.MineShaft)
+                        w.Value(n + "MountainOreNext", b.MountainOreNext);
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
                 {

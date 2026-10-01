@@ -54,7 +54,9 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Bridge, 6, true, (s, f) => s.BridgeOn, BridgeScore,
                 (s, f) => s.BridgeAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.EngineerCamp) >= 0),
             new CivRegistration(CivKind.Academy, 7, true, (s, f) => s.AcademyOn, AcademyScore,
-                (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0)
+                (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
+            new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
+                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -127,6 +129,8 @@ namespace Rts.Simulation
             }
             return usable;
         }
+
+        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
