@@ -27,6 +27,30 @@ namespace Rts.UnityHost
         private PresetController enemy;
         // The opponent's side is fixed when the match starts; switching the viewed side must not hand it the other frame.
         private uint enemyFactionId = 2;
+        // The player's own side may run a doctrine too. "maintain" by default, so a hands-off match runs both sides
+        // alike; with "none" the player's armies wait for the player's orders, as before.
+        [SerializeField] private string ownPreset = "maintain";
+        private PresetController own;
+        private uint ownFactionId = 1;
+        private OwnDoctrineChoice ownDoctrine;
+
+        /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
+        private sealed class OwnDoctrineChoice : IOpponentControl
+        {
+            private readonly LiveMatchHost host;
+            public OwnDoctrineChoice(LiveMatchHost host) { this.host = host; }
+            public string[] Choices { get { return Rts.Application.PolicyPresets.Names; } }
+            public string Current
+            {
+                get { return host.ownPreset; }
+                set
+                {
+                    if (value == host.ownPreset || System.Array.IndexOf(Choices, value) < 0) return;
+                    host.ownPreset = value;
+                    host.matchRestartRequested = true;
+                }
+            }
+        }
         private float accumulated;
         private int speedMultiplier = 1;
         private bool paused;
@@ -223,6 +247,10 @@ namespace Rts.UnityHost
             enemyFactionId = 3 - viewFactionId;
             enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
+            ownFactionId = viewFactionId;
+            // An outside AI already steers the own side; a doctrine on top of it would fight it.
+            own = PolicyPresets.CreateController(external != null ? "none" : ownPreset, ownFactionId, gateway);
+            own.Initialize();
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
                     PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
@@ -234,6 +262,8 @@ namespace Rts.UnityHost
             panel.ExternalAi = this;
             panel.MatchRestart = this;
             panel.Opponent = this;
+            if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
+            panel.OwnDoctrine = ownDoctrine;
             // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
             if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
             if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
@@ -261,6 +291,7 @@ namespace Rts.UnityHost
             view.Push(frame);
             if (frame.Result.HasEnded) return;
             enemy.Step(simulation.Capture(enemyFactionId));
+            own.Step(simulation.Capture(ownFactionId));
         }
 
         private const string LanguageKey = "rts.language.japanese";
