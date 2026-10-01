@@ -17,6 +17,8 @@ namespace Rts.Core.Tests
     {
         private const int Width = 128;
         private static readonly MethodInfo Site = typeof(Battle).GetMethod("MountainShaftSiteIsClear", BindingFlags.Instance | BindingFlags.NonPublic);
+        private static readonly MethodInfo MountainScore = typeof(Battle).GetMethod("MountainScore", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly MethodInfo MountainEdgeUnits = typeof(Battle).GetMethod("CountUsableMountainShaftEdgeUnits", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private static void Steps(CommandGateway gateway, Battle sim, int count)
         {
@@ -40,6 +42,18 @@ namespace Rts.Core.Tests
             s.Economy.MountainMinIntervalTicks = 4;
             s.Cores[0].Hp = 1000000;
             s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
+        private static ScenarioDefinition MountainMatchScenario(ulong seed)
+        {
+            var s = MountainScenario(seed);
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
             return s;
         }
 
@@ -263,6 +277,151 @@ namespace Rts.Core.Tests
                 var outcome = ReplayRunner.Replay(stream, identity);
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void MountainChoiceScoreCountsOnlyObservedBuildableEdgesInSmallTiers()
+        {
+            Assert.That(MountainScore, Is.Not.Null);
+            Assert.That(MountainEdgeUnits, Is.Not.Null);
+            bool sawZero = false, sawOneToTwo = false, sawThreeOrMore = false;
+            for (ulong seed = 1; seed <= 100; seed++)
+            {
+                var scenario = MountainScenario(seed);
+                var sim = new Battle(scenario);
+                sim.Step(1, Array.Empty<ScheduledInput>());
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    int units = (int)MountainEdgeUnits.Invoke(sim, new object[] { faction, scenario.Cores[faction - 1].Position });
+                    int score = (int)MountainScore.Invoke(null, new object[] { sim, faction, scenario.Cores[faction - 1].Position, 0, 0 });
+                    if (units == 0) sawZero = true;
+                    if (units > 0 && units < 3) sawOneToTwo = true;
+                    if (units >= 3) sawThreeOrMore = true;
+                    Assert.That(score, Is.EqualTo(units >= 3 ? 3 : units > 0 ? 2 : 0));
+                }
+            }
+            Assert.That(sawZero, Is.True, "山の縁0か所");
+            Assert.That(sawOneToTwo, Is.True, "山の縁1〜2か所相当");
+            Assert.That(sawThreeOrMore, Is.True, "山の縁3か所以上相当");
+        }
+
+        [Test]
+        public void MountainChoiceScoreIgnoresUnseenAndUnbuildableMountainEdges()
+        {
+            ScenarioDefinition observedScenario = null;
+            int observedFaction = 0;
+            for (ulong seed = 1; seed <= 100; seed++)
+            {
+                var scenario = MountainScenario(seed);
+                var sim = new Battle(scenario);
+                sim.Step(1, Array.Empty<ScheduledInput>());
+                for (uint faction = 1; faction <= 2; faction++)
+                    if ((int)MountainEdgeUnits.Invoke(sim, new object[] { faction, scenario.Cores[faction - 1].Position }) > 0)
+                    {
+                        observedScenario = scenario;
+                        observedFaction = (int)faction;
+                        break;
+                    }
+                if (observedScenario != null) break;
+            }
+            Assert.That(observedScenario, Is.Not.Null, "観測済みで建てられる山の縁がある種");
+
+            var observed = new Battle(observedScenario);
+            observed.Step(1, Array.Empty<ScheduledInput>());
+            var world = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(observed);
+            var factions = (Array)world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(world);
+            var factionState = factions.GetValue(observedFaction - 1);
+            var explored = (bool[])factionState.GetType().GetField("ExploredCells", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(factionState);
+            for (int i = 0; i < observedScenario.Map.Terrain.Length; i++)
+                if (observedScenario.Map.Terrain[i] == (byte)TerrainKind.Mountain) explored[i] = false;
+            Assert.That((int)MountainScore.Invoke(null, new object[] { observed, (uint)observedFaction, observedScenario.Cores[observedFaction - 1].Position, 0, 0 }), Is.EqualTo(0), "見たことのない山だけ");
+
+            var blockedScenario = MountainScenario(101);
+            var blocked = new HashSet<int>(blockedScenario.Map.BlockedCellIds);
+            int width = blockedScenario.Map.WidthCells, height = blockedScenario.Map.HeightCells;
+            for (int cell = 0; cell < blockedScenario.Map.Terrain.Length; cell++)
+                if (blockedScenario.Map.Terrain[cell] == (byte)TerrainKind.Mountain)
+                {
+                    int x = cell % width, z = cell / width;
+                    if (x > 0) blocked.Add(cell - 1);
+                    if (x + 1 < width) blocked.Add(cell + 1);
+                    if (z > 0) blocked.Add(cell - width);
+                    if (z + 1 < height) blocked.Add(cell + width);
+                }
+            blockedScenario.Map.BlockedCellIds = new List<int>(blocked).ToArray();
+            var unbuildable = new Battle(blockedScenario);
+            unbuildable.Step(1, Array.Empty<ScheduledInput>());
+            Assert.That((int)MountainScore.Invoke(null, new object[] { unbuildable, 1U, blockedScenario.Cores[0].Position, 0, 0 }), Is.EqualTo(0), "建てられない山の縁だけ");
+        }
+
+        [TestCase(CivKind.Mountain, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Mountain)]
+        [TestCase(CivKind.Mountain, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Mountain)]
+        public void MountainCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east)
+        {
+            var scenario = MountainMatchScenario(21);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+        }
+
+        [Test]
+        public void NormalMountainStartFindsASeedAndReplaysForTwentyThousandTicks()
+        {
+            ulong foundSeed = 0;
+            CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
+            for (ulong seed = 1; seed <= 1000; seed++)
+            {
+                var probe = new Battle(MountainMatchScenario(seed));
+                var probeGateway = new CommandGateway(probe);
+                Steps(probeGateway, probe, 80);
+                var west = probe.Capture(1).Economy.Civ;
+                var east = probe.Capture(2).Economy.Civ;
+                if (west == CivKind.Mountain || east == CivKind.Mountain)
+                {
+                    foundSeed = seed;
+                    foundWest = west;
+                    foundEast = east;
+                    break;
+                }
+            }
+            if (foundSeed == 0)
+            {
+                TestContext.WriteLine("山岳が選ばれる種は seed 1..1000 では見つからなかった");
+                Assert.Inconclusive("山岳が選ばれる種が見つからない");
+                return;
+            }
+
+            var scenario = MountainMatchScenario(foundSeed);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            TestContext.WriteLine("normal mountain seed " + foundSeed + ": civs=" + foundWest + "/" + foundEast
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Mountain || sim.Capture(2).Economy.Civ == CivKind.Mountain, Is.True);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
             }
         }
 
