@@ -9,41 +9,47 @@ namespace Rts.Simulation
     public sealed class GridMap
     {
         internal Action<string, bool> Measure;
+        /// <summary>Optional faction-specific overlay. It is unset for every old map and then the old terrain is used.</summary>
+        internal Func<int, uint, bool> FactionPassability;
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
         // Derived from immutable terrain only. FIFO eviction changes cost, never route choices.
-        private readonly Dictionary<int, int[]> routes = new Dictionary<int, int[]>();
-        private readonly Queue<int> routeOrder = new Queue<int>();
+        private readonly Dictionary<(uint Faction, int Target), int[]> routes = new Dictionary<(uint, int), int[]>();
+        private readonly Queue<(uint Faction, int Target)> routeOrder = new Queue<(uint, int)>();
         // FindPath is a pure function of the immutable terrain, the start cell and the exact goal point, and the decision
         // layer asks for the same routes again and again. Callers only read the returned array. FIFO eviction bounds the
         // memory and, like the routes above, changes cost only, never a result.
         private const int PathCacheLimit = 4096;
-        private readonly Dictionary<(int Start, long GoalX, long GoalZ), int[]> paths = new Dictionary<(int, long, long), int[]>();
-        private readonly Queue<(int Start, long GoalX, long GoalZ)> pathOrder = new Queue<(int, long, long)>();
+        private readonly Dictionary<(uint Faction, int Start, long GoalX, long GoalZ), int[]> paths = new Dictionary<(uint, int, long, long), int[]>();
+        private readonly Queue<(uint Faction, int Start, long GoalX, long GoalZ)> pathOrder = new Queue<(uint, int, long, long)>();
         public int[] SharedRoute(int start, SimPoint goal)
+            => SharedRoute(start, goal, 0);
+
+        public int[] SharedRoute(int start, SimPoint goal, uint factionId)
         {
             Measure?.Invoke("Pathfinding", true);
-            try { return SharedRouteCore(start, goal); }
+            try { return SharedRouteCore(start, goal, factionId); }
             finally { Measure?.Invoke("Pathfinding", false); }
         }
-        private int[] SharedRouteCore(int start, SimPoint goal)
+        private int[] SharedRouteCore(int start, SimPoint goal, uint factionId)
         {
-            if (!IsPassable(start)) return Array.Empty<int>();
+            if (!IsPassableFor(start, factionId)) return Array.Empty<int>();
             int target = Cell(goal);
-            if (!IsPassable(target))
+            if (!IsPassableFor(target, factionId))
             {
                 target = -1;
                 long best = 0;
                 for (int i = 0; i < passable.Length; i++)
-                    if (passable[i])
+                    if (IsPassableFor(i, factionId))
                     {
                         var d = Distance(Center(i), goal);
                         if (target < 0 || d < best) { target = i; best = d; }
                     }
             }
             if (target < 0) return Array.Empty<int>();
-            if (!routes.TryGetValue(target, out var next))
+            var routeKey = (factionId, target);
+            if (!routes.TryGetValue(routeKey, out var next))
             {
                 // One reverse BFS per destination, shared by all soldiers. At most 8192 cells.
                 next = new int[passable.Length]; Array.Fill(next, -1);
@@ -59,11 +65,11 @@ namespace Rts.Simulation
                 }
                 void Visit(int cell, int parent)
                 {
-                    if (!IsPassable(cell) || next[cell] >= 0) return;
+                    if (!IsPassableFor(cell, factionId) || next[cell] >= 0) return;
                     next[cell] = parent; queue[tail++] = cell;
                 }
                 if (routeOrder.Count == 16) routes.Remove(routeOrder.Dequeue());
-                routes.Add(target, next); routeOrder.Enqueue(target);
+                routes.Add(routeKey, next); routeOrder.Enqueue(routeKey);
             }
             if (next[start] < 0) return Array.Empty<int>();
             var path = new List<int>();
@@ -94,7 +100,11 @@ namespace Rts.Simulation
             routes.Clear(); routeOrder.Clear();
             paths.Clear(); pathOrder.Clear();
         }
+        /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
+        internal void InvalidateRoutes() { routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); }
         public bool IsPassable(int cell) => cell >= 0 && cell < passable.Length && passable[cell];
+        public bool IsPassableFor(int cell, uint factionId)
+            => cell >= 0 && cell < passable.Length && (FactionPassability == null ? passable[cell] : FactionPassability(cell, factionId));
         public int Cell(SimPoint p)
         {
             if (p.X.Raw < 0 || p.Z.Raw < 0 || p.X.Raw >= width * size || p.Z.Raw >= height * size) return -1;
@@ -103,22 +113,25 @@ namespace Rts.Simulation
         public SimPoint Center(int cell) => new SimPoint(Fix64.FromRaw(cell % width * size + size / 2), Fix64.FromRaw(cell / width * size + size / 2));
         private int H(int a, int b) => Math.Abs(a % width - b % width) + Math.Abs(a / width - b / width);
         public int[] FindPath(int start, SimPoint goal)
+            => FindPath(start, goal, 0);
+
+        public int[] FindPath(int start, SimPoint goal, uint factionId)
         {
             Measure?.Invoke("Pathfinding", true);
             try
             {
-                var key = (start, goal.X.Raw, goal.Z.Raw);
+                var key = (factionId, start, goal.X.Raw, goal.Z.Raw);
                 if (paths.TryGetValue(key, out var cached)) return cached;
-                var path = FindPathCore(start, goal);
+                var path = FindPathCore(start, goal, factionId);
                 if (pathOrder.Count == PathCacheLimit) paths.Remove(pathOrder.Dequeue());
                 paths.Add(key, path); pathOrder.Enqueue(key);
                 return path;
             }
             finally { Measure?.Invoke("Pathfinding", false); }
         }
-        private int[] FindPathCore(int start, SimPoint goal)
+        private int[] FindPathCore(int start, SimPoint goal, uint factionId)
         {
-            if (!IsPassable(start)) return Array.Empty<int>();
+            if (!IsPassableFor(start, factionId)) return Array.Empty<int>();
             int target = Cell(goal);
             var g = new int[passable.Length]; Array.Fill(g, int.MaxValue);
             var parent = new int[passable.Length]; Array.Fill(parent, -1);
@@ -140,7 +153,7 @@ namespace Rts.Simulation
                     z > 0 ? id - width : -1, x > 0 ? id - 1 : -1 };
                 foreach (int next in neighbors)
                 {
-                    if (!IsPassable(next) || closed[next] || g[next] <= g[id] + 1) continue;
+                    if (!IsPassableFor(next, factionId) || closed[next] || g[next] <= g[id] + 1) continue;
                     int h = H(next, heuristicCell);
                     if (g[next] != int.MaxValue) open.Remove((g[next] + h, h, next));
                     g[next] = g[id] + 1; parent[next] = id; open.Add((g[next] + h, h, next));
@@ -159,8 +172,11 @@ namespace Rts.Simulation
         }
         /// <summary>Walk every crossed boundary, checking both side cells at exact corners.</summary>
         public SimPoint ClipMove(SimPoint from, SimPoint to)
+            => ClipMove(from, to, 0);
+
+        public SimPoint ClipMove(SimPoint from, SimPoint to, uint factionId)
         {
-            int cell = Cell(from); if (!IsPassable(cell)) return from;
+            int cell = Cell(from); if (!IsPassableFor(cell, factionId)) return from;
             long dx = to.X.Raw - from.X.Raw, dz = to.Z.Raw - from.Z.Raw;
             int sx = Math.Sign(dx), sz = Math.Sign(dz), x = cell % width, z = cell / width;
             long ax = Math.Abs(dx), az = Math.Abs(dz);
@@ -172,9 +188,9 @@ namespace Rts.Simulation
                 if (!crossX && !crossZ) return to;
                 int compare = !crossX ? 1 : !crossZ ? -1 : checked(nx * az).CompareTo(checked(nz * ax));
                 bool moveX = compare <= 0, moveZ = compare >= 0;
-                bool validX = !moveX || (x + sx >= 0 && x + sx < width && IsPassable(z * width + x + sx));
-                bool validZ = !moveZ || (z + sz >= 0 && z + sz < height && IsPassable((z + sz) * width + x));
-                bool validDiagonal = !moveX || !moveZ || (validX && validZ && IsPassable((z + sz) * width + x + sx));
+                bool validX = !moveX || (x + sx >= 0 && x + sx < width && IsPassableFor(z * width + x + sx, factionId));
+                bool validZ = !moveZ || (z + sz >= 0 && z + sz < height && IsPassableFor((z + sz) * width + x, factionId));
+                bool validDiagonal = !moveX || !moveZ || (validX && validZ && IsPassableFor((z + sz) * width + x + sx, factionId));
                 if (!validX || !validZ || !validDiagonal)
                 {
                     long n = moveX ? nx : nz, d = moveX ? ax : az;
@@ -182,7 +198,7 @@ namespace Rts.Simulation
                     long pz = from.Z.Raw + checked(dz * n) / d;
                     if (moveX && sx > 0) px--; if (moveZ && sz > 0) pz--;
                     var result = new SimPoint(Fix64.FromRaw(px), Fix64.FromRaw(pz));
-                    return IsPassable(Cell(result)) ? result : from;
+                    return IsPassableFor(Cell(result), factionId) ? result : from;
                 }
                 if (moveX) x += sx; if (moveZ) z += sz;
             }

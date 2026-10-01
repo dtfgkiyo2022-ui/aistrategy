@@ -68,7 +68,7 @@ namespace Rts.Contracts
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
     /// More civilisations and later ages are added after the first ones are tried (the value is not an age number).
     /// </summary>
-    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4, Caravan = 5, Cavalry = 6, Bridge = 7, Academy = 8, Cult = 9, Mountain = 11 }
+    public enum CivKind : byte { Primitive = 0, Agrarian = 1, Metallurgy = 2, Forestry = 3, Masonry = 4, Caravan = 5, Cavalry = 6, Bridge = 7, Academy = 8, Cult = 9, Mountain = 11, Tollgate = 12 }
 
     /// <summary>
     /// V3-5 research at a blacksmith (technical-design-v3 32 #6). A faction's researched techs are a bit set of
@@ -101,7 +101,7 @@ namespace Rts.Contracts
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
         ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19, Caravanserai = 20,
-        EngineerCamp = 21, Bridge = 22, Academy = 23, Monastery = 24, MineShaft = 26 }
+        EngineerCamp = 21, Bridge = 22, Academy = 23, Monastery = 24, MineShaft = 26, Tollgate = 27 }
 
     public enum EventKind : byte
     {

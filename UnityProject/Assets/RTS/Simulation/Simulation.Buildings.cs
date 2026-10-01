@@ -116,7 +116,8 @@ namespace Rts.Simulation
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
-            var footprint = kind == BuildingKind.Bridge ? bridgeCells : Footprint(origin, SizeOf(kind));
+            var footprint = kind == BuildingKind.Bridge ? bridgeCells
+                : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
             if (footprint == null || footprint.Length == 0) return;
             foreach (int cell in footprint) world.Map.SetPassable(cell, false);
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
@@ -187,8 +188,8 @@ namespace Rts.Simulation
                 var villager = world.Villagers[i];
                 if (!villager.Alive || villager.FactionId != faction) continue;
                 int start = world.Map.Cell(villager.Position);
-                if (world.Map.FindPath(start, world.Map.Center(before)).Length > 0) workCell = before;
-                else if (world.Map.FindPath(start, world.Map.Center(after)).Length > 0) workCell = after;
+                if (world.Map.FindPath(start, world.Map.Center(before), faction).Length > 0) workCell = before;
+                else if (world.Map.FindPath(start, world.Map.Center(after), faction).Length > 0) workCell = after;
             }
             if (workCell < 0) { cells = null; return false; }
             return true;
@@ -387,6 +388,11 @@ namespace Rts.Simulation
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                     opened = true;
                 }
+                else if (b.Kind == BuildingKind.Tollgate)
+                {
+                    foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                    opened = true;
+                }
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
                         world.Villagers[j].Task = VillagerTask.Idle;
@@ -439,6 +445,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Academy ? e.AcademySizeCells
                 : kind == BuildingKind.Monastery ? e.MonasterySizeCells
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
+                : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
@@ -454,7 +461,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
                 : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Academy ? e.AcademyHp
-                : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.MineShaft ? e.MountainHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+                : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.MineShaft ? e.MountainHp
+                : kind == BuildingKind.Tollgate ? e.TollgateHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -478,7 +486,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
                 : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Academy ? e.AcademyWork
-                : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.MineShaft ? e.MountainWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+                : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.MineShaft ? e.MountainWork
+                : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -494,7 +503,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
                  : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Academy ? e.AcademyWoodCost
-                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
+                 : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 
@@ -508,11 +518,25 @@ namespace Rts.Simulation
         {
             var e = world.Config.Economy;
             int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
-                : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
+                : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : 0;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
 
-        private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>() : Footprint(b.OriginCell, SizeOf(b.Kind));
+        private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>()
+            : b.Kind == BuildingKind.Tollgate ? TollgateFootprint(b.OriginCell, b.Facing) : Footprint(b.OriginCell, SizeOf(b.Kind));
+
+        private int[] TollgateFootprint(int origin, Facing facing)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            if (origin < 0 || origin >= width * height) return Array.Empty<int>();
+            int x = origin % width, z = origin / width;
+            if (facing == Facing.East && x + 1 >= width) return Array.Empty<int>();
+            if (facing == Facing.West && x <= 0) return Array.Empty<int>();
+            if (facing == Facing.North && z + 1 >= height) return Array.Empty<int>();
+            if (facing == Facing.South && z <= 0) return Array.Empty<int>();
+            int delta = facing == Facing.East ? 1 : facing == Facing.West ? -1 : facing == Facing.North ? width : -width;
+            return new[] { origin, origin + delta };
+        }
 
         private int[] Footprint(int origin, int size)
         {
@@ -539,7 +563,9 @@ namespace Rts.Simulation
         }
 
         private SimPoint BuildingCenter(BuildingState building)
-            => building.Kind == BuildingKind.Bridge ? BridgeCenter(building.BridgeCells) : FootprintCenter(building.OriginCell, SizeOf(building.Kind));
+            => building.Kind == BuildingKind.Bridge ? BridgeCenter(building.BridgeCells)
+                : building.Kind == BuildingKind.Tollgate ? BridgeCenter(TollgateFootprint(building.OriginCell, building.Facing))
+                : FootprintCenter(building.OriginCell, SizeOf(building.Kind));
 
         private bool IsRiverCell(int cell)
             => world.Config.Map.Terrain.Length != 0 && cell >= 0 && cell < world.Config.Map.Terrain.Length

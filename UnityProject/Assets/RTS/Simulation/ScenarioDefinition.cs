@@ -176,6 +176,10 @@ namespace Rts.Simulation
         public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
         public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
         public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
+        /// <summary>V3-16 #1: a completed tollgate is passable to its own faction only.</summary>
+        public bool Tollgate;
+        public int TollgateLengthCells = 2, TollgateWoodCost = 80, TollgateStoneCost = 40, TollgateWork = 250, TollgateHp = 600;
+        public int TollgateMaxBuildings = 3;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

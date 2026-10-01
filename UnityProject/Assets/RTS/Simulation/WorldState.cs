@@ -530,6 +530,9 @@ namespace Rts.Simulation
                 && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
                 && e.MountainStoneYield > 0 && e.MountainOreYield > 0),
                 "Mountain requires valid age, industry and mine-shaft rules.");
+            Require(!e.Tollgate || (e.Enabled && e.Ages && e.TollgateLengthCells == 2
+                && e.TollgateWoodCost >= 0 && e.TollgateStoneCost >= 0 && e.TollgateWork > 0 && e.TollgateHp > 0
+                && e.TollgateMaxBuildings > 0), "Tollgate requires valid age and tollgate rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -720,9 +723,12 @@ namespace Rts.Simulation
                  Mountain = e.Mountain, MountainSizeCells = e.MountainSizeCells, MountainWoodCost = e.MountainWoodCost,
                  MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
                  MountainIntervalStepTicks = e.MountainIntervalStepTicks, MountainMinIntervalTicks = e.MountainMinIntervalTicks,
-                 MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
-                 MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
-                FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
+                  MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
+                  MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
+                  Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
+                  TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
+                  TollgateMaxBuildings = e.TollgateMaxBuildings,
+                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,
                 SkirmishArcherTrainTicks = e.SkirmishArcherTrainTicks, SkirmishArcherHp = e.SkirmishArcherHp, SkirmishArcherDamage = e.SkirmishArcherDamage,

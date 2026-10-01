@@ -29,6 +29,9 @@ namespace Rts.Simulation
         private const int MountainExtensionId = 5;
         private const int MountainExtensionVersion = 1;
         private const int MountainExtensionDataLength = 12 * sizeof(int);
+        private const int TollgateExtensionId = 6;
+        private const int TollgateExtensionVersion = 1;
+        private const int TollgateExtensionDataLength = 7 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -40,7 +43,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(1, 1, sizeof(int)),
             new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
-            new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength)
+            new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
+            new ExtensionRegistration(TollgateExtensionId, TollgateExtensionVersion, TollgateExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -525,9 +529,10 @@ namespace Rts.Simulation
                 if (data.Length != dataLength) throw new InvalidDataException("Truncated scenario extension data.");
                 seen[registrationIndex] = true;
                 var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
-                if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
-                else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
-                else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
+                 if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                 else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
+                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
+                 else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -569,6 +574,9 @@ namespace Rts.Simulation
             bool hasMountain = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MountainExtensionId) hasMountain = true;
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
+            bool hasTollgate = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == TollgateExtensionId) hasTollgate = true;
+            if (c.Economy.Tollgate && !hasTollgate) extensions.Add(CreateTollgateExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -653,6 +661,31 @@ namespace Rts.Simulation
                 e.MountainMaxBuildings = reader.ReadInt32(); e.MountainMaxAdjacentCells = reader.ReadInt32();
                 e.MountainStoneYield = reader.ReadInt32(); e.MountainOreYield = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing mountain extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateTollgateExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Tollgate ? 1 : 0);
+                writer.Write(e.TollgateLengthCells); writer.Write(e.TollgateWoodCost); writer.Write(e.TollgateStoneCost);
+                writer.Write(e.TollgateWork); writer.Write(e.TollgateHp); writer.Write(e.TollgateMaxBuildings);
+                return new ScenarioExtensionData { Id = TollgateExtensionId, Version = TollgateExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadTollgateExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid tollgate flag.");
+                e.Tollgate = enabled != 0;
+                e.TollgateLengthCells = reader.ReadInt32(); e.TollgateWoodCost = reader.ReadInt32(); e.TollgateStoneCost = reader.ReadInt32();
+                e.TollgateWork = reader.ReadInt32(); e.TollgateHp = reader.ReadInt32(); e.TollgateMaxBuildings = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tollgate extension data.");
             }
         }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)

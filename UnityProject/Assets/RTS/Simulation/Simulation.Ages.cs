@@ -34,6 +34,8 @@ namespace Rts.Simulation
 
         private bool MountainOn => AgesOn && world.Config.Economy.Mountain;
 
+        private bool TollgateOn => AgesOn && world.Config.Economy.Tollgate;
+
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
 
@@ -69,6 +71,9 @@ namespace Rts.Simulation
 
         private bool MountainAllowed(uint faction)
             => MountainOn && world.Economies[faction - 1].Civ == CivKind.Mountain && world.Economies[faction - 1].Age >= 1;
+
+        private bool TollgateAllowed(uint faction)
+            => TollgateOn && world.Economies[faction - 1].Civ == CivKind.Tollgate && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -241,7 +246,7 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !MountainOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !MountainOn && !TollgateOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
             // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.

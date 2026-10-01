@@ -58,7 +58,9 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
                 (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
-                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
+                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
+            new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -135,6 +137,8 @@ namespace Rts.Simulation
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
