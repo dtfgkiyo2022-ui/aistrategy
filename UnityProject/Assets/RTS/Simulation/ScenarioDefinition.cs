@@ -166,6 +166,11 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
+        public bool Cult;
+        /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
+        public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
+        public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
         /// <summary>V3-15 #1 provisional mountain values; a mine shaft uses mountain cells, not a resource node.</summary>
         public bool Mountain;
         public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;

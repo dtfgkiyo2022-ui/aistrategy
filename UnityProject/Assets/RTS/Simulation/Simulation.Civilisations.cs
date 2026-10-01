@@ -55,6 +55,8 @@ namespace Rts.Simulation
                 (s, f) => s.BridgeAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.EngineerCamp) >= 0),
             new CivRegistration(CivKind.Academy, 7, true, (s, f) => s.AcademyOn, AcademyScore,
                 (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
+            new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
+                (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
         };
@@ -129,6 +131,8 @@ namespace Rts.Simulation
             }
             return usable;
         }
+
+        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
