@@ -354,12 +354,25 @@ namespace Rts.Simulation
             if (e.Civ != CivKind.Primitive && e.Age == 2 && SavingToAdvance(faction))
                 demand = e.Civ == CivKind.Metallurgy ? rules.Age3GoldCostMetallurgy : rules.Age3GoldCostAgrarian;
             else if (!SavingToAdvance(faction) && MonkPlanned(faction)) demand = rules.MonkGoldCost;
+            if (e.Civ == CivKind.Academy && AcademyAllowed(faction))
+            {
+                var next = AcademyNextResearch(faction);
+                if (next != 0) demand += AcademyGoldCost(next);
+            }
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var v = world.Villagers[i];
                 if (v.Alive && v.FactionId == faction && IsGoldWork(v)) demand -= v.Carry;
             }
             return Math.Max(0, demand - e.Gold);
+        }
+
+        private TechKind AcademyNextResearch(uint faction)
+        {
+            if (!AcademyAllowed(faction)) return 0;
+            if (TechOpen(faction, TechKind.Tools)) return TechKind.Tools;
+            if (TechOpen(faction, TechKind.Carts)) return TechKind.Carts;
+            return 0;
         }
 
         private bool MonkPlanned(uint faction)

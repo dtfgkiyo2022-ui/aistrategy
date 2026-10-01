@@ -512,6 +512,11 @@ namespace Rts.Simulation
                 && e.CaravanseraiWoodCost >= 0 && e.CaravanseraiWork > 0 && e.CaravanseraiHp > 0
                 && e.CaravanOutpostReach >= 0 && e.CaravanMinimumDistance > 0 && e.CaravanRewardDistanceStep > 0
                 && e.CaravanRewardMaxWood > 0 && e.CaravanAutoVillagers > 0), "Caravan requires valid age and caravanserai rules.");
+            Require(!e.Academy || (e.Enabled && e.Ages && e.AcademySizeCells > 0 && e.AcademySizeCells <= 8
+                && e.AcademyWoodCost >= 0 && e.AcademyWork > 0 && e.AcademyHp > 0
+                && e.AcademyToolsFoodCost >= 0 && e.AcademyToolsWoodCost >= 0 && e.AcademyToolsGoldCost > 0 && e.AcademyToolsTicks > 0
+                && e.AcademyCartsFoodCost >= 0 && e.AcademyCartsWoodCost >= 0 && e.AcademyCartsGoldCost > 0 && e.AcademyCartsTicks > 0),
+                "Academy requires valid age and academy rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -677,7 +682,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                 Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
@@ -691,8 +696,12 @@ namespace Rts.Simulation
                 LumberCampWork = e.LumberCampWork, LumberCampHp = e.LumberCampHp, LumberCampIntervalTicks = e.LumberCampIntervalTicks,
                 MarketFoodFloor = e.MarketFoodFloor, MarketWoodReserve = e.MarketWoodReserve, MarketStoneReserve = e.MarketStoneReserve,
                 CaravanseraiSizeCells = e.CaravanseraiSizeCells, CaravanseraiWoodCost = e.CaravanseraiWoodCost, CaravanseraiWork = e.CaravanseraiWork,
-                CaravanseraiHp = e.CaravanseraiHp, CaravanOutpostReach = e.CaravanOutpostReach, CaravanMinimumDistance = e.CaravanMinimumDistance,
-                CaravanRewardDistanceStep = e.CaravanRewardDistanceStep, CaravanRewardMaxWood = e.CaravanRewardMaxWood, CaravanAutoVillagers = e.CaravanAutoVillagers,
+                 CaravanseraiHp = e.CaravanseraiHp, CaravanOutpostReach = e.CaravanOutpostReach, CaravanMinimumDistance = e.CaravanMinimumDistance,
+                 CaravanRewardDistanceStep = e.CaravanRewardDistanceStep, CaravanRewardMaxWood = e.CaravanRewardMaxWood, CaravanAutoVillagers = e.CaravanAutoVillagers,
+                 AcademySizeCells = e.AcademySizeCells, AcademyWoodCost = e.AcademyWoodCost, AcademyWork = e.AcademyWork, AcademyHp = e.AcademyHp,
+                 AcademyToolsFoodCost = e.AcademyToolsFoodCost, AcademyToolsWoodCost = e.AcademyToolsWoodCost, AcademyToolsGoldCost = e.AcademyToolsGoldCost,
+                 AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
+                 AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,
