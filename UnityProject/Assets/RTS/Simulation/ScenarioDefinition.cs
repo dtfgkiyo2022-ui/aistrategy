@@ -166,6 +166,11 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-15 #1 provisional mountain values; a mine shaft uses mountain cells, not a resource node.</summary>
+        public bool Mountain;
+        public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
+        public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
+        public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;
