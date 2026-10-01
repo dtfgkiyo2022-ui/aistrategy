@@ -355,8 +355,8 @@ namespace Rts.Simulation
                     else
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                        soldierDamage[target] = checked(soldierDamage[target]
-                            + Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille));
+                        int damage = Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille);
+                        soldierDamage[target] = checked(soldierDamage[target] + SanctuaryDamage(s.Initial.FactionId, damage));
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
@@ -365,7 +365,7 @@ namespace Rts.Simulation
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
-                    coreDamage[target] = checked(coreDamage[target] + SiegeDamage(s));
+                    coreDamage[target] = checked(coreDamage[target] + SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)));
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
                 s.IsAttacking = true;
@@ -389,6 +389,29 @@ namespace Rts.Simulation
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
+
+        /// <summary>V3-18 #1: applies the fixed-point army bonus only to soldiers of the sanctuary civilisation.</summary>
+        private int SanctuaryDamage(uint faction, int damage)
+        {
+            if (!SanctuaryAllowed(faction) || damage <= 0) return damage;
+            int shrines = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var shrine = world.Buildings[i];
+                if (!shrine.Alive || !shrine.Complete || shrine.FactionId != faction || shrine.Kind != BuildingKind.Shrine
+                    || shrine.SanctuaryOutpostId == 0 || shrine.SanctuaryOutpostId > world.Outposts.Length
+                    || world.Outposts[shrine.SanctuaryOutpostId - 1].OwnerFactionId != faction) continue;
+                shrines++;
+            }
+            int bonus = Math.Min(checked(shrines * world.Config.Economy.SanctuaryAttackBonusPermille),
+                world.Config.Economy.SanctuaryMaxBonusPermille);
+            if (bonus <= 0) return damage;
+            Fix64 multiplier = Fix64.FromRatio(1000L + bonus, 1000L);
+            // Fixed-point multiplication is rounded to the nearest integer so a
+            // nominal 10% bonus remains 110 damage for a 100-damage blow.
+            long raw = (Fix64.FromInt(damage) * multiplier).Raw;
+            return checked((int)((raw + 32768L) / 65536L));
+        }
 
         private void ResolveConversions()
         {
