@@ -45,9 +45,10 @@ namespace Rts.Core.Tests
             return s;
         }
 
-        private static (Battle sim, CommandGateway gateway, ScenarioDefinition scenario, ulong sequence) Enter(ulong seed)
+        private static (Battle sim, CommandGateway gateway, ScenarioDefinition scenario, ulong sequence) Enter(ulong seed, bool ages = true)
         {
             var scenario = Scenario(seed);
+            scenario.Economy.Ages = ages;
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
@@ -202,6 +203,109 @@ namespace Rts.Core.Tests
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
             }
+        }
+
+        [Test]
+        public void TollgateFeeArrivesOnlyForNearbyEnemySoldiers()
+        {
+            var state = Enter(7);
+            int[] cells = FindSite(state.sim, state.scenario, 1);
+            Assert.That(cells, Is.Not.Null);
+            state.gateway.SubmitEconomy(EconomyCommand.Place(1, ++state.sequence, BuildingKind.Tollgate, cells[0], Facing.East));
+            Steps(state.gateway, state.sim, 5000);
+            var gate = state.sim.Capture(1).Economy.Buildings.Single(b => b.Kind == BuildingKind.Tollgate);
+            var world = typeof(Battle).GetField("world", Hidden).GetValue(state.sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Hidden).GetValue(world);
+            int enemyIndex = -1;
+            for (int i = 0; i < soldiers.Length; i++)
+            {
+                var soldier = soldiers.GetValue(i);
+                var initial = soldier.GetType().GetField("Initial", Hidden).GetValue(soldier);
+                if ((uint)initial.GetType().GetField("FactionId", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(initial) == 2) { enemyIndex = i; break; }
+            }
+            Assert.That(enemyIndex, Is.GreaterThanOrEqualTo(0));
+            SetSoldierPosition(world, soldiers, enemyIndex, gate.Center);
+            var economy = (Array)world.GetType().GetField("Economies", Hidden).GetValue(world);
+            var before = economy.GetValue(0);
+            int woodBefore = (int)before.GetType().GetField("Wood", Hidden).GetValue(before);
+            int foodBefore = (int)before.GetType().GetField("Food", Hidden).GetValue(before);
+            world.GetType().GetField("Tick", Hidden).SetValue(world, 100L);
+            typeof(Battle).GetMethod("AdvanceTollgateFees", Hidden).Invoke(state.sim, null);
+            var after = economy.GetValue(0);
+            Assert.That((int)after.GetType().GetField("Wood", Hidden).GetValue(after), Is.EqualTo(woodBefore + 1));
+            Assert.That((int)after.GetType().GetField("Food", Hidden).GetValue(after), Is.EqualTo(foodBefore + 1));
+
+            SetSoldierPosition(world, soldiers, enemyIndex, state.scenario.Cores[1].Position);
+            world.GetType().GetField("Tick", Hidden).SetValue(world, 200L);
+            typeof(Battle).GetMethod("AdvanceTollgateFees", Hidden).Invoke(state.sim, null);
+            var away = economy.GetValue(0);
+            Assert.That((int)away.GetType().GetField("Wood", Hidden).GetValue(away), Is.EqualTo(woodBefore + 1));
+            Assert.That((int)away.GetType().GetField("Food", Hidden).GetValue(away), Is.EqualTo(foodBefore + 1));
+        }
+
+        [Test]
+        public void TollgateResearchChangesOnlyTheTollgateFaction()
+        {
+            var state = Enter(8, true);
+            int[] cells = FindSite(state.sim, state.scenario, 1);
+            Assert.That(cells, Is.Not.Null);
+            state.gateway.SubmitEconomy(EconomyCommand.Place(1, ++state.sequence, BuildingKind.Tollgate, cells[0], Facing.East));
+            Steps(state.gateway, state.sim, 5000);
+            var world = typeof(Battle).GetField("world", Hidden).GetValue(state.sim);
+            SetTech(world, 1, TollgateTech.GateDefence);
+            SetTech(world, 1, TollgateTech.GateNetwork);
+            Assert.That((bool)typeof(Battle).GetMethod("HasTech", Hidden).Invoke(state.sim,
+                new object[] { 1u, TollgateTech.GateDefence }), Is.True);
+            state.gateway.Step();
+            var gate = state.sim.Capture(1).Economy.Buildings.Single(b => b.Kind == BuildingKind.Tollgate);
+            Assert.That(gate.MaxHp, Is.EqualTo(state.scenario.Economy.TollgateHp * 3 / 2));
+            Assert.That((int)typeof(Battle).GetMethod("TollgateDefenceDamage", Hidden).Invoke(state.sim,
+                new object[] { 1u, gate.Center, 10 }), Is.EqualTo(8));
+            Assert.That((int)typeof(Battle).GetMethod("TollgateDefenceDamage", Hidden).Invoke(state.sim,
+                new object[] { 2u, gate.Center, 10 }), Is.EqualTo(10));
+            Assert.That((int)typeof(Battle).GetMethod("TollgateMaxBuildingsFor", Hidden).Invoke(state.sim, new object[] { 1u }), Is.EqualTo(5));
+        }
+
+        [Test]
+        public void TollgateExtensionVersionOneIsReadableAndUpgradesOnWrite()
+        {
+            var source = Scenario(9);
+            byte[] versionTwo = ScenarioBinary.Encode(source);
+            byte[] marker = BitConverter.GetBytes(0x4E545845);
+            int markerOffset = -1;
+            for (int i = 0; i <= versionTwo.Length - marker.Length; i++)
+                if (versionTwo.Skip(i).Take(marker.Length).SequenceEqual(marker)) { markerOffset = i; break; }
+            Assert.That(markerOffset, Is.GreaterThanOrEqualTo(0));
+            int recordOffset = markerOffset + 12;
+            Assert.That(BitConverter.ToInt32(versionTwo, recordOffset), Is.EqualTo(6));
+            byte[] versionOne = new byte[recordOffset + 12 + 7 * sizeof(int)];
+            Array.Copy(versionTwo, versionOne, versionOne.Length);
+            Array.Copy(BitConverter.GetBytes(12 + 7 * sizeof(int)), 0, versionOne, markerOffset + 8, sizeof(int));
+            Array.Copy(BitConverter.GetBytes(1), 0, versionOne, recordOffset + 4, sizeof(int));
+            Array.Copy(BitConverter.GetBytes(7 * sizeof(int)), 0, versionOne, recordOffset + 8, sizeof(int));
+            var decoded = ScenarioBinary.Decode(versionOne);
+            Assert.That(decoded.Economy.Tollgate, Is.True);
+            Assert.That(decoded.Extensions.Single(e => e.Id == 6).Version, Is.EqualTo(1));
+            byte[] upgraded = ScenarioBinary.Encode(decoded);
+            var reread = ScenarioBinary.Decode(upgraded);
+            Assert.That(reread.Extensions.Single(e => e.Id == 6).Version, Is.EqualTo(2));
+            Assert.That(ScenarioBinary.Encode(reread), Is.EqualTo(upgraded));
+        }
+
+        private static void SetSoldierPosition(object world, Array soldiers, int index, SimPoint position)
+        {
+            var boxed = soldiers.GetValue(index);
+            boxed.GetType().GetField("Position", Hidden).SetValue(boxed, position);
+            soldiers.SetValue(boxed, index);
+        }
+
+        private static void SetTech(object world, uint faction, TechKind tech)
+        {
+            var economies = (Array)world.GetType().GetField("Economies", Hidden).GetValue(world);
+            var boxed = economies.GetValue((int)faction - 1);
+            var field = boxed.GetType().GetField("Techs", Hidden);
+            field.SetValue(boxed, (ulong)field.GetValue(boxed) | (1UL << ((int)tech - 1)));
+            economies.SetValue(boxed, (int)faction - 1);
         }
     }
 }

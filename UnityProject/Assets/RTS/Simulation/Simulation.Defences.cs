@@ -117,7 +117,8 @@ namespace Rts.Simulation
                 }
                 if (best >= 0)
                 {
-                    soldierDamage[best] = checked(soldierDamage[best] + TowerShot(b.FactionId, b.Kind));
+                    int shot = TollgateDefenceDamage(world.Soldiers[best].Initial.FactionId, world.Soldiers[best].Position, TowerShot(b.FactionId, b.Kind));
+                    soldierDamage[best] = checked(soldierDamage[best] + shot);
                     b.Timer = interval - 1;
                     b.Shots++;
                     continue;

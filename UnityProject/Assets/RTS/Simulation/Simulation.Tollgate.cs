@@ -39,7 +39,7 @@ namespace Rts.Simulation
         private void TryPlaceTollgate(uint faction, EconomyCommand command)
         {
             var rules = world.Config.Economy;
-            if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= rules.TollgateMaxBuildings
+            if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= TollgateMaxBuildingsFor(faction)
                 || (byte)command.Facing > 3 || world.Economies[faction - 1].Wood < rules.TollgateWoodCost
                 || world.Economies[faction - 1].Stone < rules.TollgateStoneCost) return;
             int[] cells = TollgateFootprint(command.Cell, command.Facing);
@@ -54,6 +54,74 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Tollgate) count++;
             return count;
+        }
+
+        private int TollgateMaxBuildingsFor(uint faction)
+            => world.Config.Economy.TollgateMaxBuildings
+                + (HasTech(faction, TollgateTech.GateNetwork) ? world.Config.Economy.TollgateGateNetworkMaxBuildingsBonus : 0);
+
+        private int TollgateHpFor(int baseHp, uint faction)
+            => HasTech(faction, TollgateTech.GateDefence)
+                ? checked(baseHp * world.Config.Economy.TollgateGateDefenceHpPermille / 1000) : baseHp;
+
+        /// <summary>V3-16 #2: one fee pulse counts enemy soldiers stopped within the gate's fee radius.</summary>
+        private void AdvanceTollgateFees()
+        {
+            var rules = world.Config.Economy;
+            if (!TollgateOn || rules.TollgateFeeIntervalTicks <= 0 || world.Tick % rules.TollgateFeeIntervalTicks != 0) return;
+            long radius = Fix64.FromInt(rules.TollgateFeeRadiusMeters).Raw;
+            long radiusSquared = checked(radius * radius);
+            long networkRadius = Fix64.FromInt(rules.TollgateNetworkRadiusMeters).Raw;
+            long networkRadiusSquared = checked(networkRadius * networkRadius);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var gate = world.Buildings[i];
+                if (!gate.Alive || !gate.Complete || gate.Kind != BuildingKind.Tollgate) continue;
+                int enemyCount = 0;
+                var gateCenter = BuildingCenter(gate);
+                foreach (int soldierIndex in world.SoldierTraversal)
+                {
+                    var enemy = world.Soldiers[soldierIndex];
+                    if (!enemy.Alive || enemy.Initial.FactionId == gate.FactionId || !WithinSquared(enemy.Position, gateCenter, radiusSquared)) continue;
+                    enemyCount++;
+                }
+                if (enemyCount == 0) continue;
+                int nearbyGates = 0;
+                for (int j = 0; j < world.BuildingCount; j++)
+                {
+                    var other = world.Buildings[j];
+                    if (i == j || !other.Alive || !other.Complete || other.FactionId != gate.FactionId || other.Kind != BuildingKind.Tollgate
+                        || !WithinSquared(BuildingCenter(other), gateCenter, networkRadiusSquared)) continue;
+                    nearbyGates++;
+                }
+                int multiplier = checked(1000 + nearbyGates * (HasTech(gate.FactionId, TollgateTech.GateNetwork) ? rules.TollgateNetworkFeeBonusPermille : 0));
+                ref var economy = ref world.Economies[gate.FactionId - 1];
+                economy.Wood = checked(economy.Wood + checked(enemyCount * rules.TollgateWoodPerEnemy * multiplier / 1000));
+                economy.Food = checked(economy.Food + checked(enemyCount * rules.TollgateFoodPerEnemy * multiplier / 1000));
+            }
+        }
+
+        private static bool WithinSquared(SimPoint a, SimPoint b, long radiusSquared)
+        {
+            long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
+            return checked(dx * dx + dz * dz) <= radiusSquared;
+        }
+
+        /// <summary>V3-16 #2: only tollgate-civilisation soldiers beside their own completed gate get this reduction.</summary>
+        private int TollgateDefenceDamage(uint defenderFaction, SimPoint position, int damage)
+        {
+            if (damage <= 0 || !TollgateAllowed(defenderFaction) || !HasTech(defenderFaction, TollgateTech.GateDefence)) return damage;
+            int cell = world.Map.Cell(position);
+            if (cell < 0) return damage;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var gate = world.Buildings[i];
+                if (!gate.Alive || !gate.Complete || gate.FactionId != defenderFaction || gate.Kind != BuildingKind.Tollgate) continue;
+                foreach (int gateCell in Footprint(gate))
+                    if (Chebyshev(cell, gateCell) <= 1)
+                        return checked(damage * (1000 - world.Config.Economy.TollgateGateDefenceDamageReductionPermille) / 1000);
+            }
+            return damage;
         }
 
         private bool TollgateSiteIsClear(uint faction, int[] cells)
@@ -82,7 +150,7 @@ namespace Rts.Simulation
         /// <summary>V3-16 #1: the automatic choice is the narrowest cell pair on the own-core to enemy-core route.</summary>
         private void DecideTollgate(uint faction)
         {
-            if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= world.Config.Economy.TollgateMaxBuildings) return;
+            if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= TollgateMaxBuildingsFor(faction)) return;
             var economy = world.Economies[faction - 1];
             var rules = world.Config.Economy;
             if (economy.Wood < rules.TollgateWoodCost || economy.Stone < rules.TollgateStoneCost) return;

@@ -39,8 +39,10 @@ namespace Rts.Simulation
         private const int MountainExtensionV1DataLength = 12 * sizeof(int);
         private const int MountainExtensionDataLength = 22 * sizeof(int);
         private const int TollgateExtensionId = 6;
-        private const int TollgateExtensionVersion = 1;
-        private const int TollgateExtensionDataLength = 7 * sizeof(int);
+        private const int TollgateExtensionV1 = 1;
+        private const int TollgateExtensionVersion = 2;
+        private const int TollgateExtensionV1DataLength = 7 * sizeof(int);
+        private const int TollgateExtensionDataLength = 22 * sizeof(int);
         private const int MetropolisExtensionId = 7;
         private const int MetropolisExtensionVersion = 1;
         private const int MetropolisExtensionDataLength = 5 * sizeof(int);
@@ -546,8 +548,10 @@ namespace Rts.Simulation
                     && dataLength == MountainExtensionV1DataLength;
                 bool oldFishing = id == FishingCivExtensionId && featureVersion == FishingCivExtensionV1
                     && dataLength == FishingCivExtensionV1DataLength;
-                if ((!oldCult && !oldMountain && !oldFishing && featureVersion != registration.Version)
-                    || (!oldCult && !oldMountain && !oldFishing && dataLength != registration.DataLength) || dataLength < 0
+                bool oldTollgate = id == TollgateExtensionId && featureVersion == TollgateExtensionV1
+                    && dataLength == TollgateExtensionV1DataLength;
+                if ((!oldCult && !oldMountain && !oldFishing && !oldTollgate && featureVersion != registration.Version)
+                    || (!oldCult && !oldMountain && !oldFishing && !oldTollgate && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -629,8 +633,14 @@ namespace Rts.Simulation
                 }
             }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
+            extensions.RemoveAll(extension => extension != null && extension.Id == TollgateExtensionId && !c.Economy.Tollgate);
             bool hasTollgate = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == TollgateExtensionId) hasTollgate = true;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != TollgateExtensionId) continue;
+                hasTollgate = true;
+                if (extensions[i].Version == TollgateExtensionV1) extensions[i] = CreateTollgateExtension(c.Economy);
+            }
             if (c.Economy.Tollgate && !hasTollgate) extensions.Add(CreateTollgateExtension(c.Economy));
             bool hasMetropolis = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
@@ -841,6 +851,13 @@ namespace Rts.Simulation
                 writer.Write(e.Tollgate ? 1 : 0);
                 writer.Write(e.TollgateLengthCells); writer.Write(e.TollgateWoodCost); writer.Write(e.TollgateStoneCost);
                 writer.Write(e.TollgateWork); writer.Write(e.TollgateHp); writer.Write(e.TollgateMaxBuildings);
+                writer.Write(e.TollgateFeeRadiusMeters); writer.Write(e.TollgateFeeIntervalTicks);
+                writer.Write(e.TollgateWoodPerEnemy); writer.Write(e.TollgateFoodPerEnemy);
+                writer.Write(e.TollgateNetworkRadiusMeters); writer.Write(e.TollgateNetworkFeeBonusPermille);
+                writer.Write(e.TollgateGateDefenceFoodCost); writer.Write(e.TollgateGateDefenceWoodCost); writer.Write(e.TollgateGateDefenceTicks);
+                writer.Write(e.TollgateGateNetworkFoodCost); writer.Write(e.TollgateGateNetworkWoodCost); writer.Write(e.TollgateGateNetworkTicks);
+                writer.Write(e.TollgateGateDefenceHpPermille); writer.Write(e.TollgateGateDefenceDamageReductionPermille);
+                writer.Write(e.TollgateGateNetworkMaxBuildingsBonus);
                 return new ScenarioExtensionData { Id = TollgateExtensionId, Version = TollgateExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -855,6 +872,16 @@ namespace Rts.Simulation
                 e.Tollgate = enabled != 0;
                 e.TollgateLengthCells = reader.ReadInt32(); e.TollgateWoodCost = reader.ReadInt32(); e.TollgateStoneCost = reader.ReadInt32();
                 e.TollgateWork = reader.ReadInt32(); e.TollgateHp = reader.ReadInt32(); e.TollgateMaxBuildings = reader.ReadInt32();
+                if (extension.Version >= TollgateExtensionVersion)
+                {
+                    e.TollgateFeeRadiusMeters = reader.ReadInt32(); e.TollgateFeeIntervalTicks = reader.ReadInt32();
+                    e.TollgateWoodPerEnemy = reader.ReadInt32(); e.TollgateFoodPerEnemy = reader.ReadInt32();
+                    e.TollgateNetworkRadiusMeters = reader.ReadInt32(); e.TollgateNetworkFeeBonusPermille = reader.ReadInt32();
+                    e.TollgateGateDefenceFoodCost = reader.ReadInt32(); e.TollgateGateDefenceWoodCost = reader.ReadInt32(); e.TollgateGateDefenceTicks = reader.ReadInt32();
+                    e.TollgateGateNetworkFoodCost = reader.ReadInt32(); e.TollgateGateNetworkWoodCost = reader.ReadInt32(); e.TollgateGateNetworkTicks = reader.ReadInt32();
+                    e.TollgateGateDefenceHpPermille = reader.ReadInt32(); e.TollgateGateDefenceDamageReductionPermille = reader.ReadInt32();
+                    e.TollgateGateNetworkMaxBuildingsBonus = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tollgate extension data.");
             }
         }
