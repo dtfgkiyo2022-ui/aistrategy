@@ -189,6 +189,7 @@ namespace Rts.Presentation
                 case CivKind.Caravan: return UiText.T("caravan", "隊商・交易の文明");
                 case CivKind.Cavalry: return UiText.T("cavalry", "騎馬・機動の文明");
                 case CivKind.Bridge: return UiText.T("engineering", "工兵・架橋の文明");
+                case CivKind.Academy: return UiText.T("academy", "学府・技術の文明");
                 default: return UiText.T("primitive age", "原始時代");
             }
         }
@@ -205,6 +206,7 @@ namespace Rts.Presentation
                 case CivKind.Caravan: return UiText.T("caravan", "隊商");
                 case CivKind.Cavalry: return UiText.T("cavalry", "騎馬");
                 case CivKind.Bridge: return UiText.T("engineering", "工兵");
+                case CivKind.Academy: return UiText.T("academy", "学府");
                 default: return c.ToString();
             }
         }
@@ -216,7 +218,7 @@ namespace Rts.Presentation
         public bool ExtraCivilisations { get; set; }
 
         private static readonly CivKind[] AllCivs = { CivKind.Agrarian, CivKind.Metallurgy, CivKind.Forestry, CivKind.Masonry,
-            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge };
+            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy };
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
         private static string AgeName(CivKind c, int age)
@@ -549,7 +551,7 @@ namespace Rts.Presentation
                 }
                 else
                 {
-                    // Seven civilisations: one label with the cost, then the choices four to a row.
+                    // All civilisations: one label with the cost, then the choices four to a row.
                     GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advance into", "時代を進める：") + cost);
                     y += 22f;
                     float quarterWidth = (w - 12f) / 4f;

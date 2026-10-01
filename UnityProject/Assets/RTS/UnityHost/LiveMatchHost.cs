@@ -213,7 +213,8 @@ namespace Rts.UnityHost
             if (mapSeed == 0) mapSeed = FreshSeed();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
-            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.GenerateTerrain(mapSeed)
+            // The academy needs gold on the map, so the all-civilisations match asks the generator for the gold placement too.
+            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (economyMap && ScenarioMultiplier == 1)
             {
@@ -226,6 +227,7 @@ namespace Rts.UnityHost
                     scenario.Economy.Caravan = true;
                     scenario.Economy.Cavalry = true;
                     scenario.Economy.Bridge = true;
+                    scenario.Economy.Academy = true;
                 }
             }
             tickSeconds = 1f / scenario.TickRateHz;
