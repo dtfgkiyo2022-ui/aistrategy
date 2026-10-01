@@ -407,7 +407,8 @@ namespace Rts.Simulation
         }
 
         private bool MonkPlanned(uint faction)
-            => world.Config.Economy.MonksEnabled && CompleteBarracks(faction) && QueuedOf(faction, UnitKind.Monk) == 0 && LivingClass(faction, UnitKind.Monk) == 0;
+            => world.Config.Economy.MonksEnabled && !CultAllowed(faction) && CompleteBarracks(faction)
+                && QueuedOf(faction, UnitKind.Monk) == 0 && LivingClass(faction, UnitKind.Monk) == 0;
 
         private bool CompleteBarracks(uint faction)
         {

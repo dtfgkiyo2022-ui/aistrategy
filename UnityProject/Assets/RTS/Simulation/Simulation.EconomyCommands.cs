@@ -83,7 +83,8 @@ namespace Rts.Simulation
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
-                        && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
+                         && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
+                         && !(CultAllowed(faction) && kind == BuildingKind.Monastery)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
@@ -137,7 +138,7 @@ namespace Rts.Simulation
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
-                    if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit)) return;
+                    if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit, b.Kind)) return;
                     if (IndustryOn) b.Held = true;
                     MarkLinesForBuilding(faction, b.Id);
                     Enqueue(faction, ref b, c.Unit);

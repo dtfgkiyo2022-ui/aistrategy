@@ -29,9 +29,20 @@ namespace Rts.Simulation
             return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
         }
 
+        private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, BuildingKind producer)
+        {
+            if (producer == BuildingKind.Monastery && kind == UnitKind.Monk && CultAllowed(faction))
+            {
+                var e = world.Config.Economy;
+                return (e.MonasteryMonkFoodCost, e.MonasteryMonkWoodCost, 0, 0, 0, e.MonkTrainTicks);
+            }
+            return CostOf(faction, kind);
+        }
+
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
         private bool Trains(BuildingState b, UnitKind kind)
         {
+            if (b.Kind == BuildingKind.Monastery) return kind == UnitKind.Monk && CultAllowed(b.FactionId);
             // V3-5 (32 #9): the siege workshop trains rams, and only rams.
             if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
@@ -144,11 +155,13 @@ namespace Rts.Simulation
 
         private static UnitKind QueueAt(BuildingState b, int i) => b.QueueKinds == null || i >= b.QueueKinds.Length ? UnitKind.Infantry : b.QueueKinds[i];
 
-        private bool CanPay(uint faction, UnitKind kind)
+        private bool CanPay(uint faction, UnitKind kind) => CanPay(faction, kind, BuildingKind.Barracks);
+
+        private bool CanPay(uint faction, UnitKind kind, BuildingKind producer)
         {
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
-            var c = CostOf(faction, kind);
+            var c = CostOf(faction, kind, producer);
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold;
         }
@@ -156,7 +169,7 @@ namespace Rts.Simulation
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
         private void Enqueue(uint faction, ref BuildingState b, UnitKind kind)
         {
-            var c = CostOf(faction, kind);
+            var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
@@ -197,7 +210,7 @@ namespace Rts.Simulation
         private void CancelLast(uint faction, ref BuildingState b)
         {
             var kind = QueueAt(b, b.Queued - 1);
-            var c = CostOf(faction, kind);
+            var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
             if (b.QueueKinds != null && b.QueueKinds.Length > 0) Array.Resize(ref b.QueueKinds, b.QueueKinds.Length - 1);
@@ -240,16 +253,17 @@ namespace Rts.Simulation
                 Array.Copy(b.QueueKinds, 1, rest, 0, rest.Length);
                 b.QueueKinds = rest;
             }
-            int metal = CostOf(faction, done).metal;
-            int gems = CostOf(faction, done).gems;
-            int gold = CostOf(faction, done).gold;
+            var doneCost = CostOf(faction, done, b.Kind);
+            int metal = doneCost.metal;
+            int gems = doneCost.gems;
+            int gold = doneCost.gold;
             if (done == UnitKind.HeavyInfantry) b.QueuedSteel = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSteel - metal);
             else if (done == UnitKind.SkirmishArcher) b.QueuedBowGear = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedBowGear - metal);
             else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
                 b.QueuedGold = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGold - gold);
-            b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0)).ticks : 0;
+            b.TrainRemaining = b.Queued > 0 ? CostOf(faction, QueueAt(b, 0), b.Kind).ticks : 0;
         }
 
         /// <summary>Units of <paramref name="kind"/> queued in all the faction's buildings.</summary>
@@ -301,6 +315,7 @@ namespace Rts.Simulation
         /// <summary>Gold-enabled automatic economy keeps one monk planned, except while saving for the third age.</summary>
         private bool DecideMonk(uint faction, ref BuildingState barracks)
         {
+            if (CultAllowed(faction)) return false;
             if (!world.Config.Economy.GoldEnabled || !world.Config.Economy.MonksEnabled || SavingToAdvance(faction)
                 || barracks.Queued >= world.Config.Economy.QueueLimit || QueuedOf(faction, UnitKind.Monk) > 0
                 || LivingClass(faction, UnitKind.Monk) > 0 || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk)) return false;

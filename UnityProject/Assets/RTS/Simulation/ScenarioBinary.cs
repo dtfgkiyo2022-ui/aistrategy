@@ -23,6 +23,9 @@ namespace Rts.Simulation
         private const int AcademyExtensionId = 2;
         private const int AcademyExtensionVersion = 1;
         private const int AcademyExtensionDataLength = 13 * sizeof(int);
+        private const int CultExtensionId = 3;
+        private const int CultExtensionVersion = 1;
+        private const int CultExtensionDataLength = 7 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -32,7 +35,8 @@ namespace Rts.Simulation
         private static readonly ExtensionRegistration[] ExtensionRegistrations =
         {
             new ExtensionRegistration(1, 1, sizeof(int)),
-            new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength)
+            new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
+            new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -518,6 +522,7 @@ namespace Rts.Simulation
                 seen[registrationIndex] = true;
                 var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
                 if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -551,8 +556,11 @@ namespace Rts.Simulation
             if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
             bool hasAcademy = false;
+            bool hasCult = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == CultExtensionId) hasCult = true;
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
+            if (c.Economy.Cult && !hasCult) extensions.Add(CreateCultExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -581,6 +589,32 @@ namespace Rts.Simulation
                 e.AcademyToolsFoodCost = reader.ReadInt32(); e.AcademyToolsWoodCost = reader.ReadInt32(); e.AcademyToolsGoldCost = reader.ReadInt32(); e.AcademyToolsTicks = reader.ReadInt32();
                 e.AcademyCartsFoodCost = reader.ReadInt32(); e.AcademyCartsWoodCost = reader.ReadInt32(); e.AcademyCartsGoldCost = reader.ReadInt32(); e.AcademyCartsTicks = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing academy extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCultExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Cult ? 1 : 0);
+                writer.Write(e.MonasterySizeCells); writer.Write(e.MonasteryWoodCost); writer.Write(e.MonasteryWork); writer.Write(e.MonasteryHp);
+                writer.Write(e.MonasteryMonkFoodCost); writer.Write(e.MonasteryMonkWoodCost);
+                return new ScenarioExtensionData { Id = CultExtensionId, Version = CultExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCultExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid cult flag.");
+                e.Cult = enabled != 0;
+                e.MonasterySizeCells = reader.ReadInt32(); e.MonasteryWoodCost = reader.ReadInt32(); e.MonasteryWork = reader.ReadInt32(); e.MonasteryHp = reader.ReadInt32();
+                e.MonasteryMonkFoodCost = reader.ReadInt32(); e.MonasteryMonkWoodCost = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing cult extension data.");
             }
         }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
