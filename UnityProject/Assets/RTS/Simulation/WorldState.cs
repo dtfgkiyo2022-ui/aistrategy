@@ -76,6 +76,11 @@ namespace Rts.Simulation
         internal SimPoint[] ContactPositions;
         internal long[] ContactLastSeenTicks;
         internal bool[] ContactAbsent;
+        /// <summary>V3-13 #4: one record per observed enemy soldier for cult choice scoring.</summary>
+        internal uint[] CultObservedContactIds;
+        internal UnitKind[] CultObservedKinds;
+        internal long[] CultObservedLastSeenTicks;
+        internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
         internal ObjectiveMemory[] Objectives;
     }
@@ -317,6 +322,8 @@ namespace Rts.Simulation
                 Factions[f] = new FactionState { Id = d.Id, CoreId = d.CoreId, ArmyIds = d.ArmyIds,
                     ContactIds = new uint[Soldiers.Length], ContactPositions = new SimPoint[Soldiers.Length],
                     ContactLastSeenTicks = new long[Soldiers.Length], ContactAbsent = new bool[Soldiers.Length],
+                    CultObservedContactIds = new uint[Soldiers.Length], CultObservedKinds = new UnitKind[Soldiers.Length],
+                    CultObservedLastSeenTicks = new long[Soldiers.Length], CultObservedValidUntilTicks = new long[Soldiers.Length],
                     VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)

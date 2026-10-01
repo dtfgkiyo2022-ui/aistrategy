@@ -34,6 +34,28 @@ namespace Rts.Core.Tests
             return s;
         }
 
+        private static ScenarioDefinition CultMatchScenario()
+        {
+            var s = CultScenario(true);
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
+            s.Economy.AutoVillagerTarget = 10;
+            s.Economy.MonasteryWoodCost = 0;
+            s.Economy.MonasteryWork = 1;
+            s.Economy.AutoInfantryQueue = 0;
+            s.Cores[0].Hp = s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
         private static void AdvanceCultAge(ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ref ulong sequence)
         {
             gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Cult));
@@ -101,6 +123,38 @@ namespace Rts.Core.Tests
         private static int Number(Dictionary<string, string> fields, string name)
             => int.Parse(fields[name], CultureInfo.InvariantCulture);
 
+        private static void SetCultObservationMemory(Battle sim, params UnitKind[] kinds)
+        {
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = worldField.GetValue(sim);
+            var factionsField = world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic);
+            var factions = (Array)factionsField.GetValue(world);
+            var faction = factions.GetValue(0);
+            var type = faction.GetType();
+            var observedIds = (uint[])type.GetField("CultObservedContactIds", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            var observedKinds = (UnitKind[])type.GetField("CultObservedKinds", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            var lastSeen = (long[])type.GetField("CultObservedLastSeenTicks", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            var validUntil = (long[])type.GetField("CultObservedValidUntilTicks", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            Array.Clear(observedIds, 0, observedIds.Length);
+            Array.Clear(observedKinds, 0, observedKinds.Length);
+            Array.Clear(lastSeen, 0, lastSeen.Length);
+            Array.Clear(validUntil, 0, validUntil.Length);
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                observedIds[i] = (uint)i + 1;
+                observedKinds[i] = kinds[i];
+                lastSeen[i] = 0;
+                validUntil[i] = 600;
+            }
+        }
+
+        private static int CultScore(Battle sim)
+        {
+            var method = typeof(Battle).GetMethod("CultScore", BindingFlags.Static | BindingFlags.NonPublic);
+            return (int)method.Invoke(null, new object[] { sim, 1u, sim.Capture(1).Economy.Civ == CivKind.Primitive
+                ? default(SimPoint) : default(SimPoint), 0, 0 });
+        }
+
         private static uint PlaceAndBuild(ScenarioDefinition s, Battle sim, CommandGateway gateway, ref ulong sequence)
         {
             int before = sim.Capture(1).Economy.Buildings.Count;
@@ -148,6 +202,53 @@ namespace Rts.Core.Tests
                 Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
                     Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
             }
+        }
+
+        [Test]
+        public void CultChoiceScoresDistinctValidObservedHighValueSoldiers()
+        {
+            var scenario = CultScenario();
+            var sim = new Battle(scenario);
+
+            SetCultObservationMemory(sim);
+            Assert.That(CultScore(sim), Is.EqualTo(0), "未観測なら加点しない");
+
+            SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
+            Assert.That(CultScore(sim), Is.EqualTo(2), "1体は2点");
+
+            // The record is per individual slot: seeing this same heavy soldier repeatedly only refreshes its
+            // validity window, it does not create a second record.
+            SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
+            Assert.That(CultScore(sim), Is.EqualTo(2), "同じ個体の再観測は重複計上しない");
+
+            SetCultObservationMemory(sim, UnitKind.HeavyInfantry, UnitKind.Cavalry, UnitKind.Mercenary);
+            Assert.That(CultScore(sim), Is.EqualTo(3), "3体以上は3点");
+
+            SetCultObservationMemory(sim, UnitKind.Infantry);
+            Assert.That(CultScore(sim), Is.EqualTo(0), "価値の高くない兵だけなら加点しない");
+
+            SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = worldField.GetValue(sim);
+            var factions = (Array)world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(world);
+            var faction = factions.GetValue(0);
+            var validUntil = (long[])faction.GetType().GetField("CultObservedValidUntilTicks", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            validUntil[0] = -1;
+            Assert.That(CultScore(sim), Is.EqualTo(0), "有効期限切れは加点しない");
+        }
+
+        [Test]
+        public void CultObservationMemoryIsInCanonicalState()
+        {
+            var sim = new Battle(CultScenario());
+            byte[] before = ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState);
+            SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
+            var fields = Fields(sim);
+            Assert.That(fields["Observations[1].CultObservations[0].Kind"], Is.EqualTo(((byte)UnitKind.HeavyInfantry).ToString(CultureInfo.InvariantCulture)));
+            Assert.That(fields["Observations[1].CultObservations[0].LastSeenTick"], Is.EqualTo("0"));
+            Assert.That(fields["Observations[1].CultObservations[0].ValidUntilTick"], Is.EqualTo("600"));
+            byte[] after = ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState);
+            Assert.That(after, Is.Not.EqualTo(before));
         }
 
         [Test]
@@ -383,6 +484,28 @@ namespace Rts.Core.Tests
             var decodedV2 = ScenarioBinary.Decode(v2);
             Assert.That(decodedV2.Extensions.Single(e => e.Id == 3).Version, Is.EqualTo(2));
             Assert.That(ScenarioBinary.Encode(decodedV2), Is.EqualTo(v2));
+        }
+
+        [TestCase(CivKind.Cult, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Cult)]
+        [TestCase(CivKind.Cult, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Cult)]
+        public void CultCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east)
+        {
+            var scenario = CultMatchScenario();
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", ages="
+                + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2));
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2));
         }
     }
 }

@@ -140,7 +140,35 @@ namespace Rts.Simulation
             return usable;
         }
 
-        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// V3-13 #4: a cult choice is justified only by high-value enemy soldiers that this faction has actually
+        /// observed. The record is per soldier slot, so repeated sightings of one individual do not add points and
+        /// expired observations do not delay the ordinary age decision.
+        /// </summary>
+        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.CultOn) return 0;
+            int observed = s.CountValidCultObservations(faction);
+            return observed >= 3 ? 3 : observed > 0 ? 2 : 0;
+        }
+
+        private const int CultObservationValidityTicks = 600;
+
+        private int CountValidCultObservations(uint faction)
+        {
+            var memory = world.Factions[faction - 1];
+            int count = 0;
+            for (int i = 0; i < memory.CultObservedKinds.Length; i++)
+            {
+                if (memory.CultObservedValidUntilTicks[i] < world.Tick) continue;
+                if (CultObservedValue(memory.CultObservedKinds[i]) > 0) count++;
+            }
+            return count;
+        }
+
+        private static int CultObservedValue(UnitKind kind)
+            => kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry ? 5 : kind == UnitKind.LightCavalry ? 4
+                : kind == UnitKind.Mercenary ? 3 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 2 : 0;
 
         private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
