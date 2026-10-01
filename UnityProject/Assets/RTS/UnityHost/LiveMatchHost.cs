@@ -197,7 +197,7 @@ namespace Rts.UnityHost
             set { if (value == ageVictory) return; ageVictory = value; matchRestartRequested = true; }
         }
 
-        // Off by default so the usual match keeps the first two civilisations; on opens all seven for trying them.
+        // Off by default so the usual match keeps the first two civilisations; on opens all fourteen for trying them.
         [SerializeField] private bool allCivilisations = false;
 
         public bool AllCivilisations
@@ -233,6 +233,9 @@ namespace Rts.UnityHost
                     scenario.Economy.Mountain = true;
                     scenario.Economy.FishingCiv = true;
                     scenario.Economy.FishingEnabled = true; // the fishing civilisation needs the river fish
+                    scenario.Economy.Tollgate = true;
+                    scenario.Economy.Metropolis = true;
+                    scenario.Economy.Sanctuary = true;
                 }
             }
             tickSeconds = 1f / scenario.TickRateHz;

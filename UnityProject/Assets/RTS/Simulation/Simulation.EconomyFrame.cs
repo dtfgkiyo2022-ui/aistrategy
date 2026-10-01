@@ -124,7 +124,7 @@ namespace Rts.Simulation
                     if (world.Soldiers[soldierId - 1].Alive) { first = soldierId; break; }
                 if (first == 0) continue;
                 var lead = world.Soldiers[first - 1];
-                var path = world.Map.FindPath(world.Map.Cell(lead.Position), army.Decision.Goal.Point);
+                var path = world.Map.FindPath(world.Map.Cell(lead.Position), army.Decision.Goal.Point, army.Definition.FactionId);
                 long eta = path.Length == 0 ? -1 : checked((long)path.Length * 20);
                 return new CavalryMissionView(kind, id, army.Decision.Goal.Point, eta, army.Decision.Returning);
             }

@@ -75,7 +75,7 @@ namespace Rts.Simulation
                 int i = checked((int)s.TargetId - 1);
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) return;
-                villagerDamage[i] = checked(villagerDamage[i] + s.Parameters.Damage);
+                villagerDamage[i] = checked(villagerDamage[i] + SanctuaryDamage(faction, s.Parameters.Damage));
             }
             else if (s.TargetKind == TargetBelt)
             {
@@ -83,14 +83,14 @@ namespace Rts.Simulation
                 var belt = world.Belts[cell];
                 if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]
                     || !InRange(s.Position, world.Map.Center(cell), s.Parameters.Range)) return;
-                beltDamage[cell] = checked(beltDamage[cell] + s.Parameters.Damage);
+                beltDamage[cell] = checked(beltDamage[cell] + SanctuaryDamage(faction, s.Parameters.Damage));
             }
             else
             {
                 int i = checked((int)s.TargetId - 1);
                 var b = world.Buildings[i];
                 if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
-                buildingDamage[i] = checked(buildingDamage[i] + SiegeDamage(s));
+                buildingDamage[i] = checked(buildingDamage[i] + SanctuaryDamage(faction, SiegeDamage(s)));
             }
             s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
             s.IsAttacking = true;
@@ -164,7 +164,7 @@ namespace Rts.Simulation
         /// <summary>The point of the footprint square closest to <paramref name="from"/>, for range checks.</summary>
         private SimPoint NearestFootprintPoint(BuildingState b, SimPoint from)
         {
-            if (b.Kind == BuildingKind.Bridge)
+            if (b.Kind == BuildingKind.Bridge || b.Kind == BuildingKind.Tollgate)
             {
                 var cells = Footprint(b);
                 int best = cells.Length == 0 ? -1 : cells[0];
