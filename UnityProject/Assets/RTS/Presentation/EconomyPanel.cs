@@ -195,6 +195,7 @@ namespace Rts.Presentation
                 case CivKind.Mountain: return UiText.T("mountain", "山岳・鉱夫の文明");
                 case CivKind.Tollgate: return UiText.T("tollgate", "関所・要塞の文明");
                 case CivKind.Metropolis: return UiText.T("metropolis", "都市・人口の文明");
+                case CivKind.Sanctuary: return UiText.T("sanctuary", "聖地・遺物の文明");
                 default: return UiText.T("primitive age", "原始時代");
             }
         }
@@ -217,6 +218,7 @@ namespace Rts.Presentation
                 case CivKind.Mountain: return UiText.T("mountain", "山岳");
                 case CivKind.Tollgate: return UiText.T("tollgate", "関所");
                 case CivKind.Metropolis: return UiText.T("metropolis", "都市");
+                case CivKind.Sanctuary: return UiText.T("sanctuary", "聖地");
                 default: return c.ToString();
             }
         }
@@ -228,7 +230,7 @@ namespace Rts.Presentation
         public bool ExtraCivilisations { get; set; }
 
         private static readonly CivKind[] AllCivs = { CivKind.Agrarian, CivKind.Metallurgy, CivKind.Forestry, CivKind.Masonry,
-            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy, CivKind.Cult, CivKind.Fishing, CivKind.Mountain, CivKind.Tollgate, CivKind.Metropolis };
+            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy, CivKind.Cult, CivKind.Fishing, CivKind.Mountain, CivKind.Tollgate, CivKind.Metropolis, CivKind.Sanctuary };
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
         private static string AgeName(CivKind c, int age)

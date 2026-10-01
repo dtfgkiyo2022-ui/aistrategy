@@ -280,6 +280,7 @@ namespace Rts.Presentation
                 case BuildingKind.MineShaft: return UiText.T("Mine shaft", "坑道小屋");
                 case BuildingKind.Tollgate: return UiText.T("Tollgate", "関所");
                 case BuildingKind.GrandHouse: return UiText.T("Grand house", "大住居");
+                case BuildingKind.Shrine: return UiText.T("Shrine", "祠");
                 default: return kind.ToString();
             }
         }
