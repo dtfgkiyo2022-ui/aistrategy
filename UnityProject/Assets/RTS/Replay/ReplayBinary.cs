@@ -187,7 +187,7 @@ namespace Rts.Replay
         private static TechKind Tech(BinaryReader r)
         {
             byte value = r.ReadByte();
-            if (value < (byte)TechKind.Weapons || value > (byte)MountainTech.MountainFort) throw new InvalidDataException("Unknown TechKind.");
+            if (value < (byte)TechKind.Weapons || value > (byte)CultTech.MartyrBlessing) throw new InvalidDataException("Unknown TechKind.");
             return (TechKind)value;
         }
     }

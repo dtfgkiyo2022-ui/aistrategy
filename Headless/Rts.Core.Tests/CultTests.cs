@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
@@ -33,6 +34,12 @@ namespace Rts.Core.Tests
             return s;
         }
 
+        private static void AdvanceCultAge(ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ref ulong sequence)
+        {
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Cult));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 3);
+        }
+
         private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtCultAge(Action<ScenarioDefinition> customize = null, bool holdEnemy = false, bool humanArmyPolicy = false)
         {
             var scenario = CultScenario(true, customize);
@@ -55,7 +62,7 @@ namespace Rts.Core.Tests
             return (scenario, sim, gateway, sequence);
         }
 
-        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence, uint monastery, uint monk) CultWithOneManualMonk(int conversionTicks = 100000, int postTrainTicks = 60, bool humanPolicy = false)
+        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence, uint monastery, uint monk) CultWithOneManualMonk(int conversionTicks = 100000, int postTrainTicks = 60, bool humanPolicy = false, Action<ScenarioDefinition> customize = null)
         {
             var state = AtCultAge(s =>
             {
@@ -79,6 +86,7 @@ namespace Rts.Core.Tests
                     var parameters = Array.Find(s.UnitParameters, p => p.Kind == s.Soldiers[i].Kind);
                     s.Soldiers[i].Hp = s.Soldiers[i].Alive ? parameters.Hp : 0;
                 }
+                customize?.Invoke(s);
             }, false, humanPolicy);
             uint monastery = PlaceAndBuild(state.scenario, state.sim, state.gateway, ref state.sequence);
             state.gateway.SubmitEconomy(EconomyCommand.Train(1, ++state.sequence, monastery, UnitKind.Monk));
@@ -272,6 +280,109 @@ namespace Rts.Core.Tests
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
             }
+        }
+
+        [Test]
+        public void SermonShortensOnlyTheCultFactionConversion()
+        {
+            var state = AtCultAge(s =>
+            {
+                s.Economy.Age2FoodCost = 0; s.Economy.Age2WoodCost = 0; s.Economy.Age2Ticks = 1; s.Economy.SermonTicks = 1;
+                s.Economy.ConversionTicks = 400;
+            }, humanArmyPolicy: true);
+            uint monastery = PlaceAndBuild(state.scenario, state.sim, state.gateway, ref state.sequence);
+            AdvanceCultAge(state.scenario, state.sim, state.gateway, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, monastery, CultTech.Sermon));
+            Steps(state.gateway, state.sim, state.scenario.Economy.SermonTicks + 2);
+
+            var method = typeof(Battle).GetMethod("ConversionTicksFor", BindingFlags.Instance | BindingFlags.NonPublic);
+            int cultTicks = (int)method.Invoke(state.sim, new object[] { 1u });
+            int otherFactionTicks = (int)method.Invoke(state.sim, new object[] { 2u });
+            Assert.That(cultTicks, Is.EqualTo(400 * 2 / 3));
+            Assert.That(otherFactionTicks, Is.EqualTo(400));
+        }
+
+        [Test]
+        public void MartyrBlessingRaisesCultMonkHpOnlyAfterThirdAgeResearch()
+        {
+            var state = CultWithOneManualMonk(100000, 2, true, s =>
+            {
+                s.Economy.Age2FoodCost = s.Economy.Age2WoodCost = 0;
+                s.Economy.Age2Ticks = s.Economy.Age3Ticks = 1;
+                s.Economy.Age3FoodCost = s.Economy.Age3WoodCost = 0;
+                s.Economy.SermonTicks = s.Economy.MartyrBlessingTicks = 1;
+            });
+            uint monastery = state.monastery;
+            int before = state.sim.Capture(1).Units.First(u => u.Id == state.monk).Hp;
+            AdvanceCultAge(state.scenario, state.sim, state.gateway, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, monastery, CultTech.Sermon));
+            Steps(state.gateway, state.sim, 3);
+            AdvanceCultAge(state.scenario, state.sim, state.gateway, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, monastery, CultTech.MartyrBlessing));
+            Steps(state.gateway, state.sim, 3);
+            int after = state.sim.Capture(1).Units.First(u => u.Id == state.monk).Hp;
+            Assert.That(after, Is.EqualTo(before * state.scenario.Economy.MartyrBlessingHpPermille / 1000));
+        }
+
+        [Test]
+        public void CultBudgetLeavesAgeCostBeforeTrainingAndResearch()
+        {
+            var training = AtCultAge(s => { s.Economy.StartFood = 700; s.Economy.StartWood = 500; s.Economy.Age2FoodCost = 500; s.Economy.Age2WoodCost = 300; });
+            uint monastery = PlaceAndBuild(training.scenario, training.sim, training.gateway, ref training.sequence);
+            training.gateway.SubmitEconomy(EconomyCommand.Train(1, ++training.sequence, monastery, UnitKind.Monk));
+            Steps(training.gateway, training.sim, 1);
+            Assert.That(training.sim.Capture(1).Economy.Buildings.First(b => b.Id == monastery).Queued, Is.EqualTo(0));
+
+            var research = AtCultAge(s =>
+            {
+                s.Economy.StartFood = 2000; s.Economy.StartWood = 1500; s.Economy.Age2FoodCost = 500; s.Economy.Age2WoodCost = 300;
+                s.Economy.Age2Ticks = 1; s.Economy.SermonTicks = 1;
+            });
+            monastery = PlaceAndBuild(research.scenario, research.sim, research.gateway, ref research.sequence);
+            AdvanceCultAge(research.scenario, research.sim, research.gateway, ref research.sequence);
+            research.gateway.SubmitEconomy(EconomyCommand.Research(1, ++research.sequence, monastery, CultTech.Sermon));
+            Steps(research.gateway, research.sim, 1);
+            Assert.That(research.sim.Capture(1).Economy.Buildings.First(b => b.Id == monastery).Researching, Is.EqualTo((TechKind)0));
+        }
+
+        [Test]
+        public void CultCanReachTheNextAgeWhileConversionAttemptsFail()
+        {
+            var state = AtCultAge(s =>
+            {
+                s.Economy.ConversionTicks = 100000; s.Economy.Age2FoodCost = 0; s.Economy.Age2WoodCost = 0; s.Economy.Age2Ticks = 1;
+            });
+            AdvanceCultAge(state.scenario, state.sim, state.gateway, ref state.sequence);
+            Assert.That(state.sim.Capture(1).Economy.Age, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void CultVersionOneExtensionIsReadableAndUpgradesToStableVersionTwo()
+        {
+            var scenario = CultScenario();
+            byte[] current = ScenarioBinary.Encode(scenario);
+            int marker = -1;
+            for (int i = current.Length - 4; i >= 0; i--)
+                if (BitConverter.ToInt32(current, i) == 0x4E545845) { marker = i; break; }
+            Assert.That(marker, Is.GreaterThanOrEqualTo(0));
+            Assert.That(BitConverter.ToInt32(current, marker + 12), Is.EqualTo(3));
+            Assert.That(BitConverter.ToInt32(current, marker + 20), Is.EqualTo(14 * sizeof(int)));
+
+            int recordData = marker + 24;
+            byte[] v1 = new byte[current.Length - 7 * sizeof(int)];
+            Buffer.BlockCopy(current, 0, v1, 0, recordData + 7 * sizeof(int));
+            Buffer.BlockCopy(current, recordData + 14 * sizeof(int), v1, recordData + 7 * sizeof(int),
+                current.Length - (recordData + 14 * sizeof(int)));
+            Buffer.BlockCopy(BitConverter.GetBytes(1), 0, v1, marker + 16, sizeof(int));
+            Buffer.BlockCopy(BitConverter.GetBytes(7 * sizeof(int)), 0, v1, marker + 20, sizeof(int));
+            Buffer.BlockCopy(BitConverter.GetBytes(BitConverter.ToInt32(v1, marker + 8) - 7 * sizeof(int)), 0, v1, marker + 8, sizeof(int));
+
+            var decodedV1 = ScenarioBinary.Decode(v1);
+            Assert.That(decodedV1.Extensions.Single(e => e.Id == 3).Version, Is.EqualTo(1));
+            byte[] v2 = ScenarioBinary.Encode(decodedV1);
+            var decodedV2 = ScenarioBinary.Decode(v2);
+            Assert.That(decodedV2.Extensions.Single(e => e.Id == 3).Version, Is.EqualTo(2));
+            Assert.That(ScenarioBinary.Encode(decodedV2), Is.EqualTo(v2));
         }
     }
 }

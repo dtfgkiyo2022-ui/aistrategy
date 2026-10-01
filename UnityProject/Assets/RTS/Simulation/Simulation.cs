@@ -392,13 +392,14 @@ namespace Rts.Simulation
 
         private void ResolveConversions()
         {
-            int ticks = world.Config.Economy.ConversionTicks;
-            if (!world.Config.Economy.MonksEnabled || ticks <= 0) return;
+            if (!world.Config.Economy.MonksEnabled || world.Config.Economy.ConversionTicks <= 0) return;
             foreach (int i in world.SoldierTraversal)
             {
                 ref var target = ref world.Soldiers[i];
-                if (!target.Alive || target.Hp <= 0 || target.ConversionProgress < ticks || target.ConversionByFaction == 0) continue;
                 uint faction = target.ConversionByFaction;
+                if (!target.Alive || target.Hp <= 0 || faction == 0) continue;
+                int ticks = ConversionTicksFor(faction);
+                if (target.ConversionProgress < ticks) continue;
                 UnitKind originalClass = target.Class;
                 UnitKind convertedKind = originalClass != 0 ? originalClass : target.Initial.Kind;
                 UnitKind spawnKind = originalClass != 0 ? UnitKind.Infantry : convertedKind;
@@ -416,6 +417,14 @@ namespace Rts.Simulation
                 if (spawned)
                     ApplyClass(world.SoldierCount - 1, originalClass == 0 ? 0 : convertedKind);
             }
+        }
+
+        /// <summary>Conversion duration is selected by the faction that is performing the conversion.</summary>
+        private int ConversionTicksFor(uint faction)
+        {
+            int ticks = world.Config.Economy.ConversionTicks;
+            if (CultAllowed(faction) && HasTech(faction, CultTech.Sermon)) ticks = checked(ticks * 2 / 3);
+            return Math.Max(1, ticks);
         }
 
         private void ResolveDeaths()

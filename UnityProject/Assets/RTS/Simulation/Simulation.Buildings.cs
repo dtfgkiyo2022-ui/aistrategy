@@ -100,7 +100,8 @@ namespace Rts.Simulation
             if (!building.Complete || building.Held || building.Queued >= world.Config.Economy.QueueLimit) return false;
             if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= CultMonkLimit(faction)) return false;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued + QueuedInfantry(faction);
-            if (population >= PopCapFor(faction) || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk, BuildingKind.Monastery)) return false;
+            if (population >= PopCapFor(faction) || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk, BuildingKind.Monastery)
+                || !CultBudgetAllows(faction, world.Config.Economy.MonasteryMonkFoodCost, world.Config.Economy.MonasteryMonkWoodCost)) return false;
             Enqueue(faction, ref building, UnitKind.Monk);
             return true;
         }
