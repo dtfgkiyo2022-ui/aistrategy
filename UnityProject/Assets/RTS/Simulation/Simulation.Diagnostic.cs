@@ -39,6 +39,7 @@ namespace Rts.Simulation
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
                     w.Value(n+"LocalPath.Count",(uint)(p.LocalPath?.Length ?? 0));
                     if (p.LocalPath != null) for (int j = 0; j < p.LocalPath.Length; j++) w.Value(n+"LocalPath["+j.ToString(CultureInfo.InvariantCulture)+"]",p.LocalPath[j]);
+                    if (CultOn) w.Value(n+"CultTargetContactId", p.CultTargetContactId);
                     // Parameters are immutable copies of Config; serialize explicitly to detect accidental divergence too.
                     w.Value(n+"Parameters.Kind",(byte)p.Parameters.Kind); w.Value(n+"Parameters.Hp",p.Parameters.Hp); w.Value(n+"Parameters.Damage",p.Parameters.Damage);
                     w.Value(n+"Parameters.AttackIntervalTicks",p.Parameters.AttackIntervalTicks); w.Value(n+"Parameters.Speed.Raw",p.Parameters.Speed.Raw); w.Value(n+"Parameters.Vision.Raw",p.Parameters.Vision.Raw); w.Value(n+"Parameters.Range.Raw",p.Parameters.Range.Raw);

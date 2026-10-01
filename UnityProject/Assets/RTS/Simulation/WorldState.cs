@@ -29,6 +29,8 @@ namespace Rts.Simulation
         internal int ConversionProgress;
         internal uint ConversionByFaction;
         internal long ConversionLastAttackTick;
+        /// <summary>V3-13 #2: the observation contact currently retained by an autonomous cult monk.</summary>
+        internal uint CultTargetContactId;
     }
 
     internal struct ArmyState

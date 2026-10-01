@@ -19,7 +19,7 @@ namespace Rts.Core.Tests
             for (int i = 0; i < count && !sim.Capture(1).Result.HasEnded; i++) gateway.Step();
         }
 
-        private static ScenarioDefinition CultScenario(bool monks = true)
+        private static ScenarioDefinition CultScenario(bool monks = true, Action<ScenarioDefinition> customize = null)
         {
             var s = MapGenerator.GenerateTerrain(1);
             s.Economy.Cult = true;
@@ -29,20 +29,62 @@ namespace Rts.Core.Tests
             s.Economy.AutoVillagerTarget = 3;
             s.Economy.AutoInfantryQueue = 0;
             s.Cores[0].Hp = s.Cores[1].Hp = 100000;
+            customize?.Invoke(s);
             return s;
         }
 
-        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtCultAge()
+        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtCultAge(Action<ScenarioDefinition> customize = null, bool holdEnemy = false, bool humanArmyPolicy = false)
         {
-            var scenario = CultScenario();
+            var scenario = CultScenario(true, customize);
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
             gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
             gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            if (holdEnemy)
+                gateway.Submit(new UserPolicyIntent(1, new ScopeKey(2, ScopeKind.All, 0), PolicyKind.Defend, default,
+                    0, new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 0,
+                    new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            if (humanArmyPolicy)
+                gateway.Submit(new UserPolicyIntent(0, new ScopeKey(1, ScopeKind.Army, 3), PolicyKind.Defend,
+                    new PolicyGoal(GoalKind.Core, 1, default), 0, new LossBudget(300),
+                    new EndCondition(EndKind.UntilReplaced, 0), 0,
+                    new Expiration(long.MaxValue, 0, ExpireFlags.None)));
             gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Cult));
-            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2);
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 5);
             return (scenario, sim, gateway, sequence);
+        }
+
+        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence, uint monastery, uint monk) CultWithOneManualMonk(int conversionTicks = 100000, int postTrainTicks = 60, bool humanPolicy = false)
+        {
+            var state = AtCultAge(s =>
+            {
+                s.Economy.AdvanceTicks = 1;
+                s.Economy.ConversionTicks = conversionTicks;
+                s.Economy.MonasteryWork = 1;
+                s.Economy.MonkTrainTicks = 1;
+                var west = s.Cores[0].Position;
+                for (int i = 20; i < s.Soldiers.Length; i++)
+                    s.Soldiers[i].Position = s.Cores[1].Position;
+                int targetOffset = conversionTicks < 100000 ? 6 : -15;
+                s.Soldiers[20].Position = conversionTicks < 100000
+                    ? new SimPoint(s.Soldiers[17].Position.X, west.Z - Fix64.FromInt(9))
+                    : new SimPoint(west.X + Fix64.FromInt(targetOffset), west.Z);
+                s.Soldiers[20].Hp = 100;
+                int infantryIndex = Array.FindIndex(s.UnitParameters, p => p.Kind == UnitKind.Infantry);
+                s.UnitParameters[infantryIndex].Hp = 100000;
+                if (conversionTicks < 100000) s.UnitParameters[infantryIndex].Speed = Fix64.FromInt(0);
+                for (int i = 0; i < s.Soldiers.Length; i++)
+                {
+                    var parameters = Array.Find(s.UnitParameters, p => p.Kind == s.Soldiers[i].Kind);
+                    s.Soldiers[i].Hp = s.Soldiers[i].Alive ? parameters.Hp : 0;
+                }
+            }, false, humanPolicy);
+            uint monastery = PlaceAndBuild(state.scenario, state.sim, state.gateway, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Train(1, ++state.sequence, monastery, UnitKind.Monk));
+            Steps(state.gateway, state.sim, state.scenario.Economy.MonkTrainTicks + postTrainTicks);
+            uint monk = state.sim.Capture(1).Units.First(u => u.IsOwn && u.Kind == UnitKind.Monk).Id;
+            return (state.scenario, state.sim, state.gateway, state.sequence, monastery, monk);
         }
 
         private static Dictionary<string, string> Fields(Battle sim)
@@ -73,7 +115,11 @@ namespace Rts.Core.Tests
                         uint id = buildings[before].Id;
                         gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new uint[] { 1, 2, 3 },
                             EconomyTargetKind.Building, id));
-                        Steps(gateway, sim, 900);
+                        for (int tick = 0; tick < 900; tick++)
+                        {
+                            Steps(gateway, sim, 1);
+                            if (sim.Capture(1).Economy.Buildings.First(b => b.Id == id).Complete) break;
+                        }
                         return id;
                     }
             return 0;
@@ -153,6 +199,64 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Extensions.Any(e => e.Id == 3), Is.True);
             Assert.That(decoded.Extensions.Any(e => e.Id == 2), Is.True);
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void CultMonkKeepsOnlyVisibleEnemyContactsAsTargets()
+        {
+            var state = CultWithOneManualMonk();
+            var visible = state.sim.Capture(1).Observation.VisibleEnemies.Select(e => e.ContactId).ToHashSet();
+            var fields = Fields(state.sim);
+            var targets = fields.Where(p => p.Key.EndsWith("CultTargetContactId", StringComparison.Ordinal) && p.Value != "0")
+                .Select(p => uint.Parse(p.Value, CultureInfo.InvariantCulture)).ToArray();
+            Assert.That(targets, Is.Not.Empty);
+            Assert.That(targets.All(visible.Contains), Is.True);
+        }
+
+        [Test]
+        public void CultMonkKeepsTheSameSafeTarget()
+        {
+            var state = CultWithOneManualMonk();
+            var targets = new HashSet<uint>();
+            for (int i = 0; i < 30; i++)
+            {
+                state.gateway.Step();
+                foreach (var pair in Fields(state.sim).Where(p => p.Key.EndsWith("CultTargetContactId", StringComparison.Ordinal)))
+                    if (pair.Value != "0") targets.Add(uint.Parse(pair.Value, CultureInfo.InvariantCulture));
+            }
+            Assert.That(targets, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void CultAutomaticMonksAreCappedByTheirEscorts()
+        {
+            var state = AtCultAge();
+            uint monastery = PlaceAndBuild(state.scenario, state.sim, state.gateway, ref state.sequence);
+            Assert.That(monastery, Is.Not.EqualTo(0u));
+            state.gateway.SubmitEconomy(EconomyCommand.Auto(1, ++state.sequence, true));
+            Steps(state.gateway, state.sim, 2500);
+            int monks = state.sim.Capture(1).Units.Count(u => u.IsOwn && u.Kind == UnitKind.Monk);
+            Assert.That(monks, Is.LessThanOrEqualTo(4));
+        }
+
+        [Test]
+        public void ConvertedSoldierIsAddedToAnOwnArmy()
+        {
+            var state = CultWithOneManualMonk(1, 3);
+            var before = state.sim.Capture(1).Units.Count(u => u.IsOwn && u.Kind != UnitKind.Monk);
+            Steps(state.gateway, state.sim, 200);
+            var after = Fields(state.sim);
+            Assert.That(state.sim.Capture(1).Units.Count(u => u.IsOwn && u.Kind != UnitKind.Monk), Is.GreaterThan(before));
+            uint newest = (uint)Number(after, "Soldiers.Count");
+            Assert.That(after.Any(p => p.Key.Contains("SoldierIds[", StringComparison.Ordinal) && p.Value == newest.ToString(CultureInfo.InvariantCulture)), Is.True);
+        }
+
+        [Test]
+        public void HumanArmyPolicyStopsCultAutomaticTargeting()
+        {
+            var state = CultWithOneManualMonk(100000, 60, true);
+            var fields = Fields(state.sim);
+            Assert.That(fields.Where(p => p.Key.EndsWith("CultTargetContactId", StringComparison.Ordinal)).All(p => p.Value == "0"), Is.True);
         }
 
         [Test]

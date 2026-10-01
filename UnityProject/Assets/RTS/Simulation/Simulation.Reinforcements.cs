@@ -36,8 +36,43 @@ namespace Rts.Simulation
         private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit)
             => Spawn(faction, kind, objective, origin, unit, unit);
 
+        /// <summary>V3-13 #2: converted soldiers join the nearest non-scout army with a free slot.</summary>
+        private bool SpawnConverted(uint faction, SimPoint origin, UnitKind unit, UnitKind assignmentUnit)
+        {
+            uint army = NearestArmyWithRoom(faction, origin);
+            if (army == 0) return false;
+            return Spawn(faction, GoalKind.Core, world.Factions[faction - 1].CoreId, origin, unit, assignmentUnit, army);
+        }
+
+        private uint NearestArmyWithRoom(uint faction, SimPoint point)
+        {
+            uint best = 0;
+            System.Numerics.BigInteger bestDistance = default;
+            foreach (uint id in world.Factions[faction - 1].ArmyIds.OrderBy(v => v))
+            {
+                var army = world.Armies[id - 1];
+                if (army.Definition.Role == "scout") continue;
+                int count = 0;
+                SimPoint reference = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+                foreach (uint soldier in army.SoldierIds)
+                {
+                    var member = world.Soldiers[soldier - 1];
+                    if (!member.Alive) continue;
+                    if (count++ == 0) reference = member.Position;
+                }
+                if (count >= army.Definition.Capacity) continue;
+                var distance = DistanceSquared(reference, point);
+                if (best == 0 || distance < bestDistance) { best = id; bestDistance = distance; }
+            }
+            return best;
+        }
+
         /// <summary>Spawn <paramref name="unit"/> while using <paramref name="assignmentUnit"/> for formation routing.</summary>
         private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit, UnitKind assignmentUnit)
+            => Spawn(faction, kind, objective, origin, unit, assignmentUnit, 0);
+
+        private bool Spawn(uint faction, GoalKind kind, uint objective, SimPoint origin, UnitKind unit, UnitKind assignmentUnit,
+            uint preferredArmy)
         {
             bool scout = unit == UnitKind.Scout;
             bool mobile = assignmentUnit == UnitKind.LightCavalry;
@@ -47,24 +82,33 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
                 if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == faction) alive++;
             if (alive >= world.Config.Rules.FactionCap) return false;
-            uint army = 0;
-            for (int priority = 0; priority < 3 && army == 0; priority++)
-                foreach (uint id in world.Factions[faction - 1].ArmyIds)
-                {
-                    var a = world.Armies[id - 1];
-                    if ((a.Definition.Role == "scout") != scout) continue;
-                    var home = a.Definition.HomeObjective;
-                    // Light cavalry is a mobile reserve, not reinforcement for the north/south core line.
-                    // The existing infantry/cavalry allocation order is unchanged for every other unit.
-                    int rank = mobile
-                        ? a.Definition.Role == "reserve" ? 0 : 1
-                        : keepReserveForMobile && a.Definition.Role == "reserve" ? 2
-                        : home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
-                    if (rank != priority) continue;
-                    int count = 0;
-                    foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
-                    if (count < a.Definition.Capacity) { army = id; break; }
-                }
+            uint army = preferredArmy;
+            if (army != 0)
+            {
+                if (army > world.Armies.Length || world.Armies[army - 1].Definition.FactionId != faction
+                    || (world.Armies[army - 1].Definition.Role == "scout") != scout) return false;
+                int count = 0;
+                foreach (uint soldier in world.Armies[army - 1].SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
+                if (count >= world.Armies[army - 1].Definition.Capacity) return false;
+            }
+            else
+                for (int priority = 0; priority < 3 && army == 0; priority++)
+                    foreach (uint id in world.Factions[faction - 1].ArmyIds)
+                    {
+                        var a = world.Armies[id - 1];
+                        if ((a.Definition.Role == "scout") != scout) continue;
+                        var home = a.Definition.HomeObjective;
+                        // Light cavalry is a mobile reserve, not reinforcement for the north/south core line.
+                        // The existing infantry/cavalry allocation order is unchanged for every other unit.
+                        int rank = mobile
+                            ? a.Definition.Role == "reserve" ? 0 : 1
+                            : keepReserveForMobile && a.Definition.Role == "reserve" ? 2
+                            : home.Kind == kind && home.Id == objective ? 0 : a.Definition.Role == "reserve" ? 1 : 2;
+                        if (rank != priority) continue;
+                        int count = 0;
+                        foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
+                        if (count < a.Definition.Capacity) { army = id; break; }
+                    }
             if (army == 0) return false;
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
