@@ -43,7 +43,7 @@ namespace Rts.Simulation
                         world.Soldiers[id - 1].SlotWaitSinceTick = 0; world.Soldiers[id - 1].SlotWaitTarget = default;
                         world.Soldiers[id - 1].TacticalRoute = false; world.Soldiers[id - 1].LocalPath = null;
                     }
-                    a.Path = world.Map.FindPath(world.Map.Cell(world.Soldiers[first].Position), goal);
+                    a.Path = world.Map.FindPath(world.Map.Cell(world.Soldiers[first].Position), goal, a.Definition.FactionId);
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
@@ -62,7 +62,7 @@ namespace Rts.Simulation
                     {
                         // Tactical destinations can cross walls too. Reuse the route while its cell is unchanged.
                         if (!soldier.TacticalRoute || world.Map.Cell(soldier.LocalGoal) != world.Map.Cell(intended))
-                            StartLocalRoute(ref soldier, intended);
+                        StartLocalRoute(ref soldier, intended);
                         soldier.LocalGoal = intended;
                         soldier.TacticalRoute = true; soldier.Joining = false;
                         FollowLocalRoute(ref soldier);
@@ -72,7 +72,7 @@ namespace Rts.Simulation
                     { soldier.TacticalRoute = false; soldier.Joining = false; soldier.LocalPath = null; }
                     if (a.PathImpossible) { soldier.MoveGoal = soldier.Position; continue; }
                     var center = world.Map.Center(a.Path[a.PathCursor]);
-                    if (!soldier.Joining && (!InRange(soldier.Position, center, Fix64.FromInt(8)) || !Clear(soldier.Position, center)))
+                    if (!soldier.Joining && (!InRange(soldier.Position, center, Fix64.FromInt(8)) || !Clear(soldier.Position, center, a.Definition.FactionId)))
                     {
                         soldier.Joining = true; soldier.JoinCursor = a.PathCursor;
                         StartLocalRoute(ref soldier, center);
@@ -95,9 +95,9 @@ namespace Rts.Simulation
                     // Returning armies use the route centre instead of a one-metre formation offset, which can press
                     // a late scout against an obstacle while the rest of the army waits for its slot.
                     var target = returning ? center : new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
-                    if (!Clear(center, target) || !Clear(soldier.Position, target)
-                        || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]))) target = center;
-                    if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal) ? goal : center;
+                    if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
+                        || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
+                    if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
                     soldier.MoveGoal = target;
                     if (!SamePoint(soldier.SlotWaitTarget, target))
                     {
@@ -115,13 +115,16 @@ namespace Rts.Simulation
             }
         }
 
-        private bool Clear(SimPoint from, SimPoint to) => world.Map.IsPassable(world.Map.Cell(to)) && SamePoint(world.Map.ClipMove(from, to), to);
+        private bool Clear(SimPoint from, SimPoint to) => Clear(from, to, 0);
+
+        private bool Clear(SimPoint from, SimPoint to, uint faction)
+            => world.Map.IsPassableFor(world.Map.Cell(to), faction) && SamePoint(world.Map.ClipMove(from, to, faction), to);
 
         private void StartLocalRoute(ref SoldierState soldier, SimPoint goal)
         {
             soldier.LocalGoal = goal; soldier.LocalCursor = 0;
-            soldier.LocalPath = world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal);
-            if (soldier.LocalPath.Length > 1 && Clear(soldier.Position, world.Map.Center(soldier.LocalPath[1]))) soldier.LocalCursor = 1;
+            soldier.LocalPath = world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
+            if (soldier.LocalPath.Length > 1 && Clear(soldier.Position, world.Map.Center(soldier.LocalPath[1]), soldier.Initial.FactionId)) soldier.LocalCursor = 1;
         }
 
         private void FollowLocalRoute(ref SoldierState soldier)
@@ -131,8 +134,8 @@ namespace Rts.Simulation
             // Center-to-center segments cannot cut a blocked corner. An off-center start first recenters.
             while (soldier.LocalCursor + 1 < path.Length && SamePoint(soldier.Position, world.Map.Center(path[soldier.LocalCursor]))) soldier.LocalCursor++;
             var target = world.Map.Center(path[soldier.LocalCursor]);
-            if (soldier.LocalCursor == path.Length - 1 && Clear(soldier.Position, soldier.LocalGoal)) target = soldier.LocalGoal;
-            soldier.MoveGoal = Clear(soldier.Position, target) ? target : world.Map.Center(world.Map.Cell(soldier.Position));
+            if (soldier.LocalCursor == path.Length - 1 && Clear(soldier.Position, soldier.LocalGoal, soldier.Initial.FactionId)) target = soldier.LocalGoal;
+            soldier.MoveGoal = Clear(soldier.Position, target, soldier.Initial.FactionId) ? target : world.Map.Center(world.Map.Cell(soldier.Position));
         }
     }
 }

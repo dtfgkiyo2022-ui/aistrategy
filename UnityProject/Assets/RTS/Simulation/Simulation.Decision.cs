@@ -57,7 +57,7 @@ namespace Rts.Simulation
                 foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
                 foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && observation.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
                 {
-                    var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position);
+                    var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position, f);
                     int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
                     approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
                 }
@@ -80,14 +80,14 @@ namespace Rts.Simulation
                     var routes = new List<ObjectiveRoute>();
                     foreach (var o in observation.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
                     {
-                        var path = world.Map.FindPath(start, o.Position);
+                        var path = world.Map.FindPath(start, o.Position, f);
                         int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
                         routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, path.Select(world.Map.Center).ToArray()));
                     }
                     if (OffenseDecision.IsMobileArmyKind(view.Kind))
                         foreach (var target in observation.RaidTargets.OrderBy(t => t.Kind).ThenBy(t => t.Id))
                         {
-                            var path = world.Map.FindPath(start, target.Position);
+                            var path = world.Map.FindPath(start, target.Position, f);
                             int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), target.Position, Fix64.FromInt(4))
                                 ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
                             routes.Add(new ObjectiveRoute(new PolicyGoal(GoalKind.Point, target.Id, target.Position), distance,
@@ -143,15 +143,15 @@ namespace Rts.Simulation
             foreach (var goal in observation.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
             {
                 var policyGoal = new PolicyGoal(goal.Kind, goal.Id, default);
-                var corePath = world.Map.FindPath(world.Map.Cell(home), goal.Position);
+                var corePath = world.Map.FindPath(world.Map.Cell(home), goal.Position, observation.FactionId);
                 if (corePath.Length == 0 || !InRange(world.Map.Center(corePath[corePath.Length - 1]), goal.Position, Fix64.FromInt(4))) continue;
                 var state = offenseMemory[observation.FactionId - 1];
                 SimPoint rally;
                 if (state.Phase != OffensivePhase.Idle && state.Goal.Kind == goal.Kind && state.Goal.Id == goal.Id) rally = state.RallyPoint;
                 else if (!OffenseDecision.TryRally(observation, corePath.Select(world.Map.Center).ToArray(), out rally)) continue;
-                var tail = world.Map.FindPath(world.Map.Cell(rally), goal.Position);
+                var tail = world.Map.FindPath(world.Map.Cell(rally), goal.Position, observation.FactionId);
                 var legs = inputs.Select(i => {
-                    var path = world.Map.FindPath(world.Map.Cell(i.Army.Position), rally);
+                    var path = world.Map.FindPath(world.Map.Cell(i.Army.Position), rally, observation.FactionId);
                     if (path.Length > 0 && !SamePoint(world.Map.Center(path[path.Length - 1]), rally)) path = Array.Empty<int>();
                     return new ObjectiveRoute(new PolicyGoal(GoalKind.Point, i.Army.Id, default), path.Length == 0 ? int.MaxValue : path.Length - 1, path.Select(world.Map.Center).ToArray());
                 }).ToArray();

@@ -38,6 +38,9 @@ namespace Rts.Simulation
         private const int MountainExtensionVersion = 2;
         private const int MountainExtensionV1DataLength = 12 * sizeof(int);
         private const int MountainExtensionDataLength = 22 * sizeof(int);
+        private const int TollgateExtensionId = 6;
+        private const int TollgateExtensionVersion = 1;
+        private const int TollgateExtensionDataLength = 7 * sizeof(int);
         private const int MetropolisExtensionId = 7;
         private const int MetropolisExtensionVersion = 1;
         private const int MetropolisExtensionDataLength = 5 * sizeof(int);
@@ -54,6 +57,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
             new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength),
             new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
+            new ExtensionRegistration(TollgateExtensionId, TollgateExtensionVersion, TollgateExtensionDataLength),
             new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength)
         };
 
@@ -550,6 +554,7 @@ namespace Rts.Simulation
                 else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
                 else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
+                else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
                 else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
@@ -618,6 +623,9 @@ namespace Rts.Simulation
                 }
             }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
+            bool hasTollgate = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == TollgateExtensionId) hasTollgate = true;
+            if (c.Economy.Tollgate && !hasTollgate) extensions.Add(CreateTollgateExtension(c.Economy));
             bool hasMetropolis = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
             if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
@@ -786,6 +794,31 @@ namespace Rts.Simulation
                     e.MountainFortHpPermille = reader.ReadInt32(); e.MountainFortRangeBonus = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing mountain extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateTollgateExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Tollgate ? 1 : 0);
+                writer.Write(e.TollgateLengthCells); writer.Write(e.TollgateWoodCost); writer.Write(e.TollgateStoneCost);
+                writer.Write(e.TollgateWork); writer.Write(e.TollgateHp); writer.Write(e.TollgateMaxBuildings);
+                return new ScenarioExtensionData { Id = TollgateExtensionId, Version = TollgateExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadTollgateExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid tollgate flag.");
+                e.Tollgate = enabled != 0;
+                e.TollgateLengthCells = reader.ReadInt32(); e.TollgateWoodCost = reader.ReadInt32(); e.TollgateStoneCost = reader.ReadInt32();
+                e.TollgateWork = reader.ReadInt32(); e.TollgateHp = reader.ReadInt32(); e.TollgateMaxBuildings = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tollgate extension data.");
             }
         }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)

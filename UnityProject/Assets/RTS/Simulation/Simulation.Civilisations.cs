@@ -61,6 +61,8 @@ namespace Rts.Simulation
                 (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
+            new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
                 (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
         };
@@ -151,6 +153,8 @@ namespace Rts.Simulation
         }
 
         private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
