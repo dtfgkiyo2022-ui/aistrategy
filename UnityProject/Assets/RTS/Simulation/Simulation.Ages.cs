@@ -387,6 +387,45 @@ namespace Rts.Simulation
         }
 
         /// <summary>
+        /// Counts the starting fish points that can support the fishing civilisation. Only points in cells already
+        /// explored by this faction are considered. The placement search deliberately uses HarborSiteIsClear and
+        /// KeepsMapConnected, the same legality checks as the automatic harbour finder, so a visible fish behind a
+        /// blocked bank or in a disconnected pocket does not inflate the civilisation score.
+        /// </summary>
+        private int CountUsableFishingFish(uint faction, SimPoint core)
+        {
+            var explored = world.Factions[faction - 1].ExploredCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int cellCount = checked(width * height);
+            var rules = world.Config.Economy;
+            int count = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (!node.Fishing || node.Remaining <= 0
+                    || !InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) continue;
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (cell < 0 || cell >= cellCount || !explored[cell]) continue;
+                if (HasUsableHarborSiteForFish(faction, node.Definition.Position, width, height, rules.HarborSizeCells,
+                    rules.FishReach)) count++;
+            }
+            return count;
+        }
+
+        private bool HasUsableHarborSiteForFish(uint faction, SimPoint fish, int width, int height, int size, int fishReach)
+        {
+            long reach = Fix64.FromInt(checked(fishReach * 2)).Raw;
+            System.Numerics.BigInteger limit = new System.Numerics.BigInteger(reach) * reach;
+            for (int origin = 0; origin < width * height; origin++)
+            {
+                if (origin % width + size > width || origin / width + size > height) continue;
+                if (DistanceSquared(FootprintCenter(origin, size), fish) > limit) continue;
+                if (HarborSiteIsClear(faction, origin) && KeepsMapConnected(faction, origin, size)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// V3-11 #4: the engineer terrain score is the best legal one-bridge shortening from this core to a public
         /// outpost or an observed resource. The candidate search temporarily opens the exact river cells and restores
         /// their previous passability in a finally block; the returned value is a 0..3 tier, never a raw distance.

@@ -594,8 +594,15 @@ namespace Rts.Simulation
                 if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
                 if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
             }
+            // ID 4 is feature-owned data. It is meaningful only when both switches that make fishing selectable are
+            // on; an old extension must not resurrect a disabled fishing civilisation on a subsequent round trip.
+            if (!c.Economy.FishingCiv || !c.Economy.FishingEnabled)
+            {
+                extensions.RemoveAll(extension => extension != null && extension.Id == FishingCivExtensionId);
+                hasFishingCiv = false;
+            }
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
-            if (c.Economy.FishingCiv && !hasFishingCiv) extensions.Add(CreateFishingCivExtension(c.Economy));
+            if (c.Economy.FishingCiv && c.Economy.FishingEnabled && !hasFishingCiv) extensions.Add(CreateFishingCivExtension(c.Economy));
             bool hasCult = false;
             for (int i = 0; i < extensions.Count; i++)
             {
