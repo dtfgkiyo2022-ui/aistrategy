@@ -27,8 +27,10 @@ namespace Rts.Simulation
         private const int CultExtensionVersion = 1;
         private const int CultExtensionDataLength = 7 * sizeof(int);
         private const int FishingCivExtensionId = 4;
-        private const int FishingCivExtensionVersion = 1;
-        private const int FishingCivExtensionDataLength = 5 * sizeof(int);
+        private const int FishingCivExtensionV1 = 1;
+        private const int FishingCivExtensionVersion = 2;
+        private const int FishingCivExtensionV1DataLength = 5 * sizeof(int);
+        private const int FishingCivExtensionDataLength = 13 * sizeof(int);
         private const int MountainExtensionId = 5;
         private const int MountainExtensionV1 = 1;
         private const int MountainExtensionVersion = 2;
@@ -526,7 +528,9 @@ namespace Rts.Simulation
                 var registration = ExtensionRegistrations[registrationIndex];
                 bool oldMountain = id == MountainExtensionId && featureVersion == MountainExtensionV1
                     && dataLength == MountainExtensionV1DataLength;
-                if ((!oldMountain && featureVersion != registration.Version) || (!oldMountain && dataLength != registration.DataLength) || dataLength < 0
+                bool oldFishing = id == FishingCivExtensionId && featureVersion == FishingCivExtensionV1
+                    && dataLength == FishingCivExtensionV1DataLength;
+                if ((!oldMountain && !oldFishing && featureVersion != registration.Version) || (!oldMountain && !oldFishing && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -586,6 +590,9 @@ namespace Rts.Simulation
             if (c.Economy.Cult && !hasCult) extensions.Add(CreateCultExtension(c.Economy));
             bool hasMountain = false;
             for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] != null && extensions[i].Id == FishingCivExtensionId && extensions[i].Version == FishingCivExtensionV1)
+                    extensions[i] = CreateFishingCivExtension(c.Economy);
                 if (extensions[i] != null && extensions[i].Id == MountainExtensionId)
                 {
                     hasMountain = true;
@@ -593,6 +600,7 @@ namespace Rts.Simulation
                     // flag was off; the current writer accepts only the registered v2 shape.
                     extensions[i] = CreateMountainExtension(c.Economy);
                 }
+            }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
             return extensions.ToArray();
         }
@@ -632,6 +640,9 @@ namespace Rts.Simulation
             {
                 writer.Write(e.FishingCiv ? 1 : 0);
                 writer.Write(e.HarborSizeCells); writer.Write(e.HarborWoodCost); writer.Write(e.HarborWork); writer.Write(e.HarborHp);
+                writer.Write(e.FishingNetFoodCost); writer.Write(e.FishingNetWoodCost); writer.Write(e.FishingNetTicks);
+                writer.Write(e.DriedFishFoodCost); writer.Write(e.DriedFishWoodCost); writer.Write(e.DriedFishTicks);
+                writer.Write(e.FishingNetCarryBonusPermille); writer.Write(e.DriedFishRegrowIntervalPermille);
                 return new ScenarioExtensionData { Id = FishingCivExtensionId, Version = FishingCivExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -646,6 +657,12 @@ namespace Rts.Simulation
                 e.FishingCiv = enabled != 0;
                 e.HarborSizeCells = reader.ReadInt32(); e.HarborWoodCost = reader.ReadInt32();
                 e.HarborWork = reader.ReadInt32(); e.HarborHp = reader.ReadInt32();
+                if (extension.Version >= FishingCivExtensionVersion)
+                {
+                    e.FishingNetFoodCost = reader.ReadInt32(); e.FishingNetWoodCost = reader.ReadInt32(); e.FishingNetTicks = reader.ReadInt32();
+                    e.DriedFishFoodCost = reader.ReadInt32(); e.DriedFishWoodCost = reader.ReadInt32(); e.DriedFishTicks = reader.ReadInt32();
+                    e.FishingNetCarryBonusPermille = reader.ReadInt32(); e.DriedFishRegrowIntervalPermille = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fishing civilisation extension data.");
             }
         }
