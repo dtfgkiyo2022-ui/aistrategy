@@ -82,8 +82,9 @@ namespace Rts.Simulation
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
-                        && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
-                        && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
+                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
+                         && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
+                         && !(FishingAllowed(faction) && kind == BuildingKind.Harbor)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
@@ -106,9 +107,10 @@ namespace Rts.Simulation
                     int caravanReward = 0;
                     if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
                     bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
-                        : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
-                        : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
-                        : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
+                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
+                         : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
+                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
                     if (kind == BuildingKind.Caravanserai)

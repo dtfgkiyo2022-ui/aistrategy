@@ -486,6 +486,9 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
+                && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0),
+                "Fishing civilisation requires valid age, fishing and harbour rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.Cavalry || e.Ages, "Cavalry requires ages.");
             if (e.Cavalry)
@@ -700,8 +703,10 @@ namespace Rts.Simulation
                  CaravanRewardDistanceStep = e.CaravanRewardDistanceStep, CaravanRewardMaxWood = e.CaravanRewardMaxWood, CaravanAutoVillagers = e.CaravanAutoVillagers,
                  AcademySizeCells = e.AcademySizeCells, AcademyWoodCost = e.AcademyWoodCost, AcademyWork = e.AcademyWork, AcademyHp = e.AcademyHp,
                  AcademyToolsFoodCost = e.AcademyToolsFoodCost, AcademyToolsWoodCost = e.AcademyToolsWoodCost, AcademyToolsGoldCost = e.AcademyToolsGoldCost,
-                 AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
-                 AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
+                  AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
+                  AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
+                 FishingCiv = e.FishingCiv, HarborSizeCells = e.HarborSizeCells, HarborWoodCost = e.HarborWoodCost,
+                 HarborWork = e.HarborWork, HarborHp = e.HarborHp,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,

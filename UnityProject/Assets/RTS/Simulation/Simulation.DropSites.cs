@@ -24,6 +24,22 @@ namespace Rts.Simulation
                 if (target.Alive && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
                     return (world.Map.Center(target.WorkCell), GatherReach);
             }
+            if (FishingAllowed(v.FactionId) && v.CarryKind == ResourceKind.Food && v.NodeId > 0 && v.NodeId <= world.Nodes.Length
+                && world.Nodes[v.NodeId - 1].Fishing)
+            {
+                var fishDrop = point;
+                var fishReach = reach;
+                var fishBest = DistanceSquared(v.Position, point);
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var harbor = world.Buildings[i];
+                    if (!harbor.Alive || !harbor.Complete || harbor.FactionId != v.FactionId || harbor.Kind != BuildingKind.Harbor) continue;
+                    var spot = world.Map.Center(harbor.WorkCell);
+                    var distance = DistanceSquared(v.Position, spot);
+                    if (distance < fishBest) { fishBest = distance; fishDrop = spot; fishReach = rules.DropOffMargin; }
+                }
+                point = fishDrop; reach = fishReach;
+            }
             if (!AgesOn) return (point, reach);
             BigInteger best = DistanceSquared(v.Position, point);
             for (int i = 0; i < world.BuildingCount; i++)

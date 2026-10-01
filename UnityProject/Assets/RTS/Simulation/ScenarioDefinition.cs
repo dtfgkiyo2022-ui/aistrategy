@@ -166,6 +166,9 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
+        public bool FishingCiv;
+        public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

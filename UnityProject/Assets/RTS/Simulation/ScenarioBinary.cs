@@ -23,6 +23,9 @@ namespace Rts.Simulation
         private const int AcademyExtensionId = 2;
         private const int AcademyExtensionVersion = 1;
         private const int AcademyExtensionDataLength = 13 * sizeof(int);
+        private const int FishingCivExtensionId = 4;
+        private const int FishingCivExtensionVersion = 1;
+        private const int FishingCivExtensionDataLength = 5 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -32,7 +35,8 @@ namespace Rts.Simulation
         private static readonly ExtensionRegistration[] ExtensionRegistrations =
         {
             new ExtensionRegistration(1, 1, sizeof(int)),
-            new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength)
+            new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
+            new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -517,7 +521,8 @@ namespace Rts.Simulation
                 if (data.Length != dataLength) throw new InvalidDataException("Truncated scenario extension data.");
                 seen[registrationIndex] = true;
                 var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
-                if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                 if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                 else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -550,9 +555,15 @@ namespace Rts.Simulation
         {
             if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
-            bool hasAcademy = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+            bool hasAcademy = false, hasFishingCiv = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null) continue;
+                if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+                if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
+            }
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
+            if (c.Economy.FishingCiv && !hasFishingCiv) extensions.Add(CreateFishingCivExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -581,6 +592,31 @@ namespace Rts.Simulation
                 e.AcademyToolsFoodCost = reader.ReadInt32(); e.AcademyToolsWoodCost = reader.ReadInt32(); e.AcademyToolsGoldCost = reader.ReadInt32(); e.AcademyToolsTicks = reader.ReadInt32();
                 e.AcademyCartsFoodCost = reader.ReadInt32(); e.AcademyCartsWoodCost = reader.ReadInt32(); e.AcademyCartsGoldCost = reader.ReadInt32(); e.AcademyCartsTicks = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing academy extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateFishingCivExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.FishingCiv ? 1 : 0);
+                writer.Write(e.HarborSizeCells); writer.Write(e.HarborWoodCost); writer.Write(e.HarborWork); writer.Write(e.HarborHp);
+                return new ScenarioExtensionData { Id = FishingCivExtensionId, Version = FishingCivExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFishingCivExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fishing civilisation flag.");
+                e.FishingCiv = enabled != 0;
+                e.HarborSizeCells = reader.ReadInt32(); e.HarborWoodCost = reader.ReadInt32();
+                e.HarborWork = reader.ReadInt32(); e.HarborHp = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fishing civilisation extension data.");
             }
         }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
