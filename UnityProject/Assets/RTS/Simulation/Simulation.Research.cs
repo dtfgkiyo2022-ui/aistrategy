@@ -26,6 +26,7 @@ namespace Rts.Simulation
         private const int AcademySiegecraftFoodCost = 100, AcademySiegecraftWoodCost = 75, AcademySiegecraftGoldCost = 75, AcademySiegecraftTicks = 350;
 
         private static readonly TechKind[] AcademyResearchOrder = { TechKind.Tools, TechKind.Carts, TechKind.Weapons, TechKind.Armour, TechKind.Siegecraft };
+        private static readonly TechKind[] MountainResearchOrder = { MountainTech.DeepShaft, MountainTech.MountainFort };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
@@ -56,6 +57,8 @@ namespace Rts.Simulation
         {
             var e = world.Economies[faction - 1];
             if (tech == CavalryDrillTech) return CavalryAllowed(faction) && e.Age >= 2 && !HasCavalryDrill(faction);
+            if (tech == MountainTech.DeepShaft) return MountainAllowed(faction) && e.Age >= 2 && !HasTech(faction, tech);
+            if (tech == MountainTech.MountainFort) return MountainAllowed(faction) && e.Age >= 3 && !HasTech(faction, tech);
             if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || HasTech(faction, tech)) return false;
             if (tech == BridgeTech.Bridgeworks) return e.Civ == CivKind.Bridge && e.Age >= 2;
             if (tech == BridgeTech.SiegeDeployment) return e.Civ == CivKind.Bridge && e.Age >= 3;
@@ -94,6 +97,18 @@ namespace Rts.Simulation
             => tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksTicks
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentTicks
                 : world.Config.Economy.TechTicks[(int)tech - 1];
+
+        private bool IsMountainTech(TechKind tech)
+            => tech == MountainTech.DeepShaft || tech == MountainTech.MountainFort;
+
+        private int MountainFoodCost(TechKind tech)
+            => tech == MountainTech.DeepShaft ? world.Config.Economy.MountainDeepShaftFoodCost : world.Config.Economy.MountainFortFoodCost;
+
+        private int MountainWoodCost(TechKind tech)
+            => tech == MountainTech.DeepShaft ? world.Config.Economy.MountainDeepShaftWoodCost : world.Config.Economy.MountainFortWoodCost;
+
+        private int MountainTicks(TechKind tech)
+            => tech == MountainTech.DeepShaft ? world.Config.Economy.MountainDeepShaftTicks : world.Config.Economy.MountainFortTicks;
 
         private bool AcademyTech(TechKind tech)
             => tech == TechKind.Tools || tech == TechKind.Carts || tech == TechKind.Weapons || tech == TechKind.Armour || tech == TechKind.Siegecraft;
@@ -157,7 +172,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy) && b.Researching == tech) return true;
+                if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy || b.Kind == BuildingKind.MineShaft) && b.Researching == tech) return true;
             }
             return false;
         }
@@ -166,26 +181,36 @@ namespace Rts.Simulation
         private bool StartResearch(uint faction, ref BuildingState smith, TechKind tech, bool byPlayer)
         {
             bool academy = smith.Kind == BuildingKind.Academy;
+            bool mountain = smith.Kind == BuildingKind.MineShaft;
             if (!AgesOn || !smith.Complete || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
             if (academy)
             {
                 if (!AcademyAllowed(faction) || !AcademyTechOpen(faction, tech) || !AcademyGoldAvailable(faction, tech)
                     || !AcademyBudgetAllows(faction, tech)) return false;
             }
-            else if (smith.Kind != BuildingKind.Blacksmith || !TechOpen(faction, tech)) return false;
+            else if (mountain)
+            {
+                if (!IsMountainTech(tech) || !TechOpen(faction, tech)) return false;
+            }
+            else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || !TechOpen(faction, tech)) return false;
             ref var economy = ref world.Economies[faction - 1];
-            int food = academy ? AcademyFoodCost(tech) : TechFoodCost(tech);
-            int wood = academy ? AcademyWoodCost(tech) : TechWoodCost(tech);
+            int food = academy ? AcademyFoodCost(tech) : mountain ? MountainFoodCost(tech) : TechFoodCost(tech);
+            int wood = academy ? AcademyWoodCost(tech) : mountain ? MountainWoodCost(tech) : TechWoodCost(tech);
             int gold = academy ? AcademyGoldCost(tech) : 0;
-            int metal = academy ? 0 : TechMetalCost(tech), gems = academy ? 0 : TechGemsCost(tech);
-            if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal || economy.Gems < gems) return false;
+            int normalMetal = academy || mountain ? 0 : TechMetalCost(tech);
+            int metal = MountainAllowed(faction) ? 0 : normalMetal;
+            int oreForMetal = MountainAllowed(faction) ? normalMetal : 0;
+            int gems = academy || mountain ? 0 : TechGemsCost(tech);
+            if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
+                || economy.Ore < oreForMetal || economy.Gems < gems) return false;
             economy.Food = checked(economy.Food - food);
             economy.Wood = checked(economy.Wood - wood);
             economy.Gold = checked(economy.Gold - gold);
             economy.Metal = checked(economy.Metal - metal);
+            economy.Ore = checked(economy.Ore - oreForMetal);
             economy.Gems = checked(economy.Gems - gems);
             smith.Researching = tech;
-            smith.TrainRemaining = academy ? AcademyTicks(tech) : TechTicks(tech);
+            smith.TrainRemaining = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : TechTicks(tech);
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -197,7 +222,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy) || b.Researching == 0) continue;
+                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy && b.Kind != BuildingKind.MineShaft) || b.Researching == 0) continue;
                 if (--b.TrainRemaining > 0) continue;
                 var tech = b.Researching;
                 b.Researching = 0;
@@ -211,6 +236,16 @@ namespace Rts.Simulation
                         ref var bridge = ref world.Buildings[j];
                         if (bridge.Alive && bridge.FactionId == b.FactionId && bridge.Kind == BuildingKind.Bridge)
                             bridge.Hp = checked(bridge.Hp + bonus);
+                    }
+                }
+                if (tech == MountainTech.MountainFort)
+                {
+                    for (int j = 0; j < world.BuildingCount; j++)
+                    {
+                        ref var defence = ref world.Buildings[j];
+                        if (!defence.Alive || defence.FactionId != b.FactionId
+                            || (defence.Kind != BuildingKind.Wall && defence.Kind != BuildingKind.Tower)) continue;
+                        defence.Hp = MountainFortHp(defence.Hp, defence.FactionId, defence.OriginCell, SizeOf(defence.Kind));
                     }
                 }
                 if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour && tech != TechKind.GemArmor) continue;
@@ -259,6 +294,7 @@ namespace Rts.Simulation
         private void DecideResearch(uint faction)
         {
             if (!AgesOn || SavingHard(faction)) return;
+            if (world.Economies[faction - 1].Civ == CivKind.Mountain && DecideMountainResearch(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Academy)
             {
                 if (DecideAcademyResearch(faction)) return;
@@ -278,6 +314,18 @@ namespace Rts.Simulation
             foreach (var tech in AutoResearchOrder)
                 if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy && AcademyResearchOperational(faction)) continue;
                 else if (TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
+        }
+
+        private bool DecideMountainResearch(uint faction)
+        {
+            if (!MountainAllowed(faction)) return false;
+            int shaft = OwnBuildingIndex(faction, BuildingKind.MineShaft);
+            if (shaft < 0) return false;
+            ref var building = ref world.Buildings[shaft];
+            if (!building.Complete || building.Held || building.Researching != 0) return true;
+            foreach (var tech in MountainResearchOrder)
+                if (TechOpen(faction, tech)) return StartResearch(faction, ref building, tech, false);
+            return false;
         }
 
         /// <summary>Academy civilisation: build one academy, then fund the next useful fixed academy research.</summary>

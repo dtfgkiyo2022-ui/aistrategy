@@ -100,7 +100,7 @@ namespace Rts.Simulation
                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                         && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
-                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= rules.MountainMaxBuildings) return;
+                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;

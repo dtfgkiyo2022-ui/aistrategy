@@ -30,8 +30,10 @@ namespace Rts.Simulation
         private const int FishingCivExtensionVersion = 1;
         private const int FishingCivExtensionDataLength = 5 * sizeof(int);
         private const int MountainExtensionId = 5;
-        private const int MountainExtensionVersion = 1;
-        private const int MountainExtensionDataLength = 12 * sizeof(int);
+        private const int MountainExtensionV1 = 1;
+        private const int MountainExtensionVersion = 2;
+        private const int MountainExtensionV1DataLength = 12 * sizeof(int);
+        private const int MountainExtensionDataLength = 22 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -522,7 +524,9 @@ namespace Rts.Simulation
                 if (registrationIndex < 0) throw new InvalidDataException("Unknown scenario extension.");
                 if (seen[registrationIndex]) throw new InvalidDataException("Duplicate scenario extension.");
                 var registration = ExtensionRegistrations[registrationIndex];
-                if (featureVersion != registration.Version || dataLength != registration.DataLength || dataLength < 0
+                bool oldMountain = id == MountainExtensionId && featureVersion == MountainExtensionV1
+                    && dataLength == MountainExtensionV1DataLength;
+                if ((!oldMountain && featureVersion != registration.Version) || (!oldMountain && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -578,7 +582,14 @@ namespace Rts.Simulation
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == CultExtensionId) hasCult = true;
             if (c.Economy.Cult && !hasCult) extensions.Add(CreateCultExtension(c.Economy));
             bool hasMountain = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MountainExtensionId) hasMountain = true;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == MountainExtensionId)
+                {
+                    hasMountain = true;
+                    // A decoded v1 record is upgraded on the next write even when the old
+                    // flag was off; the current writer accepts only the registered v2 shape.
+                    extensions[i] = CreateMountainExtension(c.Economy);
+                }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
             return extensions.ToArray();
         }
@@ -673,6 +684,10 @@ namespace Rts.Simulation
                 writer.Write(e.MountainBaseIntervalTicks); writer.Write(e.MountainIntervalStepTicks); writer.Write(e.MountainMinIntervalTicks);
                 writer.Write(e.MountainMaxBuildings); writer.Write(e.MountainMaxAdjacentCells);
                 writer.Write(e.MountainStoneYield); writer.Write(e.MountainOreYield);
+                writer.Write(e.MountainDeepShaftFoodCost); writer.Write(e.MountainDeepShaftWoodCost); writer.Write(e.MountainDeepShaftTicks);
+                writer.Write(e.MountainFortFoodCost); writer.Write(e.MountainFortWoodCost); writer.Write(e.MountainFortTicks);
+                writer.Write(e.MountainDeepShaftIntervalPermille); writer.Write(e.MountainDeepShaftMaxBuildingsBonus);
+                writer.Write(e.MountainFortHpPermille); writer.Write(e.MountainFortRangeBonus);
                 return new ScenarioExtensionData { Id = MountainExtensionId, Version = MountainExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -689,6 +704,13 @@ namespace Rts.Simulation
                 e.MountainBaseIntervalTicks = reader.ReadInt32(); e.MountainIntervalStepTicks = reader.ReadInt32(); e.MountainMinIntervalTicks = reader.ReadInt32();
                 e.MountainMaxBuildings = reader.ReadInt32(); e.MountainMaxAdjacentCells = reader.ReadInt32();
                 e.MountainStoneYield = reader.ReadInt32(); e.MountainOreYield = reader.ReadInt32();
+                if (extension.Version >= MountainExtensionVersion)
+                {
+                    e.MountainDeepShaftFoodCost = reader.ReadInt32(); e.MountainDeepShaftWoodCost = reader.ReadInt32(); e.MountainDeepShaftTicks = reader.ReadInt32();
+                    e.MountainFortFoodCost = reader.ReadInt32(); e.MountainFortWoodCost = reader.ReadInt32(); e.MountainFortTicks = reader.ReadInt32();
+                    e.MountainDeepShaftIntervalPermille = reader.ReadInt32(); e.MountainDeepShaftMaxBuildingsBonus = reader.ReadInt32();
+                    e.MountainFortHpPermille = reader.ReadInt32(); e.MountainFortRangeBonus = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing mountain extension data.");
             }
         }

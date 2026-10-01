@@ -14,11 +14,15 @@ namespace Rts.Simulation
         private void DecideMountain(uint faction)
         {
             var rules = world.Config.Economy;
-            if (!MountainAllowed(faction) || MountainShaftCount(faction) >= rules.MountainMaxBuildings) return;
+            if (!MountainAllowed(faction) || MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
             if (world.Economies[faction - 1].Wood < rules.MountainWoodCost) return;
             int origin = FindMountainShaftSite(faction);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.MineShaft, origin, Facing.North, 0);
         }
+
+        private int MountainMaxBuildingsFor(uint faction)
+            => world.Config.Economy.MountainMaxBuildings
+                + (HasTech(faction, MountainTech.DeepShaft) ? world.Config.Economy.MountainDeepShaftMaxBuildingsBonus : 0);
 
         private int MountainShaftCount(uint faction)
         {
@@ -90,7 +94,10 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int adjacent = Math.Min(MountainAdjacentCount(shaft.OriginCell, rules.MountainSizeCells), rules.MountainMaxAdjacentCells);
-            return Math.Max(rules.MountainMinIntervalTicks, rules.MountainBaseIntervalTicks - adjacent * rules.MountainIntervalStepTicks);
+            int interval = Math.Max(rules.MountainMinIntervalTicks, rules.MountainBaseIntervalTicks - adjacent * rules.MountainIntervalStepTicks);
+            if (HasTech(shaft.FactionId, MountainTech.DeepShaft))
+                interval = Math.Max(1, checked(interval * rules.MountainDeepShaftIntervalPermille / 1000));
+            return interval;
         }
 
         private void AdvanceMountain()
@@ -100,7 +107,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var shaft = ref world.Buildings[i];
-                if (!shaft.Alive || !shaft.Complete || shaft.Kind != BuildingKind.MineShaft) continue;
+                if (!shaft.Alive || !shaft.Complete || shaft.Kind != BuildingKind.MineShaft || shaft.Researching != 0) continue;
                 int interval = MountainInterval(shaft);
                 if (++shaft.Timer < interval) continue;
                 shaft.Timer = 0;
@@ -109,5 +116,16 @@ namespace Rts.Simulation
                 shaft.MountainOreNext = !shaft.MountainOreNext;
             }
         }
+
+        private bool MountainFortified(uint faction, int origin, int size)
+            => MountainAllowed(faction) && HasTech(faction, MountainTech.MountainFort)
+                && MountainAdjacentCount(origin, size) > 0;
+
+        private int MountainFortHp(int baseHp, uint faction, int origin, int size)
+            => MountainFortified(faction, origin, size)
+                ? checked(baseHp * world.Config.Economy.MountainFortHpPermille / 1000) : baseHp;
+
+        private int MountainTowerRange(uint faction, int origin, int size)
+            => world.Config.Economy.TowerRange + (MountainFortified(faction, origin, size) ? world.Config.Economy.MountainFortRangeBonus : 0);
     }
 }

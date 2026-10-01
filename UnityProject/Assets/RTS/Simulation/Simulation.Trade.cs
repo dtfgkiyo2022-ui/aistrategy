@@ -22,11 +22,14 @@ namespace Rts.Simulation
         private static bool TradeTakeable(ResourceKind kind) => Tradable(kind) || kind == ResourceKind.Gems;
 
         private static int StockOf(FactionEconomy e, ResourceKind kind)
-            => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : 0;
+            => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Ore ? e.Ore
+                : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : 0;
 
         private void TradeAtMarket(uint faction, ResourceKind give, ResourceKind take)
         {
-            if (!AgesOn || give == take || !Tradable(give) || !TradeTakeable(take)) return;
+            bool mountainOreTrade = MountainAllowed(faction) && give == ResourceKind.Ore
+                && (take == ResourceKind.Food || take == ResourceKind.Wood);
+            if (!AgesOn || give == take || (!mountainOreTrade && (!Tradable(give) || !TradeTakeable(take)))) return;
             int market = OwnBuildingIndex(faction, BuildingKind.Market);
             if (market < 0 || !world.Buildings[market].Complete) return;
             var rules = world.Config.Economy;
