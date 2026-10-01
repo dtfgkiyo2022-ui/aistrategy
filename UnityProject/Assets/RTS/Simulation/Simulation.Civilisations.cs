@@ -64,7 +64,9 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
                 (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
-                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
+                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
+            new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
+                (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -139,6 +141,8 @@ namespace Rts.Simulation
         }
 
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         /// <summary>
         /// Mountain's choice score is based on the first legal shaft edges the faction could have known at

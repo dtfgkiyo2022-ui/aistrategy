@@ -166,6 +166,9 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-18 #1 provisional shrine values. A shrine is tied to one outpost and costs wood and stone.</summary>
+        public int ShrineSizeCells = 2, ShrineWoodCost = 80, ShrineStoneCost = 40, ShrineWork = 200, ShrineHp = 300;
+        public int ShrineOutpostReach = 24, SanctuaryAttackBonusPermille = 100, SanctuaryMaxBonusPermille = 300;
         /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
         public bool FishingCiv;
         public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
@@ -177,6 +180,8 @@ namespace Rts.Simulation
         public bool Cult;
         /// <summary>V3-17 #1: enables the metropolis civilisation. Its rules are kept in extension ID 7.</summary>
         public bool Metropolis;
+        /// <summary>V3-18 #1: enables the sanctuary civilisation. Its rules are kept in extension ID 8.</summary>
+        public bool Sanctuary;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
