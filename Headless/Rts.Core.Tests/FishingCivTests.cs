@@ -103,6 +103,239 @@ namespace Rts.Core.Tests
             Assert.That(state.sim.Capture(1).Economy.Age, Is.EqualTo(2));
         }
 
+        private static int FishingScoreOf(Battle sim, SimPoint core, uint faction = 1)
+        {
+            var method = typeof(Battle).GetMethod("FishingScore", BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            return (int)method.Invoke(null, new object[] { sim, faction, core, 0, 0 });
+        }
+
+        private static bool IsFishingNode(ScenarioDefinition scenario, ResourceNodeDefinition node)
+        {
+            long reach = Fix64.FromInt(scenario.Economy.FishReach).Raw;
+            long limit = checked(reach * reach);
+            int width = scenario.Map.WidthCells;
+            for (int cell = 0; cell < scenario.Map.Terrain.Length; cell++)
+            {
+                if (scenario.Map.Terrain[cell] != (byte)TerrainKind.River) continue;
+                long x = Fix64.FromInt((cell % width) * scenario.Map.CellSizeMeters + scenario.Map.CellSizeMeters / 2).Raw;
+                long z = Fix64.FromInt((cell / width) * scenario.Map.CellSizeMeters + scenario.Map.CellSizeMeters / 2).Raw;
+                long dx = node.Position.X.Raw - x, dz = node.Position.Z.Raw - z;
+                if (checked(dx * dx + dz * dz) <= limit) return true;
+            }
+            return false;
+        }
+
+        private static int UsableFishingFishOf(Battle sim, SimPoint core, uint faction = 1)
+        {
+            var method = typeof(Battle).GetMethod("CountUsableFishingFish", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            return (int)method.Invoke(sim, new object[] { faction, core });
+        }
+
+        private static ScenarioDefinition ScenarioWithOnlyUsableFish(int desired)
+        {
+            const ulong seed = 4;
+            var candidates = new List<SimPoint>();
+            var source = MapGenerator.GenerateTerrain(seed);
+            for (int i = 0; i < source.ResourceNodes.Length; i++)
+            {
+                if (source.ResourceNodes[i].Kind != ResourceKind.Food || !IsFishingNode(source, source.ResourceNodes[i])) continue;
+                var probe = MapGenerator.GenerateTerrain(seed);
+                probe.Economy.FishingEnabled = true;
+                probe.Economy.FishingCiv = true;
+                var selected = source.ResourceNodes[i];
+                KeepFoodNodes(probe, new[] { selected.Position });
+                var sim = new Battle(probe);
+                if (UsableFishingFishOf(sim, probe.Cores[0].Position) == 1) candidates.Add(selected.Position);
+            }
+            Assert.That(candidates.Count, Is.GreaterThanOrEqualTo(desired), "seed 4 has enough individually usable fish");
+
+            var scenario = MapGenerator.GenerateTerrain(seed);
+            scenario.Economy.FishingEnabled = true;
+            scenario.Economy.FishingCiv = true;
+            KeepFoodNodes(scenario, candidates.Take(desired).ToArray());
+            return scenario;
+        }
+
+        private static void KeepFoodNodes(ScenarioDefinition scenario, IReadOnlyCollection<SimPoint> keep)
+        {
+            var nodes = scenario.ResourceNodes.Where(node => node.Kind != ResourceKind.Food
+                || keep.Any(position => position.X.Raw == node.Position.X.Raw && position.Z.Raw == node.Position.Z.Raw)).ToArray();
+            for (int i = 0; i < nodes.Length; i++)
+            {
+                var node = nodes[i];
+                node.Id = (uint)i + 1;
+                nodes[i] = node;
+            }
+            scenario.ResourceNodes = nodes;
+        }
+
+        private static ScenarioDefinition FishingMatchScenario(ulong seed)
+        {
+            var scenario = MapGenerator.GenerateTerrain(seed);
+            scenario.Economy.FishingEnabled = true;
+            scenario.Economy.FishingCiv = true;
+            scenario.Economy.StartFood = 50000;
+            scenario.Economy.StartWood = 50000;
+            scenario.Economy.AutoVillagerTarget = 3;
+            scenario.Economy.AutoInfantryQueue = 0;
+            scenario.Economy.AdvanceFoodCost = 0;
+            scenario.Economy.AdvanceWoodCost = 0;
+            scenario.Economy.AdvanceTicks = 1;
+            scenario.Economy.Age2FoodCost = 0;
+            scenario.Economy.Age2WoodCost = 0;
+            scenario.Economy.Age2Ticks = 1;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 1000000;
+            return scenario;
+        }
+
+        [Test]
+        public void FishingScoresAreTieredFromUsableExploredFish()
+        {
+            foreach (var expected in new[] { 0, 2, 3 })
+            {
+                var scenario = ScenarioWithOnlyUsableFish(expected == 0 ? 0 : expected == 2 ? 1 : 3);
+                var sim = new Battle(scenario);
+                Assert.That(UsableFishingFishOf(sim, scenario.Cores[0].Position), Is.EqualTo(expected == 0 ? 0 : expected == 2 ? 1 : 3));
+                Assert.That(FishingScoreOf(sim, scenario.Cores[0].Position), Is.EqualTo(expected));
+            }
+        }
+
+        [Test]
+        public void FishingScoreIgnoresUnexploredFish()
+        {
+            var scenario = ScenarioWithOnlyUsableFish(1);
+            var sim = new Battle(scenario);
+            var fish = scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Food && n.Amount > 0);
+            int cellSize = scenario.Map.CellSizeMeters;
+            int cell = (int)(fish.Position.Z.Raw / Fix64.FromInt(cellSize).Raw) * scenario.Map.WidthCells
+                + (int)(fish.Position.X.Raw / Fix64.FromInt(cellSize).Raw);
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = worldField.GetValue(sim);
+            var factionsField = world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic);
+            var factions = (Array)factionsField.GetValue(world);
+            var faction = factions.GetValue(0);
+            var exploredField = faction.GetType().GetField("ExploredCells", BindingFlags.Instance | BindingFlags.NonPublic);
+            var explored = (bool[])exploredField.GetValue(faction);
+            explored[cell] = false;
+            Assert.That(FishingScoreOf(sim, scenario.Cores[0].Position), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void FishingScoreIgnoresFishWithNoHarborSite()
+        {
+            var scenario = ScenarioWithOnlyUsableFish(1);
+            var before = new Battle(scenario);
+            var fish = scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Food && n.Amount > 0);
+            var clear = typeof(Battle).GetMethod("HarborSiteIsClear", BindingFlags.Instance | BindingFlags.NonPublic);
+            var blocked = new HashSet<int>(scenario.Map.BlockedCellIds);
+            int width = scenario.Map.WidthCells, height = scenario.Map.HeightCells, size = scenario.Economy.HarborSizeCells;
+            long reach = Fix64.FromInt(scenario.Economy.FishReach * 2).Raw;
+            long limit = checked(reach * reach);
+            for (int origin = 0; origin < width * height; origin++)
+            {
+                if (origin % width + size > width || origin / width + size > height) continue;
+                long centreX = Fix64.FromInt((origin % width) * scenario.Map.CellSizeMeters
+                    + size * scenario.Map.CellSizeMeters / 2).Raw;
+                long centreZ = Fix64.FromInt((origin / width) * scenario.Map.CellSizeMeters
+                    + size * scenario.Map.CellSizeMeters / 2).Raw;
+                long dx = centreX - fish.Position.X.Raw, dz = centreZ - fish.Position.Z.Raw;
+                if (checked(dx * dx + dz * dz) > limit) continue;
+                if (!(bool)clear.Invoke(before, new object[] { 1u, origin })) continue;
+                for (int z = 0; z < size; z++) for (int x = 0; x < size; x++) blocked.Add(origin + z * width + x);
+            }
+            scenario.Map.BlockedCellIds = blocked.OrderBy(cell => cell).ToArray();
+            var sim = new Battle(scenario);
+            Assert.That(UsableFishingFishOf(sim, scenario.Cores[0].Position), Is.EqualTo(0));
+            Assert.That(FishingScoreOf(sim, scenario.Cores[0].Position), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void FishingChoiceSeedsAreReported()
+        {
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            var fishing = new List<ulong>();
+            for (ulong seed = 1; seed <= 50; seed++)
+            {
+                var scenario = MapGenerator.GenerateTerrain(seed);
+                scenario.Economy.FishingEnabled = true;
+                scenario.Economy.FishingCiv = true;
+                var sim = new Battle(scenario);
+                var west = (CivKind)choose.Invoke(sim, new object[] { 1u });
+                var east = (CivKind)choose.Invoke(sim, new object[] { 2u });
+                TestContext.WriteLine("seed " + seed + ": " + west + "/" + east);
+                if (west == CivKind.Fishing || east == CivKind.Fishing) fishing.Add(seed);
+            }
+            Assert.That(fishing.Count, Is.GreaterThan(0), "漁労が選ばれる種がある");
+            TestContext.WriteLine("fishing choice seeds: " + string.Join(",", fishing));
+        }
+
+        [TestCase(CivKind.Fishing, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Fishing)]
+        [TestCase(CivKind.Fishing, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Fishing)]
+        public void FishingMatchesReachTheSecondAgeAndReplay(CivKind west, CivKind east)
+        {
+            var scenario = FishingMatchScenario(22);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            Steps(gateway, sim, 4);
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(west));
+            Assert.That(sim.Capture(2).Economy.Civ, Is.EqualTo(east));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 3, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 4, east));
+            Steps(gateway, sim, 4);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2));
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2));
+
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick
+                + ", civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void FishingNormalStartReplaysForTwentyThousandTicks()
+        {
+            var scenario = FishingMatchScenario(7);
+            scenario.Economy.AutoVillagerTarget = 10;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            var west = sim.Capture(1).Economy.Civ;
+            var east = sim.Capture(2).Economy.Civ;
+            TestContext.WriteLine("normal seed 7: civs=" + west + "/" + east + ", tick=" + sim.Capture(1).Tick
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(west == CivKind.Fishing || east == CivKind.Fishing, Is.True, "通常開始で漁労が選ばれる");
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2));
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2));
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
         [Test]
         public void FishingCivOffKeepsOldBytesAndState()
         {

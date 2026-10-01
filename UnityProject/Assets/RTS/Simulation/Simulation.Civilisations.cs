@@ -61,8 +61,12 @@ namespace Rts.Simulation
                 (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
+            new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
-                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
+                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
+            new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
+                (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -136,7 +140,37 @@ namespace Rts.Simulation
             return usable;
         }
 
-        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// V3-13 #4: a cult choice is justified only by high-value enemy soldiers that this faction has actually
+        /// observed. The record is per soldier slot, so repeated sightings of one individual do not add points and
+        /// expired observations do not delay the ordinary age decision.
+        /// </summary>
+        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.CultOn) return 0;
+            int observed = s.CountValidCultObservations(faction);
+            return observed >= 3 ? 3 : observed > 0 ? 2 : 0;
+        }
+
+        private const int CultObservationValidityTicks = 600;
+
+        private int CountValidCultObservations(uint faction)
+        {
+            var memory = world.Factions[faction - 1];
+            int count = 0;
+            for (int i = 0; i < memory.CultObservedKinds.Length; i++)
+            {
+                if (memory.CultObservedValidUntilTicks[i] < world.Tick) continue;
+                if (CultObservedValue(memory.CultObservedKinds[i]) > 0) count++;
+            }
+            return count;
+        }
+
+        private static int CultObservedValue(UnitKind kind)
+            => kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry ? 5 : kind == UnitKind.LightCavalry ? 4
+                : kind == UnitKind.Mercenary ? 3 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 2 : 0;
+
+        private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         /// <summary>
         /// Mountain's choice score is based on the first legal shaft edges the faction could have known at
@@ -150,7 +184,21 @@ namespace Rts.Simulation
             return edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
         }
 
-        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// Fishing's terrain score is a small tier based on usable fish points, not on raw food or distance.
+        /// A point must already be explored, be within the same 30m starting-food reach used by agrarian, and have
+        /// at least one legal, connected harbour site within the existing fish reach. This keeps fishing distinct from
+        /// agrarian: food beyond the guaranteed three points favours farming, while river fish that can actually feed a
+        /// harbour favours fishing.
+        /// </summary>
+        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.FishingOn) return 0;
+            int usable = s.CountUsableFishingFish(faction, core);
+            return usable >= 3 ? 3 : usable >= 1 ? 2 : 0;
+        }
+
+        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {

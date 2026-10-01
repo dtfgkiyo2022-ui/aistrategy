@@ -34,7 +34,11 @@ namespace Rts.Simulation
 
         private bool MountainOn => AgesOn && world.Config.Economy.Mountain;
 
+        private bool TollgateOn => AgesOn && world.Config.Economy.Tollgate;
+
         private bool MetropolisOn => AgesOn && world.Config.Economy.Metropolis;
+
+        private bool SanctuaryOn => AgesOn && world.Config.Economy.Sanctuary;
 
         private bool FishingOn => AgesOn && world.Config.Economy.FishingCiv && world.Config.Economy.FishingEnabled;
 
@@ -74,8 +78,14 @@ namespace Rts.Simulation
         private bool MountainAllowed(uint faction)
             => MountainOn && world.Economies[faction - 1].Civ == CivKind.Mountain && world.Economies[faction - 1].Age >= 1;
 
+        private bool TollgateAllowed(uint faction)
+            => TollgateOn && world.Economies[faction - 1].Civ == CivKind.Tollgate && world.Economies[faction - 1].Age >= 1;
+
         private bool MetropolisAllowed(uint faction)
             => MetropolisOn && world.Economies[faction - 1].Civ == CivKind.Metropolis && world.Economies[faction - 1].Age >= 1;
+
+        private bool SanctuaryAllowed(uint faction)
+            => SanctuaryOn && world.Economies[faction - 1].Civ == CivKind.Sanctuary && world.Economies[faction - 1].Age >= 1;
 
         private bool FishingAllowed(uint faction)
             => FishingOn && world.Economies[faction - 1].Civ == CivKind.Fishing && world.Economies[faction - 1].Age >= 1;
@@ -279,7 +289,7 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn && !MetropolisOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn && !TollgateOn && !MetropolisOn && !SanctuaryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
             // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.
@@ -394,6 +404,45 @@ namespace Rts.Simulation
                 count++;
             }
             return count;
+        }
+
+        /// <summary>
+        /// Counts the starting fish points that can support the fishing civilisation. Only points in cells already
+        /// explored by this faction are considered. The placement search deliberately uses HarborSiteIsClear and
+        /// KeepsMapConnected, the same legality checks as the automatic harbour finder, so a visible fish behind a
+        /// blocked bank or in a disconnected pocket does not inflate the civilisation score.
+        /// </summary>
+        private int CountUsableFishingFish(uint faction, SimPoint core)
+        {
+            var explored = world.Factions[faction - 1].ExploredCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int cellCount = checked(width * height);
+            var rules = world.Config.Economy;
+            int count = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (!node.Fishing || node.Remaining <= 0
+                    || !InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) continue;
+                int cell = world.Map.Cell(node.Definition.Position);
+                if (cell < 0 || cell >= cellCount || !explored[cell]) continue;
+                if (HasUsableHarborSiteForFish(faction, node.Definition.Position, width, height, rules.HarborSizeCells,
+                    rules.FishReach)) count++;
+            }
+            return count;
+        }
+
+        private bool HasUsableHarborSiteForFish(uint faction, SimPoint fish, int width, int height, int size, int fishReach)
+        {
+            long reach = Fix64.FromInt(checked(fishReach * 2)).Raw;
+            System.Numerics.BigInteger limit = new System.Numerics.BigInteger(reach) * reach;
+            for (int origin = 0; origin < width * height; origin++)
+            {
+                if (origin % width + size > width || origin / width + size > height) continue;
+                if (DistanceSquared(FootprintCenter(origin, size), fish) > limit) continue;
+                if (HarborSiteIsClear(faction, origin) && KeepsMapConnected(faction, origin, size)) return true;
+            }
+            return false;
         }
 
         /// <summary>

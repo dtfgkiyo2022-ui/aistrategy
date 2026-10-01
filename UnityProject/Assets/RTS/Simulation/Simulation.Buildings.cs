@@ -35,6 +35,7 @@ namespace Rts.Simulation
             }
             if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
                 PlaceBarracks(faction);
+            DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
             ref var building = ref world.Buildings[barracks];
             if (CultAllowed(faction) && !DecideCultMonastery(faction)) return;
@@ -77,6 +78,76 @@ namespace Rts.Simulation
             int origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
+        }
+
+        /// <summary>V3-18 #1: the sanctuary's first automatic investment is one shrine for an owned outpost.</summary>
+        private void DecideSanctuaryShrine(uint faction)
+        {
+            if (!SanctuaryAllowed(faction)) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < rules.ShrineWoodCost || economy.Stone < rules.ShrineStoneCost) return;
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                var outpost = world.Outposts[i];
+                if (outpost.OwnerFactionId != faction || SanctuaryOutpostHasShrine(faction, outpost.Definition.Id)) continue;
+                int origin = FindSanctuarySite(faction, outpost.Definition.Id);
+                if (origin < 0) continue;
+                PlaceBuildingAt(faction, BuildingKind.Shrine, origin, Facing.North, 0);
+                world.Buildings[world.BuildingCount - 1].SanctuaryOutpostId = outpost.Definition.Id;
+                return;
+            }
+        }
+
+        private bool SanctuaryOutpostHasShrine(uint faction, uint outpostId)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.FactionId == faction && building.Kind == BuildingKind.Shrine
+                    && building.SanctuaryOutpostId == outpostId) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Validates a manual shrine placement and fixes its outpost link by ascending outpost ID.</summary>
+        private bool TrySanctuaryPlacement(uint faction, int origin, out uint outpostId)
+        {
+            outpostId = 0;
+            if (!SanctuaryAllowed(faction)) return false;
+            var centre = FootprintCenter(origin, world.Config.Economy.ShrineSizeCells);
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                var outpost = world.Outposts[i];
+                if (outpost.OwnerFactionId != faction || SanctuaryOutpostHasShrine(faction, outpost.Definition.Id)) continue;
+                if (!InRange(centre, outpost.Definition.Position, Fix64.FromInt(world.Config.Economy.ShrineOutpostReach))) continue;
+                outpostId = outpost.Definition.Id;
+                return true;
+            }
+            return false;
+        }
+
+        private int FindSanctuarySite(uint faction, uint outpostId)
+        {
+            if (outpostId == 0 || outpostId > world.Outposts.Length || SanctuaryOutpostHasShrine(faction, outpostId)) return -1;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.ShrineSizeCells;
+            int postCell = world.Map.Cell(world.Outposts[outpostId - 1].Definition.Position);
+            int cx = postCell % width, cz = postCell / width;
+            int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
+            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!SiteIsClear(origin, coreCell, size) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (InRange(FootprintCenter(origin, size), world.Outposts[outpostId - 1].Definition.Position,
+                            Fix64.FromInt(world.Config.Economy.ShrineOutpostReach))) return origin;
+                    }
+            return -1;
         }
 
         /// <summary>V3-13 #1: a cult keeps one monastery before its automatic monk queue is opened.</summary>
@@ -131,7 +202,8 @@ namespace Rts.Simulation
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
-            var footprint = kind == BuildingKind.Bridge ? bridgeCells : Footprint(origin, SizeOf(kind));
+            var footprint = kind == BuildingKind.Bridge ? bridgeCells
+                : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
             if (footprint == null || footprint.Length == 0) return;
             foreach (int cell in footprint) world.Map.SetPassable(cell, false);
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
@@ -202,8 +274,8 @@ namespace Rts.Simulation
                 var villager = world.Villagers[i];
                 if (!villager.Alive || villager.FactionId != faction) continue;
                 int start = world.Map.Cell(villager.Position);
-                if (world.Map.FindPath(start, world.Map.Center(before)).Length > 0) workCell = before;
-                else if (world.Map.FindPath(start, world.Map.Center(after)).Length > 0) workCell = after;
+                if (world.Map.FindPath(start, world.Map.Center(before), faction).Length > 0) workCell = before;
+                else if (world.Map.FindPath(start, world.Map.Center(after), faction).Length > 0) workCell = after;
             }
             if (workCell < 0) { cells = null; return false; }
             return true;
@@ -406,6 +478,11 @@ namespace Rts.Simulation
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                     opened = true;
                 }
+                else if (b.Kind == BuildingKind.Tollgate)
+                {
+                    foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                    opened = true;
+                }
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
                         world.Villagers[j].Task = VillagerTask.Idle;
@@ -456,9 +533,11 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Castle ? e.CastleSizeCells : kind == BuildingKind.Caravanserai ? e.CaravanseraiSizeCells
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampSizeCells
                 : kind == BuildingKind.Academy ? e.AcademySizeCells
+                : kind == BuildingKind.Shrine ? e.ShrineSizeCells
                 : kind == BuildingKind.Monastery ? e.MonasterySizeCells
                 : kind == BuildingKind.Harbor ? e.HarborSizeCells
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
+                : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
                 : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
@@ -475,8 +554,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
                 : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Academy ? e.AcademyHp
+                : kind == BuildingKind.Shrine ? e.ShrineHp
                 : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
-                : kind == BuildingKind.GrandHouse ? e.GrandHouseHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+                : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
             return hp;
@@ -503,8 +583,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
                 : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Academy ? e.AcademyWork
+                : kind == BuildingKind.Shrine ? e.ShrineWork
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
-                : kind == BuildingKind.GrandHouse ? e.GrandHouseWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+                : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -520,8 +601,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
                  : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Academy ? e.AcademyWoodCost
+                 : kind == BuildingKind.Shrine ? e.ShrineWoodCost
                  : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
-                 : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+                 : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 
@@ -535,11 +617,25 @@ namespace Rts.Simulation
         {
             var e = world.Config.Economy;
             int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
-                : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
+                : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost : 0;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
 
-        private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>() : Footprint(b.OriginCell, SizeOf(b.Kind));
+        private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>()
+            : b.Kind == BuildingKind.Tollgate ? TollgateFootprint(b.OriginCell, b.Facing) : Footprint(b.OriginCell, SizeOf(b.Kind));
+
+        private int[] TollgateFootprint(int origin, Facing facing)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            if (origin < 0 || origin >= width * height) return Array.Empty<int>();
+            int x = origin % width, z = origin / width;
+            if (facing == Facing.East && x + 1 >= width) return Array.Empty<int>();
+            if (facing == Facing.West && x <= 0) return Array.Empty<int>();
+            if (facing == Facing.North && z + 1 >= height) return Array.Empty<int>();
+            if (facing == Facing.South && z <= 0) return Array.Empty<int>();
+            int delta = facing == Facing.East ? 1 : facing == Facing.West ? -1 : facing == Facing.North ? width : -width;
+            return new[] { origin, origin + delta };
+        }
 
         private int[] Footprint(int origin, int size)
         {
@@ -566,7 +662,9 @@ namespace Rts.Simulation
         }
 
         private SimPoint BuildingCenter(BuildingState building)
-            => building.Kind == BuildingKind.Bridge ? BridgeCenter(building.BridgeCells) : FootprintCenter(building.OriginCell, SizeOf(building.Kind));
+            => building.Kind == BuildingKind.Bridge ? BridgeCenter(building.BridgeCells)
+                : building.Kind == BuildingKind.Tollgate ? BridgeCenter(TollgateFootprint(building.OriginCell, building.Facing))
+                : FootprintCenter(building.OriginCell, SizeOf(building.Kind));
 
         private bool IsRiverCell(int cell)
             => world.Config.Map.Terrain.Length != 0 && cell >= 0 && cell < world.Config.Map.Terrain.Length

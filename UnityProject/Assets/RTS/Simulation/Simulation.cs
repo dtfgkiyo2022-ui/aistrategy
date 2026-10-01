@@ -32,6 +32,8 @@ namespace Rts.Simulation
             this.measure = measure;
             world = new WorldState(scenario);
             world.Map.Measure = measure;
+            // Only a map with the tollgate rules gets the faction overlay; every other map keeps the plain terrain path.
+            if (TollgateOn) { world.Map.FactionPassability = IsPassableForFaction; RefreshTollgateOwners(); }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
@@ -77,6 +79,8 @@ namespace Rts.Simulation
             measure?.Invoke(name, true);
             try { action(); }
             finally { measure?.Invoke(name, false); }
+            // A phase may finish, destroy or remove a tollgate; the faction overlay follows at once (tollgate maps only).
+            if (TollgateOn) RefreshTollgateOwners();
             if (PhaseHashObserver != null)
             {
                 phaseOrdinal++;
@@ -300,7 +304,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance)) : s.Position;
+                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance), s.Initial.FactionId) : s.Position;
             }
             foreach (int i in world.SoldierTraversal)
             {
@@ -351,8 +355,10 @@ namespace Rts.Simulation
                     else
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
-                        soldierDamage[target] = checked(soldierDamage[target]
-                            + Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille));
+                        int damage = Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille);
+                        damage = SanctuaryDamage(s.Initial.FactionId, damage);
+                        damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
+                        soldierDamage[target] = checked(soldierDamage[target] + damage);
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
@@ -361,7 +367,7 @@ namespace Rts.Simulation
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
-                    coreDamage[target] = checked(coreDamage[target] + SiegeDamage(s));
+                    coreDamage[target] = checked(coreDamage[target] + SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)));
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
                 s.IsAttacking = true;
@@ -385,6 +391,29 @@ namespace Rts.Simulation
 
         // HP has a semantic floor of zero; accumulated damage uses checked long, never saturating arithmetic.
         private static int RemainingHp(int hp, long damage) => damage >= hp ? 0 : checked(hp - (int)damage);
+
+        /// <summary>V3-18 #1: applies the fixed-point army bonus only to soldiers of the sanctuary civilisation.</summary>
+        private int SanctuaryDamage(uint faction, int damage)
+        {
+            if (!SanctuaryAllowed(faction) || damage <= 0) return damage;
+            int shrines = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var shrine = world.Buildings[i];
+                if (!shrine.Alive || !shrine.Complete || shrine.FactionId != faction || shrine.Kind != BuildingKind.Shrine
+                    || shrine.SanctuaryOutpostId == 0 || shrine.SanctuaryOutpostId > world.Outposts.Length
+                    || world.Outposts[shrine.SanctuaryOutpostId - 1].OwnerFactionId != faction) continue;
+                shrines++;
+            }
+            int bonus = Math.Min(checked(shrines * world.Config.Economy.SanctuaryAttackBonusPermille),
+                world.Config.Economy.SanctuaryMaxBonusPermille);
+            if (bonus <= 0) return damage;
+            Fix64 multiplier = Fix64.FromRatio(1000L + bonus, 1000L);
+            // Fixed-point multiplication is rounded to the nearest integer so a
+            // nominal 10% bonus remains 110 damage for a 100-damage blow.
+            long raw = (Fix64.FromInt(damage) * multiplier).Raw;
+            return checked((int)((raw + 32768L) / 65536L));
+        }
 
         private void ResolveConversions()
         {
@@ -476,6 +505,17 @@ namespace Rts.Simulation
                         faction.ContactPositions[i] = s.Position;
                         faction.ContactLastSeenTicks[i] = world.Tick;
                         faction.ContactAbsent[i] = false;
+                        if (CultOn)
+                        {
+                            UnitKind observedKind = s.Class != 0 ? s.Class : s.Initial.Kind;
+                            if (CultObservedValue(observedKind) > 0)
+                            {
+                                faction.CultObservedContactIds[i] = faction.ContactIds[i];
+                                faction.CultObservedKinds[i] = observedKind;
+                                faction.CultObservedLastSeenTicks[i] = world.Tick;
+                                faction.CultObservedValidUntilTicks[i] = checked(world.Tick + CultObservationValidityTicks);
+                            }
+                        }
                     }
                     else if (faction.ContactIds[i] != 0 && IsVisibleTo(faction.Id, faction.ContactPositions[i]))
                         faction.ContactAbsent[i] = true;
