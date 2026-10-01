@@ -169,6 +169,16 @@ namespace Rts.Simulation
         /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
         public bool FishingCiv;
         public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
+        /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
+        public bool Cult;
+        /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
+        public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
+        public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
+        /// <summary>V3-15 #1 provisional mountain values; a mine shaft uses mountain cells, not a resource node.</summary>
+        public bool Mountain;
+        public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
+        public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
+        public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

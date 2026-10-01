@@ -22,6 +22,9 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
+        // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
+        private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
+        private GUIStyle tagStyle;
         private readonly Dictionary<uint, GameObject> ports = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> villagerTargets = new Dictionary<uint, Vector3>();
         private GameObject ghost;
@@ -202,6 +205,7 @@ namespace Rts.Presentation
                 go.transform.position = new Vector3(p.x, height / 2f, p.z);
                 go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
                 go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.PlayerHeld)
                 {
                     if (!buildingFlags.TryGetValue(b.Id, out var flag))
@@ -221,6 +225,59 @@ namespace Rts.Presentation
             Remove(buildings, seen);
             Remove(buildingFlags, seen);
             Remove(ports, seen);
+            var untagged = new List<uint>();
+            foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
+            foreach (var id in untagged) buildingTags.Remove(id);
+        }
+
+        private void OnGUI()
+        {
+            var cam = Camera.main;
+            if (cam == null || buildingTags.Count == 0) return;
+            if (tagStyle == null)
+            {
+                tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11 };
+                tagStyle.normal.textColor = Color.white;
+            }
+            foreach (var tag in buildingTags.Values)
+            {
+                var screen = cam.WorldToScreenPoint(tag.Value);
+                if (screen.z <= 0f) continue;
+                GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), BuildingName(tag.Key), tagStyle);
+            }
+        }
+
+        /// <summary>Short display names for the name tags (display only).</summary>
+        private static string BuildingName(BuildingKind kind)
+        {
+            switch (kind)
+            {
+                case BuildingKind.Barracks: return UiText.T("Barracks", "兵舎");
+                case BuildingKind.Mine: return UiText.T("Mine", "鉱山");
+                case BuildingKind.Smelter: return UiText.T("Smelter", "製錬所");
+                case BuildingKind.Farm: return UiText.T("Farm", "農場");
+                case BuildingKind.House: return UiText.T("House", "住居");
+                case BuildingKind.DropSite: return UiText.T("Drop site", "集積所");
+                case BuildingKind.Wall: return "";
+                case BuildingKind.Tower: return UiText.T("Tower", "塔");
+                case BuildingKind.Blacksmith: return UiText.T("Blacksmith", "鍛冶場");
+                case BuildingKind.Market: return UiText.T("Market", "市場");
+                case BuildingKind.SiegeWorkshop: return UiText.T("Siege workshop", "攻城工房");
+                case BuildingKind.ArcheryRange: return UiText.T("Archery range", "射撃場");
+                case BuildingKind.Stable: return UiText.T("Stable", "厩舎");
+                case BuildingKind.Castle: return UiText.T("Castle", "城");
+                case BuildingKind.CharcoalKiln: return UiText.T("Charcoal kiln", "炭焼き窯");
+                case BuildingKind.Steelworks: return UiText.T("Steelworks", "製鋼所");
+                case BuildingKind.LumberCamp: return UiText.T("Lumber camp", "林業所");
+                case BuildingKind.Fletcher: return UiText.T("Fletcher", "弓工房");
+                case BuildingKind.Quarry: return UiText.T("Quarry", "採石場");
+                case BuildingKind.Caravanserai: return UiText.T("Caravanserai", "隊商宿");
+                case BuildingKind.EngineerCamp: return UiText.T("Engineer camp", "工兵所");
+                case BuildingKind.Bridge: return UiText.T("Bridge", "橋");
+                case BuildingKind.Academy: return UiText.T("Academy", "学府");
+                case BuildingKind.MineShaft: return UiText.T("Mine shaft", "坑道小屋");
+                default: return kind.ToString();
+            }
         }
 
         private void SyncBelts(EconomyView economy)

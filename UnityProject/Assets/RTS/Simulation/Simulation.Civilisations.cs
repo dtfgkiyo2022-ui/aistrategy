@@ -1,5 +1,6 @@
 using System;
 using Rts.Contracts;
+using Rts.Decision;
 
 namespace Rts.Simulation
 {
@@ -54,8 +55,12 @@ namespace Rts.Simulation
                 (s, f) => s.BridgeAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.EngineerCamp) >= 0),
             new CivRegistration(CivKind.Academy, 7, true, (s, f) => s.AcademyOn, AcademyScore,
                 (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
+            new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
+                (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
             new CivRegistration(CivKind.Fishing, 9, false, (s, f) => s.FishingOn, FishingScore,
-                (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0)
+                (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
+            new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
+                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -78,7 +83,60 @@ namespace Rts.Simulation
         private static int BridgeScore(Simulation s, uint faction, SimPoint core, int ore, int food)
             => s.CountUsableBridgeSaving(faction, core);
 
-        private static int AcademyScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// Academy's choice score is deliberately a small tier, not a raw distance or cell count. Only gold that
+        /// the faction has explored, can reach from its core through explored passable cells, can still fund the first
+        /// academy research, and is not near a currently visible enemy is useful at choice time.
+        /// </summary>
+        private static int AcademyScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.AcademyOn) return 0;
+            int usable = s.CountUsableAcademyGold(faction, core);
+            return usable >= 2 ? 3 : usable == 1 ? 2 : 0;
+        }
+
+        private int CountUsableAcademyGold(uint faction, SimPoint core)
+        {
+            var rules = world.Config.Economy;
+            var explored = world.Factions[faction - 1].ExploredCells;
+            var visible = world.Factions[faction - 1].VisibleCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int cells = checked(width * height);
+            int coreCell = world.Map.Cell(core);
+            var passable = new bool[cells];
+            Array.Fill(passable, world.Config.Map.DefaultPassable);
+            foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
+
+            int danger = rules.GoldDangerMeters;
+            long dangerSquared = checked(Fix64.FromInt(danger).Raw * Fix64.FromInt(danger).Raw);
+            int usable = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != ResourceKind.Gold || node.Remaining < rules.AcademyToolsGoldCost) continue;
+                int nodeCell = world.Map.Cell(node.Definition.Position);
+                if (nodeCell < 0 || nodeCell >= cells || !explored[nodeCell]) continue;
+                if (RouteDistance.Measure(width, height, passable, explored, coreCell, nodeCell, null) < 0) continue;
+
+                bool enemyNear = false;
+                foreach (int soldierIndex in world.SoldierTraversal)
+                {
+                    var enemy = world.Soldiers[soldierIndex];
+                    if (!enemy.Alive || enemy.Initial.FactionId == faction) continue;
+                    int enemyCell = world.Map.Cell(enemy.Position);
+                    if (enemyCell < 0 || enemyCell >= visible.Length || !visible[enemyCell]) continue;
+                    long dx = enemy.Position.X.Raw - node.Definition.Position.X.Raw;
+                    long dz = enemy.Position.Z.Raw - node.Definition.Position.Z.Raw;
+                    if (checked(dx * dx + dz * dz) <= dangerSquared) { enemyNear = true; break; }
+                }
+                if (!enemyNear) usable++;
+            }
+            return usable;
+        }
+
+        private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 

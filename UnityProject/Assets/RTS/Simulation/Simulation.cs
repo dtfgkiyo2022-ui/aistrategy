@@ -117,6 +117,8 @@ namespace Rts.Simulation
                     }
                     else intent = new ArmyIntent(a.Definition.Id, mission, 0, default, false);
                 }
+                else if (s.Initial.Kind == UnitKind.Monk && CultAllowed(faction) && a.Policy == 0)
+                    intent = CultMonkIntent(s, a, faction, home, mission);
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
                 s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
@@ -126,6 +128,60 @@ namespace Rts.Simulation
                 PickRaidTarget(ref s);
 
             }
+        }
+
+        /// <summary>V3-13 #1: cult monks stay behind a living infantry escort and only convert visible non-monks.</summary>
+        private ArmyIntent CultMonkIntent(SoldierState monk, ArmyState army, uint faction, SimPoint home, SimPoint mission)
+        {
+            int guardian = -1;
+            foreach (uint id in army.SoldierIds)
+            {
+                int index = checked((int)id - 1);
+                var candidate = world.Soldiers[index];
+                if (!candidate.Alive || candidate.Initial.Kind == UnitKind.Monk || candidate.Class == UnitKind.Monk) continue;
+                if (guardian < 0 || DistanceSquared(candidate.Position, monk.Position) < DistanceSquared(world.Soldiers[guardian].Position, monk.Position)) guardian = index;
+            }
+            if (guardian < 0) return new ArmyIntent(army.Definition.Id, home, 0, default, true);
+
+            foreach (int i in world.SoldierTraversal)
+            {
+                var enemy = world.Soldiers[i];
+                if (!enemy.Alive || enemy.Initial.FactionId == faction || !IsVisibleTo(faction, enemy.Position)) continue;
+                if (enemy.Initial.Kind == UnitKind.Monk || enemy.Class == UnitKind.Monk) continue;
+                if (enemy.Parameters.Range > Fix64.FromInt(2) && InRange(enemy.Position, monk.Position, Fix64.FromInt(16)))
+                    return new ArmyIntent(army.Definition.Id, home, 0, default, true);
+            }
+
+            int target = -1, bestValue = int.MinValue;
+            foreach (int i in world.SoldierTraversal)
+            {
+                var enemy = world.Soldiers[i];
+                if (!enemy.Alive || enemy.Initial.FactionId == faction || !IsVisibleTo(faction, enemy.Position)) continue;
+                if (enemy.Initial.Kind == UnitKind.Monk || enemy.Class == UnitKind.Monk) continue;
+                int value = CultTargetValue(enemy) * 1000 - DistanceRank(monk.Position, enemy.Position);
+                if (target < 0 || value > bestValue) { target = i; bestValue = value; }
+            }
+            var escort = world.Soldiers[guardian];
+            if (target < 0) return new ArmyIntent(army.Definition.Id, escort.Position, 0, default, false);
+            var prey = world.Soldiers[target];
+            SimPoint approach = FixMath.MoveTowards(escort.Position, prey.Position, Fix64.FromInt(4));
+            uint contact = world.Factions[faction - 1].ContactIds[target];
+            if (contact != 0 && InRange(monk.Position, prey.Position, monk.Parameters.Range))
+                return new ArmyIntent(army.Definition.Id, monk.Position, contact, default, false);
+            return new ArmyIntent(army.Definition.Id, approach, contact, default, false);
+        }
+
+        private static int CultTargetValue(SoldierState enemy)
+        {
+            UnitKind kind = enemy.Class != 0 ? enemy.Class : enemy.Initial.Kind;
+            return kind == UnitKind.HeavyInfantry ? 5 : kind == UnitKind.Cavalry ? 4 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 3 : 2;
+        }
+
+        private static int DistanceRank(SimPoint a, SimPoint b)
+        {
+            long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
+            long value = Math.Abs(dx / Fix64.FromInt(1).Raw) + Math.Abs(dz / Fix64.FromInt(1).Raw);
+            return value > int.MaxValue ? int.MaxValue : (int)value;
         }
 
         private uint InternalSoldierId(uint faction, uint contactId)

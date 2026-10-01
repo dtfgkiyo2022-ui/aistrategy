@@ -36,6 +36,7 @@ namespace Rts.Simulation
                 return;
             }
             if (MasonryAllowed(faction)) { DecideQuarry(faction); return; }
+            if (MountainAllowed(faction)) { DecideMountain(faction); return; }
             if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
