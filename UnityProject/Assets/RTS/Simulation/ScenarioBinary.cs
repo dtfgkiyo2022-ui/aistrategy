@@ -41,6 +41,9 @@ namespace Rts.Simulation
         private const int MetropolisExtensionId = 7;
         private const int MetropolisExtensionVersion = 1;
         private const int MetropolisExtensionDataLength = 5 * sizeof(int);
+        private const int SanctuaryExtensionId = 8;
+        private const int SanctuaryExtensionVersion = 1;
+        private const int SanctuaryExtensionDataLength = 9 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -54,7 +57,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
             new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength),
             new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
-            new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength)
+            new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength),
+            new ExtensionRegistration(SanctuaryExtensionId, SanctuaryExtensionVersion, SanctuaryExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -551,6 +555,7 @@ namespace Rts.Simulation
                 else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
                 else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
+                else if (id == SanctuaryExtensionId) ReadSanctuaryExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -587,6 +592,7 @@ namespace Rts.Simulation
             // not retain a stale cult extension from a previous encode/decode round trip.
             extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
             extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
+            extensions.RemoveAll(extension => extension != null && extension.Id == SanctuaryExtensionId && !c.Economy.Sanctuary);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -621,7 +627,38 @@ namespace Rts.Simulation
             bool hasMetropolis = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
             if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
+            bool hasSanctuary = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == SanctuaryExtensionId) hasSanctuary = true;
+            if (c.Economy.Sanctuary && !hasSanctuary) extensions.Add(CreateSanctuaryExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateSanctuaryExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Sanctuary ? 1 : 0);
+                writer.Write(e.ShrineSizeCells); writer.Write(e.ShrineWoodCost); writer.Write(e.ShrineStoneCost);
+                writer.Write(e.ShrineWork); writer.Write(e.ShrineHp); writer.Write(e.ShrineOutpostReach);
+                writer.Write(e.SanctuaryAttackBonusPermille); writer.Write(e.SanctuaryMaxBonusPermille);
+                return new ScenarioExtensionData { Id = SanctuaryExtensionId, Version = SanctuaryExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadSanctuaryExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid sanctuary flag.");
+                e.Sanctuary = enabled != 0;
+                e.ShrineSizeCells = reader.ReadInt32(); e.ShrineWoodCost = reader.ReadInt32(); e.ShrineStoneCost = reader.ReadInt32();
+                e.ShrineWork = reader.ReadInt32(); e.ShrineHp = reader.ReadInt32(); e.ShrineOutpostReach = reader.ReadInt32();
+                e.SanctuaryAttackBonusPermille = reader.ReadInt32(); e.SanctuaryMaxBonusPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing sanctuary extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateMetropolisExtension(EconomyRules e)

@@ -63,7 +63,7 @@ namespace Rts.Simulation
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn || MountainOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn || MountainOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
@@ -86,6 +86,7 @@ namespace Rts.Simulation
                         && !(MetropolisAllowed(faction) && kind == BuildingKind.GrandHouse)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
                          && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
+                         && !(SanctuaryAllowed(faction) && kind == BuildingKind.Shrine)
                          && !(CultAllowed(faction) && kind == BuildingKind.Monastery)
                          && !(FishingAllowed(faction) && kind == BuildingKind.Harbor)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
@@ -109,7 +110,9 @@ namespace Rts.Simulation
                     uint caravanOutpost = 0, caravanMarket = 0;
                     Fix64 caravanDistance = default;
                     int caravanReward = 0;
+                    uint sanctuaryOutpost = 0;
                     if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
+                    if (kind == BuildingKind.Shrine && !TrySanctuaryPlacement(faction, c.Cell, out sanctuaryOutpost)) return;
                     bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
@@ -126,6 +129,8 @@ namespace Rts.Simulation
                         host.CaravanDistance = caravanDistance;
                         host.CaravanWoodReward = caravanReward;
                     }
+                    if (kind == BuildingKind.Shrine)
+                        world.Buildings[world.BuildingCount - 1].SanctuaryOutpostId = sanctuaryOutpost;
                     world.Buildings[world.BuildingCount - 1].Held = IndustryOn; // V3-3: the player's building
                     return;
                 }

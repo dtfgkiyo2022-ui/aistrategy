@@ -62,7 +62,9 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
-                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
+                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
+            new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
+                (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -137,6 +139,8 @@ namespace Rts.Simulation
         }
 
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 

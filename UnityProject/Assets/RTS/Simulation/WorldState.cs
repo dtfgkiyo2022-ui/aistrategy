@@ -181,6 +181,8 @@ namespace Rts.Simulation
         internal uint CaravanOutpostId, CaravanMarketId;
         internal Fix64 CaravanDistance;
         internal int CaravanWoodReward;
+        /// <summary>V3-18 #1: the shrine's fixed outpost link; losing the outpost stops the effect without removing it.</summary>
+        internal uint SanctuaryOutpostId;
     }
 
     internal struct ResourceNodeState
@@ -527,6 +529,11 @@ namespace Rts.Simulation
                 && e.AcademyToolsFoodCost >= 0 && e.AcademyToolsWoodCost >= 0 && e.AcademyToolsGoldCost > 0 && e.AcademyToolsTicks > 0
                 && e.AcademyCartsFoodCost >= 0 && e.AcademyCartsWoodCost >= 0 && e.AcademyCartsGoldCost > 0 && e.AcademyCartsTicks > 0),
                 "Academy requires valid age and academy rules.");
+            Require(!e.Sanctuary || (e.Enabled && e.Ages && e.ShrineSizeCells > 0 && e.ShrineSizeCells <= 8
+                && e.ShrineWoodCost >= 0 && e.ShrineStoneCost >= 0 && e.ShrineWork > 0 && e.ShrineHp > 0
+                && e.ShrineOutpostReach >= 0 && e.SanctuaryAttackBonusPermille >= 0
+                && e.SanctuaryMaxBonusPermille >= e.SanctuaryAttackBonusPermille),
+                "Sanctuary requires valid age and shrine rules.");
             Require(!e.Cult || (e.Enabled && e.Ages && e.MonasterySizeCells > 0 && e.MonasterySizeCells <= 8
                 && e.MonasteryWoodCost >= 0 && e.MonasteryWork > 0 && e.MonasteryHp > 0
                 && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0
@@ -714,7 +721,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
@@ -734,6 +741,9 @@ namespace Rts.Simulation
                  AcademyToolsFoodCost = e.AcademyToolsFoodCost, AcademyToolsWoodCost = e.AcademyToolsWoodCost, AcademyToolsGoldCost = e.AcademyToolsGoldCost,
                  AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
                  AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
+                 ShrineSizeCells = e.ShrineSizeCells, ShrineWoodCost = e.ShrineWoodCost, ShrineStoneCost = e.ShrineStoneCost,
+                 ShrineWork = e.ShrineWork, ShrineHp = e.ShrineHp, ShrineOutpostReach = e.ShrineOutpostReach,
+                 SanctuaryAttackBonusPermille = e.SanctuaryAttackBonusPermille, SanctuaryMaxBonusPermille = e.SanctuaryMaxBonusPermille,
                   MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
                   MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
                   SermonFoodCost = e.SermonFoodCost, SermonWoodCost = e.SermonWoodCost, SermonTicks = e.SermonTicks,

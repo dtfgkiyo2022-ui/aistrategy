@@ -139,6 +139,8 @@ namespace Rts.Simulation
                     w.Value(n + "CaravanOutpostId", b.CaravanOutpostId); w.Value(n + "CaravanMarketId", b.CaravanMarketId);
                     w.Value(n + "CaravanDistance.Raw", b.CaravanDistance.Raw); w.Value(n + "CaravanWoodReward", b.CaravanWoodReward);
                 }
+                if (world.Config.Economy.Sanctuary && b.Kind == BuildingKind.Shrine)
+                    w.Value(n + "SanctuaryOutpostId", b.SanctuaryOutpostId);
             }
             w.Value("NextVillagerId", world.NextVillagerId);
             w.Value("Villagers.Count", (uint)world.VillagerCount);
