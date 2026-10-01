@@ -560,6 +560,9 @@ namespace Rts.Simulation
         {
             if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
+            // ID 3 is feature-owned data.  A scenario that turns the cult flag off must
+            // not retain a stale cult extension from a previous encode/decode round trip.
+            extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
             bool hasAcademy = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
