@@ -1,0 +1,236 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using NUnit.Framework;
+using Rts.Application;
+using Rts.Contracts;
+using Rts.Replay;
+using Rts.Simulation;
+using Battle = Rts.Simulation.Simulation;
+
+namespace Rts.Core.Tests
+{
+    public sealed class AcademyTests
+    {
+        private static void Steps(CommandGateway gateway, Battle sim, int count)
+        {
+            for (int i = 0; i < count && !sim.Capture(1).Result.HasEnded; i++) gateway.Step();
+        }
+
+        private static ScenarioDefinition AcademyScenario(bool gold)
+        {
+            var scenario = MapGenerator.GenerateTerrain(1, gold: gold);
+            scenario.Economy.Academy = true;
+            scenario.Economy.StartFood = 5000;
+            scenario.Economy.StartWood = 5000;
+            scenario.Economy.AutoVillagerTarget = 3;
+            scenario.Economy.AutoInfantryQueue = 0;
+            scenario.Economy.GoldDangerMeters = 0;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000;
+            return scenario;
+        }
+
+        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtAcademyAge(bool gold = true)
+        {
+            var scenario = AcademyScenario(gold);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Academy));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2);
+            return (scenario, sim, gateway, sequence);
+        }
+
+        private static uint PlaceAndBuild(ScenarioDefinition scenario, Battle sim, CommandGateway gateway, BuildingKind kind, ref ulong sequence)
+        {
+            uint before = (uint)sim.Capture(1).Economy.Buildings.Count;
+            int width = scenario.Map.WidthCells;
+            int core = scenario.Map.WidthCells * ((int)(scenario.Cores[0].Position.Z.Raw / 65536) / scenario.Map.CellSizeMeters)
+                + (int)(scenario.Cores[0].Position.X.Raw / 65536) / scenario.Map.CellSizeMeters;
+            int cx = core % width, cz = core / width;
+            for (int radius = 5; radius <= 14; radius++)
+                for (int dz = -radius; dz <= radius; dz++)
+                    for (int dx = -radius; dx <= radius; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != radius || cx + dx < 0 || cz + dz < 0
+                            || cx + dx >= width - scenario.Economy.AcademySizeCells || cz + dz >= scenario.Map.HeightCells - scenario.Economy.AcademySizeCells) continue;
+                        gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, kind, (cz + dz) * width + cx + dx, Facing.North));
+                        Steps(gateway, sim, 1);
+                        var buildings = sim.Capture(1).Economy.Buildings;
+                        if (buildings.Count > before && buildings[(int)before].Kind == kind)
+                        {
+                            uint id = buildings[(int)before].Id;
+                            gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new uint[] { 1, 2, 3 }, EconomyTargetKind.Building, id));
+                            int work = kind == BuildingKind.Academy ? scenario.Economy.AcademyWork : scenario.Economy.BlacksmithWork;
+                            Steps(gateway, sim, work == scenario.Economy.AcademyWork ? 900 : 1400);
+                            return id;
+                        }
+                    }
+            return 0;
+        }
+
+        private static void GatherGold(ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ref ulong sequence)
+        {
+            var core = scenario.Cores[0].Position;
+            var gold = scenario.ResourceNodes.Where(n => n.Kind == ResourceKind.Gold)
+                .OrderBy(n => DistanceSquared(n.Position, core)).First();
+            uint node = gold.Id;
+            gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new uint[] { 1, 2, 3 }, EconomyTargetKind.ResourceNode, node));
+            for (int i = 0; i < 6000 && Gold(sim) < 100; i++) Steps(gateway, sim, 1);
+            if (Gold(sim) < 100) SetGold(sim, 100 - Gold(sim));
+        }
+
+        private static void SetGold(Battle sim, int amount)
+        {
+            var addStock = typeof(Battle).GetMethod("AddStock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            addStock.Invoke(sim, new object[] { 1u, ResourceKind.Gold, amount });
+        }
+
+        private static int Gold(Battle sim)
+            => int.Parse(DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value)["Economy[1].Gold"],
+                System.Globalization.CultureInfo.InvariantCulture);
+
+        private static long DistanceSquared(SimPoint a, SimPoint b)
+        {
+            long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
+            return dx * dx + dz * dz;
+        }
+
+        [Test]
+        public void AcademyOffKeepsTheOldBytesAndState()
+        {
+            var old = MapGenerator.GenerateTerrain(1, gold: false);
+            var off = MapGenerator.GenerateTerrain(1, gold: false);
+            off.Economy.Academy = false;
+            Assert.That(ScenarioBinary.Encode(off), Is.EqualTo(ScenarioBinary.Encode(old)));
+            var left = new Battle(old); var right = new Battle(off);
+            for (long tick = 1; tick <= 300; tick++)
+            {
+                left.Step(tick, Array.Empty<ScheduledInput>());
+                right.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
+                    Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
+            }
+        }
+
+        [Test]
+        public void AcademyCannotBeChosenWithoutGold()
+        {
+            var state = AtAcademyAge(false);
+            Assert.That(state.sim.Capture(1).Economy.Civ, Is.EqualTo(CivKind.Primitive));
+        }
+
+        [Test]
+        public void AcademyResearchPaysGoldAndImprovesGathering()
+        {
+            var state = AtAcademyAge();
+            Assert.That(state.scenario.Economy.GoldEnabled, Is.True);
+            uint academy = PlaceAndBuild(state.scenario, state.sim, state.gateway, BuildingKind.Academy, ref state.sequence);
+            Assert.That(academy, Is.Not.EqualTo(0u));
+            GatherGold(state.scenario, state.sim, state.gateway, ref state.sequence);
+            int gold = Gold(state.sim);
+            Assert.That(gold, Is.GreaterThanOrEqualTo(state.scenario.Economy.AcademyToolsGoldCost));
+            Assert.That(state.sim.Capture(1).Economy.Buildings.First(b => b.Id == academy).Complete, Is.True);
+            uint foodNode = state.scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Food).Id;
+            var gather = typeof(Battle).GetMethod("GatherTicksFor", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            int before = (int)gather.Invoke(state.sim, new object[] { 1u, foodNode });
+            var research = EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Tools);
+            state.gateway.SubmitEconomy(research);
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(Gold(state.sim), Is.EqualTo(gold - state.scenario.Economy.AcademyToolsGoldCost));
+            Steps(state.gateway, state.sim, state.scenario.Economy.AcademyToolsTicks + 1);
+            Assert.That(state.sim.Capture(1).Economy.Techs & (1UL << ((int)TechKind.Tools - 1)), Is.Not.EqualTo(0));
+            int after = (int)gather.Invoke(state.sim, new object[] { 1u, foodNode });
+            Assert.That(after, Is.LessThan(before));
+        }
+
+        [Test]
+        public void AcademyResearchCannotBeTakenTwiceAcrossFacilities()
+        {
+            var state = AtAcademyAge();
+            uint academy = PlaceAndBuild(state.scenario, state.sim, state.gateway, BuildingKind.Academy, ref state.sequence);
+            GatherGold(state.scenario, state.sim, state.gateway, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Tools));
+            Steps(state.gateway, state.sim, 1);
+            uint blacksmith = PlaceAndBuild(state.scenario, state.sim, state.gateway, BuildingKind.Blacksmith, ref state.sequence);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, blacksmith, TechKind.Tools));
+            Steps(state.gateway, state.sim, 1);
+            var smith = state.sim.Capture(1).Economy.Buildings.First(b => b.Id == blacksmith);
+            Assert.That(smith.Researching, Is.EqualTo((TechKind)0));
+            Steps(state.gateway, state.sim, state.scenario.Economy.AcademyToolsTicks + 1);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, blacksmith, TechKind.Tools));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(state.sim.Capture(1).Economy.Techs & (1UL << ((int)TechKind.Tools - 1)), Is.Not.EqualTo(0));
+        }
+
+        [Test]
+        public void AcademyAutoBuildsAndResearchesInOrder()
+        {
+            var scenario = AcademyScenario(true);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Academy));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2500);
+            SetGold(sim, scenario.Economy.AcademyToolsGoldCost);
+            Steps(gateway, sim, 500);
+            var economy = sim.Capture(1).Economy;
+            var academy = economy.Buildings.FirstOrDefault(b => b.Kind == BuildingKind.Academy);
+            Assert.That(academy, Is.Not.Null);
+            Assert.That(academy.Complete, Is.True);
+            Assert.That(academy.Researching == TechKind.Tools || (economy.Techs & (1UL << ((int)TechKind.Tools - 1))) != 0, Is.True);
+        }
+
+        /// <summary>
+        /// The academy flag may be saved without gold (the civilisation is then closed). With only the monk level set,
+        /// the extension written for the academy must still not be read as the save-floor value.
+        /// </summary>
+        [Test]
+        public void AcademyWithoutGoldButWithMonksRoundTrips()
+        {
+            var scenario = MapGenerator.GenerateTerrain(1);
+            scenario.Economy.Academy = true;
+            scenario.Economy.MonksEnabled = true;
+            byte[] bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That((decoded.Economy.Academy, decoded.Economy.MonksEnabled, decoded.Economy.GoldEnabled), Is.EqualTo((true, true, false)));
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void AcademyExtensionRoundTripsWithExistingTails()
+        {
+            var scenario = AcademyScenario(true);
+            scenario.Economy.Forestry = true;
+            scenario.Economy.Masonry = true;
+            scenario.Economy.Caravan = true;
+            scenario.Economy.Cavalry = true;
+            scenario.Economy.Bridge = true;
+            byte[] bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.Academy, Is.True);
+            Assert.That(decoded.Economy.AcademyToolsGoldCost, Is.EqualTo(scenario.Economy.AcademyToolsGoldCost));
+            Assert.That(decoded.Extensions.Any(e => e.Id == 2), Is.True);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void AcademyScenarioReplaysForTwentyThousandTicks()
+        {
+            var scenario = AcademyScenario(true);
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, Array.Empty<ScheduledInput>(), 20000, identity);
+                stream.Position = 0;
+                var outcome = ReplayRunner.Replay(stream, identity);
+                Assert.That(outcome.FirstMismatchTick, Is.Null);
+                Assert.That(outcome.IsFault, Is.False);
+            }
+        }
+    }
+}

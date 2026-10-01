@@ -28,6 +28,8 @@ namespace Rts.Simulation
 
         private bool BridgeOn => AgesOn && world.Config.Economy.Bridge;
 
+        private bool AcademyOn => AgesOn && world.Config.Economy.Academy && world.Config.Economy.GoldEnabled;
+
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
 
@@ -54,6 +56,9 @@ namespace Rts.Simulation
 
         private bool BridgeAllowed(uint faction)
             => BridgeOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
+
+        private bool AcademyAllowed(uint faction)
+            => AcademyOn && world.Economies[faction - 1].Civ == CivKind.Academy && world.Economies[faction - 1].Age >= 1;
 
         private bool Agrarian(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
@@ -105,17 +110,22 @@ namespace Rts.Simulation
         /// </summary>
         private bool CanAdvance(uint faction, CivKind civ)
         {
+            if (!CanAdvanceWithoutCiv(faction)) return false;
+            var e = world.Economies[faction - 1];
+            if (e.Civ == CivKind.Primitive)
+                return CivEnabled(faction, civ);
+            // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
+            return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
+        }
+
+        /// <summary>Checks every advance prerequisite that does not depend on the civilisation choice.</summary>
+        private bool CanAdvanceWithoutCiv(uint faction)
+        {
             if (!AgesOn) return false;
             var e = world.Economies[faction - 1];
             if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
             var (food, wood, gold, _) = AdvancePrice(e);
-            if (e.Food < food || e.Wood < wood || e.Gold < gold) return false;
-            if (e.Civ == CivKind.Primitive)
-                return civ == CivKind.Agrarian || civ == CivKind.Metallurgy || ForestryOn && civ == CivKind.Forestry
-                    || MasonryOn && civ == CivKind.Masonry || CaravanOn && civ == CivKind.Caravan
-                    || CavalryOn && civ == CivKind.Cavalry || BridgeOn && civ == CivKind.Bridge;
-            // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
-            return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
+            return e.Food >= food && e.Wood >= wood && e.Gold >= gold;
         }
 
         private (int food, int wood, int gold, int ticks) AdvancePrice(FactionEconomy e)
@@ -163,8 +173,9 @@ namespace Rts.Simulation
         {
             // The core the player runs by hand (V3-3, 19) is theirs to advance too.
             var e = world.Economies[faction - 1];
+            if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvanceWithoutCiv(faction)) return;
             var civ = e.Civ == CivKind.Primitive ? ChooseCiv(faction) : e.Civ;
-            if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvance(faction, civ)) return;
+            if (!CanAdvance(faction, civ)) return;
             StartAdvance(faction, civ);
         }
 
@@ -210,15 +221,18 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
-            // A civilisation whose flag is off scores zero, which never steals a tie from an older one.
-            int forest = ForestryOn ? CountUsableForestWood(faction, core) : 0;
-            int stone = MasonryOn ? CountUsableMasonryStone(faction, core) : 0;
-            int caravan = CaravanOn ? CountUsableCaravanOutposts(faction, core) : 0;
-            int cavalry = CavalryOn ? CountCavalryMobility(faction, core) : 0;
-            int bridge = BridgeOn ? CountUsableBridgeSaving(faction, core) : 0;
-            return EconomyDecision.ChooseCiv(ore, food, forest, stone, caravan, cavalry, bridge, GuaranteedFoodPoints);
+            // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
+            // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.
+            var candidates = new EconomyDecision.CivScore[CivRegistrations.Length];
+            for (int i = 0; i < CivRegistrations.Length; i++)
+            {
+                var row = CivRegistrations[i];
+                candidates[i] = new EconomyDecision.CivScore(row.Civ,
+                    row.Enabled(this, faction) ? row.Score(this, faction, core, ore, food) : 0, row.Priority);
+            }
+            return EconomyDecision.ChooseCiv((System.Collections.Generic.IReadOnlyList<EconomyDecision.CivScore>)candidates);
         }
 
         /// <summary>
