@@ -28,6 +28,7 @@ namespace Rts.Simulation
         private static readonly TechKind[] AcademyResearchOrder = { TechKind.Tools, TechKind.Carts, TechKind.Weapons, TechKind.Armour, TechKind.Siegecraft };
         private static readonly TechKind[] MountainResearchOrder = { MountainTech.DeepShaft, MountainTech.MountainFort };
         private static readonly TechKind[] FishingResearchOrder = { FishingTech.FishingNet, FishingTech.DriedFish };
+        private static readonly TechKind[] CultResearchOrder = { CultTech.Sermon, CultTech.MartyrBlessing };
 
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
@@ -66,6 +67,8 @@ namespace Rts.Simulation
             if (tech == MountainTech.MountainFort) return MountainAllowed(faction) && e.Age >= 3 && !HasTech(faction, tech);
             if (tech == FishingTech.FishingNet) return FishingAllowed(faction) && e.Age >= 2 && !HasTech(faction, tech);
             if (tech == FishingTech.DriedFish) return FishingAllowed(faction) && e.Age >= 3 && !HasTech(faction, tech);
+            if (tech == CultTech.Sermon) return CultAllowed(faction) && e.Age >= 2 && !HasTech(faction, tech);
+            if (tech == CultTech.MartyrBlessing) return CultAllowed(faction) && e.Age >= 3 && !HasTech(faction, tech);
             if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || HasTech(faction, tech)) return false;
             if (tech == BridgeTech.Bridgeworks) return e.Civ == CivKind.Bridge && e.Age >= 2;
             if (tech == BridgeTech.SiegeDeployment) return e.Civ == CivKind.Bridge && e.Age >= 3;
@@ -87,6 +90,9 @@ namespace Rts.Simulation
         private bool IsFishingTech(TechKind tech)
             => tech == FishingTech.FishingNet || tech == FishingTech.DriedFish;
 
+        private bool IsCultTech(TechKind tech)
+            => tech == CultTech.Sermon || tech == CultTech.MartyrBlessing;
+
         private int FishingFoodCost(TechKind tech)
             => tech == FishingTech.FishingNet ? world.Config.Economy.FishingNetFoodCost : world.Config.Economy.DriedFishFoodCost;
 
@@ -96,26 +102,38 @@ namespace Rts.Simulation
         private int FishingTicks(TechKind tech)
             => tech == FishingTech.FishingNet ? world.Config.Economy.FishingNetTicks : world.Config.Economy.DriedFishTicks;
 
+        private int CultFoodCost(TechKind tech)
+            => tech == CultTech.Sermon ? world.Config.Economy.SermonFoodCost : world.Config.Economy.MartyrBlessingFoodCost;
+
+        private int CultWoodCost(TechKind tech)
+            => tech == CultTech.Sermon ? world.Config.Economy.SermonWoodCost : world.Config.Economy.MartyrBlessingWoodCost;
+
+        private int CultTicks(TechKind tech)
+            => tech == CultTech.Sermon ? world.Config.Economy.SermonTicks : world.Config.Economy.MartyrBlessingTicks;
+
         private int TechFoodCost(TechKind tech)
-            => IsFishingTech(tech) ? FishingFoodCost(tech)
+            => IsCultTech(tech) ? CultFoodCost(tech)
+                : IsFishingTech(tech) ? FishingFoodCost(tech)
                 : tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksFoodCost
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentFoodCost
                 : world.Config.Economy.TechFood[(int)tech - 1];
 
         private int TechWoodCost(TechKind tech)
-            => IsFishingTech(tech) ? FishingWoodCost(tech)
+            => IsCultTech(tech) ? CultWoodCost(tech)
+                : IsFishingTech(tech) ? FishingWoodCost(tech)
                 : tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksWoodCost
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentWoodCost
                 : world.Config.Economy.TechWood[(int)tech - 1];
 
         private int TechMetalCost(TechKind tech)
-            => IsBridgeTech(tech) || IsFishingTech(tech) ? 0 : world.Config.Economy.TechMetal[(int)tech - 1];
+            => IsBridgeTech(tech) || IsFishingTech(tech) || IsCultTech(tech) ? 0 : world.Config.Economy.TechMetal[(int)tech - 1];
 
         private int TechGemsCost(TechKind tech)
-            => IsBridgeTech(tech) || IsFishingTech(tech) ? 0 : world.Config.Economy.TechGems[(int)tech - 1];
+            => IsBridgeTech(tech) || IsFishingTech(tech) || IsCultTech(tech) ? 0 : world.Config.Economy.TechGems[(int)tech - 1];
 
         private int TechTicks(TechKind tech)
-            => IsFishingTech(tech) ? FishingTicks(tech)
+            => IsCultTech(tech) ? CultTicks(tech)
+                : IsFishingTech(tech) ? FishingTicks(tech)
                 : tech == BridgeTech.Bridgeworks ? world.Config.Economy.BridgeworksTicks
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentTicks
                 : world.Config.Economy.TechTicks[(int)tech - 1];
@@ -194,7 +212,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy || b.Kind == BuildingKind.MineShaft || b.Kind == BuildingKind.Harbor) && b.Researching == tech) return true;
+                if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy || b.Kind == BuildingKind.MineShaft || b.Kind == BuildingKind.Harbor || b.Kind == BuildingKind.Monastery) && b.Researching == tech) return true;
             }
             return false;
         }
@@ -205,6 +223,7 @@ namespace Rts.Simulation
             bool academy = smith.Kind == BuildingKind.Academy;
             bool mountain = smith.Kind == BuildingKind.MineShaft;
             bool fishing = smith.Kind == BuildingKind.Harbor;
+            bool cult = smith.Kind == BuildingKind.Monastery;
             if (!AgesOn || !smith.Complete || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
             if (academy)
             {
@@ -219,6 +238,10 @@ namespace Rts.Simulation
             {
                 if (!IsFishingTech(tech) || !TechOpen(faction, tech)) return false;
             }
+            else if (cult)
+            {
+                if (!IsCultTech(tech) || !TechOpen(faction, tech)) return false;
+            }
             else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || !TechOpen(faction, tech)) return false;
             ref var economy = ref world.Economies[faction - 1];
             int food = academy ? AcademyFoodCost(tech) : mountain ? MountainFoodCost(tech) : fishing ? FishingFoodCost(tech) : TechFoodCost(tech);
@@ -230,6 +253,7 @@ namespace Rts.Simulation
             int gems = academy || mountain || fishing ? 0 : TechGemsCost(tech);
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
+            if (cult && !CultBudgetAllows(faction, food, wood)) return false;
             economy.Food = checked(economy.Food - food);
             economy.Wood = checked(economy.Wood - wood);
             economy.Gold = checked(economy.Gold - gold);
@@ -249,7 +273,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy && b.Kind != BuildingKind.MineShaft && b.Kind != BuildingKind.Harbor) || b.Researching == 0) continue;
+                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy && b.Kind != BuildingKind.MineShaft && b.Kind != BuildingKind.Harbor && b.Kind != BuildingKind.Monastery) || b.Researching == 0) continue;
                 if (--b.TrainRemaining > 0) continue;
                 var tech = b.Researching;
                 b.Researching = 0;
@@ -275,6 +299,14 @@ namespace Rts.Simulation
                         defence.Hp = MountainFortHp(defence.Hp, defence.FactionId, defence.OriginCell, SizeOf(defence.Kind));
                     }
                 }
+                if (tech == CultTech.MartyrBlessing)
+                {
+                    foreach (int soldier in world.SoldierTraversal)
+                        if (world.Soldiers[soldier].Alive && world.Soldiers[soldier].Initial.FactionId == b.FactionId
+                            && world.Soldiers[soldier].Initial.Kind == UnitKind.Monk)
+                            ApplyTech(soldier, tech);
+                    continue;
+                }
                 if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour && tech != TechKind.GemArmor) continue;
                 foreach (int s in world.SoldierTraversal)
                     if (world.Soldiers[s].Alive && world.Soldiers[s].Initial.FactionId == b.FactionId) ApplyTech(s, tech);
@@ -290,6 +322,8 @@ namespace Rts.Simulation
             if (HasTech(faction, TechKind.SteelArmour)) ApplyTech(index, TechKind.SteelArmour);
             if (HasTech(faction, TechKind.GemArmor)) ApplyTech(index, TechKind.GemArmor);
             if (HasCavalryDrill(faction)) ApplyTech(index, CavalryDrillTech);
+            if (HasTech(faction, CultTech.MartyrBlessing) && world.Soldiers[index].Initial.Kind == UnitKind.Monk)
+                ApplyTech(index, CultTech.MartyrBlessing);
         }
 
         private void ApplyTech(int index, TechKind tech)
@@ -306,6 +340,13 @@ namespace Rts.Simulation
             }
             else if (tech == TechKind.Weapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.WeaponsDamage);
             else if (tech == TechKind.SteelWeapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.SteelWeaponsDamage);
+            else if (tech == CultTech.MartyrBlessing && s.Initial.Kind == UnitKind.Monk)
+            {
+                int hp = checked(s.Parameters.Hp * rules.MartyrBlessingHpPermille / 1000);
+                int delta = checked(hp - s.Parameters.Hp);
+                s.Parameters.Hp = hp;
+                s.Hp = checked(s.Hp + delta);
+            }
             else
             {
                 int hp = tech == TechKind.SteelArmour ? rules.SteelArmourHp : tech == TechKind.GemArmor ? rules.GemArmorHp : rules.ArmourHp;
@@ -323,6 +364,10 @@ namespace Rts.Simulation
             if (!AgesOn || SavingHard(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Fishing && DecideFishingResearch(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Mountain && DecideMountainResearch(faction)) return;
+            if (world.Economies[faction - 1].Civ == CivKind.Cult)
+            {
+                if (DecideCultResearch(faction)) return;
+            }
             if (world.Economies[faction - 1].Civ == CivKind.Academy)
             {
                 if (DecideAcademyResearch(faction)) return;
@@ -342,6 +387,40 @@ namespace Rts.Simulation
             foreach (var tech in AutoResearchOrder)
                 if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy && AcademyResearchOperational(faction)) continue;
                 else if (TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
+        }
+
+        private bool DecideCultResearch(uint faction)
+        {
+            if (!CultAllowed(faction)) return false;
+            int monastery = OwnBuildingIndex(faction, BuildingKind.Monastery);
+            if (monastery < 0) return false;
+            ref var building = ref world.Buildings[monastery];
+            if (!building.Complete || building.Held || building.Researching != 0) return true;
+            foreach (var tech in CultResearchOrder)
+                if (TechOpen(faction, tech))
+                {
+                    if (StartResearch(faction, ref building, tech, false)) return true;
+                    return false;
+                }
+            return false;
+        }
+
+        private bool CultBudgetAllows(uint faction, int foodCost, int woodCost)
+        {
+            var e = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            var (ageFood, ageWood, ageGold, _) = AdvancePrice(faction, e);
+            int foodReserve = ageFood + (e.Civ == CivKind.Primitive ? 0 : rules.MarketFoodFloor);
+            int woodReserve = ageWood;
+            if (LivingVillagers(faction) + e.Queued < AutoVillagerTargetFor(faction))
+                foodReserve = checked(foodReserve + VillagerFoodCostFor(faction));
+            if (CompleteBarracks(faction) && LivingSoldiers(faction) == 0)
+            {
+                foodReserve = checked(foodReserve + InfantryFoodFor(faction));
+                woodReserve = checked(woodReserve + InfantryWoodFor(faction));
+            }
+            return e.Food >= checked(foodCost + foodReserve) && e.Wood >= checked(woodCost + woodReserve)
+                && e.Gold >= ageGold;
         }
 
         private bool DecideFishingResearch(uint faction)

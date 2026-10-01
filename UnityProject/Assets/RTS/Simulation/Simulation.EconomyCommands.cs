@@ -145,6 +145,8 @@ namespace Rts.Simulation
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit, b.Kind)) return;
+                    if (b.Kind == BuildingKind.Monastery && c.Unit == UnitKind.Monk
+                        && !CultBudgetAllows(faction, rules.MonasteryMonkFoodCost, rules.MonasteryMonkWoodCost)) return;
                     if (IndustryOn) b.Held = true;
                     MarkLinesForBuilding(faction, b.Id);
                     Enqueue(faction, ref b, c.Unit);
