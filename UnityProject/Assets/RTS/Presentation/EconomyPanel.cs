@@ -179,7 +179,44 @@ namespace Rts.Presentation
                 : m == Mode.Castle ? BuildingKind.Castle : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
-            => c == CivKind.Agrarian ? UiText.T("farming", "農耕の文明") : c == CivKind.Metallurgy ? UiText.T("metallurgy", "冶金の文明") : UiText.T("primitive age", "原始時代");
+        {
+            switch (c)
+            {
+                case CivKind.Agrarian: return UiText.T("farming", "農耕の文明");
+                case CivKind.Metallurgy: return UiText.T("metallurgy", "冶金の文明");
+                case CivKind.Forestry: return UiText.T("forestry", "森林・木工の文明");
+                case CivKind.Masonry: return UiText.T("masonry", "石工・城塞の文明");
+                case CivKind.Caravan: return UiText.T("caravan", "隊商・交易の文明");
+                case CivKind.Cavalry: return UiText.T("cavalry", "騎馬・機動の文明");
+                case CivKind.Bridge: return UiText.T("engineering", "工兵・架橋の文明");
+                default: return UiText.T("primitive age", "原始時代");
+            }
+        }
+
+        /// <summary>A short name for the advance buttons.</summary>
+        private static string CivShortName(CivKind c)
+        {
+            switch (c)
+            {
+                case CivKind.Agrarian: return UiText.T("farming", "農耕");
+                case CivKind.Metallurgy: return UiText.T("metallurgy", "冶金");
+                case CivKind.Forestry: return UiText.T("forestry", "森林");
+                case CivKind.Masonry: return UiText.T("masonry", "石工");
+                case CivKind.Caravan: return UiText.T("caravan", "隊商");
+                case CivKind.Cavalry: return UiText.T("cavalry", "騎馬");
+                case CivKind.Bridge: return UiText.T("engineering", "工兵");
+                default: return c.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Set by the match host when the later civilisations are switched on. The economy view does not carry the
+        /// civilisation flags, so the panel is told instead; a button for a closed civilisation would simply be refused.
+        /// </summary>
+        public bool ExtraCivilisations { get; set; }
+
+        private static readonly CivKind[] AllCivs = { CivKind.Agrarian, CivKind.Metallurgy, CivKind.Forestry, CivKind.Masonry,
+            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge };
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
         private static string AgeName(CivKind c, int age)
@@ -187,7 +224,9 @@ namespace Rts.Presentation
             if (age < 2) return CivName(c);
             if (c == CivKind.Agrarian)
                 return age == 2 ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("farming, trade age", "農耕の文明・交易の時代");
-            return age == 2 ? UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代") : UiText.T("metallurgy, steel age", "冶金の文明・鋼の時代");
+            if (c == CivKind.Metallurgy)
+                return age == 2 ? UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代") : UiText.T("metallurgy, steel age", "冶金の文明・鋼の時代");
+            return CivName(c) + (age == 2 ? UiText.T(", second age", "・2つ目の時代") : UiText.T(", third age", "・3つ目の時代"));
         }
 
         private static string FacingName(Facing f)
@@ -500,11 +539,31 @@ namespace Rts.Presentation
             {
                 // V3-4: advancing out of the primitive age, into one civilisation.
                 string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）");
-                if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Advance: farming", "時代を進める：農耕") + cost))
-                    Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
-                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
-                    Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
-                y += 26f;
+                if (!ExtraCivilisations)
+                {
+                    if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Advance: farming", "時代を進める：農耕") + cost))
+                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
+                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
+                    y += 26f;
+                }
+                else
+                {
+                    // Seven civilisations: one label with the cost, then the choices four to a row.
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advance into", "時代を進める：") + cost);
+                    y += 22f;
+                    float quarterWidth = (w - 12f) / 4f;
+                    var civs = AllCivs;
+                    for (int i = 0; i < civs.Length; i++)
+                    {
+                        var civ = civs[i];
+                        var r = new Rect(x + (i % 4) * (quarterWidth + 4f), y + (i / 4) * 26f, quarterWidth, 22f);
+                        if (GUI.Button(r, CivShortName(civ)))
+                            Send(EconomyCommand.Advance(faction, ++sequence, civ),
+                                UiText.T("Advancing into ", "") + CivName(civ) + UiText.T(" requested", "へ進めるよう依頼しました"));
+                    }
+                    y += ((civs.Length + 3) / 4) * 26f;
+                }
             }
             else if (economy.Ages && (economy.Age == 1 || economy.Age == 2) && economy.AdvanceRemaining == 0)
             {
@@ -583,7 +642,9 @@ namespace Rts.Presentation
                 : UiText.T("Blacksmith: pick a tech", "鍛冶場：研究を選ぶ"));
             y += 26f;
             var techs = new List<TechKind> { TechKind.Weapons, TechKind.Armour, TechKind.Tools, TechKind.Carts };
-            techs.Add(economy.Civ == CivKind.Agrarian ? TechKind.Irrigation : TechKind.BlastFurnace);
+            // Irrigation and the blast furnace belong to farming and metallurgy; the later civilisations have neither.
+            if (economy.Civ == CivKind.Agrarian) techs.Add(TechKind.Irrigation);
+            else if (economy.Civ == CivKind.Metallurgy) techs.Add(TechKind.BlastFurnace);
             // V3-5 (32 #10): the third age opens three more, the same for both civilisations.
             // V3-5 (32 #14): the steel pair comes with the second age and is paid in metal.
             if (economy.Age >= 2) { techs.Add(TechKind.SteelWeapons); techs.Add(TechKind.SteelArmour); }

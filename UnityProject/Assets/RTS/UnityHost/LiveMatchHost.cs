@@ -25,6 +25,32 @@ namespace Rts.UnityHost
         private CommandGateway gateway;
         private LiveCommandPort port;
         private PresetController enemy;
+        // The opponent's side is fixed when the match starts; switching the viewed side must not hand it the other frame.
+        private uint enemyFactionId = 2;
+        // The player's own side may run a doctrine too. "maintain" by default, so a hands-off match runs both sides
+        // alike; with "none" the player's armies wait for the player's orders, as before.
+        [SerializeField] private string ownPreset = "maintain";
+        private PresetController own;
+        private uint ownFactionId = 1;
+        private OwnDoctrineChoice ownDoctrine;
+
+        /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
+        private sealed class OwnDoctrineChoice : IOpponentControl
+        {
+            private readonly LiveMatchHost host;
+            public OwnDoctrineChoice(LiveMatchHost host) { this.host = host; }
+            public string[] Choices { get { return Rts.Application.PolicyPresets.Names; } }
+            public string Current
+            {
+                get { return host.ownPreset; }
+                set
+                {
+                    if (value == host.ownPreset || System.Array.IndexOf(Choices, value) < 0) return;
+                    host.ownPreset = value;
+                    host.matchRestartRequested = true;
+                }
+            }
+        }
         private float accumulated;
         private int speedMultiplier = 1;
         private bool paused;
@@ -171,6 +197,15 @@ namespace Rts.UnityHost
             set { if (value == ageVictory) return; ageVictory = value; matchRestartRequested = true; }
         }
 
+        // Off by default so the usual match keeps the first two civilisations; on opens all seven for trying them.
+        [SerializeField] private bool allCivilisations = false;
+
+        public bool AllCivilisations
+        {
+            get { return allCivilisations; }
+            set { if (value == allCivilisations) return; allCivilisations = value; matchRestartRequested = true; }
+        }
+
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
 
         public void Begin()
@@ -184,6 +219,14 @@ namespace Rts.UnityHost
             {
                 scenario.Economy.MonksEnabled = monks;
                 scenario.Economy.AgeVictoryEnabled = ageVictory;
+                if (allCivilisations)
+                {
+                    scenario.Economy.Forestry = true;
+                    scenario.Economy.Masonry = true;
+                    scenario.Economy.Caravan = true;
+                    scenario.Economy.Cavalry = true;
+                    scenario.Economy.Bridge = true;
+                }
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
@@ -201,8 +244,13 @@ namespace Rts.UnityHost
             gateway = new CommandGateway(simulation, provider, null,
                 external == null ? null : AutonomousPollSchedule.OnChange(600), external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
-            enemy = PolicyPresets.CreateController(enemyPreset, 3 - viewFactionId, gateway);
+            enemyFactionId = 3 - viewFactionId;
+            enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
+            ownFactionId = viewFactionId;
+            // An outside AI already steers the own side; a doctrine on top of it would fight it.
+            own = PolicyPresets.CreateController(external != null ? "none" : ownPreset, ownFactionId, gateway);
+            own.Initialize();
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
                     PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
@@ -214,6 +262,8 @@ namespace Rts.UnityHost
             panel.ExternalAi = this;
             panel.MatchRestart = this;
             panel.Opponent = this;
+            if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
+            panel.OwnDoctrine = ownDoctrine;
             // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
             if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
             if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
@@ -222,6 +272,7 @@ namespace Rts.UnityHost
             economyLayer.Clear();
             economyLayer.Bind(view);
             economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+            economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
@@ -239,7 +290,8 @@ namespace Rts.UnityHost
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
             if (frame.Result.HasEnded) return;
-            enemy.Step(simulation.Capture(3 - viewFactionId));
+            enemy.Step(simulation.Capture(enemyFactionId));
+            own.Step(simulation.Capture(ownFactionId));
         }
 
         private const string LanguageKey = "rts.language.japanese";

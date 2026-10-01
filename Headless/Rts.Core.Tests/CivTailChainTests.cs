@@ -41,6 +41,37 @@ namespace Rts.Core.Tests
             }
         }
 
+        /// <summary>
+        /// The "all seven civilisations" switch of the live match turns the five later flags on together on a plain
+        /// random map (no extra resources). Such a match must run, pick civilisations and replay tick for tick.
+        /// </summary>
+        [TestCase(1UL)]
+        [TestCase(27UL)]
+        public void AllSevenCivilisationsOnAPlainMapRunAndReplay(ulong seed)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Forestry = true; s.Economy.Masonry = true; s.Economy.Caravan = true;
+            s.Economy.Cavalry = true; s.Economy.Bridge = true;
+            var sim = new Rts.Simulation.Simulation(s);
+            var gateway = new Rts.Application.CommandGateway(sim);
+            for (int i = 0; i < 12000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            TestContext.WriteLine("seed " + seed + ": civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age + ", tick=" + sim.Capture(1).Tick);
+            using (var stream = new System.IO.MemoryStream())
+            {
+                var identity = new Rts.Replay.BuildIdentity();
+                Rts.Application.ReplayRunner.Record(stream, s, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = Rts.Application.ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
         [TestCase(0, 3, 0, 0, 0, 0, CivKind.Agrarian)]
         [TestCase(2, 3, 0, 0, 0, 2, CivKind.Metallurgy)]
         [TestCase(0, 3, 0, 0, 2, 2, CivKind.Caravan)]
