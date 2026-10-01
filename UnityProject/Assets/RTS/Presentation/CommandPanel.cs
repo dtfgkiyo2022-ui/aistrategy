@@ -332,7 +332,7 @@ namespace Rts.Presentation
                 GUI.enabled = mapChoice != null && mapChoice.EconomyMap;
                 bool all = matchRuleChoice.AllCivilisations;
                 bool allNow = GUI.Toggle(new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f), all,
-                    all ? UiText.T("All 7 (+ forestry, masonry, caravan, cavalry, bridge)", "7つ全部（＋森林・石工・隊商・騎馬・工兵）")
+                    all ? UiText.T("All 8 (+ forestry, masonry, caravan, cavalry, bridge, academy; gold on the map)", "8つ全部（＋森林・石工・隊商・騎馬・工兵・学府、金あり）")
                         : UiText.T("First 2 only (agrarian, metallurgy)", "最初の2つだけ（農耕・冶金）"), GUI.skin.button);
                 if (allNow != all) matchRuleChoice.AllCivilisations = allNow;
                 GUI.enabled = true;
