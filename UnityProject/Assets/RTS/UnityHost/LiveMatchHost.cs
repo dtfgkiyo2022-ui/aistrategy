@@ -25,6 +25,8 @@ namespace Rts.UnityHost
         private CommandGateway gateway;
         private LiveCommandPort port;
         private PresetController enemy;
+        // The opponent's side is fixed when the match starts; switching the viewed side must not hand it the other frame.
+        private uint enemyFactionId = 2;
         private float accumulated;
         private int speedMultiplier = 1;
         private bool paused;
@@ -171,6 +173,15 @@ namespace Rts.UnityHost
             set { if (value == ageVictory) return; ageVictory = value; matchRestartRequested = true; }
         }
 
+        // Off by default so the usual match keeps the first two civilisations; on opens all seven for trying them.
+        [SerializeField] private bool allCivilisations = false;
+
+        public bool AllCivilisations
+        {
+            get { return allCivilisations; }
+            set { if (value == allCivilisations) return; allCivilisations = value; matchRestartRequested = true; }
+        }
+
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
 
         public void Begin()
@@ -184,6 +195,14 @@ namespace Rts.UnityHost
             {
                 scenario.Economy.MonksEnabled = monks;
                 scenario.Economy.AgeVictoryEnabled = ageVictory;
+                if (allCivilisations)
+                {
+                    scenario.Economy.Forestry = true;
+                    scenario.Economy.Masonry = true;
+                    scenario.Economy.Caravan = true;
+                    scenario.Economy.Cavalry = true;
+                    scenario.Economy.Bridge = true;
+                }
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
@@ -201,7 +220,8 @@ namespace Rts.UnityHost
             gateway = new CommandGateway(simulation, provider, null,
                 external == null ? null : AutonomousPollSchedule.OnChange(600), external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
-            enemy = PolicyPresets.CreateController(enemyPreset, 3 - viewFactionId, gateway);
+            enemyFactionId = 3 - viewFactionId;
+            enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
@@ -222,6 +242,7 @@ namespace Rts.UnityHost
             economyLayer.Clear();
             economyLayer.Bind(view);
             economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+            economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
@@ -239,7 +260,7 @@ namespace Rts.UnityHost
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
             if (frame.Result.HasEnded) return;
-            enemy.Step(simulation.Capture(3 - viewFactionId));
+            enemy.Step(simulation.Capture(enemyFactionId));
         }
 
         private const string LanguageKey = "rts.language.japanese";
