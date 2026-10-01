@@ -40,6 +40,10 @@ namespace Rts.Presentation
         /// <summary>Lets the player pick the opponent's doctrine. Null hides the picker, which is what the mock scene wants.</summary>
         public IOpponentControl Opponent { get { return opponent; } set { opponent = value; } }
 
+        private IOpponentControl ownDoctrine;
+        /// <summary>Lets the player pick a doctrine for their own side too ("none" leaves the armies to the player). Null hides it.</summary>
+        public IOpponentControl OwnDoctrine { get { return ownDoctrine; } set { ownDoctrine = value; } }
+
         /// <summary>Random economy map or the classic one. Null hides the row.</summary>
         public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
 
@@ -108,7 +112,7 @@ namespace Rts.Presentation
         /// <summary>Called after the player switches the on-screen language, so the host can remember it.</summary>
         public System.Action<bool> LanguageChanged;
         private const float SetupRow = 30f;
-        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 5f + 62f); }
+        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 6f + 62f); }
 
         private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
 
@@ -273,6 +277,20 @@ namespace Rts.Presentation
                 {
                     bool on = opponent.Current == choices[i];
                     if (GUI.Toggle(new Rect(x + labelWidth + i * width, y, width - 4f, 24f), on, PresetLabel(choices[i]), GUI.skin.button) && !on) opponent.Current = choices[i];
+                }
+            }
+            y += SetupRow;
+
+            // The same doctrines for the player's own side, so a hands-off match can run both sides alike.
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own side", "自軍の方針"));
+            if (ownDoctrine != null)
+            {
+                var choices = ownDoctrine.Choices;
+                float width = (rect.width - 16f - labelWidth) / choices.Length;
+                for (int i = 0; i < choices.Length; i++)
+                {
+                    bool on = ownDoctrine.Current == choices[i];
+                    if (GUI.Toggle(new Rect(x + labelWidth + i * width, y, width - 4f, 24f), on, PresetLabel(choices[i]), GUI.skin.button) && !on) ownDoctrine.Current = choices[i];
                 }
             }
             y += SetupRow;
