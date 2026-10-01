@@ -87,6 +87,20 @@ namespace Rts.Simulation
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentTicks
                 : world.Config.Economy.TechTicks[(int)tech - 1];
 
+        private bool AcademyTech(TechKind tech) => tech == TechKind.Tools || tech == TechKind.Carts;
+
+        private int AcademyFoodCost(TechKind tech)
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsFoodCost : world.Config.Economy.AcademyCartsFoodCost;
+
+        private int AcademyWoodCost(TechKind tech)
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsWoodCost : world.Config.Economy.AcademyCartsWoodCost;
+
+        private int AcademyGoldCost(TechKind tech)
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsGoldCost : world.Config.Economy.AcademyCartsGoldCost;
+
+        private int AcademyTicks(TechKind tech)
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsTicks : world.Config.Economy.AcademyCartsTicks;
+
         private int BridgeHpFor(uint faction)
         {
             var rules = world.Config.Economy;
@@ -113,7 +127,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.Blacksmith && b.Researching == tech) return true;
+                if (b.Alive && b.FactionId == faction && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy) && b.Researching == tech) return true;
             }
             return false;
         }
@@ -121,17 +135,22 @@ namespace Rts.Simulation
         /// <summary>Pays and starts <paramref name="tech"/> at <paramref name="smith"/>; returns false and changes nothing when it cannot.</summary>
         private bool StartResearch(uint faction, ref BuildingState smith, TechKind tech, bool byPlayer)
         {
-            if (!AgesOn || smith.Kind != BuildingKind.Blacksmith || !smith.Complete || smith.Researching != 0 || !TechOpen(faction, tech) || BeingResearched(faction, tech)) return false;
-            var rules = world.Config.Economy;
+            bool academy = smith.Kind == BuildingKind.Academy;
+            if (!AgesOn || !smith.Complete || smith.Researching != 0 || !TechOpen(faction, tech) || BeingResearched(faction, tech)) return false;
+            if (academy ? !AcademyAllowed(faction) || !AcademyTech(tech) : smith.Kind != BuildingKind.Blacksmith) return false;
             ref var economy = ref world.Economies[faction - 1];
-            int food = TechFoodCost(tech), wood = TechWoodCost(tech), metal = TechMetalCost(tech), gems = TechGemsCost(tech);
-            if (economy.Food < food || economy.Wood < wood || economy.Metal < metal || economy.Gems < gems) return false;
+            int food = academy ? AcademyFoodCost(tech) : TechFoodCost(tech);
+            int wood = academy ? AcademyWoodCost(tech) : TechWoodCost(tech);
+            int gold = academy ? AcademyGoldCost(tech) : 0;
+            int metal = academy ? 0 : TechMetalCost(tech), gems = academy ? 0 : TechGemsCost(tech);
+            if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal || economy.Gems < gems) return false;
             economy.Food = checked(economy.Food - food);
             economy.Wood = checked(economy.Wood - wood);
+            economy.Gold = checked(economy.Gold - gold);
             economy.Metal = checked(economy.Metal - metal);
             economy.Gems = checked(economy.Gems - gems);
             smith.Researching = tech;
-            smith.TrainRemaining = TechTicks(tech);
+            smith.TrainRemaining = academy ? AcademyTicks(tech) : TechTicks(tech);
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -143,7 +162,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || b.Kind != BuildingKind.Blacksmith || b.Researching == 0) continue;
+                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy) || b.Researching == 0) continue;
                 if (--b.TrainRemaining > 0) continue;
                 var tech = b.Researching;
                 b.Researching = 0;
@@ -204,7 +223,12 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideResearch(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction) || SavingHard(faction)) return;
+            if (!AgesOn || SavingHard(faction)) return;
+            if (world.Economies[faction - 1].Civ == CivKind.Academy)
+            {
+                if (DecideAcademyResearch(faction)) return;
+            }
+            if (!CivLineStarted(faction)) return;
             var rules = world.Config.Economy;
             int smith = OwnBuildingIndex(faction, BuildingKind.Blacksmith);
             if (smith < 0)
@@ -217,7 +241,33 @@ namespace Rts.Simulation
             ref var b = ref world.Buildings[smith];
             if (!b.Complete || b.Held || b.Researching != 0) return;
             foreach (var tech in AutoResearchOrder)
-                if (TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
+                if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy) continue;
+                else if (TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
+        }
+
+        /// <summary>Academy civilisation: build one academy, then research tools before carts.</summary>
+        private bool DecideAcademyResearch(uint faction)
+        {
+            if (!AcademyAllowed(faction)) return false;
+            var rules = world.Config.Economy;
+            int academy = OwnBuildingIndex(faction, BuildingKind.Academy);
+            if (academy < 0)
+            {
+                if (world.Economies[faction - 1].Wood < rules.AcademyWoodCost) return false;
+                int origin = FindSite(faction, rules.AcademySizeCells);
+                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Academy, origin, Facing.North, 0);
+                return true;
+            }
+            ref var building = ref world.Buildings[academy];
+            if (!building.Complete || building.Held || building.Researching != 0) return true;
+            var order = new[] { TechKind.Tools, TechKind.Carts };
+            foreach (var tech in order)
+                if (TechOpen(faction, tech))
+                {
+                    StartResearch(faction, ref building, tech, false);
+                    return true;
+                }
+            return false;
         }
     }
 }

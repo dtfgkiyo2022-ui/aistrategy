@@ -128,6 +128,8 @@ namespace Rts.Simulation
         public bool Cavalry;
         /// <summary>V3-11 #1: enables the engineer-and-bridging civilisation. False keeps prior age maps unchanged.</summary>
         public bool Bridge;
+        /// <summary>V3-12 #1: enables the academy civilisation. Its rules are kept in the length-delimited extension section.</summary>
+        public bool Academy;
         /// <summary>V3-11 #1 provisional engineer camp values; the first pass matches a lumber camp.</summary>
         public int EngineerCampSizeCells = 2, EngineerCampWoodCost = 80, EngineerCampWork = 200, EngineerCampHp = 400;
         /// <summary>V3-11 #1 provisional short bridge values. BridgeWoodCost is paid once per bridge.</summary>
@@ -160,6 +162,10 @@ namespace Rts.Simulation
         // the host tied to its registered outpost. This is a provisional placement value, not a reward distance.
         public int CaravanOutpostReach = 24, CaravanMinimumDistance = 20, CaravanRewardDistanceStep = 10, CaravanRewardMaxWood = 30;
         public int CaravanAutoVillagers = 2;
+        /// <summary>V3-12 #1 provisional academy values; building cost is wood only and research uses fixed gold prices.</summary>
+        public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
+        public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
+        public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

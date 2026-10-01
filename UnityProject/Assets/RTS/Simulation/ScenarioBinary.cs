@@ -20,6 +20,9 @@ namespace Rts.Simulation
 
         // Keep this an ordered array. Adding the eighth civilisation's record is one row here; neither reflection nor
         // dictionary enumeration may determine the binary order. ID 1 is deliberately a test-only integer payload.
+        private const int AcademyExtensionId = 2;
+        private const int AcademyExtensionVersion = 1;
+        private const int AcademyExtensionDataLength = 13 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -28,7 +31,8 @@ namespace Rts.Simulation
 
         private static readonly ExtensionRegistration[] ExtensionRegistrations =
         {
-            new ExtensionRegistration(1, 1, sizeof(int))
+            new ExtensionRegistration(1, 1, sizeof(int)),
+            new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -143,7 +147,7 @@ namespace Rts.Simulation
             // The extension section is read only at the end of the whole optional envelope; the monk/floor/fishing/gold
             // levels are told apart by "bytes remain". So a record with extensions writes the full envelope, exactly as
             // the civilisation tails do - otherwise a monk-only record would read the EXTN marker as its floor value.
-            bool extensionRules = c.Extensions.Length > 0;
+            bool extensionRules = ExtensionsForEncode(c).Length > 0;
             bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules
                 || extensionRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
@@ -231,7 +235,7 @@ namespace Rts.Simulation
                         w.Write(c.Economy.SiegeDeploymentRamTicksReduction); w.Write(c.Economy.SiegeDeploymentRamCapacityBonus);
                     }
                 }
-                WriteExtensionSection(w, c.Extensions);
+                WriteExtensionSection(w, ExtensionsForEncode(c));
                 return s.ToArray();
             }
         }
@@ -512,7 +516,9 @@ namespace Rts.Simulation
                 var data = r.ReadBytes(dataLength);
                 if (data.Length != dataLength) throw new InvalidDataException("Truncated scenario extension data.");
                 seen[registrationIndex] = true;
-                extensions.Add(new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data });
+                var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
+                if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -538,6 +544,44 @@ namespace Rts.Simulation
             for (int i = 0; i < ExtensionRegistrations.Length; i++)
                 if (ExtensionRegistrations[i].Id == id) return i;
             return -1;
+        }
+
+        private static ScenarioExtensionData[] ExtensionsForEncode(ScenarioDefinition c)
+        {
+            if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
+            var extensions = new List<ScenarioExtensionData>(c.Extensions);
+            bool hasAcademy = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+            if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
+            return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateAcademyExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Academy ? 1 : 0);
+                writer.Write(e.AcademySizeCells); writer.Write(e.AcademyWoodCost); writer.Write(e.AcademyWork); writer.Write(e.AcademyHp);
+                writer.Write(e.AcademyToolsFoodCost); writer.Write(e.AcademyToolsWoodCost); writer.Write(e.AcademyToolsGoldCost); writer.Write(e.AcademyToolsTicks);
+                writer.Write(e.AcademyCartsFoodCost); writer.Write(e.AcademyCartsWoodCost); writer.Write(e.AcademyCartsGoldCost); writer.Write(e.AcademyCartsTicks);
+                return new ScenarioExtensionData { Id = AcademyExtensionId, Version = AcademyExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAcademyExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid academy flag.");
+                e.Academy = enabled != 0;
+                e.AcademySizeCells = reader.ReadInt32(); e.AcademyWoodCost = reader.ReadInt32(); e.AcademyWork = reader.ReadInt32(); e.AcademyHp = reader.ReadInt32();
+                e.AcademyToolsFoodCost = reader.ReadInt32(); e.AcademyToolsWoodCost = reader.ReadInt32(); e.AcademyToolsGoldCost = reader.ReadInt32(); e.AcademyToolsTicks = reader.ReadInt32();
+                e.AcademyCartsFoodCost = reader.ReadInt32(); e.AcademyCartsWoodCost = reader.ReadInt32(); e.AcademyCartsGoldCost = reader.ReadInt32(); e.AcademyCartsTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing academy extension data.");
+            }
         }
         private static void ReadCaravanTail(BinaryReader r, EconomyRules e)
         {

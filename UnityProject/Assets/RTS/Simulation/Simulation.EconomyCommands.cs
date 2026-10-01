@@ -83,6 +83,7 @@ namespace Rts.Simulation
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
+                        && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
