@@ -156,7 +156,19 @@ namespace Rts.Simulation
             return edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
         }
 
-        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// Fishing's terrain score is a small tier based on usable fish points, not on raw food or distance.
+        /// A point must already be explored, be within the same 30m starting-food reach used by agrarian, and have
+        /// at least one legal, connected harbour site within the existing fish reach. This keeps fishing distinct from
+        /// agrarian: food beyond the guaranteed three points favours farming, while river fish that can actually feed a
+        /// harbour favours fishing.
+        /// </summary>
+        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.FishingOn) return 0;
+            int usable = s.CountUsableFishingFish(faction, core);
+            return usable >= 3 ? 3 : usable >= 1 ? 2 : 0;
+        }
 
         private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 

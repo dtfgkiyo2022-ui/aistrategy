@@ -467,8 +467,10 @@ namespace Rts.Simulation
         private int FishingWorkNode(SimPoint position, uint faction)
         {
             if (!FishingAllowed(faction)) return -1;
-            int nearHarbor = NearestFishingNode(position, faction, true);
-            return nearHarbor >= 0 ? nearHarbor : NearestFishingNode(position, faction, false);
+            // Fish outside a completed harbour's reach is deliberately not a fishing-civ fallback. Once the
+            // covered fish is exhausted, the normal WorkKindFor path must resume so the faction can use ordinary
+            // food (and the market opened by FishingNeedsFoodMarket) instead of silently chasing another fish.
+            return NearestFishingNode(position, faction, true);
         }
 
         private int NearestFishingNode(SimPoint position, uint faction, bool harborOnly)
