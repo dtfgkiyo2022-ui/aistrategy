@@ -43,7 +43,10 @@ namespace Rts.Presentation
         {
             var clockRect = ClockRect();
             var current = Clock;
-            GUI.Box(clockRect, current == null ? UiText.T("Clock", "時計") : UiText.T("Clock  t=", "時計  t=") + current.Tick + UiText.T("  faction ", "  陣営 ") + current.ViewFactionId);
+            // Minutes and seconds first (20 ticks a second); the raw tick stays for checking replays and logs.
+            GUI.Box(clockRect, current == null ? UiText.T("Clock", "時計")
+                : UiText.T("Elapsed ", "経過 ") + MatchOutcome.Clock(current.Tick) + "  (t=" + current.Tick + ")"
+                    + UiText.T("  faction ", "  陣営 ") + current.ViewFactionId);
             if (current != null)
             {
                 float x = clockRect.x + 8f;
