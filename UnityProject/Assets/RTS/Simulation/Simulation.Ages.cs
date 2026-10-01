@@ -34,6 +34,8 @@ namespace Rts.Simulation
 
         private bool MountainOn => AgesOn && world.Config.Economy.Mountain;
 
+        private bool MetropolisOn => AgesOn && world.Config.Economy.Metropolis;
+
         private bool FishingOn => AgesOn && world.Config.Economy.FishingCiv && world.Config.Economy.FishingEnabled;
 
         private bool CavalryAllowed(uint faction)
@@ -72,6 +74,9 @@ namespace Rts.Simulation
         private bool MountainAllowed(uint faction)
             => MountainOn && world.Economies[faction - 1].Civ == CivKind.Mountain && world.Economies[faction - 1].Age >= 1;
 
+        private bool MetropolisAllowed(uint faction)
+            => MetropolisOn && world.Economies[faction - 1].Civ == CivKind.Metropolis && world.Economies[faction - 1].Age >= 1;
+
         private bool FishingAllowed(uint faction)
             => FishingOn && world.Economies[faction - 1].Civ == CivKind.Fishing && world.Economies[faction - 1].Age >= 1;
 
@@ -80,6 +85,24 @@ namespace Rts.Simulation
         private int InfantryFoodFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryFood : world.Config.Economy.InfantryFoodCost;
         private int InfantryWoodFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryWood : world.Config.Economy.InfantryWoodCost;
         private int InfantryTicksFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryTicks : world.Config.Economy.InfantryTrainTicks;
+
+        private int VillagerFoodCostFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return MetropolisAllowed(faction) ? checked(rules.VillagerFoodCost * 2 / 3) : rules.VillagerFoodCost;
+        }
+
+        private int VillagerTrainTicksFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
+        }
+
+        private int AutoVillagerTargetFor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            return MetropolisAllowed(faction) ? checked(rules.AutoVillagerTarget * 3 / 2) : rules.AutoVillagerTarget;
+        }
 
         /// <summary>Metallurgy (27): an infantry trained now is born forged - more HP and damage. Soldiers already out stay as they are.</summary>
         private void ForgeIfMetallurgy(uint faction, int index)
@@ -246,7 +269,7 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn && !MetropolisOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
             // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
             // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.

@@ -171,6 +171,8 @@ namespace Rts.Simulation
         public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
         /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
         public bool Cult;
+        /// <summary>V3-17 #1: enables the metropolis civilisation. Its rules are kept in extension ID 7.</summary>
+        public bool Metropolis;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
@@ -184,6 +186,8 @@ namespace Rts.Simulation
         public int MountainFortFoodCost = 400, MountainFortWoodCost = 250, MountainFortTicks = 800;
         public int MountainDeepShaftIntervalPermille = 667, MountainDeepShaftMaxBuildingsBonus = 1;
         public int MountainFortHpPermille = 1500, MountainFortRangeBonus = 2;
+        /// <summary>V3-17 #1 provisional grand-house values; one completed grand house adds three ordinary house slots.</summary>
+        public int GrandHouseSizeCells = 3, GrandHouseWoodCost = 150, GrandHouseWork = 300, GrandHouseHp = 500;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;
