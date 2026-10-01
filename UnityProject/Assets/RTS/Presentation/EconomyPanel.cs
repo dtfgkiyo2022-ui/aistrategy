@@ -191,6 +191,7 @@ namespace Rts.Presentation
                 case CivKind.Bridge: return UiText.T("engineering", "工兵・架橋の文明");
                 case CivKind.Academy: return UiText.T("academy", "学府・技術の文明");
                 case CivKind.Cult: return UiText.T("cult", "教団・改宗の文明");
+                case CivKind.Fishing: return UiText.T("fishing", "漁労・港湾の文明");
                 case CivKind.Mountain: return UiText.T("mountain", "山岳・鉱夫の文明");
                 default: return UiText.T("primitive age", "原始時代");
             }
@@ -210,6 +211,7 @@ namespace Rts.Presentation
                 case CivKind.Bridge: return UiText.T("engineering", "工兵");
                 case CivKind.Academy: return UiText.T("academy", "学府");
                 case CivKind.Cult: return UiText.T("cult", "教団");
+                case CivKind.Fishing: return UiText.T("fishing", "漁労");
                 case CivKind.Mountain: return UiText.T("mountain", "山岳");
                 default: return c.ToString();
             }
@@ -222,7 +224,7 @@ namespace Rts.Presentation
         public bool ExtraCivilisations { get; set; }
 
         private static readonly CivKind[] AllCivs = { CivKind.Agrarian, CivKind.Metallurgy, CivKind.Forestry, CivKind.Masonry,
-            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy, CivKind.Cult, CivKind.Mountain };
+            CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy, CivKind.Cult, CivKind.Fishing, CivKind.Mountain };
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
         private static string AgeName(CivKind c, int age)
