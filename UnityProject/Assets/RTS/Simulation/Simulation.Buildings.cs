@@ -98,11 +98,25 @@ namespace Rts.Simulation
             if (monastery < 0) return false;
             ref var building = ref world.Buildings[monastery];
             if (!building.Complete || building.Held || building.Queued >= world.Config.Economy.QueueLimit) return false;
-            if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= 2) return false;
+            if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= CultMonkLimit(faction)) return false;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued + QueuedInfantry(faction);
             if (population >= PopCapFor(faction) || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk, BuildingKind.Monastery)) return false;
             Enqueue(faction, ref building, UnitKind.Monk);
             return true;
+        }
+
+        /// <summary>V3-13 #2: one autonomous monk per four living non-scout escorts, up to four monks.</summary>
+        private int CultMonkLimit(uint faction)
+        {
+            int escorts = 0;
+            foreach (int i in world.SoldierTraversal)
+            {
+                var soldier = world.Soldiers[i];
+                if (!soldier.Alive || soldier.Initial.FactionId != faction || soldier.Initial.Kind == UnitKind.Monk
+                    || soldier.Initial.Kind == UnitKind.Scout) continue;
+                escorts++;
+            }
+            return Math.Min(4, escorts / 4);
         }
 
         /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
