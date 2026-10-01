@@ -500,7 +500,7 @@ namespace Rts.Simulation
             bool caravanNeedsBaseMarket = CaravanAllowed(faction) && OwnFinishedMarketIndex(faction) < 0;
             if (!AgesOn || (!CivLineStarted(faction) && !caravanNeedsBaseMarket)) return;
             var rules = world.Config.Economy;
-            bool foodMarketCiv = CivUsesFoodMarket(faction);
+            bool foodMarketCiv = CivUsesFoodMarket(faction) || FishingNeedsFoodMarket(faction);
             // Agriculture keeps its original market timing and rich/poor rule. The two civilizations without a
             // farm get a market before saving can close the door, so food remains available after wild food dries up.
             // Caravan's first market is the base condition for the civilisation, so allow that one building before
@@ -543,6 +543,22 @@ namespace Rts.Simulation
             int woodSurplus = e.Wood - rules.MarketWoodReserve;
             int stoneSurplus = e.Stone - rules.MarketStoneReserve;
             return woodSurplus >= stoneSurplus ? ResourceKind.Wood : ResourceKind.Stone;
+        }
+
+        /// <summary>Fishing keeps the registration row's original no-market policy until its covered fish is gone.</summary>
+        private bool FishingNeedsFoodMarket(uint faction)
+        {
+            if (!FishingAllowed(faction)) return false;
+            bool harbor = false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Harbor) { harbor = true; break; }
+            }
+            if (!harbor) return false;
+            foreach (var node in world.Nodes)
+                if (node.Fishing && node.Remaining > 0 && HarborCoversFish(faction, node.Definition.Position)) return false;
+            return true;
         }
 
         /// <summary>AI phase, in the second age: a siege workshop, then up to AutoRams rams at a time.</summary>

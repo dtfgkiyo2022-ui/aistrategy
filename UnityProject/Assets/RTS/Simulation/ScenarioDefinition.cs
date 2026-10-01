@@ -169,6 +169,10 @@ namespace Rts.Simulation
         /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
         public bool FishingCiv;
         public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
+        /// <summary>V3-14 #2 provisional fishing-civilisation research values.</summary>
+        public int FishingNetFoodCost = 150, FishingNetWoodCost = 100, FishingNetTicks = 400;
+        public int DriedFishFoodCost = 200, DriedFishWoodCost = 150, DriedFishTicks = 500;
+        public int FishingNetCarryBonusPermille = 500, DriedFishRegrowIntervalPermille = 333;
         /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
         public bool Cult;
         /// <summary>V3-17 #1: enables the metropolis civilisation. Its rules are kept in extension ID 7.</summary>

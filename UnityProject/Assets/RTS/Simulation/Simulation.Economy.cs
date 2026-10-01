@@ -156,7 +156,7 @@ namespace Rts.Simulation
                     v.CarryKind = node.Definition.Kind;
                     v.Carry++;
                     v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId, v.NodeId));
-                    if (v.Carry >= CarryFor(v.FactionId) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
+                    if (v.Carry >= CarryFor(v.FactionId, node.Fishing) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
                 {
@@ -229,8 +229,10 @@ namespace Rts.Simulation
                 for (uint faction = 1; faction <= 2; faction++)
                     if (FishingAllowed(faction) && HarborCoversFish(faction, node.Definition.Position))
                     {
-                        interval = Math.Max(1, rules.FishRegrowTicks / 2);
-                        break;
+                        int coveredInterval = HasTech(faction, FishingTech.DriedFish)
+                            ? Math.Max(1, checked(rules.FishRegrowTicks * rules.DriedFishRegrowIntervalPermille / 1000))
+                            : Math.Max(1, rules.FishRegrowTicks / 2);
+                        interval = Math.Min(interval, coveredInterval);
                     }
                 if (world.Tick % interval != 0) continue;
                 if (node.Remaining < node.Definition.Amount) node.Remaining++;
