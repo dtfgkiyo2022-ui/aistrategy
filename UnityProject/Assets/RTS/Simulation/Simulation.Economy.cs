@@ -183,6 +183,8 @@ namespace Rts.Simulation
                         && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
                     {
                         var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
+                        int fishing = FishingWorkNode(v.Position, v.FactionId);
+                        if (fishing >= 0) { SetWorkNode(ref v, fishing); continue; }
                         var kind = WorkKindFor(v);
                         // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
                         if (kind != currentKind && kind != ResourceKind.Stone)
@@ -219,16 +221,26 @@ namespace Rts.Simulation
         private void RegrowFishing()
         {
             var rules = world.Config.Economy;
-            if (!rules.FishingEnabled || world.Tick % rules.FishRegrowTicks != 0) return;
+            if (!rules.FishingEnabled) return;
             foreach (uint id in world.FishingNodeIds)
             {
                 ref var node = ref world.Nodes[id - 1];
+                int interval = rules.FishRegrowTicks;
+                for (uint faction = 1; faction <= 2; faction++)
+                    if (FishingAllowed(faction) && HarborCoversFish(faction, node.Definition.Position))
+                    {
+                        interval = Math.Max(1, rules.FishRegrowTicks / 2);
+                        break;
+                    }
+                if (world.Tick % interval != 0) continue;
                 if (node.Remaining < node.Definition.Amount) node.Remaining++;
             }
         }
 
         private void AssignWork(ref VillagerState v)
         {
+            int fishing = FishingWorkNode(v.Position, v.FactionId);
+            if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
             var kind = WorkKindFor(v);
             int index = NearestWorkNode(v.Position, kind);
             if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
@@ -446,6 +458,43 @@ namespace Rts.Simulation
         {
             v.NodeId = world.Nodes[index].Definition.Id;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
+        }
+
+        private int FishingWorkNode(SimPoint position, uint faction)
+        {
+            if (!FishingAllowed(faction)) return -1;
+            int nearHarbor = NearestFishingNode(position, faction, true);
+            return nearHarbor >= 0 ? nearHarbor : NearestFishingNode(position, faction, false);
+        }
+
+        private int NearestFishingNode(SimPoint position, uint faction, bool harborOnly)
+        {
+            int best = -1;
+            long bestDistance = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (!node.Fishing || node.Remaining <= 0) continue;
+                if (harborOnly && !HarborCoversFish(faction, node.Definition.Position)) continue;
+                long dx = node.Definition.Position.X.Raw - position.X.Raw;
+                long dz = node.Definition.Position.Z.Raw - position.Z.Raw;
+                long distance = checked(dx * dx + dz * dz);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
+                { best = i; bestDistance = distance; }
+            }
+            return best;
+        }
+
+        private bool HarborCoversFish(uint faction, SimPoint fish)
+        {
+            var reach = Fix64.FromInt(world.Config.Economy.FishReach);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Harbor) continue;
+                if (InRange(BuildingCenter(b), fish, reach)) return true;
+            }
+            return false;
         }
 
         /// <summary>The same centre-to-centre walk the soldiers' local routes use, on the shared route cache.</summary>

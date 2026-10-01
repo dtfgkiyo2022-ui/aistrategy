@@ -26,6 +26,9 @@ namespace Rts.Simulation
         private const int CultExtensionId = 3;
         private const int CultExtensionVersion = 1;
         private const int CultExtensionDataLength = 7 * sizeof(int);
+        private const int FishingCivExtensionId = 4;
+        private const int FishingCivExtensionVersion = 1;
+        private const int FishingCivExtensionDataLength = 5 * sizeof(int);
         private const int MountainExtensionId = 5;
         private const int MountainExtensionVersion = 1;
         private const int MountainExtensionDataLength = 12 * sizeof(int);
@@ -40,6 +43,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(1, 1, sizeof(int)),
             new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
+            new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength),
             new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength)
         };
 
@@ -527,6 +531,7 @@ namespace Rts.Simulation
                 var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
                 if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
                 else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
+                else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
@@ -560,9 +565,15 @@ namespace Rts.Simulation
         {
             if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
-            bool hasAcademy = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+            bool hasAcademy = false, hasFishingCiv = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null) continue;
+                if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+                if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
+            }
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
+            if (c.Economy.FishingCiv && !hasFishingCiv) extensions.Add(CreateFishingCivExtension(c.Economy));
             bool hasCult = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == CultExtensionId) hasCult = true;
             if (c.Economy.Cult && !hasCult) extensions.Add(CreateCultExtension(c.Economy));
@@ -599,6 +610,32 @@ namespace Rts.Simulation
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing academy extension data.");
             }
         }
+
+        private static ScenarioExtensionData CreateFishingCivExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.FishingCiv ? 1 : 0);
+                writer.Write(e.HarborSizeCells); writer.Write(e.HarborWoodCost); writer.Write(e.HarborWork); writer.Write(e.HarborHp);
+                return new ScenarioExtensionData { Id = FishingCivExtensionId, Version = FishingCivExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFishingCivExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fishing civilisation flag.");
+                e.FishingCiv = enabled != 0;
+                e.HarborSizeCells = reader.ReadInt32(); e.HarborWoodCost = reader.ReadInt32();
+                e.HarborWork = reader.ReadInt32(); e.HarborHp = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fishing civilisation extension data.");
+            }
+        }
+
 
         private static ScenarioExtensionData CreateCultExtension(EconomyRules e)
         {
