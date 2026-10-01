@@ -76,7 +76,9 @@ namespace Rts.Simulation
                         w.Value(a+"Id",m.Id); w.Point(a+"Position",m.Position); w.Value(a+"LastSeenTick",m.LastSeenTick);
                         w.Value(a+"Min",m.Min); w.Value(a+"Max",m.Max); w.Value(a+"Visible",m.Visible); w.Value(a+"Absent",m.Absent); w.Ids(a+"Covered",m.Covered ?? Array.Empty<uint>()); }
                     w.Value(n+"NextContactId",f.NextContactId); w.Ids(n+"ContactIds",f.ContactIds,world.SoldierCount);
-                    for(int i=0;i<world.SoldierCount;i++) { string c=n+"Contacts["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Point(c+"Position",f.ContactPositions[i]); w.Value(c+"LastSeenTick",f.ContactLastSeenTicks[i]); w.Value(c+"Absent",f.ContactAbsent[i]); } }
+                    for(int i=0;i<world.SoldierCount;i++) { string c=n+"Contacts["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Point(c+"Position",f.ContactPositions[i]); w.Value(c+"LastSeenTick",f.ContactLastSeenTicks[i]); w.Value(c+"Absent",f.ContactAbsent[i]); }
+                    if (CultOn)
+                        for (int i=0;i<world.SoldierCount;i++) { string c=n+"CultObservations["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(c+"ContactId",f.CultObservedContactIds[i]); w.Value(c+"Kind",(byte)f.CultObservedKinds[i]); w.Value(c+"LastSeenTick",f.CultObservedLastSeenTicks[i]); w.Value(c+"ValidUntilTick",f.CultObservedValidUntilTicks[i]); } }
                 WriteDecision(w);
                 // Written only when the economy is on, so Ver.1 scenarios keep their exact canonical bytes.
                 if (world.Config.Economy.Enabled) WriteEconomy(w);

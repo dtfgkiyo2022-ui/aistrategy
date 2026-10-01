@@ -155,6 +155,10 @@ namespace Rts.Simulation
                 if (observer.ContactPositions.Length < capacity) Array.Resize(ref observer.ContactPositions, capacity);
                 if (observer.ContactLastSeenTicks.Length < capacity) Array.Resize(ref observer.ContactLastSeenTicks, capacity);
                 if (observer.ContactAbsent.Length < capacity) Array.Resize(ref observer.ContactAbsent, capacity);
+                if (observer.CultObservedContactIds.Length < capacity) Array.Resize(ref observer.CultObservedContactIds, capacity);
+                if (observer.CultObservedKinds.Length < capacity) Array.Resize(ref observer.CultObservedKinds, capacity);
+                if (observer.CultObservedLastSeenTicks.Length < capacity) Array.Resize(ref observer.CultObservedLastSeenTicks, capacity);
+                if (observer.CultObservedValidUntilTicks.Length < capacity) Array.Resize(ref observer.CultObservedValidUntilTicks, capacity);
             }
         }
 

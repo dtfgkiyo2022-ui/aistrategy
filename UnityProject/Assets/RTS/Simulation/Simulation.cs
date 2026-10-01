@@ -505,6 +505,17 @@ namespace Rts.Simulation
                         faction.ContactPositions[i] = s.Position;
                         faction.ContactLastSeenTicks[i] = world.Tick;
                         faction.ContactAbsent[i] = false;
+                        if (CultOn)
+                        {
+                            UnitKind observedKind = s.Class != 0 ? s.Class : s.Initial.Kind;
+                            if (CultObservedValue(observedKind) > 0)
+                            {
+                                faction.CultObservedContactIds[i] = faction.ContactIds[i];
+                                faction.CultObservedKinds[i] = observedKind;
+                                faction.CultObservedLastSeenTicks[i] = world.Tick;
+                                faction.CultObservedValidUntilTicks[i] = checked(world.Tick + CultObservationValidityTicks);
+                            }
+                        }
                     }
                     else if (faction.ContactIds[i] != 0 && IsVisibleTo(faction.Id, faction.ContactPositions[i]))
                         faction.ContactAbsent[i] = true;
