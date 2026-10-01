@@ -110,6 +110,13 @@ namespace Rts.Contracts
         public const TechKind MartyrBlessing = (TechKind)21;
     }
 
+    /// <summary>V3-16 #2: tollgate civilisation research values live outside <see cref="TechKind"/>.</summary>
+    public static class TollgateTech
+    {
+        public const TechKind GateDefence = (TechKind)22;
+        public const TechKind GateNetwork = (TechKind)23;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 

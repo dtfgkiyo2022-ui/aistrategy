@@ -553,9 +553,16 @@ namespace Rts.Simulation
                  && e.MountainDeepShaftMaxBuildingsBonus >= 0
                  && e.MountainFortHpPermille >= 1000 && e.MountainFortRangeBonus >= 0),
                 "Mountain requires valid age, industry and mine-shaft rules.");
-            Require(!e.Tollgate || (e.Enabled && e.Ages && e.TollgateLengthCells == 2
-                && e.TollgateWoodCost >= 0 && e.TollgateStoneCost >= 0 && e.TollgateWork > 0 && e.TollgateHp > 0
-                && e.TollgateMaxBuildings > 0), "Tollgate requires valid age and tollgate rules.");
+             Require(!e.Tollgate || (e.Enabled && e.TollgateLengthCells == 2
+                 && e.TollgateWoodCost >= 0 && e.TollgateStoneCost >= 0 && e.TollgateWork > 0 && e.TollgateHp > 0
+                 && e.TollgateMaxBuildings > 0 && e.TollgateFeeRadiusMeters >= 0 && e.TollgateFeeIntervalTicks > 0
+                 && e.TollgateWoodPerEnemy >= 0 && e.TollgateFoodPerEnemy >= 0 && e.TollgateNetworkRadiusMeters >= 0
+                 && e.TollgateNetworkFeeBonusPermille >= 0 && e.TollgateNetworkFeeBonusPermille <= 1000
+                 && e.TollgateGateDefenceFoodCost >= 0 && e.TollgateGateDefenceWoodCost >= 0 && e.TollgateGateDefenceTicks > 0
+                 && e.TollgateGateNetworkFoodCost >= 0 && e.TollgateGateNetworkWoodCost >= 0 && e.TollgateGateNetworkTicks > 0
+                 && e.TollgateGateDefenceHpPermille >= 1000 && e.TollgateGateDefenceDamageReductionPermille >= 0
+                 && e.TollgateGateDefenceDamageReductionPermille <= 1000 && e.TollgateGateNetworkMaxBuildingsBonus >= 0),
+                 "Tollgate requires valid age and tollgate rules.");
             Require(!e.Metropolis || (e.Enabled && e.Ages && e.GrandHouseSizeCells > 0 && e.GrandHouseSizeCells <= 8
                 && e.GrandHouseWoodCost >= 0 && e.GrandHouseWork > 0 && e.GrandHouseHp > 0),
                 "Metropolis requires valid age and grand-house rules.");
@@ -769,9 +776,18 @@ namespace Rts.Simulation
                  MountainDeepShaftMaxBuildingsBonus = e.MountainDeepShaftMaxBuildingsBonus,
                  MountainFortHpPermille = e.MountainFortHpPermille, MountainFortRangeBonus = e.MountainFortRangeBonus,
                  GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
-                  Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
-                  TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
-                  TollgateMaxBuildings = e.TollgateMaxBuildings,
+                   Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
+                   TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
+                   TollgateMaxBuildings = e.TollgateMaxBuildings, TollgateFeeRadiusMeters = e.TollgateFeeRadiusMeters,
+                   TollgateFeeIntervalTicks = e.TollgateFeeIntervalTicks, TollgateWoodPerEnemy = e.TollgateWoodPerEnemy,
+                   TollgateFoodPerEnemy = e.TollgateFoodPerEnemy, TollgateNetworkRadiusMeters = e.TollgateNetworkRadiusMeters,
+                   TollgateNetworkFeeBonusPermille = e.TollgateNetworkFeeBonusPermille,
+                   TollgateGateDefenceFoodCost = e.TollgateGateDefenceFoodCost, TollgateGateDefenceWoodCost = e.TollgateGateDefenceWoodCost,
+                   TollgateGateDefenceTicks = e.TollgateGateDefenceTicks, TollgateGateNetworkFoodCost = e.TollgateGateNetworkFoodCost,
+                   TollgateGateNetworkWoodCost = e.TollgateGateNetworkWoodCost, TollgateGateNetworkTicks = e.TollgateGateNetworkTicks,
+                   TollgateGateDefenceHpPermille = e.TollgateGateDefenceHpPermille,
+                   TollgateGateDefenceDamageReductionPermille = e.TollgateGateDefenceDamageReductionPermille,
+                   TollgateGateNetworkMaxBuildingsBonus = e.TollgateGateNetworkMaxBuildingsBonus,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,

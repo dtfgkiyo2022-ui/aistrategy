@@ -356,7 +356,9 @@ namespace Rts.Simulation
                     {
                         // V3-5 (32 #13): the counter triangle is read here, at the blow, so it needs no new state.
                         int damage = Rts.Decision.CombatMath.DamageAgainst(s.Parameters.Damage, s.Class, enemy.Class, world.Config.Economy.CounterBonusPermille);
-                        soldierDamage[target] = checked(soldierDamage[target] + SanctuaryDamage(s.Initial.FactionId, damage));
+                        damage = SanctuaryDamage(s.Initial.FactionId, damage);
+                        damage = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, damage);
+                        soldierDamage[target] = checked(soldierDamage[target] + damage);
                     }
                 }
                 else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
