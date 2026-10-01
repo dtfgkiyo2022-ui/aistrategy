@@ -117,6 +117,7 @@ namespace Rts.Simulation
             RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();
+            AdvanceMountain();
             AdvanceAges();
             AdvanceResearch();
             int count = world.VillagerCount; // villagers trained below start next tick

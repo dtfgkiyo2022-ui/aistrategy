@@ -1,0 +1,113 @@
+using System;
+using System.Collections.Generic;
+using System.Numerics;
+using Rts.Contracts;
+
+namespace Rts.Simulation
+{
+    /// <summary>
+    /// V3-15 #1: the mountain civilisation turns the edge of impassable mountains into a renewable, direct stock
+    /// source. A shaft never claims a resource node and therefore never depletes stone or ore on the map.
+    /// </summary>
+    public sealed partial class Simulation
+    {
+        private void DecideMountain(uint faction)
+        {
+            var rules = world.Config.Economy;
+            if (!MountainAllowed(faction) || MountainShaftCount(faction) >= rules.MountainMaxBuildings) return;
+            if (world.Economies[faction - 1].Wood < rules.MountainWoodCost) return;
+            int origin = FindMountainShaftSite(faction);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.MineShaft, origin, Facing.North, 0);
+        }
+
+        private int MountainShaftCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.MineShaft) count++;
+            return count;
+        }
+
+        private int FindMountainShaftSite(uint faction)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.MountainSizeCells;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position);
+            int best = -1;
+            BigInteger bestDistance = 0;
+            for (int z = 0; z + size <= height; z++)
+                for (int x = 0; x + size <= width; x++)
+                {
+                    int origin = z * width + x;
+                    if (!MountainShaftSiteIsClear(faction, origin) || !KeepsMapConnected(faction, origin, size)) continue;
+                    BigInteger distance = DistanceSquared(world.Map.Center(origin), world.Map.Center(core));
+                    if (best < 0 || distance < bestDistance || distance == bestDistance && origin < best)
+                    {
+                        best = origin;
+                        bestDistance = distance;
+                    }
+                }
+            return best;
+        }
+
+        private bool MountainShaftSiteIsClear(uint faction, int origin)
+        {
+            if (!MountainAllowed(faction)) return false;
+            int size = world.Config.Economy.MountainSizeCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            if (origin < 0 || origin >= width * height || origin % width + size > width || origin / width + size > height) return false;
+            return SiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), size)
+                && MountainAdjacentCount(origin, size) > 0;
+        }
+
+        /// <summary>Counts distinct four-neighbour mountain cells around the square footprint.</summary>
+        private int MountainAdjacentCount(int origin, int size)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            var terrain = world.Config.Map.Terrain;
+            if (terrain.Length == 0) return 0;
+            var adjacent = new HashSet<int>();
+            int x0 = origin % width, z0 = origin / width;
+            for (int z = z0; z < z0 + size; z++)
+                for (int x = x0; x < x0 + size; x++)
+                {
+                    AddIfMountain(x - 1, z);
+                    AddIfMountain(x + 1, z);
+                    AddIfMountain(x, z - 1);
+                    AddIfMountain(x, z + 1);
+                }
+            return adjacent.Count;
+
+            void AddIfMountain(int x, int z)
+            {
+                if (x < 0 || z < 0 || x >= width || z >= height) return;
+                int cell = z * width + x;
+                if (terrain[cell] == (byte)TerrainKind.Mountain) adjacent.Add(cell);
+            }
+        }
+
+        private int MountainInterval(BuildingState shaft)
+        {
+            var rules = world.Config.Economy;
+            int adjacent = Math.Min(MountainAdjacentCount(shaft.OriginCell, rules.MountainSizeCells), rules.MountainMaxAdjacentCells);
+            return Math.Max(rules.MountainMinIntervalTicks, rules.MountainBaseIntervalTicks - adjacent * rules.MountainIntervalStepTicks);
+        }
+
+        private void AdvanceMountain()
+        {
+            if (!MountainOn) return;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var shaft = ref world.Buildings[i];
+                if (!shaft.Alive || !shaft.Complete || shaft.Kind != BuildingKind.MineShaft) continue;
+                int interval = MountainInterval(shaft);
+                if (++shaft.Timer < interval) continue;
+                shaft.Timer = 0;
+                ResourceKind kind = shaft.MountainOreNext ? ResourceKind.Ore : ResourceKind.Stone;
+                AddStock(shaft.FactionId, kind, kind == ResourceKind.Ore ? rules.MountainOreYield : rules.MountainStoneYield);
+                shaft.MountainOreNext = !shaft.MountainOreNext;
+            }
+        }
+    }
+}

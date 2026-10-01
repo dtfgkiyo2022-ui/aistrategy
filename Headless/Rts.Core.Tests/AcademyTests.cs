@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
@@ -28,6 +29,25 @@ namespace Rts.Core.Tests
             scenario.Economy.AutoInfantryQueue = 0;
             scenario.Economy.GoldDangerMeters = 0;
             scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000;
+            return scenario;
+        }
+
+        private static ScenarioDefinition AcademyMatchScenario(ulong seed)
+        {
+            var scenario = MapGenerator.GenerateTerrain(seed, gold: true);
+            scenario.Economy.Academy = true;
+            scenario.Economy.StartFood = 50000;
+            scenario.Economy.StartWood = 50000;
+            scenario.Economy.AdvanceFoodCost = 0;
+            scenario.Economy.AdvanceWoodCost = 0;
+            scenario.Economy.AdvanceTicks = 1;
+            scenario.Economy.Age2FoodCost = 0;
+            scenario.Economy.Age2WoodCost = 0;
+            scenario.Economy.Age2Ticks = 1;
+            scenario.Economy.Age3FoodCost = 0;
+            scenario.Economy.Age3WoodCost = 0;
+            scenario.Economy.Age3Ticks = 1;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 1000000;
             return scenario;
         }
 
@@ -108,6 +128,59 @@ namespace Rts.Core.Tests
             addStock.Invoke(sim, new object[] { 1u, kind, amount - Stock(sim, kind) });
         }
 
+        private static void SetKnowledge(Battle sim, ScenarioDefinition scenario, int[] observedGoldIndexes,
+            bool allVisible, int dangerMeters)
+        {
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = worldField.GetValue(sim);
+            var factionsField = world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic);
+            var factions = (Array)factionsField.GetValue(world);
+            var faction = factions.GetValue(0);
+            var explored = (bool[])faction.GetType().GetField("ExploredCells", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            var visible = (bool[])faction.GetType().GetField("VisibleCells", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            Array.Clear(explored, 0, explored.Length);
+            Array.Clear(visible, 0, visible.Length);
+            if (allVisible) for (int i = 0; i < visible.Length; i++) visible[i] = true;
+            foreach (int index in observedGoldIndexes)
+            {
+                var node = scenario.ResourceNodes.Where(n => n.Kind == ResourceKind.Gold).ElementAt(index);
+                int cell = (int)(node.Position.Z.Raw / 65536 / scenario.Map.CellSizeMeters) * scenario.Map.WidthCells
+                    + (int)(node.Position.X.Raw / 65536 / scenario.Map.CellSizeMeters);
+                explored[cell] = true;
+            }
+            var core = scenario.Cores[0].Position;
+            int coreCell = (int)(core.Z.Raw / 65536 / scenario.Map.CellSizeMeters) * scenario.Map.WidthCells
+                + (int)(core.X.Raw / 65536 / scenario.Map.CellSizeMeters);
+            if (observedGoldIndexes.Length == 0 && !allVisible) explored[coreCell] = true;
+            if (observedGoldIndexes.Length > 0)
+            {
+                // This is the decision-time known map for the unit cases: all terrain cells are known, except when a
+                // case intentionally verifies that an unexplored corridor blocks the route.
+                for (int i = 0; i < explored.Length; i++) explored[i] = true;
+                for (int i = 0; i < scenario.ResourceNodes.Count(n => n.Kind == ResourceKind.Gold); i++)
+                {
+                    if (observedGoldIndexes.Contains(i)) continue;
+                    var node = scenario.ResourceNodes.Where(n => n.Kind == ResourceKind.Gold).ElementAt(i);
+                    int cell = (int)(node.Position.Z.Raw / 65536 / scenario.Map.CellSizeMeters) * scenario.Map.WidthCells
+                        + (int)(node.Position.X.Raw / 65536 / scenario.Map.CellSizeMeters);
+                    explored[cell] = false;
+                }
+            }
+            scenario.Economy.GoldDangerMeters = dangerMeters;
+        }
+
+        private static int AcademyGoldScore(Battle sim, ScenarioDefinition scenario)
+        {
+            var score = typeof(Battle).GetMethod("AcademyScore", BindingFlags.Static | BindingFlags.NonPublic);
+            return (int)score.Invoke(null, new object[] { sim, 1u, scenario.Cores[0].Position, 0, 0 });
+        }
+
+        private static int AcademyGoldCount(Battle sim, ScenarioDefinition scenario)
+        {
+            var count = typeof(Battle).GetMethod("CountUsableAcademyGold", BindingFlags.Instance | BindingFlags.NonPublic);
+            return (int)count.Invoke(sim, new object[] { 1u, scenario.Cores[0].Position });
+        }
+
         private static void Advance(Battle sim, CommandGateway gateway, ScenarioDefinition scenario, ref ulong sequence)
         {
             int ticks = sim.Capture(1).Economy.Age == 1 ? scenario.Economy.Age2Ticks : scenario.Economy.Age3Ticks;
@@ -143,6 +216,66 @@ namespace Rts.Core.Tests
         {
             var state = AtAcademyAge(false);
             Assert.That(state.sim.Capture(1).Economy.Civ, Is.EqualTo(CivKind.Primitive));
+        }
+
+        [Test]
+        public void AcademyScoreCountsOnlyKnownSafeReachableGoldInTiers()
+        {
+            int[] cases = { 0, 1, 2, 3 };
+            foreach (int amount in cases)
+            {
+                var scenario = AcademyScenario(true);
+                var sim = new Battle(scenario);
+                int[] observed = Enumerable.Range(0, amount).ToArray();
+                SetKnowledge(sim, scenario, observed, allVisible: false, dangerMeters: 0);
+                Assert.That(AcademyGoldCount(sim, scenario), Is.EqualTo(amount), "known gold=" + amount);
+                Assert.That(AcademyGoldScore(sim, scenario), Is.EqualTo(amount == 0 ? 0 : amount == 1 ? 2 : 3),
+                    "known gold=" + amount);
+            }
+
+            var unknown = AcademyScenario(true);
+            var unknownSim = new Battle(unknown);
+            SetKnowledge(unknownSim, unknown, Array.Empty<int>(), allVisible: false, dangerMeters: 0);
+            Assert.That(AcademyGoldCount(unknownSim, unknown), Is.EqualTo(0));
+            Assert.That(AcademyGoldScore(unknownSim, unknown), Is.EqualTo(0));
+
+            var dangerous = AcademyScenario(true);
+            dangerous.Economy.GoldDangerMeters = 1000;
+            var dangerousSim = new Battle(dangerous);
+            SetKnowledge(dangerousSim, dangerous, new[] { 0, 1 }, allVisible: true, dangerMeters: 1000);
+            Assert.That(AcademyGoldCount(dangerousSim, dangerous), Is.EqualTo(0));
+            Assert.That(AcademyGoldScore(dangerousSim, dangerous), Is.EqualTo(0));
+
+            var unreachable = AcademyScenario(true);
+            var unreachableSim = new Battle(unreachable);
+            SetKnowledge(unreachableSim, unreachable, new[] { 0 }, allVisible: false, dangerMeters: 0);
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = worldField.GetValue(unreachableSim);
+            var factions = (Array)world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(world);
+            var faction = factions.GetValue(0);
+            var explored = (bool[])faction.GetType().GetField("ExploredCells", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
+            Array.Clear(explored, 0, explored.Length);
+            int coreCell = (int)(unreachable.Cores[0].Position.Z.Raw / 65536 / unreachable.Map.CellSizeMeters) * unreachable.Map.WidthCells
+                + (int)(unreachable.Cores[0].Position.X.Raw / 65536 / unreachable.Map.CellSizeMeters);
+            int goldCell = (int)(unreachable.ResourceNodes.Where(n => n.Kind == ResourceKind.Gold).First().Position.Z.Raw / 65536 / unreachable.Map.CellSizeMeters) * unreachable.Map.WidthCells
+                + (int)(unreachable.ResourceNodes.Where(n => n.Kind == ResourceKind.Gold).First().Position.X.Raw / 65536 / unreachable.Map.CellSizeMeters);
+            explored[coreCell] = true; explored[goldCell] = true;
+            Assert.That(AcademyGoldCount(unreachableSim, unreachable), Is.EqualTo(0));
+            Assert.That(AcademyGoldScore(unreachableSim, unreachable), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AcademyScoreKeepsTheExistingCivTieOrderWhenFlagsAreOff()
+        {
+            var withoutAcademy = MapGenerator.GenerateTerrain(1, gold: false);
+            withoutAcademy.Economy.Academy = false;
+            var withAcademyFlagButNoGold = MapGenerator.GenerateTerrain(1, gold: false);
+            withAcademyFlagButNoGold.Economy.Academy = true;
+            Assert.That(ScenarioBinary.Encode(withAcademyFlagButNoGold), Is.Not.EqualTo(ScenarioBinary.Encode(withoutAcademy)));
+            var left = new Battle(withoutAcademy);
+            var right = new Battle(withAcademyFlagButNoGold);
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(choose.Invoke(right, new object[] { 1u }), Is.EqualTo(choose.Invoke(left, new object[] { 1u })));
         }
 
         [Test]
@@ -318,6 +451,52 @@ namespace Rts.Core.Tests
                 var outcome = ReplayRunner.Replay(stream, identity);
                 Assert.That(outcome.FirstMismatchTick, Is.Null);
                 Assert.That(outcome.IsFault, Is.False);
+            }
+        }
+
+        [TestCase(CivKind.Academy, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Academy)]
+        [TestCase(CivKind.Academy, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Academy)]
+        public void AcademyCombinationsReachTheSecondAgeWithoutFault(CivKind west, CivKind east)
+        {
+            var scenario = AcademyMatchScenario(21);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+        }
+
+        [Test]
+        public void AutomaticAcademyChoiceSeedReplaysForTwentyThousandTicks()
+        {
+            // Seed 7 is the recorded normal-start probe: the east faction automatically chooses Academy after scouting gold.
+            var scenario = MapGenerator.GenerateTerrain(7, gold: true);
+            scenario.Economy.Academy = true;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            var west = sim.Capture(1).Economy;
+            var east = sim.Capture(2).Economy;
+            TestContext.WriteLine("normal seed 7: civs=" + west.Civ + "/" + east.Civ + ", ages=" + west.Age + "/" + east.Age
+                + ", techs=" + west.Techs + "/" + east.Techs + ", gold=" + west.Gold + "/" + east.Gold + ", tick=" + sim.Capture(1).Tick);
+            Assert.That(east.Civ, Is.EqualTo(CivKind.Academy));
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
             }
         }
     }

@@ -130,8 +130,6 @@ namespace Rts.Simulation
         public bool Bridge;
         /// <summary>V3-12 #1: enables the academy civilisation. Its rules are kept in the length-delimited extension section.</summary>
         public bool Academy;
-        /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
-        public bool Cult;
         /// <summary>V3-11 #1 provisional engineer camp values; the first pass matches a lumber camp.</summary>
         public int EngineerCampSizeCells = 2, EngineerCampWoodCost = 80, EngineerCampWork = 200, EngineerCampHp = 400;
         /// <summary>V3-11 #1 provisional short bridge values. BridgeWoodCost is paid once per bridge.</summary>
@@ -168,9 +166,16 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
+        public bool Cult;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
+        /// <summary>V3-15 #1 provisional mountain values; a mine shaft uses mountain cells, not a resource node.</summary>
+        public bool Mountain;
+        public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
+        public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
+        public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;
