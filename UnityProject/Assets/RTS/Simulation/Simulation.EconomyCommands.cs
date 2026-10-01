@@ -86,6 +86,7 @@ namespace Rts.Simulation
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
                          && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
                          && !(CultAllowed(faction) && kind == BuildingKind.Monastery)
+                         && !(FishingAllowed(faction) && kind == BuildingKind.Harbor)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
@@ -99,7 +100,7 @@ namespace Rts.Simulation
                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                         && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
-                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= rules.MountainMaxBuildings) return;
+                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -112,6 +113,7 @@ namespace Rts.Simulation
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
+                         : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);

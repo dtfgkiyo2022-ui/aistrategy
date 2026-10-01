@@ -10,7 +10,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         /// <summary>A finished building of this faction below this share of its HP is worth sending villagers to.</summary>
-        private bool NeedsRepair(BuildingState b) => AgesOn && b.Alive && b.Complete && b.Kind != BuildingKind.Wall && b.Hp < HpOf(b.Kind, b.FactionId);
+        private bool NeedsRepair(BuildingState b) => AgesOn && b.Alive && b.Complete && b.Kind != BuildingKind.Wall && b.Hp < HpOf(b.Kind, b.FactionId, b.OriginCell);
 
         /// <summary>Economy step, before the building work: every villager repairing adds its HP, never past the top.</summary>
         private void RepairBuildings()
@@ -21,7 +21,7 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!NeedsRepair(b)) continue;
-            int max = HpOf(b.Kind, b.FactionId);
+            int max = HpOf(b.Kind, b.FactionId, b.OriginCell);
                 for (int j = 0; j < world.VillagerCount && b.Hp < max; j++)
                 {
                     var v = world.Villagers[j];
@@ -49,7 +49,7 @@ namespace Rts.Simulation
             {
                 var b = world.Buildings[i];
                 if (b.FactionId != faction || b.Held || !NeedsRepair(b)) continue;
-            long share = 1000L * b.Hp / HpOf(b.Kind, b.FactionId);
+            long share = 1000L * b.Hp / HpOf(b.Kind, b.FactionId, b.OriginCell);
                 if (share >= world.Config.Economy.RepairAtPermille) continue;
                 if (worst < 0 || share < worstShare) { worst = i; worstShare = share; }
             }

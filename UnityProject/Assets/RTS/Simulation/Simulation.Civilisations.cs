@@ -57,6 +57,8 @@ namespace Rts.Simulation
                 (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
             new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
                 (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
+            new CivRegistration(CivKind.Fishing, 9, false, (s, f) => s.FishingOn, FishingScore,
+                (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
         };
@@ -135,6 +137,8 @@ namespace Rts.Simulation
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
