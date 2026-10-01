@@ -275,6 +275,7 @@ namespace Rts.Presentation
                 case BuildingKind.EngineerCamp: return UiText.T("Engineer camp", "工兵所");
                 case BuildingKind.Bridge: return UiText.T("Bridge", "橋");
                 case BuildingKind.Academy: return UiText.T("Academy", "学府");
+                case BuildingKind.Monastery: return UiText.T("Monastery", "修道院");
                 case BuildingKind.MineShaft: return UiText.T("Mine shaft", "坑道小屋");
                 default: return kind.ToString();
             }
