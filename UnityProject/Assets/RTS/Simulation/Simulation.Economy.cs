@@ -32,10 +32,10 @@ namespace Rts.Simulation
                 var plan = PlanOf(faction);
                 DecideAdvance(faction);
                 if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
+                    VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
                 {
-                    economy.Food = checked(economy.Food - rules.VillagerFoodCost);
-                    if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
+                    economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+                    if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
                     economy.Queued++;
                 }
                 ResumeUnbuilt(faction);
@@ -157,7 +157,7 @@ namespace Rts.Simulation
                     v.CarryKind = node.Definition.Kind;
                     v.Carry++;
                     v.NextGatherTick = checked(world.Tick + GatherTicksFor(v.FactionId, v.NodeId));
-                    if (v.Carry >= CarryFor(v.FactionId) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
+                    if (v.Carry >= CarryFor(v.FactionId, node.Fishing) || node.Remaining == 0) v.Task = VillagerTask.ToDropOff;
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
                 {
@@ -184,6 +184,8 @@ namespace Rts.Simulation
                         && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
                     {
                         var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
+                        int fishing = FishingWorkNode(v.Position, v.FactionId);
+                        if (fishing >= 0) { SetWorkNode(ref v, fishing); continue; }
                         var kind = WorkKindFor(v);
                         // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
                         if (kind != currentKind && kind != ResourceKind.Stone)
@@ -212,7 +214,7 @@ namespace Rts.Simulation
                 if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
                 SpawnVillager(faction);
                 economy.Queued--;
-                economy.TrainRemaining = economy.Queued > 0 ? rules.VillagerTrainTicks : 0;
+                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction) : 0;
             }
         }
 
@@ -220,16 +222,28 @@ namespace Rts.Simulation
         private void RegrowFishing()
         {
             var rules = world.Config.Economy;
-            if (!rules.FishingEnabled || world.Tick % rules.FishRegrowTicks != 0) return;
+            if (!rules.FishingEnabled) return;
             foreach (uint id in world.FishingNodeIds)
             {
                 ref var node = ref world.Nodes[id - 1];
+                int interval = rules.FishRegrowTicks;
+                for (uint faction = 1; faction <= 2; faction++)
+                    if (FishingAllowed(faction) && HarborCoversFish(faction, node.Definition.Position))
+                    {
+                        int coveredInterval = HasTech(faction, FishingTech.DriedFish)
+                            ? Math.Max(1, checked(rules.FishRegrowTicks * rules.DriedFishRegrowIntervalPermille / 1000))
+                            : Math.Max(1, rules.FishRegrowTicks / 2);
+                        interval = Math.Min(interval, coveredInterval);
+                    }
+                if (world.Tick % interval != 0) continue;
                 if (node.Remaining < node.Definition.Amount) node.Remaining++;
             }
         }
 
         private void AssignWork(ref VillagerState v)
         {
+            int fishing = FishingWorkNode(v.Position, v.FactionId);
+            if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
             var kind = WorkKindFor(v);
             int index = NearestWorkNode(v.Position, kind, v.FactionId);
             if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food, v.FactionId);
@@ -449,6 +463,43 @@ namespace Rts.Simulation
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }
 
+        private int FishingWorkNode(SimPoint position, uint faction)
+        {
+            if (!FishingAllowed(faction)) return -1;
+            int nearHarbor = NearestFishingNode(position, faction, true);
+            return nearHarbor >= 0 ? nearHarbor : NearestFishingNode(position, faction, false);
+        }
+
+        private int NearestFishingNode(SimPoint position, uint faction, bool harborOnly)
+        {
+            int best = -1;
+            long bestDistance = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (!node.Fishing || node.Remaining <= 0) continue;
+                if (harborOnly && !HarborCoversFish(faction, node.Definition.Position)) continue;
+                long dx = node.Definition.Position.X.Raw - position.X.Raw;
+                long dz = node.Definition.Position.Z.Raw - position.Z.Raw;
+                long distance = checked(dx * dx + dz * dz);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
+                { best = i; bestDistance = distance; }
+            }
+            return best;
+        }
+
+        private bool HarborCoversFish(uint faction, SimPoint fish)
+        {
+            var reach = Fix64.FromInt(world.Config.Economy.FishReach);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Harbor) continue;
+                if (InRange(BuildingCenter(b), fish, reach)) return true;
+            }
+            return false;
+        }
+
         /// <summary>The same centre-to-centre walk the soldiers' local routes use, on the shared route cache.</summary>
         private SimPoint VillagerRouteTarget(ref VillagerState v, SimPoint goal)
         {
@@ -488,7 +539,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             return EconomyDecision.PlanFor(IndustryOn ? world.Economies[faction - 1].Policy : EconomyPolicy.Balanced,
-                rules.AutoVillagerTarget, rules.AutoInfantryQueue);
+                AutoVillagerTargetFor(faction), rules.AutoInfantryQueue);
         }
 
         private CoreState OwnCore(uint faction) => world.Cores[world.Factions[faction - 1].CoreId - 1];

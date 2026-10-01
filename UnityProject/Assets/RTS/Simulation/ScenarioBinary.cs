@@ -26,12 +26,22 @@ namespace Rts.Simulation
         private const int CultExtensionId = 3;
         private const int CultExtensionVersion = 1;
         private const int CultExtensionDataLength = 7 * sizeof(int);
+        private const int FishingCivExtensionId = 4;
+        private const int FishingCivExtensionV1 = 1;
+        private const int FishingCivExtensionVersion = 2;
+        private const int FishingCivExtensionV1DataLength = 5 * sizeof(int);
+        private const int FishingCivExtensionDataLength = 13 * sizeof(int);
         private const int MountainExtensionId = 5;
-        private const int MountainExtensionVersion = 1;
-        private const int MountainExtensionDataLength = 12 * sizeof(int);
+        private const int MountainExtensionV1 = 1;
+        private const int MountainExtensionVersion = 2;
+        private const int MountainExtensionV1DataLength = 12 * sizeof(int);
+        private const int MountainExtensionDataLength = 22 * sizeof(int);
         private const int TollgateExtensionId = 6;
         private const int TollgateExtensionVersion = 1;
         private const int TollgateExtensionDataLength = 7 * sizeof(int);
+        private const int MetropolisExtensionId = 7;
+        private const int MetropolisExtensionVersion = 1;
+        private const int MetropolisExtensionDataLength = 5 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -43,8 +53,10 @@ namespace Rts.Simulation
             new ExtensionRegistration(1, 1, sizeof(int)),
             new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
+            new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength),
             new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
-            new ExtensionRegistration(TollgateExtensionId, TollgateExtensionVersion, TollgateExtensionDataLength)
+            new ExtensionRegistration(TollgateExtensionId, TollgateExtensionVersion, TollgateExtensionDataLength),
+            new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -522,17 +534,23 @@ namespace Rts.Simulation
                 if (registrationIndex < 0) throw new InvalidDataException("Unknown scenario extension.");
                 if (seen[registrationIndex]) throw new InvalidDataException("Duplicate scenario extension.");
                 var registration = ExtensionRegistrations[registrationIndex];
-                if (featureVersion != registration.Version || dataLength != registration.DataLength || dataLength < 0
+                bool oldMountain = id == MountainExtensionId && featureVersion == MountainExtensionV1
+                    && dataLength == MountainExtensionV1DataLength;
+                bool oldFishing = id == FishingCivExtensionId && featureVersion == FishingCivExtensionV1
+                    && dataLength == FishingCivExtensionV1DataLength;
+                if ((!oldMountain && !oldFishing && featureVersion != registration.Version) || (!oldMountain && !oldFishing && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
                 if (data.Length != dataLength) throw new InvalidDataException("Truncated scenario extension data.");
                 seen[registrationIndex] = true;
                 var extension = new ScenarioExtensionData { Id = id, Version = featureVersion, Data = data };
-                 if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
-                 else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
-                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
-                 else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
+                if (id == AcademyExtensionId) ReadAcademyExtension(extension, c.Economy);
+                else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
+                else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
+                else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
+                else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
+                else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -565,19 +583,69 @@ namespace Rts.Simulation
         {
             if (c.Extensions == null) throw new InvalidDataException("Missing scenario extensions.");
             var extensions = new List<ScenarioExtensionData>(c.Extensions);
-            bool hasAcademy = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+            // ID 3 is feature-owned data.  A scenario that turns the cult flag off must
+            // not retain a stale cult extension from a previous encode/decode round trip.
+            extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
+            extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
+            bool hasAcademy = false, hasFishingCiv = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null) continue;
+                if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
+                if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
+            }
             if (c.Economy.Academy && !hasAcademy) extensions.Add(CreateAcademyExtension(c.Economy));
+            if (c.Economy.FishingCiv && !hasFishingCiv) extensions.Add(CreateFishingCivExtension(c.Economy));
             bool hasCult = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == CultExtensionId) hasCult = true;
             if (c.Economy.Cult && !hasCult) extensions.Add(CreateCultExtension(c.Economy));
             bool hasMountain = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MountainExtensionId) hasMountain = true;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] != null && extensions[i].Id == FishingCivExtensionId && extensions[i].Version == FishingCivExtensionV1)
+                    extensions[i] = CreateFishingCivExtension(c.Economy);
+                if (extensions[i] != null && extensions[i].Id == MountainExtensionId)
+                {
+                    hasMountain = true;
+                    // A decoded v1 record is upgraded on the next write even when the old
+                    // flag was off; the current writer accepts only the registered v2 shape.
+                    extensions[i] = CreateMountainExtension(c.Economy);
+                }
+            }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
             bool hasTollgate = false;
             for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == TollgateExtensionId) hasTollgate = true;
             if (c.Economy.Tollgate && !hasTollgate) extensions.Add(CreateTollgateExtension(c.Economy));
+            bool hasMetropolis = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
+            if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateMetropolisExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Metropolis ? 1 : 0);
+                writer.Write(e.GrandHouseSizeCells); writer.Write(e.GrandHouseWoodCost);
+                writer.Write(e.GrandHouseWork); writer.Write(e.GrandHouseHp);
+                return new ScenarioExtensionData { Id = MetropolisExtensionId, Version = MetropolisExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadMetropolisExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid metropolis flag.");
+                e.Metropolis = enabled != 0;
+                e.GrandHouseSizeCells = reader.ReadInt32(); e.GrandHouseWoodCost = reader.ReadInt32();
+                e.GrandHouseWork = reader.ReadInt32(); e.GrandHouseHp = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing metropolis extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateAcademyExtension(EconomyRules e)
@@ -607,6 +675,41 @@ namespace Rts.Simulation
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing academy extension data.");
             }
         }
+
+        private static ScenarioExtensionData CreateFishingCivExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.FishingCiv ? 1 : 0);
+                writer.Write(e.HarborSizeCells); writer.Write(e.HarborWoodCost); writer.Write(e.HarborWork); writer.Write(e.HarborHp);
+                writer.Write(e.FishingNetFoodCost); writer.Write(e.FishingNetWoodCost); writer.Write(e.FishingNetTicks);
+                writer.Write(e.DriedFishFoodCost); writer.Write(e.DriedFishWoodCost); writer.Write(e.DriedFishTicks);
+                writer.Write(e.FishingNetCarryBonusPermille); writer.Write(e.DriedFishRegrowIntervalPermille);
+                return new ScenarioExtensionData { Id = FishingCivExtensionId, Version = FishingCivExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFishingCivExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fishing civilisation flag.");
+                e.FishingCiv = enabled != 0;
+                e.HarborSizeCells = reader.ReadInt32(); e.HarborWoodCost = reader.ReadInt32();
+                e.HarborWork = reader.ReadInt32(); e.HarborHp = reader.ReadInt32();
+                if (extension.Version >= FishingCivExtensionVersion)
+                {
+                    e.FishingNetFoodCost = reader.ReadInt32(); e.FishingNetWoodCost = reader.ReadInt32(); e.FishingNetTicks = reader.ReadInt32();
+                    e.DriedFishFoodCost = reader.ReadInt32(); e.DriedFishWoodCost = reader.ReadInt32(); e.DriedFishTicks = reader.ReadInt32();
+                    e.FishingNetCarryBonusPermille = reader.ReadInt32(); e.DriedFishRegrowIntervalPermille = reader.ReadInt32();
+                }
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fishing civilisation extension data.");
+            }
+        }
+
 
         private static ScenarioExtensionData CreateCultExtension(EconomyRules e)
         {
@@ -644,6 +747,10 @@ namespace Rts.Simulation
                 writer.Write(e.MountainBaseIntervalTicks); writer.Write(e.MountainIntervalStepTicks); writer.Write(e.MountainMinIntervalTicks);
                 writer.Write(e.MountainMaxBuildings); writer.Write(e.MountainMaxAdjacentCells);
                 writer.Write(e.MountainStoneYield); writer.Write(e.MountainOreYield);
+                writer.Write(e.MountainDeepShaftFoodCost); writer.Write(e.MountainDeepShaftWoodCost); writer.Write(e.MountainDeepShaftTicks);
+                writer.Write(e.MountainFortFoodCost); writer.Write(e.MountainFortWoodCost); writer.Write(e.MountainFortTicks);
+                writer.Write(e.MountainDeepShaftIntervalPermille); writer.Write(e.MountainDeepShaftMaxBuildingsBonus);
+                writer.Write(e.MountainFortHpPermille); writer.Write(e.MountainFortRangeBonus);
                 return new ScenarioExtensionData { Id = MountainExtensionId, Version = MountainExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -660,6 +767,13 @@ namespace Rts.Simulation
                 e.MountainBaseIntervalTicks = reader.ReadInt32(); e.MountainIntervalStepTicks = reader.ReadInt32(); e.MountainMinIntervalTicks = reader.ReadInt32();
                 e.MountainMaxBuildings = reader.ReadInt32(); e.MountainMaxAdjacentCells = reader.ReadInt32();
                 e.MountainStoneYield = reader.ReadInt32(); e.MountainOreYield = reader.ReadInt32();
+                if (extension.Version >= MountainExtensionVersion)
+                {
+                    e.MountainDeepShaftFoodCost = reader.ReadInt32(); e.MountainDeepShaftWoodCost = reader.ReadInt32(); e.MountainDeepShaftTicks = reader.ReadInt32();
+                    e.MountainFortFoodCost = reader.ReadInt32(); e.MountainFortWoodCost = reader.ReadInt32(); e.MountainFortTicks = reader.ReadInt32();
+                    e.MountainDeepShaftIntervalPermille = reader.ReadInt32(); e.MountainDeepShaftMaxBuildingsBonus = reader.ReadInt32();
+                    e.MountainFortHpPermille = reader.ReadInt32(); e.MountainFortRangeBonus = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing mountain extension data.");
             }
         }

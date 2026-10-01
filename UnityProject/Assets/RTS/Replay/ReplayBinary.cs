@@ -171,7 +171,7 @@ namespace Rts.Replay
                 var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
-                // Bridge-civilisation research intentionally uses the two values just outside
+                // Bridge- and mountain-civilisation research intentionally use values just outside
                 // TechKind; keep the established enum unchanged while allowing those replay bytes.
                 var tech=ek==EconomyCommandKind.Research ? Tech(r) : (TechKind)0;
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
@@ -187,7 +187,7 @@ namespace Rts.Replay
         private static TechKind Tech(BinaryReader r)
         {
             byte value = r.ReadByte();
-            if (value < (byte)TechKind.Weapons || value > (byte)BridgeTech.SiegeDeployment) throw new InvalidDataException("Unknown TechKind.");
+            if (value < (byte)TechKind.Weapons || value > (byte)MountainTech.MountainFort) throw new InvalidDataException("Unknown TechKind.");
             return (TechKind)value;
         }
     }

@@ -166,8 +166,17 @@ namespace Rts.Simulation
         public int AcademySizeCells = 2, AcademyWoodCost = 100, AcademyWork = 200, AcademyHp = 400;
         public int AcademyToolsFoodCost = 50, AcademyToolsWoodCost = 25, AcademyToolsGoldCost = 50, AcademyToolsTicks = 200;
         public int AcademyCartsFoodCost = 50, AcademyCartsWoodCost = 50, AcademyCartsGoldCost = 50, AcademyCartsTicks = 200;
+        /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
+        public bool FishingCiv;
+        public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;
+        /// <summary>V3-14 #2 provisional fishing-civilisation research values.</summary>
+        public int FishingNetFoodCost = 150, FishingNetWoodCost = 100, FishingNetTicks = 400;
+        public int DriedFishFoodCost = 200, DriedFishWoodCost = 150, DriedFishTicks = 500;
+        public int FishingNetCarryBonusPermille = 500, DriedFishRegrowIntervalPermille = 333;
         /// <summary>V3-13 #1: enables the cult civilisation. Its rules are kept in the length-delimited extension section.</summary>
         public bool Cult;
+        /// <summary>V3-17 #1: enables the metropolis civilisation. Its rules are kept in extension ID 7.</summary>
+        public bool Metropolis;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
@@ -176,10 +185,17 @@ namespace Rts.Simulation
         public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
         public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
         public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
+        /// <summary>V3-15 #2 provisional mountain research prices, times and effects.</summary>
+        public int MountainDeepShaftFoodCost = 250, MountainDeepShaftWoodCost = 150, MountainDeepShaftTicks = 600;
+        public int MountainFortFoodCost = 400, MountainFortWoodCost = 250, MountainFortTicks = 800;
+        public int MountainDeepShaftIntervalPermille = 667, MountainDeepShaftMaxBuildingsBonus = 1;
+        public int MountainFortHpPermille = 1500, MountainFortRangeBonus = 2;
         /// <summary>V3-16 #1: a completed tollgate is passable to its own faction only.</summary>
         public bool Tollgate;
         public int TollgateLengthCells = 2, TollgateWoodCost = 80, TollgateStoneCost = 40, TollgateWork = 250, TollgateHp = 600;
         public int TollgateMaxBuildings = 3;
+        /// <summary>V3-17 #1 provisional grand-house values; one completed grand house adds three ordinary house slots.</summary>
+        public int GrandHouseSizeCells = 3, GrandHouseWoodCost = 150, GrandHouseWork = 300, GrandHouseHp = 500;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

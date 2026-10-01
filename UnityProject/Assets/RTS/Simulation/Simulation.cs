@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Rts.Contracts;
 using Rts.Decision;
@@ -121,8 +122,21 @@ namespace Rts.Simulation
                     }
                     else intent = new ArmyIntent(a.Definition.Id, mission, 0, default, false);
                 }
-                else if (s.Initial.Kind == UnitKind.Monk && CultAllowed(faction) && a.Policy == 0)
-                    intent = CultMonkIntent(s, a, faction, home, mission);
+                else if (s.Initial.Kind == UnitKind.Monk && CultAllowed(faction))
+                {
+                    if (a.Policy == 0) intent = CultMonkIntent(ref s, a, faction, home, mission, observation);
+                    else
+                    {
+                        // A human policy supplies movement only.  Do not let the common tactical policy turn a
+                        // monk's opportunistic contact into an automatic conversion or an automatic retreat.
+                        s.CultTargetContactId = 0;
+                        var humanInput = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
+                            s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment,
+                            a.Policy == PolicyKind.Retreat);
+                        var controlled = PolicyDecision.Tactics(observation, humanInput, ref s.Pursuit);
+                        intent = new ArmyIntent(a.Definition.Id, controlled.MoveGoal, 0, default, controlled.IsRetreating);
+                    }
+                }
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
                 s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
@@ -134,8 +148,9 @@ namespace Rts.Simulation
             }
         }
 
-        /// <summary>V3-13 #1: cult monks stay behind a living infantry escort and only convert visible non-monks.</summary>
-        private ArmyIntent CultMonkIntent(SoldierState monk, ArmyState army, uint faction, SimPoint home, SimPoint mission)
+        /// <summary>V3-13 #2: an autonomous cult monk uses only currently visible enemy contacts.</summary>
+        private ArmyIntent CultMonkIntent(ref SoldierState monk, ArmyState army, uint faction, SimPoint home, SimPoint mission,
+            FactionObservation observation)
         {
             int guardian = -1;
             foreach (uint id in army.SoldierIds)
@@ -147,38 +162,117 @@ namespace Rts.Simulation
             }
             if (guardian < 0) return new ArmyIntent(army.Definition.Id, home, 0, default, true);
 
-            foreach (int i in world.SoldierTraversal)
+            var escort = world.Soldiers[guardian];
+            bool escortReady = InRange(monk.Position, escort.Position, Fix64.FromInt(12));
+
+            // Keep a target while it remains visible and alive.  A newly visible, higher-value unit must not reset
+            // conversion progress by causing a target switch every decision tick.
+            VisibleEnemyView current = default;
+            bool hasCurrent = TryVisibleCultTarget(observation, monk.CultTargetContactId, out current)
+                && TryInternalSoldierId(faction, current.ContactId, out int currentIndex)
+                && world.Soldiers[currentIndex].Alive;
+            if (!hasCurrent) monk.CultTargetContactId = 0;
+
+            int nearbyRanged = hasCurrent ? CultNearbyRanged(observation, current.Position, current.ContactId) : 0;
+            if (nearbyRanged > 0 || CultNearbyRanged(observation, monk.Position, 0) > 0)
+                return new ArmyIntent(army.Definition.Id, home, 0, default, true);
+
+            uint claimed = 0;
+            var targets = new List<VisibleEnemyView>();
+            foreach (var visible in observation.VisibleEnemies.OrderBy(e => e.ContactId))
             {
-                var enemy = world.Soldiers[i];
-                if (!enemy.Alive || enemy.Initial.FactionId == faction || !IsVisibleTo(faction, enemy.Position)) continue;
-                if (enemy.Initial.Kind == UnitKind.Monk || enemy.Class == UnitKind.Monk) continue;
-                if (enemy.Parameters.Range > Fix64.FromInt(2) && InRange(enemy.Position, monk.Position, Fix64.FromInt(16)))
-                    return new ArmyIntent(army.Definition.Id, home, 0, default, true);
+                UnitKind kind = (UnitKind)visible.Kind;
+                if (kind == UnitKind.Monk || !TryInternalSoldierId(faction, visible.ContactId, out int index)) continue;
+                var enemy = world.Soldiers[index];
+                if (!enemy.Alive || enemy.Initial.FactionId == faction) continue;
+                if (CultTargetClaimedByEarlierMonk(army, monk.Initial.Id, visible.ContactId)) continue;
+                targets.Add(new VisibleEnemyView(visible.ContactId, visible.Position, kind,
+                    CultNearbyRanged(observation, visible.Position, visible.ContactId), DistanceRank(monk.Position, visible.Position)));
             }
 
-            int target = -1, bestValue = int.MinValue;
-            foreach (int i in world.SoldierTraversal)
+            if (hasCurrent && !CultTargetClaimedByEarlierMonk(army, monk.Initial.Id, current.ContactId))
+                claimed = current.ContactId;
+            else
             {
-                var enemy = world.Soldiers[i];
-                if (!enemy.Alive || enemy.Initial.FactionId == faction || !IsVisibleTo(faction, enemy.Position)) continue;
-                if (enemy.Initial.Kind == UnitKind.Monk || enemy.Class == UnitKind.Monk) continue;
-                int value = CultTargetValue(enemy) * 1000 - DistanceRank(monk.Position, enemy.Position);
-                if (target < 0 || value > bestValue) { target = i; bestValue = value; }
+                var choice = targets.OrderByDescending(t => CultTargetValue(t.Kind)).ThenBy(t => t.Danger)
+                    .ThenBy(t => t.Distance).ThenBy(t => t.ContactId).FirstOrDefault();
+                if (choice.ContactId != 0)
+                {
+                    monk.CultTargetContactId = choice.ContactId;
+                    current = choice;
+                    hasCurrent = true;
+                    claimed = choice.ContactId;
+                }
+                else hasCurrent = false;
             }
-            var escort = world.Soldiers[guardian];
-            if (target < 0) return new ArmyIntent(army.Definition.Id, escort.Position, 0, default, false);
+
+            if (!hasCurrent || claimed == 0) return new ArmyIntent(army.Definition.Id, escort.Position, 0, default, false);
+            // Selection is based on the faction's current visible contacts even while the monk catches up.  Until
+            // the escort is close enough, the stored target is retained but movement remains with the escort.
+            if (!escortReady) return new ArmyIntent(army.Definition.Id, escort.Position, 0, default, false);
+            int target = checked((int)InternalSoldierId(faction, claimed) - 1);
             var prey = world.Soldiers[target];
             SimPoint approach = FixMath.MoveTowards(escort.Position, prey.Position, Fix64.FromInt(4));
-            uint contact = world.Factions[faction - 1].ContactIds[target];
+            uint contact = claimed;
             if (contact != 0 && InRange(monk.Position, prey.Position, monk.Parameters.Range))
                 return new ArmyIntent(army.Definition.Id, monk.Position, contact, default, false);
             return new ArmyIntent(army.Definition.Id, approach, contact, default, false);
         }
 
-        private static int CultTargetValue(SoldierState enemy)
+        private readonly struct VisibleEnemyView
         {
-            UnitKind kind = enemy.Class != 0 ? enemy.Class : enemy.Initial.Kind;
-            return kind == UnitKind.HeavyInfantry ? 5 : kind == UnitKind.Cavalry ? 4 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 3 : 2;
+            internal readonly uint ContactId;
+            internal readonly SimPoint Position;
+            internal readonly UnitKind Kind;
+            internal readonly int Danger, Distance;
+            internal VisibleEnemyView(uint contactId, SimPoint position, UnitKind kind, int danger, int distance)
+            { ContactId = contactId; Position = position; Kind = kind; Danger = danger; Distance = distance; }
+        }
+
+        private static int CultTargetValue(UnitKind kind)
+        {
+            return kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry ? 5 : kind == UnitKind.LightCavalry ? 4
+                : kind == UnitKind.Mercenary ? 3 : kind == UnitKind.Archer ? 2 : kind == UnitKind.SkirmishArcher ? 2 : 1;
+        }
+
+        private bool TryVisibleCultTarget(FactionObservation observation, uint contactId, out VisibleEnemyView target)
+        {
+            foreach (var visible in observation.VisibleEnemies)
+            {
+                if (visible.ContactId != contactId) continue;
+                UnitKind kind = (UnitKind)visible.Kind;
+                if (kind == UnitKind.Monk) break;
+                target = new VisibleEnemyView(contactId, visible.Position, kind,
+                    CultNearbyRanged(observation, visible.Position, contactId), 0);
+                return true;
+            }
+            target = default;
+            return false;
+        }
+
+        private int CultNearbyRanged(FactionObservation observation, SimPoint point, uint excludeContactId)
+        {
+            int count = 0;
+            foreach (var enemy in observation.VisibleEnemies)
+            {
+                UnitKind kind = (UnitKind)enemy.Kind;
+                if (enemy.ContactId == excludeContactId || !CultIsRanged(kind)) continue;
+                if (InRange(point, enemy.Position, Fix64.FromInt(16))) count++;
+            }
+            return count;
+        }
+
+        private static bool CultIsRanged(UnitKind kind) => kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher;
+
+        private bool CultTargetClaimedByEarlierMonk(ArmyState army, uint monkId, uint contactId)
+        {
+            foreach (uint id in army.SoldierIds)
+            {
+                if (id >= monkId) continue;
+                var other = world.Soldiers[id - 1];
+                if (other.Alive && other.Initial.Kind == UnitKind.Monk && other.CultTargetContactId == contactId) return true;
+            }
+            return false;
         }
 
         private static int DistanceRank(SimPoint a, SimPoint b)
@@ -193,6 +287,15 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
                 if (world.Factions[faction - 1].ContactIds[i] == contactId) return (uint)i + 1;
             throw new InvalidOperationException("Observation contact has no internal mapping.");
+        }
+
+        private bool TryInternalSoldierId(uint faction, uint contactId, out int index)
+        {
+            foreach (int i in world.SoldierTraversal)
+                if (world.Factions[faction - 1].ContactIds[i] == contactId)
+                { index = i; return true; }
+            index = -1;
+            return false;
         }
 
         private void Move()
@@ -305,7 +408,12 @@ namespace Rts.Simulation
                 target.ConversionByFaction = 0;
                 target.ConversionLastAttackTick = 0;
                 target.Hp = 0;
-                if (Spawn(faction, GoalKind.Core, world.Cores[core - 1].Definition.Id, position, spawnKind))
+                // The nearest-army assignment is a cult-side rule.  Keep the common conversion
+                // path's historical reinforcement priority for every other faction.
+                bool spawned = CultAllowed(faction)
+                    ? SpawnConverted(faction, position, spawnKind, spawnKind)
+                    : Spawn(faction, GoalKind.Core, core, position, spawnKind, spawnKind);
+                if (spawned)
                     ApplyClass(world.SoldierCount - 1, originalClass == 0 ? 0 : convertedKind);
             }
         }
@@ -494,7 +602,11 @@ namespace Rts.Simulation
                         own && s.IsRetreating, own, own ? s.Hp : 0));
                     if (!own)
                     {
-                        enemies.Add(new VisibleEnemy(id, s.Position, (byte)s.Initial.Kind));
+                        // Cult's observation may use the trained class (for example HeavyInfantry) because that is
+                        // the information used by its target valuation.  Keep the old visible-enemy bytes unchanged
+                        // for every other scenario.
+                        byte observedKind = CultOn && s.Class != 0 ? (byte)s.Class : (byte)s.Initial.Kind;
+                        enemies.Add(new VisibleEnemy(id, s.Position, observedKind));
                         contacts.Add(Contact(f, i, true));
                     }
                 }

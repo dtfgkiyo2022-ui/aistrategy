@@ -29,6 +29,8 @@ namespace Rts.Simulation
         internal int ConversionProgress;
         internal uint ConversionByFaction;
         internal long ConversionLastAttackTick;
+        /// <summary>V3-13 #2: the observation contact currently retained by an autonomous cult monk.</summary>
+        internal uint CultTargetContactId;
     }
 
     internal struct ArmyState
@@ -488,6 +490,12 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
+                && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
+                && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
+                && e.DriedFishFoodCost >= 0 && e.DriedFishWoodCost >= 0 && e.DriedFishTicks > 0
+                && e.FishingNetCarryBonusPermille >= 0 && e.DriedFishRegrowIntervalPermille > 0 && e.DriedFishRegrowIntervalPermille <= 1000),
+                "Fishing civilisation requires valid age, fishing and harbour rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.Cavalry || e.Ages, "Cavalry requires ages.");
             if (e.Cavalry)
@@ -524,15 +532,23 @@ namespace Rts.Simulation
                 && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0),
                 "Cult requires valid age and monastery rules.");
             Require(!e.Mountain || (e.Enabled && e.Ages && e.Industry && e.MountainSizeCells > 0 && e.MountainSizeCells <= 8
-                && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
-                && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
-                && e.MountainMinIntervalTicks > 0 && e.MountainMinIntervalTicks <= e.MountainBaseIntervalTicks
-                && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
-                && e.MountainStoneYield > 0 && e.MountainOreYield > 0),
+                 && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
+                 && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
+                 && e.MountainMinIntervalTicks > 0 && e.MountainMinIntervalTicks <= e.MountainBaseIntervalTicks
+                 && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
+                 && e.MountainStoneYield > 0 && e.MountainOreYield > 0
+                 && e.MountainDeepShaftFoodCost >= 0 && e.MountainDeepShaftWoodCost >= 0 && e.MountainDeepShaftTicks > 0
+                 && e.MountainFortFoodCost >= 0 && e.MountainFortWoodCost >= 0 && e.MountainFortTicks > 0
+                 && e.MountainDeepShaftIntervalPermille > 0 && e.MountainDeepShaftIntervalPermille <= 1000
+                 && e.MountainDeepShaftMaxBuildingsBonus >= 0
+                 && e.MountainFortHpPermille >= 1000 && e.MountainFortRangeBonus >= 0),
                 "Mountain requires valid age, industry and mine-shaft rules.");
             Require(!e.Tollgate || (e.Enabled && e.Ages && e.TollgateLengthCells == 2
                 && e.TollgateWoodCost >= 0 && e.TollgateStoneCost >= 0 && e.TollgateWork > 0 && e.TollgateHp > 0
                 && e.TollgateMaxBuildings > 0), "Tollgate requires valid age and tollgate rules.");
+            Require(!e.Metropolis || (e.Enabled && e.Ages && e.GrandHouseSizeCells > 0 && e.GrandHouseSizeCells <= 8
+                && e.GrandHouseWoodCost >= 0 && e.GrandHouseWork > 0 && e.GrandHouseHp > 0),
+                "Metropolis requires valid age and grand-house rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -698,7 +714,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
@@ -721,14 +737,26 @@ namespace Rts.Simulation
                  MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
                  MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
                  Mountain = e.Mountain, MountainSizeCells = e.MountainSizeCells, MountainWoodCost = e.MountainWoodCost,
-                 MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
+                  MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
                  MountainIntervalStepTicks = e.MountainIntervalStepTicks, MountainMinIntervalTicks = e.MountainMinIntervalTicks,
-                  MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
-                  MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
+                 MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
+                 MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
+                 FishingCiv = e.FishingCiv, HarborSizeCells = e.HarborSizeCells, HarborWoodCost = e.HarborWoodCost,
+                  HarborWork = e.HarborWork, HarborHp = e.HarborHp,
+                  FishingNetFoodCost = e.FishingNetFoodCost, FishingNetWoodCost = e.FishingNetWoodCost, FishingNetTicks = e.FishingNetTicks,
+                  DriedFishFoodCost = e.DriedFishFoodCost, DriedFishWoodCost = e.DriedFishWoodCost, DriedFishTicks = e.DriedFishTicks,
+                  FishingNetCarryBonusPermille = e.FishingNetCarryBonusPermille, DriedFishRegrowIntervalPermille = e.DriedFishRegrowIntervalPermille,
+                 MountainDeepShaftFoodCost = e.MountainDeepShaftFoodCost, MountainDeepShaftWoodCost = e.MountainDeepShaftWoodCost,
+                 MountainDeepShaftTicks = e.MountainDeepShaftTicks, MountainFortFoodCost = e.MountainFortFoodCost,
+                 MountainFortWoodCost = e.MountainFortWoodCost, MountainFortTicks = e.MountainFortTicks,
+                 MountainDeepShaftIntervalPermille = e.MountainDeepShaftIntervalPermille,
+                 MountainDeepShaftMaxBuildingsBonus = e.MountainDeepShaftMaxBuildingsBonus,
+                 MountainFortHpPermille = e.MountainFortHpPermille, MountainFortRangeBonus = e.MountainFortRangeBonus,
+                 GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
                   Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
                   TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
                   TollgateMaxBuildings = e.TollgateMaxBuildings,
-                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
+                FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,
                 SkirmishArcherTrainTicks = e.SkirmishArcherTrainTicks, SkirmishArcherHp = e.SkirmishArcherHp, SkirmishArcherDamage = e.SkirmishArcherDamage,

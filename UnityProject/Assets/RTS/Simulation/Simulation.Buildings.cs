@@ -98,11 +98,25 @@ namespace Rts.Simulation
             if (monastery < 0) return false;
             ref var building = ref world.Buildings[monastery];
             if (!building.Complete || building.Held || building.Queued >= world.Config.Economy.QueueLimit) return false;
-            if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= 2) return false;
+            if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= CultMonkLimit(faction)) return false;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued + QueuedInfantry(faction);
             if (population >= PopCapFor(faction) || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk, BuildingKind.Monastery)) return false;
             Enqueue(faction, ref building, UnitKind.Monk);
             return true;
+        }
+
+        /// <summary>V3-13 #2: one autonomous monk per four living non-scout escorts, up to four monks.</summary>
+        private int CultMonkLimit(uint faction)
+        {
+            int escorts = 0;
+            foreach (int i in world.SoldierTraversal)
+            {
+                var soldier = world.Soldiers[i];
+                if (!soldier.Alive || soldier.Initial.FactionId != faction || soldier.Initial.Kind == UnitKind.Monk
+                    || soldier.Initial.Kind == UnitKind.Scout) continue;
+                escorts++;
+            }
+            return Math.Min(4, escorts / 4);
         }
 
         /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
@@ -123,7 +137,7 @@ namespace Rts.Simulation
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = requestedWorkCell >= 0 ? requestedWorkCell : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind))),
-                Alive = true, Hp = HpOf(kind, faction), Facing = facing, NodeId = nodeId };
+                Alive = true, Hp = HpOf(kind, faction, origin), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
@@ -444,15 +458,17 @@ namespace Rts.Simulation
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampSizeCells
                 : kind == BuildingKind.Academy ? e.AcademySizeCells
                 : kind == BuildingKind.Monastery ? e.MonasterySizeCells
+                : kind == BuildingKind.Harbor ? e.HarborSizeCells
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
                 : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
+                : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
-        private int HpOf(BuildingKind kind, uint faction)
+        private int HpOf(BuildingKind kind, uint faction, int origin = -1)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
+            int hp = kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
                 : kind == BuildingKind.Fletcher ? e.FletcherHp
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
@@ -461,8 +477,11 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeHp : kind == BuildingKind.Stable ? e.StableHp
                 : kind == BuildingKind.Castle ? e.CastleHp : kind == BuildingKind.Caravanserai ? e.CaravanseraiHp
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Academy ? e.AcademyHp
-                : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.MineShaft ? e.MountainHp
-                : kind == BuildingKind.Tollgate ? e.TollgateHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+                : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
+                : kind == BuildingKind.Tollgate ? e.TollgateHp : kind == BuildingKind.GrandHouse ? e.GrandHouseHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+            if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
+                hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
+            return hp;
         }
 
         private bool IsMasonryDefence(uint faction, BuildingKind kind)
@@ -486,8 +505,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWork : kind == BuildingKind.Stable ? e.StableWork
                 : kind == BuildingKind.Castle ? e.CastleWork : kind == BuildingKind.Caravanserai ? e.CaravanseraiWork
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Academy ? e.AcademyWork
-                : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.MineShaft ? e.MountainWork
-                : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+                : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
+                : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -503,8 +522,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
                  : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Academy ? e.AcademyWoodCost
-                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
-                 : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
+                 : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 

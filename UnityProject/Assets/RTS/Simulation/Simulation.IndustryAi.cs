@@ -28,6 +28,7 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
+            if (FishingAllowed(faction)) { DecideFishingHarbor(faction); return; }
             if (ForestryAllowed(faction))
             {
                 if (world.Economies[faction - 1].Age < 2) { DecideLumberCamp(faction); return; }
@@ -110,6 +111,73 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private void DecideFishingHarbor(uint faction)
+        {
+            var rules = world.Config.Economy;
+            if (OwnBuildingIndex(faction, BuildingKind.Harbor) >= 0 || world.Economies[faction - 1].Wood < rules.HarborWoodCost) return;
+            int origin = FindHarborSite(faction);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Harbor, origin, Facing.North, 0);
+        }
+
+        private int FindHarborSite(uint faction)
+        {
+            var rules = world.Config.Economy;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = rules.HarborSizeCells;
+            var core = OwnCore(faction).Definition.Position;
+            int best = -1;
+            BigInteger bestFish = 0, bestCore = 0;
+            long reach = Fix64.FromInt(rules.FishReach * 2).Raw;
+            BigInteger limit = new BigInteger(reach) * reach;
+            for (int origin = 0; origin < width * height; origin++)
+            {
+                if (origin % width + size > width || origin / width + size > height) continue;
+                var centre = FootprintCenter(origin, size);
+                BigInteger fishDistance = 0;
+                bool nearFish = false;
+                for (int n = 0; n < world.Nodes.Length; n++)
+                {
+                    var node = world.Nodes[n];
+                    if (!node.Fishing || node.Remaining <= 0) continue;
+                    BigInteger distance = DistanceSquared(centre, node.Definition.Position);
+                    if (distance > limit) continue;
+                    if (!nearFish || distance < fishDistance) { nearFish = true; fishDistance = distance; }
+                }
+                if (!nearFish) continue;
+                if (!HarborSiteIsClear(faction, origin) || !KeepsMapConnected(faction, origin, size)) continue;
+                BigInteger coreDistance = DistanceSquared(centre, core);
+                if (best < 0 || fishDistance < bestFish || fishDistance == bestFish && (coreDistance < bestCore
+                    || coreDistance == bestCore && origin < best))
+                {
+                    best = origin; bestFish = fishDistance; bestCore = coreDistance;
+                }
+            }
+            return best;
+        }
+
+        private bool HarborSiteIsClear(uint faction, int origin)
+        {
+            int size = world.Config.Economy.HarborSizeCells;
+            return SiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), size)
+                && HarborTouchesRiver(origin, size);
+        }
+
+        private bool HarborTouchesRiver(int origin, int size)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                {
+                    int cell = origin + z * width + x;
+                    if (x > 0 && IsRiverCell(cell - 1) || x + 1 < size && IsRiverCell(cell + 1)
+                        || z > 0 && IsRiverCell(cell - width) || z + 1 < size && IsRiverCell(cell + width)) return true;
+                    if (x == 0 && origin % width > 0 && IsRiverCell(cell - 1)
+                        || x + 1 == size && origin % width + size < width && IsRiverCell(cell + 1)
+                        || z == 0 && origin / width > 0 && IsRiverCell(cell - width)
+                        || z + 1 == size && origin / width + size < height && IsRiverCell(cell + width)) return true;
+                }
+            return false;
         }
 
         private void DecideLegacyIndustry(uint faction)

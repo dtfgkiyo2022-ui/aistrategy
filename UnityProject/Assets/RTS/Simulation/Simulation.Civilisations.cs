@@ -57,10 +57,14 @@ namespace Rts.Simulation
                 (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
             new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
                 (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
+            new CivRegistration(CivKind.Fishing, 9, false, (s, f) => s.FishingOn, FishingScore,
+                (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
             new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
-                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0)
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
+            new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
+                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -137,6 +141,8 @@ namespace Rts.Simulation
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 

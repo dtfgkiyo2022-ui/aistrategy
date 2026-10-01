@@ -88,9 +88,11 @@ namespace Rts.Simulation
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
+                        && !(MetropolisAllowed(faction) && kind == BuildingKind.GrandHouse)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
                          && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
                          && !(CultAllowed(faction) && kind == BuildingKind.Monastery)
+                         && !(FishingAllowed(faction) && kind == BuildingKind.Harbor)
                         && !(IndustryOn && ForestryAllowed(faction) && world.Economies[faction - 1].Age >= 2 && kind == BuildingKind.Fletcher)
                         && !(ProcessingAvailable(faction) && (kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks))
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
@@ -104,7 +106,7 @@ namespace Rts.Simulation
                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                         && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
-                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= rules.MountainMaxBuildings) return;
+                    if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -117,6 +119,7 @@ namespace Rts.Simulation
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
+                         : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
                     if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
@@ -137,10 +140,10 @@ namespace Rts.Simulation
                     if (population >= PopCapFor(faction)) return;
                     if (c.ProducerId == 0)
                     {
-                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost || economy.AdvanceRemaining > 0) return;
+                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < VillagerFoodCostFor(faction) || economy.AdvanceRemaining > 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
-                        economy.Food = checked(economy.Food - rules.VillagerFoodCost);
-                        if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
+                        economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+                        if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
                         economy.Queued++;
                         return;
                     }
@@ -160,7 +163,7 @@ namespace Rts.Simulation
                         if (economy.Queued == 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
                         economy.Queued--;
-                        economy.Food = checked(economy.Food + rules.VillagerFoodCost);
+                        economy.Food = checked(economy.Food + VillagerFoodCostFor(faction));
                         if (economy.Queued == 0) economy.TrainRemaining = 0;
                         return;
                     }

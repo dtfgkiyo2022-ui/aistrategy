@@ -49,7 +49,7 @@ namespace Rts.Simulation
                     else caravanReason = CaravanStopReason.Normal;
                 }
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
-                    own ? b.Hp : 0, own ? HpOf(b.Kind, b.FactionId) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
+                    own ? b.Hp : 0, own ? HpOf(b.Kind, b.FactionId, b.OriginCell) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
                     own && (ProcessingOn || ForestryOn) ? b.InputSecondary : 0,
@@ -75,7 +75,7 @@ namespace Rts.Simulation
             }
             var cavalryMission = CavalryMissionFor(faction);
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
-                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, InfantryFoodFor(faction),
+                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction), InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
