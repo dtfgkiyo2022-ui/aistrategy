@@ -228,6 +228,11 @@ namespace Rts.UnityHost
                     scenario.Economy.Cavalry = true;
                     scenario.Economy.Bridge = true;
                     scenario.Economy.Academy = true;
+                    scenario.Economy.Cult = true;
+                    scenario.Economy.MonksEnabled = true; // the cult trains monks, so the monk rules come with it
+                    scenario.Economy.Mountain = true;
+                    scenario.Economy.FishingCiv = true;
+                    scenario.Economy.FishingEnabled = true; // the fishing civilisation needs the river fish
                 }
             }
             tickSeconds = 1f / scenario.TickRateHz;
