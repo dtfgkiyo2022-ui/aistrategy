@@ -111,9 +111,13 @@ namespace Rts.Simulation
                     if (inputs[i].Memory.Returning && !assessed[i].Returning) world.Armies[inputs[i].Army.Id - 1].AutoStartIds = world.Armies[inputs[i].Army.Id - 1].SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
                     inputs[i] = new ArmyDecisionInput(inputs[i].Army, inputs[i].Policy, inputs[i].IsReserveRole, assessed[i], inputs[i].Routes);
                 }
-                var allocations = world.Tick % 20 != 0 ? assessed : PolicyDecision.Allocate(observation, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], policies.Select(c => c.Order).ToArray(), out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
+                // The common offense policy remains unchanged. An academy that has finished a military or siege
+                // advantage asks that policy for an allocation on every tick, so its existing thresholds can fire a
+                // little earlier without adding a civilisation flag branch inside OffenseDecision.
+                bool academyOffenseTick = AcademyOffenseReady(f);
+                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(observation, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], policies.Select(c => c.Order).ToArray(), out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
                 var waitGoal = OffenseDecision.WaitGoal(observation, offenseRoutes);
-                OffenseDecision.Update(observation, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0,
+                OffenseDecision.Update(observation, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,

@@ -345,6 +345,35 @@ namespace Rts.Simulation
             return true;
         }
 
+        /// <summary>
+        /// Academy only: is there a gold point with a route from the core and no observed enemy near it? Used to stop
+        /// the academy's gold research when the gold line is lost; the shared gold-gathering rules do not use it.
+        /// </summary>
+        private bool HasUsableGoldSource(uint faction, uint nodeId = 0)
+        {
+            var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            int danger = world.Config.Economy.GoldDangerMeters;
+            long limit = checked(Fix64.FromInt(danger).Raw * Fix64.FromInt(danger).Raw);
+            for (int n = 0; n < world.Nodes.Length; n++)
+            {
+                var node = world.Nodes[n];
+                if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0 || nodeId != 0 && node.Definition.Id != nodeId) continue;
+                if (world.Map.SharedRoute(world.Map.Cell(core), node.Definition.Position).Length == 0) continue;
+                bool dangerFound = false;
+                foreach (int i in world.SoldierTraversal)
+                {
+                    var enemy = world.Soldiers[i];
+                    if (!enemy.Alive || enemy.Initial.FactionId == faction) continue;
+                    int cell = world.Map.Cell(enemy.Position);
+                    if (cell < 0 || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                    long dx = enemy.Position.X.Raw - node.Definition.Position.X.Raw, dz = enemy.Position.Z.Raw - node.Definition.Position.Z.Raw;
+                    if (checked(dx * dx + dz * dz) <= limit) { dangerFound = true; break; }
+                }
+                if (!dangerFound) return true;
+            }
+            return false;
+        }
+
         private int GoldNeeded(uint faction)
         {
             var rules = world.Config.Economy;
@@ -356,6 +385,8 @@ namespace Rts.Simulation
             else if (!SavingToAdvance(faction) && MonkPlanned(faction)) demand = rules.MonkGoldCost;
             if (e.Civ == CivKind.Academy && AcademyAllowed(faction))
             {
+                // A lost or unreachable gold line ends the academy's gold demand; nobody is sent to a dead line.
+                if (!HasUsableGoldSource(faction)) return 0;
                 var next = AcademyNextResearch(faction);
                 if (next != 0) demand += AcademyGoldCost(next);
             }
@@ -370,8 +401,8 @@ namespace Rts.Simulation
         private TechKind AcademyNextResearch(uint faction)
         {
             if (!AcademyAllowed(faction)) return 0;
-            if (TechOpen(faction, TechKind.Tools)) return TechKind.Tools;
-            if (TechOpen(faction, TechKind.Carts)) return TechKind.Carts;
+            foreach (var tech in AcademyResearchOrderFor(faction))
+                if (AcademyTechOpen(faction, tech) && !BeingResearched(faction, tech)) return tech;
             return 0;
         }
 

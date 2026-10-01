@@ -93,6 +93,28 @@ namespace Rts.Core.Tests
             => int.Parse(DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value)["Economy[1].Gold"],
                 System.Globalization.CultureInfo.InvariantCulture);
 
+        private static Dictionary<string, string> Fields(Battle sim)
+            => DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(p => p.Key, p => p.Value);
+
+        private static int Stock(Battle sim, ResourceKind kind)
+        {
+            string name = kind.ToString();
+            return int.Parse(Fields(sim)["Economy[1]." + name], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static void SetStock(Battle sim, ResourceKind kind, int amount)
+        {
+            var addStock = typeof(Battle).GetMethod("AddStock", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            addStock.Invoke(sim, new object[] { 1u, kind, amount - Stock(sim, kind) });
+        }
+
+        private static void Advance(Battle sim, CommandGateway gateway, ScenarioDefinition scenario, ref ulong sequence)
+        {
+            int ticks = sim.Capture(1).Economy.Age == 1 ? scenario.Economy.Age2Ticks : scenario.Economy.Age3Ticks;
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Academy));
+            Steps(gateway, sim, ticks + 2);
+        }
+
         private static long DistanceSquared(SimPoint a, SimPoint b)
         {
             long dx = a.X.Raw - b.X.Raw, dz = a.Z.Raw - b.Z.Raw;
@@ -183,6 +205,72 @@ namespace Rts.Core.Tests
             Assert.That(academy, Is.Not.Null);
             Assert.That(academy.Complete, Is.True);
             Assert.That(academy.Researching == TechKind.Tools || (economy.Techs & (1UL << ((int)TechKind.Tools - 1))) != 0, Is.True);
+        }
+
+        [Test]
+        public void AcademyResearchesSecondAndThirdAgeTechsWithTheirEffects()
+        {
+            var state = AtAcademyAge();
+            Advance(state.sim, state.gateway, state.scenario, ref state.sequence);
+            Assert.That(state.sim.Capture(1).Economy.Age, Is.EqualTo(2));
+            uint academy = PlaceAndBuild(state.scenario, state.sim, state.gateway, BuildingKind.Academy, ref state.sequence);
+            SetStock(state.sim, ResourceKind.Gold, 1000);
+
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Weapons));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(Fields(state.sim)["Buildings[" + academy + "].Researching"], Is.EqualTo(((byte)TechKind.Weapons).ToString()));
+            Steps(state.gateway, state.sim, 301);
+            Assert.That(long.Parse(Fields(state.sim)["Economy[1].Techs"], System.Globalization.CultureInfo.InvariantCulture) & 1L, Is.Not.EqualTo(0));
+
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Armour));
+            Steps(state.gateway, state.sim, 1); Steps(state.gateway, state.sim, 301);
+            Assert.That(long.Parse(Fields(state.sim)["Economy[1].Techs"], System.Globalization.CultureInfo.InvariantCulture) & (1L << ((int)TechKind.Armour - 1)), Is.Not.EqualTo(0));
+
+            Advance(state.sim, state.gateway, state.scenario, ref state.sequence);
+            Assert.That(state.sim.Capture(1).Economy.Age, Is.EqualTo(3));
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Siegecraft));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(Fields(state.sim)["Buildings[" + academy + "].Researching"], Is.EqualTo(((byte)TechKind.Siegecraft).ToString()));
+            Steps(state.gateway, state.sim, 351);
+            Assert.That(long.Parse(Fields(state.sim)["Economy[1].Techs"], System.Globalization.CultureInfo.InvariantCulture) & (1L << ((int)TechKind.Siegecraft - 1)), Is.Not.EqualTo(0));
+        }
+
+        [Test]
+        public void AcademyResearchLeavesTheAgeAndBasicDefenceBudget()
+        {
+            var state = AtAcademyAge();
+            uint academy = PlaceAndBuild(state.scenario, state.sim, state.gateway, BuildingKind.Academy, ref state.sequence);
+            SetStock(state.sim, ResourceKind.Food, 679);
+            SetStock(state.sim, ResourceKind.Wood, 324);
+            SetStock(state.sim, ResourceKind.Gold, 100);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, academy, TechKind.Tools));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(Fields(state.sim)["Buildings[" + academy + "].Researching"], Is.EqualTo("0"));
+            Assert.That(state.sim.Capture(1).Economy.Age, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AcademyStopsAtLostGoldButBlacksmithAndAgeAdvanceContinue()
+        {
+            var scenario = AcademyScenario(true);
+            scenario.ResourceNodes = scenario.ResourceNodes.Where(n => n.Kind != ResourceKind.Gold).ToArray();
+            var sim = new Battle(scenario); var gateway = new CommandGateway(sim); ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Academy));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2);
+            uint academy = PlaceAndBuild(scenario, sim, gateway, BuildingKind.Academy, ref sequence);
+            SetStock(sim, ResourceKind.Gold, 0);
+            gateway.SubmitEconomy(EconomyCommand.Research(1, ++sequence, academy, TechKind.Tools));
+            Steps(gateway, sim, 1);
+            Assert.That(Fields(sim)["Buildings[" + academy + "].Researching"], Is.EqualTo("0"));
+            uint blacksmith = PlaceAndBuild(scenario, sim, gateway, BuildingKind.Blacksmith, ref sequence);
+            gateway.SubmitEconomy(EconomyCommand.Research(1, ++sequence, blacksmith, TechKind.Weapons));
+            Steps(gateway, sim, 1);
+            Assert.That(Fields(sim)["Buildings[" + blacksmith + "].Researching"], Is.EqualTo(((byte)TechKind.Weapons).ToString()));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Academy));
+            Steps(gateway, sim, scenario.Economy.Age2Ticks + 2);
+            Assert.That(sim.Capture(1).Economy.Age, Is.EqualTo(2));
         }
 
         /// <summary>
