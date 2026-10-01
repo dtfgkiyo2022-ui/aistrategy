@@ -32,10 +32,10 @@ namespace Rts.Simulation
                 var plan = PlanOf(faction);
                 DecideAdvance(faction);
                 if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    rules.VillagerFoodCost, villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
+                    VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
                 {
-                    economy.Food = checked(economy.Food - rules.VillagerFoodCost);
-                    if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
+                    economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+                    if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
                     economy.Queued++;
                 }
                 ResumeUnbuilt(faction);
@@ -213,7 +213,7 @@ namespace Rts.Simulation
                 if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
                 SpawnVillager(faction);
                 economy.Queued--;
-                economy.TrainRemaining = economy.Queued > 0 ? rules.VillagerTrainTicks : 0;
+                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction) : 0;
             }
         }
 
@@ -538,7 +538,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             return EconomyDecision.PlanFor(IndustryOn ? world.Economies[faction - 1].Policy : EconomyPolicy.Balanced,
-                rules.AutoVillagerTarget, rules.AutoInfantryQueue);
+                AutoVillagerTargetFor(faction), rules.AutoInfantryQueue);
         }
 
         private CoreState OwnCore(uint faction) => world.Cores[world.Factions[faction - 1].CoreId - 1];

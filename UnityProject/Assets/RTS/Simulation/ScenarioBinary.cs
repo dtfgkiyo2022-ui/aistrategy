@@ -36,6 +36,9 @@ namespace Rts.Simulation
         private const int MountainExtensionVersion = 2;
         private const int MountainExtensionV1DataLength = 12 * sizeof(int);
         private const int MountainExtensionDataLength = 22 * sizeof(int);
+        private const int MetropolisExtensionId = 7;
+        private const int MetropolisExtensionVersion = 1;
+        private const int MetropolisExtensionDataLength = 5 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -48,7 +51,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(AcademyExtensionId, AcademyExtensionVersion, AcademyExtensionDataLength),
             new ExtensionRegistration(CultExtensionId, CultExtensionVersion, CultExtensionDataLength),
             new ExtensionRegistration(FishingCivExtensionId, FishingCivExtensionVersion, FishingCivExtensionDataLength),
-            new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength)
+            new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
+            new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -541,6 +545,7 @@ namespace Rts.Simulation
                 else if (id == CultExtensionId) ReadCultExtension(extension, c.Economy);
                 else if (id == FishingCivExtensionId) ReadFishingCivExtension(extension, c.Economy);
                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
+                else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -576,6 +581,7 @@ namespace Rts.Simulation
             // ID 3 is feature-owned data.  A scenario that turns the cult flag off must
             // not retain a stale cult extension from a previous encode/decode round trip.
             extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
+            extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -602,7 +608,36 @@ namespace Rts.Simulation
                 }
             }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
+            bool hasMetropolis = false;
+            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
+            if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateMetropolisExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Metropolis ? 1 : 0);
+                writer.Write(e.GrandHouseSizeCells); writer.Write(e.GrandHouseWoodCost);
+                writer.Write(e.GrandHouseWork); writer.Write(e.GrandHouseHp);
+                return new ScenarioExtensionData { Id = MetropolisExtensionId, Version = MetropolisExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadMetropolisExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid metropolis flag.");
+                e.Metropolis = enabled != 0;
+                e.GrandHouseSizeCells = reader.ReadInt32(); e.GrandHouseWoodCost = reader.ReadInt32();
+                e.GrandHouseWork = reader.ReadInt32(); e.GrandHouseHp = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing metropolis extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateAcademyExtension(EconomyRules e)

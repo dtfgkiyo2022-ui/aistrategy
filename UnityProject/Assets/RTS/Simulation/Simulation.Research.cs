@@ -432,7 +432,7 @@ namespace Rts.Simulation
             int foodReserve = ageFood + (e.Civ == CivKind.Primitive ? 0 : rules.MarketFoodFloor);
             int woodReserve = ageWood;
             int goldReserve = ageGold;
-            if (LivingVillagers(faction) + e.Queued < rules.AutoVillagerTarget) foodReserve = checked(foodReserve + rules.VillagerFoodCost);
+            if (LivingVillagers(faction) + e.Queued < AutoVillagerTargetFor(faction)) foodReserve = checked(foodReserve + VillagerFoodCostFor(faction));
             if (CompleteBarracks(faction) && LivingSoldiers(faction) == 0)
             {
                 foodReserve = checked(foodReserve + InfantryFoodFor(faction));
