@@ -37,6 +37,13 @@ namespace Rts.Simulation
             AddStock(faction, give, -rules.TradeLot);
             int returned = take == ResourceKind.Gems ? rules.GemsTradeReturn
                 : rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0);
+            if (take != ResourceKind.Gems && HasTech(faction, MetropolisTech.MarketFestivity))
+            {
+                int steps = Math.Min(rules.MetropolisMarketMaxBonusPermille / rules.MetropolisMarketBonusPermille,
+                    LivingVillagers(faction) / rules.MetropolisMarketVillagerStep);
+                int bonus = checked(steps * rules.MetropolisMarketBonusPermille);
+                returned = checked(returned * (1000 + bonus) / 1000);
+            }
             AddStock(faction, take, returned);
         }
 

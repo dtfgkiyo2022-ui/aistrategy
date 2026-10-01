@@ -39,8 +39,10 @@ namespace Rts.Simulation
         private const int MountainExtensionV1DataLength = 12 * sizeof(int);
         private const int MountainExtensionDataLength = 22 * sizeof(int);
         private const int MetropolisExtensionId = 7;
-        private const int MetropolisExtensionVersion = 1;
-        private const int MetropolisExtensionDataLength = 5 * sizeof(int);
+        private const int MetropolisExtensionV1 = 1;
+        private const int MetropolisExtensionVersion = 2;
+        private const int MetropolisExtensionV1DataLength = 5 * sizeof(int);
+        private const int MetropolisExtensionDataLength = 16 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -538,8 +540,10 @@ namespace Rts.Simulation
                     && dataLength == MountainExtensionV1DataLength;
                 bool oldFishing = id == FishingCivExtensionId && featureVersion == FishingCivExtensionV1
                     && dataLength == FishingCivExtensionV1DataLength;
-                if ((!oldCult && !oldMountain && !oldFishing && featureVersion != registration.Version)
-                    || (!oldCult && !oldMountain && !oldFishing && dataLength != registration.DataLength) || dataLength < 0
+                bool oldMetropolis = id == MetropolisExtensionId && featureVersion == MetropolisExtensionV1
+                    && dataLength == MetropolisExtensionV1DataLength;
+                if ((!oldCult && !oldMountain && !oldFishing && !oldMetropolis && featureVersion != registration.Version)
+                    || (!oldCult && !oldMountain && !oldFishing && !oldMetropolis && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -619,7 +623,12 @@ namespace Rts.Simulation
             }
             if (c.Economy.Mountain && !hasMountain) extensions.Add(CreateMountainExtension(c.Economy));
             bool hasMetropolis = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == MetropolisExtensionId) hasMetropolis = true;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != MetropolisExtensionId) continue;
+                hasMetropolis = true;
+                if (extensions[i].Version == MetropolisExtensionV1) extensions[i] = CreateMetropolisExtension(c.Economy);
+            }
             if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
             return extensions.ToArray();
         }
@@ -632,6 +641,10 @@ namespace Rts.Simulation
                 writer.Write(e.Metropolis ? 1 : 0);
                 writer.Write(e.GrandHouseSizeCells); writer.Write(e.GrandHouseWoodCost);
                 writer.Write(e.GrandHouseWork); writer.Write(e.GrandHouseHp);
+                writer.Write(e.MetropolisMarketFoodCost); writer.Write(e.MetropolisMarketWoodCost); writer.Write(e.MetropolisMarketTicks);
+                writer.Write(e.MetropolisMilitiaFoodCost); writer.Write(e.MetropolisMilitiaWoodCost); writer.Write(e.MetropolisMilitiaTicks);
+                writer.Write(e.MetropolisMarketVillagerStep); writer.Write(e.MetropolisMarketBonusPermille); writer.Write(e.MetropolisMarketMaxBonusPermille);
+                writer.Write(e.MetropolisMilitiaDamage); writer.Write(e.MetropolisMilitiaCoreRadius);
                 return new ScenarioExtensionData { Id = MetropolisExtensionId, Version = MetropolisExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -646,6 +659,13 @@ namespace Rts.Simulation
                 e.Metropolis = enabled != 0;
                 e.GrandHouseSizeCells = reader.ReadInt32(); e.GrandHouseWoodCost = reader.ReadInt32();
                 e.GrandHouseWork = reader.ReadInt32(); e.GrandHouseHp = reader.ReadInt32();
+                if (extension.Version >= MetropolisExtensionVersion)
+                {
+                    e.MetropolisMarketFoodCost = reader.ReadInt32(); e.MetropolisMarketWoodCost = reader.ReadInt32(); e.MetropolisMarketTicks = reader.ReadInt32();
+                    e.MetropolisMilitiaFoodCost = reader.ReadInt32(); e.MetropolisMilitiaWoodCost = reader.ReadInt32(); e.MetropolisMilitiaTicks = reader.ReadInt32();
+                    e.MetropolisMarketVillagerStep = reader.ReadInt32(); e.MetropolisMarketBonusPermille = reader.ReadInt32(); e.MetropolisMarketMaxBonusPermille = reader.ReadInt32();
+                    e.MetropolisMilitiaDamage = reader.ReadInt32(); e.MetropolisMilitiaCoreRadius = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing metropolis extension data.");
             }
         }

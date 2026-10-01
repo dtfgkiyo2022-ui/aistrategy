@@ -104,6 +104,16 @@ namespace Rts.Simulation
             return MetropolisAllowed(faction) ? checked(rules.AutoVillagerTarget * 3 / 2) : rules.AutoVillagerTarget;
         }
 
+        /// <summary>V3-17 #2: a researched metropolis villager answers a nearby raid with a small deterministic blow.</summary>
+        private void MetropolisVillagerCounterattack(uint faction, int villagerIndex, int attackerIndex)
+        {
+            if (!HasTech(faction, MetropolisTech.CitizenMilitia)) return;
+            var rules = world.Config.Economy;
+            if (!InRange(world.Villagers[villagerIndex].Position, OwnCore(faction).Definition.Position,
+                    Fix64.FromInt(rules.MetropolisMilitiaCoreRadius))) return;
+            soldierDamage[attackerIndex] = checked(soldierDamage[attackerIndex] + rules.MetropolisMilitiaDamage);
+        }
+
         /// <summary>Metallurgy (27): an infantry trained now is born forged - more HP and damage. Soldiers already out stay as they are.</summary>
         private void ForgeIfMetallurgy(uint faction, int index)
         {
