@@ -489,7 +489,10 @@ namespace Rts.Simulation
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
-                && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0),
+                && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
+                && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
+                && e.DriedFishFoodCost >= 0 && e.DriedFishWoodCost >= 0 && e.DriedFishTicks > 0
+                && e.FishingNetCarryBonusPermille >= 0 && e.DriedFishRegrowIntervalPermille > 0 && e.DriedFishRegrowIntervalPermille <= 1000),
                 "Fishing civilisation requires valid age, fishing and harbour rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.Cavalry || e.Ages, "Cavalry requires ages.");
@@ -731,7 +734,10 @@ namespace Rts.Simulation
                  MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
                  MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
                  FishingCiv = e.FishingCiv, HarborSizeCells = e.HarborSizeCells, HarborWoodCost = e.HarborWoodCost,
-                 HarborWork = e.HarborWork, HarborHp = e.HarborHp,
+                  HarborWork = e.HarborWork, HarborHp = e.HarborHp,
+                  FishingNetFoodCost = e.FishingNetFoodCost, FishingNetWoodCost = e.FishingNetWoodCost, FishingNetTicks = e.FishingNetTicks,
+                  DriedFishFoodCost = e.DriedFishFoodCost, DriedFishWoodCost = e.DriedFishWoodCost, DriedFishTicks = e.DriedFishTicks,
+                  FishingNetCarryBonusPermille = e.FishingNetCarryBonusPermille, DriedFishRegrowIntervalPermille = e.DriedFishRegrowIntervalPermille,
                  MountainDeepShaftFoodCost = e.MountainDeepShaftFoodCost, MountainDeepShaftWoodCost = e.MountainDeepShaftWoodCost,
                  MountainDeepShaftTicks = e.MountainDeepShaftTicks, MountainFortFoodCost = e.MountainFortFoodCost,
                  MountainFortWoodCost = e.MountainFortWoodCost, MountainFortTicks = e.MountainFortTicks,
