@@ -25,6 +25,8 @@ namespace Rts.UnityHost
         private CommandGateway gateway;
         private LiveCommandPort port;
         private PresetController enemy;
+        // The opponent's side is fixed when the match starts; switching the viewed side must not hand it the other frame.
+        private uint enemyFactionId = 2;
         private float accumulated;
         private int speedMultiplier = 1;
         private bool paused;
@@ -218,7 +220,8 @@ namespace Rts.UnityHost
             gateway = new CommandGateway(simulation, provider, null,
                 external == null ? null : AutonomousPollSchedule.OnChange(600), external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
-            enemy = PolicyPresets.CreateController(enemyPreset, 3 - viewFactionId, gateway);
+            enemyFactionId = 3 - viewFactionId;
+            enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
@@ -257,7 +260,7 @@ namespace Rts.UnityHost
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
             if (frame.Result.HasEnded) return;
-            enemy.Step(simulation.Capture(3 - viewFactionId));
+            enemy.Step(simulation.Capture(enemyFactionId));
         }
 
         private const string LanguageKey = "rts.language.japanese";
