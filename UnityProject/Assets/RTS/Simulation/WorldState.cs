@@ -505,6 +505,14 @@ namespace Rts.Simulation
                 && e.DriedFishFoodCost >= 0 && e.DriedFishWoodCost >= 0 && e.DriedFishTicks > 0
                 && e.FishingNetCarryBonusPermille >= 0 && e.DriedFishRegrowIntervalPermille > 0 && e.DriedFishRegrowIntervalPermille <= 1000),
                 "Fishing civilisation requires valid age, fishing and harbour rules.");
+            Require(!e.Metropolis || (e.Enabled && e.Ages && e.GrandHouseSizeCells > 0 && e.GrandHouseSizeCells <= 8
+                && e.GrandHouseWoodCost >= 0 && e.GrandHouseWork > 0 && e.GrandHouseHp > 0
+                && e.MetropolisMarketFoodCost >= 0 && e.MetropolisMarketWoodCost >= 0 && e.MetropolisMarketTicks > 0
+                && e.MetropolisMilitiaFoodCost >= 0 && e.MetropolisMilitiaWoodCost >= 0 && e.MetropolisMilitiaTicks > 0
+                && e.MetropolisMarketVillagerStep > 0 && e.MetropolisMarketBonusPermille > 0
+                && e.MetropolisMarketMaxBonusPermille >= e.MetropolisMarketBonusPermille
+                && e.MetropolisMilitiaDamage >= 0 && e.MetropolisMilitiaCoreRadius >= 0),
+                "Metropolis requires valid grand-house and research rules.");
             Require(!e.Forestry || (e.Ages && e.Industry), "Forestry requires ages and industry.");
             Require(!e.Cavalry || e.Ages, "Cavalry requires ages.");
             if (e.Cavalry)
@@ -570,9 +578,6 @@ namespace Rts.Simulation
                  && e.TollgateGateDefenceHpPermille >= 1000 && e.TollgateGateDefenceDamageReductionPermille >= 0
                  && e.TollgateGateDefenceDamageReductionPermille <= 1000 && e.TollgateGateNetworkMaxBuildingsBonus >= 0),
                  "Tollgate requires valid age and tollgate rules.");
-            Require(!e.Metropolis || (e.Enabled && e.Ages && e.GrandHouseSizeCells > 0 && e.GrandHouseSizeCells <= 8
-                && e.GrandHouseWoodCost >= 0 && e.GrandHouseWork > 0 && e.GrandHouseHp > 0),
-                "Metropolis requires valid age and grand-house rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
             // V3-4: terrain comes with the industry map, and every cell that is not plain must be blocked.
@@ -782,7 +787,12 @@ namespace Rts.Simulation
                  MountainDeepShaftIntervalPermille = e.MountainDeepShaftIntervalPermille,
                  MountainDeepShaftMaxBuildingsBonus = e.MountainDeepShaftMaxBuildingsBonus,
                  MountainFortHpPermille = e.MountainFortHpPermille, MountainFortRangeBonus = e.MountainFortRangeBonus,
-                 GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
+                  GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
+                  MetropolisMarketFoodCost = e.MetropolisMarketFoodCost, MetropolisMarketWoodCost = e.MetropolisMarketWoodCost, MetropolisMarketTicks = e.MetropolisMarketTicks,
+                  MetropolisMilitiaFoodCost = e.MetropolisMilitiaFoodCost, MetropolisMilitiaWoodCost = e.MetropolisMilitiaWoodCost, MetropolisMilitiaTicks = e.MetropolisMilitiaTicks,
+                  MetropolisMarketVillagerStep = e.MetropolisMarketVillagerStep, MetropolisMarketBonusPermille = e.MetropolisMarketBonusPermille,
+                  MetropolisMarketMaxBonusPermille = e.MetropolisMarketMaxBonusPermille, MetropolisMilitiaDamage = e.MetropolisMilitiaDamage,
+                  MetropolisMilitiaCoreRadius = e.MetropolisMilitiaCoreRadius,
                    Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
                    TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
                    TollgateMaxBuildings = e.TollgateMaxBuildings, TollgateFeeRadiusMeters = e.TollgateFeeRadiusMeters,

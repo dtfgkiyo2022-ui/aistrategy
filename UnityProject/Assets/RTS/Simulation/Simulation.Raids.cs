@@ -76,6 +76,7 @@ namespace Rts.Simulation
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) return;
                 villagerDamage[i] = checked(villagerDamage[i] + SanctuaryDamage(faction, s.Parameters.Damage));
+                MetropolisVillagerCounterattack(v.FactionId, i, (int)(s.Initial.Id - 1));
             }
             else if (s.TargetKind == TargetBelt)
             {

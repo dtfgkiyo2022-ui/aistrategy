@@ -117,6 +117,13 @@ namespace Rts.Contracts
         public const TechKind GateNetwork = (TechKind)23;
     }
 
+    /// <summary>V3-17 #2: metropolis civilisation research values live outside <see cref="TechKind"/>.</summary>
+    public static class MetropolisTech
+    {
+        public const TechKind MarketFestivity = (TechKind)24;
+        public const TechKind CitizenMilitia = (TechKind)25;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 

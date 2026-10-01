@@ -211,6 +211,11 @@ namespace Rts.Simulation
         public int TollgateGateDefenceHpPermille = 1500, TollgateGateDefenceDamageReductionPermille = 200, TollgateGateNetworkMaxBuildingsBonus = 2;
         /// <summary>V3-17 #1 provisional grand-house values; one completed grand house adds three ordinary house slots.</summary>
         public int GrandHouseSizeCells = 3, GrandHouseWoodCost = 150, GrandHouseWork = 300, GrandHouseHp = 500;
+        /// <summary>V3-17 #2 provisional metropolis research values. Both researches are performed at a grand house.</summary>
+        public int MetropolisMarketFoodCost = 200, MetropolisMarketWoodCost = 150, MetropolisMarketTicks = 500;
+        public int MetropolisMilitiaFoodCost = 300, MetropolisMilitiaWoodCost = 200, MetropolisMilitiaTicks = 700;
+        public int MetropolisMarketVillagerStep = 10, MetropolisMarketBonusPermille = 20, MetropolisMarketMaxBonusPermille = 100;
+        public int MetropolisMilitiaDamage = 3, MetropolisMilitiaCoreRadius = 12;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

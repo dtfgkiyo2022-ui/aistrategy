@@ -426,7 +426,7 @@ namespace Rts.Simulation
         private void AssignBuilders(ref BuildingState building)
         {
             var spot = world.Map.Center(building.WorkCell);
-            for (int n = 0; n < world.Config.Economy.Builders; n++)
+            for (int n = 0; n < BuildersFor(building.FactionId); n++)
             {
                 int best = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
@@ -441,6 +441,10 @@ namespace Rts.Simulation
                 world.Villagers[best].BuildingId = building.Id;
             }
         }
+
+        /// <summary>V3-17 #2: the metropolis sends two additional villagers to every construction site.</summary>
+        private int BuildersFor(uint faction)
+            => checked(world.Config.Economy.Builders + (MetropolisAllowed(faction) ? 2 : 0));
 
         /// <summary>Economy step: builders arrive, work adds up, and finished barracks train infantry.</summary>
         private void AdvanceBuildings()
