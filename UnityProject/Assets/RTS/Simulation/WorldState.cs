@@ -529,7 +529,10 @@ namespace Rts.Simulation
                 "Academy requires valid age and academy rules.");
             Require(!e.Cult || (e.Enabled && e.Ages && e.MonasterySizeCells > 0 && e.MonasterySizeCells <= 8
                 && e.MonasteryWoodCost >= 0 && e.MonasteryWork > 0 && e.MonasteryHp > 0
-                && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0),
+                && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0
+                && e.SermonFoodCost >= 0 && e.SermonWoodCost >= 0 && e.SermonTicks > 0
+                && e.MartyrBlessingFoodCost >= 0 && e.MartyrBlessingWoodCost >= 0 && e.MartyrBlessingTicks > 0
+                && e.MartyrBlessingHpPermille >= 1000),
                 "Cult requires valid age and monastery rules.");
             Require(!e.Mountain || (e.Enabled && e.Ages && e.Industry && e.MountainSizeCells > 0 && e.MountainSizeCells <= 8
                  && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
@@ -731,8 +734,11 @@ namespace Rts.Simulation
                  AcademyToolsFoodCost = e.AcademyToolsFoodCost, AcademyToolsWoodCost = e.AcademyToolsWoodCost, AcademyToolsGoldCost = e.AcademyToolsGoldCost,
                  AcademyToolsTicks = e.AcademyToolsTicks, AcademyCartsFoodCost = e.AcademyCartsFoodCost, AcademyCartsWoodCost = e.AcademyCartsWoodCost,
                  AcademyCartsGoldCost = e.AcademyCartsGoldCost, AcademyCartsTicks = e.AcademyCartsTicks,
-                 MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
-                 MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
+                  MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
+                  MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
+                  SermonFoodCost = e.SermonFoodCost, SermonWoodCost = e.SermonWoodCost, SermonTicks = e.SermonTicks,
+                  MartyrBlessingFoodCost = e.MartyrBlessingFoodCost, MartyrBlessingWoodCost = e.MartyrBlessingWoodCost,
+                  MartyrBlessingTicks = e.MartyrBlessingTicks, MartyrBlessingHpPermille = e.MartyrBlessingHpPermille,
                  Mountain = e.Mountain, MountainSizeCells = e.MountainSizeCells, MountainWoodCost = e.MountainWoodCost,
                   MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
                  MountainIntervalStepTicks = e.MountainIntervalStepTicks, MountainMinIntervalTicks = e.MountainMinIntervalTicks,

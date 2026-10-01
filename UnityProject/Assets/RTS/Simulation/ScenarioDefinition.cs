@@ -180,6 +180,10 @@ namespace Rts.Simulation
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
+        /// <summary>V3-13 #3 provisional cult research prices and effects. These are stored in extension ID 3 version 2.</summary>
+        public int SermonFoodCost = 150, SermonWoodCost = 100, SermonTicks = 400;
+        public int MartyrBlessingFoodCost = 200, MartyrBlessingWoodCost = 150, MartyrBlessingTicks = 500;
+        public int MartyrBlessingHpPermille = 1500;
         /// <summary>V3-15 #1 provisional mountain values; a mine shaft uses mountain cells, not a resource node.</summary>
         public bool Mountain;
         public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;

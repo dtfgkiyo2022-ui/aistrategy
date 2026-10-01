@@ -103,6 +103,13 @@ namespace Rts.Contracts
         public const TechKind DriedFish = (TechKind)17;
     }
 
+    /// <summary>V3-13 #3: cult civilisation research values live outside <see cref="TechKind"/>.</summary>
+    public static class CultTech
+    {
+        public const TechKind Sermon = (TechKind)20;
+        public const TechKind MartyrBlessing = (TechKind)21;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 
