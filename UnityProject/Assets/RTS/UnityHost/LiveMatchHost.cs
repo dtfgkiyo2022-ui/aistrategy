@@ -233,6 +233,8 @@ namespace Rts.UnityHost
                     scenario.Economy.Mountain = true;
                     scenario.Economy.FishingCiv = true;
                     scenario.Economy.FishingEnabled = true; // the fishing civilisation needs the river fish
+                    scenario.Economy.Tollgate = true;
+                    scenario.Economy.Metropolis = true;
                 }
             }
             tickSeconds = 1f / scenario.TickRateHz;
