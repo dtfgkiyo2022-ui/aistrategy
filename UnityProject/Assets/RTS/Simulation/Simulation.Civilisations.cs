@@ -61,6 +61,8 @@ namespace Rts.Simulation
                 (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
+            new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
                 (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
             new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
@@ -142,9 +144,21 @@ namespace Rts.Simulation
 
         private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
-        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// Mountain's choice score is based on the first legal shaft edges the faction could have known at
+        /// civilisation choice. A site with several observed mountain neighbours is worth several edge units;
+        /// this keeps a compact, high-value cliff from being treated like a single isolated mountain cell while
+        /// still returning the same small 0/2/3 score scale used by the registration table.
+        /// </summary>
+        private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            int edgeUnits = s.CountUsableMountainShaftEdgeUnits(faction, core);
+            return edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
+        }
 
         private static int FishingScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {

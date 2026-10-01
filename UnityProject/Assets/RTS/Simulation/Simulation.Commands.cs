@@ -320,7 +320,8 @@ namespace Rts.Simulation
                 var radius = o.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius :
                     o.Goal.Kind == GoalKind.Core && o.Kind == PolicyKind.Focus ? world.Config.Rules.CoreRadius + world.Soldiers[soldiers[0] - 1].Parameters.Range : Fix64.FromInt(4);
                 {
-                    var path = world.Map.FindPath(world.Map.Cell(world.Soldiers[soldiers[0] - 1].Position), goal);
+                    var path = world.Map.FindPath(world.Map.Cell(world.Soldiers[soldiers[0] - 1].Position), goal,
+                        world.Soldiers[soldiers[0] - 1].Initial.FactionId);
                     if (path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), goal, radius)) return ReasonCode.NoPath;
                 }
             }

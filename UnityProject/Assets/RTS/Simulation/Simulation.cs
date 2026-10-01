@@ -32,6 +32,8 @@ namespace Rts.Simulation
             this.measure = measure;
             world = new WorldState(scenario);
             world.Map.Measure = measure;
+            // Only a map with the tollgate rules gets the faction overlay; every other map keeps the plain terrain path.
+            if (TollgateOn) { world.Map.FactionPassability = IsPassableForFaction; RefreshTollgateOwners(); }
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
@@ -77,6 +79,8 @@ namespace Rts.Simulation
             measure?.Invoke(name, true);
             try { action(); }
             finally { measure?.Invoke(name, false); }
+            // A phase may finish, destroy or remove a tollgate; the faction overlay follows at once (tollgate maps only).
+            if (TollgateOn) RefreshTollgateOwners();
             if (PhaseHashObserver != null)
             {
                 phaseOrdinal++;
@@ -300,7 +304,7 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 var s = world.Soldiers[i];
-                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance)) : s.Position;
+                nextPositions[i] = s.Alive ? world.Map.ClipMove(s.Position, FixMath.MoveTowards(s.Position, s.MoveGoal, s.StepDistance), s.Initial.FactionId) : s.Position;
             }
             foreach (int i in world.SoldierTraversal)
             {

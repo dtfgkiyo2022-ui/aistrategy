@@ -201,10 +201,10 @@ namespace Rts.Tests.EditMode
             var s=WeekTwoScenario.Create(); var a=new Battle(s); var b=new Battle(s);
             var map=(GridMap)World(b).GetType().GetField("Map",Hidden).GetValue(World(b));
             var cache=(System.Collections.IDictionary)typeof(GridMap).GetField("routes",Hidden).GetValue(map);
-            var order=(Queue<int>)typeof(GridMap).GetField("routeOrder",Hidden).GetValue(map);
+            var order=typeof(GridMap).GetField("routeOrder",Hidden).GetValue(map); var clearOrder=order.GetType().GetMethod("Clear");
             for(int t=1;t<=1200;t++)
             {
-                cache.Clear(); order.Clear();
+                cache.Clear(); clearOrder.Invoke(order,null);
                 a.Step(t,Array.Empty<ScheduledInput>()); b.Step(t,Array.Empty<ScheduledInput>());
                 CommandTestInput.AssertCanonicalEqual(a.CaptureDiagnostic(),b.CaptureDiagnostic(),"tick="+t);
             }

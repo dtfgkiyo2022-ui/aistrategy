@@ -553,6 +553,9 @@ namespace Rts.Simulation
                  && e.MountainDeepShaftMaxBuildingsBonus >= 0
                  && e.MountainFortHpPermille >= 1000 && e.MountainFortRangeBonus >= 0),
                 "Mountain requires valid age, industry and mine-shaft rules.");
+            Require(!e.Tollgate || (e.Enabled && e.Ages && e.TollgateLengthCells == 2
+                && e.TollgateWoodCost >= 0 && e.TollgateStoneCost >= 0 && e.TollgateWork > 0 && e.TollgateHp > 0
+                && e.TollgateMaxBuildings > 0), "Tollgate requires valid age and tollgate rules.");
             Require(!e.Metropolis || (e.Enabled && e.Ages && e.GrandHouseSizeCells > 0 && e.GrandHouseSizeCells <= 8
                 && e.GrandHouseWoodCost >= 0 && e.GrandHouseWork > 0 && e.GrandHouseHp > 0),
                 "Metropolis requires valid age and grand-house rules.");
@@ -766,6 +769,9 @@ namespace Rts.Simulation
                  MountainDeepShaftMaxBuildingsBonus = e.MountainDeepShaftMaxBuildingsBonus,
                  MountainFortHpPermille = e.MountainFortHpPermille, MountainFortRangeBonus = e.MountainFortRangeBonus,
                  GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
+                  Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
+                  TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
+                  TollgateMaxBuildings = e.TollgateMaxBuildings,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,

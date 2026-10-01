@@ -63,7 +63,7 @@ namespace Rts.Simulation
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn || MountainOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || MasonryOn || CaravanOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
@@ -77,6 +77,11 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.Bridge)
                     {
                         TryPlaceBridge(faction, c);
+                        return;
+                    }
+                    if (kind == BuildingKind.Tollgate)
+                    {
+                        TryPlaceTollgate(faction, c);
                         return;
                     }
                     if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))

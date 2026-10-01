@@ -199,6 +199,10 @@ namespace Rts.Simulation
         public int MountainFortFoodCost = 400, MountainFortWoodCost = 250, MountainFortTicks = 800;
         public int MountainDeepShaftIntervalPermille = 667, MountainDeepShaftMaxBuildingsBonus = 1;
         public int MountainFortHpPermille = 1500, MountainFortRangeBonus = 2;
+        /// <summary>V3-16 #1: a completed tollgate is passable to its own faction only.</summary>
+        public bool Tollgate;
+        public int TollgateLengthCells = 2, TollgateWoodCost = 80, TollgateStoneCost = 40, TollgateWork = 250, TollgateHp = 600;
+        public int TollgateMaxBuildings = 3;
         /// <summary>V3-17 #1 provisional grand-house values; one completed grand house adds three ordinary house slots.</summary>
         public int GrandHouseSizeCells = 3, GrandHouseWoodCost = 150, GrandHouseWork = 300, GrandHouseHp = 500;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>

@@ -164,7 +164,7 @@ namespace Rts.Simulation
         /// <summary>The point of the footprint square closest to <paramref name="from"/>, for range checks.</summary>
         private SimPoint NearestFootprintPoint(BuildingState b, SimPoint from)
         {
-            if (b.Kind == BuildingKind.Bridge)
+            if (b.Kind == BuildingKind.Bridge || b.Kind == BuildingKind.Tollgate)
             {
                 var cells = Footprint(b);
                 int best = cells.Length == 0 ? -1 : cells[0];

@@ -54,6 +54,7 @@ namespace Rts.Simulation
                 DecideRepair(faction);
                 DecideBuildings(faction);
                 DecideIndustry(faction);
+                DecideTollgate(faction);
                 DecideCavalryStable(faction);
             }
         }
@@ -100,7 +101,7 @@ namespace Rts.Simulation
                 else if (v.Task == VillagerTask.ToCaravanCore) goal = OwnCore(v.FactionId).Definition.Position;
                 else { v.MoveGoal = v.Position; continue; }
                 v.MoveGoal = VillagerRouteTarget(ref v, goal);
-                var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep));
+                var next = world.Map.ClipMove(v.Position, FixMath.MoveTowards(v.Position, v.MoveGoal, world.VillagerStep), v.FactionId);
                 v.IsMoving = !SamePoint(v.Position, next);
                 v.Position = next;
             }
@@ -189,7 +190,7 @@ namespace Rts.Simulation
                         // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
                         if (kind != currentKind && kind != ResourceKind.Stone)
                         {
-                            int index = NearestWorkNode(v.Position, kind);
+                            int index = NearestWorkNode(v.Position, kind, v.FactionId);
                             if (index >= 0)
                             {
                                 SetWorkNode(ref v, index);
@@ -244,8 +245,8 @@ namespace Rts.Simulation
             int fishing = FishingWorkNode(v.Position, v.FactionId);
             if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
             var kind = WorkKindFor(v);
-            int index = NearestWorkNode(v.Position, kind);
-            if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food);
+            int index = NearestWorkNode(v.Position, kind, v.FactionId);
+            if (index < 0) index = NearestWorkNode(v.Position, kind == ResourceKind.Food ? ResourceKind.Wood : ResourceKind.Food, v.FactionId);
             if (index < 0) return; // nothing left anywhere: stays idle
             SetWorkNode(ref v, index);
         }
@@ -259,7 +260,7 @@ namespace Rts.Simulation
             if (!ProcessingOn || kilnId == 0 || kilnId > world.BuildingCount) return false;
             var kiln = world.Buildings[kilnId - 1];
             if (!kiln.Alive || !kiln.Complete || kiln.FactionId != v.FactionId) return false;
-            int index = NearestWorkNode(v.Position, ResourceKind.Wood);
+            int index = NearestWorkNode(v.Position, ResourceKind.Wood, v.FactionId);
             if (index < 0) return false;
             v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
             v.NodeId = world.Nodes[index].Definition.Id;
@@ -311,9 +312,9 @@ namespace Rts.Simulation
             return kind;
         }
 
-        private int NearestWorkNode(SimPoint position, ResourceKind kind)
+        private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
         {
-            if (kind == ResourceKind.Gold) return NearestGoldNode(position);
+            if (kind == ResourceKind.Gold) return NearestGoldNode(position, faction);
             int n = world.Nodes.Length;
             var positions = new SimPoint[n];
             var kinds = new ResourceKind[n];
@@ -322,14 +323,14 @@ namespace Rts.Simulation
             return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
         }
 
-        private int NearestGoldNode(SimPoint position)
+        private int NearestGoldNode(SimPoint position, uint faction)
         {
             int best = -1; long bestDistance = 0;
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
                 if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0) continue;
-                if (world.Map.SharedRoute(world.Map.Cell(position), node.Definition.Position).Length == 0) continue;
+                if (world.Map.SharedRoute(world.Map.Cell(position), node.Definition.Position, faction).Length == 0) continue;
                 long dx = node.Definition.Position.X.Raw - position.X.Raw, dz = node.Definition.Position.Z.Raw - position.Z.Raw;
                 long distance = checked(dx * dx + dz * dz);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
@@ -344,7 +345,7 @@ namespace Rts.Simulation
         private bool GoldTargetUsable(VillagerState v)
         {
             var node = world.Nodes[v.NodeId - 1];
-            if (node.Remaining <= 0 || world.Map.SharedRoute(world.Map.Cell(v.Position), node.Definition.Position).Length == 0) return false;
+            if (node.Remaining <= 0 || world.Map.SharedRoute(world.Map.Cell(v.Position), node.Definition.Position, v.FactionId).Length == 0) return false;
             int danger = world.Config.Economy.GoldDangerMeters;
             long limit = checked(Fix64.FromInt(danger).Raw * Fix64.FromInt(danger).Raw);
             var faction = world.Factions[v.FactionId - 1];
@@ -373,7 +374,7 @@ namespace Rts.Simulation
             {
                 var node = world.Nodes[n];
                 if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0 || nodeId != 0 && node.Definition.Id != nodeId) continue;
-                if (world.Map.SharedRoute(world.Map.Cell(core), node.Definition.Position).Length == 0) continue;
+                if (world.Map.SharedRoute(world.Map.Cell(core), node.Definition.Position, faction).Length == 0) continue;
                 bool dangerFound = false;
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -505,16 +506,16 @@ namespace Rts.Simulation
             if (v.Route.Length == 0 || !SamePoint(v.RouteGoal, goal))
             {
                 v.RouteGoal = goal;
-                v.Route = world.Map.SharedRoute(world.Map.Cell(v.Position), goal);
+                v.Route = world.Map.SharedRoute(world.Map.Cell(v.Position), goal, v.FactionId);
                 v.RouteCursor = 0;
-                if (v.Route.Length > 1 && Clear(v.Position, world.Map.Center(v.Route[1]))) v.RouteCursor = 1;
+                if (v.Route.Length > 1 && Clear(v.Position, world.Map.Center(v.Route[1]), v.FactionId)) v.RouteCursor = 1;
             }
             var path = v.Route;
             if (path.Length == 0) return v.Position;
             while (v.RouteCursor + 1 < path.Length && SamePoint(v.Position, world.Map.Center(path[v.RouteCursor]))) v.RouteCursor++;
             var target = world.Map.Center(path[v.RouteCursor]);
-            if (v.RouteCursor == path.Length - 1 && Clear(v.Position, goal)) target = goal;
-            return Clear(v.Position, target) ? target : world.Map.Center(world.Map.Cell(v.Position));
+            if (v.RouteCursor == path.Length - 1 && Clear(v.Position, goal, v.FactionId)) target = goal;
+            return Clear(v.Position, target, v.FactionId) ? target : world.Map.Center(world.Map.Cell(v.Position));
         }
 
         private void SpawnVillager(uint faction)
