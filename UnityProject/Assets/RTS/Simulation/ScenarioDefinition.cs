@@ -176,6 +176,11 @@ namespace Rts.Simulation
         public int MountainSizeCells = 2, MountainWoodCost = 100, MountainWork = 200, MountainHp = 400;
         public int MountainBaseIntervalTicks = 40, MountainIntervalStepTicks = 4, MountainMinIntervalTicks = 20;
         public int MountainMaxBuildings = 3, MountainMaxAdjacentCells = 4, MountainStoneYield = 1, MountainOreYield = 1;
+        /// <summary>V3-15 #2 provisional mountain research prices, times and effects.</summary>
+        public int MountainDeepShaftFoodCost = 250, MountainDeepShaftWoodCost = 150, MountainDeepShaftTicks = 600;
+        public int MountainFortFoodCost = 400, MountainFortWoodCost = 250, MountainFortTicks = 800;
+        public int MountainDeepShaftIntervalPermille = 667, MountainDeepShaftMaxBuildingsBonus = 1;
+        public int MountainFortHpPermille = 1500, MountainFortRangeBonus = 2;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

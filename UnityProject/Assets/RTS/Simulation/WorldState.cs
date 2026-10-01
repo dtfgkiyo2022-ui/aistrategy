@@ -524,11 +524,16 @@ namespace Rts.Simulation
                 && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0),
                 "Cult requires valid age and monastery rules.");
             Require(!e.Mountain || (e.Enabled && e.Ages && e.Industry && e.MountainSizeCells > 0 && e.MountainSizeCells <= 8
-                && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
-                && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
-                && e.MountainMinIntervalTicks > 0 && e.MountainMinIntervalTicks <= e.MountainBaseIntervalTicks
-                && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
-                && e.MountainStoneYield > 0 && e.MountainOreYield > 0),
+                 && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
+                 && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
+                 && e.MountainMinIntervalTicks > 0 && e.MountainMinIntervalTicks <= e.MountainBaseIntervalTicks
+                 && e.MountainMaxBuildings > 0 && e.MountainMaxAdjacentCells >= 0
+                 && e.MountainStoneYield > 0 && e.MountainOreYield > 0
+                 && e.MountainDeepShaftFoodCost >= 0 && e.MountainDeepShaftWoodCost >= 0 && e.MountainDeepShaftTicks > 0
+                 && e.MountainFortFoodCost >= 0 && e.MountainFortWoodCost >= 0 && e.MountainFortTicks > 0
+                 && e.MountainDeepShaftIntervalPermille > 0 && e.MountainDeepShaftIntervalPermille <= 1000
+                 && e.MountainDeepShaftMaxBuildingsBonus >= 0
+                 && e.MountainFortHpPermille >= 1000 && e.MountainFortRangeBonus >= 0),
                 "Mountain requires valid age, industry and mine-shaft rules.");
             Require(!e.GoldEnabled || (e.Ages && e.Age3GoldCostAgrarian >= 0 && e.Age3GoldCostMetallurgy >= 0 && e.GoldGatherers >= 0 && e.GoldAmount > 0
                 && e.GoldDangerMeters >= 0 && e.GoldDangerMeters <= 1024), "Invalid gold rules.");
@@ -718,10 +723,16 @@ namespace Rts.Simulation
                  MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
                  MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
                  Mountain = e.Mountain, MountainSizeCells = e.MountainSizeCells, MountainWoodCost = e.MountainWoodCost,
-                 MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
+                  MountainWork = e.MountainWork, MountainHp = e.MountainHp, MountainBaseIntervalTicks = e.MountainBaseIntervalTicks,
                  MountainIntervalStepTicks = e.MountainIntervalStepTicks, MountainMinIntervalTicks = e.MountainMinIntervalTicks,
                  MountainMaxBuildings = e.MountainMaxBuildings, MountainMaxAdjacentCells = e.MountainMaxAdjacentCells,
                  MountainStoneYield = e.MountainStoneYield, MountainOreYield = e.MountainOreYield,
+                 MountainDeepShaftFoodCost = e.MountainDeepShaftFoodCost, MountainDeepShaftWoodCost = e.MountainDeepShaftWoodCost,
+                 MountainDeepShaftTicks = e.MountainDeepShaftTicks, MountainFortFoodCost = e.MountainFortFoodCost,
+                 MountainFortWoodCost = e.MountainFortWoodCost, MountainFortTicks = e.MountainFortTicks,
+                 MountainDeepShaftIntervalPermille = e.MountainDeepShaftIntervalPermille,
+                 MountainDeepShaftMaxBuildingsBonus = e.MountainDeepShaftMaxBuildingsBonus,
+                 MountainFortHpPermille = e.MountainFortHpPermille, MountainFortRangeBonus = e.MountainFortRangeBonus,
                 FletcherSizeCells = e.FletcherSizeCells, FletcherWoodCost = e.FletcherWoodCost, FletcherWork = e.FletcherWork,
                 FletcherHp = e.FletcherHp, FletcherTicks = e.FletcherTicks, FletcherWoodInput = e.FletcherWoodInput, FletcherFoodInput = e.FletcherFoodInput,
                 SkirmishArcherFoodCost = e.SkirmishArcherFoodCost, SkirmishArcherBowGearCost = e.SkirmishArcherBowGearCost,

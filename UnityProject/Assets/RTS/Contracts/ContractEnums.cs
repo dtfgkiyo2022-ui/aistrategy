@@ -89,6 +89,13 @@ namespace Rts.Contracts
         public const TechKind SiegeDeployment = (TechKind)15;
     }
 
+    /// <summary>V3-15 #2: mountain civilisation research values live outside <see cref="TechKind"/>.</summary>
+    public static class MountainTech
+    {
+        public const TechKind DeepShaft = (TechKind)18;
+        public const TechKind MountainFort = (TechKind)19;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 

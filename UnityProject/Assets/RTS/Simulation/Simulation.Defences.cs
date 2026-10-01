@@ -33,7 +33,7 @@ namespace Rts.Simulation
                 if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
                 world.Map.SetPassable(cell, false);
                 world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Wall, OriginCell = cell,
-                    WorkCell = cell, Alive = true, Complete = true, Hp = rules.WallHp, Progress = 1, Held = IndustryOn, Facing = Facing.North };
+                    WorkCell = cell, Alive = true, Complete = true, Hp = MountainFortHp(rules.WallHp, faction, cell, 1), Progress = 1, Held = IndustryOn, Facing = Facing.North };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 changed = true;
@@ -98,13 +98,13 @@ namespace Rts.Simulation
         private void TowersShoot()
         {
             var rules = world.Config.Economy;
-            var towerRange = Fix64.FromInt(rules.TowerRange);
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || !b.Complete || !Shoots(b.Kind)) continue;
                 if (b.Timer > 0) { b.Timer--; continue; }
-                var range = b.Kind == BuildingKind.Castle ? Fix64.FromInt(rules.CastleRange) : towerRange;
+                var range = b.Kind == BuildingKind.Castle ? Fix64.FromInt(rules.CastleRange)
+                    : Fix64.FromInt(MountainTowerRange(b.FactionId, b.OriginCell, SizeOf(b.Kind)));
                 int interval = b.Kind == BuildingKind.Castle ? rules.CastleIntervalTicks : rules.TowerIntervalTicks;
                 var centre = FootprintCenter(b.OriginCell, SizeOf(b.Kind));
                 int best = -1; BigInteger bestDistance = 0;
