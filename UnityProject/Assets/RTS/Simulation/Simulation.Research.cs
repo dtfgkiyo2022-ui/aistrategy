@@ -19,6 +19,14 @@ namespace Rts.Simulation
             BridgeTech.Bridgeworks, TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor,
             CavalryDrillTech, BridgeTech.SiegeDeployment };
 
+        // Academy prices are deliberately fixed per technology. They are not scenario knobs: keeping them here leaves
+        // the V3-12 #1 extension payload unchanged while making the academy's discount explicit and deterministic.
+        private const int AcademyWeaponsFoodCost = 75, AcademyWeaponsWoodCost = 50, AcademyWeaponsGoldCost = 50, AcademyWeaponsTicks = 300;
+        private const int AcademyArmourFoodCost = 75, AcademyArmourWoodCost = 50, AcademyArmourGoldCost = 50, AcademyArmourTicks = 300;
+        private const int AcademySiegecraftFoodCost = 100, AcademySiegecraftWoodCost = 75, AcademySiegecraftGoldCost = 75, AcademySiegecraftTicks = 350;
+
+        private static readonly TechKind[] AcademyResearchOrder = { TechKind.Tools, TechKind.Carts, TechKind.Weapons, TechKind.Armour, TechKind.Siegecraft };
+
         private bool HasTech(uint faction, TechKind tech) => AgesOn && (world.Economies[faction - 1].Techs & (1UL << ((int)tech - 1))) != 0;
 
         private bool HasCavalryDrill(uint faction) => CavalryAllowed(faction) && (world.Economies[faction - 1].Techs & CavalryDrillBit) != 0;
@@ -87,19 +95,41 @@ namespace Rts.Simulation
                 : tech == BridgeTech.SiegeDeployment ? world.Config.Economy.SiegeDeploymentTicks
                 : world.Config.Economy.TechTicks[(int)tech - 1];
 
-        private bool AcademyTech(TechKind tech) => tech == TechKind.Tools || tech == TechKind.Carts;
+        private bool AcademyTech(TechKind tech)
+            => tech == TechKind.Tools || tech == TechKind.Carts || tech == TechKind.Weapons || tech == TechKind.Armour || tech == TechKind.Siegecraft;
+
+        private bool AcademyTechOpen(uint faction, TechKind tech)
+        {
+            if (!AcademyTech(tech) || !TechOpen(faction, tech)) return false;
+            byte age = world.Economies[faction - 1].Age;
+            if ((tech == TechKind.Weapons || tech == TechKind.Armour) && age < 2) return false;
+            if (tech == TechKind.Siegecraft && age < 3) return false;
+            return true;
+        }
 
         private int AcademyFoodCost(TechKind tech)
-            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsFoodCost : world.Config.Economy.AcademyCartsFoodCost;
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsFoodCost
+                : tech == TechKind.Carts ? world.Config.Economy.AcademyCartsFoodCost
+                : tech == TechKind.Weapons ? AcademyWeaponsFoodCost
+                : tech == TechKind.Armour ? AcademyArmourFoodCost : AcademySiegecraftFoodCost;
 
         private int AcademyWoodCost(TechKind tech)
-            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsWoodCost : world.Config.Economy.AcademyCartsWoodCost;
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsWoodCost
+                : tech == TechKind.Carts ? world.Config.Economy.AcademyCartsWoodCost
+                : tech == TechKind.Weapons ? AcademyWeaponsWoodCost
+                : tech == TechKind.Armour ? AcademyArmourWoodCost : AcademySiegecraftWoodCost;
 
         private int AcademyGoldCost(TechKind tech)
-            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsGoldCost : world.Config.Economy.AcademyCartsGoldCost;
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsGoldCost
+                : tech == TechKind.Carts ? world.Config.Economy.AcademyCartsGoldCost
+                : tech == TechKind.Weapons ? AcademyWeaponsGoldCost
+                : tech == TechKind.Armour ? AcademyArmourGoldCost : AcademySiegecraftGoldCost;
 
         private int AcademyTicks(TechKind tech)
-            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsTicks : world.Config.Economy.AcademyCartsTicks;
+            => tech == TechKind.Tools ? world.Config.Economy.AcademyToolsTicks
+                : tech == TechKind.Carts ? world.Config.Economy.AcademyCartsTicks
+                : tech == TechKind.Weapons ? AcademyWeaponsTicks
+                : tech == TechKind.Armour ? AcademyArmourTicks : AcademySiegecraftTicks;
 
         private int BridgeHpFor(uint faction)
         {
@@ -136,8 +166,13 @@ namespace Rts.Simulation
         private bool StartResearch(uint faction, ref BuildingState smith, TechKind tech, bool byPlayer)
         {
             bool academy = smith.Kind == BuildingKind.Academy;
-            if (!AgesOn || !smith.Complete || smith.Researching != 0 || !TechOpen(faction, tech) || BeingResearched(faction, tech)) return false;
-            if (academy ? !AcademyAllowed(faction) || !AcademyTech(tech) : smith.Kind != BuildingKind.Blacksmith) return false;
+            if (!AgesOn || !smith.Complete || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
+            if (academy)
+            {
+                if (!AcademyAllowed(faction) || !AcademyTechOpen(faction, tech) || !AcademyGoldAvailable(faction, tech)
+                    || !AcademyBudgetAllows(faction, tech)) return false;
+            }
+            else if (smith.Kind != BuildingKind.Blacksmith || !TechOpen(faction, tech)) return false;
             ref var economy = ref world.Economies[faction - 1];
             int food = academy ? AcademyFoodCost(tech) : TechFoodCost(tech);
             int wood = academy ? AcademyWoodCost(tech) : TechWoodCost(tech);
@@ -241,11 +276,11 @@ namespace Rts.Simulation
             ref var b = ref world.Buildings[smith];
             if (!b.Complete || b.Held || b.Researching != 0) return;
             foreach (var tech in AutoResearchOrder)
-                if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy) continue;
+                if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy && AcademyResearchOperational(faction)) continue;
                 else if (TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
         }
 
-        /// <summary>Academy civilisation: build one academy, then research tools before carts.</summary>
+        /// <summary>Academy civilisation: build one academy, then fund the next useful fixed academy research.</summary>
         private bool DecideAcademyResearch(uint faction)
         {
             if (!AcademyAllowed(faction)) return false;
@@ -260,14 +295,71 @@ namespace Rts.Simulation
             }
             ref var building = ref world.Buildings[academy];
             if (!building.Complete || building.Held || building.Researching != 0) return true;
-            var order = new[] { TechKind.Tools, TechKind.Carts };
-            foreach (var tech in order)
-                if (TechOpen(faction, tech))
+            foreach (var tech in AcademyResearchOrderFor(faction))
+                if (AcademyTechOpen(faction, tech))
                 {
-                    StartResearch(faction, ref building, tech, false);
-                    return true;
+                    if (StartResearch(faction, ref building, tech, false)) return true;
+                    // A failed start means that this research is not affordable within the protected budget. Do not
+                    // spend the reserve on a later item in the same allocation tick.
+                    return false;
                 }
             return false;
+        }
+
+        private TechKind[] AcademyResearchOrderFor(uint faction)
+        {
+            var result = new System.Collections.Generic.List<TechKind>(AcademyResearchOrder.Length);
+            bool infantry = LivingClass(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Infantry) > 0;
+            bool siege = LivingClass(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Ram) > 0;
+            if (infantry && world.Economies[faction - 1].Age >= 2)
+            {
+                result.Add(TechKind.Weapons); result.Add(TechKind.Armour);
+            }
+            if (siege && world.Economies[faction - 1].Age >= 3) result.Add(TechKind.Siegecraft);
+            foreach (var tech in AcademyResearchOrder)
+                if (!result.Contains(tech)) result.Add(tech);
+            return result.ToArray();
+        }
+
+        private bool AcademyResearchOperational(uint faction)
+        {
+            if (!AcademyAllowed(faction)) return false;
+            int academy = OwnBuildingIndex(faction, BuildingKind.Academy);
+            if (academy < 0 || !world.Buildings[academy].Complete) return false;
+            var next = AcademyNextResearch(faction);
+            return next != 0 && AcademyGoldAvailable(faction, next);
+        }
+
+        private bool AcademyGoldAvailable(uint faction, TechKind tech)
+        {
+            var e = world.Economies[faction - 1];
+            return HasUsableGoldSource(faction) && e.Gold >= AcademyGoldCost(tech);
+        }
+
+        private bool AcademyBudgetAllows(uint faction, TechKind tech)
+        {
+            var e = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            var (ageFood, ageWood, ageGold, _) = AdvancePrice(faction, e);
+            int foodReserve = ageFood + (e.Civ == CivKind.Primitive ? 0 : rules.MarketFoodFloor);
+            int woodReserve = ageWood;
+            int goldReserve = ageGold;
+            if (LivingVillagers(faction) + e.Queued < rules.AutoVillagerTarget) foodReserve = checked(foodReserve + rules.VillagerFoodCost);
+            if (CompleteBarracks(faction) && LivingSoldiers(faction) == 0)
+            {
+                foodReserve = checked(foodReserve + InfantryFoodFor(faction));
+                woodReserve = checked(woodReserve + InfantryWoodFor(faction));
+            }
+            return e.Food >= checked(AcademyFoodCost(tech) + foodReserve)
+                && e.Wood >= checked(AcademyWoodCost(tech) + woodReserve)
+                && e.Gold >= checked(AcademyGoldCost(tech) + goldReserve);
+        }
+
+        private bool AcademyOffenseReady(uint faction)
+        {
+            var e = world.Economies[faction - 1];
+            return e.Civ == CivKind.Academy && ((HasTech(faction, TechKind.Weapons) && HasTech(faction, TechKind.Armour))
+                || HasTech(faction, TechKind.Siegecraft));
         }
     }
 }

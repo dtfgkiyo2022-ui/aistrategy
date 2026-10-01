@@ -124,16 +124,26 @@ namespace Rts.Simulation
             if (!AgesOn) return false;
             var e = world.Economies[faction - 1];
             if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
-            var (food, wood, gold, _) = AdvancePrice(e);
+            var (food, wood, gold, _) = AdvancePrice(faction, e);
             return e.Food >= food && e.Wood >= wood && e.Gold >= gold;
         }
 
-        private (int food, int wood, int gold, int ticks) AdvancePrice(FactionEconomy e)
+        private (int food, int wood, int gold, int ticks) AdvancePrice(uint faction, FactionEconomy e)
         {
             var rules = world.Config.Economy;
             if (e.Civ == CivKind.Primitive) return (rules.AdvanceFoodCost, rules.AdvanceWoodCost, 0, rules.AdvanceTicks);
             return e.Age == 1 ? (rules.Age2FoodCost, rules.Age2WoodCost, 0, rules.Age2Ticks)
-                : (rules.Age3FoodCost, rules.Age3WoodCost, rules.GoldEnabled ? Age3GoldCost(rules, e.Civ) : 0, rules.Age3Ticks);
+                : (rules.Age3FoodCost, rules.Age3WoodCost, AcademyAge3GoldCost(faction, e, rules), rules.Age3Ticks);
+        }
+
+        private int AcademyAge3GoldCost(uint faction, FactionEconomy e, EconomyRules rules)
+        {
+            if (!rules.GoldEnabled) return 0;
+            int gold = Age3GoldCost(rules, e.Civ);
+            // Losing the visible gold line must stop academy research, not the civilisation's ordinary growth. If
+            // some stock remains, it is still spent normally; only an unfundable academy is allowed to continue
+            // into the next age without turning a lost mine into a permanent economic dead-end.
+            return e.Civ == CivKind.Academy && e.Gold < gold && !HasUsableGoldSource(faction) ? 0 : gold;
         }
 
         private static int Age3GoldCost(EconomyRules rules, CivKind civ)
@@ -142,7 +152,7 @@ namespace Rts.Simulation
         private void StartAdvance(uint faction, CivKind civ)
         {
             ref var e = ref world.Economies[faction - 1];
-            var (food, wood, gold, ticks) = AdvancePrice(e);
+            var (food, wood, gold, ticks) = AdvancePrice(faction, e);
             e.Food = checked(e.Food - food);
             e.Wood = checked(e.Wood - wood);
             e.Gold = checked(e.Gold - gold);
@@ -188,7 +198,7 @@ namespace Rts.Simulation
             // The second and third ages wait for the civilisation's own line, and for the stock to be half way there (32.8).
             if (e.Civ != CivKind.Primitive)
             {
-                var (food, wood, gold, _) = AdvancePrice(e);
+                var (food, wood, gold, _) = AdvancePrice(faction, e);
                 if (!CivLineStarted(faction)) return false;
                 if (world.Config.Economy.Age2SaveArmyFloor == 0
                     ? 2 * (e.Food + e.Wood + e.Gold) < food + wood + gold
