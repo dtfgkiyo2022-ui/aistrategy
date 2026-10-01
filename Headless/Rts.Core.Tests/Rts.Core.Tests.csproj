@@ -76,6 +76,7 @@
     <Compile Include="CultTests.cs" />
     <Compile Include="FishingCivTests.cs" />
     <Compile Include="MountainTests.cs" />
+    <Compile Include="MetropolisTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>

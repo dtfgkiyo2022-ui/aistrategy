@@ -24,13 +24,14 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (!AgesOn) return rules.PopulationCap;
             int ceiling = rules.PopulationCap + AgeRoom(world.Economies[faction - 1].Age);
-            int houses = 0;
+            int houses = 0, grandHouses = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.House) houses++;
+                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.GrandHouse) grandHouses++;
             }
-            return Math.Min(ceiling, rules.BasePopulation + rules.HousePopulation * houses);
+            return Math.Min(ceiling, rules.BasePopulation + rules.HousePopulation * houses + rules.HousePopulation * 3 * grandHouses);
         }
 
         /// <summary>
@@ -45,16 +46,20 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int cap = PopCapFor(faction);
             int ceiling = rules.PopulationCap + AgeRoom(economy.Age);
-            if (cap >= ceiling || economy.Wood < rules.HouseWoodCost) return;
+            bool metropolis = MetropolisAllowed(faction);
+            BuildingKind kind = metropolis ? BuildingKind.GrandHouse : BuildingKind.House;
+            int size = metropolis ? rules.GrandHouseSizeCells : rules.HouseSizeCells;
+            int wood = metropolis ? rules.GrandHouseWoodCost : rules.HouseWoodCost;
+            if (cap >= ceiling || economy.Wood < wood) return;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
             if (population + HouseMargin < cap) return;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && !b.Complete && b.FactionId == faction && b.Kind == BuildingKind.House) return; // one is on its way
+                if (b.Alive && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
             }
-            int origin = FindSite(faction, rules.HouseSizeCells);
-            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.House, origin, Facing.North, 0);
+            int origin = FindSite(faction, size);
+            if (origin >= 0) PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
         }
     }
 }

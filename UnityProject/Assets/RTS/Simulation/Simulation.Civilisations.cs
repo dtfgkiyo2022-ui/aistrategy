@@ -60,7 +60,9 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Fishing, 9, false, (s, f) => s.FishingOn, FishingScore,
                 (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
-                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0)
+                (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
+            new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
+                (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0)
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)

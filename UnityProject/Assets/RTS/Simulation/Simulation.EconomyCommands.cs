@@ -83,6 +83,7 @@ namespace Rts.Simulation
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
+                        && !(MetropolisAllowed(faction) && kind == BuildingKind.GrandHouse)
                         && !(IndustryOn && BridgeAllowed(faction) && kind == BuildingKind.EngineerCamp)
                          && !(AcademyAllowed(faction) && kind == BuildingKind.Academy)
                          && !(CultAllowed(faction) && kind == BuildingKind.Monastery)
@@ -134,16 +135,18 @@ namespace Rts.Simulation
                     if (population >= PopCapFor(faction)) return;
                     if (c.ProducerId == 0)
                     {
-                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < rules.VillagerFoodCost || economy.AdvanceRemaining > 0) return;
+                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < VillagerFoodCostFor(faction) || economy.AdvanceRemaining > 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
-                        economy.Food = checked(economy.Food - rules.VillagerFoodCost);
-                        if (economy.Queued == 0) economy.TrainRemaining = rules.VillagerTrainTicks;
+                        economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+                        if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
                         economy.Queued++;
                         return;
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
                     if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit, b.Kind)) return;
+                    if (b.Kind == BuildingKind.Monastery && c.Unit == UnitKind.Monk
+                        && !CultBudgetAllows(faction, rules.MonasteryMonkFoodCost, rules.MonasteryMonkWoodCost)) return;
                     if (IndustryOn) b.Held = true;
                     MarkLinesForBuilding(faction, b.Id);
                     Enqueue(faction, ref b, c.Unit);
@@ -157,7 +160,7 @@ namespace Rts.Simulation
                         if (economy.Queued == 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
                         economy.Queued--;
-                        economy.Food = checked(economy.Food + rules.VillagerFoodCost);
+                        economy.Food = checked(economy.Food + VillagerFoodCostFor(faction));
                         if (economy.Queued == 0) economy.TrainRemaining = 0;
                         return;
                     }

@@ -75,7 +75,7 @@ namespace Rts.Simulation
             }
             var cavalryMission = CavalryMissionFor(faction);
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
-                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, rules.VillagerFoodCost, InfantryFoodFor(faction),
+                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction), InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
