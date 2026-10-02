@@ -547,8 +547,12 @@ namespace Rts.Simulation
             Require(!e.Sanctuary || (e.Enabled && e.Ages && e.ShrineSizeCells > 0 && e.ShrineSizeCells <= 8
                 && e.ShrineWoodCost >= 0 && e.ShrineStoneCost >= 0 && e.ShrineWork > 0 && e.ShrineHp > 0
                 && e.ShrineOutpostReach >= 0 && e.SanctuaryAttackBonusPermille >= 0
-                && e.SanctuaryMaxBonusPermille >= e.SanctuaryAttackBonusPermille),
-                "Sanctuary requires valid age and shrine rules.");
+                && e.SanctuaryMaxBonusPermille >= e.SanctuaryAttackBonusPermille
+                && e.SanctuaryPilgrimageFoodCost >= 0 && e.SanctuaryPilgrimageWoodCost >= 0 && e.SanctuaryPilgrimageTicks > 0
+                && e.SanctuaryRelicFoodCost >= 0 && e.SanctuaryRelicWoodCost >= 0 && e.SanctuaryRelicTicks > 0
+                && e.SanctuaryPilgrimageRadius >= 0 && e.SanctuaryPilgrimageIntervalTicks > 0 && e.SanctuaryPilgrimageHeal >= 0
+                && e.SanctuaryRelicBonusPermille >= 0 && e.SanctuaryRelicMaxBonusPermille >= e.SanctuaryRelicBonusPermille),
+                "Sanctuary requires valid age, shrine and research rules.");
             Require(!e.Cult || (e.Enabled && e.Ages && e.MonasterySizeCells > 0 && e.MonasterySizeCells <= 8
                 && e.MonasteryWoodCost >= 0 && e.MonasteryWork > 0 && e.MonasteryHp > 0
                 && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0
@@ -766,6 +770,12 @@ namespace Rts.Simulation
                  ShrineSizeCells = e.ShrineSizeCells, ShrineWoodCost = e.ShrineWoodCost, ShrineStoneCost = e.ShrineStoneCost,
                  ShrineWork = e.ShrineWork, ShrineHp = e.ShrineHp, ShrineOutpostReach = e.ShrineOutpostReach,
                  SanctuaryAttackBonusPermille = e.SanctuaryAttackBonusPermille, SanctuaryMaxBonusPermille = e.SanctuaryMaxBonusPermille,
+                 SanctuaryPilgrimageFoodCost = e.SanctuaryPilgrimageFoodCost, SanctuaryPilgrimageWoodCost = e.SanctuaryPilgrimageWoodCost,
+                 SanctuaryPilgrimageTicks = e.SanctuaryPilgrimageTicks, SanctuaryRelicFoodCost = e.SanctuaryRelicFoodCost,
+                 SanctuaryRelicWoodCost = e.SanctuaryRelicWoodCost, SanctuaryRelicTicks = e.SanctuaryRelicTicks,
+                 SanctuaryPilgrimageRadius = e.SanctuaryPilgrimageRadius, SanctuaryPilgrimageIntervalTicks = e.SanctuaryPilgrimageIntervalTicks,
+                 SanctuaryPilgrimageHeal = e.SanctuaryPilgrimageHeal, SanctuaryRelicBonusPermille = e.SanctuaryRelicBonusPermille,
+                 SanctuaryRelicMaxBonusPermille = e.SanctuaryRelicMaxBonusPermille,
                   MonasterySizeCells = e.MonasterySizeCells, MonasteryWoodCost = e.MonasteryWoodCost, MonasteryWork = e.MonasteryWork, MonasteryHp = e.MonasteryHp,
                   MonasteryMonkFoodCost = e.MonasteryMonkFoodCost, MonasteryMonkWoodCost = e.MonasteryMonkWoodCost,
                   SermonFoodCost = e.SermonFoodCost, SermonWoodCost = e.SermonWoodCost, SermonTicks = e.SermonTicks,

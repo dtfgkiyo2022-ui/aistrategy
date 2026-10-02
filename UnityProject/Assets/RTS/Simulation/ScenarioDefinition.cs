@@ -169,6 +169,11 @@ namespace Rts.Simulation
         /// <summary>V3-18 #1 provisional shrine values. A shrine is tied to one outpost and costs wood and stone.</summary>
         public int ShrineSizeCells = 2, ShrineWoodCost = 80, ShrineStoneCost = 40, ShrineWork = 200, ShrineHp = 300;
         public int ShrineOutpostReach = 24, SanctuaryAttackBonusPermille = 100, SanctuaryMaxBonusPermille = 300;
+        /// <summary>V3-18 #2 provisional sanctuary research values. Both researches are performed at a shrine.</summary>
+        public int SanctuaryPilgrimageFoodCost = 150, SanctuaryPilgrimageWoodCost = 100, SanctuaryPilgrimageTicks = 500;
+        public int SanctuaryRelicFoodCost = 250, SanctuaryRelicWoodCost = 200, SanctuaryRelicTicks = 700;
+        public int SanctuaryPilgrimageRadius = 16, SanctuaryPilgrimageIntervalTicks = 20, SanctuaryPilgrimageHeal = 1;
+        public int SanctuaryRelicBonusPermille = 150, SanctuaryRelicMaxBonusPermille = 450;
         /// <summary>V3-14 #1 provisional fishing-civilisation values; the harbour is the fish drop-off.</summary>
         public bool FishingCiv;
         public int HarborSizeCells = 2, HarborWoodCost = 100, HarborWork = 200, HarborHp = 400;

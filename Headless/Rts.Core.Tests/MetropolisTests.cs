@@ -458,6 +458,311 @@ namespace Rts.Core.Tests
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(current));
         }
 
+        // ---- V3-17 #3: civilisation choice score, matches and the normal start ----
+
+        private const System.Reflection.BindingFlags Private = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        private static readonly System.Reflection.MethodInfo MetropolisCells = typeof(Battle).GetMethod("CountMetropolisBuildableCells", Private);
+        private static readonly System.Reflection.MethodInfo MetropolisScoreMethod = typeof(Battle).GetMethod("MetropolisScore",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+        private static readonly System.Reflection.MethodInfo CavalryMobility = typeof(Battle).GetMethod("CountCavalryMobility", Private);
+        private static readonly System.Reflection.MethodInfo ChooseCivMethod = typeof(Battle).GetMethod("ChooseCiv", Private);
+
+        private static ScenarioDefinition MetropolisMatchScenario(ulong seed, bool metropolis = true)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Metropolis = metropolis;
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
+        private static bool[] Cells(Battle sim, uint faction, string field)
+        {
+            var world = World(sim);
+            var factions = (Array)world.GetType().GetField("Factions", Private).GetValue(world);
+            object state = factions.GetValue((int)faction - 1);
+            return (bool[])state.GetType().GetField(field, Private).GetValue(state);
+        }
+
+        private static int BuildableCells(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)MetropolisCells.Invoke(sim, new object[] { faction, s.Cores[faction - 1].Position });
+
+        private static int MetropolisScoreOf(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)MetropolisScoreMethod.Invoke(null, new object[] { sim, faction, s.Cores[faction - 1].Position, 0, 0 });
+
+        private static int CavalryOf(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)CavalryMobility.Invoke(sim, new object[] { faction, s.Cores[faction - 1].Position });
+
+        /// <summary>A sim at tick 1 whose explored cells cover the whole map, so the score reads only the ground.</summary>
+        private static Battle FullyExplored(ScenarioDefinition s)
+        {
+            var sim = new Battle(s);
+            sim.Step(1, Array.Empty<ScheduledInput>());
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                var explored = Cells(sim, faction, "ExploredCells");
+                for (int i = 0; i < explored.Length; i++) explored[i] = true;
+            }
+            return sim;
+        }
+
+        private static bool WithinMetropolisReach(ScenarioDefinition s, uint faction, int cell, int extraCells)
+        {
+            int width = s.Map.WidthCells, size = s.Map.CellSizeMeters;
+            int core = Cell(s, s.Cores[faction - 1].Position);
+            int dx = Math.Abs(cell % width - core % width), dz = Math.Abs(cell / width - core / width);
+            int reachCells = 24 / size + 1 + extraCells;
+            return Math.Max(dx, dz) <= reachCells;
+        }
+
+        [Test]
+        public void MetropolisScoreTiersNarrowNormalAndWideGround()
+        {
+            Assert.That(MetropolisCells, Is.Not.Null);
+            Assert.That(MetropolisScoreMethod, Is.Not.Null);
+            bool sawNarrow = false, sawNormal = false, sawWide = false;
+            for (ulong seed = 1; seed <= 60; seed++)
+            {
+                var s = MetropolisMatchScenario(seed);
+                var sim = FullyExplored(s);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    int cells = BuildableCells(sim, s, faction);
+                    int score = MetropolisScoreOf(sim, s, faction);
+                    TestContext.WriteLine("seed " + seed + " faction " + faction + ": buildable cells=" + cells + " -> " + score);
+                    Assert.That(cells, Is.GreaterThan(0).And.LessThan(700), "24m の円の中だけを数える");
+                    Assert.That(score, Is.EqualTo(cells >= 320 ? 3 : cells >= 270 ? 2 : 0), "seed " + seed);
+                    if (score == 0) sawNarrow = true;
+                    if (score == 2) sawNormal = true;
+                    if (score == 3) sawWide = true;
+                }
+            }
+            Assert.That(sawNarrow, Is.True, "狭い（0点）");
+            Assert.That(sawNormal, Is.True, "ふつう（2点）");
+            Assert.That(sawWide, Is.True, "広い（3点）");
+
+            // Closing every other column of ground near the core makes a wide start narrow; flags off score zero.
+            var wide = MetropolisMatchScenario(3);
+            var narrowSim = FullyExplored(wide);
+            int before = BuildableCells(narrowSim, wide, 2);
+            Assert.That(MetropolisScoreOf(narrowSim, wide, 2), Is.EqualTo(3), "広い地面");
+            var map = World(narrowSim).GetType().GetField("Map", Private).GetValue(World(narrowSim));
+            var setPassable = map.GetType().GetMethod("SetPassable", Private);
+            for (int cell = 0; cell < wide.Map.WidthCells * wide.Map.HeightCells; cell++)
+                if (WithinMetropolisReach(wide, 2, cell, 0) && cell % 2 == 0) setPassable.Invoke(map, new object[] { cell, false });
+            Assert.That(BuildableCells(narrowSim, wide, 2), Is.LessThan(before));
+            Assert.That(MetropolisScoreOf(narrowSim, wide, 2), Is.EqualTo(0), "狭くした地面");
+
+            var off = MetropolisMatchScenario(3, metropolis: false);
+            Assert.That(MetropolisScoreOf(FullyExplored(off), off, 2), Is.EqualTo(0), "旗オフは0点");
+        }
+
+        [Test]
+        public void MetropolisScoreCountsOnlyExploredGroundNearTheCore()
+        {
+            var s = MetropolisMatchScenario(3);
+            var sim = FullyExplored(s);
+            int full = BuildableCells(sim, s, 2);
+            Assert.That(MetropolisScoreOf(sim, s, 2), Is.EqualTo(3));
+
+            // Forgetting everything outside the 24m square changes nothing.
+            var explored = Cells(sim, 2, "ExploredCells");
+            for (int i = 0; i < explored.Length; i++)
+                if (!WithinMetropolisReach(s, 2, i, 0)) explored[i] = false;
+            Assert.That(BuildableCells(sim, s, 2), Is.EqualTo(full), "24m の外は数えない");
+
+            // Forgetting half of the ground inside lowers it; forgetting all of it gives zero.
+            for (int i = 0; i < explored.Length; i++)
+                if (WithinMetropolisReach(s, 2, i, 0) && i % 2 == 0) explored[i] = false;
+            int half = BuildableCells(sim, s, 2);
+            Assert.That(half, Is.LessThan(full).And.GreaterThan(0));
+            for (int i = 0; i < explored.Length; i++) explored[i] = false;
+            Assert.That(BuildableCells(sim, s, 2), Is.EqualTo(0));
+            Assert.That(MetropolisScoreOf(sim, s, 2), Is.EqualTo(0), "見たことのない範囲だけ");
+        }
+
+        [Test]
+        public void MetropolisAndCavalryScoresMoveIndependently()
+        {
+            Assert.That(CavalryMobility, Is.Not.Null);
+            // 1. Forgetting the ground inside the metropolis square drops the metropolis score to zero, and the cavalry
+            //    score (visible routes out of the core) does not move at all.
+            var s = MetropolisMatchScenario(3);
+            var sim = FullyExplored(s);
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int cavalry = CavalryOf(sim, s, faction);
+                var explored = Cells(sim, faction, "ExploredCells");
+                for (int i = 0; i < explored.Length; i++)
+                    if (WithinMetropolisReach(s, faction, i, 0)) explored[i] = false;
+                Assert.That(MetropolisScoreOf(sim, s, faction), Is.EqualTo(0));
+                Assert.That(CavalryOf(sim, s, faction), Is.EqualTo(cavalry), "都市の範囲を変えても騎馬は同じ");
+            }
+
+            // 2. Hiding the routes outside the cavalry's 16m core ring changes the cavalry score and never the
+            //    metropolis count.
+            bool cavalryMoved = false;
+            for (ulong seed = 1; seed <= 20 && !cavalryMoved; seed++)
+            {
+                var scenario = MetropolisMatchScenario(seed);
+                var probe = FullyExplored(scenario);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    int cells = BuildableCells(probe, scenario, faction);
+                    int cavalry = CavalryOf(probe, scenario, faction);
+                    var visible = Cells(probe, faction, "VisibleCells");
+                    for (int i = 0; i < visible.Length; i++)
+                        if (!WithinMetropolisReach(scenario, faction, i, -5)) visible[i] = false;
+                    Assert.That(BuildableCells(probe, scenario, faction), Is.EqualTo(cells), "騎馬の進路を変えても都市は同じ");
+                    if (cavalry > 0 && CavalryOf(probe, scenario, faction) != cavalry) cavalryMoved = true;
+                }
+            }
+            Assert.That(cavalryMoved, Is.True, "コアの外側への進路を隠すと騎馬の得点が変わる");
+
+            // 3. On real maps the two scores do not rise together: some pair of starts has more room for the city
+            //    but weaker routes for the cavalry.
+            var pairs = new System.Collections.Generic.List<(int city, int cavalry, string name)>();
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var scenario = MetropolisMatchScenario(seed);
+                var probe = FullyExplored(scenario);
+                for (uint faction = 1; faction <= 2; faction++)
+                    pairs.Add((BuildableCells(probe, scenario, faction), CavalryOf(probe, scenario, faction), "seed " + seed + " faction " + faction));
+            }
+            string disagreement = null;
+            for (int a = 0; a < pairs.Count && disagreement == null; a++)
+                for (int b = 0; b < pairs.Count && disagreement == null; b++)
+                    if (pairs[a].city > pairs[b].city && pairs[a].cavalry < pairs[b].cavalry)
+                        disagreement = pairs[a].name + " (cells " + pairs[a].city + ", cavalry " + pairs[a].cavalry + ") vs "
+                            + pairs[b].name + " (cells " + pairs[b].city + ", cavalry " + pairs[b].cavalry + ")";
+            TestContext.WriteLine("disagreement: " + disagreement);
+            Assert.That(disagreement, Is.Not.Null, "都市の広さと騎馬の進路は別々に動く");
+        }
+
+        [Test]
+        public void MetropolisOnlyChangesChoicesItWins()
+        {
+            Assert.That(ChooseCivMethod, Is.Not.Null);
+            int won = 0;
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var onScenario = MetropolisMatchScenario(seed);
+                var offScenario = MetropolisMatchScenario(seed, metropolis: false);
+                var on = FullyExplored(onScenario);
+                var off = FullyExplored(offScenario);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var withCity = (CivKind)ChooseCivMethod.Invoke(on, new object[] { faction });
+                    var without = (CivKind)ChooseCivMethod.Invoke(off, new object[] { faction });
+                    TestContext.WriteLine("seed " + seed + " faction " + faction + ": on=" + withCity + " off=" + without);
+                    Assert.That(without, Is.Not.EqualTo(CivKind.Metropolis));
+                    if (withCity == CivKind.Metropolis) won++;
+                    else Assert.That(withCity, Is.EqualTo(without), "都市が勝たない陣営の選択は変わらない");
+                }
+            }
+            TestContext.WriteLine("metropolis chosen: " + won + " / 60");
+        }
+
+        [TestCase(CivKind.Metropolis, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Metropolis)]
+        [TestCase(CivKind.Metropolis, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Metropolis)]
+        public void MetropolisCombinationsReachTheSecondAgeAndReplay(CivKind west, CivKind east)
+        {
+            var scenario = MetropolisMatchScenario(21);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", undecided=" + result.IsUndecided
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age
+                + ", villagers=" + sim.Capture(1).Economy.Population + "/" + sim.Capture(2).Economy.Population);
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(west));
+            Assert.That(sim.Capture(2).Economy.Civ, Is.EqualTo(east));
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void NormalMetropolisStartFindsASeedAndReplaysForTwentyThousandTicks()
+        {
+            ulong foundSeed = 0;
+            CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
+            for (ulong seed = 1; seed <= 200 && foundSeed == 0; seed++)
+            {
+                var probe = new Battle(MetropolisMatchScenario(seed));
+                var probeGateway = new CommandGateway(probe);
+                for (int i = 0; i < 1500; i++)
+                {
+                    probeGateway.Step();
+                    if (i % 20 != 19) continue;
+                    var west = probe.Capture(1).Economy.Civ;
+                    var east = probe.Capture(2).Economy.Civ;
+                    if (west == CivKind.Metropolis || east == CivKind.Metropolis)
+                    {
+                        foundSeed = seed;
+                        foundWest = west;
+                        foundEast = east;
+                        break;
+                    }
+                    if (west != CivKind.Primitive && east != CivKind.Primitive) break;
+                }
+            }
+            if (foundSeed == 0)
+            {
+                TestContext.WriteLine("都市が選ばれる種は seed 1..200 では見つからなかった");
+                Assert.Inconclusive("都市が選ばれる種が見つからない");
+                return;
+            }
+
+            var scenario = MetropolisMatchScenario(foundSeed);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            TestContext.WriteLine("normal metropolis seed " + foundSeed + ": civs=" + foundWest + "/" + foundEast
+                + ", final civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Metropolis || sim.Capture(2).Economy.Civ == CivKind.Metropolis, Is.True);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
         private static int TrainRemaining(Battle sim)
             => int.Parse(DiagnosticComparison.Fields(sim.CaptureDiagnostic())
                 .First(p => p.Key == "Economy[1].TrainRemaining").Value,
