@@ -156,7 +156,24 @@ namespace Rts.Editor
         public static void PlayLive()
         {
             EditorSceneManager.OpenScene(LiveScenePath);
-            EditorApplication.delayCall += () => EditorApplication.EnterPlaymode();
+            // A script reload right after start-up (a compile of fresh changes) drops a pending delayCall, so the wish to
+            // play is kept in SessionState, which survives the reload; PlayLiveAfterReload picks it up again.
+            SessionState.SetBool(PlayLivePendingKey, true);
+            EditorApplication.delayCall += EnterPendingPlayLive;
+        }
+
+        internal const string PlayLivePendingKey = "Rts.Editor.PlayLivePending";
+
+        internal static void EnterPendingPlayLive()
+        {
+            if (!SessionState.GetBool(PlayLivePendingKey, false)) return;
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            {
+                EditorApplication.delayCall += EnterPendingPlayLive;
+                return;
+            }
+            SessionState.EraseBool(PlayLivePendingKey);
+            if (!EditorApplication.isPlayingOrWillChangePlaymode) EditorApplication.EnterPlaymode();
         }
 
         // Batch entry: enters real Play mode on the live scene, lets it run, and renders the Game camera to a PNG.
@@ -759,6 +776,20 @@ namespace Rts.Editor
             Object.DestroyImmediate(texture);
             target.Release();
             Debug.Log("[MockBattlefield] Wrote " + path);
+        }
+    }
+
+    /// <summary>
+    /// After a script reload, finishes a PlayLive start whose delayCall the reload dropped (see PlayLive). Does nothing
+    /// unless PlayLive asked for Play in this editor session and Play has not started yet.
+    /// </summary>
+    [InitializeOnLoad]
+    internal static class PlayLiveAfterReload
+    {
+        static PlayLiveAfterReload()
+        {
+            if (SessionState.GetBool(MockBattlefieldSceneBuilder.PlayLivePendingKey, false))
+                EditorApplication.delayCall += MockBattlefieldSceneBuilder.EnterPendingPlayLive;
         }
     }
 }
