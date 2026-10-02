@@ -78,6 +78,22 @@ namespace Rts.Simulation
                 observation.Contacts, kept, observation.EnemyFactionCap, observation.RaidTargets);
         }
 
+        /// <summary>
+        /// V3-18 #3: the shrine is the sanctuary's line, and it costs stone, but the automatic economy only sends
+        /// villagers to stone once the line has started. Without starting stone that was a deadlock (measured: an owned
+        /// outpost and no shrine for 20000 ticks). So, only for the sanctuary civilisation, stone is wanted while it owns
+        /// an outpost, has no shrine yet and cannot pay the shrine's stone. Every other faction gets false.
+        /// </summary>
+        private bool SanctuaryNeedsShrineStone(uint faction)
+        {
+            if (!SanctuaryAllowed(faction)) return false;
+            if (world.Economies[faction - 1].Stone >= world.Config.Economy.ShrineStoneCost) return false;
+            if (OwnBuildingIndex(faction, BuildingKind.Shrine) >= 0) return false;
+            for (int i = 0; i < world.Outposts.Length; i++)
+                if (world.Outposts[i].OwnerFactionId == faction) return true;
+            return false;
+        }
+
         /// <summary>AI phase: the sanctuary civilisation researches its own techs at an idle completed shrine.</summary>
         private bool DecideSanctuaryResearch(uint faction)
         {
