@@ -292,6 +292,276 @@ namespace Rts.Core.Tests
             Assert.That(ScenarioBinary.Encode(reread), Is.EqualTo(upgraded));
         }
 
+        // ---- V3-16 #3: the choice score, the cavalry mirror, and the matches ----
+
+        private static readonly MethodInfo ScoreMethod = typeof(Battle).GetMethod("TollgateScore", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly MethodInfo SiteCount = typeof(Battle).GetMethod("CountTollgateChokeSites", Hidden);
+        private static readonly MethodInfo ChooseMethod = typeof(Battle).GetMethod("ChooseCiv", Hidden);
+
+        /// <summary>'#' is a wall, anything else is open. All rows must have the same length.</summary>
+        private static (int width, int height, bool[] passable, bool[] known) Grid(params string[] rows)
+        {
+            int width = rows[0].Length, height = rows.Length;
+            var passable = new bool[width * height];
+            var known = new bool[width * height];
+            for (int z = 0; z < height; z++)
+                for (int x = 0; x < width; x++)
+                {
+                    passable[z * width + x] = rows[z][x] != '#';
+                    known[z * width + x] = true;
+                }
+            return (width, height, passable, known);
+        }
+
+        private static string Row(int length, char fill) => new string(fill, length);
+
+        // One 1-wide corridor (row 7, x 15..19) is the short way; a wide gap (rows 11..14) is a longer way round.
+        private static string[] OneChokeRows()
+        {
+            var rows = new string[15];
+            for (int z = 0; z < 15; z++)
+            {
+                string left = Row(15, '.'), right = Row(20, '.');
+                string middle = z == 7 || z >= 11 ? Row(5, '.') : Row(5, '#');
+                rows[z] = left + middle + right;
+            }
+            return rows;
+        }
+
+        // Two such corridors in a row (x 15..19 and x 30..34), each with its own wide way round.
+        private static string[] TwoChokeRows()
+        {
+            var rows = new string[15];
+            for (int z = 0; z < 15; z++)
+            {
+                string gap = z == 7 || z >= 11 ? Row(5, '.') : Row(5, '#');
+                rows[z] = Row(15, '.') + gap + Row(10, '.') + gap + Row(10, '.');
+            }
+            return rows;
+        }
+
+        private static string[] OpenRows(int width) => Enumerable.Range(0, 15).Select(_ => Row(width, '.')).ToArray();
+
+        private static string[] OnlyCorridorRows()
+        {
+            var rows = new string[15];
+            for (int z = 0; z < 15; z++) rows[z] = Row(15, '.') + (z == 7 ? Row(5, '.') : Row(5, '#')) + Row(20, '.');
+            return rows;
+        }
+
+        private static int Sites(string[] rows, int core, int[] objectives, bool[] known = null)
+        {
+            var g = Grid(rows);
+            return Rts.Decision.TollgateTerrainScoring.CountSites(g.width, g.height, g.passable, known ?? g.known, core, objectives, 4);
+        }
+
+        private static int Cell(int width, int x, int z) => z * width + x;
+
+        [Test]
+        public void ChokeSitesAreCountedAsZeroOneAndTwo()
+        {
+            Assert.That(Sites(OpenRows(40), Cell(40, 2, 7), new[] { Cell(40, 37, 7) }), Is.EqualTo(0), "開けた地形");
+            Assert.That(Sites(OneChokeRows(), Cell(40, 2, 7), new[] { Cell(40, 37, 7) }), Is.EqualTo(1));
+            Assert.That(Sites(TwoChokeRows(), Cell(45, 2, 7), new[] { Cell(45, 43, 7) }), Is.EqualTo(2));
+            Assert.That(Rts.Decision.TollgateTerrainScoring.Points(0), Is.EqualTo(0));
+            Assert.That(Rts.Decision.TollgateTerrainScoring.Points(1), Is.EqualTo(2));
+            Assert.That(Rts.Decision.TollgateTerrainScoring.Points(2), Is.EqualTo(3));
+            Assert.That(Rts.Decision.TollgateTerrainScoring.Points(5), Is.EqualTo(3));
+        }
+
+        [Test]
+        public void UnseenCellsAndOwnRouteCuttingPlacesAreNotCounted()
+        {
+            // The enemy side was never seen: the objective is unknown, so nothing counts.
+            var g = Grid(OneChokeRows());
+            var known = (bool[])g.known.Clone();
+            for (int z = 0; z < g.height; z++) for (int x = 20; x < g.width; x++) known[Cell(g.width, x, z)] = false;
+            Assert.That(Sites(OneChokeRows(), Cell(40, 2, 7), new[] { Cell(40, 37, 7) }, known), Is.EqualTo(0), "見たことのない場所だけ");
+
+            // The wide way round was never seen either: closing the corridor would look like it cuts the owner off.
+            known = (bool[])g.known.Clone();
+            for (int z = 11; z < g.height; z++) for (int x = 15; x < 20; x++) known[Cell(g.width, x, z)] = false;
+            Assert.That(Sites(OneChokeRows(), Cell(40, 2, 7), new[] { Cell(40, 37, 7) }, known), Is.EqualTo(0));
+
+            // The only corridor: closing it would cut the owner's own route (a gate there could never be built).
+            Assert.That(Sites(OnlyCorridorRows(), Cell(40, 2, 7), new[] { Cell(40, 37, 7) }), Is.EqualTo(0), "自陣の経路も塞ぐ場所だけ");
+        }
+
+        [Test]
+        public void ChokeScoringDoesNotChangeItsInputs()
+        {
+            var g = Grid(OneChokeRows());
+            var passable = (bool[])g.passable.Clone();
+            var known = (bool[])g.known.Clone();
+            Rts.Decision.TollgateTerrainScoring.CountSites(g.width, g.height, g.passable, g.known, Cell(40, 2, 7), new[] { Cell(40, 37, 7) }, 4);
+            Assert.That(g.passable, Is.EqualTo(passable));
+            Assert.That(g.known, Is.EqualTo(known));
+        }
+
+        [Test]
+        public void CavalryAndTollgateMoveInOppositeDirectionsOnTheSameTerrain()
+        {
+            int[] objectives = { Cell(40, 30, 3), Cell(40, 30, 7), Cell(40, 30, 12) };
+            var open = Grid(OpenRows(40));
+            var choke = Grid(OneChokeRows());
+            // Objectives behind the corridor sit at x=30: keep them in the right-hand room.
+            int cavalryOpen = Rts.Decision.CavalryTerrainScoring.Score(open.width, open.height, open.passable, open.known, Cell(40, 2, 7), objectives, 8).Points;
+            int cavalryChoke = Rts.Decision.CavalryTerrainScoring.Score(choke.width, choke.height, choke.passable, choke.known, Cell(40, 2, 7), objectives, 8).Points;
+            int gateOpen = Rts.Decision.TollgateTerrainScoring.Score(open.width, open.height, open.passable, open.known, Cell(40, 2, 7), objectives, 4);
+            int gateChoke = Rts.Decision.TollgateTerrainScoring.Score(choke.width, choke.height, choke.passable, choke.known, Cell(40, 2, 7), objectives, 4);
+            TestContext.WriteLine("cavalry open/choke=" + cavalryOpen + "/" + cavalryChoke + ", tollgate open/choke=" + gateOpen + "/" + gateChoke);
+            Assert.That(cavalryOpen, Is.GreaterThan(cavalryChoke), "騎馬は隘路に頼らない地形を好む");
+            Assert.That(gateChoke, Is.GreaterThan(gateOpen), "関所は敵が隘路に頼る地形を好む");
+        }
+
+        [Test]
+        public void TollgateScoreIsZeroWithTheFlagOffAndChoiceIsUnchangedWhenTheScoreIsZero()
+        {
+            int sawZero = 0;
+            for (ulong seed = 1; seed <= 25; seed++)
+            {
+                var on = Scenario(seed);
+                var off = Scenario(seed);
+                off.Economy.Tollgate = false;
+                var simOn = new Battle(on);
+                var simOff = new Battle(off);
+                simOn.Step(1, Array.Empty<ScheduledInput>());
+                simOff.Step(1, Array.Empty<ScheduledInput>());
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var core = on.Cores[faction - 1].Position;
+                    Assert.That((int)ScoreMethod.Invoke(null, new object[] { simOff, faction, core, 0, 0 }), Is.EqualTo(0), "旗オフは0点");
+                    int score = (int)ScoreMethod.Invoke(null, new object[] { simOn, faction, core, 0, 0 });
+                    if (score != 0) continue;
+                    sawZero++;
+                    Assert.That((CivKind)ChooseMethod.Invoke(simOn, new object[] { faction }),
+                        Is.EqualTo((CivKind)ChooseMethod.Invoke(simOff, new object[] { faction })), "seed " + seed + " faction " + faction);
+                }
+            }
+            Assert.That(sawZero, Is.GreaterThan(0));
+        }
+
+        [Test]
+        public void ChoiceScoreOnRealMapsIsSmallTieredAndIgnoresUnexploredCells()
+        {
+            var tally = new Dictionary<int, int>();
+            ulong foundSeed = 0;
+            uint foundFaction = 0;
+            for (ulong seed = 1; seed <= 60; seed++)
+            {
+                var scenario = Scenario(seed);
+                var sim = new Battle(scenario);
+                sim.Step(1, Array.Empty<ScheduledInput>());
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var core = scenario.Cores[faction - 1].Position;
+                    int sites = (int)SiteCount.Invoke(sim, new object[] { faction, core });
+                    int score = (int)ScoreMethod.Invoke(null, new object[] { sim, faction, core, 0, 0 });
+                    Assert.That(score, Is.EqualTo(sites >= 2 ? 3 : sites == 1 ? 2 : 0));
+                    tally[score] = tally.TryGetValue(score, out int n) ? n + 1 : 1;
+                    if (score > 0 && foundSeed == 0) { foundSeed = seed; foundFaction = faction; }
+                }
+            }
+            TestContext.WriteLine("tollgate scores over seeds 1..60: " + string.Join(", ", tally.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value)));
+            if (foundSeed == 0) Assert.Inconclusive("tick 1 の見たことのある範囲で点がつく実際の地図が見つからない");
+            var again = new Battle(Scenario(foundSeed));
+            again.Step(1, Array.Empty<ScheduledInput>());
+            var world = typeof(Battle).GetField("world", Hidden).GetValue(again);
+            var factions = (Array)world.GetType().GetField("Factions", Hidden).GetValue(world);
+            var state = factions.GetValue((int)foundFaction - 1);
+            var explored = (bool[])state.GetType().GetField("ExploredCells", Hidden).GetValue(state);
+            Array.Clear(explored, 0, explored.Length);
+            Assert.That((int)ScoreMethod.Invoke(null, new object[] { again, foundFaction, Scenario(foundSeed).Cores[foundFaction - 1].Position, 0, 0 }), Is.EqualTo(0));
+        }
+
+        private static ScenarioDefinition MatchScenario(ulong seed)
+        {
+            var s = Scenario(seed);
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
+            return s;
+        }
+
+        [TestCase(CivKind.Tollgate, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Tollgate)]
+        [TestCase(CivKind.Tollgate, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Tollgate)]
+        public void TollgateMatchesReachTheSecondAgeWithoutFaultAndReplay(CivKind west, CivKind east)
+        {
+            var scenario = MatchScenario(21);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void NormalTollgateStartFindsASeedAndReplaysForTwentyThousandTicks()
+        {
+            ulong foundSeed = 0;
+            CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
+            for (ulong seed = 1; seed <= 300; seed++)
+            {
+                var probe = new Battle(MatchScenario(seed));
+                var probeGateway = new CommandGateway(probe);
+                Steps(probeGateway, probe, 80);
+                var west = probe.Capture(1).Economy.Civ;
+                var east = probe.Capture(2).Economy.Civ;
+                if (west == CivKind.Tollgate || east == CivKind.Tollgate)
+                {
+                    foundSeed = seed; foundWest = west; foundEast = east;
+                    break;
+                }
+            }
+            if (foundSeed == 0)
+            {
+                TestContext.WriteLine("関所が選ばれる種は seed 1..300 では見つからなかった");
+                Assert.Inconclusive("関所が選ばれる種が見つからない");
+                return;
+            }
+            var scenario = MatchScenario(foundSeed);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            TestContext.WriteLine("normal tollgate seed " + foundSeed + ": civs=" + foundWest + "/" + foundEast
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age);
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Tollgate || sim.Capture(2).Economy.Civ == CivKind.Tollgate, Is.True);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
         private static void SetSoldierPosition(object world, Array soldiers, int index, SimPoint position)
         {
             var boxed = soldiers.GetValue(index);
