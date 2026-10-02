@@ -198,7 +198,36 @@ namespace Rts.Simulation
             return usable >= 3 ? 3 : usable >= 1 ? 2 : 0;
         }
 
-        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        /// <summary>
+        /// V3-16 #3: the number of observed narrow places on the route from the own core to the enemy core and
+        /// outposts whose closing lengthens (but does not cut) that route. Only explored cells are used, terrain only
+        /// (no building), and one route search per narrow stretch, never one per map cell.
+        /// </summary>
+        private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.TollgateOn) return 0;
+            return TollgateTerrainScoring.Points(s.CountTollgateChokeSites(faction, core));
+        }
+
+        private int CountTollgateChokeSites(uint faction, SimPoint core)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int count = checked(width * height), coreCell = world.Map.Cell(core);
+            var explored = world.Factions[faction - 1].ExploredCells;
+            var passable = new bool[count];
+            Array.Fill(passable, world.Config.Map.DefaultPassable);
+            foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
+            var objectives = new System.Collections.Generic.List<int>();
+            int enemyCell = world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position);
+            if (enemyCell >= 0 && explored[enemyCell]) objectives.Add(enemyCell);
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                int cell = world.Map.Cell(world.Outposts[i].Definition.Position);
+                if (cell >= 0 && explored[cell] && !objectives.Contains(cell)) objectives.Add(cell);
+            }
+            objectives.Sort();
+            return TollgateTerrainScoring.CountSites(width, height, passable, explored, coreCell, objectives, CoreClearanceCells);
+        }
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
