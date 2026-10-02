@@ -396,17 +396,10 @@ namespace Rts.Simulation
         private int SanctuaryDamage(uint faction, int damage)
         {
             if (!SanctuaryAllowed(faction) || damage <= 0) return damage;
-            int shrines = 0;
-            for (int i = 0; i < world.BuildingCount; i++)
-            {
-                var shrine = world.Buildings[i];
-                if (!shrine.Alive || !shrine.Complete || shrine.FactionId != faction || shrine.Kind != BuildingKind.Shrine
-                    || shrine.SanctuaryOutpostId == 0 || shrine.SanctuaryOutpostId > world.Outposts.Length
-                    || world.Outposts[shrine.SanctuaryOutpostId - 1].OwnerFactionId != faction) continue;
-                shrines++;
-            }
-            int bonus = Math.Min(checked(shrines * world.Config.Economy.SanctuaryAttackBonusPermille),
-                world.Config.Economy.SanctuaryMaxBonusPermille);
+            int shrines = ActiveSanctuaryCount(faction);
+            // V3-18 #2: the holy relic replaces the per-sanctuary rate and the cap with its larger values.
+            var (perSanctuary, cap) = SanctuaryBonusRules(faction);
+            int bonus = Math.Min(checked(shrines * perSanctuary), cap);
             if (bonus <= 0) return damage;
             Fix64 multiplier = Fix64.FromRatio(1000L + bonus, 1000L);
             // Fixed-point multiplication is rounded to the nearest integer so a

@@ -37,16 +37,18 @@ namespace Rts.Core.Tests
         }
 
         private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtSanctuaryAge()
+            => AtCivAge(Scenario(true), CivKind.Sanctuary);
+
+        private static (ScenarioDefinition scenario, Battle sim, CommandGateway gateway, ulong sequence) AtCivAge(ScenarioDefinition scenario, CivKind civ)
         {
-            var scenario = Scenario(true);
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             ulong sequence = 0;
             gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
             gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
-            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Sanctuary));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, civ));
             Steps(gateway, sim, scenario.Economy.AdvanceTicks + 2);
-            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(CivKind.Sanctuary));
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(civ));
             return (scenario, sim, gateway, sequence);
         }
 
@@ -170,6 +172,433 @@ namespace Rts.Core.Tests
             {
                 var identity = new BuildIdentity();
                 ReplayRunner.Record(stream, scenario, Array.Empty<ScheduledInput>(), 20000, identity);
+                stream.Position = 0;
+                var outcome = ReplayRunner.Replay(stream, identity);
+                Assert.That(outcome.FirstMismatchTick, Is.Null);
+                Assert.That(outcome.IsFault, Is.False);
+            }
+        }
+
+        // ---- V3-18 #2: outpost targeting, pilgrimage (26), holy relic (27), extension v2 ----
+
+        private static object World(Battle sim) => typeof(Battle).GetField("world", Private).GetValue(sim);
+
+        private static void SetEconomyField(Battle sim, uint faction, string name, object value)
+        {
+            object world = World(sim);
+            var economies = (Array)world.GetType().GetField("Economies", Private).GetValue(world);
+            object economy = economies.GetValue((int)faction - 1);
+            economy.GetType().GetField(name, Private).SetValue(economy, value);
+            economies.SetValue(economy, (int)faction - 1);
+        }
+
+        private static void SetTech(Battle sim, uint faction, TechKind tech, bool enabled)
+        {
+            object world = World(sim);
+            var economies = (Array)world.GetType().GetField("Economies", Private).GetValue(world);
+            object economy = economies.GetValue((int)faction - 1);
+            var techs = economy.GetType().GetField("Techs", Private);
+            ulong bits = (ulong)techs.GetValue(economy);
+            ulong mask = 1UL << ((int)tech - 1);
+            techs.SetValue(economy, enabled ? bits | mask : bits & ~mask);
+            economies.SetValue(economy, (int)faction - 1);
+        }
+
+        private static int EconomyInt(Battle sim, uint faction, string name)
+        {
+            object world = World(sim);
+            var economies = (Array)world.GetType().GetField("Economies", Private).GetValue(world);
+            object economy = economies.GetValue((int)faction - 1);
+            return (int)economy.GetType().GetField(name, Private).GetValue(economy);
+        }
+
+        private static TechKind BuildingResearching(Battle sim, uint id)
+        {
+            object world = World(sim);
+            var buildings = (Array)world.GetType().GetField("Buildings", Private).GetValue(world);
+            for (int i = 0; i < buildings.Length; i++)
+            {
+                object building = buildings.GetValue(i);
+                if (building != null && (uint)building.GetType().GetField("Id", Private).GetValue(building) == id)
+                    return (TechKind)building.GetType().GetField("Researching", Private).GetValue(building);
+            }
+            Assert.Fail("no building " + id);
+            return 0;
+        }
+
+        private static void ReleaseBuilding(Battle sim, uint id)
+        {
+            object world = World(sim);
+            var buildings = (Array)world.GetType().GetField("Buildings", Private).GetValue(world);
+            for (int i = 0; i < buildings.Length; i++)
+            {
+                object building = buildings.GetValue(i);
+                if (building == null || (uint)building.GetType().GetField("Id", Private).GetValue(building) != id) continue;
+                building.GetType().GetField("Held", Private).SetValue(building, false);
+                buildings.SetValue(building, i);
+                return;
+            }
+            Assert.Fail("no building " + id);
+        }
+
+        private static bool HasTech(Battle sim, uint faction, TechKind tech)
+            => (bool)typeof(Battle).GetMethod("HasTech", Private).Invoke(sim, new object[] { faction, tech });
+
+        private static bool TechOpen(Battle sim, uint faction, TechKind tech)
+            => (bool)typeof(Battle).GetMethod("TechOpen", Private).Invoke(sim, new object[] { faction, tech });
+
+        private static int SoldierOf(Battle sim, uint faction, int skip = 0)
+        {
+            object world = World(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+            for (int i = 0; i < soldiers.Length; i++)
+            {
+                object soldier = soldiers.GetValue(i);
+                if (soldier == null || !(bool)soldier.GetType().GetField("Alive", Private).GetValue(soldier)) continue;
+                object initial = soldier.GetType().GetField("Initial", Private).GetValue(soldier);
+                if ((uint)initial.GetType().GetField("FactionId").GetValue(initial) != faction) continue;
+                if (skip-- == 0) return i;
+            }
+            Assert.Fail("no living soldier of faction " + faction);
+            return -1;
+        }
+
+        private static int MaxHp(Battle sim, int index)
+        {
+            object world = World(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+            object soldier = soldiers.GetValue(index);
+            object parameters = soldier.GetType().GetField("Parameters", Private).GetValue(soldier);
+            return (int)parameters.GetType().GetField("Hp").GetValue(parameters);
+        }
+
+        private static int Hp(Battle sim, int index)
+        {
+            object world = World(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+            object soldier = soldiers.GetValue(index);
+            return (int)soldier.GetType().GetField("Hp", Private).GetValue(soldier);
+        }
+
+        private static void PlaceSoldier(Battle sim, int index, SimPoint position, int hp)
+        {
+            object world = World(sim);
+            var soldiers = (Array)world.GetType().GetField("Soldiers", Private).GetValue(world);
+            object soldier = soldiers.GetValue(index);
+            soldier.GetType().GetField("Position", Private).SetValue(soldier, position);
+            soldier.GetType().GetField("Hp", Private).SetValue(soldier, hp);
+            soldiers.SetValue(soldier, index);
+        }
+
+        private static void Pulse(Battle sim)
+            => typeof(Battle).GetMethod("SanctuaryPilgrimagePulse", Private).Invoke(sim, null);
+
+        private static FactionObservation Targets(Battle sim, uint faction, FactionObservation observation)
+            => (FactionObservation)typeof(Battle).GetMethod("SanctuaryTargetObservation", Private).Invoke(sim, new object[] { faction, observation });
+
+        private static bool Focus(Battle sim, uint faction, FactionObservation observation)
+            => (bool)typeof(Battle).GetMethod("SanctuaryOutpostFocus", Private).Invoke(sim, new object[] { faction, observation });
+
+        private static bool Skips(Battle sim, uint faction, bool focus, GoalKind kind, uint id)
+            => (bool)typeof(Battle).GetMethod("SanctuarySkipsGoal", Private).Invoke(sim, new object[] { faction, focus, kind, id });
+
+        private static SimPoint P(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
+
+        /// <summary>Runs the unchanged common allocation for one infantry army, with routes built the way DecideArmies builds them.</summary>
+        private static PolicyGoal Allocate(Battle sim, uint faction, FactionObservation observation, IDictionary<(GoalKind, uint), int> distances)
+        {
+            var targets = Targets(sim, faction, observation);
+            bool focus = Focus(sim, faction, targets);
+            var army = new OwnArmyView(1, faction, UnitKind.Infantry, P(10, 10), 5, default);
+            var routes = targets.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id).Select(o => new ObjectiveRoute(
+                new PolicyGoal(o.Kind, o.Id, default),
+                Skips(sim, faction, focus, o.Kind, o.Id) ? int.MaxValue : distances[(o.Kind, o.Id)],
+                new[] { army.Position, o.Position })).ToArray();
+            var input = new ArmyDecisionInput(army, default, false, default, routes);
+            return Rts.Decision.PolicyDecision.Allocate(targets, observation.Tick, new[] { input }, 0, Array.Empty<uint>(),
+                Array.Empty<AttackMemory>(), Array.Empty<PolicyOrder>(), out _)[0].Goal;
+        }
+
+        [Test]
+        public void SanctuaryAutoTargetsAnObservedEasyOutpostAndNeverAnUnseenOne()
+        {
+            var state = AtSanctuaryAge();
+            var sim = state.sim;
+            uint ownCore = state.scenario.Cores[0].Id, enemyCore = state.scenario.Cores[1].Id;
+            const long tick = 1000;
+            // A far visible enemy fills the public enemy cap, so the unseen outpost carries no doctrine warning and the
+            // common ordering alone would prefer it for being nearer.
+            var far = new VisibleEnemy(1, P(5000, 5000), (byte)UnitKind.Infantry);
+            var farContact = new EnemyContact(1, P(5000, 5000), tick, 1, 1, true);
+            var cores = new[]
+            {
+                new KnownObjective(GoalKind.Core, ownCore, P(10, 10), true, 1, true, 100, tick),
+                new KnownObjective(GoalKind.Core, enemyCore, P(300, 10), true, 2, true, 100, tick),
+            };
+            var seenEnemyPost = new KnownObjective(GoalKind.Outpost, 1, P(60, 80), true, 2, false, 0, tick);
+            var unseenPost = new KnownObjective(GoalKind.Outpost, 2, P(40, 10), false, 0, false, 0, 0);
+            var observation = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), new[] { far }, new[] { farContact },
+                cores.Concat(new[] { seenEnemyPost, unseenPost }).ToArray(), 1);
+            var distances = new Dictionary<(GoalKind, uint), int>
+            {
+                [(GoalKind.Core, ownCore)] = 0, [(GoalKind.Core, enemyCore)] = 30,
+                [(GoalKind.Outpost, 1)] = 50, [(GoalKind.Outpost, 2)] = 10,
+            };
+
+            var targets = Targets(sim, 1, observation);
+            Assert.That(targets.Objectives.Where(o => o.Kind == GoalKind.Outpost).Select(o => o.Id), Is.EqualTo(new[] { 1u }), "見ていない拠点は候補から外す");
+            var chosen = Allocate(sim, 1, observation, distances);
+            Assert.That((chosen.Kind, chosen.Id), Is.EqualTo((GoalKind.Outpost, 1u)), "観測した拠点を取りに行く");
+            // The common policy itself, given the unchanged observation, would have chosen the nearer unseen outpost.
+            var army = new OwnArmyView(1, 1, UnitKind.Infantry, P(10, 10), 5, default);
+            var plainRoutes = observation.Objectives.Select(o => new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default),
+                distances[(o.Kind, o.Id)], new[] { army.Position, o.Position })).ToArray();
+            var plain = Rts.Decision.PolicyDecision.Allocate(observation, tick, new[] { new ArmyDecisionInput(army, default, false, default, plainRoutes) },
+                0, Array.Empty<uint>(), Array.Empty<AttackMemory>(), Array.Empty<PolicyOrder>(), out _)[0].Goal;
+            Assert.That((plain.Kind, plain.Id), Is.EqualTo((GoalKind.Outpost, 2u)), "共通の判断だけなら近い未観測の拠点を選ぶ（比較用）");
+
+            // Once one outpost is already own, the sanctuary has its foothold and goes back to the common behaviour:
+            // the enemy core is a candidate again, so an outpost it cannot take never keeps it from the core.
+            var ownPost = new KnownObjective(GoalKind.Outpost, 1, P(60, 80), true, 1, false, 0, tick);
+            var neutralPost = new KnownObjective(GoalKind.Outpost, 2, P(40, 10), true, 0, false, 0, tick);
+            var open = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), new[] { far }, new[] { farContact },
+                cores.Concat(new[] { ownPost, neutralPost }).ToArray(), 1);
+            Assert.That(Targets(sim, 1, open), Is.SameAs(open), "拠点を1つ持っていれば観測はそのまま");
+            Assert.That(Focus(sim, 1, open), Is.False, "拠点を1つ持ったら拠点だけを狙う状態は終わる");
+            Assert.That(Skips(sim, 1, Focus(sim, 1, open), GoalKind.Core, enemyCore), Is.False, "拠点を持ったら敵のコアも候補に戻る");
+            Assert.That(Focus(sim, 1, observation), Is.True, "拠点を1つも持たず、観測した拠点があれば拠点を狙う");
+            Assert.That(Skips(sim, 1, true, GoalKind.Core, enemyCore), Is.True, "その間は敵のコアを候補から外す");
+
+            var crowdedPost = new KnownObjective(GoalKind.Outpost, 1, P(60, 80), true, 2, false, 0, tick);
+            var guards = Enumerable.Range(0, 3).Select(i => new VisibleEnemy((uint)(10 + i), P(60, 80), (byte)UnitKind.Infantry)).ToArray();
+            var guardContacts = guards.Select(g => new EnemyContact(g.ContactId, g.Position, tick, 1, 1, true)).ToArray();
+            var easy = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), guards, guardContacts,
+                cores.Concat(new[] { crowdedPost, neutralPost }).ToArray(), 40);
+            var easyDistances = new Dictionary<(GoalKind, uint), int>
+            {
+                [(GoalKind.Core, ownCore)] = 0, [(GoalKind.Core, enemyCore)] = 20,
+                [(GoalKind.Outpost, 1)] = 30, [(GoalKind.Outpost, 2)] = 60,
+            };
+            var easyChoice = Allocate(sim, 1, easy, easyDistances);
+            Assert.That((easyChoice.Kind, easyChoice.Id), Is.EqualTo((GoalKind.Outpost, 2u)), "見えている敵が少ない拠点を優先");
+
+            // Another civilisation, and a sanctuary with nothing observed to take, get the observation unchanged.
+            var other = new FactionObservation(2, tick, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(),
+                cores.Concat(new[] { seenEnemyPost, unseenPost }).ToArray());
+            Assert.That(Targets(sim, 2, other), Is.SameAs(other), "聖地でない陣営は変わらない");
+            Assert.That(Focus(sim, 2, other), Is.False);
+            var nothing = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(),
+                cores.Concat(new[] { ownPost, unseenPost }).ToArray());
+            Assert.That(Targets(sim, 1, nothing), Is.SameAs(nothing), "取れる拠点を観測していなければ従来どおり");
+            Assert.That(Focus(sim, 1, nothing), Is.False);
+            Assert.That(Skips(sim, 1, true, GoalKind.Core, ownCore), Is.False, "自分のコアへの道は残す");
+        }
+
+        [Test]
+        public void PilgrimageHealsOnlyOwnSoldiersNearAnOwnSanctuaryAfterResearch()
+        {
+            var state = AtSanctuaryAge();
+            var sim = state.sim;
+            PlaceAndBuildShrine(state.scenario, sim, state.gateway, ref state.sequence, 1);
+            SetOutpostOwner(sim, 1, 1);
+            var post = state.scenario.Outposts[0].Position;
+            int near = SoldierOf(sim, 1), far = SoldierOf(sim, 1, 1), enemy = SoldierOf(sim, 2);
+            int max = MaxHp(sim, near);
+            var edge = new SimPoint(post.X + Fix64.FromInt(state.scenario.Economy.SanctuaryPilgrimageRadius), post.Z);
+            var beyond = new SimPoint(post.X + Fix64.FromInt(state.scenario.Economy.SanctuaryPilgrimageRadius + 1), post.Z);
+
+            PlaceSoldier(sim, near, edge, max - 5);
+            PlaceSoldier(sim, far, beyond, max - 5);
+            PlaceSoldier(sim, enemy, post, MaxHp(sim, enemy) - 5);
+            Pulse(sim);
+            Assert.That(Hp(sim, near), Is.EqualTo(max - 5), "未研究では回復しない");
+
+            SetTech(sim, 1, SanctuaryTech.Pilgrimage, true);
+            Pulse(sim);
+            Assert.That(Hp(sim, near), Is.EqualTo(max - 5 + state.scenario.Economy.SanctuaryPilgrimageHeal), "聖地の16m以内");
+            Assert.That(Hp(sim, far), Is.EqualTo(max - 5), "聖地から遠い");
+            Assert.That(Hp(sim, enemy), Is.EqualTo(MaxHp(sim, enemy) - 5), "敵の兵は回復しない");
+
+            PlaceSoldier(sim, near, post, max);
+            Pulse(sim);
+            Assert.That(Hp(sim, near), Is.EqualTo(max), "最大HPを超えない");
+
+            // The tick gate: only on pilgrimage interval ticks.
+            PlaceSoldier(sim, near, post, max - 5);
+            object world = World(sim);
+            var tickField = world.GetType().GetField("Tick", Private);
+            long saved = (long)tickField.GetValue(world);
+            int interval = state.scenario.Economy.SanctuaryPilgrimageIntervalTicks;
+            tickField.SetValue(world, (long)interval * 7 + 1);
+            typeof(Battle).GetMethod("AdvanceSanctuaryPilgrimage", Private).Invoke(sim, null);
+            Assert.That(Hp(sim, near), Is.EqualTo(max - 5));
+            tickField.SetValue(world, (long)interval * 7);
+            typeof(Battle).GetMethod("AdvanceSanctuaryPilgrimage", Private).Invoke(sim, null);
+            Assert.That(Hp(sim, near), Is.EqualTo(max - 4));
+            tickField.SetValue(world, saved);
+
+            // Losing the outpost stops the sanctuary, so the heal stops with it.
+            SetOutpostOwner(sim, 1, 2);
+            Pulse(sim);
+            Assert.That(Hp(sim, near), Is.EqualTo(max - 4), "拠点を奪われたら止まる");
+            SetOutpostOwner(sim, 1, 1);
+
+            // The holy relic, on the default values: one sanctuary gives +15% instead of +10%.
+            Assert.That(SanctuaryDamage(sim, 1, 100), Is.EqualTo(110));
+            SetTech(sim, 1, SanctuaryTech.HolyRelic, true);
+            Assert.That(SanctuaryDamage(sim, 1, 100), Is.EqualTo(115));
+            Assert.That(SanctuaryDamage(sim, 2, 100), Is.EqualTo(100));
+
+            // Another civilisation with the same tech bit and a soldier on the outpost is never healed.
+            var otherState = AtCivAge(Scenario(true), CivKind.Agrarian);
+            SetOutpostOwner(otherState.sim, 1, 1);
+            SetTech(otherState.sim, 1, SanctuaryTech.Pilgrimage, true);
+            int otherSoldier = SoldierOf(otherState.sim, 1);
+            int otherMax = MaxHp(otherState.sim, otherSoldier);
+            PlaceSoldier(otherState.sim, otherSoldier, post, otherMax - 5);
+            Pulse(otherState.sim);
+            Assert.That(Hp(otherState.sim, otherSoldier), Is.EqualTo(otherMax - 5), "他の文明は変わらない");
+        }
+
+        [Test]
+        public void HolyRelicRaisesTheRateAndTheCapOfTheSanctuaryBonus()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.SanctuaryAttackBonusPermille = 200;
+            scenario.Economy.SanctuaryMaxBonusPermille = 300;
+            scenario.Economy.SanctuaryRelicBonusPermille = 300;
+            scenario.Economy.SanctuaryRelicMaxBonusPermille = 450;
+            var state = AtCivAge(scenario, CivKind.Sanctuary);
+            PlaceAndBuildShrine(state.scenario, state.sim, state.gateway, ref state.sequence, 1);
+            SetOutpostOwner(state.sim, 1, 1);
+            Assert.That(SanctuaryDamage(state.sim, 1, 100), Is.EqualTo(120));
+            SetTech(state.sim, 1, SanctuaryTech.HolyRelic, true);
+            Assert.That(SanctuaryDamage(state.sim, 1, 100), Is.EqualTo(130), "聖地1つあたりの上がり方が増える");
+            Assert.That(SanctuaryDamage(state.sim, 2, 100), Is.EqualTo(100));
+            Assume.That(state.scenario.Outposts.Length, Is.GreaterThan(1));
+            SetTech(state.sim, 1, SanctuaryTech.HolyRelic, false);
+            SetOutpostOwner(state.sim, 2, 1);
+            PlaceAndBuildShrine(state.scenario, state.sim, state.gateway, ref state.sequence, 2);
+            SetOutpostOwner(state.sim, 1, 1);
+            SetOutpostOwner(state.sim, 2, 1);
+            Assert.That(SanctuaryDamage(state.sim, 1, 100), Is.EqualTo(130), "研究前の上限30%");
+            SetTech(state.sim, 1, SanctuaryTech.HolyRelic, true);
+            Assert.That(SanctuaryDamage(state.sim, 1, 100), Is.EqualTo(145), "上限が45%に増える");
+            Assert.That(SanctuaryDamage(state.sim, 2, 100), Is.EqualTo(100));
+        }
+
+        [Test]
+        public void SanctuaryResearchIsShrineOnlyAgeGatedAndReplaysTheNewTechValues()
+        {
+            var state = AtSanctuaryAge();
+            uint shrine = PlaceAndBuildShrine(state.scenario, state.sim, state.gateway, ref state.sequence, 1);
+            Assert.That(TechOpen(state.sim, 1, SanctuaryTech.Pilgrimage), Is.False, "第1時代では巡礼は閉じる");
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, shrine, SanctuaryTech.Pilgrimage));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(state.sim.Capture(1).Economy.Buildings.First(b => b.Id == shrine).Researching, Is.EqualTo((TechKind)0));
+
+            SetEconomyField(state.sim, 1, "Age", (byte)2);
+            Assert.That(TechOpen(state.sim, 1, SanctuaryTech.Pilgrimage), Is.True);
+            Assert.That(TechOpen(state.sim, 1, SanctuaryTech.HolyRelic), Is.False, "第2時代では聖遺物は閉じる");
+            Assert.That(TechOpen(state.sim, 2, SanctuaryTech.Pilgrimage), Is.False, "聖地でない陣営は研究できない");
+            // Food 0: a single tick's drop-off cannot reach the research price.
+            SetEconomyField(state.sim, 1, "Food", 0);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, shrine, SanctuaryTech.Pilgrimage));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(state.sim.Capture(1).Economy.Buildings.First(b => b.Id == shrine).Researching, Is.EqualTo((TechKind)0), "食料が足りない");
+
+            SetEconomyField(state.sim, 1, "Food", 1000);
+            SetEconomyField(state.sim, 1, "Wood", 1000);
+            ReleaseBuilding(state.sim, shrine); // a player-placed building is held from automation until released
+            Assert.That((bool)typeof(Battle).GetMethod("DecideSanctuaryResearch", Private).Invoke(state.sim, new object[] { 1u }), Is.True, "お任せが祠で研究を始める");
+            Assert.That(BuildingResearching(state.sim, shrine), Is.EqualTo(SanctuaryTech.Pilgrimage));
+            Assert.That(EconomyInt(state.sim, 1, "Food"), Is.EqualTo(1000 - state.scenario.Economy.SanctuaryPilgrimageFoodCost));
+            Assert.That(EconomyInt(state.sim, 1, "Wood"), Is.EqualTo(1000 - state.scenario.Economy.SanctuaryPilgrimageWoodCost));
+            Steps(state.gateway, state.sim, state.scenario.Economy.SanctuaryPilgrimageTicks + 1);
+            Assert.That(HasTech(state.sim, 1, SanctuaryTech.Pilgrimage), Is.True);
+
+            SetEconomyField(state.sim, 1, "Age", (byte)3);
+            SetEconomyField(state.sim, 1, "Food", 1000);
+            SetEconomyField(state.sim, 1, "Wood", 1000);
+            state.gateway.SubmitEconomy(EconomyCommand.Research(1, ++state.sequence, shrine, SanctuaryTech.HolyRelic));
+            Steps(state.gateway, state.sim, 1);
+            Assert.That(state.sim.Capture(1).Economy.Buildings.First(b => b.Id == shrine).Researching, Is.EqualTo(SanctuaryTech.HolyRelic));
+            Steps(state.gateway, state.sim, state.scenario.Economy.SanctuaryRelicTicks + 1);
+            Assert.That(HasTech(state.sim, 1, SanctuaryTech.HolyRelic), Is.True);
+
+            // Both new tech values pass through the replay record (its tech range now reaches 27).
+            using (var stream = new MemoryStream())
+            {
+                var build = new BuildIdentity();
+                var record = ReplayRunner.Record(stream, state.scenario, state.gateway.Inputs, state.sim.Capture(1).Tick, build);
+                Assert.That(record.IsFault, Is.False);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, build);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        [Test]
+        public void SanctuaryExtensionVersionOneIsReadableAndVersionTwoRoundTrips()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.SanctuaryRelicBonusPermille = 160;
+            scenario.Economy.SanctuaryPilgrimageRadius = 18;
+            byte[] current = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(current);
+            var extension = decoded.Extensions.Single(e => e.Id == 8);
+            Assert.That(extension.Version, Is.EqualTo(2));
+            Assert.That(extension.Data.Length, Is.EqualTo(20 * sizeof(int)));
+            Assert.That(decoded.Economy.SanctuaryRelicBonusPermille, Is.EqualTo(160));
+            Assert.That(decoded.Economy.SanctuaryPilgrimageRadius, Is.EqualTo(18));
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(current));
+
+            // Rebuild the same bytes as a version-1 record (the first nine integers only).
+            byte[] marker = BitConverter.GetBytes(0x4E545845);
+            int markerOffset = -1;
+            for (int i = 0; i <= current.Length - marker.Length; i++)
+                if (current.Skip(i).Take(marker.Length).SequenceEqual(marker)) { markerOffset = i; break; }
+            Assert.That(markerOffset, Is.GreaterThanOrEqualTo(0));
+            int sectionLength = BitConverter.ToInt32(current, markerOffset + 8);
+            int recordOffset = markerOffset + 12;
+            Assert.That(BitConverter.ToInt32(current, recordOffset), Is.EqualTo(8), "the sanctuary record is the only extension here");
+            Assert.That(sectionLength, Is.EqualTo(12 + 20 * sizeof(int)));
+            Assert.That(markerOffset + 12 + sectionLength, Is.EqualTo(current.Length));
+            byte[] old = new byte[recordOffset + 12 + 9 * sizeof(int)];
+            Array.Copy(current, old, old.Length);
+            Array.Copy(BitConverter.GetBytes(12 + 9 * sizeof(int)), 0, old, markerOffset + 8, sizeof(int));
+            Array.Copy(BitConverter.GetBytes(1), 0, old, recordOffset + 4, sizeof(int));
+            Array.Copy(BitConverter.GetBytes(9 * sizeof(int)), 0, old, recordOffset + 8, sizeof(int));
+
+            var fromOld = ScenarioBinary.Decode(old);
+            Assert.That(fromOld.Economy.Sanctuary, Is.True);
+            Assert.That(fromOld.Extensions.Single(e => e.Id == 8).Version, Is.EqualTo(1));
+            Assert.That(fromOld.Economy.ShrineWork, Is.EqualTo(scenario.Economy.ShrineWork));
+            var defaults = new EconomyRules();
+            Assert.That(fromOld.Economy.SanctuaryRelicBonusPermille, Is.EqualTo(defaults.SanctuaryRelicBonusPermille), "版1には研究の値がないので既定値");
+            Assert.That(fromOld.Economy.SanctuaryPilgrimageRadius, Is.EqualTo(defaults.SanctuaryPilgrimageRadius));
+            byte[] upgraded = ScenarioBinary.Encode(fromOld);
+            var reread = ScenarioBinary.Decode(upgraded);
+            Assert.That(reread.Extensions.Single(e => e.Id == 8).Version, Is.EqualTo(2));
+            Assert.That(ScenarioBinary.Encode(reread), Is.EqualTo(upgraded));
+        }
+
+        [Test]
+        public void SanctuaryCivilisationReplayIsDeterministicForTwentyThousandTicks()
+        {
+            var scenario = Scenario(true);
+            scenario.UnitParameters = MapGenerator.GenerateTerrain(1).UnitParameters;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Sanctuary));
+            Steps(gateway, sim, 2);
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                var record = ReplayRunner.Record(stream, scenario, gateway.Inputs, 20000, identity);
+                Assert.That(record.IsFault, Is.False);
                 stream.Position = 0;
                 var outcome = ReplayRunner.Replay(stream, identity);
                 Assert.That(outcome.FirstMismatchTick, Is.Null);

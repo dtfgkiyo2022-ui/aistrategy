@@ -122,6 +122,7 @@ namespace Rts.Simulation
             AdvanceAges();
             AdvanceResearch();
             AdvanceTollgateFees();
+            AdvanceSanctuaryPilgrimage();
             int count = world.VillagerCount; // villagers trained below start next tick
             for (int i = 0; i < count; i++)
             {

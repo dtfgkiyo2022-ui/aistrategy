@@ -49,8 +49,10 @@ namespace Rts.Simulation
         private const int MetropolisExtensionV1DataLength = 5 * sizeof(int);
         private const int MetropolisExtensionDataLength = 16 * sizeof(int);
         private const int SanctuaryExtensionId = 8;
-        private const int SanctuaryExtensionVersion = 1;
-        private const int SanctuaryExtensionDataLength = 9 * sizeof(int);
+        private const int SanctuaryExtensionV1 = 1;
+        private const int SanctuaryExtensionVersion = 2;
+        private const int SanctuaryExtensionV1DataLength = 9 * sizeof(int);
+        private const int SanctuaryExtensionDataLength = 20 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -554,8 +556,11 @@ namespace Rts.Simulation
                     && dataLength == MetropolisExtensionV1DataLength;
                 bool oldTollgate = id == TollgateExtensionId && featureVersion == TollgateExtensionV1
                     && dataLength == TollgateExtensionV1DataLength;
-                if ((!oldCult && !oldMountain && !oldFishing && !oldTollgate && !oldMetropolis && featureVersion != registration.Version)
-                    || (!oldCult && !oldMountain && !oldFishing && !oldTollgate && !oldMetropolis && dataLength != registration.DataLength) || dataLength < 0
+                bool oldSanctuary = id == SanctuaryExtensionId && featureVersion == SanctuaryExtensionV1
+                    && dataLength == SanctuaryExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary;
+                if ((!old && featureVersion != registration.Version)
+                    || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
                     throw new InvalidDataException("Invalid scenario extension version or length.");
                 var data = r.ReadBytes(dataLength);
@@ -662,7 +667,12 @@ namespace Rts.Simulation
             }
             if (c.Economy.Metropolis && !hasMetropolis) extensions.Add(CreateMetropolisExtension(c.Economy));
             bool hasSanctuary = false;
-            for (int i = 0; i < extensions.Count; i++) if (extensions[i] != null && extensions[i].Id == SanctuaryExtensionId) hasSanctuary = true;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != SanctuaryExtensionId) continue;
+                hasSanctuary = true;
+                if (extensions[i].Version == SanctuaryExtensionV1) extensions[i] = CreateSanctuaryExtension(c.Economy);
+            }
             if (c.Economy.Sanctuary && !hasSanctuary) extensions.Add(CreateSanctuaryExtension(c.Economy));
             return extensions.ToArray();
         }
@@ -676,6 +686,10 @@ namespace Rts.Simulation
                 writer.Write(e.ShrineSizeCells); writer.Write(e.ShrineWoodCost); writer.Write(e.ShrineStoneCost);
                 writer.Write(e.ShrineWork); writer.Write(e.ShrineHp); writer.Write(e.ShrineOutpostReach);
                 writer.Write(e.SanctuaryAttackBonusPermille); writer.Write(e.SanctuaryMaxBonusPermille);
+                writer.Write(e.SanctuaryPilgrimageFoodCost); writer.Write(e.SanctuaryPilgrimageWoodCost); writer.Write(e.SanctuaryPilgrimageTicks);
+                writer.Write(e.SanctuaryRelicFoodCost); writer.Write(e.SanctuaryRelicWoodCost); writer.Write(e.SanctuaryRelicTicks);
+                writer.Write(e.SanctuaryPilgrimageRadius); writer.Write(e.SanctuaryPilgrimageIntervalTicks); writer.Write(e.SanctuaryPilgrimageHeal);
+                writer.Write(e.SanctuaryRelicBonusPermille); writer.Write(e.SanctuaryRelicMaxBonusPermille);
                 return new ScenarioExtensionData { Id = SanctuaryExtensionId, Version = SanctuaryExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -691,6 +705,13 @@ namespace Rts.Simulation
                 e.ShrineSizeCells = reader.ReadInt32(); e.ShrineWoodCost = reader.ReadInt32(); e.ShrineStoneCost = reader.ReadInt32();
                 e.ShrineWork = reader.ReadInt32(); e.ShrineHp = reader.ReadInt32(); e.ShrineOutpostReach = reader.ReadInt32();
                 e.SanctuaryAttackBonusPermille = reader.ReadInt32(); e.SanctuaryMaxBonusPermille = reader.ReadInt32();
+                if (extension.Version >= SanctuaryExtensionVersion)
+                {
+                    e.SanctuaryPilgrimageFoodCost = reader.ReadInt32(); e.SanctuaryPilgrimageWoodCost = reader.ReadInt32(); e.SanctuaryPilgrimageTicks = reader.ReadInt32();
+                    e.SanctuaryRelicFoodCost = reader.ReadInt32(); e.SanctuaryRelicWoodCost = reader.ReadInt32(); e.SanctuaryRelicTicks = reader.ReadInt32();
+                    e.SanctuaryPilgrimageRadius = reader.ReadInt32(); e.SanctuaryPilgrimageIntervalTicks = reader.ReadInt32(); e.SanctuaryPilgrimageHeal = reader.ReadInt32();
+                    e.SanctuaryRelicBonusPermille = reader.ReadInt32(); e.SanctuaryRelicMaxBonusPermille = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing sanctuary extension data.");
             }
         }
