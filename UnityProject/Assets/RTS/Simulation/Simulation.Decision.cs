@@ -71,6 +71,11 @@ namespace Rts.Simulation
 
                 }
 
+                // The sanctuary civilisation hands the common policies a candidate list of observed outposts only, and
+                // reports the enemy core unreachable while such an outpost is not yet its own. For every other faction
+                // this is the same observation instance and focus is false, so nothing below changes for them.
+                var targets = SanctuaryTargetObservation(f, observation);
+                bool sanctuaryFocus = SanctuaryOutpostFocus(f, targets);
                 var inputs = new List<ArmyDecisionInput>();
                 foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
                 {
@@ -78,10 +83,11 @@ namespace Rts.Simulation
                     uint first = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).DefaultIfEmpty(0U).First();
                     var start = first == 0 ? world.Map.Cell(view.Position) : world.Map.Cell(world.Soldiers[first - 1].Position);
                     var routes = new List<ObjectiveRoute>();
-                    foreach (var o in observation.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
+                    foreach (var o in targets.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
                     {
                         var path = world.Map.FindPath(start, o.Position, f);
                         int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
+                        if (SanctuarySkipsGoal(f, sanctuaryFocus, o.Kind, o.Id)) distance = int.MaxValue;
                         routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, path.Select(world.Map.Center).ToArray()));
                     }
                     if (OffenseDecision.IsMobileArmyKind(view.Kind))
@@ -104,9 +110,9 @@ namespace Rts.Simulation
                     return new OffenseArmyInput(i.Army.Id, live.Select(id => world.Soldiers[id - 1].Position).ToArray(), live.Length == 0 ? 0 : world.Soldiers[live[0] - 1].StepDistance.Raw,
                         false, ReturnComplete(observation, a), a.AutoStartIds.Length, a.AutoStartIds.Count(id => !world.Soldiers[id - 1].Alive));
                 }).ToArray();
-                var offenseRoutes = OffenseRoutes(observation, inputs);
+                var offenseRoutes = OffenseRoutes(targets, inputs);
                 var assessed = inputs.Select(i => i.Memory).ToArray();
-                OffenseDecision.Retreat(observation, world.Tick, offenseMemory[f - 1], inputs, own, assessed, offenseRoutes.FirstOrDefault(r => r.Goal.Kind == offenseMemory[f - 1].Goal.Kind && r.Goal.Id == offenseMemory[f - 1].Goal.Id));
+                OffenseDecision.Retreat(targets, world.Tick, offenseMemory[f - 1], inputs, own, assessed, offenseRoutes.FirstOrDefault(r => r.Goal.Kind == offenseMemory[f - 1].Goal.Kind && r.Goal.Id == offenseMemory[f - 1].Goal.Id));
                 for (int i = 0; i < inputs.Count; i++) {
                     if (inputs[i].Memory.Returning && !assessed[i].Returning) world.Armies[inputs[i].Army.Id - 1].AutoStartIds = world.Armies[inputs[i].Army.Id - 1].SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
                     inputs[i] = new ArmyDecisionInput(inputs[i].Army, inputs[i].Policy, inputs[i].IsReserveRole, assessed[i], inputs[i].Routes);
@@ -115,9 +121,9 @@ namespace Rts.Simulation
                 // advantage asks that policy for an allocation on every tick, so its existing thresholds can fire a
                 // little earlier without adding a civilisation flag branch inside OffenseDecision.
                 bool academyOffenseTick = AcademyOffenseReady(f);
-                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(observation, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], policies.Select(c => c.Order).ToArray(), out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
-                var waitGoal = OffenseDecision.WaitGoal(observation, offenseRoutes);
-                OffenseDecision.Update(observation, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
+                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(targets, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], policies.Select(c => c.Order).ToArray(), out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
+                var waitGoal = OffenseDecision.WaitGoal(targets, offenseRoutes);
+                OffenseDecision.Update(targets, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,
@@ -140,8 +146,10 @@ namespace Rts.Simulation
         {
             var result = new List<OffenseRouteInput>();
             var home = PolicyDecision.Position(observation, PolicyDecision.Core(observation, true));
+            bool sanctuaryFocus = SanctuaryOutpostFocus(observation.FactionId, observation);
             foreach (var goal in observation.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
             {
+                if (SanctuarySkipsGoal(observation.FactionId, sanctuaryFocus, goal.Kind, goal.Id)) continue;
                 var policyGoal = new PolicyGoal(goal.Kind, goal.Id, default);
                 var corePath = world.Map.FindPath(world.Map.Cell(home), goal.Position, observation.FactionId);
                 if (corePath.Length == 0 || !InRange(world.Map.Center(corePath[corePath.Length - 1]), goal.Position, Fix64.FromInt(4))) continue;

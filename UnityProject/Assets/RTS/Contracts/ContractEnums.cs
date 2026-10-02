@@ -124,6 +124,13 @@ namespace Rts.Contracts
         public const TechKind CitizenMilitia = (TechKind)25;
     }
 
+    /// <summary>V3-18 #2: sanctuary civilisation research values live outside <see cref="TechKind"/>.</summary>
+    public static class SanctuaryTech
+    {
+        public const TechKind Pilgrimage = (TechKind)26;
+        public const TechKind HolyRelic = (TechKind)27;
+    }
+
     /// <summary>V3-3 economy policy (technical-design-v3 20): what the automatic economy aims for.</summary>
     public enum EconomyPolicy : byte { Balanced = 0, Military = 1, Growth = 2 }
 
