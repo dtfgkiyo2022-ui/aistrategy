@@ -153,7 +153,7 @@ namespace Rts.Simulation
         /// <summary>Once in a civilisation, the automatic economy keeps StoneGatherers villagers on stone (for its towers).</summary>
         private bool StoneWanted(uint faction)
         {
-            if (!AgesOn || MasonryAllowed(faction) || (!CivLineStarted(faction) && !SanctuaryNeedsShrineStone(faction))) return false;
+            if (!AgesOn || MasonryAllowed(faction) || (!CivLineStarted(faction) && !FoundationNeedsStone(faction))) return false;
             int onStone = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {

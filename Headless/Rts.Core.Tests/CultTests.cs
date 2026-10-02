@@ -148,11 +148,42 @@ namespace Rts.Core.Tests
             }
         }
 
-        private static int CultScore(Battle sim)
+        private static int CultScore(Battle sim, ScenarioDefinition scenario, uint faction = 1)
         {
             var method = typeof(Battle).GetMethod("CultScore", BindingFlags.Static | BindingFlags.NonPublic);
-            return (int)method.Invoke(null, new object[] { sim, 1u, sim.Capture(1).Economy.Civ == CivKind.Primitive
-                ? default(SimPoint) : default(SimPoint), 0, 0 });
+            return (int)method.Invoke(null, new object[] { sim, faction, scenario.Cores[faction - 1].Position, 0, 0 });
+        }
+
+        /// <summary>Test-side core-to-core route length in metres over the scenario terrain, or -1.</summary>
+        private static int CoreRouteMeters(ScenarioDefinition s)
+        {
+            int width = s.Map.WidthCells, height = s.Map.HeightCells;
+            var passable = new bool[width * height];
+            for (int i = 0; i < passable.Length; i++) passable[i] = s.Map.DefaultPassable;
+            foreach (int blocked in s.Map.BlockedCellIds) passable[blocked] = false;
+            int CellOf(SimPoint p) => (int)(p.Z.Raw / 65536 / s.Map.CellSizeMeters) * width + (int)(p.X.Raw / 65536 / s.Map.CellSizeMeters);
+            int edges = Rts.Decision.RouteDistance.Measure(width, height, passable, null, CellOf(s.Cores[0].Position), CellOf(s.Cores[1].Position), null);
+            return edges < 0 ? -1 : edges * s.Map.CellSizeMeters;
+        }
+
+        // Simulation.CultShortRouteMeters / CultMiddleRouteMeters.
+        private static int RouteTier(int meters) => meters < 0 ? 0 : meters <= 204 ? 3 : meters <= 218 ? 2 : 0;
+
+        private static ScenarioDefinition CultSeedScenario(ulong seed, bool cult = true)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Cult = cult;
+            s.Economy.MonksEnabled = true;
+            return s;
+        }
+
+        /// <summary>The first seed whose core-to-core route gives the wanted tier.</summary>
+        private static ulong SeedWithRouteTier(int tier)
+        {
+            for (ulong seed = 1; seed <= 60; seed++)
+                if (RouteTier(CoreRouteMeters(CultSeedScenario(seed))) == tier) return seed;
+            Assert.Fail("no seed in 1..60 with route tier " + tier);
+            return 0;
         }
 
         private static uint PlaceAndBuild(ScenarioDefinition s, Battle sim, CommandGateway gateway, ref ulong sequence)
@@ -204,28 +235,32 @@ namespace Rts.Core.Tests
             }
         }
 
+        /// <summary>
+        /// Rewritten when the cult score moved to the core-to-core route: an observed high-value enemy soldier is now a
+        /// +1 on top of the route tier (never above 3) instead of the whole score. Measured on a map whose route gives 0.
+        /// </summary>
         [Test]
         public void CultChoiceScoresDistinctValidObservedHighValueSoldiers()
         {
-            var scenario = CultScenario();
+            var scenario = CultSeedScenario(SeedWithRouteTier(0));
             var sim = new Battle(scenario);
 
             SetCultObservationMemory(sim);
-            Assert.That(CultScore(sim), Is.EqualTo(0), "未観測なら加点しない");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(0), "遠い地図で未観測なら0点");
 
             SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
-            Assert.That(CultScore(sim), Is.EqualTo(2), "1体は2点");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(1), "強い兵の観測は+1");
 
             // The record is per individual slot: seeing this same heavy soldier repeatedly only refreshes its
             // validity window, it does not create a second record.
             SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
-            Assert.That(CultScore(sim), Is.EqualTo(2), "同じ個体の再観測は重複計上しない");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(1), "同じ個体の再観測は重複計上しない");
 
             SetCultObservationMemory(sim, UnitKind.HeavyInfantry, UnitKind.Cavalry, UnitKind.Mercenary);
-            Assert.That(CultScore(sim), Is.EqualTo(3), "3体以上は3点");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(1), "何体見ても加点は+1まで");
 
             SetCultObservationMemory(sim, UnitKind.Infantry);
-            Assert.That(CultScore(sim), Is.EqualTo(0), "価値の高くない兵だけなら加点しない");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(0), "価値の高くない兵だけなら加点しない");
 
             SetCultObservationMemory(sim, UnitKind.HeavyInfantry);
             var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -234,7 +269,149 @@ namespace Rts.Core.Tests
             var faction = factions.GetValue(0);
             var validUntil = (long[])faction.GetType().GetField("CultObservedValidUntilTicks", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(faction);
             validUntil[0] = -1;
-            Assert.That(CultScore(sim), Is.EqualTo(0), "有効期限切れは加点しない");
+            Assert.That(CultScore(sim, scenario), Is.EqualTo(0), "有効期限切れは加点しない");
+
+            // On top of the route tiers: 2 + 1 = 3, and 3 stays 3.
+            var middle = CultSeedScenario(SeedWithRouteTier(2));
+            var middleSim = new Battle(middle);
+            SetCultObservationMemory(middleSim);
+            Assert.That(CultScore(middleSim, middle), Is.EqualTo(2));
+            SetCultObservationMemory(middleSim, UnitKind.Cavalry);
+            Assert.That(CultScore(middleSim, middle), Is.EqualTo(3), "2点の地図で観測があれば3点");
+            var shortRoute = CultSeedScenario(SeedWithRouteTier(3));
+            var shortSim = new Battle(shortRoute);
+            SetCultObservationMemory(shortSim, UnitKind.Cavalry);
+            Assert.That(CultScore(shortSim, shortRoute), Is.EqualTo(3), "上限は3点");
+        }
+
+        [Test]
+        public void CultChoiceScoreFollowsTheCoreRouteInSmallTiers()
+        {
+            var seen = new Dictionary<int, int>();
+            var routes = new List<int>();
+            for (ulong seed = 1; seed <= 60; seed++)
+            {
+                var scenario = CultSeedScenario(seed);
+                var sim = new Battle(scenario);
+                int meters = CoreRouteMeters(scenario);
+                routes.Add(meters);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    int score = CultScore(sim, scenario, faction);
+                    Assert.That(score, Is.EqualTo(RouteTier(meters)), "seed " + seed + " faction " + faction + " route " + meters);
+                    seen[score] = seen.TryGetValue(score, out int n) ? n + 1 : 1;
+                }
+                var off = CultSeedScenario(seed, cult: false);
+                Assert.That(CultScore(new Battle(off), off), Is.EqualTo(0), "旗オフは0点");
+            }
+            routes.Sort();
+            TestContext.WriteLine("core routes (m) over seeds 1..60: " + string.Join(" ", routes));
+            TestContext.WriteLine("cult tiers (sides): " + string.Join(", ", seen.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value)));
+            Assert.That(RouteTier(204), Is.EqualTo(3));
+            Assert.That(RouteTier(206), Is.EqualTo(2));
+            Assert.That(RouteTier(218), Is.EqualTo(2));
+            Assert.That(RouteTier(220), Is.EqualTo(0));
+            Assert.That(seen.Keys.OrderBy(k => k), Is.EqualTo(new[] { 0, 2, 3 }), "0・2・3点がどれも出る");
+            Assert.That(routes.Contains(204) && routes.Contains(218), Is.True, "境目の道のりが実際の地図にある");
+
+            var noMonks = CultSeedScenario(1);
+            noMonks.Economy.MonksEnabled = false;
+            Assert.That(CultScore(new Battle(noMonks), noMonks), Is.EqualTo(0), "修道士なしは0点");
+        }
+
+        private static ScenarioDefinition CultNormalScenario(ulong seed, bool cult = true)
+        {
+            var s = CultSeedScenario(seed, cult);
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
+        [Test]
+        public void CultOnlyChangesChoicesItWins()
+        {
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            int won = 0;
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var on = new Battle(CultNormalScenario(seed));
+                var off = new Battle(CultNormalScenario(seed, cult: false));
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var withCult = (CivKind)choose.Invoke(on, new object[] { faction });
+                    var without = (CivKind)choose.Invoke(off, new object[] { faction });
+                    Assert.That(without, Is.Not.EqualTo(CivKind.Cult));
+                    if (withCult == CivKind.Cult) won++;
+                    else Assert.That(withCult, Is.EqualTo(without), "教団が勝たない陣営の選択は変わらない");
+                }
+            }
+            TestContext.WriteLine("cult chosen at tick 0: " + won + " / 60");
+        }
+
+        [Test]
+        public void NormalCultStartFindsASeedAndReplaysForTwentyThousandTicks()
+        {
+            ulong foundSeed = 0;
+            CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
+            for (ulong seed = 1; seed <= 200 && foundSeed == 0; seed++)
+            {
+                var probe = new Battle(CultNormalScenario(seed));
+                var probeGateway = new CommandGateway(probe);
+                for (int i = 0; i < 1500; i++)
+                {
+                    probeGateway.Step();
+                    if (i % 20 != 19) continue;
+                    var west = probe.Capture(1).Economy.Civ;
+                    var east = probe.Capture(2).Economy.Civ;
+                    if (west == CivKind.Cult || east == CivKind.Cult)
+                    {
+                        foundSeed = seed;
+                        foundWest = west;
+                        foundEast = east;
+                        break;
+                    }
+                    if (west != CivKind.Primitive && east != CivKind.Primitive) break;
+                }
+            }
+            if (foundSeed == 0)
+            {
+                TestContext.WriteLine("教団が選ばれる種は seed 1..200 では見つからなかった");
+                Assert.Inconclusive("教団が選ばれる種が見つからない");
+                return;
+            }
+
+            var scenario = CultNormalScenario(foundSeed);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            TestContext.WriteLine("normal cult seed " + foundSeed + ": civs=" + foundWest + "/" + foundEast
+                + ", final civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age
+                + ", monks=" + sim.Capture(1).Units.Count(u => u.IsOwn && u.Kind == UnitKind.Monk)
+                + "/" + sim.Capture(2).Units.Count(u => u.IsOwn && u.Kind == UnitKind.Monk));
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Cult || sim.Capture(2).Economy.Civ == CivKind.Cult, Is.True);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
         }
 
         [Test]
