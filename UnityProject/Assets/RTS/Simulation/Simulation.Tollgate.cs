@@ -183,6 +183,19 @@ namespace Rts.Simulation
             world.Buildings[world.BuildingCount - 1].Held = false;
         }
 
+        /// <summary>
+        /// The parts of DecideTollgate other than the cost and the site search (see FoundationNeedsStone): room for a
+        /// gate under the limit, and a route to the enemy core long enough to have gate candidates between its margins.
+        /// The route is the same cached FindPath DecideTollgate reads; no site is searched here.
+        /// </summary>
+        private bool TollgateFoundationReady(uint faction)
+        {
+            if (ActiveTollgateCount(faction) >= TollgateMaxBuildingsFor(faction)) return false;
+            int start = world.Map.Cell(OwnCore(faction).Definition.Position);
+            var enemy = world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position;
+            return world.Map.FindPath(start, enemy, faction).Length >= TollgateSearchPathMargin * 2 + 1;
+        }
+
         private int OpenNeighbours(int[] cells)
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, result = 0;

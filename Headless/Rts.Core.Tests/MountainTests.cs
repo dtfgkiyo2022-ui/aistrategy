@@ -285,7 +285,7 @@ namespace Rts.Core.Tests
         {
             Assert.That(MountainScore, Is.Not.Null);
             Assert.That(MountainEdgeUnits, Is.Not.Null);
-            bool sawZero = false, sawOneToTwo = false, sawThreeOrMore = false;
+            bool sawZero = false, sawOneToTwo = false, sawThreeOrMore = false, sawWide = false, sawJustBelowWide = false;
             for (ulong seed = 1; seed <= 100; seed++)
             {
                 var scenario = MountainScenario(seed);
@@ -298,12 +298,73 @@ namespace Rts.Core.Tests
                     if (units == 0) sawZero = true;
                     if (units > 0 && units < 3) sawOneToTwo = true;
                     if (units >= 3) sawThreeOrMore = true;
-                    Assert.That(score, Is.EqualTo(units >= 3 ? 3 : units > 0 ? 2 : 0));
+                    Assert.That(score, Is.EqualTo(ExpectedMountainScore(units)));
+
+                    // The same ground seen in full (the footprints and their mountain cells all explored) reaches the
+                    // longer edges, where the 4-point tier starts at 24 edge units.
+                    var explored = ExploredOf(sim, faction);
+                    var saved = (bool[])explored.Clone();
+                    for (int i = 0; i < explored.Length; i++) explored[i] = true;
+                    int fullUnits = (int)MountainEdgeUnits.Invoke(sim, new object[] { faction, scenario.Cores[faction - 1].Position });
+                    int fullScore = (int)MountainScore.Invoke(null, new object[] { sim, faction, scenario.Cores[faction - 1].Position, 0, 0 });
+                    Array.Copy(saved, explored, saved.Length);
+                    Assert.That(fullScore, Is.EqualTo(ExpectedMountainScore(fullUnits)), "seed " + seed + " faction " + faction);
+                    if (fullUnits >= 24) sawWide = true;
+                    if (fullUnits >= 3 && fullUnits < 24) sawJustBelowWide = true;
                 }
             }
             Assert.That(sawZero, Is.True, "山の縁0か所");
             Assert.That(sawOneToTwo, Is.True, "山の縁1〜2か所相当");
             Assert.That(sawThreeOrMore, Is.True, "山の縁3か所以上相当");
+            Assert.That(sawWide, Is.True, "山の縁24以上（4点）");
+            Assert.That(sawJustBelowWide, Is.True, "山の縁3〜23（3点）");
+        }
+
+        private static int ExpectedMountainScore(int units) => units >= 24 ? 4 : units >= 3 ? 3 : units > 0 ? 2 : 0;
+
+        private static bool[] ExploredOf(Battle sim, uint faction)
+        {
+            var world = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(sim);
+            var factions = (Array)world.GetType().GetField("Factions", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(world);
+            var state = factions.GetValue((int)faction - 1);
+            return (bool[])state.GetType().GetField("ExploredCells", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(state);
+        }
+
+        [Test]
+        public void MountainWideEdgeTierIsFourAndOnlyTheMountainScoreChanges()
+        {
+            // Scores 0..3 keep their meaning; only 24 edge units or more becomes 4. With the flag off the mountain is
+            // never chosen, and the old two-score choice is used.
+            Assert.That(ExpectedMountainScore(23), Is.EqualTo(3));
+            Assert.That(ExpectedMountainScore(24), Is.EqualTo(4));
+            var choose = typeof(Battle).GetMethod("ChooseCiv", BindingFlags.Instance | BindingFlags.NonPublic);
+            int wide = 0;
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var on = MapGenerator.GenerateTerrain(seed);
+                on.Economy.Mountain = true;
+                var off = MapGenerator.GenerateTerrain(seed);
+                var simOn = new Battle(on);
+                var simOff = new Battle(off);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var explored = ExploredOf(simOn, faction);
+                    for (int i = 0; i < explored.Length; i++) explored[i] = true;
+                    int score = (int)MountainScore.Invoke(null, new object[] { simOn, faction, on.Cores[faction - 1].Position, 0, 0 });
+                    var offExplored = ExploredOf(simOff, faction);
+                    for (int i = 0; i < offExplored.Length; i++) offExplored[i] = true;
+                    Assert.That((int)MountainScore.Invoke(null, new object[] { simOff, faction, off.Cores[faction - 1].Position, 0, 0 }),
+                        Is.EqualTo(0), "旗オフは0点");
+                    var withMountain = (CivKind)choose.Invoke(simOn, new object[] { faction });
+                    var without = (CivKind)choose.Invoke(simOff, new object[] { faction });
+                    Assert.That(without, Is.Not.EqualTo(CivKind.Mountain));
+                    if (score == 4) wide++;
+                    if (withMountain != CivKind.Mountain)
+                        Assert.That(withMountain, Is.EqualTo(without), "山岳が勝たない陣営の選択は変わらない seed " + seed);
+                }
+            }
+            TestContext.WriteLine("4-point mountain sides over seeds 1..30 (fully explored): " + wide);
+            Assert.That(wide, Is.GreaterThan(0));
         }
 
         [Test]
@@ -383,19 +444,26 @@ namespace Rts.Core.Tests
         {
             ulong foundSeed = 0;
             CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
-            for (ulong seed = 1; seed <= 1000; seed++)
+            // The normal start chooses its civilisation only once the barracks and villagers stand (about tick 1000), so
+            // each seed is followed until both sides have chosen (as the sanctuary and metropolis searches do).
+            for (ulong seed = 1; seed <= 1000 && foundSeed == 0; seed++)
             {
                 var probe = new Battle(MountainMatchScenario(seed));
                 var probeGateway = new CommandGateway(probe);
-                Steps(probeGateway, probe, 80);
-                var west = probe.Capture(1).Economy.Civ;
-                var east = probe.Capture(2).Economy.Civ;
-                if (west == CivKind.Mountain || east == CivKind.Mountain)
+                for (int i = 0; i < 1500; i++)
                 {
-                    foundSeed = seed;
-                    foundWest = west;
-                    foundEast = east;
-                    break;
+                    probeGateway.Step();
+                    if (i % 20 != 19) continue;
+                    var west = probe.Capture(1).Economy.Civ;
+                    var east = probe.Capture(2).Economy.Civ;
+                    if (west == CivKind.Mountain || east == CivKind.Mountain)
+                    {
+                        foundSeed = seed;
+                        foundWest = west;
+                        foundEast = east;
+                        break;
+                    }
+                    if (west != CivKind.Primitive && east != CivKind.Primitive) break;
                 }
             }
             if (foundSeed == 0)

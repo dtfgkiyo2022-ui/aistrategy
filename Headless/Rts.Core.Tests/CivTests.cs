@@ -234,5 +234,51 @@ namespace Rts.Core.Tests
                 Assert.That(outcome.IsFault, Is.False);
             }
         }
+
+        /// <summary>
+        /// The table of civilisations the automatic choice takes when all fourteen are enabled, over seeds 1..60 and
+        /// both sides (120 choices), on the normal start (each side followed until it starts advancing). The table is
+        /// reported in the test output; the assertions only check that every side chooses and that the count is whole.
+        /// </summary>
+        [Test]
+        public void FourteenCivilisationChoiceTableOverSeedsOneToSixty()
+        {
+            var tally = new SortedDictionary<CivKind, int>();
+            int chosen = 0;
+            for (ulong seed = 1; seed <= 60; seed++)
+            {
+                var s = MapGenerator.GenerateTerrain(seed, gold: true, bridge: true);
+                var e = s.Economy;
+                e.Forestry = e.Masonry = e.Caravan = e.Cavalry = e.Bridge = true;
+                e.Academy = true; e.GoldEnabled = true;
+                e.Cult = true; e.MonksEnabled = true;
+                e.FishingCiv = true; e.FishingEnabled = true;
+                e.Mountain = e.Tollgate = e.Metropolis = e.Sanctuary = true;
+                e.StartFood = 50000; e.StartWood = 50000;
+                e.AdvanceFoodCost = 0; e.AdvanceWoodCost = 0; e.AdvanceTicks = 1;
+                s.Cores[0].Hp = s.Cores[1].Hp = 1000000;
+                var sim = new Battle(s);
+                var gateway = new CommandGateway(sim);
+                var done = new bool[2];
+                for (int i = 0; i < 3000 && !(done[0] && done[1]); i++)
+                {
+                    gateway.Step();
+                    for (uint f = 1; f <= 2; f++)
+                    {
+                        if (done[f - 1]) continue;
+                        var view = sim.Capture(f).Economy;
+                        if (view.AdvanceRemaining == 0 && view.Civ == CivKind.Primitive) continue;
+                        done[f - 1] = true;
+                        var civ = view.Civ != CivKind.Primitive ? view.Civ : view.AdvancingTo;
+                        tally[civ] = tally.TryGetValue(civ, out int n) ? n + 1 : 1;
+                        chosen++;
+                    }
+                }
+                Assert.That(done[0] && done[1], Is.True, "seed " + seed + ": both sides choose");
+            }
+            TestContext.WriteLine("14-civ choice table (seeds 1..60, both sides): "
+                + string.Join(", ", tally.Select(p => p.Key + "=" + p.Value)));
+            Assert.That(chosen, Is.EqualTo(120));
+        }
     }
 }

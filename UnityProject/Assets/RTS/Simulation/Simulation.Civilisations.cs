@@ -18,11 +18,17 @@ namespace Rts.Simulation
             public Func<Simulation, uint, bool> Enabled { get; }
             public Func<Simulation, uint, SimPoint, int, int, int> Score { get; }
             public Func<Simulation, uint, bool> LineStarted { get; }
+            /// <summary>The civilisation's first own building (its foundation); 0 when it has none.</summary>
+            public BuildingKind Foundation { get; }
+            /// <summary>Whether the foundation could be placed now apart from its cost (null: always).</summary>
+            public Func<Simulation, uint, bool> FoundationReady { get; }
 
             public CivRegistration(CivKind civ, int priority, bool usesFoodMarket,
                 Func<Simulation, uint, bool> enabled,
                 Func<Simulation, uint, SimPoint, int, int, int> score,
-                Func<Simulation, uint, bool> lineStarted)
+                Func<Simulation, uint, bool> lineStarted,
+                BuildingKind foundation = 0,
+                Func<Simulation, uint, bool> foundationReady = null)
             {
                 Civ = civ;
                 Priority = priority;
@@ -30,6 +36,8 @@ namespace Rts.Simulation
                 Enabled = enabled;
                 Score = score;
                 LineStarted = lineStarted;
+                Foundation = foundation;
+                FoundationReady = foundationReady;
             }
         }
 
@@ -62,11 +70,13 @@ namespace Rts.Simulation
             new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
             new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
-                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
+                (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0,
+                BuildingKind.Tollgate, (s, f) => s.TollgateFoundationReady(f)),
             new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, MetropolisScore,
                 (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
             new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
-                (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0)
+                (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0,
+                BuildingKind.Shrine, (s, f) => s.SanctuaryFoundationReady(f))
         };
 
         private static int AgrarianScore(Simulation s, uint faction, SimPoint core, int ore, int food)
@@ -140,16 +150,41 @@ namespace Rts.Simulation
             return usable;
         }
 
+        // Route length (metres) from the own core to the enemy core: at most the first is 3 points, at most the second 2.
+        // Measured on generated maps (seeds 1..60, 2m cells): the core-to-core route is 180..268m; 204m keeps the
+        // shortest ~22% of maps (13/60) and 218m the next ~20% (12/60).
+        private const int CultShortRouteMeters = 204, CultMiddleRouteMeters = 218;
+
         /// <summary>
-        /// V3-13 #4: a cult choice is justified only by high-value enemy soldiers that this faction has actually
-        /// observed. The record is per soldier slot, so repeated sightings of one individual do not add points and
-        /// expired observations do not delay the ordinary age decision.
+        /// The cult wants enemies that arrive soon (more chances to convert): the choice score is a small tier from the
+        /// route length between the two cores over the scenario terrain (cores and ground are public, as for the
+        /// sanctuary score), so it is known at choice time. A valid observation of a high-value enemy soldier (V3-13 #4
+        /// memory, kept in the canonical state) adds one point, never above 3.
         /// </summary>
         private static int CultScore(Simulation s, uint faction, SimPoint core, int ore, int food)
         {
             if (!s.CultOn) return 0;
-            int observed = s.CountValidCultObservations(faction);
-            return observed >= 3 ? 3 : observed > 0 ? 2 : 0;
+            int meters = s.CultCoreRouteMeters(faction, core);
+            int tier = meters < 0 ? 0 : meters <= CultShortRouteMeters ? 3 : meters <= CultMiddleRouteMeters ? 2 : 0;
+            if (s.CountValidCultObservations(faction) > 0) tier++;
+            return Math.Min(3, tier);
+        }
+
+        /// <summary>
+        /// Route length in metres from <paramref name="core"/> to the enemy core over the scenario's terrain passability
+        /// (player buildings are not subtracted), or -1 when unreachable. One <see cref="RouteDistance.Measure"/>.
+        /// </summary>
+        private int CultCoreRouteMeters(uint faction, SimPoint core)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int coreCell = world.Map.Cell(core);
+            int enemyCell = world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position);
+            if (coreCell < 0 || enemyCell < 0) return -1;
+            var passable = new bool[checked(width * height)];
+            Array.Fill(passable, world.Config.Map.DefaultPassable);
+            foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
+            int edges = RouteDistance.Measure(width, height, passable, null, coreCell, enemyCell, null);
+            return edges < 0 ? -1 : checked(edges * world.Config.Map.CellSizeMeters);
         }
 
         private const int CultObservationValidityTicks = 600;
@@ -224,13 +259,19 @@ namespace Rts.Simulation
         /// Mountain's choice score is based on the first legal shaft edges the faction could have known at
         /// civilisation choice. A site with several observed mountain neighbours is worth several edge units;
         /// this keeps a compact, high-value cliff from being treated like a single isolated mountain cell while
-        /// still returning the same small 0/2/3 score scale used by the registration table.
+        /// still returning a small 0/2/3 score scale, with 4 for a very long edge (MountainWideEdgeUnits).
         /// </summary>
         private static int MountainScore(Simulation s, uint faction, SimPoint core, int ore, int food)
         {
+            if (!s.MountainOn) return 0;
             int edgeUnits = s.CountUsableMountainShaftEdgeUnits(faction, core);
-            return edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
+            return edgeUnits >= MountainWideEdgeUnits ? 4 : edgeUnits >= 3 ? 3 : edgeUnits > 0 ? 2 : 0;
         }
+
+        // A very long usable mountain edge is worth 4. Measured at the normal choice (seeds 1..60, both factions): the
+        // mountain was usually 3 and lost to ore or food of 3 or more (it is tenth in the tie order); 24 edge units or more
+        // is the top ~22% (26/120). Cavalry still reaches 5 and the ore/food/forest/stone counts are unbounded.
+        private const int MountainWideEdgeUnits = 24;
 
         /// <summary>
         /// Fishing's terrain score is a small tier based on usable fish points, not on raw food or distance.
@@ -247,9 +288,10 @@ namespace Rts.Simulation
         }
 
         /// <summary>
-        /// V3-16 #3: the number of observed narrow places on the route from the own core to the enemy core and
-        /// outposts whose closing lengthens (but does not cut) that route. Only explored cells are used, terrain only
-        /// (no building), and one route search per narrow stretch, never one per map cell.
+        /// V3-16 #3: the number of narrow places on the route from the own core to the enemy core and outposts whose
+        /// closing lengthens (but does not cut) that route. The terrain and the positions of the cores and outposts are
+        /// public (as for the sanctuary score), so the whole map is known to the scoring and the score exists at choice
+        /// time. Terrain only (no building), and one route search per narrow stretch, never one per map cell.
         /// </summary>
         private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food)
         {
@@ -261,20 +303,21 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int count = checked(width * height), coreCell = world.Map.Cell(core);
-            var explored = world.Factions[faction - 1].ExploredCells;
+            var known = new bool[count];
+            Array.Fill(known, true);
             var passable = new bool[count];
             Array.Fill(passable, world.Config.Map.DefaultPassable);
             foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
             var objectives = new System.Collections.Generic.List<int>();
             int enemyCell = world.Map.Cell(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position);
-            if (enemyCell >= 0 && explored[enemyCell]) objectives.Add(enemyCell);
+            if (enemyCell >= 0) objectives.Add(enemyCell);
             for (int i = 0; i < world.Outposts.Length; i++)
             {
                 int cell = world.Map.Cell(world.Outposts[i].Definition.Position);
-                if (cell >= 0 && explored[cell] && !objectives.Contains(cell)) objectives.Add(cell);
+                if (cell >= 0 && !objectives.Contains(cell)) objectives.Add(cell);
             }
             objectives.Sort();
-            return TollgateTerrainScoring.CountSites(width, height, passable, explored, coreCell, objectives, CoreClearanceCells);
+            return TollgateTerrainScoring.CountSites(width, height, passable, known, coreCell, objectives, CoreClearanceCells);
         }
 
         // V3-17 #3: the metropolis looks only at the ground right around its core (24m), not at routes leaving it.
@@ -364,5 +407,23 @@ namespace Rts.Simulation
 
         private bool CivLineStartedFromRegistry(uint faction)
             => TryGetCivRegistration(faction, out CivRegistration row) && row.LineStarted(this, faction);
+
+        /// <summary>
+        /// The automatic economy only sends villagers to stone once the civilisation's line has started. A civilisation
+        /// whose foundation itself costs stone (the sanctuary's shrine, the tollgate) would then wait for ever when it
+        /// starts without stone. So stone is wanted while the faction is in such a civilisation, has no foundation yet,
+        /// cannot pay its stone, and the foundation could otherwise be placed (the registry's FoundationReady). Every
+        /// civilisation without a registered foundation, or whose foundation costs no stone, gets false.
+        /// </summary>
+        private bool FoundationNeedsStone(uint faction)
+        {
+            if (!AgesOn || !TryGetCivRegistration(faction, out CivRegistration row) || row.Foundation == 0) return false;
+            var economy = world.Economies[faction - 1];
+            if (economy.Age < 1 || !row.Enabled(this, faction)) return false;
+            int stone = StoneOf(row.Foundation, faction);
+            if (stone <= 0 || economy.Stone >= stone) return false;
+            if (OwnBuildingIndex(faction, row.Foundation) >= 0) return false;
+            return row.FoundationReady == null || row.FoundationReady(this, faction);
+        }
     }
 }

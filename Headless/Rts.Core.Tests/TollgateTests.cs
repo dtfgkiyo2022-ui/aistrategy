@@ -441,8 +441,13 @@ namespace Rts.Core.Tests
             Assert.That(sawZero, Is.GreaterThan(0));
         }
 
+        /// <summary>
+        /// The choice score reads the public terrain (the whole map, the enemy core and every outpost), so it already
+        /// exists at tick 1 and does not depend on what the faction has explored. Rewritten from the earlier
+        /// "unexplored cells score zero" version when the score moved to public information.
+        /// </summary>
         [Test]
-        public void ChoiceScoreOnRealMapsIsSmallTieredAndIgnoresUnexploredCells()
+        public void ChoiceScoreOnRealMapsIsSmallTieredAndUsesThePublicTerrain()
         {
             var tally = new Dictionary<int, int>();
             ulong foundSeed = 0;
@@ -458,20 +463,101 @@ namespace Rts.Core.Tests
                     int sites = (int)SiteCount.Invoke(sim, new object[] { faction, core });
                     int score = (int)ScoreMethod.Invoke(null, new object[] { sim, faction, core, 0, 0 });
                     Assert.That(score, Is.EqualTo(sites >= 2 ? 3 : sites == 1 ? 2 : 0));
+                    Assert.That(sites, Is.EqualTo(PublicSites(scenario, faction)), "seed " + seed + " faction " + faction);
                     tally[score] = tally.TryGetValue(score, out int n) ? n + 1 : 1;
                     if (score > 0 && foundSeed == 0) { foundSeed = seed; foundFaction = faction; }
                 }
             }
             TestContext.WriteLine("tollgate scores over seeds 1..60: " + string.Join(", ", tally.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value)));
-            if (foundSeed == 0) Assert.Inconclusive("tick 1 の見たことのある範囲で点がつく実際の地図が見つからない");
+            Assert.That(foundSeed, Is.Not.EqualTo(0UL), "公開の地形で点がつく実際の地図がある");
             var again = new Battle(Scenario(foundSeed));
             again.Step(1, Array.Empty<ScheduledInput>());
             var world = typeof(Battle).GetField("world", Hidden).GetValue(again);
             var factions = (Array)world.GetType().GetField("Factions", Hidden).GetValue(world);
             var state = factions.GetValue((int)foundFaction - 1);
             var explored = (bool[])state.GetType().GetField("ExploredCells", Hidden).GetValue(state);
+            int before = (int)ScoreMethod.Invoke(null, new object[] { again, foundFaction, Scenario(foundSeed).Cores[foundFaction - 1].Position, 0, 0 });
             Array.Clear(explored, 0, explored.Length);
-            Assert.That((int)ScoreMethod.Invoke(null, new object[] { again, foundFaction, Scenario(foundSeed).Cores[foundFaction - 1].Position, 0, 0 }), Is.EqualTo(0));
+            Assert.That((int)ScoreMethod.Invoke(null, new object[] { again, foundFaction, Scenario(foundSeed).Cores[foundFaction - 1].Position, 0, 0 }),
+                Is.EqualTo(before).And.GreaterThan(0), "見たことのある範囲に関係なく、公開の地形で数える");
+        }
+
+        /// <summary>Test-side count over the scenario terrain with every cell known: enemy core and outposts.</summary>
+        private static int PublicSites(ScenarioDefinition s, uint faction)
+        {
+            int width = s.Map.WidthCells, height = s.Map.HeightCells;
+            var passable = new bool[width * height];
+            var known = new bool[width * height];
+            for (int i = 0; i < passable.Length; i++) { passable[i] = s.Map.DefaultPassable; known[i] = true; }
+            foreach (int blocked in s.Map.BlockedCellIds) passable[blocked] = false;
+            int CellOf(SimPoint p) => (int)(p.Z.Raw / 65536 / s.Map.CellSizeMeters) * width + (int)(p.X.Raw / 65536 / s.Map.CellSizeMeters);
+            var objectives = new List<int> { CellOf(s.Cores[2 - faction].Position) };
+            foreach (var post in s.Outposts) if (!objectives.Contains(CellOf(post.Position))) objectives.Add(CellOf(post.Position));
+            objectives.Sort();
+            return Rts.Decision.TollgateTerrainScoring.CountSites(width, height, passable, known, CellOf(s.Cores[faction - 1].Position), objectives, 4);
+        }
+
+        private static bool FoundationNeedsStone(Battle sim, uint faction)
+            => (bool)typeof(Battle).GetMethod("FoundationNeedsStone", Hidden).Invoke(sim, new object[] { faction });
+
+        private static bool StoneWanted(Battle sim, uint faction)
+            => (bool)typeof(Battle).GetMethod("StoneWanted", Hidden).Invoke(sim, new object[] { faction });
+
+        private static void SetStone(Battle sim, uint faction, int stone)
+        {
+            var world = typeof(Battle).GetField("world", Hidden).GetValue(sim);
+            var economies = (Array)world.GetType().GetField("Economies", Hidden).GetValue(world);
+            var boxed = economies.GetValue((int)faction - 1);
+            boxed.GetType().GetField("Stone", Hidden).SetValue(boxed, stone);
+            economies.SetValue(boxed, (int)faction - 1);
+        }
+
+        /// <summary>A normal-economy tollgate start (ordinary gathering) without any starting stone.</summary>
+        private static ScenarioDefinition NoStoneScenario(ulong seed)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Tollgate = true;
+            s.Economy.StartFood = 5000;
+            s.Economy.StartWood = 5000;
+            s.Economy.StartStone = 0;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.AutoVillagerTarget = 8;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
+        [Test]
+        public void TollgateWithoutStartingStoneGathersStoneForItsFirstGateAndBuildsIt()
+        {
+            // The rule itself: the tollgate faction wants stone only while it has no gate and cannot pay one.
+            var scenario = NoStoneScenario(1);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Tollgate));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, CivKind.Agrarian));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 3);
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(CivKind.Tollgate));
+            Assert.That(sim.Capture(2).Economy.Civ, Is.EqualTo(CivKind.Agrarian));
+            SetStone(sim, 1, 0);
+            SetStone(sim, 2, 0);
+            Assert.That(FoundationNeedsStone(sim, 1), Is.True, "関所がなく、石が足りない");
+            Assert.That(StoneWanted(sim, 1), Is.True, "関所のための石を集める");
+            SetStone(sim, 1, scenario.Economy.TollgateStoneCost);
+            Assert.That(FoundationNeedsStone(sim, 1), Is.False, "関所の分の石があれば集めない");
+            SetStone(sim, 1, 0);
+            Assert.That(FoundationNeedsStone(sim, 2), Is.False, "農耕は基盤に石が要らない");
+            if (sim.Capture(2).Economy.Buildings.All(b => b.Kind != BuildingKind.Farm))
+                Assert.That(StoneWanted(sim, 2), Is.False, "農耕は畑の前に石を集めに行かない");
+
+            // The automatic tollgate, starting with no stone at all, gathers it and builds its gate.
+            Steps(gateway, sim, 8000);
+            var gates = sim.Capture(1).Economy.Buildings.Where(b => b.Kind == BuildingKind.Tollgate).ToArray();
+            TestContext.WriteLine("tollgates=" + gates.Length + " complete=" + gates.Count(b => b.Complete) + " stone=" + sim.Capture(1).Economy.Stone);
+            Assert.That(gates.Length, Is.GreaterThan(0), "石0から関所を建てる");
+            Assert.That(FoundationNeedsStone(sim, 1), Is.False, "関所が建ったら基盤のための石は求めない");
         }
 
         private static ScenarioDefinition MatchScenario(ulong seed)
@@ -523,17 +609,24 @@ namespace Rts.Core.Tests
         {
             ulong foundSeed = 0;
             CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
-            for (ulong seed = 1; seed <= 300; seed++)
+            // The normal start chooses its civilisation only once the barracks and villagers stand (about tick 1000), so
+            // each seed is followed until both sides have chosen (as the sanctuary and metropolis searches do).
+            for (ulong seed = 1; seed <= 300 && foundSeed == 0; seed++)
             {
                 var probe = new Battle(MatchScenario(seed));
                 var probeGateway = new CommandGateway(probe);
-                Steps(probeGateway, probe, 80);
-                var west = probe.Capture(1).Economy.Civ;
-                var east = probe.Capture(2).Economy.Civ;
-                if (west == CivKind.Tollgate || east == CivKind.Tollgate)
+                for (int i = 0; i < 1500; i++)
                 {
-                    foundSeed = seed; foundWest = west; foundEast = east;
-                    break;
+                    probeGateway.Step();
+                    if (i % 20 != 19) continue;
+                    var west = probe.Capture(1).Economy.Civ;
+                    var east = probe.Capture(2).Economy.Civ;
+                    if (west == CivKind.Tollgate || east == CivKind.Tollgate)
+                    {
+                        foundSeed = seed; foundWest = west; foundEast = east;
+                        break;
+                    }
+                    if (west != CivKind.Primitive && east != CivKind.Primitive) break;
                 }
             }
             if (foundSeed == 0)

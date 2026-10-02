@@ -920,7 +920,7 @@ namespace Rts.Core.Tests
             => (bool)typeof(Battle).GetMethod("StoneWanted", Private).Invoke(sim, new object[] { faction });
 
         private static bool NeedsShrineStone(Battle sim, uint faction)
-            => (bool)typeof(Battle).GetMethod("SanctuaryNeedsShrineStone", Private).Invoke(sim, new object[] { faction });
+            => (bool)typeof(Battle).GetMethod("FoundationNeedsStone", Private).Invoke(sim, new object[] { faction });
 
         [Test]
         public void SanctuaryWithoutStartingStoneGathersStoneOnlyForItsFirstShrine()
