@@ -43,11 +43,14 @@ namespace Rts.Simulation
         private bool SanctuaryOutpostFocus(uint faction, FactionObservation observation)
         {
             if (!SanctuaryAllowed(faction)) return false;
-            for (int i = 0; i < world.Outposts.Length; i++)
-                if (world.Outposts[i].OwnerFactionId == faction) return false;
+            bool observedOther = false;
             foreach (var objective in observation.Objectives)
-                if (objective.Kind == GoalKind.Outpost && objective.IsOwnerKnown && objective.OwnerFactionId != faction) return true;
-            return false;
+                if (objective.Kind == GoalKind.Outpost && objective.IsOwnerKnown)
+                {
+                    if (objective.OwnerFactionId == faction) return false;
+                    observedOther = true;
+                }
+            return observedOther;
         }
 
         /// <summary>While focused on outposts, the enemy core is not a candidate (its route is reported unreachable).</summary>

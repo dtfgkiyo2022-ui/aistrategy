@@ -357,20 +357,17 @@ namespace Rts.Core.Tests
                 0, Array.Empty<uint>(), Array.Empty<AttackMemory>(), Array.Empty<PolicyOrder>(), out _)[0].Goal;
             Assert.That((plain.Kind, plain.Id), Is.EqualTo((GoalKind.Outpost, 2u)), "共通の判断だけなら近い未観測の拠点を選ぶ（比較用）");
 
-            // Two observed outposts: the one with fewer visible enemies on the way is taken first, and while an observed
-            // outpost is open the enemy core (nearer here) is not a target even though an outpost is already own.
+            // Once one outpost is already own, the sanctuary has its foothold and goes back to the common behaviour:
+            // the enemy core is a candidate again, so an outpost it cannot take never keeps it from the core.
             var ownPost = new KnownObjective(GoalKind.Outpost, 1, P(60, 80), true, 1, false, 0, tick);
             var neutralPost = new KnownObjective(GoalKind.Outpost, 2, P(40, 10), true, 0, false, 0, tick);
             var open = new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), new[] { far }, new[] { farContact },
                 cores.Concat(new[] { ownPost, neutralPost }).ToArray(), 1);
-            var openDistances = new Dictionary<(GoalKind, uint), int>
-            {
-                [(GoalKind.Core, ownCore)] = 0, [(GoalKind.Core, enemyCore)] = 20,
-                [(GoalKind.Outpost, 1)] = 50, [(GoalKind.Outpost, 2)] = 60,
-            };
-            Assert.That(Targets(sim, 1, open), Is.SameAs(open), "未観測の拠点がなければ観測はそのまま");
-            var openChoice = Allocate(sim, 1, open, openDistances);
-            Assert.That((openChoice.Kind, openChoice.Id), Is.EqualTo((GoalKind.Outpost, 2u)), "敵のコアより拠点を優先");
+            Assert.That(Targets(sim, 1, open), Is.SameAs(open), "拠点を1つ持っていれば観測はそのまま");
+            Assert.That(Focus(sim, 1, open), Is.False, "拠点を1つ持ったら拠点だけを狙う状態は終わる");
+            Assert.That(Skips(sim, 1, Focus(sim, 1, open), GoalKind.Core, enemyCore), Is.False, "拠点を持ったら敵のコアも候補に戻る");
+            Assert.That(Focus(sim, 1, observation), Is.True, "拠点を1つも持たず、観測した拠点があれば拠点を狙う");
+            Assert.That(Skips(sim, 1, true, GoalKind.Core, enemyCore), Is.True, "その間は敵のコアを候補から外す");
 
             var crowdedPost = new KnownObjective(GoalKind.Outpost, 1, P(60, 80), true, 2, false, 0, tick);
             var guards = Enumerable.Range(0, 3).Select(i => new VisibleEnemy((uint)(10 + i), P(60, 80), (byte)UnitKind.Infantry)).ToArray();
