@@ -63,7 +63,7 @@ namespace Rts.Simulation
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
             new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
                 (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0),
-            new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, (s, f, core, ore, food) => 0,
+            new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, MetropolisScore,
                 (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
             new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
                 (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0)
@@ -199,6 +199,68 @@ namespace Rts.Simulation
         }
 
         private static int TollgateScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+
+        // V3-17 #3: the metropolis looks only at the ground right around its core (24m), not at routes leaving it.
+        private const int CivMetropolisReach = 24, MetropolisNormalCells = 270, MetropolisWideCells = 320;
+
+        /// <summary>
+        /// V3-17 #3: the metropolis choice score is a small tier from the number of explored, flat, buildable cells
+        /// within <see cref="CivMetropolisReach"/> of the core. Cavalry scores the routes reaching out of the core; this
+        /// scores the room around it, so the two read different ground (the cavalry ring starts outside 16m, and it
+        /// reads visible passability, not building clearance).
+        /// </summary>
+        private static int MetropolisScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.MetropolisOn) return 0;
+            int cells = s.CountMetropolisBuildableCells(faction, core);
+            return cells >= MetropolisWideCells ? 3 : cells >= MetropolisNormalCells ? 2 : 0;
+        }
+
+        /// <summary>
+        /// Counts the cells a building could stand on near the core, using the ground part of SiteIsClear: passable,
+        /// not river (forest and mountain cells are always blocked), outside the core clearance and outside the
+        /// clearance of every resource point. Only cells this faction has explored count. Buildings and belts are not
+        /// subtracted: the score is about the ground, so the faction's own early houses do not lower it. Only the
+        /// square around the core is visited, and resource points are marked once, so the cost is
+        /// O(square + nodes) - no per-cell connectivity search.
+        /// </summary>
+        private int CountMetropolisBuildableCells(uint faction, SimPoint core)
+        {
+            var explored = world.Factions[faction - 1].ExploredCells;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int coreCell = world.Map.Cell(core);
+            if (coreCell < 0) return 0;
+            int coreX = coreCell % width, coreZ = coreCell / width;
+            int radius = CivMetropolisReach / world.Config.Map.CellSizeMeters + 1;
+            int minX = Math.Max(0, coreX - radius), maxX = Math.Min(width - 1, coreX + radius);
+            int minZ = Math.Max(0, coreZ - radius), maxZ = Math.Min(height - 1, coreZ + radius);
+            int spanX = maxX - minX + 1, spanZ = maxZ - minZ + 1;
+
+            var nearNode = new bool[checked(spanX * spanZ)];
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                int nodeCell = world.Map.Cell(world.Nodes[i].Definition.Position);
+                if (nodeCell < 0) continue;
+                int nx = nodeCell % width, nz = nodeCell / width;
+                for (int z = Math.Max(minZ, nz - NodeClearanceCells + 1); z <= Math.Min(maxZ, nz + NodeClearanceCells - 1); z++)
+                    for (int x = Math.Max(minX, nx - NodeClearanceCells + 1); x <= Math.Min(maxX, nx + NodeClearanceCells - 1); x++)
+                        nearNode[(z - minZ) * spanX + (x - minX)] = true;
+            }
+
+            Fix64 reach = Fix64.FromInt(CivMetropolisReach);
+            int count = 0;
+            for (int z = minZ; z <= maxZ; z++)
+                for (int x = minX; x <= maxX; x++)
+                {
+                    int cell = z * width + x;
+                    if (!explored[cell] || nearNode[(z - minZ) * spanX + (x - minX)]) continue;
+                    if (Math.Max(Math.Abs(x - coreX), Math.Abs(z - coreZ)) < CoreClearanceCells) continue;
+                    if (!world.Map.IsPassable(cell) || IsRiverCell(cell)) continue;
+                    if (!InRange(world.Map.Center(cell), core, reach)) continue;
+                    count++;
+                }
+            return count;
+        }
 
         private bool TryGetCivRegistration(uint faction, out CivRegistration registration)
         {
