@@ -635,8 +635,22 @@ namespace Rts.Presentation
                 case TechKind.SteelWeapons: return UiText.T("Steel weapons (attack +3)", "鋼の武器（攻撃+3）");
                 case TechKind.SteelArmour: return UiText.T("Steel armour (HP +30)", "鋼の鎧（HP+30）");
                 case TechKind.GemArmor: return UiText.T("Gem armor (HP +40)", "宝石の鎧（HP+40）");
-                default: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
+                case TechKind.BlastFurnace: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
             }
+            // The later civilisations keep their own techs outside the enum; each is researched in that civilisation's building.
+            if (t == BridgeTech.Bridgeworks) return UiText.T("Bridgeworks", "架橋術");
+            if (t == BridgeTech.SiegeDeployment) return UiText.T("Siege deployment", "攻城展開");
+            if (t == FishingTech.FishingNet) return UiText.T("Fishing net", "漁網");
+            if (t == FishingTech.DriedFish) return UiText.T("Dried fish", "干物");
+            if (t == MountainTech.DeepShaft) return UiText.T("Deep shaft", "深い坑道");
+            if (t == MountainTech.MountainFort) return UiText.T("Mountain fort", "山の砦");
+            if (t == CultTech.Sermon) return UiText.T("Sermon", "説法");
+            if (t == CultTech.MartyrBlessing) return UiText.T("Martyr's blessing", "殉教者の加護");
+            if (t == TollgateTech.GateDefence) return UiText.T("Gate defence", "関の守り");
+            if (t == TollgateTech.GateNetwork) return UiText.T("Gate network", "関所網");
+            if (t == MetropolisTech.MarketFestivity) return UiText.T("Market festivity", "市場の賑わい");
+            if (t == MetropolisTech.CitizenMilitia) return UiText.T("Citizen militia", "市民兵");
+            return UiText.T("Research ", "研究 ") + ((int)t).ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
         /// <summary>V3-5: the blacksmith and its techs (each once; the civilisation's own tech only for that civilisation).</summary>
