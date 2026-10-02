@@ -565,6 +565,10 @@ namespace Rts.Contracts
         /// <summary>V3-6: automatic processing lines and their manager.</summary>
         public IReadOnlyList<LineView> Lines { get; }
         public int Gold { get; }
+        /// <summary>The civilisation reserved in the primitive age (taken once advancing can start); Primitive when none.</summary>
+        public CivKind ReservedCiv { get; }
+        /// <summary>The gold the next advance costs (only the third age can cost gold); 0 otherwise.</summary>
+        public int NextAgeGoldCost { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -595,8 +599,10 @@ namespace Rts.Contracts
             int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
             int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
             int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0,
-            CavalryMissionView cavalryMission = default(CavalryMissionView))
+            CavalryMissionView cavalryMission = default(CavalryMissionView),
+            CivKind reservedCiv = CivKind.Primitive, int nextAgeGoldCost = 0)
         {
+            ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost;
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
             MercenaryGemsCost = mercenaryGemsCost; MercenaryTrainTicks = mercenaryTrainTicks;

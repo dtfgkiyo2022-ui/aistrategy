@@ -247,6 +247,11 @@ namespace Rts.Simulation
         internal int AgeVictoryProgress;
         /// <summary>V3-5 (32 #6): researched techs, bit 1 &lt;&lt; (TechKind - 1).</summary>
         internal ulong Techs;
+        /// <summary>
+        /// The civilisation the player asked for in the primitive age before advancing was possible; Primitive when none.
+        /// Advancing starts with it on the first tick it can, and starting any advance clears it.
+        /// </summary>
+        internal CivKind ReservedCiv;
     }
 
     internal sealed class WorldState

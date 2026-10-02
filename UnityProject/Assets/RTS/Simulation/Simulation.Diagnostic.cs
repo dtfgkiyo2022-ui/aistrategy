@@ -169,6 +169,11 @@ namespace Rts.Simulation
             if (world.Config.Economy.Ages)
                 for (int i = 0; i < world.SoldierCount; i++)
                     w.Value("Soldiers[" + world.Soldiers[i].Initial.Id.ToString(CultureInfo.InvariantCulture) + "].Class", (byte)world.Soldiers[i].Class);
+            // A reserved civilisation, written only while one is held, so a match without one keeps its exact bytes.
+            if (world.Config.Economy.Ages)
+                for (int f = 0; f < world.Economies.Length; f++)
+                    if (world.Economies[f].ReservedCiv != CivKind.Primitive)
+                        w.Value("Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].ReservedCiv", (byte)world.Economies[f].ReservedCiv);
             // V3-2: written only with industry, so a V3-1 economy keeps its exact canonical bytes.
             if (!world.Config.Economy.Industry) return;
             for (int f = 0; f < world.Economies.Length; f++)

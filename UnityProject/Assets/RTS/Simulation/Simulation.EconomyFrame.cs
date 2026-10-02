@@ -103,7 +103,9 @@ namespace Rts.Simulation
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
-                ForestryOn ? rules.SkirmishArcherBowGearCost : 0, ForestryOn ? rules.SkirmishArcherTrainTicks : 0, cavalryMission);
+                ForestryOn ? rules.SkirmishArcherBowGearCost : 0, ForestryOn ? rules.SkirmishArcherTrainTicks : 0, cavalryMission,
+                AgesOn ? economy.ReservedCiv : CivKind.Primitive,
+                AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

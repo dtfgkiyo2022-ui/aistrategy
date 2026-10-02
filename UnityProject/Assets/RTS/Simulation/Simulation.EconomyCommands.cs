@@ -33,6 +33,10 @@ namespace Rts.Simulation
                     return;
                 case EconomyCommandKind.AdvanceAge:
                     if (CanAdvance(faction, c.Civ)) StartAdvance(faction, c.Civ);
+                    // Not yet possible out of the primitive age: the choice is kept (the latest one wins) and taken on
+                    // the first tick advancing can start (AdvanceReserved).
+                    else if (AgesOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
+                        economy.ReservedCiv = c.Civ;
                     return;
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
