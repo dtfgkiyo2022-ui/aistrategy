@@ -170,7 +170,55 @@ namespace Rts.Simulation
             => kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry ? 5 : kind == UnitKind.LightCavalry ? 4
                 : kind == UnitKind.Mercenary ? 3 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 2 : 0;
 
-        private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food) => 0;
+        // V3-18 #3: an outpost counts for the sanctuary when its route from the core is at most this many metres.
+        private const int CivSanctuaryRouteReach = 120;
+
+        /// <summary>
+        /// V3-18 #3: the sanctuary choice score is a small tier from the number of public outposts close to the core
+        /// (route length from the core at most <see cref="CivSanctuaryRouteReach"/>): none 0, one 2, two or more 3.
+        /// The caravan counts outposts that can host a caravanserai, wherever they are; this counts outposts the core
+        /// can reach quickly, whether or not a building fits beside them, so the two read the same outposts differently.
+        /// </summary>
+        private static int SanctuaryScore(Simulation s, uint faction, SimPoint core, int ore, int food)
+        {
+            if (!s.SanctuaryOn) return 0;
+            int near = s.CountNearSanctuaryOutposts(faction, core);
+            return near >= 2 ? 3 : near == 1 ? 2 : 0;
+        }
+
+        /// <summary>
+        /// Counts outposts whose four-way route from the core, over the scenario's terrain passability (outposts and
+        /// the ground are public; player buildings are not subtracted, so the faction's own early houses do not lower
+        /// it), is at most <see cref="CivSanctuaryRouteReach"/> metres. A straight-line check comes first (a four-way
+        /// route is never shorter), and <see cref="RouteDistance.Measure"/> runs once per remaining outpost - never per
+        /// map cell. The map is only read.
+        /// </summary>
+        private int CountNearSanctuaryOutposts(uint faction, SimPoint core)
+        {
+            int count = 0;
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                int meters = SanctuaryOutpostRouteMeters(core, i);
+                if (meters >= 0 && meters <= CivSanctuaryRouteReach) count++;
+            }
+            return count;
+        }
+
+        /// <summary>Route length in metres from the core to outpost <paramref name="index"/>, or -1 when it is beyond
+        /// the straight-line reach or cannot be reached.</summary>
+        private int SanctuaryOutpostRouteMeters(SimPoint core, int index)
+        {
+            var post = world.Outposts[index].Definition.Position;
+            if (!InRange(post, core, Fix64.FromInt(CivSanctuaryRouteReach))) return -1;
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int coreCell = world.Map.Cell(core), postCell = world.Map.Cell(post);
+            if (coreCell < 0 || postCell < 0) return -1;
+            var passable = new bool[checked(width * height)];
+            Array.Fill(passable, world.Config.Map.DefaultPassable);
+            foreach (int blocked in world.Config.Map.BlockedCellIds) passable[blocked] = false;
+            int edges = RouteDistance.Measure(width, height, passable, null, coreCell, postCell, null);
+            return edges < 0 ? -1 : checked(edges * world.Config.Map.CellSizeMeters);
+        }
 
         /// <summary>
         /// Mountain's choice score is based on the first legal shaft edges the faction could have known at

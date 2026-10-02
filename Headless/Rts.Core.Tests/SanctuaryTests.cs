@@ -605,5 +605,414 @@ namespace Rts.Core.Tests
                 Assert.That(outcome.IsFault, Is.False);
             }
         }
+
+        // ---- V3-18 #3: civilisation choice score, the caravan difference, matches and the normal start ----
+
+        private const int RouteReach = 120; // Simulation.CivSanctuaryRouteReach
+        private static readonly MethodInfo NearOutposts = typeof(Battle).GetMethod("CountNearSanctuaryOutposts", Private);
+        private static readonly MethodInfo SanctuaryScoreMethod = typeof(Battle).GetMethod("SanctuaryScore", BindingFlags.Static | BindingFlags.NonPublic);
+        private static readonly MethodInfo CaravanOutposts = typeof(Battle).GetMethod("CountUsableCaravanOutposts", Private);
+        private static readonly MethodInfo ChooseCivMethod = typeof(Battle).GetMethod("ChooseCiv", Private);
+
+        private static ScenarioDefinition SanctuaryMatchScenario(ulong seed, bool sanctuary = true)
+        {
+            var s = MapGenerator.GenerateTerrain(seed);
+            s.Economy.Sanctuary = sanctuary;
+            s.Economy.StartFood = 50000;
+            s.Economy.StartWood = 50000;
+            s.Economy.AdvanceFoodCost = 0;
+            s.Economy.AdvanceWoodCost = 0;
+            s.Economy.AdvanceTicks = 1;
+            s.Economy.Age2FoodCost = 0;
+            s.Economy.Age2WoodCost = 0;
+            s.Economy.Age2Ticks = 1;
+            s.Economy.Age3FoodCost = 0;
+            s.Economy.Age3WoodCost = 0;
+            s.Economy.Age3Ticks = 1;
+            s.Cores[0].Hp = 1000000;
+            s.Cores[1].Hp = 1000000;
+            return s;
+        }
+
+        private static int NearOf(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)NearOutposts.Invoke(sim, new object[] { faction, s.Cores[faction - 1].Position });
+
+        private static int SanctuaryScoreOf(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)SanctuaryScoreMethod.Invoke(null, new object[] { sim, faction, s.Cores[faction - 1].Position, 0, 0 });
+
+        private static int CaravanOf(Battle sim, ScenarioDefinition s, uint faction)
+            => (int)CaravanOutposts.Invoke(sim, new object[] { faction, s.Cores[faction - 1].Position });
+
+        private static CivKind Choose(Battle sim, uint faction) => (CivKind)ChooseCivMethod.Invoke(sim, new object[] { faction });
+
+        private static int CellOf(ScenarioDefinition s, SimPoint point)
+            => (int)(point.Z.Raw / 65536 / s.Map.CellSizeMeters) * s.Map.WidthCells + (int)(point.X.Raw / 65536 / s.Map.CellSizeMeters);
+
+        private static SimPoint CentreOf(ScenarioDefinition s, int cell)
+        {
+            int size = s.Map.CellSizeMeters;
+            return new SimPoint(Fix64.FromInt(cell % s.Map.WidthCells * size + size / 2), Fix64.FromInt(cell / s.Map.WidthCells * size + size / 2));
+        }
+
+        private static bool[] BasePassable(ScenarioDefinition s)
+        {
+            var passable = new bool[s.Map.WidthCells * s.Map.HeightCells];
+            for (int i = 0; i < passable.Length; i++) passable[i] = s.Map.DefaultPassable;
+            foreach (int blocked in s.Map.BlockedCellIds) passable[blocked] = false;
+            return passable;
+        }
+
+        /// <summary>Test-side route length in metres over the scenario terrain, or -1 when unreachable.</summary>
+        private static int RouteMeters(ScenarioDefinition s, SimPoint from, SimPoint to)
+        {
+            int edges = Rts.Decision.RouteDistance.Measure(s.Map.WidthCells, s.Map.HeightCells, BasePassable(s), null,
+                CellOf(s, from), CellOf(s, to), null);
+            return edges < 0 ? -1 : edges * s.Map.CellSizeMeters;
+        }
+
+        private static long StraightSquared(SimPoint a, SimPoint b)
+        {
+            long dx = (a.X.Raw - b.X.Raw) / 65536, dz = (a.Z.Raw - b.Z.Raw) / 65536;
+            return dx * dx + dz * dz;
+        }
+
+        /// <summary>The first passable cells (in cell order) whose route from <paramref name="from"/> lies in [min, max] metres.</summary>
+        private static List<SimPoint> PointsAtRoute(ScenarioDefinition s, SimPoint from, int min, int max, int count)
+        {
+            var passable = BasePassable(s);
+            var found = new List<SimPoint>();
+            for (int cell = 0; cell < passable.Length && found.Count < count; cell++)
+            {
+                if (!passable[cell]) continue;
+                var centre = CentreOf(s, cell);
+                if (StraightSquared(centre, from) > (long)max * max) continue;
+                int route = RouteMeters(s, from, centre);
+                if (route < min || route > max) continue;
+                bool apart = true;
+                foreach (var other in found) if (StraightSquared(other, centre) < 30 * 30) apart = false;
+                if (apart) found.Add(centre);
+            }
+            return found;
+        }
+
+        [Test]
+        public void SanctuaryScoreTiersOnGeneratedMapsFollowTheNearOutpostCount()
+        {
+            Assert.That(NearOutposts, Is.Not.Null);
+            Assert.That(SanctuaryScoreMethod, Is.Not.Null);
+            var seen = new HashSet<int>();
+            for (ulong seed = 1; seed <= 60; seed++)
+            {
+                var s = SanctuaryMatchScenario(seed);
+                var sim = new Battle(s);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var core = s.Cores[faction - 1].Position;
+                    int expected = 0;
+                    var routes = new List<int>();
+                    foreach (var post in s.Outposts)
+                    {
+                        int route = RouteMeters(s, core, post.Position);
+                        routes.Add(route);
+                        if (route >= 0 && route <= RouteReach) expected++;
+                    }
+                    int near = NearOf(sim, s, faction), score = SanctuaryScoreOf(sim, s, faction);
+                    TestContext.WriteLine("seed " + seed + " faction " + faction + ": routes=" + string.Join("/", routes)
+                        + " near=" + near + " -> " + score + " (civ " + Choose(sim, faction) + ")");
+                    Assert.That(near, Is.EqualTo(expected), "seed " + seed + " faction " + faction);
+                    Assert.That(score, Is.EqualTo(near >= 2 ? 3 : near == 1 ? 2 : 0));
+                    seen.Add(score);
+                }
+            }
+            TestContext.WriteLine("tiers seen: " + string.Join(",", seen.OrderBy(t => t)));
+            var off = SanctuaryMatchScenario(3, sanctuary: false);
+            Assert.That(SanctuaryScoreOf(new Battle(off), off, 1), Is.EqualTo(0), "旗オフは0点");
+        }
+
+        [Test]
+        public void SanctuaryScoreCountsZeroOneTwoNearOutpostsAndIgnoresUnreachableOnes()
+        {
+            var basis = SanctuaryMatchScenario(3);
+            var core = basis.Cores[0].Position;
+            var near = PointsAtRoute(basis, core, 30, 80, 2);
+            var far = PointsAtRoute(basis, core, RouteReach + 20, 400, 2);
+            Assert.That(near.Count, Is.EqualTo(2), "コアの近くに置ける場所が2つある");
+            Assert.That(far.Count, Is.EqualTo(2), "遠くに置ける場所が2つある");
+
+            (int near, int score) Run(SimPoint first, SimPoint second, Action<Battle, ScenarioDefinition> edit = null)
+            {
+                var s = SanctuaryMatchScenario(3);
+                s.Outposts[0].Position = first;
+                s.Outposts[1].Position = second;
+                var sim = new Battle(s);
+                edit?.Invoke(sim, s);
+                return (NearOf(sim, s, 1), SanctuaryScoreOf(sim, s, 1));
+            }
+
+            Assert.That(Run(far[0], far[1]), Is.EqualTo((0, 0)), "近い拠点0個は0点");
+            Assert.That(Run(near[0], far[1]), Is.EqualTo((1, 2)), "近い拠点1個は2点");
+            Assert.That(Run(near[0], near[1]), Is.EqualTo((2, 3)), "近い拠点2個は3点");
+
+            // Walling both near outposts in (on the score's terrain only) leaves outposts within the straight-line
+            // reach that the core cannot reach: they do not count.
+            void WallIn(Battle sim, ScenarioDefinition s)
+            {
+                object world = World(sim);
+                var config = (ScenarioDefinition)world.GetType().GetField("Config", Private).GetValue(world);
+                var blocked = new HashSet<int>(config.Map.BlockedCellIds);
+                int width = s.Map.WidthCells, height = s.Map.HeightCells;
+                foreach (var post in s.Outposts)
+                {
+                    int cell = CellOf(s, post.Position), x = cell % width, z = cell / width;
+                    for (int dz = -2; dz <= 2; dz++)
+                        for (int dx = -2; dx <= 2; dx++)
+                        {
+                            if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != 2) continue;
+                            int nx = x + dx, nz = z + dz;
+                            if (nx >= 0 && nz >= 0 && nx < width && nz < height) blocked.Add(nz * width + nx);
+                        }
+                }
+                config.Map.BlockedCellIds = blocked.OrderBy(c => c).ToArray();
+            }
+            Assert.That(Run(near[0], near[1], WallIn), Is.EqualTo((0, 0)), "届かない拠点だけなら0点");
+
+            // The other faction's core is far from both near outposts.
+            var s2 = SanctuaryMatchScenario(3);
+            s2.Outposts[0].Position = near[0];
+            s2.Outposts[1].Position = near[1];
+            var sim2 = new Battle(s2);
+            Assert.That(NearOf(sim2, s2, 2), Is.EqualTo(0), "相手のコアからは遠い");
+        }
+
+        /// <summary>A map whose only competing scores are the caravan and the sanctuary: ore and food points removed.</summary>
+        private static ScenarioDefinition CaravanAndSanctuaryScenario(SimPoint first, uint firstOwner, SimPoint second)
+        {
+            var s = SanctuaryMatchScenario(3);
+            s.Economy.Caravan = true;
+            s.ResourceNodes = s.ResourceNodes.Where(n => n.Kind != ResourceKind.Ore && n.Kind != ResourceKind.Food).ToArray();
+            for (int i = 0; i < s.ResourceNodes.Length; i++) s.ResourceNodes[i].Id = (uint)(i + 1);
+            s.Outposts[0].Position = first;
+            s.Outposts[0].OwnerFactionId = firstOwner;
+            s.Outposts[1].Position = second;
+            s.Outposts[1].OwnerFactionId = 0;
+            return s;
+        }
+
+        [Test]
+        public void SanctuaryAndCaravanReadTheSameOutpostsDifferently()
+        {
+            Assert.That(CaravanOutposts, Is.Not.Null);
+            // 1. On generated maps the two counts differ: the caravan counts every outpost with room for a
+            //    caravanserai, the sanctuary only the outposts close to the core.
+            string difference = null;
+            for (ulong seed = 1; seed <= 30 && difference == null; seed++)
+            {
+                var s = SanctuaryMatchScenario(seed);
+                s.Economy.Caravan = true;
+                var sim = new Battle(s);
+                for (uint faction = 1; faction <= 2 && difference == null; faction++)
+                {
+                    int caravan = CaravanOf(sim, s, faction), near = NearOf(sim, s, faction);
+                    if (caravan != near) difference = "seed " + seed + " faction " + faction + ": caravan=" + caravan + " near=" + near;
+                }
+            }
+            TestContext.WriteLine("difference: " + difference);
+            Assert.That(difference, Is.Not.Null, "隊商の数と聖地の数は別々に動く");
+
+            // 2. One fixed placement: one outpost near the west core, one far away.
+            var basis = SanctuaryMatchScenario(3);
+            var core = basis.Cores[0].Position;
+            var near2 = PointsAtRoute(basis, core, 30, 80, 2);
+            var far2 = PointsAtRoute(basis, core, RouteReach + 20, 400, 2);
+            Assert.That(near2.Count, Is.EqualTo(2));
+            Assert.That(far2.Count, Is.EqualTo(2));
+
+            (int caravan, int sanctuary, CivKind civ) Read(ScenarioDefinition s)
+            {
+                var sim = new Battle(s);
+                return (CaravanOf(sim, s, 1), SanctuaryScoreOf(sim, s, 1), Choose(sim, 1));
+            }
+
+            var neutral = Read(CaravanAndSanctuaryScenario(near2[0], 0, far2[0]));
+            TestContext.WriteLine("near neutral + far: " + neutral);
+            Assert.That(neutral.sanctuary, Is.EqualTo(2));
+            Assert.That(neutral.caravan, Is.EqualTo(2), "どちらの拠点にも隊商宿を建てられる");
+            Assert.That(neutral.civ, Is.EqualTo(CivKind.Caravan), "同点なら登録表の順位どおり隊商が先");
+
+            // The same positions, but the near outpost is held by the other side: the caravan can no longer maintain it,
+            // while it is still a near outpost for the sanctuary to take.
+            var held = Read(CaravanAndSanctuaryScenario(near2[0], 2, far2[0]));
+            TestContext.WriteLine("near enemy-held + far: " + held);
+            Assert.That(held.caravan, Is.EqualTo(1));
+            Assert.That(held.sanctuary, Is.EqualTo(2));
+            Assert.That(held.civ, Is.EqualTo(CivKind.Sanctuary), "同じ配置で聖地が選ばれる");
+
+            // Both far: the caravan still counts both, the sanctuary none.
+            var bothFar = Read(CaravanAndSanctuaryScenario(far2[0], 0, far2[1]));
+            TestContext.WriteLine("both far: " + bothFar);
+            Assert.That(bothFar.sanctuary, Is.EqualTo(0));
+            Assert.That(bothFar.civ, Is.Not.EqualTo(CivKind.Sanctuary));
+        }
+
+        [Test]
+        public void SanctuaryOnlyChangesChoicesItWins()
+        {
+            int won = 0;
+            for (ulong seed = 1; seed <= 30; seed++)
+            {
+                var onScenario = SanctuaryMatchScenario(seed);
+                var offScenario = SanctuaryMatchScenario(seed, sanctuary: false);
+                var on = new Battle(onScenario);
+                var off = new Battle(offScenario);
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var withSanctuary = Choose(on, faction);
+                    var without = Choose(off, faction);
+                    TestContext.WriteLine("seed " + seed + " faction " + faction + ": on=" + withSanctuary + " off=" + without);
+                    Assert.That(without, Is.Not.EqualTo(CivKind.Sanctuary));
+                    if (withSanctuary == CivKind.Sanctuary) won++;
+                    else Assert.That(withSanctuary, Is.EqualTo(without), "聖地が勝たない陣営の選択は変わらない");
+                }
+            }
+            TestContext.WriteLine("sanctuary chosen: " + won + " / 60");
+        }
+
+        [TestCase(CivKind.Sanctuary, CivKind.Agrarian)]
+        [TestCase(CivKind.Agrarian, CivKind.Sanctuary)]
+        [TestCase(CivKind.Sanctuary, CivKind.Metallurgy)]
+        [TestCase(CivKind.Metallurgy, CivKind.Sanctuary)]
+        public void SanctuaryCombinationsReachTheSecondAgeAndReplay(CivKind west, CivKind east)
+        {
+            var scenario = SanctuaryMatchScenario(21);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, west));
+            gateway.SubmitEconomy(EconomyCommand.Advance(2, 2, east));
+            for (int i = 0; i < 20000 && !sim.Capture(1).Result.HasEnded; i++)
+            {
+                gateway.Step();
+                Assert.That(sim.Capture(1).Result.IsFault, Is.False, "fault at tick " + sim.Capture(1).Tick);
+            }
+            var result = sim.Capture(1).Result;
+            int shrines1 = sim.Capture(1).Economy.Buildings.Count(b => b.Kind == BuildingKind.Shrine);
+            int shrines2 = sim.Capture(2).Economy.Buildings.Count(b => b.Kind == BuildingKind.Shrine);
+            TestContext.WriteLine(west + " vs " + east + ": tick=" + sim.Capture(1).Tick + ", winner=" + result.WinnerFactionId
+                + ", ended=" + result.HasEnded + ", undecided=" + result.IsUndecided
+                + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age
+                + ", shrines=" + shrines1 + "/" + shrines2
+                + ", villagers=" + sim.Capture(1).Economy.Population + "/" + sim.Capture(2).Economy.Population);
+            Assert.That(sim.Capture(1).Economy.Civ, Is.EqualTo(west));
+            Assert.That(sim.Capture(2).Economy.Civ, Is.EqualTo(east));
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), west + " reaches the second age");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), east + " reaches the second age");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
+
+        private static bool StoneWanted(Battle sim, uint faction)
+            => (bool)typeof(Battle).GetMethod("StoneWanted", Private).Invoke(sim, new object[] { faction });
+
+        private static bool NeedsShrineStone(Battle sim, uint faction)
+            => (bool)typeof(Battle).GetMethod("SanctuaryNeedsShrineStone", Private).Invoke(sim, new object[] { faction });
+
+        [Test]
+        public void SanctuaryWithoutStartingStoneGathersStoneOnlyForItsFirstShrine()
+        {
+            var noStone = Scenario(true);
+            noStone.Economy.StartStone = 0;
+            var state = AtCivAge(noStone, CivKind.Sanctuary);
+            SetOutpostOwner(state.sim, 1, 1);
+            SetOutpostOwner(state.sim, 2, 0);
+            SetEconomyField(state.sim, 1, "Stone", 0);
+            Assert.That(state.sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Shrine), Is.False);
+            Assert.That(NeedsShrineStone(state.sim, 1), Is.True, "拠点を持ち、祠がなく、石が足りない");
+            Assert.That(StoneWanted(state.sim, 1), Is.True, "祠のための石を集める");
+            SetEconomyField(state.sim, 1, "Stone", state.scenario.Economy.ShrineStoneCost);
+            Assert.That(NeedsShrineStone(state.sim, 1), Is.False, "祠の分の石があれば集めない");
+            SetEconomyField(state.sim, 1, "Stone", 0);
+            SetOutpostOwner(state.sim, 1, 2);
+            Assert.That(NeedsShrineStone(state.sim, 1), Is.False, "拠点を持っていなければ集めない");
+            Assert.That(NeedsShrineStone(state.sim, 2), Is.False, "聖地でない陣営は変わらない");
+
+            // Another civilisation in the same situation is unchanged.
+            var other = AtCivAge(noStone, CivKind.Agrarian);
+            SetOutpostOwner(other.sim, 1, 1);
+            SetEconomyField(other.sim, 1, "Stone", 0);
+            Assert.That(NeedsShrineStone(other.sim, 1), Is.False, "農耕は変わらない");
+
+            // The automatic sanctuary, starting with no stone at all, still builds its shrine.
+            // Stone goes to idle villagers (as for every civilisation once its line runs), so the economy must still be
+            // training some: three villagers that are all already at work never become idle.
+            var scenario = Scenario(true);
+            scenario.Economy.StartStone = 0;
+            scenario.Economy.AutoVillagerTarget = 8;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Sanctuary));
+            Steps(gateway, sim, scenario.Economy.AdvanceTicks + 8000);
+            Assert.That(sim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Shrine), Is.True, "石0から祠を建てる");
+        }
+
+        [Test]
+        public void NormalSanctuaryStartFindsASeedAndReplaysForTwentyThousandTicks()
+        {
+            ulong foundSeed = 0;
+            CivKind foundWest = CivKind.Primitive, foundEast = CivKind.Primitive;
+            for (ulong seed = 1; seed <= 200 && foundSeed == 0; seed++)
+            {
+                var probe = new Battle(SanctuaryMatchScenario(seed));
+                var probeGateway = new CommandGateway(probe);
+                for (int i = 0; i < 1500; i++)
+                {
+                    probeGateway.Step();
+                    if (i % 20 != 19) continue;
+                    var west = probe.Capture(1).Economy.Civ;
+                    var east = probe.Capture(2).Economy.Civ;
+                    if (west == CivKind.Sanctuary || east == CivKind.Sanctuary)
+                    {
+                        foundSeed = seed;
+                        foundWest = west;
+                        foundEast = east;
+                        break;
+                    }
+                    if (west != CivKind.Primitive && east != CivKind.Primitive) break;
+                }
+            }
+            if (foundSeed == 0)
+            {
+                TestContext.WriteLine("聖地が選ばれる種は seed 1..200 では見つからなかった");
+                Assert.Inconclusive("聖地が選ばれる種が見つからない");
+                return;
+            }
+
+            var scenario = SanctuaryMatchScenario(foundSeed);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            Steps(gateway, sim, 20000);
+            TestContext.WriteLine("normal sanctuary seed " + foundSeed + ": civs=" + foundWest + "/" + foundEast
+                + ", final civs=" + sim.Capture(1).Economy.Civ + "/" + sim.Capture(2).Economy.Civ
+                + ", tick=" + sim.Capture(1).Tick + ", ages=" + sim.Capture(1).Economy.Age + "/" + sim.Capture(2).Economy.Age
+                + ", shrines=" + sim.Capture(1).Economy.Buildings.Count(b => b.Kind == BuildingKind.Shrine)
+                + "/" + sim.Capture(2).Economy.Buildings.Count(b => b.Kind == BuildingKind.Shrine));
+            Assert.That(sim.Capture(1).Economy.Civ == CivKind.Sanctuary || sim.Capture(2).Economy.Civ == CivKind.Sanctuary, Is.True);
+            Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から西が第2時代まで進む");
+            Assert.That(sim.Capture(2).Economy.Age, Is.GreaterThanOrEqualTo(2), "通常開始から東が第2時代まで進む");
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, sim.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
+        }
     }
 }
