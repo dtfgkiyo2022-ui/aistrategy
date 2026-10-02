@@ -243,6 +243,23 @@ namespace Rts.Presentation
             return CivName(c) + (age == 2 ? UiText.T(", second age", "・2つ目の時代") : UiText.T(", third age", "・3つ目の時代"));
         }
 
+        /// <summary>The mark in front of the reserved civilisation's button.</summary>
+        private static string Star(EconomyView economy, CivKind civ) => economy.ReservedCiv == civ ? "★" : "";
+
+        /// <summary>
+        /// Out of the primitive age: advancing now when the stock is there and no villager is training, otherwise a
+        /// reservation the simulation takes later. Only a guide - the simulation decides which happens.
+        /// </summary>
+        private void SendAdvanceFromPrimitive(EconomyView economy, CivKind civ)
+        {
+            bool now = economy.Food >= economy.AdvanceFoodCost && economy.Wood >= economy.AdvanceWoodCost && economy.VillagerQueued == 0;
+            string message = now
+                ? UiText.T("Advancing into ", "") + CivName(civ) + UiText.T(" requested", "へ進めるよう依頼しました")
+                : UiText.T("Reserved ", "") + CivName(civ) + UiText.T(" (advances once food and wood are in and villager training is done)",
+                    "を予約しました（食料と木材が貯まり、村人の訓練が終わったら進みます）");
+            Send(EconomyCommand.Advance(faction, ++sequence, civ), message);
+        }
+
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
 
@@ -553,18 +570,26 @@ namespace Rts.Presentation
             {
                 // V3-4: advancing out of the primitive age, into one civilisation.
                 string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）");
+                // A button can always be pressed: when advancing is not possible yet, the choice is kept as a reservation.
+                string reserved = economy.ReservedCiv != CivKind.Primitive
+                    ? UiText.T("  Reserved: ", "  予約中：") + CivName(economy.ReservedCiv) : "";
                 if (!ExtraCivilisations)
                 {
-                    if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Advance: farming", "時代を進める：農耕") + cost))
-                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Agrarian), UiText.T("Advancing into farming requested", "農耕の文明へ進めるよう依頼しました"));
-                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
-                        Send(EconomyCommand.Advance(faction, ++sequence, CivKind.Metallurgy), UiText.T("Advancing into metallurgy requested", "冶金の文明へ進めるよう依頼しました"));
+                    if (economy.ReservedCiv != CivKind.Primitive)
+                    {
+                        GUI.Label(new Rect(x, y, w, 22f), reserved.TrimStart());
+                        y += 22f;
+                    }
+                    if (GUI.Button(new Rect(x, y, half, 22f), Star(economy, CivKind.Agrarian) + UiText.T("Advance: farming", "時代を進める：農耕") + cost))
+                        SendAdvanceFromPrimitive(economy, CivKind.Agrarian);
+                    if (GUI.Button(new Rect(right, y, half, 22f), Star(economy, CivKind.Metallurgy) + UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
+                        SendAdvanceFromPrimitive(economy, CivKind.Metallurgy);
                     y += 26f;
                 }
                 else
                 {
                     // All civilisations: one label with the cost, then the choices four to a row.
-                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advance into", "時代を進める：") + cost);
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advance into", "時代を進める：") + cost + reserved);
                     y += 22f;
                     float quarterWidth = (w - 12f) / 4f;
                     var civs = AllCivs;
@@ -572,9 +597,8 @@ namespace Rts.Presentation
                     {
                         var civ = civs[i];
                         var r = new Rect(x + (i % 4) * (quarterWidth + 4f), y + (i / 4) * 26f, quarterWidth, 22f);
-                        if (GUI.Button(r, CivShortName(civ)))
-                            Send(EconomyCommand.Advance(faction, ++sequence, civ),
-                                UiText.T("Advancing into ", "") + CivName(civ) + UiText.T(" requested", "へ進めるよう依頼しました"));
+                        if (GUI.Button(r, Star(economy, civ) + CivShortName(civ)))
+                            SendAdvanceFromPrimitive(economy, civ);
                     }
                     y += ((civs.Length + 3) / 4) * 26f;
                 }
@@ -585,8 +609,27 @@ namespace Rts.Presentation
                 string next = UiText.T("Advance: ", "時代を進める：") + AgeName(economy.Civ, economy.Age + 1);
                 int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age3FoodCost;
                 int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
-                if (GUI.Button(new Rect(x, y, w, 22f), next + UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + UiText.T("W)", "）")))
-                    Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
+                int gold = economy.NextAgeGoldCost;
+                string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood
+                    + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"));
+                // Only a guide: the simulation decides. The button is shut, with the reason, while advancing cannot start.
+                string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない")
+                    : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない")
+                    : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない")
+                    : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : null;
+                if (why == null)
+                {
+                    if (GUI.Button(new Rect(x, y, w, 22f), next + price))
+                        Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
+                }
+                else
+                {
+                    float buttonWidth = w * 0.62f;
+                    GUI.enabled = false;
+                    GUI.Button(new Rect(x, y, buttonWidth, 22f), next + price);
+                    GUI.enabled = true;
+                    GUI.Label(new Rect(x + buttonWidth + 4f, y, w - buttonWidth - 4f, 22f), why);
+                }
                 y += 26f;
             }
             if (economy.Ages)

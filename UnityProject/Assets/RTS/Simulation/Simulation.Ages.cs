@@ -216,6 +216,26 @@ namespace Rts.Simulation
             e.Gold = checked(e.Gold - gold);
             e.AdvancingTo = civ;
             e.AdvanceRemaining = ticks;
+            e.ReservedCiv = CivKind.Primitive;
+        }
+
+        /// <summary>
+        /// AI phase, every tick before the automatic economy: a civilisation the player reserved in the primitive age
+        /// starts advancing on the first tick it can - also for a core run by hand or with the automatic economy off,
+        /// since the player chose it. Without a reservation nothing here changes any state.
+        /// </summary>
+        private void AdvanceReserved()
+        {
+            if (!AgesOn) return;
+            for (int f = 0; f < 2; f++)
+            {
+                uint faction = (uint)f + 1;
+                var e = world.Economies[f];
+                if (e.ReservedCiv == CivKind.Primitive) continue;
+                if (e.Civ != CivKind.Primitive) { world.Economies[f].ReservedCiv = CivKind.Primitive; continue; }
+                if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0) continue;
+                if (CanAdvance(faction, e.ReservedCiv)) StartAdvance(faction, e.ReservedCiv);
+            }
         }
 
         /// <summary>Economy step: the advancing clock; at zero the civilisation is taken.</summary>
@@ -242,7 +262,9 @@ namespace Rts.Simulation
             // The core the player runs by hand (V3-3, 19) is theirs to advance too.
             var e = world.Economies[faction - 1];
             if (e.CoreHeld || !SavingToAdvance(faction) || !CanAdvanceWithoutCiv(faction)) return;
-            var civ = e.Civ == CivKind.Primitive ? ChooseCiv(faction) : e.Civ;
+            // A civilisation the player reserved comes before the one the ground would choose.
+            var civ = e.Civ != CivKind.Primitive ? e.Civ
+                : e.ReservedCiv != CivKind.Primitive && CivEnabled(faction, e.ReservedCiv) ? e.ReservedCiv : ChooseCiv(faction);
             if (!CanAdvance(faction, civ)) return;
             StartAdvance(faction, civ);
         }
