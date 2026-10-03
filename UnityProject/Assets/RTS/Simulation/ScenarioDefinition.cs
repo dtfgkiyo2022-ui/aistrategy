@@ -66,6 +66,8 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
+        public bool ArmyGrowth;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;

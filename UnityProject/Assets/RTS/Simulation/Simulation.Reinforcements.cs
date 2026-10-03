@@ -7,6 +7,9 @@ namespace Rts.Simulation
 {
     public sealed partial class Simulation
     {
+        private const int ArmyGrowthMaxPerFaction = 12;
+        private const int ArmyGrowthCapacity = 12;
+
         private void Reinforce()
         {
             foreach (var faction in world.Factions)
@@ -109,6 +112,8 @@ namespace Rts.Simulation
                         foreach (uint soldier in a.SoldierIds) if (world.Soldiers[soldier - 1].Alive) count++;
                         if (count < a.Definition.Capacity) { army = id; break; }
                     }
+            if (army == 0 && world.Config.Economy.ArmyGrowth && !scout)
+                army = CreateGrowthArmy(faction);
             if (army == 0) return false;
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
@@ -139,6 +144,67 @@ namespace Rts.Simulation
             commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.Reinforcement,
                 (byte)((faction == 1 || IsVisibleTo(1, position) ? 1 : 0) | (faction == 2 || IsVisibleTo(2, position) ? 2 : 0)), nextId - 1, 0, origin, 1, ReasonCode.None));
             return true;
+        }
+
+        private uint CreateGrowthArmy(uint faction)
+        {
+            ref var factionState = ref world.Factions[faction - 1];
+            if (factionState.ArmyIds.Length >= ArmyGrowthMaxPerFaction) return 0;
+
+            var home = GrowthHomeObjective(faction, factionState.ArmyIds);
+            uint id = world.NextArmyId;
+            world.NextArmyId = checked(id + 1);
+            var definition = new ArmyDefinition { Id = id, FactionId = faction, Role = "field", Capacity = ArmyGrowthCapacity,
+                HomeObjective = home };
+            Array.Resize(ref world.Armies, world.Armies.Length + 1);
+            world.Armies[id - 1] = new ArmyState { Definition = definition, AutoStartIds = Array.Empty<uint>(), SoldierIds = Array.Empty<uint>(), Path = Array.Empty<int>() };
+
+            var armyIds = new uint[factionState.ArmyIds.Length + 1];
+            Array.Copy(factionState.ArmyIds, armyIds, factionState.ArmyIds.Length);
+            armyIds[armyIds.Length - 1] = id;
+            factionState.ArmyIds = armyIds;
+
+            var traversal = new int[world.ArmyTraversal.Length + 1];
+            Array.Copy(world.ArmyTraversal, traversal, world.ArmyTraversal.Length);
+            traversal[traversal.Length - 1] = checked((int)id - 1);
+            world.ArmyTraversal = traversal;
+            for (int i = 0; i < world.Factions.Length; i++)
+            {
+                ref var observer = ref world.Factions[i];
+                Array.Resize(ref observer.ArmyContacts, world.Armies.Length);
+            }
+            return id;
+        }
+
+        private PolicyGoal GrowthHomeObjective(uint faction, IReadOnlyList<uint> armyIds)
+        {
+            uint coreId = world.Factions[faction - 1].CoreId;
+            var core = world.Cores[coreId - 1].Definition.Position;
+            var assigned = new bool[world.Outposts.Length];
+            foreach (uint id in armyIds)
+            {
+                var goal = world.Armies[id - 1].Definition.HomeObjective;
+                if (goal.Kind == GoalKind.Outpost && goal.Id > 0 && goal.Id <= world.Outposts.Length)
+                    assigned[goal.Id - 1] = true;
+            }
+
+            int start = world.Map.Cell(core);
+            uint bestId = 0;
+            int bestDistance = int.MaxValue;
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                if (assigned[i]) continue;
+                var post = world.Outposts[i].Definition;
+                var path = world.Map.FindPath(start, post.Position, faction);
+                if (path.Length == 0) continue;
+                if (path.Length < bestDistance || path.Length == bestDistance && post.Id < bestId)
+                {
+                    bestDistance = path.Length;
+                    bestId = post.Id;
+                }
+            }
+            return bestId == 0 ? new PolicyGoal(GoalKind.Core, coreId, default)
+                : new PolicyGoal(GoalKind.Outpost, bestId, default);
         }
 
         private void EnsureSoldierCapacity(int required)
