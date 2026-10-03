@@ -53,6 +53,9 @@ namespace Rts.Simulation
         private const int SanctuaryExtensionVersion = 2;
         private const int SanctuaryExtensionV1DataLength = 9 * sizeof(int);
         private const int SanctuaryExtensionDataLength = 20 * sizeof(int);
+        private const int CoreDefenceExtensionId = 9;
+        private const int CoreDefenceExtensionVersion = 1;
+        private const int CoreDefenceExtensionDataLength = 5 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -68,7 +71,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(MountainExtensionId, MountainExtensionVersion, MountainExtensionDataLength),
             new ExtensionRegistration(TollgateExtensionId, TollgateExtensionVersion, TollgateExtensionDataLength),
             new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength),
-            new ExtensionRegistration(SanctuaryExtensionId, SanctuaryExtensionVersion, SanctuaryExtensionDataLength)
+            new ExtensionRegistration(SanctuaryExtensionId, SanctuaryExtensionVersion, SanctuaryExtensionDataLength),
+            new ExtensionRegistration(CoreDefenceExtensionId, CoreDefenceExtensionVersion, CoreDefenceExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -574,6 +578,7 @@ namespace Rts.Simulation
                 else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
                 else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
                 else if (id == SanctuaryExtensionId) ReadSanctuaryExtension(extension, c.Economy);
+                else if (id == CoreDefenceExtensionId) ReadCoreDefenceExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -611,6 +616,7 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
             extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
             extensions.RemoveAll(extension => extension != null && extension.Id == SanctuaryExtensionId && !c.Economy.Sanctuary);
+            extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -674,7 +680,41 @@ namespace Rts.Simulation
                 if (extensions[i].Version == SanctuaryExtensionV1) extensions[i] = CreateSanctuaryExtension(c.Economy);
             }
             if (c.Economy.Sanctuary && !hasSanctuary) extensions.Add(CreateSanctuaryExtension(c.Economy));
+            bool hasCoreDefence = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == CoreDefenceExtensionId)
+                {
+                    hasCoreDefence = true;
+                    extensions[i] = CreateCoreDefenceExtension(c.Economy);
+                }
+            if (c.Economy.CoreDefence && !hasCoreDefence) extensions.Add(CreateCoreDefenceExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateCoreDefenceExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CoreDefence ? 1 : 0);
+                writer.Write(e.CoreDefenceRange); writer.Write(e.CoreDefenceDamage);
+                writer.Write(e.CoreDefenceIntervalTicks); writer.Write(e.CoreDefenceMaxTargets);
+                return new ScenarioExtensionData { Id = CoreDefenceExtensionId, Version = CoreDefenceExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCoreDefenceExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid core defence flag.");
+                e.CoreDefence = enabled != 0;
+                e.CoreDefenceRange = reader.ReadInt32(); e.CoreDefenceDamage = reader.ReadInt32();
+                e.CoreDefenceIntervalTicks = reader.ReadInt32(); e.CoreDefenceMaxTargets = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing core defence extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateSanctuaryExtension(EconomyRules e)

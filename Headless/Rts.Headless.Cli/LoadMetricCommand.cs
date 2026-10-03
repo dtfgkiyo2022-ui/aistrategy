@@ -33,11 +33,14 @@ internal sealed class LoadMetricDelta
 internal sealed class LoadMetricDetector
 {
     internal const int DefaultIdleTicks = 20;
+    internal const int CoreAttackEndTicks = 200;
 
     private readonly FactionFrame[] previous = new FactionFrame[2];
     private readonly Dictionary<uint, int>[] maximumHp = { new(), new() };
     private readonly Dictionary<uint, bool>[] materialWaiting = { new(), new() };
     private readonly Dictionary<uint, int>[] idleStreak = { new(), new() };
+    private readonly bool[] coreAttackActive = new bool[2];
+    private readonly int[] coreAttackQuietTicks = new int[2];
     private readonly int idleTicks;
 
     internal LoadMetricDetector(int idleTicks = DefaultIdleTicks)
@@ -61,6 +64,7 @@ internal sealed class LoadMetricDetector
         }
 
         var result = Difference(old, frame, maximumHp[index], materialWaiting[index]);
+        result.CoreAttacked = ObserveCoreAttack(index, old, frame);
         result.VillagerIdle = ObserveIdle(index, frame);
         RememberHp(index, frame);
         RememberMaterialWait(index, frame);
@@ -97,7 +101,7 @@ internal sealed class LoadMetricDetector
             current.Observation?.Contacts.Select(v => v.ContactId) ?? Array.Empty<uint>());
         result.ArmyHpHalf = ArmyHpHalfCrossings(old, current, maxHp);
         result.OutpostOwnerChanged = OwnerChanges(old, current, GoalKind.Outpost);
-        result.CoreAttacked = CoreHpDrops(old, current);
+        result.CoreAttacked = CoreHpDrop(old, current) ? 1 : 0;
         return result;
     }
 
@@ -227,11 +231,29 @@ internal sealed class LoadMetricDetector
             && prior.OwnerFactionId != v.OwnerFactionId);
     }
 
-    private static int CoreHpDrops(FactionFrame old, FactionFrame current)
+    private static bool CoreHpDrop(FactionFrame old, FactionFrame current)
     {
         var before = old.Objectives.Where(v => v.Kind == GoalKind.Core && v.Id == current.FactionId && v.IsHpKnown).ToDictionary(v => v.Id);
-        return current.Objectives.Count(v => v.Kind == GoalKind.Core && v.Id == current.FactionId && v.IsHpKnown
+        return current.Objectives.Any(v => v.Kind == GoalKind.Core && v.Id == current.FactionId && v.IsHpKnown
             && before.TryGetValue(v.Id, out var prior) && v.Hp < prior.Hp);
+    }
+
+    private int ObserveCoreAttack(int index, FactionFrame old, FactionFrame current)
+    {
+        bool dropped = CoreHpDrop(old, current);
+        if (dropped)
+        {
+            bool starts = !coreAttackActive[index] || coreAttackQuietTicks[index] >= CoreAttackEndTicks;
+            coreAttackActive[index] = true;
+            coreAttackQuietTicks[index] = 0;
+            return starts ? 1 : 0;
+        }
+        if (coreAttackActive[index])
+        {
+            long elapsed = Math.Max(1, current.Tick - old.Tick);
+            coreAttackQuietTicks[index] = (int)Math.Min(CoreAttackEndTicks, coreAttackQuietTicks[index] + elapsed);
+        }
+        return 0;
     }
 
     private void RememberHp(int index, FactionFrame frame)
@@ -300,6 +322,16 @@ internal sealed class LoadMetricRow
     }
 }
 
+internal sealed class LoadMetricMatchResult
+{
+    internal ulong Seed;
+    internal long Tick;
+    internal bool HasEnded;
+    internal uint WinnerFactionId;
+    internal bool IsDraw;
+    internal bool IsUndecided;
+}
+
 internal static class LoadMetricCommand
 {
     private const int TicksPerMinute = 1200;
@@ -320,11 +352,20 @@ internal static class LoadMetricCommand
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
         var rows = new List<LoadMetricRow>();
+        var matches = new List<LoadMetricMatchResult>();
         foreach (ulong seed in seeds)
         {
             var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"));
+            scenario.Economy.CoreDefence = options.ContainsKey("--core-defence");
             if (ticks > scenario.VerificationTickLimit) throw new InvalidDataException("--ticks is outside the scenario limit.");
-            rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks));
+            rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks,
+                completed: simulation =>
+                {
+                    var result = simulation.Capture(1).Result;
+                    matches.Add(new LoadMetricMatchResult { Seed = seed, Tick = simulation.Capture(1).Tick,
+                        HasEnded = result.HasEnded, WinnerFactionId = result.WinnerFactionId,
+                        IsDraw = result.IsDraw, IsUndecided = result.IsUndecided });
+                }));
         }
         using (var writer = new StreamWriter(output, false, new UTF8Encoding(false)))
         {
@@ -332,6 +373,7 @@ internal static class LoadMetricCommand
             foreach (var row in rows) writer.WriteLine(row.Csv());
         }
         PrintSummary(rows, seeds.Count);
+        PrintMatchResults(matches);
         return 0;
     }
 
@@ -358,7 +400,8 @@ internal static class LoadMetricCommand
     }
 
     internal static List<LoadMetricRow> RunScenario(ScenarioDefinition scenario, long ticks, string westPreset, string eastPreset,
-        Action<long, Battle> afterStep = null, int idleTicks = LoadMetricDetector.DefaultIdleTicks)
+        Action<long, Battle> afterStep = null, int idleTicks = LoadMetricDetector.DefaultIdleTicks,
+        Action<Battle> completed = null)
     {
         if (scenario == null) throw new ArgumentNullException(nameof(scenario));
         var simulation = new Battle(scenario);
@@ -395,6 +438,7 @@ internal static class LoadMetricCommand
                 minuteEvents[1] = new LoadMetricDelta();
             }
         }
+        completed?.Invoke(simulation);
         return rows;
     }
 
@@ -451,5 +495,15 @@ internal static class LoadMetricCommand
                 totals.Max().ToString(CultureInfo.InvariantCulture)));
         }
         Console.WriteLine("summary_seeds=" + seedCount.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void PrintMatchResults(IReadOnlyList<LoadMetricMatchResult> matches)
+    {
+        Console.WriteLine("matches: seed,tick,ended,winner,is_draw,is_undecided");
+        foreach (var match in matches.OrderBy(v => v.Seed))
+            Console.WriteLine(string.Join(",", match.Seed.ToString(CultureInfo.InvariantCulture),
+                match.Tick.ToString(CultureInfo.InvariantCulture), match.HasEnded ? "1" : "0",
+                match.WinnerFactionId.ToString(CultureInfo.InvariantCulture), match.IsDraw ? "1" : "0",
+                match.IsUndecided ? "1" : "0"));
     }
 }
