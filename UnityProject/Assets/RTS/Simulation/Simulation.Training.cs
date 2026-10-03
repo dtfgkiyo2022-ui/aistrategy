@@ -42,6 +42,7 @@ namespace Rts.Simulation
         /// <summary>What a barracks can train: infantry always, scouts on a map with ages.</summary>
         private bool Trains(BuildingState b, UnitKind kind)
         {
+            if (b.Kind == BuildingKind.Town) return false;
             if (b.Kind == BuildingKind.Monastery) return kind == UnitKind.Monk && CultAllowed(b.FactionId);
             // V3-5 (32 #9): the siege workshop trains rams, and only rams.
             if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
@@ -203,6 +204,40 @@ namespace Rts.Simulation
             }
         }
 
+        private bool CanTrainTownVillager(uint faction, BuildingState b)
+            => TownsAllowed(faction) && b.Alive && b.Complete && b.Kind == BuildingKind.Town
+                && b.Queued < world.Config.Economy.QueueLimit
+                && LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued
+                    + QueuedInfantry(faction) + QueuedTownVillagers(faction) < PopCapFor(faction)
+                && world.Economies[faction - 1].Food >= VillagerFoodCostFor(faction);
+
+        private void EnqueueTownVillager(uint faction, ref BuildingState b)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+            if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction);
+            b.Queued++;
+            var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
+            Array.Resize(ref kinds, kinds.Length + 1);
+            kinds[kinds.Length - 1] = UnitKind.Villager;
+            b.QueueKinds = kinds;
+        }
+
+        private void CancelTownVillager(uint faction, ref BuildingState b)
+        {
+            if (b.Queued == 0) return;
+            ref var economy = ref world.Economies[faction - 1];
+            b.Queued--;
+            economy.Food = checked(economy.Food + VillagerFoodCostFor(faction));
+            if (b.QueueKinds != null && b.QueueKinds.Length > 0)
+            {
+                var kinds = new UnitKind[b.QueueKinds.Length - 1];
+                Array.Copy(b.QueueKinds, 0, kinds, 0, kinds.Length);
+                b.QueueKinds = kinds;
+            }
+            if (b.Queued == 0) b.TrainRemaining = 0;
+        }
+
         /// <summary>
         /// Takes the last unit off the queue and returns today's price for it - metal only up to what the queue paid, so a
         /// cancel after advancing never gives metal that was not paid (26.1).
@@ -273,7 +308,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction) continue;
+                if (!b.Alive || b.FactionId != faction || b.Kind == BuildingKind.Town) continue;
                 for (int q = 0; q < b.Queued; q++) if (QueueAt(b, q) == kind) count++;
             }
             return count;

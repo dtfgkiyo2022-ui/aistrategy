@@ -108,10 +108,12 @@ namespace Rts.Simulation
                         // V3-10 #1: the cavalry civilisation may place the existing stable from its first age.
                         && !(kind == BuildingKind.Stable && CavalryAllowed(faction) && world.Economies[faction - 1].Age >= 1)
                         // V3-5 (32 #17): the castle belongs to the third age.
-                        && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
-                        && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))) return;
+                         && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
+                         && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))
+                         && !(kind == BuildingKind.Town && TownsAllowed(faction))) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
+                    if (kind == BuildingKind.Town && TownCount(faction) >= rules.TownMaxBuildings) return;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -122,7 +124,8 @@ namespace Rts.Simulation
                     uint sanctuaryOutpost = 0;
                     if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
                     if (kind == BuildingKind.Shrine && !TrySanctuaryPlacement(faction, c.Cell, out sanctuaryOutpost)) return;
-                    bool clear = kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
+                     bool clear = kind == BuildingKind.Town ? TownSiteIsClear(faction, c.Cell, size)
+                         : kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
@@ -145,7 +148,7 @@ namespace Rts.Simulation
                 }
                 case EconomyCommandKind.Train:
                 {
-                    int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
+                    int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
                     if (population >= PopCapFor(faction)) return;
                     if (c.ProducerId == 0)
                     {
@@ -158,6 +161,13 @@ namespace Rts.Simulation
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
                     ref var b = ref world.Buildings[index];
+                    if (c.Unit == UnitKind.Villager)
+                    {
+                        if (!CanTrainTownVillager(faction, b)) return;
+                        if (IndustryOn) b.Held = true;
+                        EnqueueTownVillager(faction, ref b);
+                        return;
+                    }
                     if (!b.Complete || !Trains(b, c.Unit) || b.Queued >= rules.QueueLimit || !HasRoomFor(faction, c.Unit) || !CanPay(faction, c.Unit, b.Kind)) return;
                     if (b.Kind == BuildingKind.Monastery && c.Unit == UnitKind.Monk
                         && !CultBudgetAllows(faction, rules.MonasteryMonkFoodCost, rules.MonasteryMonkWoodCost)) return;
@@ -183,6 +193,11 @@ namespace Rts.Simulation
                     if (b.Queued == 0) return;
                     if (IndustryOn) b.Held = true;
                     MarkLinesForBuilding(faction, b.Id);
+                    if (b.Kind == BuildingKind.Town)
+                    {
+                        CancelTownVillager(faction, ref b);
+                        return;
+                    }
                     // Today's price back; advancing only ever lowers food and wood, and metal comes back only as paid.
                     CancelLast(faction, ref b);
                     return;

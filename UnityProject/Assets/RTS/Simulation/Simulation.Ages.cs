@@ -42,6 +42,12 @@ namespace Rts.Simulation
 
         private bool FishingOn => AgesOn && world.Config.Economy.FishingCiv && world.Config.Economy.FishingEnabled;
 
+        /// <summary>S-3: towns are a shared second-age expansion, independent of civilisation.</summary>
+        private bool TownsOn => world.Config.Economy.Enabled && world.Config.Economy.Towns;
+
+        private bool TownsAllowed(uint faction)
+            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= 2;
+
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
 

@@ -64,7 +64,7 @@ namespace Rts.Simulation
             int size = metropolis ? rules.GrandHouseSizeCells : rules.HouseSizeCells;
             int wood = metropolis ? rules.GrandHouseWoodCost : rules.HouseWoodCost;
             if (cap >= ceiling || economy.Wood < wood) return;
-            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
+            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             // S-4b: several barracks and a larger villager target fill the cap faster, so the scaled economy starts the
             // next house earlier. Waiting for the villager target here froze the population at the base cap.
             if (population + (EconomyScaleOn ? ScaledHouseMargin : HouseMargin) < cap) return;

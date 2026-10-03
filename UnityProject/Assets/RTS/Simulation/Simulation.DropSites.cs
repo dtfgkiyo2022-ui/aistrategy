@@ -40,12 +40,30 @@ namespace Rts.Simulation
                 }
                 point = fishDrop; reach = fishReach;
             }
+            if (TownsOn)
+            {
+                var townBest = DistanceSquared(v.Position, point);
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var town = world.Buildings[i];
+                    if (!town.Alive || !town.Complete || town.FactionId != v.FactionId || town.Kind != BuildingKind.Town) continue;
+                    var spot = world.Map.Center(town.WorkCell);
+                    var distance = DistanceSquared(v.Position, spot);
+                    if (distance < townBest)
+                    {
+                        townBest = distance;
+                        point = spot;
+                        reach = rules.DropOffMargin;
+                    }
+                }
+            }
             if (!AgesOn) return (point, reach);
             BigInteger best = DistanceSquared(v.Position, point);
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.FactionId != v.FactionId || b.Kind != BuildingKind.DropSite) continue;
+                if (!b.Alive || !b.Complete || b.FactionId != v.FactionId
+                    || (b.Kind != BuildingKind.DropSite && !(TownsOn && b.Kind == BuildingKind.Town))) continue;
                 var spot = world.Map.Center(b.WorkCell);
                 var d = DistanceSquared(v.Position, spot);
                 if (d >= best) continue;
