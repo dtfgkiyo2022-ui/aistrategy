@@ -56,6 +56,9 @@ namespace Rts.Simulation
         private const int CoreDefenceExtensionId = 9;
         private const int CoreDefenceExtensionVersion = 1;
         private const int CoreDefenceExtensionDataLength = 5 * sizeof(int);
+        private const int ArmyGrowthExtensionId = 10;
+        private const int ArmyGrowthExtensionVersion = 1;
+        private const int ArmyGrowthExtensionDataLength = sizeof(int);
         private const int TownExtensionId = 11;
         private const int TownExtensionVersion = 1;
         private const int TownExtensionDataLength = 9 * sizeof(int);
@@ -76,6 +79,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(MetropolisExtensionId, MetropolisExtensionVersion, MetropolisExtensionDataLength),
             new ExtensionRegistration(SanctuaryExtensionId, SanctuaryExtensionVersion, SanctuaryExtensionDataLength),
             new ExtensionRegistration(CoreDefenceExtensionId, CoreDefenceExtensionVersion, CoreDefenceExtensionDataLength),
+            new ExtensionRegistration(ArmyGrowthExtensionId, ArmyGrowthExtensionVersion, ArmyGrowthExtensionDataLength),
             new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength)
         };
 
@@ -581,9 +585,10 @@ namespace Rts.Simulation
                 else if (id == MountainExtensionId) ReadMountainExtension(extension, c.Economy);
                 else if (id == TollgateExtensionId) ReadTollgateExtension(extension, c.Economy);
                 else if (id == MetropolisExtensionId) ReadMetropolisExtension(extension, c.Economy);
-                 else if (id == SanctuaryExtensionId) ReadSanctuaryExtension(extension, c.Economy);
-                 else if (id == CoreDefenceExtensionId) ReadCoreDefenceExtension(extension, c.Economy);
-                 else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
+                else if (id == SanctuaryExtensionId) ReadSanctuaryExtension(extension, c.Economy);
+                else if (id == CoreDefenceExtensionId) ReadCoreDefenceExtension(extension, c.Economy);
+                else if (id == ArmyGrowthExtensionId) ReadArmyGrowthExtension(extension, c.Economy);
+                else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -621,8 +626,9 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == CultExtensionId && !c.Economy.Cult);
             extensions.RemoveAll(extension => extension != null && extension.Id == MetropolisExtensionId && !c.Economy.Metropolis);
             extensions.RemoveAll(extension => extension != null && extension.Id == SanctuaryExtensionId && !c.Economy.Sanctuary);
-             extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
-             extensions.RemoveAll(extension => extension != null && extension.Id == TownExtensionId && !c.Economy.Towns);
+            extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
+            extensions.RemoveAll(extension => extension != null && extension.Id == ArmyGrowthExtensionId && !c.Economy.ArmyGrowth);
+            extensions.RemoveAll(extension => extension != null && extension.Id == TownExtensionId && !c.Economy.Towns);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -693,16 +699,24 @@ namespace Rts.Simulation
                     hasCoreDefence = true;
                     extensions[i] = CreateCoreDefenceExtension(c.Economy);
                 }
-             if (c.Economy.CoreDefence && !hasCoreDefence) extensions.Add(CreateCoreDefenceExtension(c.Economy));
-             bool hasTown = false;
-             for (int i = 0; i < extensions.Count; i++)
-                 if (extensions[i] != null && extensions[i].Id == TownExtensionId)
-                 {
-                     hasTown = true;
-                     extensions[i] = CreateTownExtension(c.Economy);
-                 }
-             if (c.Economy.Towns && !hasTown) extensions.Add(CreateTownExtension(c.Economy));
-             return extensions.ToArray();
+            if (c.Economy.CoreDefence && !hasCoreDefence) extensions.Add(CreateCoreDefenceExtension(c.Economy));
+            bool hasArmyGrowth = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != ArmyGrowthExtensionId) continue;
+                hasArmyGrowth = true;
+                extensions[i] = CreateArmyGrowthExtension(c.Economy);
+            }
+            if (c.Economy.ArmyGrowth && !hasArmyGrowth) extensions.Add(CreateArmyGrowthExtension(c.Economy));
+            bool hasTown = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == TownExtensionId)
+                {
+                    hasTown = true;
+                    extensions[i] = CreateTownExtension(c.Economy);
+                }
+            if (c.Economy.Towns && !hasTown) extensions.Add(CreateTownExtension(c.Economy));
+            return extensions.ToArray();
         }
 
         private static ScenarioExtensionData CreateTownExtension(EconomyRules e)
@@ -756,6 +770,28 @@ namespace Rts.Simulation
                 e.CoreDefenceRange = reader.ReadInt32(); e.CoreDefenceDamage = reader.ReadInt32();
                 e.CoreDefenceIntervalTicks = reader.ReadInt32(); e.CoreDefenceMaxTargets = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing core defence extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateArmyGrowthExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ArmyGrowth ? 1 : 0);
+                return new ScenarioExtensionData { Id = ArmyGrowthExtensionId, Version = ArmyGrowthExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadArmyGrowthExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid army-growth flag.");
+                e.ArmyGrowth = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing army-growth extension data.");
             }
         }
 

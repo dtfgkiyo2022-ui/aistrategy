@@ -260,17 +260,18 @@ namespace Rts.Simulation
     {
         internal readonly ScenarioDefinition Config;
         internal SoldierState[] Soldiers;
-        internal readonly ArmyState[] Armies;
+        internal ArmyState[] Armies;
         internal readonly CoreState[] Cores;
         internal readonly OutpostState[] Outposts;
         internal readonly GridMap Map;
         internal readonly FactionState[] Factions;
         internal int[] SoldierTraversal;
-        internal readonly int[] ArmyTraversal;
+        internal int[] ArmyTraversal;
         internal readonly SplitMix64 CombatRandom, AiRandom;
         internal uint NextSoldierId;
         internal int SoldierCount => checked((int)(NextSoldierId - 1));
-        internal readonly uint NextArmyId, NextCoreId, NextOutpostId, NextFactionId;
+        internal uint NextArmyId;
+        internal readonly uint NextCoreId, NextOutpostId, NextFactionId;
         internal long Tick;
         internal ulong InputCursor;
         internal ResourceNodeState[] Nodes;
@@ -321,7 +322,6 @@ namespace Rts.Simulation
                     Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = Fix64.FromRaw(p.Speed.Raw / 20) };
             }
             var soldiers = new System.Collections.Generic.List<int>();
-            var armies = new System.Collections.Generic.List<int>();
             for (int f = 0; f < 2; f++)
             {
                 var d = Config.Factions[f];
@@ -339,11 +339,11 @@ namespace Rts.Simulation
                     for (int i = 0; i < Soldiers.Length; i++)
                         if (Soldiers[i].Initial.ArmyId == id) { ids.Add((uint)i + 1); soldiers.Add(i); }
                     Armies[id - 1] = new ArmyState { Definition = Config.Armies[id - 1], SoldierIds = ids.ToArray(), AutoStartIds = ids.FindAll(id => Soldiers[id - 1].Alive).ToArray(), Path = Array.Empty<int>() };
-                    armies.Add((int)id - 1);
                 }
             }
             SoldierTraversal = soldiers.ToArray();
-            ArmyTraversal = armies.ToArray();
+            ArmyTraversal = new int[Armies.Length];
+            for (int i = 0; i < ArmyTraversal.Length; i++) ArmyTraversal[i] = i;
             var e = Config.Economy;
             Nodes = new ResourceNodeState[Config.ResourceNodes.Length];
             for (int i = 0; i < Nodes.Length; i++) Nodes[i] = new ResourceNodeState { Definition = Config.ResourceNodes[i], Remaining = Config.ResourceNodes[i].Amount };
@@ -393,7 +393,8 @@ namespace Rts.Simulation
             for (int i = 0; i < blocked.Length; i++)
                 Require(blocked[i] >= 0 && blocked[i] < m.WidthCells * m.HeightCells && (i == 0 || blocked[i] != blocked[i - 1]), "Invalid blocked cell.");
             var r = s.Rules;
-            Require(r.FactionCap > 0 && r.CoreRadius.Raw >= 0 && r.CoreRadius <= Fix64.FromInt(1024)
+            int factionCap = s.Economy != null && s.Economy.ArmyGrowth ? 200 : r.FactionCap;
+            Require(factionCap > 0 && r.CoreRadius.Raw >= 0 && r.CoreRadius <= Fix64.FromInt(1024)
                 && r.OwnedObjectiveVision.Raw >= 0 && r.CaptureRadius.Raw >= 0
                 && r.CaptureDurationTicks > 0 && r.CoreReinforcementIntervalTicks > 0
                 && r.OutpostReinforcementIntervalTicks > 0 && r.OccupationThreatMemoryTicks >= 0
@@ -403,7 +404,7 @@ namespace Rts.Simulation
                 Map = new MapDefinition { WidthMeters = m.WidthMeters, HeightMeters = m.HeightMeters,
                     CellSizeMeters = m.CellSizeMeters, WidthCells = m.WidthCells, HeightCells = m.HeightCells, DefaultPassable = m.DefaultPassable, BlockedCellIds = blocked,
                     Terrain = Copy(m.Terrain) },
-                Rules = new RuleDefinition { FactionCap = r.FactionCap, CoreRadius = r.CoreRadius,
+                Rules = new RuleDefinition { FactionCap = factionCap, CoreRadius = r.CoreRadius,
                     OwnedObjectiveVision = r.OwnedObjectiveVision, CaptureRadius = r.CaptureRadius,
                     CaptureDurationTicks = r.CaptureDurationTicks, CoreReinforcementIntervalTicks = r.CoreReinforcementIntervalTicks,
                     OutpostReinforcementIntervalTicks = r.OutpostReinforcementIntervalTicks,
@@ -414,6 +415,13 @@ namespace Rts.Simulation
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
                 Extensions = Copy(s.Extensions) };
             var e = c.Economy;
+            // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
+            // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
+            if (e.ArmyGrowth)
+            {
+                e.PopulationCap = 200;
+                c.Rules.FactionCap = 200;
+            }
             // Monk rules are opt-in. Keep disabled scenarios byte-for-byte unchanged, but make an enabled authored
             // scenario usable even when an older scenario file has no Monk parameter record yet.
             if (e.MonksEnabled && !Array.Exists(c.UnitParameters, value => value.Kind == UnitKind.Monk))
@@ -710,7 +718,7 @@ namespace Rts.Simulation
                 if (d.Alive)
                 {
                     Require(++armyCounts[d.ArmyId - 1] <= c.Armies[d.ArmyId - 1].Capacity
-                        && ++factionCounts[d.FactionId - 1] <= r.FactionCap, "Initial capacity exceeded.");
+                        && ++factionCounts[d.FactionId - 1] <= factionCap, "Initial capacity exceeded.");
                 }
             }
             if (e.Enabled)
@@ -738,7 +746,7 @@ namespace Rts.Simulation
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
             return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
-                PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
+                ArmyGrowth = e.ArmyGrowth, PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
