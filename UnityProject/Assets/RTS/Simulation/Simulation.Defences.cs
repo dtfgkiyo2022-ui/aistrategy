@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
 
@@ -12,6 +13,8 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int AutoTowers = 2, StoneGatherers = 2;
+
+        private bool CoreDefenceOn => world.Config.Economy.Enabled && world.Config.Economy.CoreDefence;
 
         /// <summary>
         /// PlaceWall: each cell on its own, in order - on the map, open ground with no belt or resource point, outside every
@@ -134,6 +137,84 @@ namespace Rts.Simulation
                 villagerDamage[best] = checked(villagerDamage[best] + TowerShot(b.FactionId, b.Kind));
                 b.Timer = interval - 1;
                 b.Shots++;
+            }
+        }
+
+        /// <summary>
+        /// Core defence: every enabled core fires a deterministic volley independently of the age. Soldiers are preferred;
+        /// villagers are considered only when no enemy soldier is in range. This deliberately follows the tower damage path.
+        /// </summary>
+        private void CoresShoot()
+        {
+            if (!CoreDefenceOn) return;
+            var rules = world.Config.Economy;
+            int maxTargets = rules.CoreDefenceMaxTargets;
+            if (maxTargets <= 0) return;
+            Fix64 range = Fix64.FromInt(rules.CoreDefenceRange);
+            for (int i = 0; i < world.Cores.Length; i++)
+            {
+                ref var core = ref world.Cores[i];
+                if (core.Hp <= 0) continue;
+                if (core.DefenceTimer > 0) { core.DefenceTimer--; continue; }
+
+                var targets = new List<int>(maxTargets);
+                while (targets.Count < maxTargets)
+                {
+                    int best = -1;
+                    BigInteger bestDistance = 0;
+                    foreach (int soldierIndex in world.SoldierTraversal)
+                    {
+                        var enemy = world.Soldiers[soldierIndex];
+                        if (!enemy.Alive || enemy.Initial.FactionId == core.Definition.FactionId
+                            || targets.Contains(soldierIndex) || !IsVisibleTo(core.Definition.FactionId, enemy.Position)
+                            || !InRange(core.Definition.Position, enemy.Position, range)) continue;
+                        var distance = DistanceSquared(core.Definition.Position, enemy.Position);
+                        if (best < 0 || distance < bestDistance
+                            || distance == bestDistance && enemy.Initial.Id < world.Soldiers[best].Initial.Id)
+                        {
+                            best = soldierIndex;
+                            bestDistance = distance;
+                        }
+                    }
+                    if (best < 0) break;
+                    targets.Add(best);
+                }
+
+                if (targets.Count == 0)
+                {
+                    while (targets.Count < maxTargets)
+                    {
+                        int best = -1;
+                        BigInteger bestDistance = 0;
+                        for (int villagerIndex = 0; villagerIndex < world.VillagerCount; villagerIndex++)
+                        {
+                            var enemy = world.Villagers[villagerIndex];
+                            if (!enemy.Alive || enemy.FactionId == core.Definition.FactionId || targets.Contains(villagerIndex)
+                                || !IsVisibleTo(core.Definition.FactionId, enemy.Position) || !InRange(core.Definition.Position, enemy.Position, range)) continue;
+                            var distance = DistanceSquared(core.Definition.Position, enemy.Position);
+                            if (best < 0 || distance < bestDistance
+                                || distance == bestDistance && enemy.Id < world.Villagers[best].Id)
+                            {
+                                best = villagerIndex;
+                                bestDistance = distance;
+                            }
+                        }
+                        if (best < 0) break;
+                        targets.Add(best);
+                    }
+                    foreach (int villagerIndex in targets)
+                        villagerDamage[villagerIndex] = checked(villagerDamage[villagerIndex] + rules.CoreDefenceDamage);
+                }
+                else
+                {
+                    foreach (int soldierIndex in targets)
+                    {
+                        var enemy = world.Soldiers[soldierIndex];
+                        int shot = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, rules.CoreDefenceDamage);
+                        soldierDamage[soldierIndex] = checked(soldierDamage[soldierIndex] + shot);
+                    }
+                }
+                if (targets.Count > 0) core.DefenceTimer = rules.CoreDefenceIntervalTicks - 1;
             }
         }
 
