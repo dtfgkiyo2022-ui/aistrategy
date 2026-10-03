@@ -64,6 +64,13 @@ namespace Rts.Decision
             }
         }
 
+        /// <summary>S-4b villager target curve. The city civilisation multiplier is applied after the curve.</summary>
+        public static int VillagerTarget(bool economyScale, int age, int defaultTarget, bool metropolis)
+        {
+            int target = economyScale ? age >= 2 ? 60 : age == 1 ? 40 : 20 : defaultTarget;
+            return metropolis ? checked(target * 3 / 2) : target;
+        }
+
         /// <summary>
         /// V3-4 (technical-design-v3 29): the civilisation that suits the ground around the core. Every core has
         /// <paramref name="guaranteedFood"/> food points by the fairness rule, so only the food beyond them speaks for
@@ -154,6 +161,10 @@ namespace Rts.Decision
 
         /// <summary>Step 2: one barracks, once there is wood for it.</summary>
         public static bool ShouldBuildBarracks(bool hasBarracks, int wood, int cost) => !hasBarracks && wood >= cost;
+
+        /// <summary>Scaled Step 2: reach the requested barracks count once wood can pay for the next one.</summary>
+        public static bool ShouldBuildBarracks(int current, int target, int wood, int cost)
+            => current < target && wood >= cost;
 
         /// <summary>Step 3: keep a short queue at a finished barracks while food, wood, population and army room allow.</summary>
         public static bool ShouldTrainInfantry(bool barracksReady, int queued, int queueTarget, int food, int wood, int foodCost, int woodCost,
