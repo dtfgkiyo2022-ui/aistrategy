@@ -4,6 +4,7 @@ using System.Text.Json;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Replay;
+using Rts.Simulation;
 
 namespace Rts.Headless.Cli;
 
@@ -14,7 +15,20 @@ internal static class BenchmarkCommand
         string Required(string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
         long ticks = long.Parse(Required("--ticks"), CultureInfo.InvariantCulture);
         int warmup = int.Parse(options.GetValueOrDefault("--warmup") ?? "200", CultureInfo.InvariantCulture);
-        var scenario = JsonInput.Scenario(Required("--scenario"));
+        if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed"))
+            throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
+        var scenario = options.TryGetValue("--map-seed", out var mapSeed)
+            ? (options.ContainsKey("--large") ? MapGenerator.GenerateLarge(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), options.ContainsKey("--all-civs"))
+                : MapGenerator.GenerateTerrain(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), gold: options.ContainsKey("--all-civs")))
+            : JsonInput.Scenario(Required("--scenario"));
+        if (options.ContainsKey("--all-civs"))
+        {
+            scenario.Economy.Forestry = true; scenario.Economy.Masonry = true; scenario.Economy.Caravan = true;
+            scenario.Economy.Cavalry = true; scenario.Economy.Bridge = true; scenario.Economy.Academy = true;
+            scenario.Economy.Cult = true; scenario.Economy.MonksEnabled = true; scenario.Economy.Mountain = true;
+            scenario.Economy.FishingCiv = true; scenario.Economy.FishingEnabled = true;
+            scenario.Economy.Tollgate = true; scenario.Economy.Metropolis = true; scenario.Economy.Sanctuary = true;
+        }
         if (ticks <= 0 || ticks > scenario.VerificationTickLimit || warmup < 0 || warmup > scenario.VerificationTickLimit)
             throw new InvalidDataException("Ticks must be positive and warmup nonnegative, within the scenario limit.");
         var inputs = options.TryGetValue("--inputs", out var inputPath)
@@ -43,7 +57,7 @@ internal static class BenchmarkCommand
             .Cast<System.Reflection.AssemblyConfigurationAttribute>().Single().Configuration;
         var report = new
         {
-            Scenario = scenario.ScenarioId, ScenarioPath = Path.GetFullPath(Required("--scenario")),
+            Scenario = scenario.ScenarioId, ScenarioPath = options.TryGetValue("--scenario", out var scenarioPath) ? Path.GetFullPath(scenarioPath) : "generated:" + scenario.ScenarioId,
             Configuration = configuration, Recording = record != null, ReplayPath = record,
             RequestedTicks = ticks, MeasuredTicks = outcome.LastTick, WarmupTicks = warmup,
             InitialSoldiers = scenario.Soldiers.Length, FactionCap = scenario.Rules.FactionCap,
@@ -153,4 +167,3 @@ internal sealed class AllocTypeListener : System.Diagnostics.Tracing.EventListen
         lock (gate) return bytes.OrderByDescending(p => p.Value).Take(count).ToDictionary(p => p.Key, p => p.Value / 1024);
     }
 }
-
