@@ -355,7 +355,7 @@ internal static class LoadMetricCommand
         var matches = new List<LoadMetricMatchResult>();
         foreach (ulong seed in seeds)
         {
-            var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"));
+            var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"), options.ContainsKey("--army-growth"));
             scenario.Economy.CoreDefence = options.ContainsKey("--core-defence");
             if (ticks > scenario.VerificationTickLimit) throw new InvalidDataException("--ticks is outside the scenario limit.");
             rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks,
@@ -377,9 +377,10 @@ internal static class LoadMetricCommand
         return 0;
     }
 
-    internal static ScenarioDefinition CreateScenario(ulong seed, bool allCivilisations, bool large = false)
+    internal static ScenarioDefinition CreateScenario(ulong seed, bool allCivilisations, bool large = false, bool armyGrowth = false)
     {
         var scenario = large ? MapGenerator.GenerateLarge(seed, gold: allCivilisations) : MapGenerator.GenerateTerrain(seed, gold: allCivilisations);
+        scenario.Economy.ArmyGrowth = armyGrowth;
         if (!allCivilisations) return scenario;
         // Keep this list identical to UnityHost/LiveMatchHost.allCivilisations.
         scenario.Economy.Forestry = true;
