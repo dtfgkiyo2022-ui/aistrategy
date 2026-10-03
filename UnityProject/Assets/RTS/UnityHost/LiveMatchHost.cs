@@ -169,6 +169,9 @@ namespace Rts.UnityHost
         // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
         // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
         [SerializeField] private bool economyMap = true;
+        // S-2 trial switch. It is deliberately separate from EconomyMap and defaults off; presentation bounds are not
+        // changed here because the presentation owner handles the large-map camera and overlay work.
+        [SerializeField] private bool largeMap = false;
         private ulong mapSeed;
         private EconomyLayer economyLayer;
         private EconomyPanel economyPanel;
@@ -177,6 +180,12 @@ namespace Rts.UnityHost
         {
             get { return economyMap; }
             set { if (value == economyMap) return; economyMap = value; matchRestartRequested = true; }
+        }
+
+        public bool LargeMap
+        {
+            get { return largeMap; }
+            set { if (value == largeMap) return; largeMap = value; matchRestartRequested = true; }
         }
 
         public ulong Seed { get { return mapSeed; } }
@@ -214,7 +223,8 @@ namespace Rts.UnityHost
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
             // The academy needs gold on the map, so the all-civilisations match asks the generator for the gold placement too.
-            var scenario = economyMap && ScenarioMultiplier == 1 ? MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations)
+            var scenario = economyMap && ScenarioMultiplier == 1 ? (largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations)
+                : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations))
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (economyMap && ScenarioMultiplier == 1)
             {

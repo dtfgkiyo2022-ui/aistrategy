@@ -387,7 +387,8 @@ namespace Rts.Simulation
                 && m.CellSizeMeters > 0 && m.WidthCells > 0 && m.HeightCells > 0
                 && (long)m.WidthCells * m.CellSizeMeters == m.WidthMeters
                 && (long)m.HeightCells * m.CellSizeMeters == m.HeightMeters, "Invalid map dimensions.");
-            Require(m.BlockedCellIds != null && (long)m.WidthCells * m.HeightCells <= 8192, "Invalid grid.");
+            // mapgen-4 is 256x128 cells. Keep a finite bound for malformed authored maps, but allow the S-2 grid.
+            Require(m.BlockedCellIds != null && (long)m.WidthCells * m.HeightCells <= 65536, "Invalid grid.");
             var blocked = Copy(m.BlockedCellIds); Array.Sort(blocked);
             for (int i = 0; i < blocked.Length; i++)
                 Require(blocked[i] >= 0 && blocked[i] < m.WidthCells * m.HeightCells && (i == 0 || blocked[i] != blocked[i - 1]), "Invalid blocked cell.");

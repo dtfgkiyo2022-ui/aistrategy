@@ -51,7 +51,7 @@ namespace Rts.Simulation
             var routeKey = (factionId, target);
             if (!routes.TryGetValue(routeKey, out var next))
             {
-                // One reverse BFS per destination, shared by all soldiers. At most 8192 cells.
+                // One reverse BFS per destination, shared by all soldiers. The scenario validator bounds the grid.
                 next = new int[passable.Length]; Array.Fill(next, -1);
                 var queue = new int[passable.Length]; int head = 0, tail = 0;
                 queue[tail++] = target; next[target] = target;
@@ -141,7 +141,7 @@ namespace Rts.Simulation
             g[start] = 0; open.Add((H(start, heuristicCell), H(start, heuristicCell), start));
             int best = start, expanded = 0;
             long bestDistance = Distance(Center(start), goal);
-            while (open.Count > 0 && expanded < 8192)
+            while (open.Count > 0 && expanded < passable.Length)
             {
                 var item = open.Min; open.Remove(item);
                 int id = item.id; closed[id] = true; expanded++;
@@ -163,7 +163,7 @@ namespace Rts.Simulation
             for (int id = best; id >= 0; id = parent[id]) path.Add(id);
             path.Reverse(); return path.ToArray();
         }
-        // Squared distance in Fix64 raw units. Both points lie on the map (at most 8192 cells), so every coordinate
+        // Squared distance in Fix64 raw units. Both points lie on the validated map, so every coordinate
         // difference is far below 2^31 and its square below 2^62; checked arithmetic turns any excess into an error.
         private static long Distance(SimPoint a, SimPoint b)
         {
