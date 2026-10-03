@@ -33,7 +33,7 @@ namespace Rts.Simulation
                 var plan = PlanOf(faction);
                 DecideAdvance(faction);
                 if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction), PopCapFor(faction), rules.QueueLimit))
+                    VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
                 {
                     economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
                     if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
@@ -54,6 +54,7 @@ namespace Rts.Simulation
                 DecideCaravanMercenary(faction);
                 DecideRepair(faction);
                 DecideBuildings(faction);
+                DecideTownVillagers(faction);
                 DecideIndustry(faction);
                 DecideTollgate(faction);
                 DecideCavalryStable(faction);
@@ -524,8 +525,10 @@ namespace Rts.Simulation
         }
 
         private void SpawnVillager(uint faction)
+            => SpawnVillager(faction, OwnCore(faction).Definition.Position);
+
+        private void SpawnVillager(uint faction, SimPoint origin)
         {
-            var origin = OwnCore(faction).Definition.Position;
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
                 if (world.Map.IsPassable(i) && (cell < 0 || DistanceSquared(origin, world.Map.Center(i)) < DistanceSquared(origin, world.Map.Center(cell)))) cell = i;

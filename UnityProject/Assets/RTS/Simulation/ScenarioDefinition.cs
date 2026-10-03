@@ -187,6 +187,8 @@ namespace Rts.Simulation
         public bool Metropolis;
         /// <summary>V3-18 #1: enables the sanctuary civilisation. Its rules are kept in extension ID 8.</summary>
         public bool Sanctuary;
+        /// <summary>S-3: enables outpost towns. Its rules are kept in extension ID 11.</summary>
+        public bool Towns;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>
         public int MonasterySizeCells = 2, MonasteryWoodCost = 100, MonasteryWork = 200, MonasteryHp = 400;
         public int MonasteryMonkFoodCost = 80, MonasteryMonkWoodCost = 40;
@@ -221,6 +223,9 @@ namespace Rts.Simulation
         public int MetropolisMilitiaFoodCost = 300, MetropolisMilitiaWoodCost = 200, MetropolisMilitiaTicks = 700;
         public int MetropolisMarketVillagerStep = 10, MetropolisMarketBonusPermille = 20, MetropolisMarketMaxBonusPermille = 100;
         public int MetropolisMilitiaDamage = 3, MetropolisMilitiaCoreRadius = 12;
+        /// <summary>S-3 provisional town values: a four-cell remote drop-off and villager-training base.</summary>
+        public int TownSizeCells = 4, TownWoodCost = 300, TownStoneCost = 200, TownWork = 800, TownHp = 2000;
+        public int TownMaxBuildings = 3, TownCoreDistance = 60, TownResourceReach = 16;
         /// <summary>V3-7 #2 provisional bow workshop values. Wood is the primary slot and food the secondary slot.</summary>
         public int FletcherSizeCells = 3, FletcherWoodCost = 150, FletcherWork = 300, FletcherHp = 300, FletcherTicks = 80;
         public int FletcherWoodInput = 1, FletcherFoodInput = 1;

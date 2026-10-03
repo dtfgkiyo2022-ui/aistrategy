@@ -51,7 +51,7 @@ namespace Rts.Simulation
             int size = metropolis ? rules.GrandHouseSizeCells : rules.HouseSizeCells;
             int wood = metropolis ? rules.GrandHouseWoodCost : rules.HouseWoodCost;
             if (cap >= ceiling || economy.Wood < wood) return;
-            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
+            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             if (population + HouseMargin < cap) return;
             for (int i = 0; i < world.BuildingCount; i++)
             {

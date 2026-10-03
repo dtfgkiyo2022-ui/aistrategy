@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using Rts.Contracts;
 using Rts.Decision;
 
@@ -14,6 +15,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int SiteSearchRadiusCells = 30, CoreClearanceCells = 4, NodeClearanceCells = 2, BuildingClearanceCells = 2;
+        private const int TownAutoWorkers = 4;
         // V3-11 #4 provisional simultaneous bridge limit. It is deliberately a simulation rule rather than a
         // contract field, so enabling bridges does not alter the old scenario bytes.
         private const int MaxActiveBridges = 3;
@@ -35,6 +37,7 @@ namespace Rts.Simulation
             }
             if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
                 PlaceBarracks(faction);
+            DecideTown(faction);
             DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
             ref var building = ref world.Buildings[barracks];
@@ -42,7 +45,7 @@ namespace Rts.Simulation
             if (CultAllowed(faction) && DecideCultMonk(faction)) return;
             if (DecideMonk(faction, ref building)) return;
             if (DecideScout(faction, ref building)) return;
-            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction);
+            int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, PopCapFor(faction), HasInfantryRoom(faction))
                 || economy.Metal < InfantryMetalFor(faction) || (SavingToAdvance(faction) && economy.Civ == CivKind.Primitive)) return;
@@ -78,6 +81,107 @@ namespace Rts.Simulation
             int origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
+        }
+
+        private void DecideTown(uint faction)
+        {
+            if (!TownsAllowed(faction)) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < rules.TownWoodCost || economy.Stone < rules.TownStoneCost || TownCount(faction) >= rules.TownMaxBuildings) return;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
+                    return;
+            int resourceCell = BestTownResourceCell(faction);
+            if (resourceCell < 0) return;
+            int origin = FindTownSite(faction, resourceCell);
+            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Town, origin, Facing.North, 0);
+        }
+
+        private void DecideTownVillagers(uint faction)
+        {
+            if (!TownsAllowed(faction)) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            // Villagers only (not soldiers) count toward the villager target; CanTrainTownVillager checks the population cap.
+            int villagers = LivingVillagers(faction) + economy.Queued + QueuedTownVillagers(faction);
+            if (villagers >= PlanOf(faction).VillagerTarget) return;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var town = ref world.Buildings[i];
+                if (!town.Alive || !town.Complete || town.Held || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (villagers >= PlanOf(faction).VillagerTarget || !CanTrainTownVillager(faction, town)) return;
+                EnqueueTownVillager(faction, ref town);
+                villagers++;
+            }
+        }
+
+        private int TownCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count++;
+            return count;
+        }
+
+        private int BestTownResourceCell(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            var rules = world.Config.Economy;
+            int best = -1, bestCount = 0, bestAmount = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var candidate = world.Nodes[i];
+                if (candidate.Remaining <= 0 || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                int count = 0, amount = 0;
+                for (int j = 0; j < world.Nodes.Length; j++)
+                {
+                    var node = world.Nodes[j];
+                    if (node.Remaining <= 0 || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
+                    count++; amount = checked(amount + node.Remaining);
+                }
+                if (count > bestCount || count == bestCount && (amount > bestAmount || amount == bestAmount && candidate.Definition.Id < world.Nodes[best].Definition.Id))
+                { best = i; bestCount = count; bestAmount = amount; }
+            }
+            return best < 0 ? -1 : world.Map.Cell(world.Nodes[best].Definition.Position);
+        }
+
+        private void AssignTownWorkers(BuildingState town)
+        {
+            if (town.Held || !TownsOn) return;
+            for (int assigned = 0; assigned < TownAutoWorkers; assigned++)
+            {
+                int villager = -1, node = -1;
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != town.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    int nearest = NearestTownNode(town, v.Position);
+                    if (nearest < 0) continue;
+                    if (villager < 0 || DistanceSquared(v.Position, world.Nodes[nearest].Definition.Position) < DistanceSquared(world.Villagers[villager].Position, world.Nodes[node].Definition.Position)
+                        || DistanceSquared(v.Position, world.Nodes[nearest].Definition.Position) == DistanceSquared(world.Villagers[villager].Position, world.Nodes[node].Definition.Position)
+                            && v.Id < world.Villagers[villager].Id)
+                    { villager = i; node = nearest; }
+                }
+                if (villager < 0) return;
+                SetWorkNode(ref world.Villagers[villager], node);
+                world.Villagers[villager].HaulFrom = 0; world.Villagers[villager].HaulTo = 0;
+            }
+        }
+
+        private int NearestTownNode(BuildingState town, SimPoint from)
+        {
+            int best = -1;
+            BigInteger bestDistance = default;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Remaining <= 0 || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
+                var distance = DistanceSquared(from, node.Definition.Position);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
+                { best = i; bestDistance = distance; }
+            }
+            return best;
         }
 
         /// <summary>V3-18 #1: the sanctuary's first automatic investment is one shrine for an owned outpost.</summary>
@@ -170,7 +274,7 @@ namespace Rts.Simulation
             ref var building = ref world.Buildings[monastery];
             if (!building.Complete || building.Held || building.Queued >= world.Config.Economy.QueueLimit) return false;
             if (QueuedOf(faction, UnitKind.Monk) + LivingClass(faction, UnitKind.Monk) >= CultMonkLimit(faction)) return false;
-            int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued + QueuedInfantry(faction);
+            int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             if (population >= PopCapFor(faction) || !HasRoomFor(faction, UnitKind.Monk) || !CanPay(faction, UnitKind.Monk, BuildingKind.Monastery)
                 || !CultBudgetAllows(faction, world.Config.Economy.MonasteryMonkFoodCost, world.Config.Economy.MonasteryMonkWoodCost)) return false;
             Enqueue(faction, ref building, UnitKind.Monk);
@@ -206,9 +310,12 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
             if (footprint == null || footprint.Length == 0) return;
             foreach (int cell in footprint) world.Map.SetPassable(cell, false);
+            int workCell = requestedWorkCell >= 0 ? requestedWorkCell
+                : kind == BuildingKind.Town ? NearestReachablePassableCell(FootprintCenter(origin, SizeOf(kind)), faction)
+                : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind)));
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
-                WorkCell = requestedWorkCell >= 0 ? requestedWorkCell : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind))),
+                WorkCell = workCell,
                 Alive = true, Hp = HpOf(kind, faction, origin), Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
@@ -296,7 +403,20 @@ namespace Rts.Simulation
         private int FindBarracksSite(uint faction) => FindSite(faction, world.Config.Economy.BarracksSizeCells);
 
         /// <summary>The same ring search for any square footprint of <paramref name="size"/> cells.</summary>
-        private int FindSite(uint faction, int size) => FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position));
+        private int FindSite(uint faction, int size)
+        {
+            int site = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position));
+            // S-3: when the core has no room left, a completed town is the next base for building (in ID order).
+            if (site >= 0 || !TownsAllowed(faction)) return site;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!town.Alive || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                site = FindSiteNear(faction, size, world.Map.Cell(BuildingCenter(town)));
+                if (site >= 0) return site;
+            }
+            return -1;
+        }
 
         /// <summary>The ring search around any <paramref name="centre"/> cell (the clearance from the own core still applies).</summary>
         private int FindSiteNear(uint faction, int size, int centre)
@@ -332,6 +452,44 @@ namespace Rts.Simulation
                 }
             }
             return true;
+        }
+
+        private bool TownSiteIsClear(uint faction, int origin, int size)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            var coreDistance = Fix64.FromInt(world.Config.Economy.TownCoreDistance);
+            if (DistanceSquared(FootprintCenter(origin, size), core) < new BigInteger(coreDistance.Raw) * coreDistance.Raw) return false;
+            foreach (int cell in Footprint(origin, size))
+            {
+                if (!world.Map.IsPassable(cell) || IsRiverCell(cell)) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
+                foreach (var node in world.Nodes)
+                    if (Chebyshev(cell, world.Map.Cell(node.Definition.Position)) < NodeClearanceCells) return false;
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    if (!world.Buildings[i].Alive) continue;
+                    foreach (int other in Footprint(world.Buildings[i]))
+                        if (Chebyshev(cell, other) < BuildingClearanceCells) return false;
+                }
+            }
+            return true;
+        }
+
+        private int FindTownSite(uint faction, int centre)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.TownSizeCells, cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (TownSiteIsClear(faction, origin, size) && KeepsMapConnected(faction, origin, size)) return origin;
+                    }
+            return -1;
         }
 
         /// <summary>
@@ -433,6 +591,8 @@ namespace Rts.Simulation
                 {
                     var v = world.Villagers[i];
                     if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    if (building.Kind == BuildingKind.Town
+                        && world.Map.FindPath(world.Map.Cell(v.Position), world.Map.Center(building.WorkCell), v.FactionId).Length == 0) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
                 }
                 if (best < 0) return;
@@ -483,6 +643,7 @@ namespace Rts.Simulation
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                     opened = true;
                 }
+                else if (b.Kind == BuildingKind.Town) AssignTownWorkers(b);
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
                         world.Villagers[j].Task = VillagerTask.Idle;
@@ -494,6 +655,20 @@ namespace Rts.Simulation
                 if (!b.Alive || !b.Complete || b.Queued == 0) continue;
                 if (b.TrainRemaining > 0) b.TrainRemaining--;
                 if (b.TrainRemaining > 0) continue;
+                if (b.Kind == BuildingKind.Town)
+                {
+                    if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
+                    SpawnVillager(b.FactionId, world.Map.Center(b.WorkCell));
+                    b.Queued--;
+                    b.TrainRemaining = b.Queued > 0 ? VillagerTrainTicksFor(b.FactionId) : 0;
+                    if (b.QueueKinds != null && b.QueueKinds.Length > 0)
+                    {
+                        var kinds = new UnitKind[b.QueueKinds.Length - 1];
+                        Array.Copy(b.QueueKinds, 1, kinds, 0, kinds.Length);
+                        b.QueueKinds = kinds;
+                    }
+                    continue;
+                }
                 // A full population or full armies hold the finished soldier at the door until there is room.
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
                 var unit = QueueAt(b, 0);
@@ -513,7 +688,15 @@ namespace Rts.Simulation
         private int QueuedInfantry(uint faction)
         {
             int count = 0;
-            for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction) count += world.Buildings[i].Queued;
+            for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind != BuildingKind.Town) count += world.Buildings[i].Queued;
+            return count;
+        }
+
+        private int QueuedTownVillagers(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count += world.Buildings[i].Queued;
             return count;
         }
 
@@ -538,7 +721,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Harbor ? e.HarborSizeCells
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
                 : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
-                : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
+                 : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
+                 : kind == BuildingKind.Town ? e.TownSizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
@@ -556,7 +740,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampHp : kind == BuildingKind.Academy ? e.AcademyHp
                 : kind == BuildingKind.Shrine ? e.ShrineHp
                 : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
-                : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+                 : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp
+                 : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
             return hp;
@@ -585,7 +770,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.EngineerCamp ? e.EngineerCampWork : kind == BuildingKind.Academy ? e.AcademyWork
                 : kind == BuildingKind.Shrine ? e.ShrineWork
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
-                : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+                 : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
+                 : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -603,7 +789,8 @@ namespace Rts.Simulation
                  : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Academy ? e.AcademyWoodCost
                  : kind == BuildingKind.Shrine ? e.ShrineWoodCost
                  : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
-                 : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+                  : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
+                  : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 
@@ -617,7 +804,8 @@ namespace Rts.Simulation
         {
             var e = world.Config.Economy;
             int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
-                : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost : 0;
+                : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
+                : kind == BuildingKind.Town ? e.TownStoneCost : 0;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
 
@@ -676,6 +864,30 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
                 if (world.Map.IsPassable(i) && (best < 0 || DistanceSquared(from, world.Map.Center(i)) < DistanceSquared(from, world.Map.Center(best)))) best = i;
             return best;
+        }
+
+        private int NearestReachablePassableCell(SimPoint from, uint faction)
+        {
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            int width = world.Config.Map.WidthCells, start = world.Map.Cell(OwnCore(faction).Definition.Position);
+            var seen = new bool[cells];
+            var queue = new int[cells];
+            int head = 0, tail = 0, best = -1;
+            if (start >= 0 && start < cells && world.Map.IsPassable(start)) { seen[start] = true; queue[tail++] = start; }
+            while (head < tail)
+            {
+                int cell = queue[head++];
+                if (best < 0 || DistanceSquared(from, world.Map.Center(cell)) < DistanceSquared(from, world.Map.Center(best))
+                    || DistanceSquared(from, world.Map.Center(cell)) == DistanceSquared(from, world.Map.Center(best)) && cell < best) best = cell;
+                int x = cell % width;
+                Visit(cell + width); if (x + 1 < width) Visit(cell + 1); Visit(cell - width); if (x > 0) Visit(cell - 1);
+            }
+            return best >= 0 ? best : NearestPassableCell(from);
+            void Visit(int next)
+            {
+                if (next < 0 || next >= cells || seen[next] || !world.Map.IsPassable(next)) return;
+                seen[next] = true; queue[tail++] = next;
+            }
         }
 
         private int Chebyshev(int a, int b)
