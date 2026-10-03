@@ -14,6 +14,7 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;

@@ -248,6 +248,7 @@ namespace Rts.UnityHost
                     scenario.Economy.Sanctuary = true;
                     scenario.Economy.CoreDefence = true;
                     scenario.Economy.ArmyGrowth = true;
+                    scenario.Economy.EconomyScale = true;
                 }
             }
             tickSeconds = 1f / scenario.TickRateHz;
