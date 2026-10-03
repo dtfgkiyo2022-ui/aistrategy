@@ -132,18 +132,19 @@ internal static class Program
     {
         try
         {
-            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze, grace, genmap.");
+            if(args.Length==0)throw new InvalidDataException("Commands: record, replay, compare, bench, analyze, grace, genmap, load.");
             var options=new Dictionary<string,string>(StringComparer.Ordinal);
             for(int i=1;i<args.Length;i++)
             {
                 string key=args[i]; if(!key.StartsWith("--",StringComparison.Ordinal))throw new InvalidDataException("Expected option.");
-                string value=key=="--allow-build-mismatch"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
+                string value=key=="--allow-build-mismatch"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"||key=="--all-civs"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
                 if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
-            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset","--trace-out","--trace-every"}, "snapshot"=>new[]{"--scenario","--out","--ticks","--every","--faction","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--ai-profile","--trigger-tick","--change-reserve","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--order2-kind","--order2-scope","--order2-scope-id","--order2-goal","--order2-goal-id","--order2-reserve-permille","--min-r","--max-r","--r-step","--input-delay","--rate-bands"}, "jev-match"=>new[]{"--scenario","--ticks","--faction","--out","--schedule","--heartbeat","--min-confidence-permille","--repeat-after","--key-env","--timeout-seconds","--cycle-sleep-ms"},"bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs","--alloc-types"},"genmap"=>new[]{"--seed","--out","--economy","--industry","--terrain"},"record"=>new[]{"--scenario","--map-seed","--economy","--industry","--terrain","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
+            string[] allowed=args[0] switch { "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset","--trace-out","--trace-every"}, "snapshot"=>new[]{"--scenario","--out","--ticks","--every","--faction","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--ai-profile","--trigger-tick","--change-reserve","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--order2-kind","--order2-scope","--order2-scope-id","--order2-goal","--order2-goal-id","--order2-reserve-permille","--min-r","--max-r","--r-step","--input-delay","--rate-bands"}, "jev-match"=>new[]{"--scenario","--ticks","--faction","--out","--schedule","--heartbeat","--min-confidence-permille","--repeat-after","--key-env","--timeout-seconds","--cycle-sleep-ms"},"bench"=>new[]{"--scenario","--ticks","--warmup","--out","--record","--inputs","--alloc-types"},"genmap"=>new[]{"--seed","--out","--economy","--industry","--terrain"},"load"=>new[]{"--map-seed","--terrain","--all-civs","--ticks","--west-preset","--east-preset","--out"},"record"=>new[]{"--scenario","--map-seed","--economy","--industry","--terrain","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
-            var build=BuildInfo.Current();
+            // load is a display-only measurement and deliberately does not inspect repository metadata.
+            var build=args[0]=="load" ? null : BuildInfo.Current();
             if(args[0]=="genmap") return GenMapCommand.Run(options);
             if(args[0]=="bench") return BenchmarkCommand.Run(options, build);
             if(args[0]=="analyze") return AnalyzeCommand.Run(options, build);
@@ -151,6 +152,7 @@ internal static class Program
             if(args[0]=="grace") return GraceCommand.Run(options, build);
             if(args[0]=="jev-match") return JevMatchCommand.Run(options, build);
             if(args[0]=="intervene") return InterventionCommand.Run(options, build);
+            if(args[0]=="load") return LoadMetricCommand.Run(options);
             if(args[0]=="record")
             {
                 if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed")) throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
