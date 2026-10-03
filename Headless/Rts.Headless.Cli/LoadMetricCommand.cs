@@ -32,9 +32,19 @@ internal sealed class LoadMetricDelta
 /// </summary>
 internal sealed class LoadMetricDetector
 {
+    internal const int DefaultIdleTicks = 20;
+
     private readonly FactionFrame[] previous = new FactionFrame[2];
     private readonly Dictionary<uint, int>[] maximumHp = { new(), new() };
     private readonly Dictionary<uint, bool>[] materialWaiting = { new(), new() };
+    private readonly Dictionary<uint, int>[] idleStreak = { new(), new() };
+    private readonly int idleTicks;
+
+    internal LoadMetricDetector(int idleTicks = DefaultIdleTicks)
+    {
+        if (idleTicks <= 0) throw new ArgumentOutOfRangeException(nameof(idleTicks));
+        this.idleTicks = idleTicks;
+    }
 
     internal LoadMetricDelta Observe(FactionFrame frame)
     {
@@ -45,11 +55,13 @@ internal sealed class LoadMetricDetector
         {
             RememberHp(index, frame);
             RememberMaterialWait(index, frame);
+            RememberIdle(index, frame);
             previous[index] = frame;
             return new LoadMetricDelta();
         }
 
         var result = Difference(old, frame, maximumHp[index], materialWaiting[index]);
+        result.VillagerIdle = ObserveIdle(index, frame);
         RememberHp(index, frame);
         RememberMaterialWait(index, frame);
         previous[index] = frame;
@@ -69,7 +81,6 @@ internal sealed class LoadMetricDetector
         var result = new LoadMetricDelta();
         if (old.Economy != null && current.Economy != null)
         {
-            result.VillagerIdle = Positive(Idle(current.Economy) - Idle(old.Economy));
             result.NodeExhausted = RemovedCount(old.Economy.Resources.Select(v => v.Id), current.Economy.Resources.Select(v => v.Id));
             result.BuildingDone = BuildingCompletions(old.Economy, current.Economy, current.FactionId);
             result.TrainingDone = TrainingCompletions(old.Economy, current.Economy, current.FactionId);
@@ -90,7 +101,43 @@ internal sealed class LoadMetricDetector
         return result;
     }
 
-    private static int Idle(EconomyView economy) => economy.Villagers.Count(v => v.IsOwn && v.Activity == VillagerActivity.Idle);
+    private void RememberIdle(int index, FactionFrame frame)
+    {
+        idleStreak[index].Clear();
+        if (frame.Economy == null) return;
+        foreach (var villager in frame.Economy.Villagers.Where(v => v.IsOwn))
+            if (villager.Activity == VillagerActivity.Idle)
+                idleStreak[index][villager.Id] = 1;
+    }
+
+    private int ObserveIdle(int index, FactionFrame frame)
+    {
+        if (frame.Economy == null)
+        {
+            idleStreak[index].Clear();
+            return 0;
+        }
+
+        var currentIds = new HashSet<uint>();
+        int result = 0;
+        foreach (var villager in frame.Economy.Villagers.Where(v => v.IsOwn))
+        {
+            currentIds.Add(villager.Id);
+            if (villager.Activity != VillagerActivity.Idle)
+            {
+                idleStreak[index].Remove(villager.Id);
+                continue;
+            }
+
+            int streak = idleStreak[index].GetValueOrDefault(villager.Id) + 1;
+            idleStreak[index][villager.Id] = streak;
+            if (streak == idleTicks) result++;
+        }
+
+        foreach (uint id in idleStreak[index].Keys.Where(id => !currentIds.Contains(id)).ToArray())
+            idleStreak[index].Remove(id);
+        return result;
+    }
 
     private static int BuildingCompletions(EconomyView old, EconomyView current, uint faction)
     {
@@ -266,6 +313,8 @@ internal static class LoadMetricCommand
         if (ticks <= 0 || ticks > 10000000) throw new InvalidDataException("--ticks must be positive and at most 10000000.");
         string west = options.GetValueOrDefault("--west-preset") ?? "maintain";
         string east = options.GetValueOrDefault("--east-preset") ?? "maintain";
+        int idleTicks = int.Parse(options.GetValueOrDefault("--idle-ticks") ?? LoadMetricDetector.DefaultIdleTicks.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        if (idleTicks <= 0) throw new InvalidDataException("--idle-ticks must be positive.");
         string output = Path.GetFullPath(Required("--out"));
         string directory = Path.GetDirectoryName(output);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
@@ -275,7 +324,7 @@ internal static class LoadMetricCommand
         {
             var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"));
             if (ticks > scenario.VerificationTickLimit) throw new InvalidDataException("--ticks is outside the scenario limit.");
-            rows.AddRange(RunScenario(scenario, ticks, west, east));
+            rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks));
         }
         using (var writer = new StreamWriter(output, false, new UTF8Encoding(false)))
         {
@@ -309,7 +358,7 @@ internal static class LoadMetricCommand
     }
 
     internal static List<LoadMetricRow> RunScenario(ScenarioDefinition scenario, long ticks, string westPreset, string eastPreset,
-        Action<long, Battle> afterStep = null)
+        Action<long, Battle> afterStep = null, int idleTicks = LoadMetricDetector.DefaultIdleTicks)
     {
         if (scenario == null) throw new ArgumentNullException(nameof(scenario));
         var simulation = new Battle(scenario);
@@ -318,7 +367,7 @@ internal static class LoadMetricCommand
         var east = PolicyPresets.CreateController(eastPreset ?? "maintain", 2, gateway);
         west.Initialize();
         east.Initialize();
-        var detector = new LoadMetricDetector();
+        var detector = new LoadMetricDetector(idleTicks);
         detector.Observe(simulation.Capture(1));
         detector.Observe(simulation.Capture(2));
         var rows = new List<LoadMetricRow>();
