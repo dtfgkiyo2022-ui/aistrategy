@@ -62,6 +62,8 @@ namespace Rts.Simulation
         internal CoreDefinition Definition;
         internal int Hp;
         internal long NextReinforcementTick;
+        /// <summary>V3 core defence: ticks remaining before the next core volley.</summary>
+        internal int DefenceTimer;
     }
 
     internal struct FactionState
@@ -513,6 +515,9 @@ namespace Rts.Simulation
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
+            Require(!e.CoreDefence || (e.Enabled && e.CoreDefenceRange >= 0 && e.CoreDefenceRange <= 64
+                && e.CoreDefenceDamage >= 0 && e.CoreDefenceIntervalTicks > 0
+                && e.CoreDefenceMaxTargets > 0 && e.CoreDefenceMaxTargets <= 16), "Invalid core defence rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
                 && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
                 && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
@@ -839,9 +844,11 @@ namespace Rts.Simulation
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
                 DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
-                 WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach,
-                 MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
-                 StartStone = e.StartStone, StartMetal = e.StartMetal,
+                  WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach,
+                  MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
+                  CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
+                  CoreDefenceIntervalTicks = e.CoreDefenceIntervalTicks, CoreDefenceMaxTargets = e.CoreDefenceMaxTargets,
+                  StartStone = e.StartStone, StartMetal = e.StartMetal,
                 TowerSizeCells = e.TowerSizeCells, TowerWoodCost = e.TowerWoodCost, TowerStoneCost = e.TowerStoneCost, TowerWork = e.TowerWork, TowerHp = e.TowerHp,
                 TowerRange = e.TowerRange, TowerVision = e.TowerVision, TowerDamage = e.TowerDamage, TowerIntervalTicks = e.TowerIntervalTicks,
                 BlacksmithSizeCells = e.BlacksmithSizeCells, BlacksmithWoodCost = e.BlacksmithWoodCost, BlacksmithWork = e.BlacksmithWork, BlacksmithHp = e.BlacksmithHp,

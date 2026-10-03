@@ -154,6 +154,19 @@ namespace Rts.Core.Tests
                 Array.Empty<EnemyContact>(), 1)).VillagerIdle, Is.EqualTo(1));
         }
 
+        [Test]
+        public void CoreAttackCountsOneStartAndRestartsAfterTenSecondsWithoutDamage()
+        {
+            var detector = new LoadMetricDetector();
+            int attacks = 0;
+            attacks += detector.Observe(Frame(1, 1, Economy(Array.Empty<VillagerView>(), Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1, 6000)).CoreAttacked;
+            attacks += detector.Observe(Frame(1, 2, Economy(Array.Empty<VillagerView>(), Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1, 5990)).CoreAttacked;
+            for (long tick = 3; tick <= 202; tick++)
+                attacks += detector.Observe(Frame(1, tick, Economy(Array.Empty<VillagerView>(), Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1, 5990)).CoreAttacked;
+            attacks += detector.Observe(Frame(1, 203, Economy(Array.Empty<VillagerView>(), Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1, 5980)).CoreAttacked;
+            Assert.That(attacks, Is.EqualTo(2));
+        }
+
         private static VillagerView Villager(uint id, VillagerActivity activity)
             => new VillagerView(id, true, default, activity, 0, 0, 40);
 
@@ -163,11 +176,11 @@ namespace Rts.Core.Tests
                 villagers, buildings, resources);
 
         private static FactionFrame Frame(uint faction, long tick, EconomyView economy,
-            IReadOnlyList<EnemyContact> contacts, uint owner)
+            IReadOnlyList<EnemyContact> contacts, uint owner, int coreHp = 6000)
         {
             var objectives = new[]
             {
-                new KnownObjective(GoalKind.Core, faction, default, true, faction, true, 6000, tick),
+                new KnownObjective(GoalKind.Core, faction, default, true, faction, true, coreHp, tick),
                 new KnownObjective(GoalKind.Outpost, 1, default, true, owner, false, 0, tick)
             };
             var observation = new FactionObservation(faction, tick, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(),

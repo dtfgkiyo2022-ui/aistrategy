@@ -373,6 +373,7 @@ namespace Rts.Simulation
                 s.IsAttacking = true;
             }
             if (AgesOn) TowersShoot();
+            CoresShoot();
             foreach (int i in world.SoldierTraversal)
                 world.Soldiers[i].Hp = RemainingHp(world.Soldiers[i].Hp, soldierDamage[i]);
             foreach (var f in world.Factions)

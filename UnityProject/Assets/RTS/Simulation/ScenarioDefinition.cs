@@ -243,6 +243,9 @@ namespace Rts.Simulation
         public int WallStoneCost = 3, WallHp = 400, WallReach = 30;
         /// <summary>V3-8 #2: masonry's fraction of wall, tower and castle costs after discount. Integer floor is used.</summary>
         public int MasonryDefenceCostPermille = 750, MasonryDefenceWorkPermille = 800;
+        /// <summary>Core defence: a core fires at nearby enemy soldiers (or villagers when no soldier is in range).</summary>
+        public bool CoreDefence;
+        public int CoreDefenceRange = 16, CoreDefenceDamage = 30, CoreDefenceIntervalTicks = 20, CoreDefenceMaxTargets = 3;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

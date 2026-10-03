@@ -246,6 +246,7 @@ namespace Rts.UnityHost
                     scenario.Economy.Tollgate = true;
                     scenario.Economy.Metropolis = true;
                     scenario.Economy.Sanctuary = true;
+                    scenario.Economy.CoreDefence = true;
                     scenario.Economy.ArmyGrowth = true;
                 }
             }
