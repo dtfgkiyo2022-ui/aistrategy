@@ -572,13 +572,17 @@ namespace Rts.Simulation
                 && e.SanctuaryPilgrimageRadius >= 0 && e.SanctuaryPilgrimageIntervalTicks > 0 && e.SanctuaryPilgrimageHeal >= 0
                 && e.SanctuaryRelicBonusPermille >= 0 && e.SanctuaryRelicMaxBonusPermille >= e.SanctuaryRelicBonusPermille),
                 "Sanctuary requires valid age, shrine and research rules.");
-            Require(!e.Cult || (e.Enabled && e.Ages && e.MonasterySizeCells > 0 && e.MonasterySizeCells <= 8
+             Require(!e.Cult || (e.Enabled && e.Ages && e.MonasterySizeCells > 0 && e.MonasterySizeCells <= 8
                 && e.MonasteryWoodCost >= 0 && e.MonasteryWork > 0 && e.MonasteryHp > 0
                 && e.MonasteryMonkFoodCost >= 0 && e.MonasteryMonkWoodCost >= 0
                 && e.SermonFoodCost >= 0 && e.SermonWoodCost >= 0 && e.SermonTicks > 0
                 && e.MartyrBlessingFoodCost >= 0 && e.MartyrBlessingWoodCost >= 0 && e.MartyrBlessingTicks > 0
                 && e.MartyrBlessingHpPermille >= 1000),
-                "Cult requires valid age and monastery rules.");
+                 "Cult requires valid age and monastery rules.");
+             Require(!e.Towns || (e.Enabled && e.Ages && e.TownSizeCells > 0 && e.TownSizeCells <= 8
+                 && e.TownWoodCost >= 0 && e.TownStoneCost >= 0 && e.TownWork > 0 && e.TownHp > 0
+                 && e.TownMaxBuildings > 0 && e.TownCoreDistance > 0 && e.TownResourceReach >= 0),
+                 "Towns require valid age and town rules.");
             Require(!e.Mountain || (e.Enabled && e.Ages && e.Industry && e.MountainSizeCells > 0 && e.MountainSizeCells <= 8
                  && e.MountainWoodCost >= 0 && e.MountainWork > 0 && e.MountainHp > 0
                  && e.MountainBaseIntervalTicks > 0 && e.MountainIntervalStepTicks >= 0
@@ -766,7 +770,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
@@ -819,9 +823,12 @@ namespace Rts.Simulation
                   GrandHouseSizeCells = e.GrandHouseSizeCells, GrandHouseWoodCost = e.GrandHouseWoodCost, GrandHouseWork = e.GrandHouseWork, GrandHouseHp = e.GrandHouseHp,
                   MetropolisMarketFoodCost = e.MetropolisMarketFoodCost, MetropolisMarketWoodCost = e.MetropolisMarketWoodCost, MetropolisMarketTicks = e.MetropolisMarketTicks,
                   MetropolisMilitiaFoodCost = e.MetropolisMilitiaFoodCost, MetropolisMilitiaWoodCost = e.MetropolisMilitiaWoodCost, MetropolisMilitiaTicks = e.MetropolisMilitiaTicks,
-                  MetropolisMarketVillagerStep = e.MetropolisMarketVillagerStep, MetropolisMarketBonusPermille = e.MetropolisMarketBonusPermille,
-                  MetropolisMarketMaxBonusPermille = e.MetropolisMarketMaxBonusPermille, MetropolisMilitiaDamage = e.MetropolisMilitiaDamage,
-                  MetropolisMilitiaCoreRadius = e.MetropolisMilitiaCoreRadius,
+                   MetropolisMarketVillagerStep = e.MetropolisMarketVillagerStep, MetropolisMarketBonusPermille = e.MetropolisMarketBonusPermille,
+                   MetropolisMarketMaxBonusPermille = e.MetropolisMarketMaxBonusPermille, MetropolisMilitiaDamage = e.MetropolisMilitiaDamage,
+                   MetropolisMilitiaCoreRadius = e.MetropolisMilitiaCoreRadius,
+                   TownSizeCells = e.TownSizeCells, TownWoodCost = e.TownWoodCost, TownStoneCost = e.TownStoneCost,
+                   TownWork = e.TownWork, TownHp = e.TownHp, TownMaxBuildings = e.TownMaxBuildings,
+                   TownCoreDistance = e.TownCoreDistance, TownResourceReach = e.TownResourceReach,
                    Tollgate = e.Tollgate, TollgateLengthCells = e.TollgateLengthCells, TollgateWoodCost = e.TollgateWoodCost,
                    TollgateStoneCost = e.TollgateStoneCost, TollgateWork = e.TollgateWork, TollgateHp = e.TollgateHp,
                    TollgateMaxBuildings = e.TollgateMaxBuildings, TollgateFeeRadiusMeters = e.TollgateFeeRadiusMeters,

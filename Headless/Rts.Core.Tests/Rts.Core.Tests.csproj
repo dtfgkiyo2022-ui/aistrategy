@@ -39,6 +39,7 @@
     <Compile Include="CivTests.cs" />
     <Compile Include="TrainingTests.cs" />
     <Compile Include="DefenceTests.cs" />
+    <Compile Include="TownTests.cs" />
     <Compile Include="ResearchTests.cs" />
     <Compile Include="MarketTests.cs" />
     <Compile Include="TradeRouteTests.cs" />
