@@ -81,12 +81,81 @@ namespace Rts.Core.Tests
                 contacts: new[] { new EnemyContact(7, default, 2, 1, 1, true) }, owner: 1);
 
             var delta = LoadMetricDetector.Difference(old, current);
-            Assert.That(delta.VillagerIdle, Is.EqualTo(1));
+            Assert.That(delta.VillagerIdle, Is.EqualTo(0));
             Assert.That(delta.BuildingDone, Is.EqualTo(1));
             Assert.That(delta.NodeExhausted, Is.EqualTo(1));
             Assert.That(delta.NewContact, Is.EqualTo(1));
             Assert.That(delta.OutpostOwnerChanged, Is.EqualTo(1));
         }
+
+        [Test]
+        public void VillagerIdleCountsOnlyAfterAContinuousIdledStreakAndUsesVillagerId()
+        {
+            var detector = new LoadMetricDetector(20);
+            int idleCount = 0;
+
+            idleCount += detector.Observe(Frame(1, 1, Economy(
+                new[]
+                {
+                    Villager(11, VillagerActivity.Idle),
+                    Villager(22, VillagerActivity.ToResource)
+                }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+            idleCount += detector.Observe(Frame(1, 2, Economy(
+                new[]
+                {
+                    Villager(22, VillagerActivity.ToResource),
+                    Villager(11, VillagerActivity.ToResource)
+                }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+            Assert.That(idleCount, Is.EqualTo(0));
+
+            for (long tick = 3; tick <= 21; tick++)
+                idleCount += detector.Observe(Frame(1, tick, Economy(
+                    new[]
+                    {
+                        Villager(22, VillagerActivity.ToResource),
+                        Villager(11, VillagerActivity.Idle)
+                    }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+
+            Assert.That(idleCount, Is.EqualTo(0));
+            idleCount += detector.Observe(Frame(1, 22, Economy(
+                new[]
+                {
+                    Villager(11, VillagerActivity.Idle),
+                    Villager(22, VillagerActivity.ToResource)
+                }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+            Assert.That(idleCount, Is.EqualTo(1));
+
+            idleCount += detector.Observe(Frame(1, 23, Economy(
+                new[]
+                {
+                    Villager(22, VillagerActivity.ToResource),
+                    Villager(11, VillagerActivity.ToResource)
+                }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+            for (long tick = 24; tick <= 43; tick++)
+                idleCount += detector.Observe(Frame(1, tick, Economy(
+                    new[]
+                    {
+                        Villager(22, VillagerActivity.ToResource),
+                        Villager(11, VillagerActivity.Idle)
+                    }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()), Array.Empty<EnemyContact>(), 1)).VillagerIdle;
+
+            Assert.That(idleCount, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void IdleTicksCanBeConfigured()
+        {
+            var detector = new LoadMetricDetector(2);
+            Assert.That(detector.Observe(Frame(1, 1, Economy(
+                new[] { Villager(11, VillagerActivity.Idle) }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()),
+                Array.Empty<EnemyContact>(), 1)).VillagerIdle, Is.EqualTo(0));
+            Assert.That(detector.Observe(Frame(1, 2, Economy(
+                new[] { Villager(11, VillagerActivity.Idle) }, Array.Empty<BuildingView>(), Array.Empty<ResourceView>()),
+                Array.Empty<EnemyContact>(), 1)).VillagerIdle, Is.EqualTo(1));
+        }
+
+        private static VillagerView Villager(uint id, VillagerActivity activity)
+            => new VillagerView(id, true, default, activity, 0, 0, 40);
 
         private static EconomyView Economy(IReadOnlyList<VillagerView> villagers, IReadOnlyList<BuildingView> buildings,
             IReadOnlyList<ResourceView> resources)
