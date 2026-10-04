@@ -249,12 +249,18 @@ namespace Rts.Providers
         }
         protected override string BuildBody(InterpreterRequest request)
         {
+            var limits = AiModelCatalog.Get(request.Model);
+            string schema = AiCommandSchema.Build(request.Summary, limits);
             return JsonValueWriter.Write(new Dictionary<string, object>
             {
-                ["model"] = request.Model, ["max_tokens"] = 2048L,
-                ["system"] = new List<object> { new Dictionary<string, object> { ["type"] = "text", ["text"] = AiCommandSchema.StableInstructions + "\nJSON Schema:\n" + AiCommandSchema.Json, ["cache_control"] = new Dictionary<string, object> { ["type"] = "ephemeral" } } },
-                 ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) } },
-                 ["output_config"] = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(AiCommandSchema.Json) } }
+                ["model"] = request.Model, ["max_tokens"] = (long)limits.MaxOutputTokens,
+                ["system"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["type"] = "text", ["text"] = AiCommandSchema.ForModel(request.Model), ["cache_control"] = new Dictionary<string, object> { ["type"] = "ephemeral" } },
+                    new Dictionary<string, object> { ["type"] = "text", ["text"] = "JSON Schema:\n" + schema }
+                },
+                ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) } },
+                ["output_config"] = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(schema) } }
             });
         }
     }
@@ -269,16 +275,20 @@ namespace Rts.Providers
         protected override string BuildBody(InterpreterRequest request) => OpenAiBody(request, request.Model);
         internal static string OpenAiBody(InterpreterRequest request, string model)
         {
-            return JsonValueWriter.Write(new Dictionary<string, object>
+            var limits = AiModelCatalog.Get(request.Model);
+            string schema = AiCommandSchema.Build(request.Summary, limits);
+            var messages = new List<object>
             {
-                ["model"] = model,
-                ["messages"] = new List<object>
-                {
-                    new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.StableInstructions + "\nJSON Schema:\n" + AiCommandSchema.Json },
-                    new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) }
-                },
-                ["response_format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["json_schema"] = new Dictionary<string, object> { ["name"] = "rts_commands", ["strict"] = true, ["schema"] = MiniJson.Parse(AiCommandSchema.Json) } }
-            });
+                new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.ForModel(request.Model) + "\nJSON Schema:\n" + schema },
+                new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) }
+            };
+            var body = new Dictionary<string, object>
+            {
+                ["model"] = model, ["max_tokens"] = (long)limits.MaxOutputTokens, ["messages"] = messages,
+                ["response_format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["json_schema"] = new Dictionary<string, object> { ["name"] = "rts_commands", ["strict"] = true, ["schema"] = MiniJson.Parse(schema) } }
+            };
+            if (limits.DisableThinking && request.Model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) body["think"] = false;
+            return JsonValueWriter.Write(body);
         }
     }
 
@@ -292,7 +302,7 @@ namespace Rts.Providers
         protected override void AddHeaders(HttpRequestMessage request, string key) { }
         protected override string BuildBody(InterpreterRequest request)
         {
-            var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary, Model = localModel };
+            var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary, Model = request.Model };
             return OpenAiCommandInterpreter.OpenAiBody(copy, localModel);
         }
     }

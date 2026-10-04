@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using Rts.Contracts;
 
 namespace Rts.Providers
@@ -14,7 +15,7 @@ namespace Rts.Providers
         // Written for the strict modes of both Claude (strict tools) and OpenAI (strict json_schema): every property is
         // required and an optional one allows null, and there are no minimum/maximum (Claude rejects them on integers).
         // Ranges are checked by the interpreter instead (count 1-100, permille 0-1000, sequence >= 1).
-        public const string Json = @"{
+        private const string LegacyJson = @"{
   ""type"": ""object"", ""additionalProperties"": false,
   ""required"": [""commands"", ""say"", ""reason"", ""unknown""],
   ""properties"": {
@@ -38,8 +39,101 @@ namespace Rts.Providers
   }
 }";
 
-        // Keep the stable part long enough for provider prompt caches.  The changing situation is appended after this
-        // text by AiSituationSummary.Prompt, so names and tick-dependent facts do not invalidate the cached prefix.
+        public static string Json => Build(null, AiModelCatalog.DefaultComplexLimits);
+
+        public static string Build(AiSituationSummary summary, AiModelPrice limits)
+        {
+            limits = limits ?? AiModelCatalog.DefaultComplexLimits;
+            var names = summary == null ? Array.Empty<AiNameTableEntry>() : summary.NameTable ?? Array.Empty<AiNameTableEntry>();
+            var scopes = names.Where(n => n.HasScope && n.IsOwn).Select(n => n.Name);
+            var goals = names.Where(n => n.HasGoal).Select(n => n.Name);
+            var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
+            var producers = names.Where(n => n.Id != 0 && !n.HasGoal).Select(n => n.Name).Concat(new[] { "コア" });
+            var locations = names.Select(n => n.Name).Concat(new[] { "お任せ" });
+            var command = CommandSchema(scopes, goals, regions, producers, locations);
+            var condition = ConditionSchema(goals);
+            var operation = new Dictionary<string, object>
+            {
+                ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = new List<object> { "when", "then", "once" },
+                ["properties"] = new Dictionary<string, object>
+                {
+                    ["when"] = condition,
+                    ["then"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
+                    ["once"] = new Dictionary<string, object> { ["type"] = "boolean" }
+                }
+            };
+            var rootProperties = new Dictionary<string, object>
+            {
+                ["commands"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
+                ["operations"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = operation, ["maxItems"] = limits.AllowsOperations ? 10L : 0L },
+                ["say"] = new Dictionary<string, object> { ["type"] = "string" },
+                ["reason"] = NullableString(), ["unknown"] = new Dictionary<string, object> { ["type"] = "boolean" }
+            };
+            return JsonValueWriter.Write(new Dictionary<string, object>
+            {
+                ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = new List<object> { "commands", "operations", "say", "reason", "unknown" },
+                ["properties"] = rootProperties
+            });
+        }
+
+        private static Dictionary<string, object> CommandSchema(IEnumerable<string> scopes, IEnumerable<string> goals,
+            IEnumerable<string> regions, IEnumerable<string> producers, IEnumerable<string> locations)
+        {
+            var props = new Dictionary<string, object>
+            {
+                ["type"] = EnumSchema("policy", "economy"),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain"),
+                ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
+                ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
+                ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
+                ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
+                ["civ"] = NullableEnum(new[] { "原始", "農耕", "冶金", "森林", "石工", "商業", "騎兵", "橋梁", "学術", "信仰", "漁業", "山岳", "関所", "都市", "聖域", "Primitive", "Agrarian", "Metallurgy", "Forestry", "Masonry", "Caravan", "Cavalry", "Bridge", "Academy", "Cult", "Fishing", "Mountain", "Tollgate", "Metropolis", "Sanctuary" }),
+                ["policy"] = NullableEnum(new[] { "軍事", "内政", "経済", "成長", "均衡", "バランス", "Military", "Growth", "Balanced" }),
+                ["control"] = NullableEnum(new[] { "Human", "Ai" }), ["sequence"] = NullableInteger(), ["count"] = NullableInteger(),
+                ["reservePermille"] = NullableInteger(), ["allowedLossPermille"] = NullableInteger(), ["enabled"] = NullableBoolean()
+            };
+            return new Dictionary<string, object> { ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = props.Keys.Select(k => (object)k).ToList(), ["properties"] = props };
+        }
+
+        private static Dictionary<string, object> ConditionSchema(IEnumerable<string> objectives)
+        {
+            var leaf = new Dictionary<string, object>();
+            var condition = new Dictionary<string, object>();
+            FillConditionSchema(leaf, objectives, null);
+            FillConditionSchema(condition, objectives, leaf);
+            return condition;
+        }
+
+        private static void FillConditionSchema(Dictionary<string, object> condition, IEnumerable<string> objectives, Dictionary<string, object> child)
+        {
+            var properties = new Dictionary<string, object>
+            {
+                ["kind"] = EnumSchema("OwnerChangedToEnemy", "OwnerChangedToSelf", "EnemyNear", "OwnArmyBelowPercent", "TimeAfter", "JudgementTrue", "And"),
+                ["objective"] = NullableEnum(objectives), ["count"] = NullableInteger(), ["permille"] = NullableInteger(),
+                ["minutes"] = NullableInteger(), ["statement"] = NullableEnum(new[] { "operation_north_broken" }),
+                ["all"] = child == null
+                    ? new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "null" } } }
+                    : new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "array", ["items"] = child }, new Dictionary<string, object> { ["type"] = "null" } } }
+            };
+            condition["type"] = "object"; condition["additionalProperties"] = false;
+            condition["required"] = properties.Keys.Select(k => (object)k).ToList(); condition["properties"] = properties;
+        }
+
+        private static Dictionary<string, object> EnumSchema(params string[] values) => new Dictionary<string, object> { ["type"] = "string", ["enum"] = values.Distinct(StringComparer.Ordinal).Cast<object>().ToList() };
+        private static Dictionary<string, object> NullableEnum(IEnumerable<string> values, params string[] extra)
+        {
+            var all = (values ?? Array.Empty<string>()).Concat(extra ?? Array.Empty<string>()).Where(x => !string.IsNullOrEmpty(x)).Distinct(StringComparer.Ordinal).Cast<object>().ToList();
+            var options = new List<object>(); if (all.Count != 0) options.Add(new Dictionary<string, object> { ["type"] = "string", ["enum"] = all });
+            options.Add(new Dictionary<string, object> { ["type"] = "null" }); return new Dictionary<string, object> { ["anyOf"] = options };
+        }
+        private static Dictionary<string, object> NullableString() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "string" }, new Dictionary<string, object> { ["type"] = "null" } } };
+        private static Dictionary<string, object> NullableInteger() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "integer" }, new Dictionary<string, object> { ["type"] = "null" } } };
+        private static Dictionary<string, object> NullableBoolean() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "boolean" }, new Dictionary<string, object> { ["type"] = "null" } } };
+
+        // Keep the stable part before the per-match schema and situation so provider prompt caches can reuse it.
         public const string StableInstructions = @"
 あなたはRTSゲームの参謀です。人間の日本語の指示を、実行可能な命令のJSONに変換してください。
 返答は必ず指定されたJSON Schemaに従うJSONだけにしてください。説明文、Markdown、コードフェンス、Schemaにないキーは返さないでください。
@@ -55,8 +149,8 @@ namespace Rts.Providers
 7. sequenceは通常nullで、commandsの順番に従います。countは訓練数または建設数で、1以上100以下の整数です。reservePermilleとallowedLossPermilleは0以上1000以下の千分率です。
 8. 「ここ」「この部隊」などの指示語は、入力の選択中の対象が明示されている場合だけそれを使います。選択中の対象がないのに指示語だけで対象を指定していたらunknown=trueにします。
 9. 「今どっちが優勢？」「敵はどこ？」のような質問は命令ではありません。commands=[]、unknown=true、reasonに「質問」と書きます。観測できないことを推測して命令にしません。
-10. 曖昧、対象不明、敵の物を操作、未対応の操作、条件付きの作戦などは、勝手に補わずunknown=trueにします。commandsは空配列にし、reasonを短く書きます。
-11. 条件が付いた命令はこの契約では実行できません。「来たら」「半分になったら」「時間が過ぎたら」などを含む場合はunknown=trueです。
+10. 曖昧、対象不明、敵の物を操作、未対応の操作は、勝手に補わずunknown=trueにします。commandsとoperationsは空配列にし、reasonを短く書きます。
+11. 条件付きの作戦はoperationsに入れます。whenは固定語彙の条件オブジェクト、thenはcommandsと同じ命令の配列、onceは一度だけならtrueです。whenの使わない項目はnull、ANDはallに条件を2つまで入れます。
 12. 文章に複数の独立した命令があるときは、各命令をcommandsに入れます。順番に意味がある場合は文の順番を保ちます。ひとつでも対象が不明なら、推測で一部だけ実行せずunknown=trueにします。
 
 項目の使い分け
@@ -99,7 +193,7 @@ namespace Rts.Providers
 霧の中の敵や戦況に記載されていない対象について、位置、数、所有者を推測しません。見えている敵の報告を求められたときも、この契約では命令を作らず質問として扱います。観測事実と人間の希望を混ぜないでください。
 選択中の対象は指示文の前に別行で示されます。選択中の対象が「北の拠点」なら「ここを守れ」は全軍が北の拠点を守る命令になります。選択中の対象が第3軍なら「この部隊を下げて」は第3軍のRetreatです。選択中の対象がなしなら、同じ文は対象不明として断ります。
 選択中の対象が区域なら、区域の担当変更ではregionにその区域を入れます。選択中の対象が建物なら、訓練の取り消しではproducerに建物名を入れます。選択対象の種類と命令の種類が合わない場合、無理にscopeやgoalへ流用しません。
-reasonは人間が読んで分かる短い理由です。成功時はnullまたは空文字でよく、unknown時は「曖昧」「対象が不明」「自分の物でない」「対応していない」「質問」「条件付きの命令は未対応」など原因を明示します。sayは短い確認文で、命令の代わりにしません。
+reasonは人間が読んで分かる短い理由です。成功時はnullまたは空文字でよく、unknown時は「曖昧」「対象が不明」「自分の物でない」「対応していない」「質問」など原因を明示します。sayは短い確認文で、命令の代わりにしません。
 unknown=trueのときcommandsは必ず空配列にします。unknown=falseのときは少なくとも意味のあるcommandsを一つ返すか、命令が空である理由をsay/reasonに示します。成功した一部だけを出して残りを黙って捨てません。
 JSONのすべてのrequired項目を出します。命令ごとに使わない項目はnullです。整数を文字列にせず、true/falseを文字列にせず、nullを「なし」という文字列にしません。commandsの外に命令を置きません。
 出力前に、typeとkindの組み合わせ、名前表への一致、所有者、goalの必要性、regionとcontrolの組み合わせ、建物・兵・文明・policyのenum変換、数の範囲、unknownとcommandsの整合性を順に確認してください。
@@ -109,7 +203,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 特に、放棄の許可と撤退は違います。拠点を捨ててよいはAllowAbandonで、部隊が下がるはRetreatです。予備の保持と部隊の撤退も違うため、保持割合はMaintainReserveのreservePermilleにだけ入れます。
 特に、場所の「近く」は目標goalではなくPlaceBuildingのlocationです。支城や資源の固まりの近くに建てる場合、その地点が名前表にあるときだけlocationに使います。名前表にない方角や距離からセル番号を作りません。
 特に、同じ文に数と命令がある場合、countはTrainまたはPlaceBuildingにだけ使います。MaintainReserveの「2割」はreservePermille=200であり、count=2ではありません。allowedLossの半分はallowedLossPermille=500です。
-特に、命令に「敵が来たら」「失ったら」「時間が経ったら」「そのとき」がある場合、現在の命令へ単純化しません。条件を保存できる別契約がないため、unknown=trueにします。
+特に、条件付きの命令は現在の命令へ単純化せず、固定語彙に変換できるときだけoperationsへ保存します。条件が自由文で、whenのkind・値に対応しない場合はunknown=trueにします。
 最後に、返すJSONを読み直し、すべての文字列が名前表または指定されたenum語彙に合っていることを確認してください。人間向けの説明をJSONの外に付けず、sayが必要なときもJSONのsay文字列に入れてください。
 入力の敬語、命令形、体言止めは同じ意味として扱えますが、意味を追加しません。文にない数、方向、対象、条件、所有者を補いません。複数候補から一つを選ぶ必要がある場合は、名前表と戦況で一意に決まるときだけ選び、決まらなければunknown=trueにします。
 表現の揺れがあっても、JSONのkindは必ず指定された英語の値に統一します。日本語名を受け付けるのはbuilding、unit、civ、policyなどの値の読み取りであり、返すJSONの種類名を日本語にすることではありません。
@@ -127,16 +221,33 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 例7: 住居を3つ建てる → economy / PlaceBuilding / building=House / location=お任せ / count=3 / その他はnull
 例8: 兵舎1で弓兵を2体訓練 → economy / Train / producer=兵舎1 / unit=Archer / count=2 / その他はnull
 例9: その件はどうなっている？ → commands=[] / unknown=true / reason=質問
-例10: もし敵が来たら守る → commands=[] / unknown=true / reason=条件付きの命令は未対応
+例10: もし敵が来たら守る → operations=[when={kind=EnemyNear,objective=北の拠点,count=1,permille=null,minutes=null,statement=null,all=null},then=[Defend],once=true]
+例11: 兵が半分になったら撤退 → operations=[when={kind=OwnArmyBelowPercent,objective=null,count=null,permille=500,minutes=null,statement=null,all=null},then=[Retreat],once=true]
 
 以上の前置きの後に続く戦況、名前表、選択中の対象、指示を読み、JSONだけを返してください。
 ";
+
+        public const string StableInstructionsShort = @"
+あなたはRTSゲームの短い命令を変換する参謀です。指定されたJSON Schemaに従うJSONだけを返してください。
+commandsは1つまでです。operationsは空配列にしてください。scope・goal・region・producer・locationは名前表の値だけ、building・unit・civ・policyはSchemaのenumだけを使い、使わない項目はnullにします。対象不明、質問、条件付きの指示、複数の命令はunknown=true、commands=[]、operations=[]にして、reasonに「この AI では直せません。Claude・ChatGPT を選んでください」と書いてください。
+";
+
+        public static string ForModel(string model)
+        {
+            try
+            {
+                var limits = AiModelCatalog.Get(model);
+                return limits.AllowsOperations && limits.MaxCommands > 1 ? StableInstructions : StableInstructionsShort;
+            }
+            catch (ArgumentException) { return StableInstructions; }
+        }
     }
 
     public sealed class AiCommandInterpretationResult
     {
         public IReadOnlyList<UserPolicyIntent> Policies { get; internal set; } = Array.Empty<UserPolicyIntent>();
         public IReadOnlyList<EconomyCommand> EconomyCommands { get; internal set; } = Array.Empty<EconomyCommand>();
+        public IReadOnlyList<OperationDefinition> Operations { get; internal set; } = Array.Empty<OperationDefinition>();
         public IReadOnlyList<AiRejectedCommand> Rejected { get; internal set; } = Array.Empty<AiRejectedCommand>();
         public string Say { get; internal set; } = "";
         public string Reason { get; internal set; } = "";
@@ -197,6 +308,12 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         }
 
         public string Prompt(string instruction, ScopeKey? fixedTarget = null)
+            => AiCommandSchema.StableInstructions + "\n" + DynamicPrompt(instruction, fixedTarget);
+
+        public string Prompt(string instruction, ScopeKey? fixedTarget, string model)
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget);
+
+        public string DynamicPrompt(string instruction, ScopeKey? fixedTarget = null)
         {
             var names = new StringBuilder();
             foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
@@ -205,7 +322,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
                 names.Append(entry.Name);
             }
             string selected = fixedTarget.HasValue ? NameFor(fixedTarget.Value) : null;
-            return AiCommandSchema.StableInstructions + "\n名前表（この文字列だけを使う）:\n" + names +
+            return "名前表（この文字列だけを使う）:\n" + names +
                 "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
                 "\n指示:\n" + (instruction ?? "");
         }
@@ -414,6 +531,8 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         public int MaxObservationAgeTicks { get; set; } = 240;
         public long DeadlineTick { get; set; }
         public IAiPlacementFinder PlacementFinder { get; set; }
+        /// <summary>Caller marks autonomous proposals as Ai; human chat remains Human.</summary>
+        public OperationSource OperationSource { get; set; } = OperationSource.Human;
     }
 
     /// <summary>LLMの返答を読み、検証に通ったものだけ既存Contractsへ変換する。</summary>
@@ -432,14 +551,28 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
                 var economy = new List<EconomyCommand>();
                 var rejected = new List<AiRejectedCommand>();
                 var commands = AiJson.Array(root, "commands");
-                if (commands == null) throw new FormatException("commands is required");
+                var operationObjects = AiJson.Array(root, "operations");
+                if (commands == null && operationObjects == null) throw new FormatException("commands is required");
                 ulong nextSequence = 1;
-                for (int i = 0; i < commands.Count; i++)
+                var operations = new List<OperationDefinition>();
+                for (int i = 0; i < (commands == null ? 0 : commands.Count); i++)
                 {
-                    try { ConvertCommand(AiJson.AsObject(commands[i]), i, context, ref nextSequence, policies, economy); }
+                    try
+                    {
+                        var command = AiJson.AsObject(commands[i]);
+                        if (string.Equals(AiJson.String(command, "type"), "operation", StringComparison.OrdinalIgnoreCase))
+                            operations.Add(ConvertOperation(command, context, ref nextSequence));
+                        else ConvertCommand(command, i, context, ref nextSequence, policies, economy);
+                    }
                     catch (AiCommandException e) { rejected.Add(new AiRejectedCommand { Index = i, Kind = e.Kind, Reason = e.Message }); }
                 }
-                result.Policies = policies.AsReadOnly(); result.EconomyCommands = economy.AsReadOnly(); result.Rejected = rejected.AsReadOnly();
+                if (operationObjects != null)
+                    for (int i = 0; i < operationObjects.Count; i++)
+                    {
+                        try { operations.Add(ConvertOperation(AiJson.AsObject(operationObjects[i]), context, ref nextSequence)); }
+                        catch (AiCommandException e) { rejected.Add(new AiRejectedCommand { Index = i, Kind = "operation", Reason = e.Message }); }
+                    }
+                result.Policies = policies.AsReadOnly(); result.EconomyCommands = economy.AsReadOnly(); result.Operations = operations.AsReadOnly(); result.Rejected = rejected.AsReadOnly();
                 return result;
             }
             catch (Exception e) when (e is FormatException || e is InvalidOperationException || e is OverflowException)
@@ -455,6 +588,73 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
             if (type == "policy") ConvertPolicy(command, kindText, c, ref next, policies);
             else if (type == "economy") ConvertEconomy(command, kindText, c, ref next, economy);
             else throw new AiCommandException("対応していない命令の種類", kindText);
+        }
+
+        private static OperationDefinition ConvertOperation(Dictionary<string, object> command, AiInterpretationContext c, ref ulong next)
+        {
+            object whenValue = command.TryGetValue("when", out var rawWhen) ? rawWhen : null;
+            OperationCondition when = ParseCondition(whenValue, c);
+            var then = AiJson.Array(command, "then");
+            if (then == null || then.Count == 0) throw new AiCommandException("作戦のthenが空", "Conditional");
+            var policies = new List<UserPolicyIntent>(); var economy = new List<EconomyCommand>();
+            for (int i = 0; i < then.Count; i++)
+            {
+                var nested = AiJson.AsObject(then[i]);
+                if (string.Equals(AiJson.String(nested, "type"), "operation", StringComparison.OrdinalIgnoreCase))
+                    throw new AiCommandException("作戦のthenに作戦は置けない", "Conditional");
+                ConvertCommand(nested, i, c, ref next, policies, economy);
+            }
+            var actions = new List<OperationAction>();
+            actions.AddRange(policies.Select(OperationAction.FromPolicy));
+            actions.AddRange(economy.Select(OperationAction.FromEconomy));
+            bool once = AiJson.Bool(command, "once");
+            return new OperationDefinition(when, actions, once, c.OperationSource);
+        }
+
+        private static OperationCondition ParseCondition(object raw, AiInterpretationContext c)
+        {
+            var obj = raw as Dictionary<string, object>;
+            if (obj == null) throw new AiCommandException("作戦のwhenが不明", "Conditional");
+            string kind = AiJson.String(obj, "kind");
+            string name = AiJson.String(obj, "objective");
+            uint id = ResolveObjective(name, c, "Conditional");
+            switch (kind)
+            {
+                case "OwnerChangedToEnemy":
+                    return OperationCondition.OwnerChangedToEnemy(name, id);
+                case "OwnerChangedToSelf":
+                    return OperationCondition.OwnerChangedToSelf(name, id);
+                case "EnemyNear":
+                    return OperationCondition.EnemyNear(name, id, Integer(obj, "count", 1));
+                case "OwnArmyBelowPercent":
+                    if (obj.TryGetValue("permille", out var permille) && permille != null)
+                        return OperationCondition.OwnArmyBelowPermille(Integer(obj, "permille", 0));
+                    return OperationCondition.OwnArmyBelowPercent(50);
+                case "TimeAfter":
+                    return OperationCondition.TimeAfterSeconds((long)Integer(obj, "minutes", 0) * 60);
+                case "JudgementTrue":
+                    return OperationCondition.Judgement(AiJson.String(obj, "statement") ?? "operation_north_broken");
+                case "And":
+                    var values = obj.TryGetValue("all", out var all) ? all as List<object> : null;
+                    if (values == null || values.Count < 2 || values.Count > 2) throw new AiCommandException("ANDは2つまで", "Conditional");
+                    return OperationCondition.AllOf(values.Select(v => ParseCondition(v, c)).ToArray());
+                default: throw new AiCommandException("作戦の条件語彙が不明", "Conditional");
+            }
+        }
+
+        private static uint ResolveObjective(string name, AiInterpretationContext c, string kind)
+        {
+            if (string.IsNullOrEmpty(name)) return 0;
+            if (!c.Summary.TryGet(name, out var entry) || !entry.HasGoal || entry.Goal.Kind != GoalKind.Outpost)
+                throw new AiCommandException("条件の拠点が名前表にない", kind);
+            return entry.Goal.Id;
+        }
+
+        private static int Integer(Dictionary<string, object> obj, string key, int fallback)
+        {
+            if (!obj.TryGetValue(key, out var value) || value == null) return fallback;
+            if (value is long number) return checked((int)number);
+            throw new AiCommandException(key + "は整数でない", "Conditional");
         }
 
         private static void ConvertPolicy(Dictionary<string, object> command, string kindText, AiInterpretationContext c, ref ulong next, List<UserPolicyIntent> output)
@@ -658,6 +858,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         public string Model { get; set; }
         public long StartedTick { get; set; }
         public long DeadlineTick { get; set; }
+        public OperationSource OperationSource { get; set; } = OperationSource.Human;
     }
 
     public sealed class InterpreterReply
@@ -718,15 +919,15 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         private readonly Dictionary<ulong, Open> open = new Dictionary<ulong, Open>();
         private ulong nextId = 1;
         public CommandInterpreterCoordinator(ICommandInterpreter interpreter) { this.interpreter = interpreter ?? throw new ArgumentNullException(nameof(interpreter)); }
-        public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null)
+        public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null, OperationSource operationSource = OperationSource.Human)
         {
             var summary = AiSituationSummary.From(frame); ulong id = nextId++;
             var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
-            var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks), MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder };
+            var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks), MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder, OperationSource = operationSource };
             if (fixedTarget.HasValue) { context.HasFixedTarget = true; context.FixedTarget = fixedTarget.Value; }
             string modelName = selected.Model;
             open.Add(id, new Open { Context = context, Model = modelName });
-            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick });
+            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick, OperationSource = operationSource });
             return id;
         }
         private static AiCommandInterpretationResult LimitToModel(string model, AiCommandInterpretationResult result) => AiModelLimits.Apply(model, result);
@@ -758,29 +959,37 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         /// </summary>
         internal static AiCommandInterpretationResult Apply(string model, AiCommandInterpretationResult result)
         {
-            if (AiModelCatalog.Get(model).SupportsComplexInstructions || result.Unknown) return result;
-            if (result.Policies.Count + result.EconomyCommands.Count <= 1) return result;
-            return new AiCommandInterpretationResult { Unknown = true, Reason = "このモデルでは直せません。別のAIを選んでください" };
+            if (result == null || result.Unknown) return result;
+            var limits = AiModelCatalog.Get(model);
+            int commands = result.Policies.Count + result.EconomyCommands.Count;
+            int operationCommands = result.Operations.Sum(o => o.Then.Count);
+            if ((!limits.AllowsOperations && result.Operations.Count != 0) || commands + operationCommands > limits.MaxCommands)
+                return new AiCommandInterpretationResult { Unknown = true, Reason = "このモデルでは直せません。この AI では直せません。Claude・ChatGPT を選んでください" };
+            return result;
         }
     }
 
     public sealed class AiModelPrice
     {
         public string Model { get; set; } public decimal InputUsdPerMillion { get; set; } public decimal OutputUsdPerMillion { get; set; }
-        public int DeadlineTicks { get; set; } public bool SupportsComplexInstructions { get; set; }
+        public int DeadlineTicks { get; set; } public int MaxCommands { get; set; } public bool AllowsOperations { get; set; }
+        public int MaxOutputTokens { get; set; } public bool DisableThinking { get; set; }
+        public bool SupportsComplexInstructions => MaxCommands > 1 || AllowsOperations;
     }
     public static class AiModelCatalog
     {
         private static readonly Dictionary<string, AiModelPrice> fallbackPrices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
         {
-            ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, true), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, true), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, true), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, true),
-            ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, true), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, true), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, true),
-            ["jev"] = P("jev", .042m, 0, 240, false), ["local-llm"] = P("local-llm", 0, 0, 240, true)
+            ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, 5, true, 2048, false), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, 5, true, 2048, false), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, 5, true, 2048, false), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, 5, true, 2048, false),
+            ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, 5, true, 2048, false), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, 5, true, 2048, false), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, 5, true, 2048, false),
+            ["jev"] = P("jev", .042m, 0, 240, 1, false, 256, true), ["local-llm"] = P("local-llm", 0, 0, 600, 1, false, 512, true)
         };
         private static decimal usdToYen;
         private static readonly Dictionary<string, AiModelPrice> prices = Load(out usdToYen);
         public static decimal UsdToYen => usdToYen;
-        private static AiModelPrice P(string model, decimal input, decimal output, int deadline, bool complex) => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, DeadlineTicks = deadline, SupportsComplexInstructions = complex };
+        internal static AiModelPrice DefaultComplexLimits => P("default", 0, 0, 240, 5, true, 2048, false);
+        private static AiModelPrice P(string model, decimal input, decimal output, int deadline, int maxCommands, bool operations, int maxOutputTokens, bool disableThinking)
+            => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, DeadlineTicks = deadline, MaxCommands = maxCommands, AllowsOperations = operations, MaxOutputTokens = maxOutputTokens, DisableThinking = disableThinking };
         public static AiModelPrice Get(string model)
         {
             if (prices.TryGetValue(model ?? "", out var p)) return p;
@@ -818,8 +1027,11 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
                     if (o == null || string.IsNullOrEmpty(name)) continue;
                     decimal input = Decimal(o, "inputUsdPerMillion", 0), output = Decimal(o, "outputUsdPerMillion", 0);
                     int deadline = (int)Decimal(o, "deadlineTicks", 240);
-                    bool complex = !name.Equals("jev", StringComparison.OrdinalIgnoreCase);
-                    result[name] = P(name, input, output, deadline, complex);
+                    int maxCommands = (int)Decimal(o, "maxCommands", name.Equals("jev", StringComparison.OrdinalIgnoreCase) || name.Equals("local-llm", StringComparison.OrdinalIgnoreCase) ? 1 : 5);
+                    bool operations = Bool(o, "allowOperations", !name.Equals("jev", StringComparison.OrdinalIgnoreCase) && !name.Equals("local-llm", StringComparison.OrdinalIgnoreCase));
+                    int maxTokens = (int)Decimal(o, "maxTokens", 2048);
+                    bool disableThinking = Bool(o, "disableThinking", name.Equals("local-llm", StringComparison.OrdinalIgnoreCase) || name.Equals("jev", StringComparison.OrdinalIgnoreCase));
+                    result[name] = P(name, input, output, deadline, maxCommands, operations, maxTokens, disableThinking);
                 }
             }
             catch (Exception) { yen = 150m; return result; }
@@ -828,6 +1040,8 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         private static string Text(Dictionary<string, object> o, string key) => o != null && o.TryGetValue(key, out var v) ? v as string : null;
         private static decimal Decimal(Dictionary<string, object> o, string key, decimal fallback)
             => o != null && o.TryGetValue(key, out var v) && v is double d ? (decimal)d : fallback;
+        private static bool Bool(Dictionary<string, object> o, string key, bool fallback)
+            => o != null && o.TryGetValue(key, out var v) && v is bool b ? b : fallback;
     }
     public readonly struct AiTokenUsage
     {
@@ -856,7 +1070,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
     {
         internal static object Parse(string text) { if (text == null) throw new FormatException("null"); return new Parser(text).Read(); }
         internal static Dictionary<string, object> AsObject(object value) => value as Dictionary<string, object> ?? throw new FormatException("object required");
-        internal static List<object> Array(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as List<object> ?? throw new FormatException(key + " must be array") : null;
+        internal static List<object> Array(Dictionary<string, object> obj, string key) => !obj.TryGetValue(key, out var v) || v == null ? null : v as List<object> ?? throw new FormatException(key + " must be array");
         internal static string String(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as string : null;
         internal static bool Bool(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is bool b && b;
         internal static double Number(Dictionary<string, object> obj, string key, double fallback)

@@ -157,7 +157,7 @@ internal static class EvalInterpreterCommand
     {
         if (item.Tags.Contains("no-llm", StringComparer.Ordinal)) return true;
         if (IsUnknown(item.Expect)) return result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0);
-        if (conditionalMayRefuse && result.Unknown) return true;
+        if (conditionalMayRefuse) return result.Unknown || ScoreConditional(item.Id, result);
         if (result.Unknown) return false;
         var expected = item.Expect.EnumerateArray().SelectMany(e =>
             e.TryGetProperty("count", out var count) && (e.GetProperty("kind").GetString() == "Train" || e.GetProperty("kind").GetString() == "PlaceBuilding")
@@ -175,6 +175,21 @@ internal static class EvalInterpreterCommand
             if (match < 0) return false; used[match] = true;
         }
         return true;
+    }
+
+    private static bool ScoreConditional(int id, AiCommandInterpretationResult result)
+    {
+        if (result.Operations.Count != 1 || result.Operations[0].Then.Count != 1) return false;
+        var operation = result.Operations[0]; var action = operation.Then[0];
+        if (id == 45)
+            return operation.When.Kind == OperationConditionKind.EnemyNearObjective && operation.When.ObjectiveId == 1 && action.IsPolicy && action.Policy.Kind == PolicyKind.Defend && action.Policy.Target.Kind == ScopeKind.Army && action.Policy.Target.Id == 3 && action.Policy.Goal.Kind == GoalKind.Outpost && action.Policy.Goal.Id == 1;
+        if (id == 46)
+            return operation.When.Kind == OperationConditionKind.OwnArmyBelowPercent && operation.When.OwnArmyPermille == 500 && action.IsPolicy && action.Policy.Kind == PolicyKind.Retreat && action.Policy.Target.Kind == ScopeKind.All;
+        if (id == 47)
+            return operation.When.Kind == OperationConditionKind.MatchTimeAfter && operation.When.TimeTick == 12000 && action.IsPolicy && action.Policy.Kind == PolicyKind.Focus && action.Policy.Target.Kind == ScopeKind.All && action.Policy.Goal.Kind == GoalKind.Core && action.Policy.Goal.Id == 2;
+        if (id == 48)
+            return operation.When.Kind == OperationConditionKind.OutpostOwnerChangedToEnemy && operation.When.ObjectiveId == 2 && !action.IsPolicy && action.Economy.Kind == EconomyCommandKind.SetRegionControl && action.Economy.RegionId == 4 && action.Economy.Enabled;
+        return false;
     }
 
     private static int FindExpected(JsonElement[] expected, bool[] used, Func<JsonElement, bool> predicate)
@@ -214,8 +229,17 @@ internal static class EvalInterpreterCommand
     {
         if (item.Tags.Contains("no-llm", StringComparer.Ordinal))
             return "{\"commands\":[],\"say\":\"ローカル処理\"}";
-        if (IsUnknown(item.Expect) || item.Tags.Any(t => t.Equals("G-4", StringComparison.OrdinalIgnoreCase)))
-            return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = Array.Empty<object>(), ["unknown"] = true, ["reason"] = item.Reason, ["say"] = "" });
+        if (IsUnknown(item.Expect))
+            return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = Array.Empty<object>(), ["operations"] = Array.Empty<object>(), ["unknown"] = true, ["reason"] = item.Reason, ["say"] = "" });
+        if (item.Tags.Any(t => t.Equals("G-4", StringComparison.OrdinalIgnoreCase)))
+        {
+            var operation = new Dictionary<string, object>();
+            if (item.Id == 45) operation = Conditional("EnemyNear", "北の拠点", 1, null, null, null, new[] { Command("policy", "Defend", "南の予備", "北の拠点") }, true);
+            else if (item.Id == 46) operation = Conditional("OwnArmyBelowPercent", null, null, 500, null, null, new[] { Command("policy", "Retreat", "全部隊", null) }, true);
+            else if (item.Id == 47) operation = Conditional("TimeAfter", null, null, null, 10, null, new[] { Command("policy", "Focus", "全部隊", "敵のコア") }, true);
+            else operation = Conditional("OwnerChangedToEnemy", "南の拠点", null, null, null, null, new[] { Command("economy", "SetRegionControl", null, null, "区域4", "Human") }, true);
+            return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = Array.Empty<object>(), ["operations"] = new[] { operation }, ["unknown"] = false, ["reason"] = null, ["say"] = "" });
+        }
         var commands = new List<Dictionary<string, object>>();
         foreach (var e in item.Expect.EnumerateArray())
         {
@@ -240,8 +264,12 @@ internal static class EvalInterpreterCommand
             }
             commands.Add(command);
         }
-        return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = commands, ["say"] = "" });
+        return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = commands, ["operations"] = Array.Empty<object>(), ["say"] = "", ["reason"] = null, ["unknown"] = false });
     }
+    private static Dictionary<string, object> Command(string type, string kind, string scope, string goal, string region = null, string control = null)
+        => new Dictionary<string, object> { ["type"] = type, ["kind"] = kind, ["scope"] = scope, ["goal"] = goal, ["region"] = region, ["building"] = null, ["location"] = null, ["producer"] = null, ["unit"] = null, ["civ"] = null, ["policy"] = null, ["control"] = control, ["sequence"] = null, ["count"] = null, ["reservePermille"] = null, ["allowedLossPermille"] = null, ["enabled"] = null };
+    private static Dictionary<string, object> Conditional(string kind, string objective, int? count, int? permille, int? minutes, string statement, IEnumerable<Dictionary<string, object>> then, bool once)
+        => new Dictionary<string, object> { ["when"] = new Dictionary<string, object> { ["kind"] = kind, ["objective"] = objective, ["count"] = count, ["permille"] = permille, ["minutes"] = minutes, ["statement"] = statement, ["all"] = null }, ["then"] = then.ToArray(), ["once"] = once };
     private static void Copy(Dictionary<string, object> target, JsonElement source, string name) { if (source.TryGetProperty(name, out var value)) target[name] = value.ValueKind == JsonValueKind.Number ? value.GetInt32() : value.GetString(); }
     private static string ScopeName(string value)
     { if (value == "All") return "全部隊"; int colon = value.IndexOf(':'); return colon >= 0 ? value.Substring(colon + 1) : value; }
