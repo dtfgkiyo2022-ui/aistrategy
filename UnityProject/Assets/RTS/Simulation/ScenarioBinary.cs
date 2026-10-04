@@ -68,6 +68,9 @@ namespace Rts.Simulation
         private const int RegionExtensionId = 13;
         private const int RegionExtensionVersion = 1;
         private const int RegionExtensionDataLength = sizeof(int);
+        private const int LatePushExtensionId = 14;
+        private const int LatePushExtensionVersion = 1;
+        private const int LatePushExtensionDataLength = 4 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -88,7 +91,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(ArmyGrowthExtensionId, ArmyGrowthExtensionVersion, ArmyGrowthExtensionDataLength),
             new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength),
             new ExtensionRegistration(EconomyScaleExtensionId, EconomyScaleExtensionVersion, EconomyScaleExtensionDataLength),
-            new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength)
+            new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength),
+            new ExtensionRegistration(LatePushExtensionId, LatePushExtensionVersion, LatePushExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -599,6 +603,7 @@ namespace Rts.Simulation
                 else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
                 else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
                 else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
+                else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -641,6 +646,7 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == TownExtensionId && !c.Economy.Towns);
             extensions.RemoveAll(extension => extension != null && extension.Id == EconomyScaleExtensionId && !c.Economy.EconomyScale);
             extensions.RemoveAll(extension => extension != null && extension.Id == RegionExtensionId && !c.Economy.Regions);
+            extensions.RemoveAll(extension => extension != null && extension.Id == LatePushExtensionId && !c.Economy.LatePush);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -744,6 +750,14 @@ namespace Rts.Simulation
                     extensions[i] = CreateRegionExtension(c.Economy);
                 }
             if (c.Economy.Regions && !hasRegions) extensions.Add(CreateRegionExtension(c.Economy));
+            bool hasLatePush = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == LatePushExtensionId)
+                {
+                    hasLatePush = true;
+                    extensions[i] = CreateLatePushExtension(c.Economy);
+                }
+            if (c.Economy.LatePush && !hasLatePush) extensions.Add(CreateLatePushExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -778,6 +792,32 @@ namespace Rts.Simulation
                 int enabled = reader.ReadInt32();
                 if (enabled != 0 && enabled != 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid regions extension.");
                 e.Regions = enabled != 0;
+            }
+        }
+
+        private static ScenarioExtensionData CreateLatePushExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.LatePush ? 1 : 0);
+                writer.Write(e.LatePushAfterTicks); writer.Write(e.LatePushAdvantageAfterTicks);
+                writer.Write(e.LatePushEnemyMultiplierPermille);
+                return new ScenarioExtensionData { Id = LatePushExtensionId, Version = LatePushExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadLatePushExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid late-push flag.");
+                e.LatePush = enabled != 0;
+                e.LatePushAfterTicks = reader.ReadInt32(); e.LatePushAdvantageAfterTicks = reader.ReadInt32();
+                e.LatePushEnemyMultiplierPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing late-push extension data.");
             }
         }
 
