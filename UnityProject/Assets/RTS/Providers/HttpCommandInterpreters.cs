@@ -273,7 +273,7 @@ namespace Rts.Providers
         protected override string ProviderName => "OpenAI";
         protected override void AddHeaders(HttpRequestMessage request, string key) => request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         protected override string BuildBody(InterpreterRequest request) => OpenAiBody(request, request.Model);
-        internal static string OpenAiBody(InterpreterRequest request, string model)
+        internal static string OpenAiBody(InterpreterRequest request, string model, bool completionTokens = true)
         {
             var limits = AiModelCatalog.Get(request.Model);
             string schema = AiCommandSchema.Build(request.Summary, limits);
@@ -284,7 +284,7 @@ namespace Rts.Providers
             };
             var body = new Dictionary<string, object>
             {
-                ["model"] = model, ["max_tokens"] = (long)limits.MaxOutputTokens, ["messages"] = messages,
+                ["model"] = model, [completionTokens ? "max_completion_tokens" : "max_tokens"] = (long)limits.MaxOutputTokens, ["messages"] = messages,
                 ["response_format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["json_schema"] = new Dictionary<string, object> { ["name"] = "rts_commands", ["strict"] = true, ["schema"] = MiniJson.Parse(schema) } }
             };
             if (limits.DisableThinking && request.Model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) body["think"] = false;
@@ -303,7 +303,8 @@ namespace Rts.Providers
         protected override string BuildBody(InterpreterRequest request)
         {
             var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary, Model = request.Model };
-            return OpenAiCommandInterpreter.OpenAiBody(copy, localModel);
+            // OpenAI's newer models only take max_completion_tokens; OpenAI-compatible local servers (Ollama) take max_tokens.
+            return OpenAiCommandInterpreter.OpenAiBody(copy, localModel, false);
         }
     }
 

@@ -59,14 +59,14 @@ namespace Rts.Providers
                 ["properties"] = new Dictionary<string, object>
                 {
                     ["when"] = condition,
-                    ["then"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
+                    ["then"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command },
                     ["once"] = new Dictionary<string, object> { ["type"] = "boolean" }
                 }
             };
             var rootProperties = new Dictionary<string, object>
             {
-                ["commands"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
-                ["operations"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = operation, ["maxItems"] = limits.AllowsOperations ? 10L : 0L },
+                ["commands"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command },
+                ["operations"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = operation },
                 ["say"] = new Dictionary<string, object> { ["type"] = "string" },
                 ["reason"] = NullableString(), ["unknown"] = new Dictionary<string, object> { ["type"] = "boolean" }
             };
@@ -114,27 +114,30 @@ namespace Rts.Providers
                 ["kind"] = EnumSchema("OwnerChangedToEnemy", "OwnerChangedToSelf", "EnemyNear", "OwnArmyBelowPercent", "TimeAfter", "JudgementTrue", "And"),
                 ["objective"] = NullableEnum(objectives), ["count"] = NullableInteger(), ["permille"] = NullableInteger(),
                 ["minutes"] = NullableInteger(), ["statement"] = NullableEnum(new[] { "operation_north_broken" }),
-                ["all"] = child == null
-                    ? new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "null" } } }
-                    : new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "array", ["items"] = child }, new Dictionary<string, object> { ["type"] = "null" } } }
             };
+            // A leaf condition has no "all"; the top level holds its parts in an array (empty when it is not an AND).
+            if (child != null) properties["all"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = child };
             condition["type"] = "object"; condition["additionalProperties"] = false;
             condition["required"] = properties.Keys.Select(k => (object)k).ToList(); condition["properties"] = properties;
         }
 
         private static Dictionary<string, object> EnumSchema(params string[] values) => new Dictionary<string, object> { ["type"] = "string", ["enum"] = values.Distinct(StringComparer.Ordinal).Cast<object>().ToList() };
+        // "None" is written without union types: an empty string for text, 0 for numbers, false for flags. Claude's strict
+        // schemas allow at most 16 parameters with type arrays or anyOf (2026-10-05: 43 were rejected with HTTP 400), and
+        // the command object alone has 17 optional fields. The interpreter reads "" and 0 as "not given".
         private static Dictionary<string, object> NullableEnum(IEnumerable<string> values, params string[] extra)
         {
             var all = (values ?? Array.Empty<string>()).Concat(extra ?? Array.Empty<string>()).Where(x => !string.IsNullOrEmpty(x)).Distinct(StringComparer.Ordinal).Cast<object>().ToList();
-            var options = new List<object>(); if (all.Count != 0) options.Add(new Dictionary<string, object> { ["type"] = "string", ["enum"] = all });
-            options.Add(new Dictionary<string, object> { ["type"] = "null" }); return new Dictionary<string, object> { ["anyOf"] = options };
+            all.Add("");
+            return new Dictionary<string, object> { ["type"] = "string", ["enum"] = all };
         }
-        private static Dictionary<string, object> NullableString() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "string" }, new Dictionary<string, object> { ["type"] = "null" } } };
-        private static Dictionary<string, object> NullableInteger() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "integer" }, new Dictionary<string, object> { ["type"] = "null" } } };
-        private static Dictionary<string, object> NullableBoolean() => new Dictionary<string, object> { ["anyOf"] = new List<object> { new Dictionary<string, object> { ["type"] = "boolean" }, new Dictionary<string, object> { ["type"] = "null" } } };
+        private static Dictionary<string, object> NullableString() => new Dictionary<string, object> { ["type"] = "string" };
+        private static Dictionary<string, object> NullableInteger() => new Dictionary<string, object> { ["type"] = "integer" };
+        private static Dictionary<string, object> NullableBoolean() => new Dictionary<string, object> { ["type"] = "boolean" };
 
         // Keep the stable part before the per-match schema and situation so provider prompt caches can reuse it.
         public const string StableInstructions = @"
+この契約では「なし」を、文字の項目は空文字""""、数の項目は0、真偽の項目はfalseで表します（nullは使いません）。以下の説明の「null」は、この意味に読み替えてください。
 あなたはRTSゲームの参謀です。人間の日本語の指示を、実行可能な命令のJSONに変換してください。
 返答は必ず指定されたJSON Schemaに従うJSONだけにしてください。説明文、Markdown、コードフェンス、Schemaにないキーは返さないでください。
 
@@ -625,7 +628,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                 case "OwnerChangedToSelf":
                     return OperationCondition.OwnerChangedToSelf(name, id);
                 case "EnemyNear":
-                    return OperationCondition.EnemyNear(name, id, Integer(obj, "count", 1));
+                    return OperationCondition.EnemyNear(name, id, Math.Max(1, Integer(obj, "count", 1)));
                 case "OwnArmyBelowPercent":
                     if (obj.TryGetValue("permille", out var permille) && permille != null)
                         return OperationCondition.OwnArmyBelowPermille(Integer(obj, "permille", 0));
@@ -688,6 +691,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                 c.MaxObservationAgeTicks, ExpireFlags.ObservationTooOld);
             ushort reserve = AiJson.UInt16(command, "reservePermille", 0);
             ushort allowedLoss = AiJson.UInt16(command, "allowedLossPermille", 1000);
+            if (allowedLoss == 0) allowedLoss = 1000; // 0 is "not given" in the schema
             if (reserve > 1000 || allowedLoss > 1000) throw new AiCommandException("割合が不正", kindText);
             output.Add(new UserPolicyIntent(next++, scope, kind, goal, 100, new LossBudget(allowedLoss),
                 new EndCondition(EndKind.UntilReplaced, 0), reserve, expiration));
@@ -705,7 +709,8 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         {
             if (c.Frame.Economy == null) throw new AiCommandException("内政が対応していない", kindText);
             if (!Enum.TryParse(kindText, false, out EconomyCommandKind kind)) throw new AiCommandException("対応していない内政命令", kindText);
-            ulong seq = AiJson.UInt64(command, "sequence", next++);
+            ulong seq = AiJson.UInt64(command, "sequence", 0);
+            if (seq == 0) seq = next++; // 0 is "not given" in the schema
             string targetName = AiJson.String(command, "region");
             if (kind == EconomyCommandKind.SetRegionControl)
             {
@@ -779,6 +784,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         private static int Count(Dictionary<string, object> command)
         {
             double value = AiJson.Number(command, "count", 1);
+            if (value == 0) value = 1; // 0 is "not given" in the schema
             if (value < 1 || value > 100 || value != Math.Truncate(value)) throw new AiCommandException("個数が不正", "count");
             return (int)value;
         }
@@ -1071,7 +1077,8 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         internal static object Parse(string text) { if (text == null) throw new FormatException("null"); return new Parser(text).Read(); }
         internal static Dictionary<string, object> AsObject(object value) => value as Dictionary<string, object> ?? throw new FormatException("object required");
         internal static List<object> Array(Dictionary<string, object> obj, string key) => !obj.TryGetValue(key, out var v) || v == null ? null : v as List<object> ?? throw new FormatException(key + " must be array");
-        internal static string String(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as string : null;
+        // An empty string is the schema's way of saying "not given" (no union types, see NullableEnum).
+        internal static string String(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is string text && text.Length != 0 ? text : null;
         internal static bool Bool(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is bool b && b;
         internal static double Number(Dictionary<string, object> obj, string key, double fallback)
         {
