@@ -31,28 +31,45 @@ internal static class JevMatchCommand
         long ticks = Number(options, "--ticks", 6000);
         uint faction = (uint)Number(options, "--faction", 1);
         if (faction is not (1 or 2)) throw new InvalidDataException("--faction must be 1 or 2.");
-        string keyVariable = options.GetValueOrDefault("--key-env") ?? "PROBE_KEY";
+        string keyVariable = options.GetValueOrDefault("--key-env") ?? HttpJevTransport.DefaultKeyEnvironment;
+        string providerName = options.GetValueOrDefault("--provider") ?? "jev";
+        var settings = new JudgementSettings
+        {
+            Backend = providerName switch
+            {
+                "jev" => JudgementBackend.Jev,
+                "local" or "local-llm" => JudgementBackend.LocalLlm,
+                _ => throw new InvalidDataException("--provider must be jev or local-llm.")
+            },
+            Url = options.GetValueOrDefault("--url"),
+            Model = options.GetValueOrDefault("--model"),
+            KeyEnvironment = keyVariable,
+            Timeout = TimeSpan.FromSeconds(Number(options, "--timeout-seconds", 12)),
+            IntervalTicks = Number(options, "--interval-ticks", 200)
+        };
         var thresholds = new JevThresholds
         {
-            MinChoiceConfidence = Permille(options, "--min-confidence-permille", 700),
+            MinChoiceConfidence = Permille(options, "--min-confidence-permille", 600),
             RepeatSameOrderAfterTicks = Number(options, "--repeat-after", 1200),
         };
         var schedule = options.GetValueOrDefault("--schedule") switch
         {
-            null or "on-change" => AutonomousPollSchedule.OnChange(Number(options, "--heartbeat", 600)),
+            null or "on-change" => AutonomousPollSchedule.OnChange(Number(options, "--heartbeat", settings.IntervalTicks)),
             "every-cycle" => AutonomousPollSchedule.EveryCycle,
             _ => throw new InvalidDataException("--schedule must be on-change or every-cycle.")
         };
-        if (Environment.GetEnvironmentVariable(keyVariable) is not { Length: > 0 })
+        if (settings.Backend == JudgementBackend.Jev && Environment.GetEnvironmentVariable(keyVariable) is not { Length: > 0 })
             throw new InvalidDataException("The environment variable " + keyVariable + " holds no key.");
 
-        var transport = new HttpJevTransport(() => Environment.GetEnvironmentVariable(keyVariable),
-            timeout: TimeSpan.FromSeconds(Number(options, "--timeout-seconds", 12)));
+        var transport = JudgementTransportFactory.Create(settings,
+            () => Environment.GetEnvironmentVariable(keyVariable));
+        using var transportLifetime = transport as IDisposable;
         using var provider = new JevPolicyProvider(transport, thresholds);
         var answers = new List<JevAnswerLine>();
         // The raw answers go into this report, which is a diagnostic file, never into the replay.
         provider.Observe = record => answers.Add(new JevAnswerLine { Tick = record.Tick, Answered = record.Answered,
             Failure = record.Failure, Choice = record.Choice, ConfidencePermille = (long)(record.ChoiceConfidence * 1000),
+            InputTokens = record.InputTokens, OutputTokens = record.OutputTokens,
             Facts = record.Facts.Select(f => new JevFactLine { Name = f.Name, Truth = f.Truth,
                 Permille = f.Probability < 0 ? null : (long?)(f.Probability * 1000) }).ToList(),
             OrderCount = record.OrderCount, Suppressed = record.Suppressed, Understood = record.Understood });
@@ -63,7 +80,7 @@ internal static class JevMatchCommand
             new Expiration(long.MaxValue, 0, ExpireFlags.None)));
 
         var report = new JevMatchReport { Build = build, ScenarioId = scenario.ScenarioId, FactionId = faction,
-            Schedule = schedule.ToString(), MinConfidencePermille = Number(options, "--min-confidence-permille", 700),
+            Schedule = schedule.ToString(), MinConfidencePermille = Number(options, "--min-confidence-permille", 600),
  };
         // One allocation cycle is 20 ticks, which is one second at the scenario's 20 Hz.
         long cycleSleepMs = Number(options, "--cycle-sleep-ms", 1000);
@@ -106,9 +123,10 @@ internal static class JevMatchCommand
         report.FailureReasons = answers.Where(a => a.Failure != null).GroupBy(a => a.Failure)
             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.Ordinal)
             .Select(g => new JevFailureCount { Reason = g.Key, Count = g.Count() }).ToList();
-        report.InputTokens = transport.InputTokens;
+        report.InputTokens = answers.Sum(a => a.InputTokens);
+        report.OutputTokens = answers.Sum(a => a.OutputTokens);
         // Prices are per million input tokens; kept as permille of a cent so no floating point enters the report.
-        report.CostMicroDollars = report.InputTokens * 42 / 1000;
+        report.CostMicroDollars = settings.Backend == JudgementBackend.LocalLlm ? 0 : report.InputTokens * 42 / 1000;
         foreach (var input in gateway.Inputs)
         {
             if (input.Kind == InputKind.Proposal && input.Orders.Count == 0) report.RejectedProposals++;
@@ -177,6 +195,8 @@ internal sealed class JevAnswerLine
     public string Failure { get; set; }
     public string Choice { get; set; }
     public long ConfidencePermille { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
     /// <summary>Each statement's answer and what it actually was, so the answers can be scored.</summary>
     public List<JevFactLine> Facts { get; set; } = new();
     public int OrderCount { get; set; }
@@ -219,6 +239,7 @@ internal sealed class JevMatchReport
     public int ComprehensionAnswered { get; set; }
     public long? FirstPausedTick { get; set; }
     public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
     public long CostMicroDollars { get; set; }
     public List<JevOrderLine> Orders { get; set; } = new();
     public List<JevAnswerLine> Answers { get; set; } = new();

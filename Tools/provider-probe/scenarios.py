@@ -4,7 +4,7 @@
 「どう答えるべきか」がほぼ決まる戦況を作り、答えが期待どおりに変わるかを数える。
 正解は人（この試験の作成者）の判断であり、ゲーム内の唯一の正解ではない。
 
-  python scenarios.py --snapshots snaps.jsonl --base-tick 2400 --repeat 5 --out result.json
+  python scenarios.py --snapshots snaps.jsonl --base-tick 2400 --repeat 5 --out result.json --fake
 """
 import argparse
 import copy
@@ -70,13 +70,20 @@ def main():
     ap.add_argument("--repeat", type=int, default=5)
     ap.add_argument("--out", required=True)
     ap.add_argument("--retreat-instructions", help="retreat 設問の文言を差し替える（設問の書き方の比較用）")
+    ap.add_argument("--fake", action="store_true", help="外部通信をせず疑似サーバーで最後まで動かす")
+    ap.add_argument("--key-env", default="TYPESAFE_API_KEY")
     args = ap.parse_args()
     if args.retreat_instructions:
         probe.QUESTIONS["retreat"]["instructions"] = args.retreat_instructions
-    key = os.environ.get("PROBE_KEY")
-    if not key:
-        raise SystemExit("PROBE_KEY が未設定です。")
-    url = os.environ.get("PROBE_URL", "https://ai-gateway.lolipop.jp/v1/systemone")
+    server = None
+    if args.fake:
+        server, url = probe.start_fake_server(20, 0)
+        key = None
+    else:
+        key = os.environ.get(args.key_env)
+        if not key:
+            raise SystemExit(args.key_env + " が未設定です。")
+        url = os.environ.get("PROBE_URL", "https://api.typesafe.ai/v1/systemone")
     base = next(json.loads(l) for l in open(args.snapshots, encoding="utf-8") if json.loads(l)["tick"] == args.base_tick)["observation"]
 
     results = {}
@@ -88,15 +95,38 @@ def main():
                 rows.append({"status": status, "seconds": round(seconds, 3)})
                 continue
             answers, usage = probe.parse_reply(body)
-            rows.append({"status": "ok", "seconds": round(seconds, 3), "choice": answers["focus"]["choice"],
-                         "confidence": answers["focus"]["confidence"], "probabilities": answers["focus"]["probabilities"],
-                         "noul": answers["retreat"]["noul"], "tokens": usage.get("input_tokens")})
+            choice = answers["focus"]["choice"]
+            confidence = answers["focus"]["confidence"]
+            noul = answers["retreat"]["noul"]
+            expected_focus = expect.get("focus")
+            expected_retreat = expect.get("retreat")
+            correct = (expected_focus is not None and choice == expected_focus) or (
+                expected_retreat == "high" and noul >= 0.5) or (
+                expected_retreat == "low" and noul < 0.5) or (
+                expected_retreat == "middle" and 0.25 <= noul <= 0.75)
+            rows.append({"status": "ok", "seconds": round(seconds, 3), "choice": choice,
+                         "confidence": confidence, "probabilities": answers["focus"]["probabilities"],
+                         "noul": noul, "input_tokens": usage.get("input_tokens"),
+                         "output_tokens": usage.get("output_tokens"), "correct": correct})
         ok = [r for r in rows if r["status"] == "ok"]
         results[name] = {"expect": expect, "n_ok": len(ok), "rows": rows,
+                         "accuracy": round(sum(r["correct"] for r in ok) / len(ok), 3) if ok else None,
+                         "latency_seconds": {"p50": probe.percentile([r["seconds"] for r in ok], 50),
+                                             "p95": probe.percentile([r["seconds"] for r in ok], 95)},
+                         "input_tokens_mean": round(statistics.mean(r["input_tokens"] for r in ok if r.get("input_tokens") is not None), 1) if any(r.get("input_tokens") is not None for r in ok) else None,
+                         "output_tokens_mean": round(statistics.mean(r["output_tokens"] for r in ok if r.get("output_tokens") is not None), 1) if any(r.get("output_tokens") is not None for r in ok) else None,
                          "choices": {c: [r["choice"] for r in ok].count(c) for c in sorted({r["choice"] for r in ok})},
                          "noul_mean": round(statistics.mean(r["noul"] for r in ok), 3) if ok else None,
                          "confidence_mean": round(statistics.mean(r["confidence"] for r in ok), 3) if ok else None}
-        print(name, expect, results[name]["choices"], "noul", results[name]["noul_mean"], "conf", results[name]["confidence_mean"], flush=True)
+        print(name, expect, "正解率", results[name]["accuracy"], "p50", results[name]["latency_seconds"]["p50"],
+              "tokens", results[name]["input_tokens_mean"], "/", results[name]["output_tokens_mean"], flush=True)
+    all_rows = [r for result in results.values() for r in result["rows"] if r["status"] == "ok"]
+    results["summary"] = {"calls": len(all_rows), "accuracy": round(sum(r["correct"] for r in all_rows) / len(all_rows), 3) if all_rows else None,
+                           "confidence_mean": round(statistics.mean(r["confidence"] for r in all_rows), 3) if all_rows else None,
+                           "latency_seconds": {"p50": probe.percentile([r["seconds"] for r in all_rows], 50),
+                                               "p95": probe.percentile([r["seconds"] for r in all_rows], 95)},
+                           "input_tokens": sum(r.get("input_tokens") or 0 for r in all_rows),
+                           "output_tokens": sum(r.get("output_tokens") or 0 for r in all_rows)}
     json.dump(results, open(args.out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 

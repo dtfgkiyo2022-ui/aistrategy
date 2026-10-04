@@ -64,7 +64,7 @@ namespace Rts.Tests.Headless
         public void AModelThatReadsTheStateHasItsChoiceActedOn()
         {
             var transport = new ScriptedTransport { Next = Answers(right: true) };
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, ComprehensionIntervalCalls = 1 }))
             {
                 for (ulong i = 1; i <= 4; i++) Assert.That(Round(provider, i, 20L * (long)i).Orders, Is.Not.Empty);
                 Assert.That(provider.ComprehensionCorrect, Is.EqualTo(provider.ComprehensionAnswered));
@@ -76,7 +76,7 @@ namespace Rts.Tests.Headless
         public void OnceTheFactualAnswersGoWrongTheChoiceIsNoLongerActedOn()
         {
             var transport = new ScriptedTransport { Next = Answers(right: false) };
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, ComprehensionIntervalCalls = 1 }))
             {
                 // The first reply carries only three answers, which is below the minimum to judge on, so it still counts.
                 Assert.That(Round(provider, 1, 20).Orders, Is.Not.Empty, "too little evidence to distrust it yet");
@@ -92,7 +92,7 @@ namespace Rts.Tests.Headless
         public void TrustComesBackWhenTheAnswersDo()
         {
             var transport = new ScriptedTransport { Next = Answers(right: false) };
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, ComprehensionWindow = 6 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, ComprehensionWindow = 6, ComprehensionIntervalCalls = 1 }))
             {
                 Round(provider, 1, 20);
                 Round(provider, 2, 40);
@@ -109,7 +109,7 @@ namespace Rts.Tests.Headless
         public void TheCheckCanBeTurnedOff()
         {
             var transport = new ScriptedTransport { Next = Answers(right: false) };
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, MinComprehensionPermille = 0 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, MinComprehensionPermille = 0, ComprehensionIntervalCalls = 1 }))
             {
                 for (ulong i = 1; i <= 4; i++) Assert.That(Round(provider, i, 20L * (long)i).Orders, Is.Not.Empty);
                 Assert.That(provider.NotUnderstoodCount, Is.EqualTo(0));
@@ -122,7 +122,7 @@ namespace Rts.Tests.Headless
         {
             var transport = new ScriptedTransport { Next = Answers(right: false) };
             var records = new List<JevAnswerRecord>();
-            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0 }))
+            using (var provider = new JevPolicyProvider(transport, new JevThresholds { RepeatSameOrderAfterTicks = 0, ComprehensionIntervalCalls = 1 }))
             {
                 provider.Observe = records.Add;
                 Round(provider, 1, 20);

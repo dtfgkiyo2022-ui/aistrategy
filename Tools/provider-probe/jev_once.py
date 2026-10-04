@@ -12,13 +12,13 @@ import time
 import urllib.error
 import urllib.request
 
-url = os.environ.get("PROBE_URL", "https://ai-gateway.lolipop.jp/v1/systemone")
-key = os.environ.get("PROBE_KEY")
+url = os.environ.get("PROBE_URL", "https://api.typesafe.ai/v1/systemone")
+key = os.environ.get("TYPESAFE_API_KEY")
 if not key:
-    sys.exit("PROBE_KEY が未設定です。")
+    sys.exit("TYPESAFE_API_KEY が未設定です。")
 
 body = {
-    "model": os.environ.get("PROBE_MODEL", "typesafe/jev-latest"),
+    "model": os.environ.get("PROBE_MODEL", "jev-latest"),
     "state": "西軍（自軍）は3軍団40人。北の拠点は自軍が確保済み、南の拠点は中立。敵は北の拠点の近くに約20人を確認、コアHPは自軍3000・敵3000。",
     "questions": {
         "focus": {
