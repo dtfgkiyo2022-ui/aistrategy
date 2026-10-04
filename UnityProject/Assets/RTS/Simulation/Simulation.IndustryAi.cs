@@ -990,7 +990,8 @@ namespace Rts.Simulation
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
-            if (farms < FarmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
+            int farmTarget = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget);
+            if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)
             {

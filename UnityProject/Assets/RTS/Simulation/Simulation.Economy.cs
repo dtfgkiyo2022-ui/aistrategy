@@ -309,7 +309,9 @@ namespace Rts.Simulation
             }
             ResourceKind current = v.NodeId == 0 ? 0 : world.Nodes[v.NodeId - 1].Definition.Kind;
             if (GoldNeeded(v.FactionId) > 0 && GoldGathererRoom(v, food, wood)) return ResourceKind.Gold;
-            var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId, v.Position).FoodPerWood);
+            var plan = PlanOf(v.FactionId, v.Position);
+            int foodPerWood = EconomyDecision.FoodPerWood(EconomyScaleOn, plan.FoodPerWood);
+            var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, foodPerWood);
             // V3-5 (32.7): on a map with ages the stock speaks too - far more of one than the other sends the idle to the other.
             if (AgesOn && kind != ResourceKind.Stone)
             {

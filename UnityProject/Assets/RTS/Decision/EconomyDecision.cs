@@ -182,6 +182,17 @@ namespace Rts.Decision
             => foodGatherers <= foodPerWood * woodGatherers ? ResourceKind.Food : ResourceKind.Wood;
 
         /// <summary>
+        /// S-4b: the scaled economy keeps a little more food available for the larger villager and infantry lines.
+        /// The policy's ratio is never reduced, and the old ratio is returned when the flag is off.
+        /// </summary>
+        public static int FoodPerWood(bool economyScale, int policyRatio)
+            => economyScale ? System.Math.Max(3, policyRatio) : policyRatio;
+
+        /// <summary>S-4b: scale the agrarian food-source count without changing the old economy.</summary>
+        public static int FoodSourceTarget(bool economyScale, int defaultTarget)
+            => economyScale ? checked(defaultTarget * 2) : defaultTarget;
+
+        /// <summary>
         /// Nearest point of this kind with something left, by squared distance, then by lower index (the ids are in
         /// index order). -1 when none is left. Coordinates are at most 1024 m, so the squares fit a long.
         /// </summary>
