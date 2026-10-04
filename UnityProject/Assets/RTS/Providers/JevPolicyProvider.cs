@@ -94,6 +94,21 @@ namespace Rts.Providers
     }
 
     /// <summary>
+    /// Optional transport capability for a per-request question set. The old IJevTransport method remains so small
+    /// fakes and older hosts continue to work; the built-in HTTP transports implement this capability.
+    /// </summary>
+    public interface IQuestionAwareJevTransport
+    {
+        Task<JevAnswers> AskAsync(string stateJson, string questionsJson, CancellationToken cancel);
+    }
+
+    /// <summary>Optional provider capability used by the gateway to mark a human Jev instruction request.</summary>
+    public interface IJevQuestionContextProvider : IPolicyProvider
+    {
+        void Request(PolicyRequest request, JevQuestionContext context);
+    }
+
+    /// <summary>
     /// Optional capability implemented by a backend which must not receive a second request while one is running.
     /// Local models commonly share a single decode queue, so overlapping requests would only increase latency.
     /// </summary>
@@ -118,6 +133,8 @@ namespace Rts.Providers
         /// <summary>How many recent factual answers the check looks at, and the fewest it will judge on.</summary>
         public int ComprehensionWindow = 12;
         public int ComprehensionMinimumAnswers = 6;
+        /// <summary>Ask the comprehension questions on the first call and then every Nth real call.</summary>
+        public int ComprehensionIntervalCalls = 3;
 
         /// <summary>
         /// How sure a factual statement has to be before the order table treats it as so. Measured answers to this
@@ -188,7 +205,7 @@ namespace Rts.Providers
     /// uses tasks and queues, but it never waits, never reads a clock, and only hands back finished answers in
     /// RequestId order. What the model said never enters the replay; the gateway records the resulting orders.
     /// </summary>
-    public sealed class JevPolicyProvider : IPolicyProvider, IDisposable
+    public sealed class JevPolicyProvider : IJevQuestionContextProvider, IDisposable
     {
         private sealed class Completed
         {
@@ -200,9 +217,17 @@ namespace Rts.Providers
         private readonly IJevTransport transport;
         private readonly JevThresholds thresholds;
         private readonly ConcurrentQueue<Completed> done = new ConcurrentQueue<Completed>();
-        private readonly Dictionary<ulong, PolicyRequest> open = new Dictionary<ulong, PolicyRequest>();
+        private sealed class OpenRequest
+        {
+            internal PolicyRequest Request;
+            internal string QuestionsJson;
+            internal HashSet<string> QuestionNames;
+        }
+
+        private readonly Dictionary<ulong, OpenRequest> open = new Dictionary<ulong, OpenRequest>();
         private readonly CancellationTokenSource cancel = new CancellationTokenSource();
         private int failures;
+        private int judgementCalls;
 
         public JevPolicyProvider(IJevTransport transport, JevThresholds thresholds = null)
         {
@@ -239,6 +264,12 @@ namespace Rts.Providers
         /// </summary>
         public Action<JevAnswerRecord> Observe { get; set; }
 
+        /// <summary>
+        /// Supplies optional per-request context for callers that use the original IPolicyProvider.Request method.
+        /// The gateway uses the overload below for human instructions and autonomous calls.
+        /// </summary>
+        public Func<PolicyRequest, JevQuestionContext> QuestionContext { get; set; }
+
         /// <summary>Whether calls are being made right now. Read on the game thread, after Request/Poll.</summary>
         public JevAvailability Availability { get; private set; } = JevAvailability.Calling;
 
@@ -251,12 +282,19 @@ namespace Rts.Providers
 
         public void Request(PolicyRequest request)
         {
+            var context = QuestionContext == null ? new JevQuestionContext() : QuestionContext(request);
+            Request(request, context ?? new JevQuestionContext());
+        }
+
+        public void Request(PolicyRequest request, JevQuestionContext context)
+        {
             if (request == null) throw new ArgumentNullException(nameof(request));
+            if (context == null) throw new ArgumentNullException(nameof(context));
             if (SingleFlightTransport() && open.Count != 0)
             {
                 // Complete the skipped request so the gateway does not wait forever. The next scheduled
                 // observation will try again after the current local decode has finished.
-                open[request.RequestId] = request;
+                open[request.RequestId] = EmptyOpen(request);
                 done.Enqueue(new Completed { RequestId = request.RequestId, Failure = JevFailure.Busy });
                 return;
             }
@@ -267,7 +305,7 @@ namespace Rts.Providers
                     // Still paused: answer straight away with nothing, so the gateway records a rejection at the usual
                     // place and the match is never left waiting on a request that was never sent.
                     done.Enqueue(new Completed { RequestId = request.RequestId, Failure = JevFailure.Paused });
-                    open[request.RequestId] = request;
+                    open[request.RequestId] = EmptyOpen(request);
                     return;
                 }
                 Availability = JevAvailability.Calling;
@@ -276,10 +314,28 @@ namespace Rts.Providers
             }
             // The state is written out now, on the caller's thread, so nothing the simulation mutates later can leak in.
             string state = JevState.Build(request.Observation);
-            open[request.RequestId] = request;
+            bool includeComprehension = context.IncludeComprehension ?? ShouldAskComprehension();
+            var selected = new JevQuestionContext
+            {
+                OperationConditionNeeded = context.OperationConditionNeeded,
+                InstructionTranslationNeeded = context.InstructionTranslationNeeded,
+                IncludeComprehension = includeComprehension
+            };
+            string questions = JevQuestions.Build(selected);
+            open[request.RequestId] = new OpenRequest
+            {
+                Request = request,
+                QuestionsJson = questions,
+                QuestionNames = new HashSet<string>(JevQuestions.Names(questions), StringComparer.Ordinal)
+            };
             ulong id = request.RequestId;
             Task<JevAnswers> call;
-            try { call = Task.Run(() => transport.AskAsync(state, cancel.Token)); }
+            try
+            {
+                call = Task.Run(() => transport is IQuestionAwareJevTransport aware
+                    ? aware.AskAsync(state, questions, cancel.Token)
+                    : transport.AskAsync(state, cancel.Token));
+            }
             catch (Exception e) { Fail(id, JevFailure.Describe(e)); return; }
             call.ContinueWith(t =>
             {
@@ -287,6 +343,20 @@ namespace Rts.Providers
                 else Fail(id, JevFailure.Describe(t.Exception));
             }, TaskScheduler.Default);
         }
+
+        private bool ShouldAskComprehension()
+        {
+            int call = ++judgementCalls;
+            int interval = thresholds.ComprehensionIntervalCalls;
+            return call == 1 || (interval > 0 && (call - 1) % interval == 0);
+        }
+
+        private static OpenRequest EmptyOpen(PolicyRequest request) => new OpenRequest
+        {
+            Request = request,
+            QuestionsJson = "{}",
+            QuestionNames = new HashSet<string>(StringComparer.Ordinal)
+        };
 
         private void Fail(ulong id, string reason)
         {
@@ -304,9 +374,10 @@ namespace Rts.Providers
             var replies = new List<PolicyReply>();
             foreach (var c in finished)
             {
-                if (!open.TryGetValue(c.RequestId, out var request)) continue;
+                if (!open.TryGetValue(c.RequestId, out var pending)) continue;
                 open.Remove(c.RequestId);
-                var facts = FactAnswers(c.Answers, request.Observation);
+                var request = pending.Request;
+                var facts = FactAnswers(c.Answers, request.Observation, pending.QuestionNames);
                 bool understood = Score(facts);
                 bool suppressed = false;
                 var orders = c.Answers == null || !understood ? new List<PolicyOrder>() : Decide(request, c.Answers, tick, out suppressed);
@@ -426,7 +497,7 @@ namespace Rts.Providers
             return 1000 * correct / comprehension.Count >= thresholds.MinComprehensionPermille;
         }
 
-        private static List<JevFactAnswer> FactAnswers(JevAnswers answers, FactionObservation observation)
+        private static List<JevFactAnswer> FactAnswers(JevAnswers answers, FactionObservation observation, HashSet<string> questionNames)
         {
             var list = new List<JevFactAnswer>();
             // Walked in a fixed order so the diagnostic log reads the same way every time.
@@ -434,7 +505,7 @@ namespace Rts.Providers
                 list.Add(new JevFactAnswer
                 {
                     Name = name,
-                    Probability = answers != null && answers.Facts.TryGetValue(name, out var p) ? p : -1,
+                    Probability = answers != null && questionNames.Contains(name) && answers.Facts.TryGetValue(name, out var p) ? p : -1,
                     Truth = JevFacts.Truth(name, observation)
                 });
             return list;

@@ -15,7 +15,7 @@ namespace Rts.Providers
     /// the game host) and is only ever placed in the Authorization header: never in a message, a log or the state.
     /// Any failure (no key, timeout, non-2xx, unreadable reply) is an exception, which the provider turns into "no order".
     /// </summary>
-    public sealed class HttpJevTransport : IJudgement
+    public sealed class HttpJevTransport : IJudgement, IQuestionAwareJevTransport
     {
         public const string DefaultUrl = "https://api.typesafe.ai/v1/systemone";
         public const string DefaultModel = "jev-latest";
@@ -44,11 +44,16 @@ namespace Rts.Providers
             client.Timeout = timeout ?? TimeSpan.FromSeconds(12);
         }
 
-        public async Task<JevAnswers> AskAsync(string stateJson, CancellationToken cancel)
+        public Task<JevAnswers> AskAsync(string stateJson, CancellationToken cancel) =>
+            AskAsync(stateJson, JevQuestions.Json, cancel);
+
+        public async Task<JevAnswers> AskAsync(string stateJson, string questionsJson, CancellationToken cancel)
         {
             string key = readKey();
             if (string.IsNullOrEmpty(key)) throw new InvalidOperationException("No API key is set.");
-            string body = "{\"model\":\"" + model + "\",\"state\":" + stateJson + ",\"questions\":" + JevQuestions.Json + "}";
+            if (stateJson == null) throw new ArgumentNullException(nameof(stateJson));
+            if (questionsJson == null) throw new ArgumentNullException(nameof(questionsJson));
+            string body = "{\"model\":\"" + model + "\",\"state\":" + stateJson + ",\"questions\":" + questionsJson + "}";
             using (var request = new HttpRequestMessage(HttpMethod.Post, url))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);

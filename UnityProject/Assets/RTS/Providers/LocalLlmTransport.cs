@@ -13,7 +13,7 @@ namespace Rts.Providers
     /// returned usage is still kept for diagnostics. The request includes a strict JSON Schema so a small local model
     /// cannot answer with prose.
     /// </summary>
-    public class LocalLlmTransport : IJudgement, ISingleFlightJudgementTransport, IDisposable
+    public class LocalLlmTransport : IJudgement, IQuestionAwareJevTransport, ISingleFlightJudgementTransport, IDisposable
     {
         public const string DefaultUrl = "http://127.0.0.1:11434/v1/chat/completions";
         public const string DefaultModel = "qwen3.5:4b";
@@ -33,14 +33,18 @@ namespace Rts.Providers
 
         public bool SingleFlight => true;
 
-        public async Task<JevAnswers> AskAsync(string stateJson, CancellationToken cancel)
+        public Task<JevAnswers> AskAsync(string stateJson, CancellationToken cancel) =>
+            AskAsync(stateJson, JevQuestions.Json, cancel);
+
+        public async Task<JevAnswers> AskAsync(string stateJson, string questionsJson, CancellationToken cancel)
         {
             if (stateJson == null) throw new ArgumentNullException(nameof(stateJson));
+            if (questionsJson == null) throw new ArgumentNullException(nameof(questionsJson));
             string body = "{\"model\":\"" + Escape(model) + "\",\"temperature\":0,\"messages\":[" +
                 "{\"role\":\"system\",\"content\":\"選択肢から1つ選び、確信度を0から1で付け、指定されたJSONで答える。説明文は返さない。\"}," +
-                "{\"role\":\"user\",\"content\":\"state=" + Escape(stateJson) + " questions=" + Escape(JevQuestions.Json) + "\"}" +
+                "{\"role\":\"user\",\"content\":\"state=" + Escape(stateJson) + " questions=" + Escape(questionsJson) + "\"}" +
                 "],\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
-                "\"name\":\"jev_judgement\",\"strict\":true,\"schema\":" + Schema + "}}}";
+                "\"name\":\"jev_judgement\",\"strict\":true,\"schema\":" + JevQuestions.AnswerSchema(questionsJson) + "}}}";
             using (var request = new HttpRequestMessage(HttpMethod.Post, url))
             {
                 request.Content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -155,13 +159,6 @@ namespace Rts.Providers
 
         private static string Escape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"")
             .Replace("\r", "\\r").Replace("\n", "\\n");
-
-        // The schema is explicit for every question and rejects prose or unknown answer fields.
-        private const string AnswerSchema = "{\"type\":\"object\",\"properties\":{\"choice\":{\"type\":\"string\"},\"confidence\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1},\"noul\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1},\"score\":{\"type\":\"number\",\"minimum\":0,\"maximum\":1}},\"additionalProperties\":false}";
-        private const string Schema = "{\"type\":\"object\",\"properties\":{\"answers\":{\"type\":\"object\",\"properties\":{" +
-            "\"decisive_point\":" + AnswerSchema + ",\"outnumbering\":" + AnswerSchema + ",\"enemy_near_my_core\":" + AnswerSchema + ",\"outpost_held_by_enemy\":" + AnswerSchema + "," +
-            "\"dangerous_outpost\":" + AnswerSchema + ",\"retreat_north\":" + AnswerSchema + ",\"operation_north_broken\":" + AnswerSchema + ",\"instruction_kind\":" + AnswerSchema + ",\"instruction_target\":" + AnswerSchema + ",\"instruction_goal\":" + AnswerSchema +
-            "},\"additionalProperties\":false}},\"required\":[\"answers\"],\"additionalProperties\":false}";
 
         public void Dispose() { client.Dispose(); }
     }
