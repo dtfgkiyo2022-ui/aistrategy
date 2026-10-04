@@ -11,29 +11,31 @@ namespace Rts.Providers
     /// <summary>固定語彙を返す参謀のJSON契約。LLMにはこのSchemaをそのまま渡せる。</summary>
     public static class AiCommandSchema
     {
+        // Written for the strict modes of both Claude (strict tools) and OpenAI (strict json_schema): every property is
+        // required and an optional one allows null, and there are no minimum/maximum (Claude rejects them on integers).
+        // Ranges are checked by the interpreter instead (count 1-100, permille 0-1000, sequence >= 1).
         public const string Json = @"{
-  ""type"": ""object"", ""required"": [""commands"", ""say""],
+  ""type"": ""object"", ""additionalProperties"": false,
+  ""required"": [""commands"", ""say"", ""reason"", ""unknown""],
   ""properties"": {
     ""commands"": { ""type"": ""array"", ""items"": {
-      ""type"": ""object"", ""required"": [""type"", ""kind""],
+      ""type"": ""object"", ""additionalProperties"": false,
+      ""required"": [""type"", ""kind"", ""scope"", ""goal"", ""region"", ""building"", ""location"", ""producer"", ""unit"", ""civ"", ""policy"", ""control"", ""sequence"", ""count"", ""reservePermille"", ""allowedLossPermille""],
       ""properties"": {
-        ""type"": { ""enum"": [""policy"", ""economy""] },
-        ""kind"": { ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain""] },
-        ""scope"": { ""type"": ""string"" }, ""goal"": { ""type"": ""string"" },
-        ""region"": { ""type"": ""string"" }, ""building"": { ""type"": ""string"" },
-        ""location"": { ""type"": ""string"" }, ""producer"": { ""type"": ""string"" },
-        ""unit"": { ""type"": ""string"" }, ""civ"": { ""type"": ""string"" },
-        ""policy"": { ""type"": ""string"" }, ""control"": { ""enum"": [""Human"", ""Ai""] },
-         ""sequence"": { ""type"": ""integer"", ""minimum"": 1 },
-         ""count"": { ""type"": ""integer"", ""minimum"": 1, ""maximum"": 100 },
-         ""reservePermille"": { ""type"": ""integer"", ""minimum"": 0, ""maximum"": 1000 },
-         ""allowedLossPermille"": { ""type"": ""integer"", ""minimum"": 0, ""maximum"": 1000 }
-       }, ""additionalProperties"": false
+        ""type"": { ""type"": ""string"", ""enum"": [""policy"", ""economy""] },
+        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain""] },
+        ""scope"": { ""type"": [""string"", ""null""] }, ""goal"": { ""type"": [""string"", ""null""] },
+        ""region"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] },
+        ""location"": { ""type"": [""string"", ""null""] }, ""producer"": { ""type"": [""string"", ""null""] },
+        ""unit"": { ""type"": [""string"", ""null""] }, ""civ"": { ""type"": [""string"", ""null""] },
+        ""policy"": { ""type"": [""string"", ""null""] }, ""control"": { ""anyOf"": [ { ""type"": ""string"", ""enum"": [""Human"", ""Ai""] }, { ""type"": ""null"" } ] },
+        ""sequence"": { ""type"": [""integer"", ""null""] }, ""count"": { ""type"": [""integer"", ""null""] },
+        ""reservePermille"": { ""type"": [""integer"", ""null""] }, ""allowedLossPermille"": { ""type"": [""integer"", ""null""] }
+      }
     } },
-    ""say"": { ""type"": ""string"" }, ""reason"": { ""type"": ""string"" },
-    ""unknown"": { ""type"": ""boolean"" },
-    ""inputTokens"": { ""type"": ""integer"" }, ""outputTokens"": { ""type"": ""integer"" }
-  }, ""additionalProperties"": false
+    ""say"": { ""type"": ""string"" }, ""reason"": { ""type"": [""string"", ""null""] },
+    ""unknown"": { ""type"": ""boolean"" }
+  }
 }";
 
         public const string StableInstructions =
@@ -677,7 +679,7 @@ namespace Rts.Providers
         internal static bool Bool(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is bool b && b;
         internal static double Number(Dictionary<string, object> obj, string key, double fallback)
         {
-            if (!obj.TryGetValue(key, out var v)) return fallback;
+            if (!obj.TryGetValue(key, out var v) || v == null) return fallback;
             if (v is long l) return l;
             if (v is double d) return d;
             throw new FormatException(key + " must be number");
@@ -688,7 +690,7 @@ namespace Rts.Providers
             if (value < 0 || value > ushort.MaxValue || value != Math.Truncate(value)) throw new FormatException(key + " must be integer");
             return (ushort)value;
         }
-        internal static ulong UInt64(Dictionary<string, object> obj, string key, ulong fallback) { if (!obj.TryGetValue(key, out var v)) return fallback; if (v is long l && l >= 0) return checked((ulong)l); throw new FormatException(key + " must be integer"); }
+        internal static ulong UInt64(Dictionary<string, object> obj, string key, ulong fallback) { if (!obj.TryGetValue(key, out var v) || v == null) return fallback; if (v is long l && l >= 0) return checked((ulong)l); throw new FormatException(key + " must be integer"); }
         private sealed class Parser
         {
             private readonly string s; private int p; internal Parser(string text) { s = text; }
