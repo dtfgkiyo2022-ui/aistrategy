@@ -255,6 +255,9 @@ namespace Rts.Simulation
         /// <summary>Core defence: a core fires at nearby enemy soldiers (or villagers when no soldier is in range).</summary>
         public bool CoreDefence;
         public int CoreDefenceRange = 16, CoreDefenceDamage = 30, CoreDefenceIntervalTicks = 20, CoreDefenceMaxTargets = 3;
+        /// <summary>S-5: after a late-game condition, automatic armies keep a deterministic focus on the enemy core.</summary>
+        public bool LatePush;
+        public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

@@ -366,6 +366,8 @@ internal static class LoadMetricCommand
             var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"), options.ContainsKey("--army-growth"), options.ContainsKey("--economy-scale"));
             scenario.Economy.CoreDefence = options.ContainsKey("--core-defence");
             ApplyCoreDefenceOptions(scenario, options);
+            scenario.Economy.LatePush = options.ContainsKey("--late-push");
+            ApplyLatePushOptions(scenario, options);
             if (ticks > scenario.VerificationTickLimit) throw new InvalidDataException("--ticks is outside the scenario limit.");
             rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks,
                 completed: simulation =>
@@ -415,6 +417,17 @@ internal static class LoadMetricCommand
         if (targets != int.MinValue) scenario.Economy.CoreDefenceMaxTargets = targets;
         if (range != int.MinValue) scenario.Economy.CoreDefenceRange = range;
         if (interval != int.MinValue) scenario.Economy.CoreDefenceIntervalTicks = interval;
+    }
+
+    internal static void ApplyLatePushOptions(ScenarioDefinition scenario, IReadOnlyDictionary<string, string> options)
+    {
+        if (scenario == null) throw new ArgumentNullException(nameof(scenario));
+        if (options == null) throw new ArgumentNullException(nameof(options));
+        if (!options.ContainsKey("--late-push")) return;
+        if (!options.TryGetValue("--late-push-minute", out var value)) return;
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minute) || minute <= 0)
+            throw new InvalidDataException("--late-push-minute must be a positive integer.");
+        scenario.Economy.LatePushAfterTicks = checked(minute * TicksPerMinute);
     }
 
     internal static ScenarioDefinition CreateScenario(ulong seed, bool allCivilisations, bool large = false, bool armyGrowth = false, bool economyScale = false)
