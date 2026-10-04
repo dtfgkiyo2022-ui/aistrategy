@@ -48,9 +48,12 @@ namespace Rts.Providers
             var scopes = names.Where(n => n.HasScope && n.IsOwn).Select(n => n.Name);
             var goals = names.Where(n => n.HasGoal).Select(n => n.Name);
             var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
-            var producers = names.Where(n => n.Id != 0 && !n.HasGoal).Select(n => n.Name).Concat(new[] { "コア" });
-            var locations = names.Select(n => n.Name).Concat(new[] { "お任せ" });
+            // Keep dynamic enums semantic: army/region names are not training producers, and every name does not
+            // need to be repeated as a building location. This is both smaller and easier for small models to select.
+            var producers = names.Where(n => n.Category == "建物").Select(n => n.Name).Concat(new[] { "コア" });
+            var locations = names.Where(n => n.HasGoal || n.Category == "地点").Select(n => n.Name).Concat(new[] { "お任せ" });
             var command = CommandSchema(scopes, goals, regions, producers, locations);
+            var commandRef = new Dictionary<string, object> { ["$ref"] = "#/$defs/command" };
             var condition = ConditionSchema(goals);
             var operation = new Dictionary<string, object>
             {
@@ -59,13 +62,13 @@ namespace Rts.Providers
                 ["properties"] = new Dictionary<string, object>
                 {
                     ["when"] = condition,
-                    ["then"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
+                    ["then"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = commandRef, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
                     ["once"] = new Dictionary<string, object> { ["type"] = "boolean" }
                 }
             };
             var rootProperties = new Dictionary<string, object>
             {
-                ["commands"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = command, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
+                ["commands"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = commandRef, ["maxItems"] = (long)Math.Max(1, limits.MaxCommands) },
                 ["operations"] = new Dictionary<string, object> { ["type"] = "array", ["items"] = operation, ["maxItems"] = limits.AllowsOperations ? 10L : 0L },
                 ["say"] = new Dictionary<string, object> { ["type"] = "string" },
                 ["reason"] = NullableString(), ["unknown"] = new Dictionary<string, object> { ["type"] = "boolean" }
@@ -74,7 +77,8 @@ namespace Rts.Providers
             {
                 ["type"] = "object", ["additionalProperties"] = false,
                 ["required"] = new List<object> { "commands", "operations", "say", "reason", "unknown" },
-                ["properties"] = rootProperties
+                ["properties"] = rootProperties,
+                ["$defs"] = new Dictionary<string, object> { ["command"] = command }
             });
         }
 
@@ -280,6 +284,10 @@ commandsは1つまでです。operationsは空配列にしてください。scop
     public sealed class AiNameTableEntry
     {
         public string Name { get; internal set; }
+        /// <summary>短い名前表でモデルに示す対象の種類（部隊・拠点・区域・建物など）。</summary>
+        public string Category { get; internal set; }
+        /// <summary>座標や明細を含めない、現在の短い状態。</summary>
+        public string State { get; internal set; }
         public ScopeKey Scope { get; internal set; }
         public bool HasScope { get; internal set; }
         public PolicyGoal Goal { get; internal set; }
@@ -313,18 +321,60 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         public string Prompt(string instruction, ScopeKey? fixedTarget, string model)
             => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget);
 
+        public string Prompt(string instruction, string fixedTargetName)
+            => AiCommandSchema.StableInstructions + "\n" + DynamicPrompt(instruction, null, fixedTargetName);
+
+        public string Prompt(string instruction, string fixedTargetName, string model)
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, null, fixedTargetName);
+
+        public string Prompt(string instruction, ScopeKey? fixedTarget, string model, string fixedTargetName)
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget, fixedTargetName);
+
         public string DynamicPrompt(string instruction, ScopeKey? fixedTarget = null)
+            => DynamicPrompt(instruction, fixedTarget, null);
+
+        public string DynamicPrompt(string instruction, ScopeKey? fixedTarget, string fixedTargetName)
         {
             var names = new StringBuilder();
-            foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
+            foreach (var group in CompactNameTable())
             {
                 if (names.Length != 0) names.Append('、');
-                names.Append(entry.Name);
+                names.Append(group.Names).Append('[').Append(group.Category);
+                if (!string.IsNullOrEmpty(group.State)) names.Append(':').Append(group.State);
+                names.Append(']');
             }
-            string selected = fixedTarget.HasValue ? NameFor(fixedTarget.Value) : null;
+            string selected = fixedTargetName;
+            if (string.IsNullOrEmpty(selected) && fixedTarget.HasValue) selected = NameFor(fixedTarget.Value);
             return "名前表（この文字列だけを使う）:\n" + names +
                 "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
                 "\n指示:\n" + (instruction ?? "");
+        }
+
+        private sealed class CompactNameEntry
+        {
+            internal string Names;
+            internal string Category;
+            internal string State;
+        }
+
+        private IReadOnlyList<CompactNameEntry> CompactNameTable()
+        {
+            var result = new List<CompactNameEntry>();
+            var byIdentity = new Dictionary<string, CompactNameEntry>(StringComparer.Ordinal);
+            foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
+            {
+                string identity = entry.HasScope ? "s:" + entry.Scope.FactionId + ":" + (int)entry.Scope.Kind + ":" + entry.Scope.Id
+                    : entry.HasGoal ? "g:" + entry.Goal.Kind + ":" + entry.Goal.Id
+                    : "i:" + entry.Id + ":" + entry.Category + ":" + entry.State;
+                if (!byIdentity.TryGetValue(identity, out var compact))
+                {
+                    compact = new CompactNameEntry { Names = entry.Name, Category = entry.Category ?? "対象", State = entry.State ?? "" };
+                    byIdentity.Add(identity, compact); result.Add(compact);
+                }
+                else if (compact.Names.IndexOf(entry.Name, StringComparison.Ordinal) < 0)
+                    compact.Names += "/" + entry.Name;
+            }
+            return result;
         }
 
         /// <summary>Host adapters may add a visible alias without changing its contract identity.</summary>
@@ -340,7 +390,8 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                 NameTable = withoutAlias.AsReadOnly();
             }
             var entry = new AiNameTableEntry { Name = alias, Scope = existing.Scope, HasScope = existing.HasScope,
-                Goal = existing.Goal, HasGoal = existing.HasGoal, Id = existing.Id, IsOwn = existing.IsOwn, Point = existing.Point };
+                Goal = existing.Goal, HasGoal = existing.HasGoal, Id = existing.Id, IsOwn = existing.IsOwn, Point = existing.Point,
+                Category = existing.Category, State = existing.State };
             names.Add(alias, entry);
             var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
         }
@@ -348,8 +399,18 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         public void AddGoalAlias(string alias, PolicyGoal goal, bool own, SimPoint point)
         {
             if (string.IsNullOrEmpty(alias) || names.ContainsKey(alias)) return;
-            var entry = new AiNameTableEntry { Name = alias, Goal = goal, HasGoal = true, IsOwn = own, Id = goal.Id, Point = point };
+            var entry = new AiNameTableEntry { Name = alias, Goal = goal, HasGoal = true, IsOwn = own, Id = goal.Id, Point = point,
+                Category = "地点", State = "既知" };
             names.Add(alias, entry);
+            var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
+        }
+
+        /// <summary>評価やHostが、実在する建物を名前表へ追加するときに使う。</summary>
+        public void AddProducerName(string name, uint id, SimPoint point, string state = "")
+        {
+            if (string.IsNullOrEmpty(name) || names.ContainsKey(name)) return;
+            var entry = new AiNameTableEntry { Name = name, Id = id, IsOwn = true, Point = point, Category = "建物", State = state ?? "" };
+            names.Add(name, entry);
             var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
         }
 
@@ -358,12 +419,12 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             if (frame == null) throw new ArgumentNullException(nameof(frame));
             var summary = new AiSituationSummary { FactionId = frame.FactionId, Tick = frame.Tick };
             var list = new List<AiNameTableEntry>();
-            AddScope(summary, list, "全部隊", new ScopeKey(frame.FactionId, ScopeKind.All, 0), true);
+            AddScope(summary, list, "全部隊", new ScopeKey(frame.FactionId, ScopeKind.All, 0), true, "部隊", "自軍全体");
 
             var armies = (frame.Observation?.OwnArmies ?? Array.Empty<OwnArmyView>()).OrderBy(a => a.Id).ToArray();
             for (int i = 0; i < armies.Length; i++)
                 AddScope(summary, list, "第" + (i + 1).ToString(CultureInfo.InvariantCulture) + "軍",
-                    new ScopeKey(frame.FactionId, ScopeKind.Army, armies[i].Id), true);
+                    new ScopeKey(frame.FactionId, ScopeKind.Army, armies[i].Id), true, "部隊", ArmyState(armies[i]));
 
             var objectives = (frame.Observation?.Objectives ?? Array.Empty<KnownObjective>()).OrderBy(o => o.Kind).ThenBy(o => o.Id).ToArray();
             int outpostNumber = 1;
@@ -374,7 +435,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                     string name = OutpostName(objective, objectives, outpostNumber++);
                     bool own = objective.IsOwnerKnown && objective.OwnerFactionId == frame.FactionId;
                     var goal = new PolicyGoal(GoalKind.Outpost, objective.Id, objective.Position);
-                    AddScope(summary, list, name, new ScopeKey(frame.FactionId, ScopeKind.Outpost, objective.Id), own);
+                    AddScope(summary, list, name, new ScopeKey(frame.FactionId, ScopeKind.Outpost, objective.Id), own, "拠点", OwnerState(own, objective.IsOwnerKnown));
                     AddGoal(summary, list, name, goal, own, objective.Position, objective.OwnerFactionId == frame.FactionId);
                 }
                 else if (objective.Kind == GoalKind.Core && objective.IsOwnerKnown)
@@ -382,17 +443,19 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                     string name = objective.OwnerFactionId == frame.FactionId ? "自軍コア" : "敵コア";
                     var goal = new PolicyGoal(GoalKind.Core, objective.Id, objective.Position);
                     AddGoal(summary, list, name, goal, objective.OwnerFactionId == frame.FactionId, objective.Position, objective.OwnerFactionId == frame.FactionId);
+                    SetNameState(summary, name, "拠点", OwnerState(objective.OwnerFactionId == frame.FactionId, objective.IsOwnerKnown));
                 }
                 else if (objective.Kind == GoalKind.Point)
                 {
                     AddGoal(summary, list, "地点" + objective.Id.ToString(CultureInfo.InvariantCulture),
                         new PolicyGoal(GoalKind.Point, objective.Id, objective.Position), true, objective.Position, true);
+                    SetNameState(summary, "地点" + objective.Id.ToString(CultureInfo.InvariantCulture), "地点", "既知");
                 }
             }
 
             foreach (var region in (frame.Regions ?? Array.Empty<RegionView>()).OrderBy(r => r.Id))
                 AddScope(summary, list, "区域" + region.Id.ToString(CultureInfo.InvariantCulture),
-                    new ScopeKey(frame.FactionId, ScopeKind.Region, region.Id), true);
+                    new ScopeKey(frame.FactionId, ScopeKind.Region, region.Id), true, "区域", RegionState(region));
 
             if (frame.Economy != null)
             {
@@ -402,7 +465,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                     int number = buildingNumbers.TryGetValue(building.Kind, out var previous) ? previous + 1 : 1;
                     buildingNumbers[building.Kind] = number;
                     string name = BuildingName(building.Kind) + number.ToString(CultureInfo.InvariantCulture);
-                    AddProducer(summary, list, name, building.Id, building.Center);
+                    AddProducer(summary, list, name, building.Id, building.Center, BuildingState(building));
                 }
             }
             summary.NameTable = list.AsReadOnly();
@@ -459,47 +522,91 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             return null;
         }
 
-        private static void AddScope(AiSituationSummary s, List<AiNameTableEntry> list, string name, ScopeKey scope, bool own)
+        private static void AddScope(AiSituationSummary s, List<AiNameTableEntry> list, string name, ScopeKey scope, bool own,
+            string category = "対象", string state = "")
         {
             if (!s.names.ContainsKey(name))
             {
-                var entry = new AiNameTableEntry { Name = name, Scope = scope, HasScope = true, Id = scope.Id, IsOwn = own };
+                var entry = new AiNameTableEntry { Name = name, Scope = scope, HasScope = true, Id = scope.Id, IsOwn = own,
+                    Category = category, State = state };
                 s.names.Add(name, entry); list.Add(entry);
             }
         }
         private static void AddGoal(AiSituationSummary s, List<AiNameTableEntry> list, string name, PolicyGoal goal, bool own, SimPoint point, bool addAlias)
         {
-            var entry = new AiNameTableEntry { Name = name, Goal = goal, HasGoal = true, Id = goal.Id, IsOwn = own, Point = point };
+            var entry = new AiNameTableEntry { Name = name, Goal = goal, HasGoal = true, Id = goal.Id, IsOwn = own, Point = point,
+                Category = "拠点", State = OwnerState(own, true) };
             if (s.names.TryGetValue(name, out var old)) { old.Goal = goal; old.HasGoal = true; old.IsOwn = old.IsOwn || own; }
             else { s.names.Add(name, entry); list.Add(entry); }
         }
-        private static void AddProducer(AiSituationSummary s, List<AiNameTableEntry> list, string name, uint id, SimPoint point)
+        private static void AddProducer(AiSituationSummary s, List<AiNameTableEntry> list, string name, uint id, SimPoint point, string state)
         {
-            var entry = new AiNameTableEntry { Name = name, Id = id, IsOwn = true, Point = point };
+            var entry = new AiNameTableEntry { Name = name, Id = id, IsOwn = true, Point = point, Category = "建物", State = state };
             if (!s.names.ContainsKey(name)) { s.names.Add(name, entry); list.Add(entry); }
         }
+        private static void SetNameState(AiSituationSummary s, string name, string category, string state)
+        {
+            if (s.names.TryGetValue(name, out var entry)) { entry.Category = category; entry.State = state; }
+        }
+
+        private static string ArmyState(OwnArmyView army)
+            => UnitName(army.Kind) + army.AliveCount.ToString(CultureInfo.InvariantCulture);
+
+        private static string UnitName(UnitKind kind)
+        {
+            switch (kind)
+            {
+                case UnitKind.Infantry: return "歩兵";
+                case UnitKind.Scout: return "斥候";
+                case UnitKind.Villager: return "村人";
+                case UnitKind.Archer: return "弓兵";
+                case UnitKind.Cavalry: return "騎兵";
+                default: return kind.ToString();
+            }
+        }
+
+        private static string OwnerState(bool own, bool known) => known ? (own ? "自軍" : "敵/他") : "不明";
+
+        private static string RegionState(RegionView region)
+            => (region.Control == RegionControl.Human ? "人" : "AI") + "/" + region.EconomyPolicy;
+
+        private static string BuildingState(BuildingView building)
+            => (building.Complete ? "完成" : "建設中") + (building.Queued > 0 ? ",訓練" + building.Queued : "");
+
         private static string BuildText(FactionFrame frame, IReadOnlyList<OwnArmyView> armies, IReadOnlyList<KnownObjective> objectives)
         {
             var b = new StringBuilder();
-            b.Append("tick ").Append(frame.Tick.ToString(CultureInfo.InvariantCulture)).Append("。自軍の軍団 ").Append(armies.Count).Append(" 個。\n");
-            for (int i = 0; i < armies.Count; i++)
-                b.Append("自軍").Append("第").Append(i + 1).Append("軍(ID=").Append(armies[i].Id).Append(") 種別=").Append(armies[i].Kind).Append(" 生存=").Append(armies[i].AliveCount).Append("。\n");
+            b.Append("tick ").Append(frame.Tick.ToString(CultureInfo.InvariantCulture)).Append("。自軍部隊=").Append(armies.Count).Append("。\n");
+            foreach (var kind in armies.Select(a => a.Kind).Distinct().OrderBy(k => (int)k))
+            {
+                var same = armies.Where(a => a.Kind == kind).ToArray();
+                b.Append(UnitName(kind)).Append(same.Sum(a => a.AliveCount)).Append("（").Append(same.Length).Append("部隊）。");
+            }
+            b.Append("\n");
             int visible = frame.Observation?.VisibleEnemies?.Count ?? 0;
             int contacts = frame.Observation?.Contacts?.Count ?? 0;
-            b.Append("現在見えている敵=").Append(visible).Append("、既知の接触=").Append(contacts).Append("（未観測の敵は含めない）。\n");
-            foreach (var objective in objectives)
+            b.Append("現在見えている敵=").Append(visible).Append("、既知の接触=").Append(contacts).Append("。\n");
+            var objectiveGroups = objectives.GroupBy(o => o.Kind).OrderBy(g => (int)g.Key);
+            foreach (var group in objectiveGroups)
             {
-                b.Append("既知地点=").Append(objective.Kind).Append('#').Append(objective.Id);
-                if (objective.IsOwnerKnown) b.Append(" 所有=").Append(objective.OwnerFactionId == frame.FactionId ? "自軍" : "敵/他");
-                else b.Append(" 所有者不明");
-                b.Append("。\n");
+                b.Append(group.Key).Append("=").Append(group.Count()).Append("件（");
+                b.Append(string.Join(",", group.Select(o => OwnerState(o.OwnerFactionId == frame.FactionId, o.IsOwnerKnown)).Distinct(StringComparer.Ordinal)));
+                b.Append("）。");
             }
+            b.Append("\n");
             if (frame.Economy != null)
+            {
                 b.Append("自軍内政: 食料=").Append(frame.Economy.Food).Append(" 木材=").Append(frame.Economy.Wood)
                     .Append(" 人口=").Append(frame.Economy.Population).Append('/').Append(frame.Economy.PopulationCap)
-                    .Append(" 自動内政=").Append(frame.Economy.AutoEconomy ? "オン" : "オフ").Append("。\n");
-            string text = b.ToString();
-            return text.Length <= 8000 ? text : text.Substring(0, 7997) + "...";
+                    .Append(" 自動=").Append(frame.Economy.AutoEconomy ? "オン" : "オフ");
+                var buildingCounts = frame.Economy.Buildings.Where(x => x.FactionId == frame.FactionId).GroupBy(x => x.Kind)
+                    .OrderBy(x => (int)x.Key).Select(x => BuildingName(x.Key) + x.Count().ToString(CultureInfo.InvariantCulture));
+                b.Append(" 建物=").Append(string.Join(",", buildingCounts));
+                var resourceCounts = frame.Economy.Resources.GroupBy(x => x.Kind).OrderBy(x => (int)x.Key)
+                    .Select(x => x.Key + x.Count().ToString(CultureInfo.InvariantCulture));
+                b.Append(" 資源=").Append(string.Join(",", resourceCounts)).Append("。\n");
+            }
+            return b.ToString();
         }
     }
 
@@ -527,6 +634,8 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         public AiSituationSummary Summary { get; set; }
         public bool HasFixedTarget { get; set; }
         public ScopeKey FixedTarget { get; set; }
+        /// <summary>ScopeKeyで表せない建物なども、選択した名前をそのままプロンプトへ渡す。</summary>
+        public string FixedTargetName { get; set; }
         public long StartedTick { get; set; }
         public int MaxObservationAgeTicks { get; set; } = 240;
         public long DeadlineTick { get; set; }
@@ -854,6 +963,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         public string Instruction { get; set; }
         public ScopeKey FixedTarget { get; set; }
         public bool HasFixedTarget { get; set; }
+        public string FixedTargetName { get; set; }
         public AiSituationSummary Summary { get; set; }
         public string Model { get; set; }
         public long StartedTick { get; set; }
@@ -891,7 +1001,8 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             if (request == null) throw new ArgumentNullException(nameof(request));
             string json = answer(request);
             if (json == null) throw new InvalidOperationException("偽物の参謀がnullを返した");
-            int inputTokens = AiCostCalculator.EstimateTokens(request.Summary == null ? request.Instruction : request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null));
+            int inputTokens = AiCostCalculator.EstimateTokens(request.Summary == null ? request.Instruction : request.Summary.Prompt(request.Instruction,
+                request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.Model, request.FixedTargetName));
             int outputTokens = AiCostCalculator.EstimateTokens(json);
             pending.Add(new Pending { Ready = checked(request.StartedTick + delayTicks), Reply = new InterpreterReply { RequestId = request.RequestId, Json = json, Model = request.Model ?? "gpt-6-luna", Usage = new AiTokenUsage(inputTokens, outputTokens) } });
         }
@@ -919,15 +1030,18 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         private readonly Dictionary<ulong, Open> open = new Dictionary<ulong, Open>();
         private ulong nextId = 1;
         public CommandInterpreterCoordinator(ICommandInterpreter interpreter) { this.interpreter = interpreter ?? throw new ArgumentNullException(nameof(interpreter)); }
-        public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null, OperationSource operationSource = OperationSource.Human)
+        public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null,
+            OperationSource operationSource = OperationSource.Human, string fixedTargetName = null)
         {
             var summary = AiSituationSummary.From(frame); ulong id = nextId++;
             var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
-            var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks), MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder, OperationSource = operationSource };
+            var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks),
+                MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder, OperationSource = operationSource, FixedTargetName = fixedTargetName };
             if (fixedTarget.HasValue) { context.HasFixedTarget = true; context.FixedTarget = fixedTarget.Value; }
             string modelName = selected.Model;
             open.Add(id, new Open { Context = context, Model = modelName });
-            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick, OperationSource = operationSource });
+            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue || !string.IsNullOrEmpty(fixedTargetName),
+                FixedTargetName = fixedTargetName, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick, OperationSource = operationSource });
             return id;
         }
         private static AiCommandInterpretationResult LimitToModel(string model, AiCommandInterpretationResult result) => AiModelLimits.Apply(model, result);

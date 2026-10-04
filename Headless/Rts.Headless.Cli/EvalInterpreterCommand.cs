@@ -68,7 +68,8 @@ internal static class EvalInterpreterCommand
         var selected = ParseSelected(item.Selected);
         string providerModel = model.Equals("fake", StringComparison.OrdinalIgnoreCase) ? "local-llm" : model;
         AiModelCatalog.Get(providerModel);
-        var context = new AiInterpretationContext { Frame = frame, Summary = summary, HasFixedTarget = selected.HasValue, FixedTarget = selected.GetValueOrDefault(),
+        string selectedName = SelectedName(item.Selected);
+        var context = new AiInterpretationContext { Frame = frame, Summary = summary, HasFixedTarget = selected.HasValue || !string.IsNullOrEmpty(selectedName), FixedTarget = selected.GetValueOrDefault(), FixedTargetName = selectedName,
             StartedTick = frame.Tick, DeadlineTick = frame.Tick + AiModelCatalog.Get(providerModel).DeadlineTicks, MaxObservationAgeTicks = AiModelCatalog.Get(providerModel).DeadlineTicks,
             PlacementFinder = new DelegateAiPlacementFinder((_, __, ___) => Tuple.Create(true, 1, "")) };
         long start = Stopwatch.GetTimestamp();
@@ -79,14 +80,14 @@ internal static class EvalInterpreterCommand
             string answer = FakeAnswer(item);
             answerForCsv = answer;
             var interpreted = AiResponseInterpreter.Interpret(answer, context);
-            var usage = new AiTokenUsage(AiCostCalculator.EstimateTokens(summary.Prompt(item.Text)), AiCostCalculator.EstimateTokens(answer));
+            var usage = new AiTokenUsage(AiCostCalculator.EstimateTokens(summary.Prompt(item.Text, selected, providerModel, selectedName)), AiCostCalculator.EstimateTokens(answer));
             reply = new InterpretedReply { Result = interpreted, Usage = usage, CostYen = AiCostCalculator.Calculate(providerModel, usage) };
         }
         else
         {
             using (var interpreter = CreateInterpreter(model))
             {
-                var request = new InterpreterRequest { RequestId = 1, FactionId = frame.FactionId, Instruction = item.Text, FixedTarget = selected.GetValueOrDefault(), HasFixedTarget = selected.HasValue,
+                var request = new InterpreterRequest { RequestId = 1, FactionId = frame.FactionId, Instruction = item.Text, FixedTarget = selected.GetValueOrDefault(), HasFixedTarget = selected.HasValue || !string.IsNullOrEmpty(selectedName), FixedTargetName = selectedName,
                     Summary = summary, Model = providerModel, StartedTick = frame.Tick, DeadlineTick = context.DeadlineTick };
                 interpreter.Request(request);
                 InterpreterReply transportReply = null;
@@ -141,12 +142,24 @@ internal static class EvalInterpreterCommand
             shouldNotRefuse = new { count = nonRefused.Length, falseRefusal = nonRefused.Count(r => r.FalseRefusal), rate = Rate(nonRefused.Count(r => r.FalseRefusal), nonRefused.Length) },
             responseTimeMs = new { p50 = Percentile(rows.Select(r => r.ElapsedMs)), p95 = Percentile(rows.Select(r => r.ElapsedMs), .95) },
             costYen = new { perRequest = rows.Count == 0 ? 0m : rows.Sum(r => r.CostYen) / rows.Count, total = rows.Sum(r => r.CostYen) },
-            tokens = new { input = rows.Sum(r => r.InputTokens), output = rows.Sum(r => r.OutputTokens), cacheRead = rows.Sum(r => r.CacheReadInputTokens) },
+            tokens = new
+            {
+                input = rows.Sum(r => r.InputTokens), output = rows.Sum(r => r.OutputTokens), cacheRead = rows.Sum(r => r.CacheReadInputTokens),
+                average = new
+                {
+                    input = Average(rows.Select(r => r.InputTokens)), output = Average(rows.Select(r => r.OutputTokens)),
+                    cacheRead = Average(rows.Select(r => r.CacheReadInputTokens))
+                }
+            },
             csv = "問題ごとの AnswerJson / Score / トークン数を --csv の CSV に保存"
         };
     }
 
     private static decimal Rate(int numerator, int denominator) => denominator == 0 ? 0m : (decimal)numerator / denominator;
+    private static decimal Average(IEnumerable<int> values)
+    {
+        var array = values.ToArray(); return array.Length == 0 ? 0m : (decimal)array.Sum() / array.Length;
+    }
     private static long Percentile(IEnumerable<long> values, double percentile = .5)
     {
         var sorted = values.OrderBy(x => x).ToArray(); if (sorted.Length == 0) return 0;
@@ -296,12 +309,26 @@ internal static class EvalInterpreterCommand
     }
     private static void AddEvaluationAliases(AiSituationSummary s)
     {
-        s.AddAlias("北軍", "第1軍"); s.AddAlias("南軍", "第2軍"); s.AddAlias("南にいる部隊", "第2軍"); s.AddAlias("斥候", "第3軍"); s.AddAlias("南の予備", "第3軍"); s.AddAlias("自分のコア", "自軍コア"); s.AddAlias("敵のコア", "敵コア"); s.AddAlias("支城の区域", "区域2"); s.AddAlias("兵舎1", "第1軍"); s.AddAlias("兵舎", "兵舎1"); s.AddAlias("北の拠点の近く", "北の拠点");
+        s.AddAlias("北軍", "第1軍"); s.AddAlias("南軍", "第2軍"); s.AddAlias("南にいる部隊", "第2軍"); s.AddAlias("斥候", "第3軍"); s.AddAlias("南の予備", "第3軍"); s.AddAlias("自分のコア", "自軍コア"); s.AddAlias("敵のコア", "敵コア"); s.AddAlias("支城の区域", "区域2");
+        s.AddProducerName("兵舎1", 1, default, "完成、訓練中"); s.AddProducerName("兵舎", 1, default, "完成、訓練中"); s.AddGoalAlias("北の拠点の近く", new PolicyGoal(GoalKind.Point, 1, default), true, default);
         s.AddGoalAlias("区域1の中心", new PolicyGoal(GoalKind.Point, 101, default), true, default);
         s.AddGoalAlias("東の資源の固まりの近く", new PolicyGoal(GoalKind.Point, 102, default), true, default);
     }
     private static ScopeKey? ParseSelected(string selected)
-    { if (string.IsNullOrEmpty(selected)) return null; int c = selected.IndexOf(':'); if (c < 0) return null; ScopeKind kind = selected.StartsWith("Army:", StringComparison.Ordinal) ? ScopeKind.Army : selected.StartsWith("Outpost:", StringComparison.Ordinal) ? ScopeKind.Outpost : ScopeKind.Region; uint id = uint.TryParse(selected.Substring(c + 1).Replace("第", "").Replace("軍", ""), out var n) ? n : 1; return new ScopeKey(1, kind, id); }
+    {
+        if (string.IsNullOrEmpty(selected)) return null;
+        int c = selected.IndexOf(':'); if (c < 0) return null;
+        if (selected.StartsWith("Building:", StringComparison.Ordinal)) return null;
+        ScopeKind kind = selected.StartsWith("Army:", StringComparison.Ordinal) ? ScopeKind.Army : selected.StartsWith("Outpost:", StringComparison.Ordinal) ? ScopeKind.Outpost : ScopeKind.Region;
+        string value = selected.Substring(c + 1);
+        uint id = uint.TryParse(value.Replace("第", "").Replace("軍", "").Replace("区域", ""), out var n) ? n : 1;
+        return new ScopeKey(1, kind, id);
+    }
+    private static string SelectedName(string selected)
+    {
+        if (string.IsNullOrEmpty(selected)) return null;
+        int c = selected.IndexOf(':'); return c < 0 ? selected : selected.Substring(c + 1);
+    }
     private static bool IsUnknown(JsonElement e) => e.ValueKind == JsonValueKind.String && e.GetString() == "unknown";
     private static List<EvalCase> Read(string path)
     { var result = new List<EvalCase>(); foreach (string line in File.ReadLines(path, Encoding.UTF8)) { if (string.IsNullOrWhiteSpace(line)) continue; using var doc = JsonDocument.Parse(line); var root = doc.RootElement; result.Add(new EvalCase { Id = root.GetProperty("id").GetInt32(), Text = root.GetProperty("text").GetString() ?? "", Selected = root.GetProperty("selected").ValueKind == JsonValueKind.Null ? null : root.GetProperty("selected").GetString(), Expect = root.GetProperty("expect").Clone(), Reason = root.TryGetProperty("reason", out var reason) ? reason.GetString() : "", Tags = root.GetProperty("tags").EnumerateArray().Select(x => x.GetString()).ToArray() }); } return result; }
