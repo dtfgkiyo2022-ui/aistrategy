@@ -117,7 +117,8 @@ namespace Rts.Simulation
         private int AutoVillagerTargetFor(uint faction)
         {
             var rules = world.Config.Economy;
-            return MetropolisAllowed(faction) ? checked(rules.AutoVillagerTarget * 3 / 2) : rules.AutoVillagerTarget;
+            return EconomyDecision.VillagerTarget(EconomyScaleOn, world.Economies[faction - 1].Age, rules.AutoVillagerTarget,
+                MetropolisAllowed(faction));
         }
 
         /// <summary>V3-17 #2: a researched metropolis villager answers a nearby raid with a small deterministic blow.</summary>

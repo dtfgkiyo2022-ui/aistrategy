@@ -70,6 +70,8 @@ namespace Rts.Simulation
         public bool Regions;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
+        /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
+        public bool EconomyScale;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;

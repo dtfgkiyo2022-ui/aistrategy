@@ -26,34 +26,61 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             bool hasBarracks = false, ready = false;
-            int barracks = -1;
+            int barracks = -1, barracksCount = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
                 hasBarracks = true;
+                barracksCount++;
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
                 if (b.Complete && !b.Held && barracks < 0) { ready = true; barracks = i; }
             }
-            if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
+            if (EconomyScaleOn)
+            {
+                int desired = Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
+                bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
+                if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood, rules.BarracksWoodCost))
+                    PlaceBarracks(faction);
+            }
+            else if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
                 PlaceBarracks(faction);
             DecideTown(faction);
             DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
-            ref var building = ref world.Buildings[barracks];
             if (CultAllowed(faction) && !DecideCultMonastery(faction)) return;
+            ref var first = ref world.Buildings[barracks];
             if (CultAllowed(faction) && DecideCultMonk(faction)) return;
-            if (DecideMonk(faction, ref building)) return;
-            if (DecideScout(faction, ref building)) return;
+            if (DecideMonk(faction, ref first)) return;
+            if (DecideScout(faction, ref first)) return;
+            if (!EconomyScaleOn)
+            {
+                DecideInfantry(faction, ref first, ready);
+                return;
+            }
+            // With scaling, each finished and unheld barracks gets its own short queue. The scan is in stable
+            // building-id order, so replay order does not depend on collection enumeration.
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var building = ref world.Buildings[i];
+                if (!building.Alive || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Barracks || building.Held) continue;
+                DecideInfantry(faction, ref building, true);
+            }
+        }
+
+        private bool DecideInfantry(uint faction, ref BuildingState building, bool ready)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, PopCapFor(faction), HasInfantryRoom(faction))
-                || economy.Metal < InfantryMetalFor(faction) || (SavingToAdvance(faction) && economy.Civ == CivKind.Primitive)) return;
+                || economy.Metal < InfantryMetalFor(faction) || (SavingToAdvance(faction) && economy.Civ == CivKind.Primitive)) return false;
             // V3-5 (32 #8): in the second age, one in three is the civilisation's own unit when it can be paid.
             UnitKind kind;
             // V3-6: steel is the automatic economy's explicit signal to replace an infantry with a heavy infantry.
             // It is checked before the civilisation's one-in-three special unit so the stock is never silently ignored.
-            if (ProcessingAvailable(faction) && economy.Steel >= world.Config.Economy.HeavyInfantrySteelCost
+            if (ProcessingAvailable(faction) && economy.Steel >= rules.HeavyInfantrySteelCost
                 && HasRoomFor(faction, UnitKind.HeavyInfantry) && CanPay(faction, UnitKind.HeavyInfantry)) kind = UnitKind.HeavyInfantry;
             else
             {
@@ -61,6 +88,7 @@ namespace Rts.Simulation
                 kind = special != 0 && CanPay(faction, special) && 2 * CountClass(faction, special) < CountClass(faction, UnitKind.Infantry) ? special : UnitKind.Infantry;
             }
             Enqueue(faction, ref building, kind);
+            return true;
         }
 
         /// <summary>Living line soldiers trained (or queued) as <paramref name="kind"/>; infantry counts those of no class.</summary>
@@ -420,11 +448,11 @@ namespace Rts.Simulation
         }
 
         /// <summary>The ring search around any <paramref name="centre"/> cell (the clearance from the own core still applies).</summary>
-        private int FindSiteNear(uint faction, int size, int centre)
+        private int FindSiteNear(uint faction, int size, int centre, int searchRadius = SiteSearchRadiusCells)
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
-            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+            for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
                     {
@@ -702,7 +730,14 @@ namespace Rts.Simulation
         }
 
         /// <summary>The same rule the reinforcement assignment uses: any non-scout army with a free slot.</summary>
-        private bool HasInfantryRoom(uint faction) => HasRoomFor(faction, UnitKind.Infantry);
+        private bool HasInfantryRoom(uint faction)
+        {
+            if (HasRoomFor(faction, UnitKind.Infantry)) return true;
+            // ArmyGrowth creates the next field army when the queued soldier is spawned. Allow the scaled economy
+            // to reach that spawn point instead of treating a full existing army as a permanent queue prohibition.
+            return EconomyScaleOn && world.Config.Economy.ArmyGrowth
+                && world.Factions[faction - 1].ArmyIds.Length < 12;
+        }
 
         private int SizeOf(BuildingKind kind)
         {

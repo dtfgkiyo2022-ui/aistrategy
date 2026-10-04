@@ -62,6 +62,9 @@ namespace Rts.Simulation
         private const int TownExtensionId = 11;
         private const int TownExtensionVersion = 1;
         private const int TownExtensionDataLength = 9 * sizeof(int);
+        private const int EconomyScaleExtensionId = 12;
+        private const int EconomyScaleExtensionVersion = 1;
+        private const int EconomyScaleExtensionDataLength = sizeof(int);
         private const int RegionExtensionId = 13;
         private const int RegionExtensionVersion = 1;
         private const int RegionExtensionDataLength = sizeof(int);
@@ -84,6 +87,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(CoreDefenceExtensionId, CoreDefenceExtensionVersion, CoreDefenceExtensionDataLength),
             new ExtensionRegistration(ArmyGrowthExtensionId, ArmyGrowthExtensionVersion, ArmyGrowthExtensionDataLength),
             new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength),
+            new ExtensionRegistration(EconomyScaleExtensionId, EconomyScaleExtensionVersion, EconomyScaleExtensionDataLength),
             new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength)
         };
 
@@ -593,6 +597,7 @@ namespace Rts.Simulation
                 else if (id == CoreDefenceExtensionId) ReadCoreDefenceExtension(extension, c.Economy);
                 else if (id == ArmyGrowthExtensionId) ReadArmyGrowthExtension(extension, c.Economy);
                 else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
+                else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
                 else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
@@ -634,6 +639,7 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
             extensions.RemoveAll(extension => extension != null && extension.Id == ArmyGrowthExtensionId && !c.Economy.ArmyGrowth);
             extensions.RemoveAll(extension => extension != null && extension.Id == TownExtensionId && !c.Economy.Towns);
+            extensions.RemoveAll(extension => extension != null && extension.Id == EconomyScaleExtensionId && !c.Economy.EconomyScale);
             extensions.RemoveAll(extension => extension != null && extension.Id == RegionExtensionId && !c.Economy.Regions);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -722,6 +728,14 @@ namespace Rts.Simulation
                     extensions[i] = CreateTownExtension(c.Economy);
                 }
             if (c.Economy.Towns && !hasTown) extensions.Add(CreateTownExtension(c.Economy));
+            bool hasEconomyScale = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != EconomyScaleExtensionId) continue;
+                hasEconomyScale = true;
+                extensions[i] = CreateEconomyScaleExtension(c.Economy);
+            }
+            if (c.Economy.EconomyScale && !hasEconomyScale) extensions.Add(CreateEconomyScaleExtension(c.Economy));
             bool hasRegions = false;
             for (int i = 0; i < extensions.Count; i++)
                 if (extensions[i] != null && extensions[i].Id == RegionExtensionId)
@@ -827,6 +841,28 @@ namespace Rts.Simulation
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid army-growth flag.");
                 e.ArmyGrowth = enabled != 0;
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing army-growth extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateEconomyScaleExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.EconomyScale ? 1 : 0);
+                return new ScenarioExtensionData { Id = EconomyScaleExtensionId, Version = EconomyScaleExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadEconomyScaleExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid economy-scale flag.");
+                e.EconomyScale = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing economy-scale extension data.");
             }
         }
 
