@@ -259,7 +259,8 @@ namespace Rts.Providers
                     new Dictionary<string, object> { ["type"] = "text", ["text"] = AiCommandSchema.ForModel(request.Model), ["cache_control"] = new Dictionary<string, object> { ["type"] = "ephemeral" } },
                     new Dictionary<string, object> { ["type"] = "text", ["text"] = "JSON Schema:\n" + schema }
                 },
-                ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) } },
+                ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction,
+                    request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName) } },
                 ["output_config"] = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(schema) } }
             });
         }
@@ -280,7 +281,8 @@ namespace Rts.Providers
             var messages = new List<object>
             {
                 new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.ForModel(request.Model) + "\nJSON Schema:\n" + schema },
-                new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) }
+                new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction,
+                    request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName) }
             };
             var body = new Dictionary<string, object>
             {
@@ -302,7 +304,8 @@ namespace Rts.Providers
         protected override void AddHeaders(HttpRequestMessage request, string key) { }
         protected override string BuildBody(InterpreterRequest request)
         {
-            var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary, Model = request.Model };
+            var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary,
+                Model = request.Model, HasFixedTarget = request.HasFixedTarget, FixedTarget = request.FixedTarget, FixedTargetName = request.FixedTargetName };
             // OpenAI's newer models only take max_completion_tokens; OpenAI-compatible local servers (Ollama) take max_tokens.
             return OpenAiCommandInterpreter.OpenAiBody(copy, localModel, false);
         }
