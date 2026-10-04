@@ -123,9 +123,47 @@ namespace Rts.UnityHost
         private bool matchRestartRequested;
         private JevPolicyProvider jev;
         private HttpJevTransport jevTransport;
+        private IDisposable judgementTransport;
+        private LiveAiCommandPort liveAi;
+
+        [SerializeField] private bool fineJudgementEnabled;
+        [SerializeField] private bool fineJudgementLocal;
+        [SerializeField] private int fineJudgementIntervalTicks = 200;
+        [SerializeField] private bool developmentAiEntry = true;
+        [SerializeField] private string developmentAiInstruction = "北の拠点を守れ";
+        [SerializeField] private string developmentAiModel = "local-llm";
+        private string developmentAiMessage = "";
+
+        /// <summary>細かい判断を試し遊びの陣営1で使うか。変更は次の試合から有効です。</summary>
+        public bool FineJudgementEnabled
+        {
+            get { return fineJudgementEnabled; }
+            set { if (value == fineJudgementEnabled) return; fineJudgementEnabled = value; matchRestartRequested = true; }
+        }
+
+        /// <summary>Jev／ローカル LLM の判断間隔。20tick 未満は決定機会を壊さないため20に丸めます。</summary>
+        public int FineJudgementIntervalTicks
+        {
+            get { return fineJudgementIntervalTicks; }
+            set { int normalized = Math.Max(20, value); if (normalized == fineJudgementIntervalTicks) return; fineJudgementIntervalTicks = normalized; matchRestartRequested = true; }
+        }
+
+        public string FineJudgementModel { get { return fineJudgementLocal ? "local-llm" : "jev"; } }
 
         /// <summary>Set while a match is running with an external provider, for the display to read.</summary>
         public JevPolicyProvider ExternalProvider { get { return jev; } }
+
+        /// <summary>画面担当が読む試し遊びのAI受け口。状態・費用・モデル一覧はこのオブジェクトから取得します。</summary>
+        public LiveAiCommandPort AiCommands { get { return liveAi; } }
+        public System.Collections.Generic.IReadOnlyList<LiveAiModelOption> AiModels => liveAi == null
+            ? Array.Empty<LiveAiModelOption>() : liveAi.Models;
+        public System.Collections.Generic.IReadOnlyList<LiveAiInstruction> AiInstructions => liveAi == null
+            ? Array.Empty<LiveAiInstruction>() : liveAi.Instructions;
+        public System.Collections.Generic.IReadOnlyList<LiveOperationView> AiOperations => liveAi == null
+            ? Array.Empty<LiveOperationView>() : liveAi.Operations;
+        public decimal AiMatchCostYen => liveAi == null ? 0m : liveAi.MatchCostYen;
+        public decimal AiRemainingBudgetYen => liveAi == null ? 3m : liveAi.RemainingBudgetYen;
+        public decimal AiRemainingFreeYen => 0m;
 
         public bool KeyAvailable { get { return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(KeyVariable)); } }
 
@@ -161,10 +199,18 @@ namespace Rts.UnityHost
             if (jev != null) jev.Dispose();
             jev = null;
             jevTransport = null;
+            if (judgementTransport != null) judgementTransport.Dispose();
+            judgementTransport = null;
             gatewayOrders = 0;
         }
 
-        private void OnDestroy() { StopExternal(); }
+        private void StopLiveAi()
+        {
+            if (liveAi != null) liveAi.Dispose();
+            liveAi = null;
+        }
+
+        private void OnDestroy() { StopLiveAi(); StopExternal(); }
 
         // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
         // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
@@ -255,6 +301,7 @@ namespace Rts.UnityHost
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
+            StopLiveAi();
             StopExternal();
             IPolicyProvider external = null;
             if (ExternalPolicyProvider != null) external = ExternalPolicyProvider();
@@ -265,9 +312,32 @@ namespace Rts.UnityHost
                 jev.Observe = record => { if (record.OrderCount > 0) gatewayOrders++; };
                 external = jev;
             }
+            else if (fineJudgementEnabled)
+            {
+                if (fineJudgementLocal)
+                {
+                    var local = new LocalLlmTransport(
+                        Environment.GetEnvironmentVariable("LOCAL_LLM_URL") ?? LocalLlmTransport.DefaultUrl,
+                        Environment.GetEnvironmentVariable("LOCAL_LLM_MODEL") ?? LocalLlmTransport.DefaultModel);
+                    judgementTransport = local;
+                    jev = new JevPolicyProvider(local);
+                    external = jev;
+                }
+                else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TYPESAFE_API_KEY")))
+                {
+                    jevTransport = new HttpJevTransport(() => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
+                    judgementTransport = jevTransport;
+                    jev = new JevPolicyProvider(jevTransport);
+                    external = jev;
+                }
+            }
+            AutonomousPollSchedule externalSchedule = null;
+            if (external != null)
+                externalSchedule = AutonomousPollSchedule.OnChange(fineJudgementEnabled ? Math.Max(20, fineJudgementIntervalTicks) : 600);
             gateway = new CommandGateway(simulation, provider, null,
-                external == null ? null : AutonomousPollSchedule.OnChange(600), external);
+                externalSchedule, external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
+            liveAi = new LiveAiCommandPort(gateway, () => Frame);
             enemyFactionId = 3 - viewFactionId;
             enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
@@ -307,12 +377,29 @@ namespace Rts.UnityHost
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>
         public ulong Submit(UserPolicyIntent intent) { return port.Submit(intent); }
 
+        /// <summary>画面から呼ぶ参謀入口。予約はこの呼び出しの中で話し始めた時点に開きます。</summary>
+        public ulong Speak(string instruction, ScopeKey? fixedTarget, string model)
+        {
+            if (liveAi == null) throw new InvalidOperationException("試合が開始されていません。");
+            return liveAi.BeginInterpretation(instruction, fixedTarget, model);
+        }
+
+        public decimal EstimateAiCost(string instruction, string model, ScopeKey? fixedTarget = null)
+        {
+            if (liveAi == null) throw new InvalidOperationException("試合が開始されていません。");
+            return liveAi.Estimate(instruction, model, fixedTarget);
+        }
+
+        /// <summary>LLMを呼ばず、直前の解釈中／実行中の指示を取り消します。</summary>
+        public bool CancelLastAiInstruction() { return liveAi != null && liveAi.CancelLast(); }
+
         public void StepOnce()
         {
             if (simulation == null || HasEnded) return;
             gateway.Step();
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
+            if (liveAi != null) liveAi.Poll(frame.Tick);
             if (frame.Result.HasEnded) return;
             enemy.Step(simulation.Capture(enemyFactionId));
             own.Step(simulation.Capture(ownFactionId));
@@ -346,6 +433,29 @@ namespace Rts.UnityHost
                 accumulated -= tickSeconds;
                 StepOnce();
             }
+        }
+
+        /// <summary>
+        /// Temporary play-test entry owned by the host. The production chat UI can call Speak directly; this small
+        /// inspector-friendly panel keeps the G-5 path usable before that UI exists.
+        /// </summary>
+        private void OnGUI()
+        {
+            if (!developmentAiEntry || liveAi == null || simulation == null) return;
+            var rect = new Rect(Screen.width - 370f, 8f, 360f, 146f);
+            GUI.Box(rect, "試し遊び：参謀（開発用）");
+            developmentAiInstruction = GUI.TextField(new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f), developmentAiInstruction ?? "");
+            developmentAiModel = GUI.TextField(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), developmentAiModel ?? "gpt-6-luna");
+            if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る"))
+            {
+                try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = "解釈中"; }
+                catch (Exception e) { developmentAiMessage = e.Message; }
+            }
+            if (GUI.Button(new Rect(rect.x + 8f, rect.y + 84f, 132f, 24f), "直前を取り消す"))
+                developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
+            GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f), developmentAiMessage ?? "");
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 114f, rect.width - 16f, 24f),
+                "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
         }
     }
 }
