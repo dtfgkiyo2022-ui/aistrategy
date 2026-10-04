@@ -55,7 +55,7 @@ namespace Rts.Simulation
                 world.Tick = tick;
                 phaseOrdinal = 0;
                 commandEvents.Clear();
-                Phase("Commands", () => { ApplyInputs(inputs); ApplyPendingCommands(); ComposePolicies(); });
+                Phase("Commands", () => { ApplyInputs(inputs); GenerateLatePushCommands(); ApplyPendingCommands(); ComposePolicies(); });
                 Phase("AI", () => { DecideArmies(); DecideEconomy(); });
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", GenerateIntents);

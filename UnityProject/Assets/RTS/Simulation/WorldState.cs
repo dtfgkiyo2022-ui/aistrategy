@@ -532,6 +532,8 @@ namespace Rts.Simulation
             Require(!e.CoreDefence || (e.Enabled && e.CoreDefenceRange >= 0 && e.CoreDefenceRange <= 64
                 && e.CoreDefenceDamage >= 0 && e.CoreDefenceIntervalTicks > 0
                 && e.CoreDefenceMaxTargets > 0 && e.CoreDefenceMaxTargets <= 16), "Invalid core defence rules.");
+            Require(!e.LatePush || (e.Enabled && e.LatePushAfterTicks > 0 && e.LatePushAdvantageAfterTicks > 0
+                && e.LatePushEnemyMultiplierPermille > 0 && e.LatePushEnemyMultiplierPermille <= 10000), "Invalid late-push rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
                 && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
                 && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
@@ -760,7 +762,10 @@ namespace Rts.Simulation
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
             return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, LatePush = e.LatePush,
+                LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
+                LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
+                PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
@@ -784,7 +789,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns, Regions = e.Regions,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,
