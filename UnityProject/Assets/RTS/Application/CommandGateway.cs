@@ -29,9 +29,19 @@ namespace Rts.Application
             internal bool Completed;
             internal ReasonCode Invalidated;
         }
+        private sealed class InterpretationHold
+        {
+            internal ulong Id;
+            internal uint FactionId;
+            internal bool HasTarget;
+            internal ScopeKey Target;
+        }
         private readonly List<AutonomousRequest> autonomous = new List<AutonomousRequest>();
         private readonly List<UserPolicyIntent> autonomousTargets = new List<UserPolicyIntent>();
         private readonly List<PollWatch> watches = new List<PollWatch>();
+        private readonly List<InterpretationHold> interpretationHolds = new List<InterpretationHold>();
+        private readonly List<InterpretationRejection> interpretationRejections = new List<InterpretationRejection>();
+        private ulong nextInterpretation = 1;
         public AiTimingProfile AiProfile { get; }
         /// <summary>How often autonomous decisions are asked for. Ver.1 default: every allocation cycle.</summary>
         public AutonomousPollSchedule PollSchedule { get; }
@@ -68,6 +78,61 @@ namespace Rts.Application
             if (tick != 0) throw new ArgumentException("Attach the gateway at S0.", nameof(simulation));
         }
         public IReadOnlyList<ScheduledInput> Inputs => Array.AsReadOnly(log.ToArray());
+
+        /// <summary>
+        /// Opens a local, non-synchronised hold at the moment the player starts speaking. The hold never enters the
+        /// simulation or replay; it only gates autonomous proposals at this gateway.
+        /// </summary>
+        public ulong BeginInterpretation(uint faction, ScopeKey? fixedTarget = null)
+        {
+            if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
+            if (fixedTarget.HasValue && fixedTarget.Value.FactionId != faction)
+                throw new ArgumentException("The interpretation target must belong to the faction.", nameof(fixedTarget));
+            var hold = new InterpretationHold
+            {
+                Id = nextInterpretation,
+                FactionId = faction,
+                HasTarget = fixedTarget.HasValue,
+                Target = fixedTarget.GetValueOrDefault()
+            };
+            nextInterpretation = checked(nextInterpretation + 1);
+            interpretationHolds.Add(hold);
+            return hold.Id;
+        }
+
+        /// <summary>Closes a local interpretation hold and allows the matching autonomous watch to ask again.</summary>
+        public void EndInterpretation(ulong reservationId)
+        {
+            var hold = interpretationHolds.Find(h => h.Id == reservationId);
+            if (hold == null) throw new ArgumentException("Unknown interpretation reservation.", nameof(reservationId));
+            interpretationHolds.Remove(hold);
+            foreach (var target in autonomousTargets)
+                if (target.Target.FactionId == hold.FactionId && Overlaps(hold, target.Target))
+                    ReaskAfterAutonomousInvalidation(target.Target);
+        }
+
+        public bool IsInterpretationOpen(ulong reservationId) => interpretationHolds.Exists(h => h.Id == reservationId);
+
+        /// <summary>Local diagnostic records for the display. These are not ScheduledInputs and are not replayed.</summary>
+        public IReadOnlyList<InterpretationRejection> InterpretationRejections =>
+            Array.AsReadOnly(interpretationRejections.ToArray());
+
+        private bool IsInterpretationHeld(ScopeKey scope, out InterpretationHold hold)
+        {
+            hold = interpretationHolds.FirstOrDefault(h => h.FactionId == scope.FactionId && Overlaps(h, scope));
+            return hold != null;
+        }
+
+        private static bool Overlaps(InterpretationHold hold, ScopeKey scope)
+        {
+            if (!hold.HasTarget || hold.Target.Kind == ScopeKind.All || scope.Kind == ScopeKind.All) return true;
+            return hold.Target.Equals(scope);
+        }
+
+        private void RecordInterpretationRejection(InterpretationHold hold, ScopeKey scope)
+        {
+            interpretationRejections.Add(new InterpretationRejection(hold.Id, scope.FactionId, scope, tick, "人の解釈中"));
+        }
 
         // Ver.3 direct economy operations: logged as they are and applied on the next tick, after this tick's policy inputs.
         private readonly List<EconomyCommand> economy = new List<EconomyCommand>();
@@ -158,6 +223,8 @@ namespace Rts.Application
                 // the model is thinking is still waiting to be asked about once the answer comes back.
                 bool wanted = watches[i].Update(observation, tick, PollSchedule);
                 if (autonomous.Any(r => !r.Completed && r.Invalidated == ReasonCode.None && r.Snapshot.Scope.Equals(intent.Target))) continue;
+                // Keep the watch wanting an answer, but do not spend a provider call while the player is speaking.
+                if (IsInterpretationHeld(intent.Target, out _)) continue;
                 if (!wanted) continue;
                 watches[i].Asked(tick);
                 var snapshot = new PolicyRequest(nextRequest, intent.Target.FactionId, intent.Target, tick,
@@ -271,6 +338,14 @@ namespace Rts.Application
         {
             if (orders == null || orders.Count == 0 || orders.Any(o => o == null || o.Target.FactionId != faction || o.Source == CommandSource.Human) || applyTick <= tick)
                 throw new ArgumentException("Invalid proposal.");
+            // This is intentionally before request allocation. A discarded autonomous answer must not consume a
+            // command/request cursor and must not become a replay input.
+            foreach (var order in orders)
+                if (IsInterpretationHeld(order.Target, out var hold))
+                {
+                    RecordInterpretationRejection(hold, order.Target);
+                    return 0;
+                }
             var r = new Request { Id = nextRequest, Batch = nextBatch, Sequence = sequence, ReceivedTick = tick, Deadline = applyTick };
             nextRequest = checked(nextRequest + 1); nextBatch = checked(nextBatch + 1);
             r.Orders = orders.Select(o => { ulong id = nextCommand; nextCommand = checked(nextCommand + 1); return Copy(o, id, r.Batch, o.TargetRevision, o.Parents); }).ToArray();

@@ -19,7 +19,10 @@ namespace Rts.Providers
             if (string.IsNullOrEmpty(model)) return false;
             if (model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
             if (model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-            if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOCAL_LLM_URL")) || !string.IsNullOrEmpty(LocalLlmCommandInterpreter.DefaultUrl);
+            if (model.Equals("jev", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
+            // A built-in default URL is not proof that a local server is running. The host uses this same explicit
+            // setting when constructing the transport, so the model is shown as unavailable until the user opts in.
+            if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOCAL_LLM_URL"));
             return false;
         }
 
@@ -271,7 +274,7 @@ namespace Rts.Providers
         protected override string ProviderName => "OpenAI";
         protected override void AddHeaders(HttpRequestMessage request, string key) => request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         protected override string BuildBody(InterpreterRequest request) => OpenAiBody(request, request.Model);
-        internal static string OpenAiBody(InterpreterRequest request, string model)
+        internal static string OpenAiBody(InterpreterRequest request, string model, bool completionTokens = true)
         {
             var limits = AiModelCatalog.Get(request.Model);
             string schema = AiCommandSchema.Build(request.Summary, limits);
@@ -283,7 +286,7 @@ namespace Rts.Providers
             };
             var body = new Dictionary<string, object>
             {
-                ["model"] = model, ["max_tokens"] = (long)limits.MaxOutputTokens, ["messages"] = messages,
+                ["model"] = model, [completionTokens ? "max_completion_tokens" : "max_tokens"] = (long)limits.MaxOutputTokens, ["messages"] = messages,
                 ["response_format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["json_schema"] = new Dictionary<string, object> { ["name"] = "rts_commands", ["strict"] = true, ["schema"] = MiniJson.Parse(schema) } }
             };
             if (limits.DisableThinking && request.Model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) body["think"] = false;
@@ -303,7 +306,8 @@ namespace Rts.Providers
         {
             var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary,
                 Model = request.Model, HasFixedTarget = request.HasFixedTarget, FixedTarget = request.FixedTarget, FixedTargetName = request.FixedTargetName };
-            return OpenAiCommandInterpreter.OpenAiBody(copy, localModel);
+            // OpenAI's newer models only take max_completion_tokens; OpenAI-compatible local servers (Ollama) take max_tokens.
+            return OpenAiCommandInterpreter.OpenAiBody(copy, localModel, false);
         }
     }
 

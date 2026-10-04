@@ -44,17 +44,18 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void DynamicSchemaIsStrictAndHasOperationsWithRequiredNullableFields()
+        public void DynamicSchemaIsStrictAndHasOperationsWithRequiredFields()
         {
             var summary = AiSituationSummary.From(Frame());
             using (var document = JsonDocument.Parse(AiCommandSchema.Build(summary, AiModelCatalog.Get("gpt-6-luna"))))
             {
-                AssertStrict(document.RootElement);
+                AssertStrict(document.RootElement, document.RootElement);
                 var root = document.RootElement;
                 CollectionAssert.Contains(root.GetProperty("required").EnumerateArray().Select(x => x.GetString()).ToArray(), "operations");
                 var scope = root.GetProperty("$defs").GetProperty("command").GetProperty("properties").GetProperty("scope");
-                var scopeEnum = scope.GetProperty("anyOf")[0].GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray();
+                var scopeEnum = scope.GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray();
                 CollectionAssert.Contains(scopeEnum, "全部隊");
+                CollectionAssert.Contains(scopeEnum, "", "an empty string is how the schema says 'not given'");
                 CollectionAssert.DoesNotContain(scopeEnum, "存在しない軍");
                 var condition = root.GetProperty("properties").GetProperty("operations").GetProperty("items").GetProperty("properties").GetProperty("when");
                 CollectionAssert.Contains(condition.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "And");
@@ -67,10 +68,11 @@ namespace Rts.Core.Tests
             var summary = AiSituationSummary.From(Frame());
             using (var document = JsonDocument.Parse(AiCommandSchema.Build(summary, AiModelCatalog.Get("local-llm"))))
             {
-                var properties = document.RootElement.GetProperty("properties");
-                Assert.That(properties.GetProperty("commands").GetProperty("maxItems").GetInt32(), Is.EqualTo(1));
-                Assert.That(properties.GetProperty("operations").GetProperty("maxItems").GetInt32(), Is.EqualTo(0));
+                // The command limit is enforced by the interpreter: Claude rejects maxItems in strict schemas (HTTP 400, 2026-10-05).
+                AssertStrict(document.RootElement, document.RootElement);
             }
+            Assert.That(AiModelCatalog.Get("local-llm").MaxCommands, Is.EqualTo(1));
+            Assert.That(AiModelCatalog.Get("local-llm").AllowsOperations, Is.False);
             Assert.That(AiModelCatalog.Get("jev").AllowsOperations, Is.False);
             Assert.That(AiModelCatalog.Get("gpt-6-luna").MaxCommands, Is.EqualTo(5));
         }
@@ -102,22 +104,36 @@ namespace Rts.Core.Tests
             Assert.That(producer.HasScope, Is.False);
         }
 
-        private static void AssertStrict(JsonElement node)
+        /// <summary>
+        /// Walks a JSON Schema node by node (only schema positions: "properties" values, "items", and "$ref" targets in
+        /// the root's "$defs"), checking the keywords the providers' strict subsets accept.
+        /// </summary>
+        private static void AssertStrict(JsonElement node, JsonElement root, int depth = 0)
         {
-            if (node.ValueKind != JsonValueKind.Object) return;
-            if (node.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.GetString() == "object")
+            Assert.That(depth, Is.LessThan(20), "schema nesting");
+            Assert.That(node.ValueKind, Is.EqualTo(JsonValueKind.Object));
+            if (node.TryGetProperty("$ref", out var reference))
+            {
+                string target = reference.GetString();
+                Assert.That(target, Does.StartWith("#/$defs/"), "only internal references");
+                AssertStrict(root.GetProperty("$defs").GetProperty(target.Substring("#/$defs/".Length)), root, depth + 1);
+                return;
+            }
+            // Keywords the providers' strict subsets rejected on 2026-10-05: numeric ranges, array lengths, and union types
+            // (Claude allows at most 16 parameters with type arrays or anyOf; the schema uses "" / 0 / false for "none").
+            foreach (var keyword in new[] { "minimum", "maximum", "maxItems", "minItems", "anyOf", "oneOf" })
+                Assert.That(node.TryGetProperty(keyword, out _), Is.False, keyword);
+            Assert.That(node.GetProperty("type").ValueKind, Is.EqualTo(JsonValueKind.String), "no type arrays");
+            string type = node.GetProperty("type").GetString();
+            if (type == "object")
             {
                 Assert.That(node.GetProperty("additionalProperties").GetBoolean(), Is.False);
                 var required = node.GetProperty("required").EnumerateArray().Select(x => x.GetString()).OrderBy(x => x).ToArray();
                 var properties = node.GetProperty("properties").EnumerateObject().Select(x => x.Name).OrderBy(x => x).ToArray();
                 CollectionAssert.AreEqual(properties, required);
+                foreach (var property in node.GetProperty("properties").EnumerateObject()) AssertStrict(property.Value, root, depth + 1);
             }
-            foreach (var property in node.EnumerateObject())
-            {
-                Assert.That(property.Name, Is.Not.EqualTo("minimum"));
-                Assert.That(property.Name, Is.Not.EqualTo("maximum"));
-                AssertStrict(property.Value);
-            }
+            else if (type == "array") AssertStrict(node.GetProperty("items"), root, depth + 1);
         }
     }
 }
