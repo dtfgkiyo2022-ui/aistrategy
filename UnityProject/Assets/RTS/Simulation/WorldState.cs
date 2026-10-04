@@ -85,6 +85,8 @@ namespace Rts.Simulation
         internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
         internal ObjectiveMemory[] Objectives;
+        internal bool[] RegionHuman;
+        internal EconomyPolicy[] RegionEconomyPolicies;
     }
 
     internal struct ArmyContactMemory
@@ -256,6 +258,14 @@ namespace Rts.Simulation
         internal CivKind ReservedCiv;
     }
 
+    internal struct RegionState
+    {
+        internal uint Id, CenterId;
+        internal RegionCenterKind CenterKind;
+        internal SimPoint Center;
+        internal bool HasCenter;
+    }
+
     internal sealed class WorldState
     {
         internal readonly ScenarioDefinition Config;
@@ -292,6 +302,9 @@ namespace Rts.Simulation
         /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>
         internal int[] BeltOrder;
         internal MatchResult Result;
+        /// <summary>S-5: geographic regions are derived from the map and current town centres.</summary>
+        internal RegionState[] Regions = Array.Empty<RegionState>();
+        internal uint[] CellRegions = Array.Empty<uint>();
 
         internal WorldState(ScenarioDefinition source)
         {
@@ -413,7 +426,7 @@ namespace Rts.Simulation
                 UnitParameters = Copy(s.UnitParameters), Factions = Copy(s.Factions), Cores = Copy(s.Cores),
                 Outposts = Copy(s.Outposts), Armies = Copy(s.Armies), Soldiers = Copy(s.Soldiers),
                 ResourceNodes = Copy(s.ResourceNodes), Economy = CopyEconomy(s.Economy), Villagers = Copy(s.Villagers), Belts = Copy(s.Belts),
-                Extensions = Copy(s.Extensions) };
+            Extensions = Copy(s.Extensions) };
             var e = c.Economy;
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
@@ -771,7 +784,7 @@ namespace Rts.Simulation
                 ForgedInfantryHp = e.ForgedInfantryHp, ForgedInfantryDamage = e.ForgedInfantryDamage,
                 FarmSizeCells = e.FarmSizeCells, FarmWoodCost = e.FarmWoodCost, FarmWork = e.FarmWork, FarmHp = e.FarmHp,
                 FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
-                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns,
+                  Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns, Regions = e.Regions,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,
                   BridgeWoodCost = e.BridgeWoodCost, BridgeWork = e.BridgeWork, BridgeHp = e.BridgeHp, MaxBridgeLength = e.MaxBridgeLength,

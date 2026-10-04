@@ -39,7 +39,14 @@ namespace Rts.Simulation
                         economy.ReservedCiv = c.Civ;
                     return;
                 case EconomyCommandKind.SetEconomyPolicy:
-                    if (IndustryOn && (byte)c.Policy <= 2) economy.Policy = c.Policy;
+                    if (IndustryOn && (byte)c.Policy <= 2)
+                    {
+                        if (c.RegionId == 0) economy.Policy = c.Policy;
+                        else SetRegionEconomyPolicy(faction, c.RegionId, c.Policy);
+                    }
+                    return;
+                case EconomyCommandKind.SetRegionControl:
+                    SetRegionControl(faction, c.RegionId, c.Control);
                     return;
                 case EconomyCommandKind.Trade:
                     TradeAtMarket(faction, c.Give, c.Take);
@@ -72,6 +79,7 @@ namespace Rts.Simulation
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     removed.Alive = false;
+                    RemoveRegionCenter(removed);
                     foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
                     TerrainChanged();
                     return;

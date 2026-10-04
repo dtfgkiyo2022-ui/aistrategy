@@ -63,13 +63,15 @@ namespace Rts.Simulation
         private static int Field(PolicyKind kind) => kind == PolicyKind.MaintainReserve ? 2 : kind == PolicyKind.AllowAbandon ? 3 : 1;
         private bool ValidScope(ScopeKey s) => s.FactionId >= 1 && s.FactionId <= 2 &&
             (s.Kind == ScopeKind.All ? s.Id == 0 : s.Kind == ScopeKind.Army ? s.Id > 0 && s.Id <= world.Armies.Length && world.Armies[s.Id - 1].Definition.FactionId == s.FactionId
-            : s.Kind == ScopeKind.Outpost && s.Id > 0 && s.Id <= world.Outposts.Length);
+            : s.Kind == ScopeKind.Outpost ? s.Id > 0 && s.Id <= world.Outposts.Length
+            : s.Kind == ScopeKind.Region && ValidRegion(s.Id));
         private uint[] Affected(ScopeKey s)
         {
             if (!ValidScope(s)) return Array.Empty<uint>();
             return world.Armies.Where(a => a.Definition.FactionId == s.FactionId &&
                 (s.Kind == ScopeKind.All || s.Kind == ScopeKind.Army && a.Definition.Id == s.Id ||
                  s.Kind == ScopeKind.Outpost && (a.Definition.HomeObjective.Kind == GoalKind.Outpost && a.Definition.HomeObjective.Id == s.Id || a.Goal.Kind == GoalKind.Outpost && a.Goal.Id == s.Id || a.Decision.Goal.Kind == GoalKind.Outpost && a.Decision.Goal.Id == s.Id)))
+                .Concat(s.Kind == ScopeKind.Region ? world.Armies.Where(a => a.Definition.FactionId == s.FactionId && RegionForArmy(a) == s.Id) : Array.Empty<ArmyState>())
                 .Select(a => a.Definition.Id).OrderBy(id => id).ToArray();
         }
         private bool Overlap(CommandState a, PolicyOrder b)
@@ -131,12 +133,12 @@ namespace Rts.Simulation
                 o.Goal.Kind == GoalKind.Core && (o.Goal.Id == 0 || o.Goal.Id > world.Cores.Length)) return ReasonCode.InvalidPayload;
             if ((o.Kind == PolicyKind.Focus || o.Kind == PolicyKind.Retreat) && o.Target.Kind == ScopeKind.Outpost ||
                 o.Kind == PolicyKind.Focus && (o.Goal.Kind == GoalKind.None || o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId == o.Target.FactionId) ||
-                o.Kind == PolicyKind.AllowAbandon && (o.Target.Kind != ScopeKind.Outpost || o.Goal.Kind != GoalKind.None) ||
-                o.Kind == PolicyKind.MaintainReserve && (o.Target.Kind != ScopeKind.All || o.Goal.Kind != GoalKind.None) ||
+                o.Kind == PolicyKind.AllowAbandon && (o.Target.Kind != ScopeKind.Outpost && o.Target.Kind != ScopeKind.Region || o.Goal.Kind != GoalKind.None) ||
+                o.Kind == PolicyKind.MaintainReserve && (o.Target.Kind != ScopeKind.All && o.Target.Kind != ScopeKind.Region || o.Goal.Kind != GoalKind.None) ||
                 o.Kind == PolicyKind.ReturnToAuto && (o.Source != CommandSource.Human || o.Goal.Kind != GoalKind.None) ||
                 o.Kind == PolicyKind.Defend && (o.Target.Kind == ScopeKind.All || o.Goal.Kind != GoalKind.Outpost && o.Goal.Kind != GoalKind.Core ||
                     o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId != o.Target.FactionId) ||
-                o.Kind == PolicyKind.Scout && (o.Target.Kind != ScopeKind.Army || world.Armies[o.Target.Id - 1].Definition.Role != "scout" ||
+                o.Kind == PolicyKind.Scout && (o.Target.Kind != ScopeKind.Army && o.Target.Kind != ScopeKind.Region || o.Target.Kind == ScopeKind.Army && world.Armies[o.Target.Id - 1].Definition.Role != "scout" ||
                     o.Goal.Kind != GoalKind.Point && o.Goal.Kind != GoalKind.Outpost)) return ReasonCode.InvalidPayload;
             if (o.Source == CommandSource.Ai && ((o.Expiration.Flags & ExpireFlags.ObservationTooOld) == 0 || o.Expiration.MaxObservationAgeTicks < 0)) return ReasonCode.InvalidPayload;
             if (o.Parents.Any(p => !ValidScope(p.Scope) || p.Scope.FactionId != o.Target.FactionId) ||
@@ -396,6 +398,7 @@ namespace Rts.Simulation
                     Combat(c.Order) && c.Armies.Any(e => e.ArmyId == armyId && e.Active && !e.Finished))
                     .OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 ref var a = ref world.Armies[index];
+                if (selected != null && RegionBlocksAiArmy(a) && selected.Order.Source != CommandSource.Human) selected = null;
                 var policy = selected == null ? (lossReturns.Contains(armyId) ? PolicyKind.Retreat : (PolicyKind)0) : selected.Order.Kind;
                 var goal = selected == null ? default : selected.Order.Goal;
                 if (selected != null && selected.Armies.Any(e => e.ArmyId == armyId && e.Returning)) { policy = PolicyKind.Retreat; goal = default; }

@@ -15,6 +15,7 @@ namespace Rts.Simulation
         private long[] soldierDamage;
         private readonly long[] coreDamage;
         private readonly FactionFrame[] frames = new FactionFrame[2];
+        private bool automaticEconomyAction;
 
         private readonly Action<string, bool> measure;
 
@@ -31,6 +32,7 @@ namespace Rts.Simulation
         {
             this.measure = measure;
             world = new WorldState(scenario);
+            InitializeRegions();
             world.Map.Measure = measure;
             // Only a map with the tollgate rules gets the faction overlay; every other map keeps the plain terrain path.
             if (TollgateOn) { world.Map.FactionPassability = IsPassableForFaction; RefreshTollgateOwners(); }
@@ -102,6 +104,7 @@ namespace Rts.Simulation
                 s.TargetId = 0;
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
+                bool regionBlocksMovement = RegionBlocksAiArmy(a);
                 uint faction = s.Initial.FactionId;
                 var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
@@ -138,7 +141,10 @@ namespace Rts.Simulation
                     }
                 }
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
-                s.MoveGoal = intent.MoveGoal; s.IsRetreating = intent.IsRetreating;
+                // A human-owned region suppresses only autonomous movement.  Tactics still runs so an enemy already
+                // in range (or an enemy core in range) gets a target and can be attacked while the soldier stays put.
+                s.MoveGoal = regionBlocksMovement ? s.Position : intent.MoveGoal;
+                s.IsRetreating = regionBlocksMovement ? false : intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
                     s.MoveGoal = PolicyDecision.ScoutRetreatHome(observation, s.Position, s.MoveGoal, s.StepDistance);
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
@@ -695,7 +701,8 @@ namespace Rts.Simulation
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents,
                     new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
-                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f));
+                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f),
+                    RegionViewsFor(f), CellRegionsForFrame());
             }
         }
 

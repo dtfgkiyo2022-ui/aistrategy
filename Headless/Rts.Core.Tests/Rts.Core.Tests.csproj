@@ -86,6 +86,7 @@
     <Compile Include="CoreDefenceTests.cs" />
     <Compile Include="ArmyGrowthTests.cs" />
     <Compile Include="EconomyScaleTests.cs" />
+    <Compile Include="RegionTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>
