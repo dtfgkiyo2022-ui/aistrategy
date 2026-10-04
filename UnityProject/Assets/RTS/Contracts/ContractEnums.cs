@@ -5,8 +5,14 @@ namespace Rts.Contracts
 {
     public enum ScopeKind : byte
     {
-        All = 1, Army = 2, Outpost = 3
+        All = 1, Army = 2, Outpost = 3, Region = 4
     }
+
+    /// <summary>Who is allowed to make new automatic decisions in a region.</summary>
+    public enum RegionControl : byte { Ai = 0, Human = 1 }
+
+    /// <summary>The stable geographic centre recorded for a region.</summary>
+    public enum RegionCenterKind : byte { None = 0, Core = 1, Outpost = 2, Town = 3 }
 
     public enum PolicyKind : byte
     {

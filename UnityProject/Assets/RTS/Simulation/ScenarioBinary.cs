@@ -62,6 +62,9 @@ namespace Rts.Simulation
         private const int TownExtensionId = 11;
         private const int TownExtensionVersion = 1;
         private const int TownExtensionDataLength = 9 * sizeof(int);
+        private const int RegionExtensionId = 13;
+        private const int RegionExtensionVersion = 1;
+        private const int RegionExtensionDataLength = sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -80,7 +83,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(SanctuaryExtensionId, SanctuaryExtensionVersion, SanctuaryExtensionDataLength),
             new ExtensionRegistration(CoreDefenceExtensionId, CoreDefenceExtensionVersion, CoreDefenceExtensionDataLength),
             new ExtensionRegistration(ArmyGrowthExtensionId, ArmyGrowthExtensionVersion, ArmyGrowthExtensionDataLength),
-            new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength)
+            new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength),
+            new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -589,6 +593,7 @@ namespace Rts.Simulation
                 else if (id == CoreDefenceExtensionId) ReadCoreDefenceExtension(extension, c.Economy);
                 else if (id == ArmyGrowthExtensionId) ReadArmyGrowthExtension(extension, c.Economy);
                 else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
+                else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -629,6 +634,7 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == CoreDefenceExtensionId && !c.Economy.CoreDefence);
             extensions.RemoveAll(extension => extension != null && extension.Id == ArmyGrowthExtensionId && !c.Economy.ArmyGrowth);
             extensions.RemoveAll(extension => extension != null && extension.Id == TownExtensionId && !c.Economy.Towns);
+            extensions.RemoveAll(extension => extension != null && extension.Id == RegionExtensionId && !c.Economy.Regions);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -716,6 +722,14 @@ namespace Rts.Simulation
                     extensions[i] = CreateTownExtension(c.Economy);
                 }
             if (c.Economy.Towns && !hasTown) extensions.Add(CreateTownExtension(c.Economy));
+            bool hasRegions = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == RegionExtensionId)
+                {
+                    hasRegions = true;
+                    extensions[i] = CreateRegionExtension(c.Economy);
+                }
+            if (c.Economy.Regions && !hasRegions) extensions.Add(CreateRegionExtension(c.Economy));
             return extensions.ToArray();
         }
 
@@ -729,6 +743,27 @@ namespace Rts.Simulation
                 writer.Write(e.TownWork); writer.Write(e.TownHp); writer.Write(e.TownMaxBuildings);
                 writer.Write(e.TownCoreDistance); writer.Write(e.TownResourceReach);
                 return new ScenarioExtensionData { Id = TownExtensionId, Version = TownExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static ScenarioExtensionData CreateRegionExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Regions ? 1 : 0);
+                return new ScenarioExtensionData { Id = RegionExtensionId, Version = RegionExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadRegionExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled != 0 && enabled != 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid regions extension.");
+                e.Regions = enabled != 0;
             }
         }
 

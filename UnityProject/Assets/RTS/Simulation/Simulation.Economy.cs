@@ -28,36 +28,41 @@ namespace Rts.Simulation
             {
                 uint faction = (uint)f + 1;
                 if (world.Cores[world.Factions[f].CoreId - 1].Hp <= 0 || world.Economies[f].AutoOff) continue;
-                ref var economy = ref world.Economies[f];
-                int villagers = LivingVillagers(faction);
-                var plan = PlanOf(faction);
-                DecideAdvance(faction);
-                if (!economy.CoreHeld && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                    VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
+                automaticEconomyAction = true;
+                try
                 {
-                    economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
-                    if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
-                    economy.Queued++;
+                    ref var economy = ref world.Economies[f];
+                    int villagers = LivingVillagers(faction);
+                    var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
+                    DecideAdvance(faction);
+                    if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
+                        VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
+                    {
+                        economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
+                        if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
+                        economy.Queued++;
+                    }
+                    ResumeUnbuilt(faction);
+                    DecideHouse(faction);
+                    DecideDropSite(faction);
+                    DecideTower(faction);
+                    DecideResearch(faction);
+                    DecideMarket(faction);
+                    DecideCaravanserai(faction);
+                    DecideCaravanRoute(faction);
+                    DecideTradeRoute(faction);
+                    DecideSiege(faction);
+                    DecideCrossUnit(faction);
+                    DecideCastle(faction);
+                    DecideCaravanMercenary(faction);
+                    DecideRepair(faction);
+                    DecideBuildings(faction);
+                    DecideTownVillagers(faction);
+                    DecideIndustry(faction);
+                    DecideTollgate(faction);
+                    DecideCavalryStable(faction);
                 }
-                ResumeUnbuilt(faction);
-                DecideHouse(faction);
-                DecideDropSite(faction);
-                DecideTower(faction);
-                DecideResearch(faction);
-                DecideMarket(faction);
-                DecideCaravanserai(faction);
-                DecideCaravanRoute(faction);
-                DecideTradeRoute(faction);
-                DecideSiege(faction);
-                DecideCrossUnit(faction);
-                DecideCastle(faction);
-                DecideCaravanMercenary(faction);
-                DecideRepair(faction);
-                DecideBuildings(faction);
-                DecideTownVillagers(faction);
-                DecideIndustry(faction);
-                DecideTollgate(faction);
-                DecideCavalryStable(faction);
+                finally { automaticEconomyAction = false; }
             }
         }
 
@@ -89,7 +94,7 @@ namespace Rts.Simulation
                         if (HoldCaravanAtMarket(ref v)) continue;
                     }
                 }
-                if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff) AssignWork(ref v);
+                if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && CanAiAssign(v)) AssignWork(ref v);
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = DropOff(v).point;
@@ -246,6 +251,7 @@ namespace Rts.Simulation
 
         private void AssignWork(ref VillagerState v)
         {
+            if (!CanAiAssign(v)) return;
             int fishing = FishingWorkNode(v.Position, v.FactionId);
             if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
             var kind = WorkKindFor(v);
@@ -302,7 +308,7 @@ namespace Rts.Simulation
             }
             ResourceKind current = v.NodeId == 0 ? 0 : world.Nodes[v.NodeId - 1].Definition.Kind;
             if (GoldNeeded(v.FactionId) > 0 && GoldGathererRoom(v, food, wood)) return ResourceKind.Gold;
-            var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId).FoodPerWood);
+            var kind = StoneWanted(v.FactionId) ? ResourceKind.Stone : EconomyDecision.KindToGather(food, wood, PlanOf(v.FactionId, v.Position).FoodPerWood);
             // V3-5 (32.7): on a map with ages the stock speaks too - far more of one than the other sends the idle to the other.
             if (AgesOn && kind != ResourceKind.Stone)
             {
@@ -548,6 +554,16 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             return EconomyDecision.PlanFor(IndustryOn ? world.Economies[faction - 1].Policy : EconomyPolicy.Balanced,
                 AutoVillagerTargetFor(faction), rules.AutoInfantryQueue);
+        }
+
+        private EconomyDecision.Plan PlanOf(uint faction, SimPoint point)
+        {
+            if (!IndustryOn || !RegionsOn) return PlanOf(faction);
+            uint region = RegionForPoint(point);
+            var policy = region > 0 && region <= world.Regions.Length
+                ? world.Factions[faction - 1].RegionEconomyPolicies[region - 1]
+                : world.Economies[faction - 1].Policy;
+            return EconomyDecision.PlanFor(policy, AutoVillagerTargetFor(faction), world.Config.Economy.AutoInfantryQueue);
         }
 
         private CoreState OwnCore(uint faction) => world.Cores[world.Factions[faction - 1].CoreId - 1];

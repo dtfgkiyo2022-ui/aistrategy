@@ -19,6 +19,9 @@ namespace Rts.Contracts
         public IReadOnlyList<ReinforcementView> Reinforcements { get; }
         /// <summary>Ver.3: stock, own villagers and buildings, seen enemy ones, resources. Null without an economy.</summary>
         public EconomyView Economy { get; }
+        /// <summary>S-5: geographic region state and the deterministic cell-to-region table.</summary>
+        public IReadOnlyList<RegionView> Regions { get; }
+        public IReadOnlyList<uint> CellRegions { get; }
 
         public FactionFrame(
             long tick,
@@ -32,9 +35,13 @@ namespace Rts.Contracts
             int aliveCount = 0,
             int factionCap = 0,
             IReadOnlyList<ReinforcementView> reinforcements = null,
-            EconomyView economy = null)
+            EconomyView economy = null,
+            IReadOnlyList<RegionView> regions = null,
+            IReadOnlyList<uint> cellRegions = null)
         {
             Economy = economy;
+            Regions = ContractList.Copy(regions ?? Array.Empty<RegionView>());
+            CellRegions = ContractList.Copy(cellRegions ?? Array.Empty<uint>());
             Tick = tick;
             FactionId = factionId;
             Units = ContractList.Copy(units);

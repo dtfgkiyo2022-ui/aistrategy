@@ -102,8 +102,9 @@ namespace Rts.Simulation
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }
                 var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).ToArray();
+                var decisionPolicies = PolicyOrdersForDecision(f, policies);
                 ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty(world.Config.Rules.DefaultReservePermille).First();
-                var abandoned = policies.Where(c => c.Order.Kind == PolicyKind.AllowAbandon).Select(c => c.Order.Target.Id).OrderBy(id => id).ToArray();
+                var abandoned = decisionPolicies.Where(o => o.Kind == PolicyKind.AllowAbandon && o.Target.Kind == ScopeKind.Outpost).Select(o => o.Target.Id).OrderBy(id => id).ToArray();
                 var own = inputs.Select(i => {
                     var a = world.Armies[i.Army.Id - 1];
                     var live = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).OrderBy(id => id).ToArray();
@@ -121,7 +122,7 @@ namespace Rts.Simulation
                 // advantage asks that policy for an allocation on every tick, so its existing thresholds can fire a
                 // little earlier without adding a civilisation flag branch inside OffenseDecision.
                 bool academyOffenseTick = AcademyOffenseReady(f);
-                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(targets, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], policies.Select(c => c.Order).ToArray(), out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
+                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(targets, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], decisionPolicies, out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
                 var waitGoal = OffenseDecision.WaitGoal(targets, offenseRoutes);
                 OffenseDecision.Update(targets, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);

@@ -66,6 +66,8 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
+        public bool Regions;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
         public int StartFood = 200, StartWood = 150;

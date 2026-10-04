@@ -148,14 +148,14 @@ namespace Rts.Simulation
 
         private void AssignTownWorkers(BuildingState town)
         {
-            if (town.Held || !TownsOn) return;
+            if (town.Held || !TownsOn || HumanRegionAt(town.FactionId, BuildingCenter(town))) return;
             for (int assigned = 0; assigned < TownAutoWorkers; assigned++)
             {
                 int villager = -1, node = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
                 {
                     var v = world.Villagers[i];
-                    if (!v.Alive || v.FactionId != town.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    if (!v.Alive || v.FactionId != town.FactionId || v.Held || !CanAiAssign(v) || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
                     int nearest = NearestTownNode(town, v.Position);
                     if (nearest < 0) continue;
                     if (villager < 0 || DistanceSquared(v.Position, world.Nodes[nearest].Definition.Position) < DistanceSquared(world.Villagers[villager].Position, world.Nodes[node].Definition.Position)
@@ -301,6 +301,7 @@ namespace Rts.Simulation
 
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1)
         {
+            if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
             economy.Wood = checked(economy.Wood - WoodOf(kind, faction));
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
@@ -569,7 +570,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.Complete || b.Held || b.FactionId != faction) continue;
+                if (!b.Alive || b.Complete || b.Held || b.FactionId != faction || HumanRegionAt(faction, BuildingCenter(b))) continue;
                 bool staffed = false;
                 for (int j = 0; j < world.VillagerCount && !staffed; j++)
                 {
@@ -643,7 +644,7 @@ namespace Rts.Simulation
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
                     opened = true;
                 }
-                else if (b.Kind == BuildingKind.Town) AssignTownWorkers(b);
+                else if (b.Kind == BuildingKind.Town) { AddTownRegion(b); AssignTownWorkers(b); }
                 for (int j = 0; j < world.VillagerCount; j++)
                     if (world.Villagers[j].BuildingId == b.Id && (world.Villagers[j].Task == VillagerTask.Building || world.Villagers[j].Task == VillagerTask.ToBuild))
                         world.Villagers[j].Task = VillagerTask.Idle;

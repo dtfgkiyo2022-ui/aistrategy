@@ -92,6 +92,23 @@ namespace Rts.Simulation
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
             }
+            if (RegionsOn)
+            {
+                uint changed = 0;
+                for (int f = 0; f < world.Factions.Length; f++)
+                    for (int i = 0; i < world.Regions.Length; i++)
+                        if (world.Factions[f].RegionHuman[i] || world.Factions[f].RegionEconomyPolicies[i] != EconomyPolicy.Balanced) changed++;
+                w.Value("Regions.Changes.Count", changed);
+                for (int f = 0; f < world.Factions.Length; f++)
+                    for (int i = 0; i < world.Regions.Length; i++)
+                    {
+                        if (!world.Factions[f].RegionHuman[i] && world.Factions[f].RegionEconomyPolicies[i] == EconomyPolicy.Balanced) continue;
+                        string n = "Regions.Changes[" + f.ToString(CultureInfo.InvariantCulture) + "][" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(n + "FactionId", (uint)(f + 1)); w.Value(n + "RegionId", (uint)(i + 1));
+                        w.Value(n + "Human", world.Factions[f].RegionHuman[i]);
+                        w.Value(n + "EconomyPolicy", (byte)world.Factions[f].RegionEconomyPolicies[i]);
+                    }
+            }
             w.Value("ResourceNodes.Count", (uint)world.Nodes.Length);
             foreach (var r in world.Nodes)
             {

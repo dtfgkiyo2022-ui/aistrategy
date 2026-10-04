@@ -34,7 +34,9 @@ namespace Rts.Contracts
         /// <summary>V3-6: removes an own building without refunding its cost.</summary>
         RemoveBuilding = 17,
         /// <summary>V3-9 #1: sends living own villagers between a fixed market and caravanserai.</summary>
-        CaravanRoute = 18
+        CaravanRoute = 18,
+        /// <summary>S-5: changes the human/AI owner of one geographic region.</summary>
+        SetRegionControl = 19
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -67,6 +69,10 @@ namespace Rts.Contracts
         public uint TargetId { get; }
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
+        /// <summary>S-5: the region targeted by SetRegionControl or a regional economy policy.</summary>
+        public uint RegionId => TargetId;
+        /// <summary>S-5: the requested owner of RegionId.</summary>
+        public RegionControl Control => Enabled ? RegionControl.Human : RegionControl.Ai;
         /// <summary>PlaceBelt: the cells of the run, in the order they are placed. Empty for every other kind.</summary>
         public IReadOnlyList<int> Cells { get; }
         /// <summary>PlaceBelt: one direction per cell.</summary>
@@ -179,6 +185,15 @@ namespace Rts.Contracts
 
         public static EconomyCommand SetPolicy(uint faction, ulong sequence, EconomyPolicy policy)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetEconomyPolicy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, policy);
+
+        /// <summary>S-5: sets the automatic economy policy for one region.</summary>
+        public static EconomyCommand SetRegionPolicy(uint faction, ulong sequence, uint regionId, EconomyPolicy policy)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SetEconomyPolicy, 0, 0, 0, 0, null, EconomyTargetKind.None, regionId, false, null, null, Facing.North, policy);
+
+        /// <summary>S-5: gives one region to the human or back to the automatic economy.</summary>
+        public static EconomyCommand SetRegionControl(uint faction, ulong sequence, uint regionId, RegionControl control)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SetRegionControl, 0, 0, 0, 0, null,
+                EconomyTargetKind.None, regionId, control == RegionControl.Human);
 
         public static EconomyCommand Advance(uint faction, ulong sequence, CivKind civ)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.AdvanceAge, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, civ);
@@ -416,6 +431,25 @@ namespace Rts.Contracts
         public LineView(uint id, uint factionId, LineManager manager)
         {
             Id = id; FactionId = factionId; Manager = manager;
+        }
+    }
+
+    /// <summary>S-5 display snapshot. Policy is the effective military policy for the region, if any.</summary>
+    public readonly struct RegionView
+    {
+        public uint Id { get; }
+        public RegionCenterKind CenterKind { get; }
+        public uint CenterId { get; }
+        public SimPoint Center { get; }
+        public RegionControl Control { get; }
+        public PolicyKind Policy { get; }
+        public EconomyPolicy EconomyPolicy { get; }
+
+        public RegionView(uint id, RegionCenterKind centerKind, uint centerId, SimPoint center,
+            RegionControl control, PolicyKind policy, EconomyPolicy economyPolicy)
+        {
+            Id = id; CenterKind = centerKind; CenterId = centerId; Center = center;
+            Control = control; Policy = policy; EconomyPolicy = economyPolicy;
         }
     }
 

@@ -136,6 +136,7 @@ namespace Rts.Simulation
                 ref var b = ref world.Buildings[i];
                 if (!b.Alive || b.Hp != 0) continue;
                 b.Alive = false;
+                RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
                 {
                     b.DestroyedTick = world.Tick;
