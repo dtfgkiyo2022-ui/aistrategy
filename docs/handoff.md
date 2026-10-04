@@ -10,7 +10,18 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-04 夜。これが最新）
+### 今どこにいるか（2026-10-05 朝。これが最新）
+
+- ゲーム内AIの G-1〜G-5 が main に入った（夜のあいだに自律で）：G-2 接続と評価の CLI（#283）、G-4 条件付きの作戦・名前を選ばせる Schema・モデルごとの上限（#284）、G-5 試し遊びへの組み込み（#286）、要約の短縮（#288）、ローカル LLM の設定と作戦の一覧（#289）
+- 見つけて直した問題：
+  - G-4 の Schema が本物の Claude・OpenAI で HTTP 400（`maxItems`、union 型43個＞16、OpenAI は `max_completion_tokens`）→ #285。「なし」は空文字・0・false で表す。`AiSchemaTests` に strict のガード
+  - G-5 が Unity でコンパイルエラー3つ（Headless では見えない）→ #287
+  - メモリに2つ足した：`ai-schema-real-api-check.md`（Schema を変えたら本物の API で1問）、`unityhost-batch-compile-check.md`（UnityHost を変えたら Unity のバッチコンパイル）
+- 本物の評価（評価セット50問、`D:/rts-verify/ai/eval7`・`eval8`）：gpt-6-luna 39〜40/50（50問 約7.5円）、Claude Haiku 37〜38/50（約27円）。Sonnet・Sol は要約を短くする前の測定で 41/50（130〜170円）。断るべき9問は全モデル 9/9
+- ローカル LLM（qwen3:8b・qwen2.5:7b）は 14〜19/50 と低い。原因は重い答えの形と、OpenAI 互換の窓口で「考えない」が効かないこと。小さい Schema（kind・scope・goal・reason）＋Ollama のネイティブ `/api/chat` `think:false` で、7問中5〜6問・約3秒まで上がるのを手で確かめた → G-2 の6回目を Codex が作業中（`aistrategy-wt-ai2f`）
+- Unity のエディタでの動作（開発用の入口から話しかける）は、まだ確かめていない
+
+### 今どこにいるか（2026-10-04 夜）
 
 - **次の段階は「ゲーム内AI」**（オーナー決定 10-04）。設計は `docs/technical-design-ai.md`（#266〜#273・#275・#280）。メモリ `in-game-ai-three-layers.md` に決定の要点
   - 参謀＝Claude API／OpenAI API（話しかけるたびにモデルを選べる。Jev・ローカル LLM も）。呼ぶのは人の指示と大きな局面の変わり目だけ
