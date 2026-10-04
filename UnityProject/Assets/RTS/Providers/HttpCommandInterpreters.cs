@@ -278,11 +278,14 @@ namespace Rts.Providers
         {
             var limits = AiModelCatalog.Get(request.Model);
             string schema = AiCommandSchema.Build(request.Summary, limits);
+            string userPrompt = request.Summary.DynamicPrompt(request.Instruction,
+                request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName);
+            if (limits.DisableThinking && request.Model.Equals("local-llm", StringComparison.OrdinalIgnoreCase))
+                userPrompt += "\n/no_think";
             var messages = new List<object>
             {
                 new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.ForModel(request.Model) + "\nJSON Schema:\n" + schema },
-                new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction,
-                    request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName) }
+                new Dictionary<string, object> { ["role"] = "user", ["content"] = userPrompt }
             };
             var body = new Dictionary<string, object>
             {

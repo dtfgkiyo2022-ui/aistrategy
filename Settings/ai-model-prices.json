@@ -9,6 +9,6 @@
     { "model": "gpt-6.1-sol", "inputUsdPerMillion": 2, "outputUsdPerMillion": 10, "deadlineTicks": 240, "maxCommands": 5, "allowOperations": true, "maxTokens": 2048, "disableThinking": false },
     { "model": "gpt-6-astra", "inputUsdPerMillion": 10, "outputUsdPerMillion": 50, "deadlineTicks": 1200, "maxCommands": 5, "allowOperations": true, "maxTokens": 2048, "disableThinking": false },
     { "model": "jev", "inputUsdPerMillion": 0.042, "outputUsdPerMillion": 0, "deadlineTicks": 240, "maxCommands": 1, "allowOperations": false, "maxTokens": 256, "disableThinking": true },
-    { "model": "local-llm", "inputUsdPerMillion": 0, "outputUsdPerMillion": 0, "deadlineTicks": 600, "maxCommands": 1, "allowOperations": false, "maxTokens": 512, "disableThinking": true }
+    { "model": "local-llm", "inputUsdPerMillion": 0, "outputUsdPerMillion": 0, "deadlineTicks": 600, "maxCommands": 1, "allowOperations": false, "maxTokens": 2048, "disableThinking": true }
   ]
 }

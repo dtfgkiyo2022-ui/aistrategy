@@ -665,7 +665,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
                 var policies = new List<UserPolicyIntent>();
                 var economy = new List<EconomyCommand>();
                 var rejected = new List<AiRejectedCommand>();
-                var commands = AiJson.Array(root, "commands");
+                var commands = DistinctCommands(AiJson.Array(root, "commands"));
                 var operationObjects = AiJson.Array(root, "operations");
                 if (commands == null && operationObjects == null) throw new FormatException("commands is required");
                 ulong nextSequence = 1;
@@ -709,7 +709,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         {
             object whenValue = command.TryGetValue("when", out var rawWhen) ? rawWhen : null;
             OperationCondition when = ParseCondition(whenValue, c);
-            var then = AiJson.Array(command, "then");
+            var then = DistinctCommands(AiJson.Array(command, "then"));
             if (then == null || then.Count == 0) throw new AiCommandException("作戦のthenが空", "Conditional");
             var policies = new List<UserPolicyIntent>(); var economy = new List<EconomyCommand>();
             for (int i = 0; i < then.Count; i++)
@@ -724,6 +724,36 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             actions.AddRange(economy.Select(OperationAction.FromEconomy));
             bool once = AiJson.Bool(command, "once");
             return new OperationDefinition(when, actions, once, c.OperationSource);
+        }
+
+        private static List<object> DistinctCommands(List<object> commands)
+        {
+            if (commands == null) return null;
+            var result = new List<object>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var command in commands)
+            {
+                string key = CanonicalJson(command);
+                if (seen.Add(key)) result.Add(command);
+            }
+            return result;
+        }
+
+        // JSON object key order is not part of equality. Sort keys so suppression depends on every field value,
+        // rather than on how the model happened to order the required properties.
+        private static string CanonicalJson(object value)
+        {
+            var map = value as Dictionary<string, object>;
+            if (map != null)
+            {
+                var parts = new List<string>();
+                foreach (var pair in map.OrderBy(p => p.Key, StringComparer.Ordinal))
+                    parts.Add(JsonValueWriter.Write(pair.Key) + ":" + CanonicalJson(pair.Value));
+                return "{" + string.Join(",", parts.ToArray()) + "}";
+            }
+            var list = value as List<object>;
+            if (list != null) return "[" + string.Join(",", list.Select(CanonicalJson).ToArray()) + "]";
+            return JsonValueWriter.Write(value);
         }
 
         private static OperationCondition ParseCondition(object raw, AiInterpretationContext c)
@@ -1105,7 +1135,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
         {
             ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, 5, true, 2048, false), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, 5, true, 2048, false), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, 5, true, 2048, false), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, 5, true, 2048, false),
             ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, 5, true, 2048, false), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, 5, true, 2048, false), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, 5, true, 2048, false),
-            ["jev"] = P("jev", .042m, 0, 240, 1, false, 256, true), ["local-llm"] = P("local-llm", 0, 0, 600, 1, false, 512, true)
+            ["jev"] = P("jev", .042m, 0, 240, 1, false, 256, true), ["local-llm"] = P("local-llm", 0, 0, 600, 1, false, 2048, true)
         };
         private static decimal usdToYen;
         private static readonly Dictionary<string, AiModelPrice> prices = Load(out usdToYen);

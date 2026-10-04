@@ -43,7 +43,7 @@ namespace Rts.Providers
             var limits = AiModelCatalog.Get("local-llm");
             string body = "{\"model\":\"" + Escape(model) + "\",\"temperature\":0,\"max_tokens\":" + limits.MaxOutputTokens + (limits.DisableThinking ? ",\"think\":false" : "") + ",\"messages\":[" +
                 "{\"role\":\"system\",\"content\":\"選択肢から1つ選び、確信度を0から1で付け、指定されたJSONで答える。説明文は返さない。\"}," +
-                "{\"role\":\"user\",\"content\":\"state=" + Escape(stateJson) + " questions=" + Escape(questionsJson) + "\"}" +
+                "{\"role\":\"user\",\"content\":\"state=" + Escape(stateJson) + " questions=" + Escape(questionsJson) + "\\n/no_think\"}" +
                 "],\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
                 "\"name\":\"jev_judgement\",\"strict\":true,\"schema\":" + JevQuestions.AnswerSchema(questionsJson) + "}}}";
             using (var request = new HttpRequestMessage(HttpMethod.Post, url))
