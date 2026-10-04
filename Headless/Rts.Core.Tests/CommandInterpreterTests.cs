@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Providers;
 
 namespace Rts.Core.Tests
 {

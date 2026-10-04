@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using Rts.Contracts;
 
-namespace Rts.Application
+namespace Rts.Providers
 {
     /// <summary>固定語彙を返す参謀のJSON契約。LLMにはこのSchemaをそのまま渡せる。</summary>
     public static class AiCommandSchema
