@@ -43,6 +43,54 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void CoreDefenceOptionsOverrideOnlySpecifiedValuesWhenEnabled()
+        {
+            var scenario = LoadMetricCommand.CreateScenario(1, false);
+            LoadMetricCommand.ApplyCoreDefenceOptions(scenario, new Dictionary<string, string>
+            {
+                ["--core-defence"] = "true",
+                ["--core-defence-damage"] = "12",
+                ["--core-defence-targets"] = "1",
+                ["--core-defence-range"] = "8",
+                ["--core-defence-interval"] = "40"
+            });
+            Assert.That(scenario.Economy.CoreDefenceDamage, Is.EqualTo(12));
+            Assert.That(scenario.Economy.CoreDefenceMaxTargets, Is.EqualTo(1));
+            Assert.That(scenario.Economy.CoreDefenceRange, Is.EqualTo(8));
+            Assert.That(scenario.Economy.CoreDefenceIntervalTicks, Is.EqualTo(40));
+        }
+
+        [Test]
+        public void CoreDefenceOptionsAreIgnoredWhenDefenceIsDisabled()
+        {
+            var scenario = LoadMetricCommand.CreateScenario(1, false);
+            int damage = scenario.Economy.CoreDefenceDamage;
+            LoadMetricCommand.ApplyCoreDefenceOptions(scenario, new Dictionary<string, string>
+            {
+                ["--core-defence-damage"] = "12"
+            });
+            Assert.That(scenario.Economy.CoreDefenceDamage, Is.EqualTo(damage));
+        }
+
+        [Test]
+        public void CoreDefenceOptionsLeaveUnspecifiedDefaultsUnchanged()
+        {
+            var scenario = LoadMetricCommand.CreateScenario(1, false);
+            int targets = scenario.Economy.CoreDefenceMaxTargets;
+            int range = scenario.Economy.CoreDefenceRange;
+            int interval = scenario.Economy.CoreDefenceIntervalTicks;
+            LoadMetricCommand.ApplyCoreDefenceOptions(scenario, new Dictionary<string, string>
+            {
+                ["--core-defence"] = "true",
+                ["--core-defence-damage"] = "12"
+            });
+            Assert.That(scenario.Economy.CoreDefenceDamage, Is.EqualTo(12));
+            Assert.That(scenario.Economy.CoreDefenceMaxTargets, Is.EqualTo(targets));
+            Assert.That(scenario.Economy.CoreDefenceRange, Is.EqualTo(range));
+            Assert.That(scenario.Economy.CoreDefenceIntervalTicks, Is.EqualTo(interval));
+        }
+
+        [Test]
         public void LoadObservationLeavesThePerTickStateHashesEqualToRecord()
         {
             const long ticks = 3000;

@@ -336,6 +336,7 @@ internal static class LoadMetricCommand
 {
     private const int TicksPerMinute = 1200;
     private const string Header = "seed,faction,minute,villager_idle,node_exhausted,building_done,training_done,research_done,population_cap,line_cut,material_wait,new_contact,army_hp_half,outpost_owner_changed,core_attacked,age_ready,buildings,belt_cells,armies,fronts,soldiers,villagers,total_events";
+    private const string MatchHeader = "seed,tick,ended,winner,is_draw,is_undecided";
 
     internal static int Run(Dictionary<string, string> options)
     {
@@ -350,6 +351,13 @@ internal static class LoadMetricCommand
         string output = Path.GetFullPath(Required("--out"));
         string directory = Path.GetDirectoryName(output);
         if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        string matchOutput = options.GetValueOrDefault("--match-out");
+        if (!string.IsNullOrEmpty(matchOutput))
+        {
+            matchOutput = Path.GetFullPath(matchOutput);
+            string matchDirectory = Path.GetDirectoryName(matchOutput);
+            if (!string.IsNullOrEmpty(matchDirectory)) Directory.CreateDirectory(matchDirectory);
+        }
 
         var rows = new List<LoadMetricRow>();
         var matches = new List<LoadMetricMatchResult>();
@@ -357,6 +365,7 @@ internal static class LoadMetricCommand
         {
             var scenario = CreateScenario(seed, options.ContainsKey("--all-civs"), options.ContainsKey("--large"), options.ContainsKey("--army-growth"), options.ContainsKey("--economy-scale"));
             scenario.Economy.CoreDefence = options.ContainsKey("--core-defence");
+            ApplyCoreDefenceOptions(scenario, options);
             if (ticks > scenario.VerificationTickLimit) throw new InvalidDataException("--ticks is outside the scenario limit.");
             rows.AddRange(RunScenario(scenario, ticks, west, east, idleTicks: idleTicks,
                 completed: simulation =>
@@ -372,9 +381,40 @@ internal static class LoadMetricCommand
             writer.WriteLine(Header);
             foreach (var row in rows) writer.WriteLine(row.Csv());
         }
+        if (!string.IsNullOrEmpty(matchOutput))
+        {
+            using var writer = new StreamWriter(matchOutput, false, new UTF8Encoding(false));
+            writer.WriteLine(MatchHeader);
+            foreach (var match in matches.OrderBy(v => v.Seed))
+                writer.WriteLine(MatchCsv(match));
+        }
         PrintSummary(rows, seeds.Count);
         PrintMatchResults(matches);
         return 0;
+    }
+
+    internal static void ApplyCoreDefenceOptions(ScenarioDefinition scenario, IReadOnlyDictionary<string, string> options)
+    {
+        if (scenario == null) throw new ArgumentNullException(nameof(scenario));
+        if (options == null) throw new ArgumentNullException(nameof(options));
+        if (!options.ContainsKey("--core-defence")) return;
+
+        int Read(string key)
+        {
+            if (!options.TryGetValue(key, out var value)) return int.MinValue;
+            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+                throw new InvalidDataException(key + " must be an integer.");
+            return parsed;
+        }
+
+        int damage = Read("--core-defence-damage");
+        int targets = Read("--core-defence-targets");
+        int range = Read("--core-defence-range");
+        int interval = Read("--core-defence-interval");
+        if (damage != int.MinValue) scenario.Economy.CoreDefenceDamage = damage;
+        if (targets != int.MinValue) scenario.Economy.CoreDefenceMaxTargets = targets;
+        if (range != int.MinValue) scenario.Economy.CoreDefenceRange = range;
+        if (interval != int.MinValue) scenario.Economy.CoreDefenceIntervalTicks = interval;
     }
 
     internal static ScenarioDefinition CreateScenario(ulong seed, bool allCivilisations, bool large = false, bool armyGrowth = false, bool economyScale = false)
@@ -508,4 +548,9 @@ internal static class LoadMetricCommand
                 match.WinnerFactionId.ToString(CultureInfo.InvariantCulture), match.IsDraw ? "1" : "0",
                 match.IsUndecided ? "1" : "0"));
     }
+
+    private static string MatchCsv(LoadMetricMatchResult match)
+        => string.Join(",", match.Seed.ToString(CultureInfo.InvariantCulture), match.Tick.ToString(CultureInfo.InvariantCulture),
+            match.HasEnded ? "1" : "0", match.WinnerFactionId.ToString(CultureInfo.InvariantCulture),
+            match.IsDraw ? "1" : "0", match.IsUndecided ? "1" : "0");
 }
