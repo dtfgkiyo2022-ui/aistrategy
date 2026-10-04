@@ -119,5 +119,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DecisionArithmeticTests.cs" Link="Tests/DecisionArithmeticTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/TestDistanceReference.cs" Link="Tests/TestDistanceReference.cs" />
     <Compile Include="CommandInterpreterTests.cs" />
+    <Compile Include="HttpCommandInterpreterTests.cs" />
   </ItemGroup>
 </Project>

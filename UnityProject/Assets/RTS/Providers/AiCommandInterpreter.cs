@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Rts.Contracts;
@@ -23,8 +24,11 @@ namespace Rts.Providers
         ""location"": { ""type"": ""string"" }, ""producer"": { ""type"": ""string"" },
         ""unit"": { ""type"": ""string"" }, ""civ"": { ""type"": ""string"" },
         ""policy"": { ""type"": ""string"" }, ""control"": { ""enum"": [""Human"", ""Ai""] },
-        ""sequence"": { ""type"": ""integer"", ""minimum"": 1 }
-      }
+         ""sequence"": { ""type"": ""integer"", ""minimum"": 1 },
+         ""count"": { ""type"": ""integer"", ""minimum"": 1, ""maximum"": 100 },
+         ""reservePermille"": { ""type"": ""integer"", ""minimum"": 0, ""maximum"": 1000 },
+         ""allowedLossPermille"": { ""type"": ""integer"", ""minimum"": 0, ""maximum"": 1000 }
+       }, ""additionalProperties"": false
     } },
     ""say"": { ""type"": ""string"" }, ""reason"": { ""type"": ""string"" },
     ""unknown"": { ""type"": ""boolean"" },
@@ -95,7 +99,32 @@ namespace Rts.Providers
 
         public string Prompt(string instruction)
         {
-            return AiCommandSchema.StableInstructions + "\n戦況:\n" + Text + "\n指示:\n" + (instruction ?? "");
+            var names = new StringBuilder();
+            foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
+            {
+                if (names.Length != 0) names.Append('、');
+                names.Append(entry.Name);
+            }
+            return AiCommandSchema.StableInstructions + "\n名前表（この文字列だけを使う）:\n" + names +
+                "\n戦況:\n" + Text + "\n指示:\n" + (instruction ?? "");
+        }
+
+        /// <summary>Host adapters may add a visible alias without changing its contract identity.</summary>
+        public void AddAlias(string alias, string existingName)
+        {
+            if (string.IsNullOrEmpty(alias) || !TryGet(existingName, out var existing) || names.ContainsKey(alias)) return;
+            var entry = new AiNameTableEntry { Name = alias, Scope = existing.Scope, HasScope = existing.HasScope,
+                Goal = existing.Goal, HasGoal = existing.HasGoal, Id = existing.Id, IsOwn = existing.IsOwn, Point = existing.Point };
+            names.Add(alias, entry);
+            var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
+        }
+
+        public void AddGoalAlias(string alias, PolicyGoal goal, bool own, SimPoint point)
+        {
+            if (string.IsNullOrEmpty(alias) || names.ContainsKey(alias)) return;
+            var entry = new AiNameTableEntry { Name = alias, Goal = goal, HasGoal = true, IsOwn = own, Id = goal.Id, Point = point };
+            names.Add(alias, entry);
+            var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
         }
 
         public static AiSituationSummary From(FactionFrame frame)
@@ -321,8 +350,11 @@ namespace Rts.Providers
             else if (needsGoal) throw new AiCommandException("目標が不明", kindText);
             var expiration = new Expiration(c.DeadlineTick == 0 ? c.StartedTick + c.MaxObservationAgeTicks : c.DeadlineTick,
                 c.MaxObservationAgeTicks, ExpireFlags.ObservationTooOld);
-            output.Add(new UserPolicyIntent(next++, scope, kind, goal, 100, new LossBudget(1000),
-                new EndCondition(EndKind.UntilReplaced, 0), 0, expiration));
+            ushort reserve = AiJson.UInt16(command, "reservePermille", 0);
+            ushort allowedLoss = AiJson.UInt16(command, "allowedLossPermille", 1000);
+            if (reserve > 1000 || allowedLoss > 1000) throw new AiCommandException("割合が不正", kindText);
+            output.Add(new UserPolicyIntent(next++, scope, kind, goal, 100, new LossBudget(allowedLoss),
+                new EndCondition(EndKind.UntilReplaced, 0), reserve, expiration));
         }
 
         private static bool IsScopeAllowed(PolicyKind kind, ScopeKind scope)
@@ -360,7 +392,14 @@ namespace Rts.Providers
             switch (kind)
             {
                 case EconomyCommandKind.SetEconomyPolicy:
-                    output.Add(EconomyCommand.SetPolicy(c.Frame.FactionId, seq, ParseEnum<EconomyPolicy>(command, "policy"))); return;
+                    if (!string.IsNullOrEmpty(targetName))
+                    {
+                        if (!c.Summary.TryGet(targetName, out var regionPolicy) || !regionPolicy.HasScope || regionPolicy.Scope.Kind != ScopeKind.Region)
+                            throw new AiCommandException("区域が名前表にない", kindText);
+                        output.Add(EconomyCommand.SetRegionPolicy(c.Frame.FactionId, seq, regionPolicy.Scope.Id, ParseEconomyPolicy(command)));
+                    }
+                    else output.Add(EconomyCommand.SetPolicy(c.Frame.FactionId, seq, ParseEconomyPolicy(command)));
+                    return;
                 case EconomyCommandKind.AdvanceAge:
                     if (!c.Frame.Economy.Ages) throw new AiCommandException("今のルールでは時代を進められない", kindText);
                     output.Add(EconomyCommand.Advance(c.Frame.FactionId, seq, ParseEnum<CivKind>(command, "civ"))); return;
@@ -368,17 +407,26 @@ namespace Rts.Providers
                     var building = ParseEnum<BuildingKind>(command, "building");
                     int cell;
                     string location = AiJson.String(command, "location");
+                    string namedPlacementReason = null;
                     if (string.IsNullOrEmpty(location) || location == "お任せ")
                     {
                         string placementReason = null;
                         if (c.PlacementFinder == null || !c.PlacementFinder.TryFindCell(c.Frame, location ?? "お任せ", building, out cell, out placementReason))
                             throw new AiCommandException(placementReason ?? "置き場所を決められない", kindText);
                     }
+                    else if (c.Summary.TryGet(location, out var locationEntry) && c.PlacementFinder != null &&
+                        c.PlacementFinder.TryFindCell(c.Frame, location, building, out cell, out namedPlacementReason))
+                    {
+                    }
                     else if (!int.TryParse(location, NumberStyles.Integer, CultureInfo.InvariantCulture, out cell))
-                        throw new AiCommandException("置き場所が名前表にない", kindText);
-                    output.Add(EconomyCommand.Place(c.Frame.FactionId, seq, building, cell)); return;
+                        throw new AiCommandException(namedPlacementReason ?? "置き場所が名前表にない", kindText);
+                    int placeCount = Count(command);
+                    for (int i = 0; i < placeCount; i++) output.Add(EconomyCommand.Place(c.Frame.FactionId, seq++, building, cell));
+                    return;
                 case EconomyCommandKind.Train:
-                    output.Add(EconomyCommand.Train(c.Frame.FactionId, seq, ProducerId(command, c), ParseEnum<UnitKind>(command, "unit"))); return;
+                    int trainCount = Count(command);
+                    for (int i = 0; i < trainCount; i++) output.Add(EconomyCommand.Train(c.Frame.FactionId, seq++, ProducerId(command, c), ParseEnum<UnitKind>(command, "unit")));
+                    return;
                 case EconomyCommandKind.CancelTrain:
                     output.Add(EconomyCommand.CancelTrain(c.Frame.FactionId, seq, ProducerId(command, c))); return;
                 default: throw new AiCommandException("G-1で対応していない内政命令", kindText);
@@ -392,10 +440,23 @@ namespace Rts.Providers
             if (!c.Summary.TryGet(producer, out var entry) || entry.Id == 0) throw new AiCommandException("訓練元が名前表にない", "Train");
             return entry.Id;
         }
+        private static int Count(Dictionary<string, object> command)
+        {
+            double value = AiJson.Number(command, "count", 1);
+            if (value < 1 || value > 100 || value != Math.Truncate(value)) throw new AiCommandException("個数が不正", "count");
+            return (int)value;
+        }
         private static T ParseEnum<T>(Dictionary<string, object> obj, string key) where T : struct
         {
             string value = AiJson.String(obj, key);
             if (!Enum.TryParse(value, false, out T result)) throw new AiCommandException(key + "が不明", key);
+            return result;
+        }
+        private static EconomyPolicy ParseEconomyPolicy(Dictionary<string, object> obj)
+        {
+            string value = AiJson.String(obj, "policy");
+            if (value == "Economy") return EconomyPolicy.Growth;
+            if (!Enum.TryParse(value, false, out EconomyPolicy result)) throw new AiCommandException("policyが不明", "SetEconomyPolicy");
             return result;
         }
         private sealed class AiCommandException : Exception
@@ -422,6 +483,7 @@ namespace Rts.Providers
         public string Json { get; internal set; }
         public AiTokenUsage Usage { get; internal set; }
         public string Model { get; internal set; }
+        public string FailureReason { get; internal set; }
     }
 
     public interface ICommandInterpreter
@@ -475,10 +537,12 @@ namespace Rts.Providers
         public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null)
         {
             var summary = AiSituationSummary.From(frame); ulong id = nextId++;
+            var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
             var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks), MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder };
             if (fixedTarget.HasValue) { context.HasFixedTarget = true; context.FixedTarget = fixedTarget.Value; }
-            open.Add(id, new Open { Context = context, Model = model ?? "gpt-6-luna" });
-            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = model ?? "gpt-6-luna", StartedTick = startedTick, DeadlineTick = context.DeadlineTick });
+            string modelName = selected.Model;
+            open.Add(id, new Open { Context = context, Model = modelName });
+            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick });
             return id;
         }
         private static AiCommandInterpretationResult LimitToModel(string model, AiCommandInterpretationResult result) => AiModelLimits.Apply(model, result);
@@ -491,7 +555,12 @@ namespace Rts.Providers
                 if (!open.TryGetValue(reply.RequestId, out var item)) continue;
                 open.Remove(reply.RequestId);
                 bool late = reply.ReturnedTick > item.Context.DeadlineTick;
-                result.Add(new InterpretedReply { RequestId = reply.RequestId, Late = late, Usage = reply.Usage, CostYen = AiCostCalculator.Calculate(item.Model, reply.Usage.InputTokens, reply.Usage.OutputTokens), Result = late ? new AiCommandInterpretationResult { Reason = "締め切りを過ぎた答え" } : LimitToModel(item.Model, AiResponseInterpreter.Interpret(reply.Json, item.Context)) });
+                var usage = reply.Usage;
+                AiCommandInterpretationResult parsed;
+                if (late) parsed = new AiCommandInterpretationResult { Reason = "締め切りを過ぎた答え" };
+                else if (!string.IsNullOrEmpty(reply.FailureReason)) parsed = new AiCommandInterpretationResult { Unknown = true, Reason = reply.FailureReason };
+                else parsed = LimitToModel(item.Model, AiResponseInterpreter.Interpret(reply.Json, item.Context));
+                result.Add(new InterpretedReply { RequestId = reply.RequestId, Late = late, Usage = usage, CostYen = AiCostCalculator.Calculate(item.Model, usage), Result = parsed });
             }
             return result;
         }
@@ -518,21 +587,77 @@ namespace Rts.Providers
     }
     public static class AiModelCatalog
     {
-        private static readonly Dictionary<string, AiModelPrice> prices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, AiModelPrice> fallbackPrices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
         {
             ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, true), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, true), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, true), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, true),
             ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, true), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, true), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, true),
             ["jev"] = P("jev", .042m, 0, 240, false), ["local-llm"] = P("local-llm", 0, 0, 240, true)
         };
+        private static decimal usdToYen;
+        private static readonly Dictionary<string, AiModelPrice> prices = Load(out usdToYen);
+        public static decimal UsdToYen => usdToYen;
         private static AiModelPrice P(string model, decimal input, decimal output, int deadline, bool complex) => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, DeadlineTicks = deadline, SupportsComplexInstructions = complex };
-        public static AiModelPrice Get(string model) => prices.TryGetValue(model ?? "", out var p) ? p : P(model ?? "unknown", 0, 0, 240, true);
+        public static AiModelPrice Get(string model)
+        {
+            if (prices.TryGetValue(model ?? "", out var p)) return p;
+            throw new ArgumentException("未知のモデルです。選択肢にあるモデルを指定してください: " + (model ?? "(null)"), nameof(model));
+        }
         public static IReadOnlyList<AiModelPrice> All => prices.Values.OrderBy(p => p.Model, StringComparer.Ordinal).ToArray();
+        public static IReadOnlyList<AiModelPrice> Available(Func<string, bool> configured = null)
+            => All.Where(p => configured == null || configured(p.Model)).ToArray();
+
+        private static Dictionary<string, AiModelPrice> Load(out decimal yen)
+        {
+            var result = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in fallbackPrices) result[pair.Key] = pair.Value;
+            yen = 150m;
+            string path = Environment.GetEnvironmentVariable("AI_MODEL_PRICES_PATH");
+            if (string.IsNullOrEmpty(path))
+            {
+                var dir = new DirectoryInfo(Environment.CurrentDirectory);
+                for (int i = 0; i < 8 && dir != null && string.IsNullOrEmpty(path); i++, dir = dir.Parent)
+                {
+                    string candidate = Path.Combine(dir.FullName, "Settings", "ai-model-prices.json");
+                    if (File.Exists(candidate)) path = candidate;
+                }
+            }
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return result;
+                var root = MiniJson.Parse(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                if (root == null) return result;
+                if (root.TryGetValue("usdToYen", out var yenValue) && yenValue is double y && y > 0) yen = (decimal)y;
+                if (!(root.TryGetValue("models", out var list) && list is List<object> models)) return result;
+                foreach (var value in models)
+                {
+                    var o = value as Dictionary<string, object>; string name = Text(o, "model");
+                    if (o == null || string.IsNullOrEmpty(name)) continue;
+                    decimal input = Decimal(o, "inputUsdPerMillion", 0), output = Decimal(o, "outputUsdPerMillion", 0);
+                    int deadline = (int)Decimal(o, "deadlineTicks", 240);
+                    bool complex = !name.Equals("jev", StringComparison.OrdinalIgnoreCase);
+                    result[name] = P(name, input, output, deadline, complex);
+                }
+            }
+            catch (Exception) { yen = 150m; return result; }
+            return result;
+        }
+        private static string Text(Dictionary<string, object> o, string key) => o != null && o.TryGetValue(key, out var v) ? v as string : null;
+        private static decimal Decimal(Dictionary<string, object> o, string key, decimal fallback)
+            => o != null && o.TryGetValue(key, out var v) && v is double d ? (decimal)d : fallback;
     }
-    public readonly struct AiTokenUsage { public int InputTokens { get; } public int OutputTokens { get; } public AiTokenUsage(int input, int output) { InputTokens = Math.Max(0, input); OutputTokens = Math.Max(0, output); } }
+    public readonly struct AiTokenUsage
+    {
+        public int InputTokens { get; } public int OutputTokens { get; } public int CacheReadInputTokens { get; } public int CacheCreationInputTokens { get; }
+        public AiTokenUsage(int input, int output) : this(input, output, 0, 0) { }
+        public AiTokenUsage(int input, int output, int cacheRead, int cacheCreation)
+        { InputTokens = Math.Max(0, input); OutputTokens = Math.Max(0, output); CacheReadInputTokens = Math.Max(0, cacheRead); CacheCreationInputTokens = Math.Max(0, cacheCreation); }
+    }
     public static class AiCostCalculator
     {
         public static decimal Calculate(string model, int inputTokens, int outputTokens)
-        { var p = AiModelCatalog.Get(model); return (inputTokens * p.InputUsdPerMillion + outputTokens * p.OutputUsdPerMillion) * 150m / 1000000m; }
+            => Calculate(model, new AiTokenUsage(inputTokens, outputTokens));
+        public static decimal Calculate(string model, AiTokenUsage usage)
+        { var p = AiModelCatalog.Get(model); return (usage.InputTokens * p.InputUsdPerMillion + usage.OutputTokens * p.OutputUsdPerMillion + usage.CacheReadInputTokens * p.InputUsdPerMillion * .1m + usage.CacheCreationInputTokens * p.InputUsdPerMillion * 1.25m) * AiModelCatalog.UsdToYen / 1000000m; }
         public static int EstimateTokens(string text) => Math.Max(1, (text ?? "").Length / 4);
         public static decimal EstimateYen(string model, string prompt, int expectedOutputTokens = 200) => Calculate(model, EstimateTokens(prompt), expectedOutputTokens);
     }
@@ -550,6 +675,19 @@ namespace Rts.Providers
         internal static List<object> Array(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as List<object> ?? throw new FormatException(key + " must be array") : null;
         internal static string String(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as string : null;
         internal static bool Bool(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is bool b && b;
+        internal static double Number(Dictionary<string, object> obj, string key, double fallback)
+        {
+            if (!obj.TryGetValue(key, out var v)) return fallback;
+            if (v is long l) return l;
+            if (v is double d) return d;
+            throw new FormatException(key + " must be number");
+        }
+        internal static ushort UInt16(Dictionary<string, object> obj, string key, ushort fallback)
+        {
+            double value = Number(obj, key, fallback);
+            if (value < 0 || value > ushort.MaxValue || value != Math.Truncate(value)) throw new FormatException(key + " must be integer");
+            return (ushort)value;
+        }
         internal static ulong UInt64(Dictionary<string, object> obj, string key, ulong fallback) { if (!obj.TryGetValue(key, out var v)) return fallback; if (v is long l && l >= 0) return checked((ulong)l); throw new FormatException(key + " must be integer"); }
         private sealed class Parser
         {
@@ -558,7 +696,7 @@ namespace Rts.Providers
             private object Value() { Skip(); if (p >= s.Length) throw new FormatException("unexpected end"); switch (s[p]) { case '{': return Object(); case '[': return List(); case '"': return Quoted(); case 't': Word("true"); return true; case 'f': Word("false"); return false; case 'n': Word("null"); return null; default: return Number(); } }
             private Dictionary<string, object> Object() { p++; var o = new Dictionary<string, object>(StringComparer.Ordinal); Skip(); if (Take('}')) return o; while (true) { Skip(); if (p >= s.Length || s[p] != '"') throw new FormatException("object key"); string k = Quoted(); Skip(); Need(':'); object v = Value(); if (!o.TryAdd(k, v)) throw new FormatException("duplicate key"); Skip(); if (Take('}')) return o; Need(','); } }
             private List<object> List() { p++; var a = new List<object>(); Skip(); if (Take(']')) return a; while (true) { a.Add(Value()); Skip(); if (Take(']')) return a; Need(','); } }
-            private string Quoted() { Need('"'); var b = new StringBuilder(); while (p < s.Length) { char c = s[p++]; if (c == '"') return b.ToString(); if (c == '\\') { if (p >= s.Length) throw new FormatException("escape"); c = s[p++]; if (c == '"' || c == '\\' || c == '/') b.Append(c); else if (c == 'n') b.Append('\n'); else if (c == 'r') b.Append('\r'); else if (c == 't') b.Append('\t'); else throw new FormatException("escape"); } else b.Append(c); } throw new FormatException("string"); }
+            private string Quoted() { Need('"'); var b = new StringBuilder(); while (p < s.Length) { char c = s[p++]; if (c == '"') return b.ToString(); if (c == '\\') { if (p >= s.Length) throw new FormatException("escape"); c = s[p++]; if (c == '"' || c == '\\' || c == '/') b.Append(c); else if (c == 'n') b.Append('\n'); else if (c == 'r') b.Append('\r'); else if (c == 't') b.Append('\t'); else if (c == 'u') { if (p + 4 > s.Length) throw new FormatException("escape"); int code = int.Parse(s.Substring(p, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture); b.Append((char)code); p += 4; } else throw new FormatException("escape"); } else b.Append(c); } throw new FormatException("string"); }
             private long Number() { int start = p; if (p < s.Length && s[p] == '-') p++; while (p < s.Length && char.IsDigit(s[p])) p++; if (start == p) throw new FormatException("value"); return long.Parse(s.Substring(start, p - start), CultureInfo.InvariantCulture); }
             private void Word(string word) { if (p + word.Length > s.Length || !s.Substring(p, word.Length).Equals(word, StringComparison.Ordinal)) throw new FormatException("literal"); p += word.Length; }
             private void Skip() { while (p < s.Length && char.IsWhiteSpace(s[p])) p++; } private bool Take(char c) { if (p < s.Length && s[p] == c) { p++; return true; } return false; } private void Need(char c) { if (!Take(c)) throw new FormatException("expected " + c); }

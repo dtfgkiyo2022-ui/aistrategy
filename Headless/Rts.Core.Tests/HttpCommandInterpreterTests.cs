@@ -1,0 +1,92 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using NUnit.Framework;
+using Rts.Contracts;
+using Rts.Providers;
+
+namespace Rts.Tests.Headless
+{
+    public sealed class HttpCommandInterpreterTests
+    {
+        private const string Key = "api-secret-for-test-only";
+        private sealed class Handler : HttpMessageHandler
+        {
+            internal HttpRequestMessage Request;
+            internal string Body;
+            internal HttpStatusCode Status = HttpStatusCode.OK;
+            internal string Reply = "{}";
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+            {
+                Request = request; Body = await request.Content.ReadAsStringAsync().ConfigureAwait(false);
+                return new HttpResponseMessage(Status) { Content = new StringContent(Reply, Encoding.UTF8, "application/json") };
+            }
+        }
+
+        private static InterpreterRequest Request(string model)
+        {
+            var point = new SimPoint(Fix64.FromInt(0), Fix64.FromInt(10));
+            var observation = new FactionObservation(1, 20, new[] { new OwnArmyView(1, 1, UnitKind.Infantry, point, 5, default(PolicyGoal)) },
+                Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), new[] { new KnownObjective(GoalKind.Outpost, 1, point, true, 1, false, 0, 20) });
+            var frame = new FactionFrame(20, 1, Array.Empty<RenderUnit>(), observation, Array.Empty<CommandView>(), Array.Empty<GameEvent>(), new FogView(Array.Empty<bool>(), Array.Empty<bool>()), new MatchResult(false, 0, false, false, true));
+            return new InterpreterRequest { RequestId = 7, Model = model, Instruction = "北を守れ", Summary = AiSituationSummary.From(frame), StartedTick = 20, DeadlineTick = 260 };
+        }
+
+        private static InterpreterReply Poll(HttpCommandInterpreter interpreter)
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                var replies = interpreter.Poll(21); if (replies.Count != 0) return replies[0];
+                Thread.Sleep(1);
+            }
+            Assert.Fail("HTTP reply did not arrive"); return null;
+        }
+
+        [Test]
+        public void ClaudeUsesCachedSystemPromptAndHeaderOnlyKey()
+        {
+            var handler = new Handler { Reply = "{\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"tool_use\",\"input\":{\"commands\":[],\"say\":\"ok\"}}],\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"cache_read_input_tokens\":80}}" };
+            using (var interpreter = new ClaudeCommandInterpreter(() => Key, handler))
+            {
+                interpreter.Request(Request("claude-haiku-4-5")); var reply = Poll(interpreter);
+                Assert.That(handler.Request.Headers.GetValues("x-api-key"), Does.Contain(Key));
+                Assert.That(handler.Body, Does.Not.Contain(Key)); Assert.That(handler.Body, Does.Contain("cache_control"));
+                Assert.That(handler.Body, Does.Contain("\"strict\":true")); Assert.That(handler.Body, Does.Contain("\"type\":\"auto\""));
+                Assert.That(reply.Json, Does.Contain("\"commands\"")); Assert.That(reply.Usage.CacheReadInputTokens, Is.EqualTo(80));
+            }
+        }
+
+        [Test]
+        public void OpenAiAndLocalUseStrictJsonSchemaAndDoNotLeakLocalKey()
+        {
+            var openHandler = new Handler { Reply = "{\"choices\":[{\"message\":{\"content\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\"}\"}}],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":2}}" };
+            using (var open = new OpenAiCommandInterpreter(() => Key, openHandler))
+            { open.Request(Request("gpt-6-luna")); Assert.That(Poll(open).Json, Does.Contain("commands")); Assert.That(openHandler.Body, Does.Contain("response_format")); Assert.That(openHandler.Body, Does.Contain("\"strict\":true")); Assert.That(openHandler.Request.Headers.Authorization.Parameter, Is.EqualTo(Key)); Assert.That(openHandler.Body, Does.Not.Contain(Key)); }
+            var localHandler = new Handler { Reply = "{\"choices\":[{\"message\":{\"content\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\"}\"}}]}" };
+            using (var local = new LocalLlmCommandInterpreter("qwen-test", localHandler))
+            { local.Request(Request("local-llm")); Poll(local); Assert.That(localHandler.Request.Headers.Authorization, Is.Null); Assert.That(localHandler.Body, Does.Contain("qwen-test")); }
+        }
+
+        [Test]
+        public void RefusalAndHttpFailureBecomeNoAnswerWithoutBodyOrKey()
+        {
+            var refusal = new Handler { Reply = "{\"stop_reason\":\"refusal\",\"content\":[],\"usage\":{}}" };
+            using (var interpreter = new ClaudeCommandInterpreter(() => Key, refusal))
+            { interpreter.Request(Request("claude-haiku-4-5")); Assert.That(Poll(interpreter).FailureReason, Does.Contain("答えなし")); }
+            var failed = new Handler { Status = HttpStatusCode.InternalServerError, Reply = "{\"error\":\"" + Key + "\"}" };
+            using (var interpreter = new OpenAiCommandInterpreter(() => Key, failed))
+            { interpreter.Request(Request("gpt-6-luna")); var reply = Poll(interpreter); Assert.That(reply.FailureReason, Does.Contain("HTTP 500")); Assert.That(reply.FailureReason, Does.Not.Contain(Key)); }
+        }
+
+        [Test]
+        public void UnknownModelsAreRejectedAndCacheTokensArePricedFromSettings()
+        {
+            Assert.Throws<ArgumentException>(() => AiModelCatalog.Get("not-a-model"));
+            Assert.That(AiCostCalculator.Calculate("claude-haiku-4-5", new AiTokenUsage(100, 20, 80, 0)), Is.EqualTo(0.0312m));
+        }
+    }
+}
