@@ -248,6 +248,9 @@ commandsは1つまでです。operationsは空配列にしてください。scop
 
     public sealed class AiCommandInterpretationResult
     {
+        /// <summary>An "I could not turn this into orders" result, for callers outside this assembly (the setters are internal).</summary>
+        public static AiCommandInterpretationResult NoAnswer(string reason) => new AiCommandInterpretationResult { Unknown = true, Reason = reason ?? "" };
+
         public IReadOnlyList<UserPolicyIntent> Policies { get; internal set; } = Array.Empty<UserPolicyIntent>();
         public IReadOnlyList<EconomyCommand> EconomyCommands { get; internal set; } = Array.Empty<EconomyCommand>();
         public IReadOnlyList<OperationDefinition> Operations { get; internal set; } = Array.Empty<OperationDefinition>();

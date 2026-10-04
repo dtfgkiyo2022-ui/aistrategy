@@ -175,7 +175,7 @@ namespace Rts.UnityHost
                 if (item.State != AiInstructionState.Interpreting) continue;
                 item.ActualCostYen = reply.CostYen;
                 budget.Add(reply.CostYen);
-                var result = reply.Result ?? new AiCommandInterpretationResult { Unknown = true, Reason = "答えがありません。" };
+                var result = reply.Result ?? AiCommandInterpretationResult.NoAnswer("答えがありません。");
                 item.Say = result.Say ?? "";
                 item.Reason = result.Reason ?? "";
                 item.RejectedReasons = result.Rejected == null ? Array.Empty<string>() :

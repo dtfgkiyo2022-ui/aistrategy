@@ -7,6 +7,7 @@
     "Rts.Simulation",
     "Rts.Replay",
     "Rts.Application",
+    "Rts.Providers",
     "Rts.Presentation",
     "Rts.UnityHost",
     "Rts.Editor",

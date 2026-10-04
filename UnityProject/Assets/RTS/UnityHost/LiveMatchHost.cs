@@ -326,7 +326,7 @@ namespace Rts.UnityHost
                 else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TYPESAFE_API_KEY")))
                 {
                     jevTransport = new HttpJevTransport(() => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
-                    judgementTransport = jevTransport;
+                    judgementTransport = null; // HttpJevTransport is not IDisposable: there is nothing to release
                     jev = new JevPolicyProvider(jevTransport);
                     external = jev;
                 }
