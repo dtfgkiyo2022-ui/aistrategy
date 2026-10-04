@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Rts.Contracts;
 
 namespace Rts.Providers
 {
@@ -71,27 +72,40 @@ namespace Rts.Providers
             if (requiresKey && string.IsNullOrEmpty(key)) throw new InvalidOperationException(ProviderName + " の API キーが設定されていません。");
             string body = BuildBody(request);
             var item = new Pending { RequestId = request.RequestId };
-            item.Task = SendAsync(request.RequestId, body, key);
+            item.Task = SendAsync(request, body, key);
             lock (gate) pending.Add(item);
         }
 
         // Kept as a separate method because HttpClient must not be awaited from the simulation tick.
-        private async Task<TransportReply> SendAsync(ulong requestId, string body, string key)
+        private async Task<TransportReply> SendAsync(InterpreterRequest requestInfo, string body, string key)
         {
             try
             {
-                using (var request = new HttpRequestMessage(HttpMethod.Post, url))
+                DateTime retryDeadline = DateTime.UtcNow.AddSeconds(Math.Max(1, Math.Min(60, requestInfo.DeadlineTick > requestInfo.StartedTick ? requestInfo.DeadlineTick - requestInfo.StartedTick : 1)));
+                for (int attempt = 0; attempt < 4; attempt++)
                 {
-                    AddHeaders(request, key);
-                    request.Content = new StringContent(body, Encoding.UTF8, "application/json");
-                    using (var response = await client.SendAsync(request).ConfigureAwait(false))
+                    using (var request = new HttpRequestMessage(HttpMethod.Post, url))
                     {
-                        if (!response.IsSuccessStatusCode)
-                            return new TransportReply { FailureReason = ProviderName + " の通信に失敗しました（HTTP " + (int)response.StatusCode + "）。" };
-                        string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                        return ReadResponse(text);
+                        AddHeaders(request, key);
+                        request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+                        using (var response = await client.SendAsync(request).ConfigureAwait(false))
+                        {
+                            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                            {
+                                if (attempt == 3) return HttpFailure(response.StatusCode);
+                                TimeSpan delay = RetryDelay(response, attempt);
+                                TimeSpan remaining = retryDeadline - DateTime.UtcNow;
+                                if (remaining <= TimeSpan.Zero || delay > remaining) return HttpFailure(response.StatusCode);
+                                await Task.Delay(delay).ConfigureAwait(false);
+                                continue;
+                            }
+                            if (!response.IsSuccessStatusCode) return HttpFailure(response.StatusCode);
+                            string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                            return ReadResponse(text);
+                        }
                     }
                 }
+                return HttpFailure(HttpStatusCode.TooManyRequests);
             }
             catch (OperationCanceledException)
             {
@@ -102,6 +116,23 @@ namespace Rts.Providers
                 // Do not echo exception text: some handlers/proxies include request headers or response bodies.
                 return new TransportReply { FailureReason = ProviderName + " の応答を読めませんでした。" };
             }
+        }
+
+        private TransportReply HttpFailure(HttpStatusCode status)
+            => new TransportReply { FailureReason = ProviderName + " の通信に失敗しました（HTTP " + (int)status + "）。" };
+
+        private static TimeSpan RetryDelay(HttpResponseMessage response, int retry)
+        {
+            if (response.Headers.RetryAfter != null)
+            {
+                if (response.Headers.RetryAfter.Delta.HasValue) return response.Headers.RetryAfter.Delta.Value < TimeSpan.Zero ? TimeSpan.Zero : response.Headers.RetryAfter.Delta.Value;
+                if (response.Headers.RetryAfter.Date.HasValue)
+                {
+                    TimeSpan until = response.Headers.RetryAfter.Date.Value.UtcDateTime - DateTime.UtcNow;
+                    return until < TimeSpan.Zero ? TimeSpan.Zero : until;
+                }
+            }
+            return TimeSpan.FromMilliseconds(10 * (1 << retry));
         }
 
         public IReadOnlyList<InterpreterReply> Poll(long tick)
@@ -140,7 +171,11 @@ namespace Rts.Providers
                 if (root == null) return Bad("答えが JSON オブジェクトではありません。");
                 var usage = Usage(root);
                 string stop = String(root, "stop_reason");
-                if (string.Equals(stop, "refusal", StringComparison.OrdinalIgnoreCase)) return Bad("モデルが拒否したため、答えなしです。");
+                if (string.Equals(stop, "refusal", StringComparison.OrdinalIgnoreCase) || string.Equals(stop, "max_tokens", StringComparison.OrdinalIgnoreCase))
+                    return Bad(string.Equals(stop, "refusal", StringComparison.OrdinalIgnoreCase) ? "モデルが拒否したため、答えなしです。" : "出力上限に達したため、答えなしです。");
+                if (root.TryGetValue("choices", out var choicesValue) && choicesValue is List<object> choices && choices.Count != 0 &&
+                    choices[0] is Dictionary<string, object> choice && string.Equals(String(choice, "finish_reason"), "length", StringComparison.OrdinalIgnoreCase))
+                    return Bad("出力上限に達したため、答えなしです。");
                 string json = ExtractClaude(root) ?? ExtractOpenAi(root);
                 if (string.IsNullOrEmpty(json)) return Bad("モデルから答えがありませんでした。");
                 return new TransportReply { Json = json, Usage = usage };
@@ -156,7 +191,6 @@ namespace Rts.Providers
             foreach (var item in content.OfType<Dictionary<string, object>>())
             {
                 string type = String(item, "type");
-                if (type == "tool_use" && item.TryGetValue("input", out var input)) return JsonValueWriter.Write(input);
                 if (type == "text" && item.TryGetValue("text", out var text) && text is string s) return s;
             }
             return null;
@@ -216,9 +250,8 @@ namespace Rts.Providers
             {
                 ["model"] = request.Model, ["max_tokens"] = 2048L,
                 ["system"] = new List<object> { new Dictionary<string, object> { ["type"] = "text", ["text"] = AiCommandSchema.StableInstructions + "\nJSON Schema:\n" + AiCommandSchema.Json, ["cache_control"] = new Dictionary<string, object> { ["type"] = "ephemeral" } } },
-                ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction) } },
-                ["tools"] = new List<object> { new Dictionary<string, object> { ["name"] = "emit_commands", ["description"] = "決まった語彙の命令を返す", ["strict"] = true, ["input_schema"] = MiniJson.Parse(AiCommandSchema.Json) } },
-                ["tool_choice"] = new Dictionary<string, object> { ["type"] = "auto" }
+                 ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) } },
+                 ["output_config"] = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(AiCommandSchema.Json) } }
             });
         }
     }
@@ -239,7 +272,7 @@ namespace Rts.Providers
                 ["messages"] = new List<object>
                 {
                     new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.StableInstructions + "\nJSON Schema:\n" + AiCommandSchema.Json },
-                    new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction) }
+                    new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null) }
                 },
                 ["response_format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["json_schema"] = new Dictionary<string, object> { ["name"] = "rts_commands", ["strict"] = true, ["schema"] = MiniJson.Parse(AiCommandSchema.Json) } }
             });
