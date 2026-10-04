@@ -88,6 +88,18 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void EconomyScaleRaisesFoodGatheringRatioOnlyWhenEnabled()
+        {
+            Assert.That(EconomyDecision.FoodPerWood(false, 2), Is.EqualTo(2));
+            Assert.That(EconomyDecision.FoodPerWood(true, 2), Is.EqualTo(3));
+            Assert.That(EconomyDecision.FoodPerWood(true, 3), Is.EqualTo(3));
+            Assert.That(EconomyDecision.FoodSourceTarget(false, 2), Is.EqualTo(2));
+            Assert.That(EconomyDecision.FoodSourceTarget(true, 2), Is.EqualTo(4));
+            Assert.That(EconomyDecision.KindToGather(3, 1, EconomyDecision.FoodPerWood(false, 2)), Is.EqualTo(ResourceKind.Wood));
+            Assert.That(EconomyDecision.KindToGather(3, 1, EconomyDecision.FoodPerWood(true, 2)), Is.EqualTo(ResourceKind.Food));
+        }
+
+        [Test]
         public void FlagOffKeepsBytesHashesVillagerTargetAndOneBarracks()
         {
             var leftScenario = Scenario(false);
