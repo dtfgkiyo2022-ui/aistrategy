@@ -123,5 +123,6 @@
     <Compile Include="CommandInterpreterTests.cs" />
     <Compile Include="OperationTableTests.cs" />
     <Compile Include="HttpCommandInterpreterTests.cs" />
+    <Compile Include="AiSchemaTests.cs" />
   </ItemGroup>
 </Project>

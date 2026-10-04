@@ -40,7 +40,8 @@ namespace Rts.Providers
         {
             if (stateJson == null) throw new ArgumentNullException(nameof(stateJson));
             if (questionsJson == null) throw new ArgumentNullException(nameof(questionsJson));
-            string body = "{\"model\":\"" + Escape(model) + "\",\"temperature\":0,\"messages\":[" +
+            var limits = AiModelCatalog.Get("local-llm");
+            string body = "{\"model\":\"" + Escape(model) + "\",\"temperature\":0,\"max_tokens\":" + limits.MaxOutputTokens + (limits.DisableThinking ? ",\"think\":false" : "") + ",\"messages\":[" +
                 "{\"role\":\"system\",\"content\":\"選択肢から1つ選び、確信度を0から1で付け、指定されたJSONで答える。説明文は返さない。\"}," +
                 "{\"role\":\"user\",\"content\":\"state=" + Escape(stateJson) + " questions=" + Escape(questionsJson) + "\"}" +
                 "],\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +

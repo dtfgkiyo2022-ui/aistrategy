@@ -44,6 +44,7 @@ namespace Rts.Providers
         public int EnemyCount { get; private set; }
         public int NearMeters { get; private set; }
         public int OwnArmyPercent { get; private set; }
+        public int OwnArmyPermille { get; private set; }
         public long TimeTick { get; private set; }
         public string JudgementQuestion { get; private set; }
         public IReadOnlyList<OperationCondition> Children { get; private set; }
@@ -67,7 +68,13 @@ namespace Rts.Providers
         public static OperationCondition OwnArmyBelowPercent(int percent)
         {
             if (percent < 0 || percent > 100) throw new ArgumentOutOfRangeException(nameof(percent));
-            return new OperationCondition { Kind = OperationConditionKind.OwnArmyBelowPercent, OwnArmyPercent = percent, Children = Empty() };
+            return new OperationCondition { Kind = OperationConditionKind.OwnArmyBelowPercent, OwnArmyPercent = percent, OwnArmyPermille = percent * 10, Children = Empty() };
+        }
+
+        public static OperationCondition OwnArmyBelowPermille(int permille)
+        {
+            if (permille < 0 || permille > 1000) throw new ArgumentOutOfRangeException(nameof(permille));
+            return new OperationCondition { Kind = OperationConditionKind.OwnArmyBelowPercent, OwnArmyPercent = permille / 10, OwnArmyPermille = permille, Children = Empty() };
         }
 
         public static OperationCondition TimeAfterSeconds(long seconds)
@@ -316,7 +323,7 @@ namespace Rts.Providers
                 }
                 case OperationConditionKind.OwnArmyBelowPercent:
                     int baseline = BaselineArmyCount(entry, current);
-                    return baseline > 0 && current.Observation.OwnArmies.Sum(a => Math.Max(0, a.AliveCount)) * 100 <= baseline * condition.OwnArmyPercent;
+                    return baseline > 0 && current.Observation.OwnArmies.Sum(a => Math.Max(0, a.AliveCount)) * 1000 <= baseline * condition.OwnArmyPermille;
                 case OperationConditionKind.MatchTimeAfter: return current.Tick > condition.TimeTick;
                 case OperationConditionKind.JudgementTrue:
                     double probability;
