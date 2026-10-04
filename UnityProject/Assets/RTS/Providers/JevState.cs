@@ -17,52 +17,72 @@ namespace Rts.Providers
     /// outpost is which, whose each objective is, how the two sides compare, and how old each sighting is. Nothing
     /// here is used to decide anything inside the game.
     /// </para>
+    /// <para>
+    /// s5 (G-3): armies and sightings are grouped (by the objective they defend and by region) instead of listed one
+    /// by one. On 2026-10-04 the one-by-one state averaged about 5,000 input tokens a call (up to about 7,300), which
+    /// at one call every 10 seconds is about 2.9 yen a match - the whole default budget. The target is about 800.
+    /// </para>
     /// </summary>
     public static class JevState
     {
         /// <summary>Bumped whenever the content changes, because the answers are only comparable within one version.</summary>
-        public const string Version = "s4";
+        public const string Version = "s5";
 
         public static string Build(FactionObservation o)
         {
             if (o == null) throw new ArgumentNullException(nameof(o));
             var names = OutpostNames(o);
             var sb = new StringBuilder();
-            sb.Append("{\"stateVersion\":\"").Append(Version).Append("\",\"tick\":").Append(o.Tick);
-            sb.Append(",\"secondsElapsed\":").Append(o.Tick / 20);
-
+            sb.Append("{\"stateVersion\":\"").Append(Version).Append("\",\"tick\":").Append(o.Tick)
+              .Append(",\"secondsElapsed\":").Append(o.Tick / 20);
             int myAlive = o.OwnArmies.Sum(a => a.AliveCount);
-            sb.Append(",\"myTotalSoldiers\":").Append(myAlive);
-            sb.Append(",\"myArmies\":[");
-            for (int i = 0; i < o.OwnArmies.Count; i++)
+            sb.Append(",\"myTotalSoldiers\":").Append(myAlive).Append(",\"myArmies\":[");
+            var armyGroups = o.OwnArmies.GroupBy(a => Name(names, a.HomeObjective.Kind, a.HomeObjective.Id) + "|" + a.Kind)
+                .OrderBy(g => g.Key, StringComparer.Ordinal).ToArray();
+            for (int i = 0; i < armyGroups.Length; i++)
             {
-                var a = o.OwnArmies[i];
+                var group = armyGroups[i];
+                var first = group.First();
                 if (i > 0) sb.Append(',');
-                sb.Append("{\"id\":").Append(a.Id).Append(",\"soldiers\":").Append(a.AliveCount)
-                  .Append(",\"x\":").Append(M(a.Position.X)).Append(",\"z\":").Append(M(a.Position.Z))
-                  .Append(",\"defends\":\"").Append(Name(names, a.HomeObjective.Kind, a.HomeObjective.Id)).Append('"');
-                long nearest = NearestEnemyMetres(a.Position, o.Contacts);
-                if (nearest >= 0) sb.Append(",\"nearestEnemyMeters\":").Append(nearest);
+                string defends = Name(names, first.HomeObjective.Kind, first.HomeObjective.Id);
+                int count = group.Count();
+                int soldiers = group.Sum(v => v.AliveCount);
+                long nearest = group.Select(v => NearestEnemyMetres(v.Position, o.Contacts)).Where(v => v >= 0)
+                    .DefaultIfEmpty(-1).Min();
+                sb.Append("{\"defends\":\"").Append(defends).Append("\",\"unit\":\"").Append(first.Kind)
+                  .Append("\",\"count\":").Append(count).Append(",\"soldiers\":").Append(soldiers)
+                  .Append(",\"state\":\"").Append(ArmyState(nearest)).Append('"');
+                if (count == 1)
+                {
+                    sb.Append(",\"x\":").Append(M(first.Position.X)).Append(",\"z\":").Append(M(first.Position.Z));
+                    if (nearest >= 0) sb.Append(",\"nearestEnemyMeters\":").Append(nearest);
+                }
                 sb.Append('}');
             }
-
             // Estimates are a range because a contact that has not been looked at recently is only bounded, not counted.
             int min = o.Contacts.Sum(c => Math.Max(c.EstimateMin, 0));
             int max = o.Contacts.Sum(c => c.EstimateMax < 0 ? c.AssumedStrength : c.EstimateMax);
-            sb.Append("],\"enemy\":{\"knownSoldiersAtLeast\":").Append(min).Append(",\"knownSoldiersAtMost\":").Append(max)
-              .Append(",\"maxPossibleSoldiers\":").Append(o.EnemyFactionCap)
-              .Append(",\"sightings\":[");
-            for (int i = 0; i < o.Contacts.Count; i++)
+            sb.Append("],\"enemy\":{\"knownSoldiersAtLeast\":").Append(min)
+              .Append(",\"knownSoldiersAtMost\":").Append(max)
+              .Append(",\"maxPossibleSoldiers\":").Append(o.EnemyFactionCap).Append(",\"sightings\":[");
+            var sightings = o.Contacts.GroupBy(c => RegionName(c.LastPosition, o, names))
+                .OrderBy(g => g.Key, StringComparer.Ordinal).ToArray();
+            for (int i = 0; i < sightings.Length; i++)
             {
-                var c = o.Contacts[i];
+                var group = sightings[i];
+                var first = group.First();
                 if (i > 0) sb.Append(',');
-                sb.Append("{\"x\":").Append(M(c.LastPosition.X)).Append(",\"z\":").Append(M(c.LastPosition.Z))
-                  .Append(",\"visibleNow\":").Append(Bool(c.IsCurrentlyVisible))
-                  .Append(",\"sightingAgeSeconds\":").Append(Math.Max(0, o.Tick - c.LastSeenTick) / 20)
-                  .Append(",\"soldiersAtLeast\":").Append(Math.Max(c.EstimateMin, 0))
-                  .Append(",\"soldiersAtMost\":").Append(c.EstimateMax < 0 ? c.AssumedStrength : c.EstimateMax)
-                  .Append(",\"strengthUnknown\":").Append(Bool(c.IsStrengthUnknown))
-                  .Append(",\"goneFromHere\":").Append(Bool(c.IsAbsentAtLastPosition)).Append('}');
+                int lower = group.Sum(v => Math.Max(v.EstimateMin, 0));
+                int upper = group.Sum(v => v.EstimateMax < 0 ? v.AssumedStrength : v.EstimateMax);
+                long age = group.Max(v => Math.Max(0, o.Tick - v.LastSeenTick)) / 20;
+                sb.Append("{\"region\":\"").Append(group.Key).Append("\",\"count\":").Append(group.Count())
+                  .Append(",\"x\":").Append(M(first.LastPosition.X)).Append(",\"z\":").Append(M(first.LastPosition.Z))
+                  .Append(",\"visibleNow\":").Append(Bool(group.Any(v => v.IsCurrentlyVisible)))
+                  .Append(",\"sightingAgeSeconds\":").Append(age)
+                  .Append(",\"soldiersAtLeast\":").Append(lower)
+                  .Append(",\"soldiersAtMost\":").Append(upper)
+                  .Append(",\"strengthUnknown\":").Append(Bool(group.Any(v => v.IsStrengthUnknown)))
+                  .Append(",\"goneFromHere\":").Append(Bool(group.All(v => v.IsAbsentAtLastPosition))).Append('}');
             }
             sb.Append("]},\"objectives\":[");
             for (int i = 0; i < o.Objectives.Count; i++)
@@ -87,8 +107,7 @@ namespace Rts.Providers
                       .Append("\",\"capturePercent\":").Append(100 * b.CaptureTicks / b.CaptureDurationTicks);
                 sb.Append(",\"lastSeenSecondsAgo\":").Append(Math.Max(0, o.Tick - b.LastSeenTick) / 20).Append('}');
             }
-            sb.Append("]}");
-            return sb.ToString();
+            return sb.Append("]}").ToString();
         }
 
         /// <summary>
@@ -115,27 +134,37 @@ namespace Rts.Providers
                 .OrderByDescending(b => b.Position.Z.Raw).ThenBy(b => b.Id).ToArray();
             if (outposts.Length == 2)
             {
-                names[OutpostId(o, north: true)] = "the north outpost";
-                names[OutpostId(o, north: false)] = "the south outpost";
+                names[OutpostId(o, true)] = "the north outpost";
+                names[OutpostId(o, false)] = "the south outpost";
             }
             else foreach (var b in outposts) names[b.Id] = "outpost " + b.Id;
             return names;
         }
 
-        private static string Name(Dictionary<uint, string> names, GoalKind kind, uint id)
+        private static string RegionName(SimPoint position, FactionObservation o, Dictionary<uint, string> names)
         {
-            if (kind == GoalKind.Outpost) return names.TryGetValue(id, out var name) ? name : "outpost " + id;
-            if (kind == GoalKind.Core) return "a core"; // only reached for an army home objective
-            return "nothing in particular";
+            var objectives = o.Objectives.Where(b => b.Kind == GoalKind.Outpost).ToArray();
+            if (objectives.Length == 0) return "unassigned";
+            var nearest = objectives.OrderBy(b => DistanceSquared(position, b.Position)).ThenBy(b => b.Id).First();
+            return Name(names, nearest.Kind, nearest.Id);
         }
 
+        private static long DistanceSquared(SimPoint a, SimPoint b)
+        {
+            long dx = (a.X.Raw - b.X.Raw) / 65536, dz = (a.Z.Raw - b.Z.Raw) / 65536;
+            return dx * dx + dz * dz;
+        }
+
+        private static string ArmyState(long nearest) => nearest < 0 ? "unknown" : nearest <= 40 ? "contact" : "clear";
+        private static string Name(Dictionary<uint, string> names, GoalKind kind, uint id) =>
+            kind == GoalKind.Outpost ? (names.TryGetValue(id, out var name) ? name : "outpost " + id) :
+            kind == GoalKind.Core ? "a core" : "nothing in particular";
         private static string Owner(KnownObjective b, uint me)
         {
             if (!b.IsOwnerKnown) return "unknown";
             if (b.OwnerFactionId == me) return "me";
             return b.OwnerFactionId == 0 ? "nobody" : "the enemy";
         }
-
         private static string Bool(bool value) => value ? "true" : "false";
 
         /// <summary>
@@ -149,10 +178,10 @@ namespace Rts.Providers
             long best = -1;
             foreach (var c in contacts)
             {
-                long dx = (from.X.Raw - c.LastPosition.X.Raw) / 65536, dz = (from.Z.Raw - c.LastPosition.Z.Raw) / 65536;
                 // Whole metres are enough for a question, and squaring metres cannot overflow on a 256 m map.
-                long squared = dx * dx + dz * dz;
-                long metres = (long)Math.Sqrt(squared);
+                long dx = (from.X.Raw - c.LastPosition.X.Raw) / 65536;
+                long dz = (from.Z.Raw - c.LastPosition.Z.Raw) / 65536;
+                long metres = (long)Math.Sqrt(dx * dx + dz * dz);
                 if (best < 0 || metres < best) best = metres;
             }
             return best;

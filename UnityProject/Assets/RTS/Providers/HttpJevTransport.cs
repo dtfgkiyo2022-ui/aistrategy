@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -14,10 +15,11 @@ namespace Rts.Providers
     /// the game host) and is only ever placed in the Authorization header: never in a message, a log or the state.
     /// Any failure (no key, timeout, non-2xx, unreadable reply) is an exception, which the provider turns into "no order".
     /// </summary>
-    public sealed class HttpJevTransport : IJevTransport
+    public sealed class HttpJevTransport : IJudgement
     {
-        public const string DefaultUrl = "https://ai-gateway.lolipop.jp/v1/systemone";
-        public const string DefaultModel = "typesafe/jev-latest";
+        public const string DefaultUrl = "https://api.typesafe.ai/v1/systemone";
+        public const string DefaultModel = "jev-latest";
+        public const string DefaultKeyEnvironment = "TYPESAFE_API_KEY";
 
         private readonly HttpClient client;
         private readonly Func<string> readKey;
@@ -27,6 +29,10 @@ namespace Rts.Providers
         /// <summary>Tokens sent so far, for the running cost display. Read from any thread.</summary>
         public long InputTokens => Interlocked.Read(ref inputTokens);
         private long inputTokens;
+
+        /// <summary>Output tokens reported by the provider, for the common cost meter.</summary>
+        public long OutputTokens => Interlocked.Read(ref outputTokens);
+        private long outputTokens;
 
         public HttpJevTransport(Func<string> readKey, HttpMessageHandler handler = null, string url = DefaultUrl,
             string model = DefaultModel, TimeSpan? timeout = null)
@@ -63,24 +69,50 @@ namespace Rts.Providers
         internal JevAnswers Read(string text)
         {
             var root = MiniJson.Parse(text) as Dictionary<string, object> ?? throw new FormatException("The reply is not an object.");
-            if (root.TryGetValue("usage", out var usage) && usage is Dictionary<string, object> u
-                && u.TryGetValue("input_tokens", out var tokens) && tokens is double t)
-                Interlocked.Add(ref inputTokens, (long)t);
+            if (root.TryGetValue("usage", out var usage) && usage is Dictionary<string, object> u)
+            {
+                if (u.TryGetValue("input_tokens", out var tokens) && tokens is double t)
+                    Interlocked.Add(ref inputTokens, (long)t);
+                if (u.TryGetValue("output_tokens", out var output) && output is double ot)
+                    Interlocked.Add(ref outputTokens, (long)ot);
+            }
             var answers = root.TryGetValue("answers", out var a) ? a as Dictionary<string, object> : null;
             if (answers == null) throw new FormatException("The reply has no answers.");
             var result = new JevAnswers();
-            if (answers.TryGetValue("decisive_point", out var point) && point is Dictionary<string, object> p)
+            if (root.TryGetValue("usage", out var usageRoot) && usageRoot is Dictionary<string, object> usageData)
             {
-                result.Choice = Game(p.TryGetValue("choice", out var choice) ? choice as string : null);
-                if (p.TryGetValue("confidence", out var confidence) && confidence is double c) result.ChoiceConfidence = c;
-                // A missing confidence stays 0, so an answer without one never clears the threshold.
+                result.Usage.InputTokens = Number(usageData, "input_tokens");
+                result.Usage.OutputTokens = Number(usageData, "output_tokens");
             }
-            foreach (string fact in JevFacts.All)
-                if (answers.TryGetValue(fact, out var value) && value is Dictionary<string, object> r
-                    && r.TryGetValue("noul", out var noul) && noul is double n && n >= 0 && n <= 1)
-                    result.Facts[fact] = n;
+            foreach (var pair in answers)
+            {
+                if (!(pair.Value is Dictionary<string, object> answer)) continue;
+                if (answer.TryGetValue("choice", out var choiceValue) && choiceValue is string rawChoice)
+                {
+                    string choice = Game(rawChoice);
+                    if (choice != null) result.Choices[pair.Key] = choice;
+                    // A missing confidence stays 0, so an answer without one never clears the threshold.
+                    if (answer.TryGetValue("confidence", out var confidence) && confidence is double c
+                        && c >= 0 && c <= 1) result.ChoiceConfidences[pair.Key] = c;
+                    if (pair.Key == "decisive_point")
+                    {
+                        result.Choice = choice;
+                        result.ChoiceConfidence = result.ChoiceConfidences.TryGetValue(pair.Key, out var decisiveConfidence) ? decisiveConfidence : 0;
+                    }
+                }
+                if (answer.TryGetValue("noul", out var noul) && noul is double n && n >= 0 && n <= 1)
+                {
+                    result.Noul[pair.Key] = n;
+                    if (JevFacts.All.Contains(pair.Key)) result.Facts[pair.Key] = n;
+                }
+                if (answer.TryGetValue("score", out var score) && score is double s && s >= 0 && s <= 1)
+                    result.Scores[pair.Key] = s;
+            }
             return result;
         }
+
+        private static long Number(Dictionary<string, object> values, string name) =>
+            values.TryGetValue(name, out var value) && value is double number ? (long)number : 0;
 
         private static string Game(string choice)
         {
@@ -90,6 +122,13 @@ namespace Rts.Providers
                 case "south_outpost": return JevChoice.SouthOutpost;
                 case "my_core": return JevChoice.MyCore;
                 case "enemy_core": return JevChoice.EnemyCore;
+                case "focus": return "focus";
+                case "defend": return JevChoice.Defend;
+                case "retreat": return JevChoice.Retreat;
+                case "economy": return JevChoice.Economy;
+                case "unknown": return JevChoice.Unknown;
+                case "hold": return "hold";
+                case "capture": return "capture";
                 default: return null; // unknown or missing: no choice
             }
         }

@@ -24,6 +24,7 @@
     <Compile Include="JevStateTests.cs" />
     <Compile Include="JevRepeatTests.cs" />
     <Compile Include="JevComprehensionTests.cs" />
+    <Compile Include="JevG3Tests.cs" />
     <Compile Include="AutonomousPollScheduleTests.cs" />
     <Compile Include="TwoProviderTests.cs" />
     <Compile Include="TuningRuleTests.cs" />

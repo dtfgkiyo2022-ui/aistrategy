@@ -41,7 +41,7 @@ namespace Rts.Tests.Headless
         {
             var state = Parse(Observation());
             Assert.That(state["stateVersion"], Is.EqualTo(JevState.Version));
-            Assert.That(JevState.Version, Is.EqualTo("s4"), "a change of content must change the version, or answers stop being comparable");
+            Assert.That(JevState.Version, Is.EqualTo("s5"), "the compact grouped state is a new comparable state version");
         }
 
         [Test]

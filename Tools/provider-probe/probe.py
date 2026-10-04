@@ -7,9 +7,9 @@
   python probe.py --snapshots snaps.jsonl --fake --concurrency 2 --out result.json
 
   # 実接続（キーは環境変数から読む。ログにも出力にも書かない）
-  PROBE_URL   # 既定：https://ai-gateway.lolipop.jp/v1/systemone （ロリポップ！AIゲートウェイ経由の Jev）
-  PROBE_KEY   # APIキー。オーナーが管理し、環境変数だけで渡す
-  PROBE_MODEL # 既定：typesafe/jev-latest
+  PROBE_URL   # 既定：https://api.typesafe.ai/v1/systemone （TypeSafe 公式）
+  TYPESAFE_API_KEY # APIキー。オーナーが管理し、環境変数だけで渡す
+  PROBE_MODEL # 既定：jev-latest
   python probe.py --snapshots snaps.jsonl --concurrency 2 --timeout 12 --out result.json
 
 snapshots は1行1件のJSON（`snapshot` コマンドの出力）。
@@ -45,7 +45,7 @@ QUESTIONS = {
 
 def build_request(observation, timeout):
     """Jev の /v1/systemone に送る本体。state は観測をそのままJSONで渡す。"""
-    return {"model": os.environ.get("PROBE_MODEL", "typesafe/jev-latest"), "state": observation, "questions": QUESTIONS}
+    return {"model": os.environ.get("PROBE_MODEL", "jev-latest"), "state": observation, "questions": QUESTIONS}
 
 
 def parse_reply(body):
@@ -142,16 +142,17 @@ def main():
     ap.add_argument("--fake", action="store_true")
     ap.add_argument("--fake-latency-ms", type=float, default=120)
     ap.add_argument("--fake-fail-every", type=int, default=0)
+    ap.add_argument("--key-env", default="TYPESAFE_API_KEY")
     args = ap.parse_args()
 
     if args.fake:
         server, url = start_fake_server(args.fake_latency_ms, args.fake_fail_every)
         key = None
     else:
-        url = os.environ.get("PROBE_URL", "https://ai-gateway.lolipop.jp/v1/systemone")
-        key = os.environ.get("PROBE_KEY")
+        url = os.environ.get("PROBE_URL", "https://api.typesafe.ai/v1/systemone")
+        key = os.environ.get(args.key_env)
         if not key:
-            sys.exit("PROBE_KEY が未設定です（キーはオーナーが環境変数で渡す）。")
+            sys.exit(args.key_env + " が未設定です（キーはオーナーが環境変数で渡す）。")
 
     snaps = [json.loads(line) for line in open(args.snapshots, encoding="utf-8") if line.strip()]
     jobs = [(s, r) for s in snaps for r in range(args.repeat)]
@@ -173,7 +174,7 @@ def main():
                 problems = ["unparseable"]
         return {"tick": snap["tick"], "phase": snap.get("phase", ""), "faction": snap.get("faction"), "repeat": rep,
                 "bytes": size, "seconds": round(seconds, 4), "status": status, "choice": choice, "confidence": confidence, "noul": noul,
-                "input_tokens": usage.get("input_tokens"), "problems": problems,
+                "input_tokens": usage.get("input_tokens"), "output_tokens": usage.get("output_tokens"), "problems": problems,
                 "reply": body if rep == 0 and args.repeat > 1 else None}
 
     wall = time.perf_counter()
@@ -202,6 +203,8 @@ def main():
         "choice_counts": {},
         "input_tokens": {"min": min([r["input_tokens"] for r in ok if r["input_tokens"]] or [None]),
                          "max": max([r["input_tokens"] for r in ok if r["input_tokens"]] or [None])},
+        "output_tokens": {"min": min([r["output_tokens"] for r in ok if r["output_tokens"]] or [None]),
+                          "max": max([r["output_tokens"] for r in ok if r["output_tokens"]] or [None])},
         "retreat_noul": {"min": min([r["noul"] for r in ok if r["noul"] is not None] or [None]),
                          "max": max([r["noul"] for r in ok if r["noul"] is not None] or [None])},
     }

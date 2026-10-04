@@ -17,7 +17,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q7";
+        public const string Version = "q8";
 
         // The keys are Jev's; the game's own names are mapped in HttpJevTransport.
         public const string Json =
@@ -33,6 +33,12 @@ namespace Rts.Providers
             "\"enemy_near_my_core\":{\"type\":\"noul\"," +
             "\"instructions\":\"objectives のうち kind が \\\"core\\\" かつ heldBy が \\\"me\\\" である要素について、その nearestEnemyMeters が 40 以下である。その要素に nearestEnemyMeters がない場合、または該当する要素がない場合は偽とする。\"}," +
             "\"outpost_held_by_enemy\":{\"type\":\"noul\"," +
-            "\"instructions\":\"objectives のうち kind が \\\"outpost\\\" である要素に限って見たとき、heldBy が \\\"the enemy\\\" であるものが少なくとも1つある。kind が \\\"core\\\" の要素は数えない。heldBy が \\\"nobody\\\" や \\\"unknown\\\" のものも数えない。\"}}";
+            "\"instructions\":\"objectives のうち kind が \\\"outpost\\\" である要素に限って見たとき、heldBy が \\\"the enemy\\\" であるものが少なくとも1つある。kind が \\\"core\\\" の要素は数えない。heldBy が \\\"nobody\\\" や \\\"unknown\\\" のものも数えない。\"}," +
+            "\"dangerous_outpost\":{\"type\":\"choice\",\"instructions\":\"次の1分間に最も危険な拠点を1つ選ぶ。state にある観測だけで判断する。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\"}}," +
+            "\"retreat_north\":{\"type\":\"noul\",\"instructions\":\"北の部隊は撤退すべきである。\"}," +
+            "\"operation_north_broken\":{\"type\":\"noul\",\"instructions\":\"北の拠点が崩れた状態である。\"}," +
+            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類を1つ選ぶ。複雑な指示はわからない。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"unknown\":\"わからない\"}}," +
+            "\"instruction_target\":{\"type\":\"choice\",\"instructions\":\"指示文の対象を state に載っている名前から1つ選ぶ。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\",\"my_core\":\"自分のコア\",\"enemy_core\":\"敵のコア\",\"unknown\":\"わからない\"}}," +
+            "\"instruction_goal\":{\"type\":\"choice\",\"instructions\":\"指示文の目標を1つ選ぶ。複雑な目標はわからない。\",\"criteria\":{\"hold\":\"保持\",\"capture\":\"占領\",\"retreat\":\"撤退\",\"unknown\":\"わからない\"}}}";
     }
 }
