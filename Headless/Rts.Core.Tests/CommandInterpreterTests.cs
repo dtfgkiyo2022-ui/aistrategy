@@ -86,6 +86,26 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void PromptStatesSelectedTargetOrNone()
+        {
+            var summary = AiSituationSummary.From(Frame());
+            Assert.That(summary.Prompt("守れ"), Does.Contain("選択中の対象：なし"));
+            Assert.That(summary.Prompt("ここを守って", new ScopeKey(1, ScopeKind.Outpost, 1)), Does.Contain("選択中の対象：北の拠点"));
+        }
+
+        [Test]
+        public void JapaneseEconomyNamesBecomeGameEnums()
+        {
+            var result = Interpret("{\"commands\":[{\"type\":\"economy\",\"kind\":\"SetEconomyPolicy\",\"policy\":\"内政\"},{\"type\":\"economy\",\"kind\":\"PlaceBuilding\",\"building\":\"塔\",\"location\":\"お任せ\"},{\"type\":\"economy\",\"kind\":\"Train\",\"unit\":\"歩兵\",\"producer\":\"コア\"}],\"say\":\"\"}", Frame(true, false),
+                new DelegateAiPlacementFinder((_, __, building) => Tuple.Create(building == BuildingKind.Tower, 9, "")));
+            Assert.That(result.Rejected, Is.Empty);
+            Assert.That(result.EconomyCommands.Count, Is.EqualTo(3));
+            Assert.That(result.EconomyCommands[0].Policy, Is.EqualTo(EconomyPolicy.Growth));
+            Assert.That(result.EconomyCommands[1].Building, Is.EqualTo(BuildingKind.Tower));
+            Assert.That(result.EconomyCommands[2].Unit, Is.EqualTo(UnitKind.Infantry));
+        }
+
+        [Test]
         public void CostEstimateAndBudgetUseTokenCounts()
         {
             Assert.That(AiCostCalculator.Calculate("gpt-6-luna", 1000, 200), Is.EqualTo(0.03m));
