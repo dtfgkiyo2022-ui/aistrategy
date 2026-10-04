@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -11,28 +12,126 @@ namespace Rts.Providers
     /// <summary>固定語彙を返す参謀のJSON契約。LLMにはこのSchemaをそのまま渡せる。</summary>
     public static class AiCommandSchema
     {
-        // G-2 strict shape: every property is required, and a field that is irrelevant to a command is null.
-        // There are deliberately no numeric ranges here; Claude and OpenAI reject those in their strict subset.
-        private const string CommandObject = @"{
-  ""type"": ""object"", ""required"": [""type"", ""kind"", ""scope"", ""goal"", ""region"", ""building"", ""location"", ""producer"", ""unit"", ""civ"", ""policy"", ""control"", ""sequence"", ""when"", ""then"", ""once""],
+        // Written for the strict modes of both Claude (strict tools) and OpenAI (strict json_schema): every property is
+        // required and an optional one allows null, and there are no minimum/maximum (Claude rejects them on integers).
+        // Ranges are checked by the interpreter instead (count 1-100, permille 0-1000, sequence >= 1).
+        public const string Json = @"{
+  ""type"": ""object"", ""additionalProperties"": false,
+  ""required"": [""commands"", ""say"", ""reason"", ""unknown""],
   ""properties"": {
-    ""type"": { ""enum"": [""policy"", ""economy"", ""operation""] },
-    ""kind"": { ""type"": [""string"", ""null""] }, ""scope"": { ""type"": [""string"", ""null""] }, ""goal"": { ""type"": [""string"", ""null""] },
-    ""region"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] }, ""location"": { ""type"": [""string"", ""null""] },
-    ""producer"": { ""type"": [""string"", ""null""] }, ""unit"": { ""type"": [""string"", ""null""] }, ""civ"": { ""type"": [""string"", ""null""] },
-    ""policy"": { ""type"": [""string"", ""null""] }, ""control"": { ""type"": [""string"", ""null""] }, ""sequence"": { ""type"": [""integer"", ""null""] },
-    ""when"": { ""type"": [""object"", ""string"", ""null""] }, ""then"": { ""type"": [""array"", ""null""] }, ""once"": { ""type"": [""boolean"", ""null""] }
-  }, ""additionalProperties"": false
+    ""commands"": { ""type"": ""array"", ""items"": {
+      ""type"": ""object"", ""additionalProperties"": false,
+      ""required"": [""type"", ""kind"", ""scope"", ""goal"", ""region"", ""building"", ""location"", ""producer"", ""unit"", ""civ"", ""policy"", ""control"", ""sequence"", ""count"", ""reservePermille"", ""allowedLossPermille""],
+      ""properties"": {
+        ""type"": { ""type"": ""string"", ""enum"": [""policy"", ""economy""] },
+        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain""] },
+        ""scope"": { ""type"": [""string"", ""null""] }, ""goal"": { ""type"": [""string"", ""null""] },
+        ""region"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] },
+        ""location"": { ""type"": [""string"", ""null""] }, ""producer"": { ""type"": [""string"", ""null""] },
+        ""unit"": { ""type"": [""string"", ""null""] }, ""civ"": { ""type"": [""string"", ""null""] },
+        ""policy"": { ""type"": [""string"", ""null""] }, ""control"": { ""anyOf"": [ { ""type"": ""string"", ""enum"": [""Human"", ""Ai""] }, { ""type"": ""null"" } ] },
+        ""sequence"": { ""type"": [""integer"", ""null""] }, ""count"": { ""type"": [""integer"", ""null""] },
+        ""reservePermille"": { ""type"": [""integer"", ""null""] }, ""allowedLossPermille"": { ""type"": [""integer"", ""null""] }
+      }
+    } },
+    ""say"": { ""type"": ""string"" }, ""reason"": { ""type"": [""string"", ""null""] },
+    ""unknown"": { ""type"": ""boolean"" }
+  }
 }";
 
-        public static readonly string Json = "{\"type\":\"object\",\"required\":[\"commands\",\"operations\",\"say\",\"reason\",\"unknown\",\"inputTokens\",\"outputTokens\"],\"properties\":{"
-            + "\"commands\":{\"type\":[\"array\",\"null\"],\"items\":" + CommandObject + "},"
-            + "\"operations\":{\"type\":[\"array\",\"null\"],\"items\":{\"type\":\"object\",\"required\":[\"when\",\"then\",\"once\"],\"properties\":{\"when\":{\"type\":[\"object\",\"string\",\"null\"]},\"then\":{\"type\":[\"array\",\"null\"],\"items\":" + CommandObject + "},\"once\":{\"type\":[\"boolean\",\"null\"]}},\"additionalProperties\":false}},"
-            + "\"say\":{\"type\":[\"string\",\"null\"]},\"reason\":{\"type\":[\"string\",\"null\"]},\"unknown\":{\"type\":[\"boolean\",\"null\"]},\"inputTokens\":{\"type\":[\"integer\",\"null\"]},\"outputTokens\":{\"type\":[\"integer\",\"null\"]}},\"additionalProperties\":false}";
+        // Keep the stable part long enough for provider prompt caches.  The changing situation is appended after this
+        // text by AiSituationSummary.Prompt, so names and tick-dependent facts do not invalidate the cached prefix.
+        public const string StableInstructions = @"
+あなたはRTSゲームの参謀です。人間の日本語の指示を、実行可能な命令のJSONに変換してください。
+返答は必ず指定されたJSON Schemaに従うJSONだけにしてください。説明文、Markdown、コードフェンス、Schemaにないキーは返さないでください。
 
-        public const string StableInstructions =
-            "commandsは順番に実行する命令。対象と目標は戦況の名前表の文字列だけを使う。" +
-            "不明・曖昧・未対応ならunknown=true、commands=[]、reasonを短く返す。";
+基本規則
+1. commandsは実行する命令を順番に並べます。指示の意味が明確で、現在の戦況で実行できるものだけを出します。
+2. scopeは動かす側です。指定できる値は名前表にある「全部隊」「第N軍」「北軍」「南軍」「斥候」「予備」などの部隊、拠点、区域です。
+   方針命令ではscopeが、どの自軍の部隊・拠点・区域を操作するかを表します。scopeに敵の対象や名前表にない語を入れてはいけません。
+3. goalは目標の場所です。拠点、コア、地点など、名前表に目標として載っている文字列だけを使います。目標が不要な命令ではnullにします。
+4. regionは区域の担当または区域ごとの内政方針を変更するときだけ使います。区域を操作する命令以外ではnullにします。
+5. buildingは建てる建物の種類、locationは建てる場所、producerは訓練元の建物、unitは作る兵種、civは進める文明、policyは内政方針です。該当しない項目はnullにします。
+6. controlは区域の担当です。Humanは人間に任せる、AiはAIに任せる、該当しないときはnullです。
+7. sequenceは通常nullで、commandsの順番に従います。countは訓練数または建設数で、1以上100以下の整数です。reservePermilleとallowedLossPermilleは0以上1000以下の千分率です。
+8. 「ここ」「この部隊」などの指示語は、入力の選択中の対象が明示されている場合だけそれを使います。選択中の対象がないのに指示語だけで対象を指定していたらunknown=trueにします。
+9. 「今どっちが優勢？」「敵はどこ？」のような質問は命令ではありません。commands=[]、unknown=true、reasonに「質問」と書きます。観測できないことを推測して命令にしません。
+10. 曖昧、対象不明、敵の物を操作、未対応の操作、条件付きの作戦などは、勝手に補わずunknown=trueにします。commandsは空配列にし、reasonを短く書きます。
+11. 条件が付いた命令はこの契約では実行できません。「来たら」「半分になったら」「時間が過ぎたら」などを含む場合はunknown=trueです。
+12. 文章に複数の独立した命令があるときは、各命令をcommandsに入れます。順番に意味がある場合は文の順番を保ちます。ひとつでも対象が不明なら、推測で一部だけ実行せずunknown=trueにします。
+
+項目の使い分け
+- policy型のkindはFocus（攻撃・向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、MaintainReserve（予備を残す）、Scout（偵察）、ReturnToAuto（自動方針に戻す）です。
+- Focus/Defend/Scoutには通常goalが必要です。Retreat、AllowAbandon、MaintainReserve、ReturnToAutoではgoalはnullです。
+- economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、PlaceBuilding、Train、CancelTrainです。区域担当を変えるときはregionとcontrolを使います。
+- 全体の内政方針はregion=null、区域ごとの内政方針はregionに区域名を入れます。policyはMilitary（軍事）、Growth（経済・内政重視）、Balanced（均衡）です。入力の「兵の生産を優先」「軍事重視」はMilitary、「村人を増やす」「稼ぎを伸ばす」「内政を優先」はGrowthにします。
+ - PlaceBuildingではbuildingとlocationを使います。場所を指定しない「もう一つ建てる」はlocation=お任せです。名前表の場所の近くならその場所名をlocationにします。
+- Trainではunitとcountを使います。producerが指定されたときだけ名前表の建物名を使い、指定がない村人の訓練などではproducer=nullにします。CancelTrainはproducerを使います。
+- AdvanceAgeではcivを使います。文明が指定されない「次の時代へ」は、現在の文明やルールを確認できないためunknown=trueにします。
+
+日本語名の変換
+建物名は日本語でも英語でも受け付けます。兵舎=Barracks、鉱山=Mine、溶鉱炉=Smelter、農場=Farm、住居または家=House、資源拠点=DropSite、壁=Wall、塔=Tower、鍛冶場=Blacksmith、市場=Market、攻城工房=SiegeWorkshop、射手育成所=ArcheryRange、騎兵育成所=Stable、城=Castle、木材所=LumberCamp、石切場=Quarry、町の中心または支城=Townです。
+兵種は日本語でも英語でも受け付けます。歩兵=Infantry、斥候=Scout、村人=Villager、弓兵=Archer、騎兵=Cavalry、破城槌=Ram、傭兵=Mercenary、僧侶=Monk、重歩兵=HeavyInfantry、散兵=SkirmishArcher、軽騎兵=LightCavalryです。
+文明は日本語でも英語でも受け付けます。原始=Primitive、農耕=Agrarian、冶金=Metallurgy、森林=Forestry、石工=Masonry、商業=Caravan、騎兵=Cavalry、橋梁=Bridge、学術=Academy、信仰=Cult、漁業=Fishing、山岳=Mountain、関所=Tollgate、都市=Metropolis、聖域=Sanctuaryです。
+内政方針は軍事=Military、兵站または内政=Growth、経済=Growth、均衡=Balancedです。JSONには必ず英語のenum値を入れます。
+
+名前表の扱い
+名前表の文字列はゲーム画面で表示される呼び方です。第N軍のNは自軍部隊IDを小さい順に並べた番号であり、IDそのものではありません。北軍・南軍・斥候・予備などの別名が表にあるときは、同じ行の同じ対象として扱います。
+区域は区域N、建物は種類の日本語名と種類ごとの番号（兵舎1、住居1など）、資源の固まりは方角付き（東の資源の固まり）、支城に対応する区域は支城の区域です。表にない地名、敵の第2軍、存在しない西の拠点を作ってはいけません。
+
+判定手順
+最初に、入力が命令か質問かを判定します。疑問符がない場合でも、「どこ」「何体」「どちらが優勢」など情報を求める文は質問です。質問には推測で答えず、unknown=trueとします。
+次に、文の中から操作対象、目標、操作の種類、数、担当、場所、条件を分けて読み取ります。「守る」はDefend、「攻める」「向かう」「取りに行く」はFocus、「下がる」「戻る」はRetreat、「任せる」は文脈に応じてReturnToAutoまたは区域のAi、「自分でやる」は区域のHumanです。
+「捨てていい」「放棄していい」はAllowAbandonであり、直ちに部隊を消す命令ではありません。「予備を残す」はMaintainReserveで、reservePermilleに千分率を入れます。2割は200、半分は500、全部は1000です。
+「見てきて」「偵察」はScoutです。偵察する部隊が名前表にない、または目標が名前表にない場合は実行しません。「総攻撃」はFocusに変換しますが、敵の名前をscopeにしてはいけません。敵を目標にできるのはgoalだけです。
+「守備重視」「ここを守る」はDefendです。守る範囲と守る場所を混同しないでください。全軍で守る場合はscope=全部隊、部隊で守る場合はscope=その部隊です。区域を守る場合はscope=区域N、区域の中心が名前表にあるときだけgoalにその中心を入れます。
+部隊名の数字は画面の番号です。戦況にID=7の部隊が一つだけあっても、それは第1軍です。名前表の「北軍」が第1軍の別名なら、第1軍と北軍を別の部隊として二重に命令しません。複数の別名が一つの対象を表す場合、それらを一つの対象として扱います。
+区域の番号は地図の区域IDであり、部隊番号とは別です。区域3の担当変更ではscopeではなくregion=区域3を使い、control=HumanまたはAiを使います。区域の内政方針ではregion=区域3、policy=Military/Growth/Balancedです。
+建設は建物の種類と場所を分けます。「塔を北側に」はbuilding=Tower、location=北側に対応する名前表の地点です。「もう一つ建てる」「空いている場所に建てる」はlocation=お任せです。お任せ配置はシステムが安全なセルを探すため、セル番号を推測して書きません。
+建物の番号は種類ごとに数えます。兵舎1と住居1は別の建物です。訓練元が兵舎とだけ言われたとき、名前表に兵舎がなく兵舎1だけがあるなら、兵舎1を使います。候補が複数あり区別できないときはunknown=trueにします。
+訓練数の表現は数字だけでなく、「一体」「二人」「3体」「5人」のような日本語も解釈できます。数がないときは通常1ですが、上限100を越える要求はunknownまたは命令を拒否します。負数、小数、極端な数を丸めてはいけません。
+「村人を作る」はunit=Villagerです。村人の訓練元が明記されていない場合はproducer=nullにします。「兵舎で歩兵」はproducerを名前表から解決します。名前表にない建物を訓練元にしません。取り消しはCancelTrainで、現在の訓練を取り消す対象の建物をproducerにします。
+文明の日本語名は、ゲームの文明名対応表に従って英語のenum値へ変換します。冶金とMetallurgy、石工とMasonryを混同しません。文明名の指定がなければ現在の文明を推測せず、次の時代へという命令をunknownにします。
+内政方針の「兵」「軍事」「戦力」はMilitary、「村人」「稼ぎ」「内政」「経済」はGrowth、「均衡」「バランス」はBalancedです。「建物を建てる」「兵を訓練する」は内政方針変更ではなく、PlaceBuildingまたはTrainです。
+普通の文体、短い電文、ひらがな、言い直し、言いよどみは意味が一つに定まれば同じ命令にします。言い直しでは最後の明確な内容を使います。例えば前半の場所を後半で訂正している場合、訂正前と訂正後の二つの命令を出しません。
+複数命令では各命令のscopeとgoalを個別に埋めます。「第2軍と第3軍」は二つのFocus命令に分けます。「Aを守りつつBで攻める」は同時に実行可能なら二命令に分けます。ただし条件文や曖昧な代名詞が含まれる場合は全体をunknownにします。
+許可される操作は、この前置きとkindの一覧にあるものだけです。チャット送信、ファイル操作、設定変更、相手への挑発、装備の交換、兵種の変換、ゲーム外の操作は未対応です。似た命令へ勝手に置き換えません。
+対象の所有者が不明な場合は自分の物として扱いません。敵の部隊、敵の拠点、敵コアをscopeにする命令は拒否します。敵コアへ攻撃する場合だけ、敵コアをgoalに置き、scopeは自軍の全部隊または自軍部隊にします。
+霧の中の敵や戦況に記載されていない対象について、位置、数、所有者を推測しません。見えている敵の報告を求められたときも、この契約では命令を作らず質問として扱います。観測事実と人間の希望を混ぜないでください。
+選択中の対象は指示文の前に別行で示されます。選択中の対象が「北の拠点」なら「ここを守れ」は全軍が北の拠点を守る命令になります。選択中の対象が第3軍なら「この部隊を下げて」は第3軍のRetreatです。選択中の対象がなしなら、同じ文は対象不明として断ります。
+選択中の対象が区域なら、区域の担当変更ではregionにその区域を入れます。選択中の対象が建物なら、訓練の取り消しではproducerに建物名を入れます。選択対象の種類と命令の種類が合わない場合、無理にscopeやgoalへ流用しません。
+reasonは人間が読んで分かる短い理由です。成功時はnullまたは空文字でよく、unknown時は「曖昧」「対象が不明」「自分の物でない」「対応していない」「質問」「条件付きの命令は未対応」など原因を明示します。sayは短い確認文で、命令の代わりにしません。
+unknown=trueのときcommandsは必ず空配列にします。unknown=falseのときは少なくとも意味のあるcommandsを一つ返すか、命令が空である理由をsay/reasonに示します。成功した一部だけを出して残りを黙って捨てません。
+JSONのすべてのrequired項目を出します。命令ごとに使わない項目はnullです。整数を文字列にせず、true/falseを文字列にせず、nullを「なし」という文字列にしません。commandsの外に命令を置きません。
+出力前に、typeとkindの組み合わせ、名前表への一致、所有者、goalの必要性、regionとcontrolの組み合わせ、建物・兵・文明・policyのenum変換、数の範囲、unknownとcommandsの整合性を順に確認してください。
+特に、scopeとgoalは役割が違います。北の拠点を守るならscope=全部隊、goal=北の拠点です。北軍で守るならscope=北軍、goal=北の拠点です。南軍を北へ向かわせるならscope=南軍、goal=北の拠点です。目標をscopeに入れたり、動かす部隊をgoalに入れたりしません。
+特に、区域の命令は三種類を区別します。区域3を人間担当にするのはSetRegionControl、区域3の内政を軍事重視にするのはSetEconomyPolicy、区域3を守るのはpolicy型のDefendです。最初の二つはeconomy型で、三つ目はpolicy型です。
+特に、「任せる」は対象によって意味が変わります。全部隊や部隊ならReturnToAuto、区域ならSetRegionControlでcontrol=Aiです。内政全体を任せるという文だけでは、既存の自動内政へ戻す操作か方針変更かを区別できない場合があるため、文の対象を確認します。
+特に、放棄の許可と撤退は違います。拠点を捨ててよいはAllowAbandonで、部隊が下がるはRetreatです。予備の保持と部隊の撤退も違うため、保持割合はMaintainReserveのreservePermilleにだけ入れます。
+特に、場所の「近く」は目標goalではなくPlaceBuildingのlocationです。支城や資源の固まりの近くに建てる場合、その地点が名前表にあるときだけlocationに使います。名前表にない方角や距離からセル番号を作りません。
+特に、同じ文に数と命令がある場合、countはTrainまたはPlaceBuildingにだけ使います。MaintainReserveの「2割」はreservePermille=200であり、count=2ではありません。allowedLossの半分はallowedLossPermille=500です。
+特に、命令に「敵が来たら」「失ったら」「時間が経ったら」「そのとき」がある場合、現在の命令へ単純化しません。条件を保存できる別契約がないため、unknown=trueにします。
+最後に、返すJSONを読み直し、すべての文字列が名前表または指定されたenum語彙に合っていることを確認してください。人間向けの説明をJSONの外に付けず、sayが必要なときもJSONのsay文字列に入れてください。
+入力の敬語、命令形、体言止めは同じ意味として扱えますが、意味を追加しません。文にない数、方向、対象、条件、所有者を補いません。複数候補から一つを選ぶ必要がある場合は、名前表と戦況で一意に決まるときだけ選び、決まらなければunknown=trueにします。
+表現の揺れがあっても、JSONのkindは必ず指定された英語の値に統一します。日本語名を受け付けるのはbuilding、unit、civ、policyなどの値の読み取りであり、返すJSONの種類名を日本語にすることではありません。
+値がnullの項目を省略しないでください。strictな構造化出力では省略された項目を受け取れないため、不要な項目にもnullを入れます。commandsが空のときもsay、reason、unknownを必ず返します。
+この確認は、短い指示でも長い計画文でも同じです。戦況の後ろにある最新の名前表と選択対象を優先し、古い一般論や推測よりも現在のデータを優先します。
+現在の戦況にない情報を前置きの例から持ち込まず、例は書式と判断の境界を示すだけのものとして扱います。実際の対象は必ず直後の名前表で照合します。
+
+返答の例（以下は形式の説明用で、現在の戦況の命令を先取りするものではありません）
+例1: 自軍のコアを守る → policy / Defend / scope=全部隊 / goal=自軍コア / その他はnull
+例2: 第1軍を北の拠点へ集める → policy / Focus / scope=第1軍 / goal=北の拠点 / その他はnull
+例3: 斥候を南の区域へ偵察に出す → policy / Scout / scope=斥候 / goal=区域2 / その他はnull
+例4: 第2軍は撤退 → policy / Retreat / scope=第2軍 / goal=null / その他はnull
+例5: 区域1を人間担当にする → economy / SetRegionControl / region=区域1 / control=Human / その他はnull
+例6: 軍事重視に変える → economy / SetEconomyPolicy / region=null / policy=Military / その他はnull
+例7: 住居を3つ建てる → economy / PlaceBuilding / building=House / location=お任せ / count=3 / その他はnull
+例8: 兵舎1で弓兵を2体訓練 → economy / Train / producer=兵舎1 / unit=Archer / count=2 / その他はnull
+例9: その件はどうなっている？ → commands=[] / unknown=true / reason=質問
+例10: もし敵が来たら守る → commands=[] / unknown=true / reason=条件付きの命令は未対応
+
+以上の前置きの後に続く戦況、名前表、選択中の対象、指示を読み、JSONだけを返してください。
+";
     }
 
     public sealed class AiCommandInterpretationResult
@@ -92,9 +191,51 @@ namespace Rts.Providers
 
         public bool TryGet(string name, out AiNameTableEntry entry) => names.TryGetValue(name ?? "", out entry);
 
-        public string Prompt(string instruction)
+        public string NameFor(ScopeKey scope)
         {
-            return AiCommandSchema.StableInstructions + "\n戦況:\n" + Text + "\n指示:\n" + (instruction ?? "");
+            foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
+                if (entry.HasScope && entry.Scope.Equals(scope)) return entry.Name;
+            return null;
+        }
+
+        public string Prompt(string instruction, ScopeKey? fixedTarget = null)
+        {
+            var names = new StringBuilder();
+            foreach (var entry in NameTable ?? Array.Empty<AiNameTableEntry>())
+            {
+                if (names.Length != 0) names.Append('、');
+                names.Append(entry.Name);
+            }
+            string selected = fixedTarget.HasValue ? NameFor(fixedTarget.Value) : null;
+            return AiCommandSchema.StableInstructions + "\n名前表（この文字列だけを使う）:\n" + names +
+                "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
+                "\n指示:\n" + (instruction ?? "");
+        }
+
+        /// <summary>Host adapters may add a visible alias without changing its contract identity.</summary>
+        public void AddAlias(string alias, string existingName)
+        {
+            if (string.IsNullOrEmpty(alias) || !TryGet(existingName, out var existing)) return;
+            if (names.TryGetValue(alias, out var oldAlias))
+            {
+                if (oldAlias.Scope.Equals(existing.Scope) && oldAlias.HasScope == existing.HasScope && oldAlias.Id == existing.Id) return;
+                names.Remove(alias);
+                var withoutAlias = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>());
+                withoutAlias.RemoveAll(x => x.Name == alias);
+                NameTable = withoutAlias.AsReadOnly();
+            }
+            var entry = new AiNameTableEntry { Name = alias, Scope = existing.Scope, HasScope = existing.HasScope,
+                Goal = existing.Goal, HasGoal = existing.HasGoal, Id = existing.Id, IsOwn = existing.IsOwn, Point = existing.Point };
+            names.Add(alias, entry);
+            var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
+        }
+
+        public void AddGoalAlias(string alias, PolicyGoal goal, bool own, SimPoint point)
+        {
+            if (string.IsNullOrEmpty(alias) || names.ContainsKey(alias)) return;
+            var entry = new AiNameTableEntry { Name = alias, Goal = goal, HasGoal = true, IsOwn = own, Id = goal.Id, Point = point };
+            names.Add(alias, entry);
+            var list = new List<AiNameTableEntry>(NameTable ?? Array.Empty<AiNameTableEntry>()); list.Add(entry); NameTable = list.AsReadOnly();
         }
 
         public static AiSituationSummary From(FactionFrame frame)
@@ -140,14 +281,25 @@ namespace Rts.Providers
 
             if (frame.Economy != null)
             {
-                int buildingNumber = 1;
+                var buildingNumbers = new Dictionary<BuildingKind, int>();
                 foreach (var building in frame.Economy.Buildings.Where(b => b.FactionId == frame.FactionId).OrderBy(b => b.Id))
                 {
-                    string name = BuildingName(building.Kind) + buildingNumber++.ToString(CultureInfo.InvariantCulture);
+                    int number = buildingNumbers.TryGetValue(building.Kind, out var previous) ? previous + 1 : 1;
+                    buildingNumbers[building.Kind] = number;
+                    string name = BuildingName(building.Kind) + number.ToString(CultureInfo.InvariantCulture);
                     AddProducer(summary, list, name, building.Id, building.Center);
                 }
             }
             summary.NameTable = list.AsReadOnly();
+            if (armies.Length > 1)
+            {
+                OwnArmyView north = armies.OrderByDescending(a => a.Position.Z.Raw).ThenBy(a => a.Id).First();
+                OwnArmyView south = armies.OrderBy(a => a.Position.Z.Raw).ThenBy(a => a.Id).First();
+                summary.AddAlias("北軍", ArmyName(armies, north.Id));
+                if (south.Id != north.Id) summary.AddAlias("南軍", ArmyName(armies, south.Id));
+            }
+            foreach (var army in armies.Where(a => a.Kind == UnitKind.Scout))
+                summary.AddAlias("斥候", ArmyName(armies, army.Id));
             summary.Text = BuildText(frame, armies, objectives);
             return summary;
         }
@@ -167,13 +319,29 @@ namespace Rts.Providers
             switch (kind)
             {
                 case BuildingKind.Barracks: return "兵舎";
-                case BuildingKind.House: return "家";
-                case BuildingKind.Farm: return "農場";
                 case BuildingKind.Mine: return "鉱山";
                 case BuildingKind.Smelter: return "溶鉱炉";
+                case BuildingKind.Farm: return "農場";
+                case BuildingKind.House: return "住居";
+                case BuildingKind.DropSite: return "資源拠点";
+                case BuildingKind.Wall: return "壁";
+                case BuildingKind.Tower: return "塔";
                 case BuildingKind.Blacksmith: return "鍛冶場";
+                case BuildingKind.Market: return "市場";
+                case BuildingKind.SiegeWorkshop: return "攻城工房";
+                case BuildingKind.ArcheryRange: return "射手育成所";
+                case BuildingKind.Stable: return "騎兵育成所";
+                case BuildingKind.Castle: return "城";
+                case BuildingKind.Town: return "支城";
                 default: return kind.ToString();
             }
+        }
+
+        private static string ArmyName(IReadOnlyList<OwnArmyView> armies, uint id)
+        {
+            for (int i = 0; i < armies.Count; i++) if (armies[i].Id == id)
+                return "第" + (i + 1).ToString(CultureInfo.InvariantCulture) + "軍";
+            return null;
         }
 
         private static void AddScope(AiSituationSummary s, List<AiNameTableEntry> list, string name, ScopeKey scope, bool own)
@@ -199,8 +367,8 @@ namespace Rts.Providers
         {
             var b = new StringBuilder();
             b.Append("tick ").Append(frame.Tick.ToString(CultureInfo.InvariantCulture)).Append("。自軍の軍団 ").Append(armies.Count).Append(" 個。\n");
-            foreach (var army in armies)
-                b.Append("自軍軍団#").Append(army.Id).Append(" 種別=").Append(army.Kind).Append(" 生存=").Append(army.AliveCount).Append("。\n");
+            for (int i = 0; i < armies.Count; i++)
+                b.Append("自軍").Append("第").Append(i + 1).Append("軍(ID=").Append(armies[i].Id).Append(") 種別=").Append(armies[i].Kind).Append(" 生存=").Append(armies[i].AliveCount).Append("。\n");
             int visible = frame.Observation?.VisibleEnemies?.Count ?? 0;
             int contacts = frame.Observation?.Contacts?.Count ?? 0;
             b.Append("現在見えている敵=").Append(visible).Append("、既知の接触=").Append(contacts).Append("（未観測の敵は含めない）。\n");
@@ -433,8 +601,11 @@ namespace Rts.Providers
             else if (needsGoal) throw new AiCommandException("目標が不明", kindText);
             var expiration = new Expiration(c.DeadlineTick == 0 ? c.StartedTick + c.MaxObservationAgeTicks : c.DeadlineTick,
                 c.MaxObservationAgeTicks, ExpireFlags.ObservationTooOld);
-            output.Add(new UserPolicyIntent(next++, scope, kind, goal, 100, new LossBudget(1000),
-                new EndCondition(EndKind.UntilReplaced, 0), 0, expiration));
+            ushort reserve = AiJson.UInt16(command, "reservePermille", 0);
+            ushort allowedLoss = AiJson.UInt16(command, "allowedLossPermille", 1000);
+            if (reserve > 1000 || allowedLoss > 1000) throw new AiCommandException("割合が不正", kindText);
+            output.Add(new UserPolicyIntent(next++, scope, kind, goal, 100, new LossBudget(allowedLoss),
+                new EndCondition(EndKind.UntilReplaced, 0), reserve, expiration));
         }
 
         private static bool IsScopeAllowed(PolicyKind kind, ScopeKind scope)
@@ -472,7 +643,14 @@ namespace Rts.Providers
             switch (kind)
             {
                 case EconomyCommandKind.SetEconomyPolicy:
-                    output.Add(EconomyCommand.SetPolicy(c.Frame.FactionId, seq, ParseEnum<EconomyPolicy>(command, "policy"))); return;
+                    if (!string.IsNullOrEmpty(targetName))
+                    {
+                        if (!c.Summary.TryGet(targetName, out var regionPolicy) || !regionPolicy.HasScope || regionPolicy.Scope.Kind != ScopeKind.Region)
+                            throw new AiCommandException("区域が名前表にない", kindText);
+                        output.Add(EconomyCommand.SetRegionPolicy(c.Frame.FactionId, seq, regionPolicy.Scope.Id, ParseEconomyPolicy(command)));
+                    }
+                    else output.Add(EconomyCommand.SetPolicy(c.Frame.FactionId, seq, ParseEconomyPolicy(command)));
+                    return;
                 case EconomyCommandKind.AdvanceAge:
                     if (!c.Frame.Economy.Ages) throw new AiCommandException("今のルールでは時代を進められない", kindText);
                     output.Add(EconomyCommand.Advance(c.Frame.FactionId, seq, ParseEnum<CivKind>(command, "civ"))); return;
@@ -480,17 +658,26 @@ namespace Rts.Providers
                     var building = ParseEnum<BuildingKind>(command, "building");
                     int cell;
                     string location = AiJson.String(command, "location");
+                    string namedPlacementReason = null;
                     if (string.IsNullOrEmpty(location) || location == "お任せ")
                     {
                         string placementReason = null;
                         if (c.PlacementFinder == null || !c.PlacementFinder.TryFindCell(c.Frame, location ?? "お任せ", building, out cell, out placementReason))
                             throw new AiCommandException(placementReason ?? "置き場所を決められない", kindText);
                     }
+                    else if (c.Summary.TryGet(location, out var locationEntry) && c.PlacementFinder != null &&
+                        c.PlacementFinder.TryFindCell(c.Frame, location, building, out cell, out namedPlacementReason))
+                    {
+                    }
                     else if (!int.TryParse(location, NumberStyles.Integer, CultureInfo.InvariantCulture, out cell))
-                        throw new AiCommandException("置き場所が名前表にない", kindText);
-                    output.Add(EconomyCommand.Place(c.Frame.FactionId, seq, building, cell)); return;
+                        throw new AiCommandException(namedPlacementReason ?? "置き場所が名前表にない", kindText);
+                    int placeCount = Count(command);
+                    for (int i = 0; i < placeCount; i++) output.Add(EconomyCommand.Place(c.Frame.FactionId, seq++, building, cell));
+                    return;
                 case EconomyCommandKind.Train:
-                    output.Add(EconomyCommand.Train(c.Frame.FactionId, seq, ProducerId(command, c), ParseEnum<UnitKind>(command, "unit"))); return;
+                    int trainCount = Count(command);
+                    for (int i = 0; i < trainCount; i++) output.Add(EconomyCommand.Train(c.Frame.FactionId, seq++, ProducerId(command, c), ParseEnum<UnitKind>(command, "unit")));
+                    return;
                 case EconomyCommandKind.CancelTrain:
                     output.Add(EconomyCommand.CancelTrain(c.Frame.FactionId, seq, ProducerId(command, c))); return;
                 default: throw new AiCommandException("G-1で対応していない内政命令", kindText);
@@ -504,11 +691,72 @@ namespace Rts.Providers
             if (!c.Summary.TryGet(producer, out var entry) || entry.Id == 0) throw new AiCommandException("訓練元が名前表にない", "Train");
             return entry.Id;
         }
+        private static int Count(Dictionary<string, object> command)
+        {
+            double value = AiJson.Number(command, "count", 1);
+            if (value < 1 || value > 100 || value != Math.Truncate(value)) throw new AiCommandException("個数が不正", "count");
+            return (int)value;
+        }
         private static T ParseEnum<T>(Dictionary<string, object> obj, string key) where T : struct
         {
             string value = AiJson.String(obj, key);
-            if (!Enum.TryParse(value, false, out T result)) throw new AiCommandException(key + "が不明", key);
-            return result;
+            if (TryParseGameName(value, out T result)) return result;
+            throw new AiCommandException(key + "が不明", key);
+        }
+        private static EconomyPolicy ParseEconomyPolicy(Dictionary<string, object> obj)
+        {
+            string value = AiJson.String(obj, "policy");
+            if (string.Equals(value, "Economy", StringComparison.OrdinalIgnoreCase) || value == "経済" || value == "内政" || value == "成長") return EconomyPolicy.Growth;
+            if (string.Equals(value, "Military", StringComparison.OrdinalIgnoreCase) || value == "軍事" || value == "兵事" || value == "兵の生産") return EconomyPolicy.Military;
+            if (string.Equals(value, "Balanced", StringComparison.OrdinalIgnoreCase) || value == "均衡" || value == "バランス") return EconomyPolicy.Balanced;
+            throw new AiCommandException("policyが不明", "SetEconomyPolicy");
+        }
+        private static bool TryParseGameName<T>(string value, out T result) where T : struct
+        {
+            if (Enum.TryParse(value, false, out result)) return true;
+            object mapped = null;
+            if (typeof(T) == typeof(BuildingKind))
+            {
+                switch (value)
+                {
+                    case "兵舎": mapped = BuildingKind.Barracks; break; case "鉱山": mapped = BuildingKind.Mine; break;
+                    case "溶鉱炉": mapped = BuildingKind.Smelter; break; case "農場": mapped = BuildingKind.Farm; break;
+                    case "住居": case "家": mapped = BuildingKind.House; break; case "資源拠点": mapped = BuildingKind.DropSite; break;
+                    case "壁": mapped = BuildingKind.Wall; break; case "塔": mapped = BuildingKind.Tower; break;
+                    case "鍛冶場": mapped = BuildingKind.Blacksmith; break; case "市場": mapped = BuildingKind.Market; break;
+                    case "攻城工房": mapped = BuildingKind.SiegeWorkshop; break; case "射手育成所": mapped = BuildingKind.ArcheryRange; break;
+                    case "騎兵育成所": mapped = BuildingKind.Stable; break; case "城": mapped = BuildingKind.Castle; break;
+                    case "支城": case "町の中心": mapped = BuildingKind.Town; break;
+                }
+            }
+            else if (typeof(T) == typeof(UnitKind))
+            {
+                switch (value)
+                {
+                    case "歩兵": mapped = UnitKind.Infantry; break; case "斥候": mapped = UnitKind.Scout; break;
+                    case "村人": mapped = UnitKind.Villager; break; case "弓兵": mapped = UnitKind.Archer; break;
+                    case "騎兵": mapped = UnitKind.Cavalry; break; case "破城槌": mapped = UnitKind.Ram; break;
+                    case "傭兵": mapped = UnitKind.Mercenary; break; case "僧侶": mapped = UnitKind.Monk; break;
+                    case "重歩兵": mapped = UnitKind.HeavyInfantry; break; case "散兵": mapped = UnitKind.SkirmishArcher; break;
+                    case "軽騎兵": mapped = UnitKind.LightCavalry; break;
+                }
+            }
+            else if (typeof(T) == typeof(CivKind))
+            {
+                switch (value)
+                {
+                    case "原始": mapped = CivKind.Primitive; break; case "農耕": mapped = CivKind.Agrarian; break;
+                    case "冶金": mapped = CivKind.Metallurgy; break; case "森林": mapped = CivKind.Forestry; break;
+                    case "石工": mapped = CivKind.Masonry; break; case "商業": mapped = CivKind.Caravan; break;
+                    case "騎兵": mapped = CivKind.Cavalry; break; case "橋梁": mapped = CivKind.Bridge; break;
+                    case "学術": mapped = CivKind.Academy; break; case "信仰": mapped = CivKind.Cult; break;
+                    case "漁業": mapped = CivKind.Fishing; break; case "山岳": mapped = CivKind.Mountain; break;
+                    case "関所": mapped = CivKind.Tollgate; break; case "都市": mapped = CivKind.Metropolis; break;
+                    case "聖域": mapped = CivKind.Sanctuary; break;
+                }
+            }
+            if (mapped == null) return false;
+            result = (T)mapped; return true;
         }
         private sealed class AiCommandException : Exception
         { internal string Kind; internal AiCommandException(string message, string kind) : base(message) { Kind = kind; } }
@@ -535,6 +783,7 @@ namespace Rts.Providers
         public string Json { get; internal set; }
         public AiTokenUsage Usage { get; internal set; }
         public string Model { get; internal set; }
+        public string FailureReason { get; internal set; }
     }
 
     public interface ICommandInterpreter
@@ -557,7 +806,7 @@ namespace Rts.Providers
             if (request == null) throw new ArgumentNullException(nameof(request));
             string json = answer(request);
             if (json == null) throw new InvalidOperationException("偽物の参謀がnullを返した");
-            int inputTokens = AiCostCalculator.EstimateTokens(request.Summary == null ? request.Instruction : request.Summary.Prompt(request.Instruction));
+            int inputTokens = AiCostCalculator.EstimateTokens(request.Summary == null ? request.Instruction : request.Summary.Prompt(request.Instruction, request.HasFixedTarget ? (ScopeKey?)request.FixedTarget : null));
             int outputTokens = AiCostCalculator.EstimateTokens(json);
             pending.Add(new Pending { Ready = checked(request.StartedTick + delayTicks), Reply = new InterpreterReply { RequestId = request.RequestId, Json = json, Model = request.Model ?? "gpt-6-luna", Usage = new AiTokenUsage(inputTokens, outputTokens) } });
         }
@@ -588,10 +837,12 @@ namespace Rts.Providers
         public ulong Request(string instruction, FactionFrame frame, ScopeKey? fixedTarget, string model, long startedTick, int deadlineTicks, IAiPlacementFinder placementFinder = null, OperationSource operationSource = OperationSource.Human)
         {
             var summary = AiSituationSummary.From(frame); ulong id = nextId++;
+            var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
             var context = new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = startedTick, DeadlineTick = checked(startedTick + deadlineTicks), MaxObservationAgeTicks = deadlineTicks, PlacementFinder = placementFinder, OperationSource = operationSource };
             if (fixedTarget.HasValue) { context.HasFixedTarget = true; context.FixedTarget = fixedTarget.Value; }
-            open.Add(id, new Open { Context = context, Model = model ?? "gpt-6-luna" });
-            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = model ?? "gpt-6-luna", StartedTick = startedTick, DeadlineTick = context.DeadlineTick, OperationSource = operationSource });
+            string modelName = selected.Model;
+            open.Add(id, new Open { Context = context, Model = modelName });
+            interpreter.Request(new InterpreterRequest { RequestId = id, FactionId = frame.FactionId, Instruction = instruction ?? "", FixedTarget = fixedTarget.GetValueOrDefault(), HasFixedTarget = fixedTarget.HasValue, Summary = summary, Model = modelName, StartedTick = startedTick, DeadlineTick = context.DeadlineTick, OperationSource = operationSource });
             return id;
         }
         private static AiCommandInterpretationResult LimitToModel(string model, AiCommandInterpretationResult result) => AiModelLimits.Apply(model, result);
@@ -604,7 +855,12 @@ namespace Rts.Providers
                 if (!open.TryGetValue(reply.RequestId, out var item)) continue;
                 open.Remove(reply.RequestId);
                 bool late = reply.ReturnedTick > item.Context.DeadlineTick;
-                result.Add(new InterpretedReply { RequestId = reply.RequestId, Late = late, Usage = reply.Usage, CostYen = AiCostCalculator.Calculate(item.Model, reply.Usage.InputTokens, reply.Usage.OutputTokens), Result = late ? new AiCommandInterpretationResult { Reason = "締め切りを過ぎた答え" } : LimitToModel(item.Model, AiResponseInterpreter.Interpret(reply.Json, item.Context)) });
+                var usage = reply.Usage;
+                AiCommandInterpretationResult parsed;
+                if (late) parsed = new AiCommandInterpretationResult { Reason = "締め切りを過ぎた答え" };
+                else if (!string.IsNullOrEmpty(reply.FailureReason)) parsed = new AiCommandInterpretationResult { Unknown = true, Reason = reply.FailureReason };
+                else parsed = LimitToModel(item.Model, AiResponseInterpreter.Interpret(reply.Json, item.Context));
+                result.Add(new InterpretedReply { RequestId = reply.RequestId, Late = late, Usage = usage, CostYen = AiCostCalculator.Calculate(item.Model, usage), Result = parsed });
             }
             return result;
         }
@@ -631,21 +887,77 @@ namespace Rts.Providers
     }
     public static class AiModelCatalog
     {
-        private static readonly Dictionary<string, AiModelPrice> prices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
+        private static readonly Dictionary<string, AiModelPrice> fallbackPrices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
         {
             ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, true), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, true), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, true), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, true),
             ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, true), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, true), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, true),
             ["jev"] = P("jev", .042m, 0, 240, false), ["local-llm"] = P("local-llm", 0, 0, 240, true)
         };
+        private static decimal usdToYen;
+        private static readonly Dictionary<string, AiModelPrice> prices = Load(out usdToYen);
+        public static decimal UsdToYen => usdToYen;
         private static AiModelPrice P(string model, decimal input, decimal output, int deadline, bool complex) => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, DeadlineTicks = deadline, SupportsComplexInstructions = complex };
-        public static AiModelPrice Get(string model) => prices.TryGetValue(model ?? "", out var p) ? p : P(model ?? "unknown", 0, 0, 240, true);
+        public static AiModelPrice Get(string model)
+        {
+            if (prices.TryGetValue(model ?? "", out var p)) return p;
+            throw new ArgumentException("未知のモデルです。選択肢にあるモデルを指定してください: " + (model ?? "(null)"), nameof(model));
+        }
         public static IReadOnlyList<AiModelPrice> All => prices.Values.OrderBy(p => p.Model, StringComparer.Ordinal).ToArray();
+        public static IReadOnlyList<AiModelPrice> Available(Func<string, bool> configured = null)
+            => All.Where(p => configured == null || configured(p.Model)).ToArray();
+
+        private static Dictionary<string, AiModelPrice> Load(out decimal yen)
+        {
+            var result = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in fallbackPrices) result[pair.Key] = pair.Value;
+            yen = 150m;
+            string path = Environment.GetEnvironmentVariable("AI_MODEL_PRICES_PATH");
+            if (string.IsNullOrEmpty(path))
+            {
+                var dir = new DirectoryInfo(Environment.CurrentDirectory);
+                for (int i = 0; i < 8 && dir != null && string.IsNullOrEmpty(path); i++, dir = dir.Parent)
+                {
+                    string candidate = Path.Combine(dir.FullName, "Settings", "ai-model-prices.json");
+                    if (File.Exists(candidate)) path = candidate;
+                }
+            }
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return result;
+                var root = MiniJson.Parse(File.ReadAllText(path, Encoding.UTF8)) as Dictionary<string, object>;
+                if (root == null) return result;
+                if (root.TryGetValue("usdToYen", out var yenValue) && yenValue is double y && y > 0) yen = (decimal)y;
+                if (!(root.TryGetValue("models", out var list) && list is List<object> models)) return result;
+                foreach (var value in models)
+                {
+                    var o = value as Dictionary<string, object>; string name = Text(o, "model");
+                    if (o == null || string.IsNullOrEmpty(name)) continue;
+                    decimal input = Decimal(o, "inputUsdPerMillion", 0), output = Decimal(o, "outputUsdPerMillion", 0);
+                    int deadline = (int)Decimal(o, "deadlineTicks", 240);
+                    bool complex = !name.Equals("jev", StringComparison.OrdinalIgnoreCase);
+                    result[name] = P(name, input, output, deadline, complex);
+                }
+            }
+            catch (Exception) { yen = 150m; return result; }
+            return result;
+        }
+        private static string Text(Dictionary<string, object> o, string key) => o != null && o.TryGetValue(key, out var v) ? v as string : null;
+        private static decimal Decimal(Dictionary<string, object> o, string key, decimal fallback)
+            => o != null && o.TryGetValue(key, out var v) && v is double d ? (decimal)d : fallback;
     }
-    public readonly struct AiTokenUsage { public int InputTokens { get; } public int OutputTokens { get; } public AiTokenUsage(int input, int output) { InputTokens = Math.Max(0, input); OutputTokens = Math.Max(0, output); } }
+    public readonly struct AiTokenUsage
+    {
+        public int InputTokens { get; } public int OutputTokens { get; } public int CacheReadInputTokens { get; } public int CacheCreationInputTokens { get; }
+        public AiTokenUsage(int input, int output) : this(input, output, 0, 0) { }
+        public AiTokenUsage(int input, int output, int cacheRead, int cacheCreation)
+        { InputTokens = Math.Max(0, input); OutputTokens = Math.Max(0, output); CacheReadInputTokens = Math.Max(0, cacheRead); CacheCreationInputTokens = Math.Max(0, cacheCreation); }
+    }
     public static class AiCostCalculator
     {
         public static decimal Calculate(string model, int inputTokens, int outputTokens)
-        { var p = AiModelCatalog.Get(model); return (inputTokens * p.InputUsdPerMillion + outputTokens * p.OutputUsdPerMillion) * 150m / 1000000m; }
+            => Calculate(model, new AiTokenUsage(inputTokens, outputTokens));
+        public static decimal Calculate(string model, AiTokenUsage usage)
+        { var p = AiModelCatalog.Get(model); return (usage.InputTokens * p.InputUsdPerMillion + usage.OutputTokens * p.OutputUsdPerMillion + usage.CacheReadInputTokens * p.InputUsdPerMillion * .1m + usage.CacheCreationInputTokens * p.InputUsdPerMillion * 1.25m) * AiModelCatalog.UsdToYen / 1000000m; }
         public static int EstimateTokens(string text) => Math.Max(1, (text ?? "").Length / 4);
         public static decimal EstimateYen(string model, string prompt, int expectedOutputTokens = 200) => Calculate(model, EstimateTokens(prompt), expectedOutputTokens);
     }
@@ -663,7 +975,20 @@ namespace Rts.Providers
         internal static List<object> Array(Dictionary<string, object> obj, string key) => !obj.TryGetValue(key, out var v) || v == null ? null : v as List<object> ?? throw new FormatException(key + " must be array");
         internal static string String(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) ? v as string : null;
         internal static bool Bool(Dictionary<string, object> obj, string key) => obj.TryGetValue(key, out var v) && v is bool b && b;
-        internal static ulong UInt64(Dictionary<string, object> obj, string key, ulong fallback) { if (!obj.TryGetValue(key, out var v)) return fallback; if (v is long l && l >= 0) return checked((ulong)l); throw new FormatException(key + " must be integer"); }
+        internal static double Number(Dictionary<string, object> obj, string key, double fallback)
+        {
+            if (!obj.TryGetValue(key, out var v) || v == null) return fallback;
+            if (v is long l) return l;
+            if (v is double d) return d;
+            throw new FormatException(key + " must be number");
+        }
+        internal static ushort UInt16(Dictionary<string, object> obj, string key, ushort fallback)
+        {
+            double value = Number(obj, key, fallback);
+            if (value < 0 || value > ushort.MaxValue || value != Math.Truncate(value)) throw new FormatException(key + " must be integer");
+            return (ushort)value;
+        }
+        internal static ulong UInt64(Dictionary<string, object> obj, string key, ulong fallback) { if (!obj.TryGetValue(key, out var v) || v == null) return fallback; if (v is long l && l >= 0) return checked((ulong)l); throw new FormatException(key + " must be integer"); }
         private sealed class Parser
         {
             private readonly string s; private int p; internal Parser(string text) { s = text; }
@@ -671,7 +996,7 @@ namespace Rts.Providers
             private object Value() { Skip(); if (p >= s.Length) throw new FormatException("unexpected end"); switch (s[p]) { case '{': return Object(); case '[': return List(); case '"': return Quoted(); case 't': Word("true"); return true; case 'f': Word("false"); return false; case 'n': Word("null"); return null; default: return Number(); } }
             private Dictionary<string, object> Object() { p++; var o = new Dictionary<string, object>(StringComparer.Ordinal); Skip(); if (Take('}')) return o; while (true) { Skip(); if (p >= s.Length || s[p] != '"') throw new FormatException("object key"); string k = Quoted(); Skip(); Need(':'); object v = Value(); if (!o.TryAdd(k, v)) throw new FormatException("duplicate key"); Skip(); if (Take('}')) return o; Need(','); } }
             private List<object> List() { p++; var a = new List<object>(); Skip(); if (Take(']')) return a; while (true) { a.Add(Value()); Skip(); if (Take(']')) return a; Need(','); } }
-            private string Quoted() { Need('"'); var b = new StringBuilder(); while (p < s.Length) { char c = s[p++]; if (c == '"') return b.ToString(); if (c == '\\') { if (p >= s.Length) throw new FormatException("escape"); c = s[p++]; if (c == '"' || c == '\\' || c == '/') b.Append(c); else if (c == 'n') b.Append('\n'); else if (c == 'r') b.Append('\r'); else if (c == 't') b.Append('\t'); else throw new FormatException("escape"); } else b.Append(c); } throw new FormatException("string"); }
+            private string Quoted() { Need('"'); var b = new StringBuilder(); while (p < s.Length) { char c = s[p++]; if (c == '"') return b.ToString(); if (c == '\\') { if (p >= s.Length) throw new FormatException("escape"); c = s[p++]; if (c == '"' || c == '\\' || c == '/') b.Append(c); else if (c == 'n') b.Append('\n'); else if (c == 'r') b.Append('\r'); else if (c == 't') b.Append('\t'); else if (c == 'u') { if (p + 4 > s.Length) throw new FormatException("escape"); int code = int.Parse(s.Substring(p, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture); b.Append((char)code); p += 4; } else throw new FormatException("escape"); } else b.Append(c); } throw new FormatException("string"); }
             private long Number() { int start = p; if (p < s.Length && s[p] == '-') p++; while (p < s.Length && char.IsDigit(s[p])) p++; if (start == p) throw new FormatException("value"); return long.Parse(s.Substring(start, p - start), CultureInfo.InvariantCulture); }
             private void Word(string word) { if (p + word.Length > s.Length || !s.Substring(p, word.Length).Equals(word, StringComparison.Ordinal)) throw new FormatException("literal"); p += word.Length; }
             private void Skip() { while (p < s.Length && char.IsWhiteSpace(s[p])) p++; } private bool Take(char c) { if (p < s.Length && s[p] == c) { p++; return true; } return false; } private void Need(char c) { if (!Take(c)) throw new FormatException("expected " + c); }
