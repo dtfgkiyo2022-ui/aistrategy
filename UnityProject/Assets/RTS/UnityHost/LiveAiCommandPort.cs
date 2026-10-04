@@ -55,10 +55,12 @@ namespace Rts.UnityHost
         internal IReadOnlyList<UserPolicyIntent> Policies { get; set; } = Array.Empty<UserPolicyIntent>();
     }
 
-    /// <summary>G-4 will populate this view; the G-5 branch deliberately exposes an empty read-only list.</summary>
+    /// <summary>Presentation-facing read-only view of one G-4 operation-table entry.</summary>
     public sealed class LiveOperationView
     {
+        public ulong Id { get; internal set; }
         public string Name { get; internal set; }
+        public string ConditionDescription { get; internal set; }
         public string Status { get; internal set; }
     }
 
@@ -75,11 +77,14 @@ namespace Rts.UnityHost
         private readonly Dictionary<ulong, LiveAiInstruction> instructions = new Dictionary<ulong, LiveAiInstruction>();
         private readonly List<LiveAiInstruction> history = new List<LiveAiInstruction>();
         private readonly AiBudgetMeter budget;
+        private OperationTable operationTable;
 
-        public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m)
+        public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
+            OperationTable operationTable = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
+            this.operationTable = operationTable;
             var runtime = new RuntimeCommandInterpreterRouter();
             ownedInterpreter = runtime;
             coordinator = new CommandInterpreterCoordinator(runtime);
@@ -88,10 +93,11 @@ namespace Rts.UnityHost
 
         /// <summary>Test/development constructor; the supplied interpreter prevents any real network access.</summary>
         public LiveAiCommandPort(CommandGateway gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
-            decimal budgetYen = 3m)
+            decimal budgetYen = 3m, OperationTable operationTable = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
+            this.operationTable = operationTable;
             coordinator = new CommandInterpreterCoordinator(interpreter ?? throw new ArgumentNullException(nameof(interpreter)));
             budget = new AiBudgetMeter(budgetYen);
         }
@@ -99,7 +105,15 @@ namespace Rts.UnityHost
         public IReadOnlyList<LiveAiModelOption> Models => AiModelCatalog.All
             .Select(p => new LiveAiModelOption(p, AiModelAvailability.IsConfigured(p.Model))).ToArray();
         public IReadOnlyList<LiveAiInstruction> Instructions => Array.AsReadOnly(history.ToArray());
-        public IReadOnlyList<LiveOperationView> Operations => Array.Empty<LiveOperationView>();
+        public IReadOnlyList<LiveOperationView> Operations => operationTable == null
+            ? Array.Empty<LiveOperationView>()
+            : operationTable.Operations.Select(o => new LiveOperationView
+            {
+                Id = o.Id,
+                Name = o.ConditionDescription,
+                ConditionDescription = o.ConditionDescription,
+                Status = o.StateText
+            }).ToArray();
         public decimal MatchCostYen => budget.SpentYen;
         public decimal BudgetYen => budget.BudgetYen;
         public decimal RemainingBudgetYen => budget.RemainingYen;
@@ -182,7 +196,7 @@ namespace Rts.UnityHost
                     result.Rejected.Select(r => r.Reason ?? "命令を読めませんでした。").ToArray();
                 item.Policies = result.Policies ?? Array.Empty<UserPolicyIntent>();
 
-                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0))
+                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0))
                 {
                     item.State = reply.Late ? AiInstructionState.Expired : AiInstructionState.Unknown;
                     if (reply.Late && string.IsNullOrEmpty(item.Reason)) item.Reason = "締め切りを過ぎた答え";
@@ -194,6 +208,17 @@ namespace Rts.UnityHost
 
                 try
                 {
+                    var latest = frame == null ? null : frame();
+                    if (result.Operations.Count != 0)
+                    {
+                        if (latest == null) throw new InvalidOperationException("作戦を登録する戦況がありません。");
+                        if (operationTable == null) operationTable = new OperationTable(latest.FactionId);
+                        foreach (var definition in result.Operations)
+                        {
+                            var added = operationTable.Add(definition, latest);
+                            if (!added.Accepted) throw new InvalidOperationException(added.Reason);
+                        }
+                    }
                     if (result.Policies.Count != 0) item.HumanRequestId = gateway.SubmitBatch(result.Policies);
                     foreach (var command in result.EconomyCommands) gateway.SubmitEconomy(command);
                     item.State = AiInstructionState.Executing;
@@ -210,6 +235,9 @@ namespace Rts.UnityHost
             }
             Refresh(frame == null ? null : frame());
         }
+
+        /// <summary>試し遊びの作戦表から指定 ID の作戦を取り消します。</summary>
+        public bool CancelOperation(ulong id) => operationTable != null && operationTable.Cancel(id);
 
         /// <summary>Updates executing/completed/expired display states from the latest simulation frame.</summary>
         public void Refresh(FactionFrame latest)

@@ -125,6 +125,7 @@ namespace Rts.UnityHost
         private HttpJevTransport jevTransport;
         private IDisposable judgementTransport;
         private LiveAiCommandPort liveAi;
+        private OperationTable operationTable;
 
         [SerializeField] private bool fineJudgementEnabled;
         [SerializeField] private bool fineJudgementLocal;
@@ -300,6 +301,7 @@ namespace Rts.UnityHost
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
+            operationTable = new OperationTable(viewFactionId);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
             StopLiveAi();
             StopExternal();
@@ -337,7 +339,7 @@ namespace Rts.UnityHost
             gateway = new CommandGateway(simulation, provider, null,
                 externalSchedule, external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
-            liveAi = new LiveAiCommandPort(gateway, () => Frame);
+            liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable);
             enemyFactionId = 3 - viewFactionId;
             enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
@@ -392,6 +394,9 @@ namespace Rts.UnityHost
 
         /// <summary>LLMを呼ばず、直前の解釈中／実行中の指示を取り消します。</summary>
         public bool CancelLastAiInstruction() { return liveAi != null && liveAi.CancelLast(); }
+
+        /// <summary>試し遊びの作戦表から指定 ID の作戦を取り消します。</summary>
+        public bool CancelAiOperation(ulong operationId) { return liveAi != null && liveAi.CancelOperation(operationId); }
 
         public void StepOnce()
         {

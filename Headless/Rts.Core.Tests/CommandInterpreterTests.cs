@@ -141,5 +141,24 @@ namespace Rts.Core.Tests
             Assert.That(single.Unknown, Is.False);
             Assert.That(single.Policies.Count, Is.EqualTo(1));
         }
+
+        [Test]
+        public void LocalModelMergesIdenticalCommandsBeforeItsLimit()
+        {
+            const string duplicate = "{\"commands\":[{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"全部隊\",\"goal\":\"北の拠点\"},{\"goal\":\"北の拠点\",\"scope\":\"全部隊\",\"kind\":\"Defend\",\"type\":\"policy\"}],\"say\":\"\"}";
+            const string different = "{\"commands\":[{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"全部隊\",\"goal\":\"北の拠点\"},{\"type\":\"policy\",\"kind\":\"Retreat\",\"scope\":\"全部隊\"}],\"say\":\"\"}";
+            var frame = Frame();
+
+            var merged = new CommandInterpreterCoordinator(new FakeCommandInterpreter(0, _ => duplicate));
+            merged.Request("北を守れ", frame, null, "local-llm", 0, 600);
+            var mergedResult = merged.Poll(0)[0].Result;
+            Assert.That(mergedResult.Unknown, Is.False);
+            Assert.That(mergedResult.Policies, Has.Count.EqualTo(1));
+
+            var refused = new CommandInterpreterCoordinator(new FakeCommandInterpreter(0, _ => different));
+            refused.Request("守って戻れ", frame, null, "local-llm", 0, 600);
+            Assert.That(refused.Poll(0)[0].Result.Unknown, Is.True);
+            Assert.That(AiModelCatalog.Get("local-llm").MaxOutputTokens, Is.EqualTo(2048));
+        }
     }
 }

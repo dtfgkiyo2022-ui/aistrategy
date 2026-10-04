@@ -86,7 +86,7 @@ namespace Rts.Tests.Headless
             { open.Request(Request("gpt-6-luna")); Assert.That(Poll(open).Json, Does.Contain("commands")); Assert.That(openHandler.Body, Does.Contain("response_format")); Assert.That(openHandler.Body, Does.Contain("\"strict\":true")); Assert.That(openHandler.Request.Headers.Authorization.Parameter, Is.EqualTo(Key)); Assert.That(openHandler.Body, Does.Not.Contain(Key)); }
             var localHandler = new Handler { Reply = "{\"choices\":[{\"message\":{\"content\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\"}\"}}]}" };
             using (var local = new LocalLlmCommandInterpreter("qwen-test", localHandler))
-            { local.Request(Request("local-llm")); Poll(local); Assert.That(localHandler.Request.Headers.Authorization, Is.Null); Assert.That(localHandler.Body, Does.Contain("qwen-test")); }
+            { local.Request(Request("local-llm")); Poll(local); Assert.That(localHandler.Request.Headers.Authorization, Is.Null); Assert.That(localHandler.Body, Does.Contain("qwen-test")); Assert.That(localHandler.Body, Does.Contain("\"max_tokens\":2048")); Assert.That(localHandler.Body, Does.Contain("/no_think")); }
         }
 
         [Test]
