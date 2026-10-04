@@ -19,7 +19,10 @@ namespace Rts.Providers
             if (string.IsNullOrEmpty(model)) return false;
             if (model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
             if (model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-            if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOCAL_LLM_URL")) || !string.IsNullOrEmpty(LocalLlmCommandInterpreter.DefaultUrl);
+            if (model.Equals("jev", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
+            // A built-in default URL is not proof that a local server is running. The host uses this same explicit
+            // setting when constructing the transport, so the model is shown as unavailable until the user opts in.
+            if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LOCAL_LLM_URL"));
             return false;
         }
 
