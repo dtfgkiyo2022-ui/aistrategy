@@ -196,7 +196,7 @@ namespace Rts.Presentation
             if (frame != null)
             {
                 int shown = 0;
-                int statusLines = Mathf.Max(1, (int)((statusRect.height - 26f) / 20f));
+                int statusLines = Mathf.Max(1, (int)((statusRect.height - 26f) / UiStyles.LineHeight));
                 for (int i = frame.Commands.Count - 1; i >= 0 && shown < Mathf.Min(MaxLogLines, statusLines); i--, shown++)
                 {
                     var c = frame.Commands[i];
@@ -205,7 +205,7 @@ namespace Rts.Presentation
                     // While interpreting there is no apply tick yet, so show how long the reply has been awaited.
                     if (c.Status == CommandStatus.Interpreting) wait = UiText.T(" waiting for the reply (", " 返答待ち（") + Seconds(frame.Tick - c.AcceptedTick) + ")";
                     else if (c.Status == CommandStatus.Pending) wait = UiText.T(" applies in ", " 適用まで ") + Seconds(c.ApplyTick - frame.Tick);
-                    GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * 20f, statusRect.width - 12f, 20f),
+                    GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * UiStyles.LineHeight, statusRect.width - 12f, UiStyles.LineHeight),
                         "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
                 }
             }
@@ -213,9 +213,9 @@ namespace Rts.Presentation
             var logRect = LogRect();
             UiStyles.Box(logRect, UiText.T("Command log", "命令の記録"));
             UiHitAreas.Shared.Register(logRect);
-            int logLines = Mathf.Max(0, (int)((logRect.height - 26f) / 20f));
+            int logLines = Mathf.Max(0, (int)((logRect.height - 26f) / UiStyles.LineHeight));
             for (int i = 0; i < log.Count && i < logLines; i++)
-                GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * 20f, logRect.width - 12f, 20f), log[i]);
+                GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * UiStyles.LineHeight, logRect.width - 12f, UiStyles.LineHeight), log[i]);
 
             if (setupOpen) DrawSetup();
             DrawResult();

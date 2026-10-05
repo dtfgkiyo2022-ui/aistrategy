@@ -507,8 +507,13 @@ namespace Rts.UnityHost
                     developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
                 GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f),
                     "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
-                GUI.Label(new Rect(rect.x + 8f, rect.y + 112f, rect.width - 16f, 56f),
-                    string.IsNullOrEmpty(developmentAiMessage) ? LastInstructionText() : developmentAiMessage);
+                float top = rect.y + 112f;
+                if (!string.IsNullOrEmpty(developmentAiMessage))
+                {
+                    GUI.Label(new Rect(rect.x + 8f, top, rect.width - 16f, 22f), developmentAiMessage);
+                    top += 24f;
+                }
+                DrawChatLog(new Rect(rect.x + 4f, top, rect.width - 8f, rect.yMax - top - 4f));
             }
             else
             {
@@ -547,26 +552,88 @@ namespace Rts.UnityHost
             }
         }
 
-        /// <summary>One-line state of the latest spoken instruction, so the result is visible without opening the log.</summary>
-        private string LastInstructionText()
+        private Vector2 chatScroll;
+        private int chatShownCount = -1;
+        private readonly System.Collections.Generic.List<ChatLine> chatLines = new System.Collections.Generic.List<ChatLine>();
+
+        private struct ChatLine
         {
+            public string Text;
+            public Color Color;
+        }
+
+        /// <summary>
+        /// The conversation with the staff officer, oldest at the top: what was said, the reply, what it ordered, what
+        /// was refused, the state and the cost. Scrolls to the newest exchange whenever one is added.
+        /// </summary>
+        private void DrawChatLog(Rect area)
+        {
+            if (area.height < 24f) return;
             var history = AiInstructions;
-            if (history.Count == 0) return "";
-            var last = history[history.Count - 1];
-            string state;
-            switch (last.State)
+            chatLines.Clear();
+            foreach (var item in history) AddChatLines(item);
+            if (chatLines.Count == 0)
             {
-                case AiInstructionState.Interpreting: state = "解釈中…"; break;
+                GUI.Label(new Rect(area.x + 4f, area.y, area.width - 8f, 22f), "参謀に話しかけると、ここにやり取りが出ます。");
+                return;
+            }
+            float width = area.width - 20f;
+            float total = 0f;
+            foreach (var line in chatLines) total += UiStyles.Body.CalcHeight(new GUIContent(line.Text), width) + 2f;
+            if (history.Count != chatShownCount)
+            {
+                chatShownCount = history.Count;
+                chatScroll.y = float.MaxValue;
+            }
+            chatScroll = GUI.BeginScrollView(area, chatScroll, new Rect(0f, 0f, width, total));
+            float y = 0f;
+            var old = GUI.contentColor;
+            foreach (var line in chatLines)
+            {
+                float h = UiStyles.Body.CalcHeight(new GUIContent(line.Text), width);
+                GUI.contentColor = line.Color;
+                GUI.Label(new Rect(0f, y, width, h), line.Text, UiStyles.Body);
+                y += h + 2f;
+            }
+            GUI.contentColor = old;
+            GUI.EndScrollView();
+        }
+
+        private void AddChatLines(LiveAiInstruction item)
+        {
+            var you = new Color(0.75f, 0.88f, 1f);
+            var staff = Color.white;
+            var detail = new Color(0.8f, 0.8f, 0.8f);
+            var bad = new Color(1f, 0.6f, 0.5f);
+            chatLines.Add(new ChatLine { Text = MatchOutcome.Clock(item.StartedTick) + " あなた：" + item.Instruction, Color = you });
+            string state;
+            switch (item.State)
+            {
+                case AiInstructionState.Interpreting: state = "考え中…"; break;
                 case AiInstructionState.Executing: state = "実行中"; break;
                 case AiInstructionState.Completed: state = "完了"; break;
                 case AiInstructionState.Cancelled: state = "取り消し"; break;
                 case AiInstructionState.Expired: state = "時間切れ"; break;
                 default: state = "わからない"; break;
             }
-            var detail = !string.IsNullOrEmpty(last.Say) ? last.Say : last.Reason;
-            if (last.RejectedReasons != null && last.RejectedReasons.Count > 0)
-                detail = (detail ?? "") + "（却下：" + string.Join("、", last.RejectedReasons) + "）";
-            return state + "　" + (detail ?? "") + "　" + last.ActualCostYen.ToString("0.000") + "円";
+            string reply = !string.IsNullOrEmpty(item.Say) ? item.Say : item.Reason;
+            chatLines.Add(new ChatLine
+            {
+                Text = "参謀（" + ModelLabel(item.Model) + "）：" + (string.IsNullOrEmpty(reply) ? state : reply),
+                Color = item.State == AiInstructionState.Unknown || item.State == AiInstructionState.Expired ? bad : staff
+            });
+            if (!string.IsNullOrEmpty(item.Say) && !string.IsNullOrEmpty(item.Reason) && item.Reason != item.Say)
+                chatLines.Add(new ChatLine { Text = "　理由：" + item.Reason, Color = detail });
+            foreach (var issued in item.Issued ?? Array.Empty<string>())
+                chatLines.Add(new ChatLine { Text = "　→ " + issued, Color = detail });
+            foreach (var rejected in item.RejectedReasons ?? Array.Empty<string>())
+                chatLines.Add(new ChatLine { Text = "　× 却下：" + rejected, Color = bad });
+            chatLines.Add(new ChatLine
+            {
+                Text = "　［" + state + "　" + (item.State == AiInstructionState.Interpreting
+                    ? "見積もり " + item.EstimatedCostYen.ToString("0.000") : item.ActualCostYen.ToString("0.000")) + "円］",
+                Color = detail
+            });
         }
     }
 }
