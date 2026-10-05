@@ -447,9 +447,19 @@ namespace Rts.UnityHost
             }
         }
 
+        /// <summary>
+        /// Where the IME candidate list is asked to open. Windows puts the list's top about one field height above the
+        /// point it is given (seen in a player build, 10-05), so the point is a field height plus a margin below the
+        /// field's bottom; the list then starts just under the field instead of covering it.
+        /// </summary>
+        private static Vector2 ImeCandidatePosition(Rect field)
+        {
+            return new Vector2(field.x, field.yMax + field.height + 8f);
+        }
+
         private void LateUpdate()
         {
-            if (aiFieldFocused) Input.compositionCursorPos = new Vector2(aiFieldRect.x, aiFieldRect.yMax);
+            if (aiFieldFocused) Input.compositionCursorPos = ImeCandidatePosition(aiFieldRect);
         }
 
         /// <summary>
@@ -482,7 +492,7 @@ namespace Rts.UnityHost
             // view, 10-05), so it is set again here and once more in LateUpdate, after all GUI events of the frame.
             aiFieldFocused = focused;
             aiFieldRect = field;
-            if (focused) Input.compositionCursorPos = new Vector2(field.x, field.yMax);
+            if (focused) Input.compositionCursorPos = ImeCandidatePosition(field);
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
                 developmentAiModelListOpen = !developmentAiModelListOpen;
             if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る") || enter)
