@@ -32,14 +32,16 @@ namespace Rts.Tests.EditMode
             ["Simulation"] = new[] { "Rts.Contracts", "Rts.Decision" },
             ["Replay"] = new[] { "Rts.Contracts" },
             ["Application"] = new[] { "Rts.Contracts", "Rts.Simulation", "Rts.Replay" },
+            ["Providers"] = new[] { "Rts.Contracts" },
             ["Tactics"] = new[] { "Rts.Contracts" },
             ["TacticsJs"] = new[] { "Rts.Contracts", "Rts.Tactics" },
             ["Presentation"] = new[] { "Rts.Contracts" },
-            ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs" },
+            ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts",
+                "Rts.Simulation", "Rts.Replay", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs" },
             ["Editor"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
-                "Rts.Application", "Rts.Presentation", "Rts.UnityHost" },
+                "Rts.Application", "Rts.Providers", "Rts.Presentation", "Rts.UnityHost" },
             ["Tests.EditMode"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
-                "Rts.Application", "Rts.Presentation", "Rts.UnityHost", "Rts.Editor" }
+                "Rts.Application", "Rts.Providers", "Rts.Presentation", "Rts.UnityHost", "Rts.Editor" }
         };
 
         private static AssemblyDefinition ReadDefinition(string name)
@@ -94,6 +96,7 @@ namespace Rts.Tests.EditMode
         [TestCase("Simulation")]
         [TestCase("Replay")]
         [TestCase("Application")]
+        [TestCase("Providers")]
         [TestCase("Tactics")]
         public void PureAssembliesHaveNoTransitiveUnityDependency(string name)
         {
@@ -130,6 +133,7 @@ namespace Rts.Tests.EditMode
         [TestCase("Simulation", new[] { "Rts.Contracts", "Rts.Decision" })]
         [TestCase("Replay", new[] { "Rts.Contracts" })]
         [TestCase("Application", new[] { "Rts.Contracts", "Rts.Simulation", "Rts.Replay" })]
+        [TestCase("Providers", new[] { "Rts.Contracts" })]
         [TestCase("Tactics", new[] { "Rts.Contracts" })]
         public void PureAssembliesRespectTheDependencyBoundary(string name, string[] allowed)
         {
