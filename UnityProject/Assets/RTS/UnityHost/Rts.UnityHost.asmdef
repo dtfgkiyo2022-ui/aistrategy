@@ -7,7 +7,9 @@
     "Rts.Replay",
     "Rts.Presentation",
     "Rts.Contracts",
-    "Rts.Providers"
+    "Rts.Providers",
+    "Rts.Tactics",
+    "Rts.TacticsJs"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

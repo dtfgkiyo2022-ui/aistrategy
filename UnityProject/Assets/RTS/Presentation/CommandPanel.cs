@@ -19,6 +19,7 @@ namespace Rts.Presentation
         private IExternalAiControl externalAi;
         private IMatchRestart matchRestart;
         private IOpponentControl opponent;
+        private ITacticControl opponentTactic;
         private IMapChoice mapChoice;
         private IMatchRuleChoice matchRuleChoice;
         private bool setupOpen;
@@ -41,8 +42,15 @@ namespace Rts.Presentation
         public IOpponentControl Opponent { get { return opponent; } set { opponent = value; } }
 
         private IOpponentControl ownDoctrine;
+        private ITacticControl ownTactic;
         /// <summary>Lets the player pick a doctrine for their own side too ("none" leaves the armies to the player). Null hides it.</summary>
         public IOpponentControl OwnDoctrine { get { return ownDoctrine; } set { ownDoctrine = value; } }
+
+        /// <summary>Lets the host expose the opponent's optional tactic and its diagnostics.</summary>
+        public ITacticControl OpponentTactic { get { return opponentTactic; } set { opponentTactic = value; } }
+
+        /// <summary>Lets the host expose the own side's optional tactic and its diagnostics.</summary>
+        public ITacticControl OwnTactic { get { return ownTactic; } set { ownTactic = value; } }
 
         /// <summary>Random economy map or the classic one. Null hides the row.</summary>
         public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
@@ -309,6 +317,16 @@ namespace Rts.Presentation
             }
             y += SetupRow;
 
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
+            DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own tactic", "自軍の戦術"));
+            DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
+            y += SetupRow;
+            y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
+            y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
+
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Map", "マップ"));
             if (mapChoice != null)
             {
@@ -375,6 +393,52 @@ namespace Rts.Presentation
                 case "maintain-legacy": return UiText.T("maintain-legacy", "維持型（旧）");
                 default: return name;
             }
+        }
+
+        private static void DrawTacticChoices(ITacticControl control, Rect area)
+        {
+            if (control == null) return;
+            var choices = control.Choices;
+            if (choices == null || choices.Length == 0) return;
+            float width = area.width / choices.Length;
+            for (int i = 0; i < choices.Length; i++)
+            {
+                bool on = control.Current == choices[i];
+                if (GUI.Toggle(new Rect(area.x + i * width, area.y, width - 4f, area.height), on,
+                    TacticLabel(choices[i]), GUI.skin.button) && !on) control.Current = choices[i];
+            }
+        }
+
+        private static string TacticLabel(string selection)
+        {
+            if (string.IsNullOrEmpty(selection)) return UiText.T("none (preset)", "なし（方針プリセット）");
+            return System.IO.Path.GetFileName(selection);
+        }
+
+        private static float DrawTacticStatus(ITacticControl control, string title, float x, float y, float width)
+        {
+            if (control == null || !control.Active) return y;
+            string failure = control.FailureCount == 0 ? UiText.T("none", "なし") : control.LastFailureReason;
+            string stopped = control.Disabled ? UiText.T(" STOPPED (10 consecutive failures)", " 停止（10回連続失敗）") : "";
+            string summary = title + ": " + control.Name
+                + UiText.T(" | last tick ", "｜最後のtick ") + control.LastTick
+                + UiText.T(" | commands ", "｜命令 ") + control.SentCommands
+                + UiText.T(" | discarded ", "｜破棄 ") + control.RejectedCommands
+                + UiText.T(" | failures ", "｜失敗 ") + control.FailureCount
+                + UiText.T(" | last reason ", "｜最後の理由 ") + failure + stopped;
+            GUI.Label(new Rect(x, y, width, 22f), summary, UiStyles.Tiny);
+            y += 20f;
+            var lines = control.ConsoleLines;
+            var recent = new List<string>();
+            if (lines != null)
+            {
+                int start = Mathf.Max(0, lines.Count - 5);
+                for (int i = start; i < lines.Count; i++) recent.Add(lines[i]);
+            }
+            string console = recent.Count == 0 ? UiText.T("none", "なし") : string.Join("\n", recent.ToArray());
+            GUI.Label(new Rect(x, y, width, 70f), UiText.T("console.log (latest 5): ", "console.log（最新5行）：") + console, UiStyles.Tiny);
+            y += 70f;
+            return y + 2f;
         }
 
         private ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }

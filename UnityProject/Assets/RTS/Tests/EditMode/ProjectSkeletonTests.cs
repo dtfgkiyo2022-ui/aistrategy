@@ -32,8 +32,10 @@ namespace Rts.Tests.EditMode
             ["Simulation"] = new[] { "Rts.Contracts", "Rts.Decision" },
             ["Replay"] = new[] { "Rts.Contracts" },
             ["Application"] = new[] { "Rts.Contracts", "Rts.Simulation", "Rts.Replay" },
+            ["Tactics"] = new[] { "Rts.Contracts" },
+            ["TacticsJs"] = new[] { "Rts.Contracts", "Rts.Tactics" },
             ["Presentation"] = new[] { "Rts.Contracts" },
-            ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts" },
+            ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs" },
             ["Editor"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
                 "Rts.Application", "Rts.Presentation", "Rts.UnityHost" },
             ["Tests.EditMode"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
@@ -69,6 +71,7 @@ namespace Rts.Tests.EditMode
                     string[] packages = name == "Editor"
                         ? new[] { "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime" }
                         : name == "Tests.EditMode" ? new[] { "UnityEngine.TestRunner", "UnityEditor.TestRunner" }
+                        : name == "TacticsJs" ? new[] { "Jint", "Acornima", "System.Runtime.CompilerServices.Unsafe" }
                         : Array.Empty<string>();
                     Assert.That(packages, Does.Contain(reference), "Rts." + name + " -> " + reference);
                 }
@@ -91,6 +94,7 @@ namespace Rts.Tests.EditMode
         [TestCase("Simulation")]
         [TestCase("Replay")]
         [TestCase("Application")]
+        [TestCase("Tactics")]
         public void PureAssembliesHaveNoTransitiveUnityDependency(string name)
         {
             var root = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "Rts." + name);
@@ -126,6 +130,7 @@ namespace Rts.Tests.EditMode
         [TestCase("Simulation", new[] { "Rts.Contracts", "Rts.Decision" })]
         [TestCase("Replay", new[] { "Rts.Contracts" })]
         [TestCase("Application", new[] { "Rts.Contracts", "Rts.Simulation", "Rts.Replay" })]
+        [TestCase("Tactics", new[] { "Rts.Contracts" })]
         public void PureAssembliesRespectTheDependencyBoundary(string name, string[] allowed)
         {
             var definition = JsonUtility.FromJson<AssemblyDefinition>(File.ReadAllText(

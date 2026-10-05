@@ -83,8 +83,10 @@ namespace Rts.Presentation
                 LogEntries = new Rect(rightX, logAreaY + statusHeight + gap, rightWidth,
                     Mathf.Max(38f, logAreaHeight - statusHeight - gap)),
                 Timeline = new Rect(rightX, timelineY, rightWidth, timelineHeight),
+                // The setup panel now includes two tactic diagnostics and their five-line console windows. At a short
+                // screen height it is allowed to cover the economy panel while open, instead of clipping those rows.
                 Setup = new Rect(centerX, contentTop, centerWidth,
-                    Mathf.Max(250f, bottom - economyHeight - contentTop - gap)),
+                    Mathf.Max(520f, bottom - economyHeight - contentTop - gap)),
                 Result = new Rect(centerX + centerWidth / 2f - 190f, contentTop, 380f, 160f)
             };
 
