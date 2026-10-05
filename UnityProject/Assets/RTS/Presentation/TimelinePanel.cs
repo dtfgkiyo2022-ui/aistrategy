@@ -66,10 +66,13 @@ namespace Rts.Presentation
             UiStyles.Box(timelineRect, UiText.T("Timeline", "時系列"));
             UiHitAreas.Shared.Register(timelineRect);
             var entries = timeline.Entries;
-            int lines = Mathf.Max(1, (int)((timelineRect.height - 26f) / 18f));
+            // Row height follows the text size (a fixed 18 px cut the bottom of the letters once the text grew).
+            float row = UiStyles.LineHeight;
+            float top = UiStyles.HeaderHeight + 2f;
+            int lines = Mathf.Max(1, (int)((timelineRect.height - top - 4f) / row));
             int first = Mathf.Max(0, entries.Count - lines);
             for (int i = first; i < entries.Count; i++)
-                GUI.Label(new Rect(timelineRect.x + 6f, timelineRect.y + 20f + (i - first) * 18f, timelineRect.width - 12f, 18f),
+                GUI.Label(new Rect(timelineRect.x + 6f, timelineRect.y + top + (i - first) * row, timelineRect.width - 12f, row),
                     MatchOutcome.Clock(entries[i].Tick) + "  " + entries[i].Text);
         }
     }

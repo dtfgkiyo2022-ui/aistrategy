@@ -51,6 +51,8 @@ namespace Rts.UnityHost
         public IReadOnlyList<string> RejectedReasons { get; internal set; }
         public decimal EstimatedCostYen { get; internal set; }
         public decimal ActualCostYen { get; internal set; }
+        /// <summary>What the staff officer decided, one line per command or operation, for the chat log.</summary>
+        public IReadOnlyList<string> Issued { get; internal set; } = Array.Empty<string>();
 
         internal IReadOnlyList<UserPolicyIntent> Policies { get; set; } = Array.Empty<UserPolicyIntent>();
     }
@@ -195,6 +197,7 @@ namespace Rts.UnityHost
                 item.RejectedReasons = result.Rejected == null ? Array.Empty<string>() :
                     result.Rejected.Select(r => r.Reason ?? "命令を読めませんでした。").ToArray();
                 item.Policies = result.Policies ?? Array.Empty<UserPolicyIntent>();
+                item.Issued = AiInstructionText.Describe(result);
 
                 if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0))
                 {
@@ -309,6 +312,86 @@ namespace Rts.UnityHost
         {
             foreach (var child in children.Values) (child as IDisposable)?.Dispose();
             children.Clear();
+        }
+    }
+
+    /// <summary>Player-facing lines for what a staff-officer answer decided (the chat log shows them under the reply).</summary>
+    public static class AiInstructionText
+    {
+        public static IReadOnlyList<string> Describe(AiCommandInterpretationResult result)
+        {
+            if (result == null) return Array.Empty<string>();
+            var lines = new List<string>();
+            foreach (var policy in result.Policies ?? Array.Empty<UserPolicyIntent>()) lines.Add(Policy(policy));
+            foreach (var command in result.EconomyCommands ?? Array.Empty<EconomyCommand>()) lines.Add(Economy(command));
+            foreach (var operation in result.Operations ?? Array.Empty<OperationDefinition>())
+                lines.Add("作戦：" + operation.When.Describe() + "なら、" + string.Join("・", operation.Then.Select(a =>
+                    a.IsPolicy ? Policy(a.Policy) : Economy(a.Economy))));
+            return lines;
+        }
+
+        public static string Policy(UserPolicyIntent policy)
+        {
+            string line = Scope(policy.Target) + "：" + PolicyName(policy.Kind);
+            string goal = Goal(policy.Goal);
+            if (!string.IsNullOrEmpty(goal)) line += "（" + goal + "）";
+            if (policy.Kind == PolicyKind.MaintainReserve) line += " " + (policy.ReservePermille / 10) + "%";
+            return line;
+        }
+
+        public static string Economy(EconomyCommand command)
+        {
+            if (command == null) return "";
+            switch (command.Kind)
+            {
+                case EconomyCommandKind.PlaceBuilding: return "内政：" + command.Building + " を建てる";
+                case EconomyCommandKind.Train: return "内政：" + command.Unit + " を訓練";
+                case EconomyCommandKind.CancelTrain: return "内政：訓練を取り消す";
+                case EconomyCommandKind.SetAutoEconomy: return "内政：お任せ内政を" + (command.Enabled ? "入" : "切");
+                case EconomyCommandKind.SetEconomyPolicy: return "内政：方針を変える";
+                case EconomyCommandKind.AdvanceAge: return "内政：時代を進める";
+                case EconomyCommandKind.Research: return "内政：研究する";
+                case EconomyCommandKind.SetRegionControl: return "区域" + command.TargetId + "：担当を" + (command.Enabled ? "人" : "AI") + "に";
+                default: return "内政：" + command.Kind;
+            }
+        }
+
+        private static string Scope(ScopeKey scope)
+        {
+            switch (scope.Kind)
+            {
+                case ScopeKind.All: return "全軍";
+                case ScopeKind.Army: return "軍団" + scope.Id;
+                case ScopeKind.Outpost: return "拠点" + scope.Id;
+                case ScopeKind.Region: return "区域" + scope.Id;
+                default: return scope.Kind.ToString() + scope.Id;
+            }
+        }
+
+        private static string Goal(PolicyGoal goal)
+        {
+            switch (goal.Kind)
+            {
+                case GoalKind.Outpost: return "拠点" + goal.Id;
+                case GoalKind.Core: return "コア" + goal.Id;
+                case GoalKind.Point: return "地点";
+                default: return "";
+            }
+        }
+
+        private static string PolicyName(PolicyKind kind)
+        {
+            switch (kind)
+            {
+                case PolicyKind.Focus: return "攻撃";
+                case PolicyKind.AllowAbandon: return "放棄を許可";
+                case PolicyKind.Retreat: return "撤退";
+                case PolicyKind.MaintainReserve: return "予備を保つ";
+                case PolicyKind.Defend: return "防衛";
+                case PolicyKind.Scout: return "偵察";
+                case PolicyKind.ReturnToAuto: return "お任せに戻す";
+                default: return kind.ToString();
+            }
         }
     }
 }

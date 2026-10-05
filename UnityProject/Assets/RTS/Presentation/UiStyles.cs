@@ -21,6 +21,8 @@ namespace Rts.Presentation
         public static GUIStyle Panel { get { Ensure(); return panel; } }
         public static GUIStyle Tiny { get { Ensure(); return tiny; } }
         // Panels place their first row about 22 px down, so the strip stays near that whatever the scale.
+        /// <summary>One line of body text with its descenders, for panels that stack labels.</summary>
+        public static float LineHeight { get { return Mathf.Ceil(Body.lineHeight) + 4f; } }
         public static float HeaderHeight { get { return Mathf.Max(20f, 22f * Scale); } }
 
         public static void Begin()

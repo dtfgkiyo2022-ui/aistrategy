@@ -59,7 +59,8 @@ namespace Rts.Presentation
             float timelineHeight = Mathf.Clamp(screenHeight - 520f, 150f, 250f);
             float timelineY = bottom - timelineHeight;
 
-            float advisorHeight = 180f;
+            // The staff panel holds the chat log, so it takes what the screen can spare (180 at 720 high, 380 from 900).
+            float advisorHeight = Mathf.Clamp(screenHeight - 520f, 180f, 380f);
             float advisorY = contentTop;
             float logToggleHeight = 28f;
             float logToggleY = advisorY + advisorHeight + gap;
