@@ -271,10 +271,28 @@ namespace Rts.Presentation
             }
         }
 
+        private Vector2 setupScroll;
+        private float setupContentHeight = 400f;
+
+        /// <summary>
+        /// The setup rows (two tactic choices and their status windows included) can be taller than the space left
+        /// above the economy panel, so they scroll inside the setup box instead of covering other panels.
+        /// </summary>
         private void DrawSetup()
         {
             var rect = SetupRect();
             UiStyles.Box(rect, UiText.T("Match setup", "試合の設定"));
+            var viewport = new Rect(rect.x, rect.y + 24f, rect.width, Mathf.Max(0f, rect.height - 28f));
+            bool scrolls = setupContentHeight > viewport.height;
+            var content = new Rect(0f, 0f, rect.width - (scrolls ? 18f : 0f), Mathf.Max(viewport.height, setupContentHeight));
+            setupScroll = GUI.BeginScrollView(viewport, setupScroll, content);
+            setupContentHeight = DrawSetupRows(new Rect(0f, -24f, content.width, content.height));
+            GUI.EndScrollView();
+        }
+
+        /// <summary>Draws the setup rows with <paramref name="rect"/> as the box; returns the height they used.</summary>
+        private float DrawSetupRows(Rect rect)
+        {
             float x = rect.x + 8f, y = rect.y + 24f, labelWidth = 96f, cell = (rect.width - 16f - labelWidth) / 4f;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
@@ -372,15 +390,16 @@ namespace Rts.Presentation
             y += SetupRow;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Outside AI", "外部AI"));
-            if (externalAi == null) return;
+            if (externalAi == null) return y + SetupRow;
             var line = new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f);
-            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return; }
+            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return y + SetupRow; }
             bool ai = externalAi.Enabled;
             bool aiNow = GUI.Toggle(line, ai, ai ? UiText.T("On - asking an outside AI", "入 - 外部AIに聞いています") : UiText.T("Off - ask an outside AI", "切 - 外部AIに聞く"), GUI.skin.button);
             if (aiNow != ai) externalAi.Enabled = aiNow;
             // The notice stays next to the switch: turning it on sends what the faction can see to an outside service.
             GUI.Label(new Rect(x, y + 26f, rect.width - 16f, 34f), ai ? externalAi.Status.Replace("\n", "   ")
                 : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"));
+            return y + 64f;
         }
 
         private static string PresetLabel(string name)
