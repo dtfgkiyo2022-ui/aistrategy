@@ -70,11 +70,20 @@ namespace Rts.Core.Tests
             {
                 // The command limit is enforced by the interpreter: Claude rejects maxItems in strict schemas (HTTP 400, 2026-10-05).
                 AssertStrict(document.RootElement, document.RootElement);
+                var properties = document.RootElement.GetProperty("properties").EnumerateObject().Select(x => x.Name).ToArray();
+                CollectionAssert.Contains(properties, "kind");
+                CollectionAssert.Contains(properties, "scope");
+                CollectionAssert.Contains(properties, "goal");
+                CollectionAssert.Contains(properties, "reason");
+                CollectionAssert.DoesNotContain(properties, "commands");
+                CollectionAssert.DoesNotContain(properties, "operations");
             }
             Assert.That(AiModelCatalog.Get("local-llm").MaxCommands, Is.EqualTo(1));
             Assert.That(AiModelCatalog.Get("local-llm").AllowsOperations, Is.False);
             Assert.That(AiModelCatalog.Get("jev").AllowsOperations, Is.False);
             Assert.That(AiModelCatalog.Get("gpt-6-luna").MaxCommands, Is.EqualTo(5));
+            Assert.That(AiCommandSchema.ForModel("local-llm"), Does.Contain("表にない名前"));
+            Assert.That(AiCommandSchema.ForModel("gpt-6-luna"), Does.Not.Contain("表にない名前（例：表にない拠点、第N軍）"));
         }
 
         [Test]

@@ -44,6 +44,7 @@ namespace Rts.Providers
         public static string Build(AiSituationSummary summary, AiModelPrice limits)
         {
             limits = limits ?? AiModelCatalog.DefaultComplexLimits;
+            if (!limits.SupportsComplexInstructions) return BuildSmall(summary);
             var names = summary == null ? Array.Empty<AiNameTableEntry>() : summary.NameTable ?? Array.Empty<AiNameTableEntry>();
             var scopes = names.Where(n => n.HasScope && n.IsOwn).Select(n => n.Name);
             var goals = names.Where(n => n.HasGoal).Select(n => n.Name);
@@ -79,6 +80,34 @@ namespace Rts.Providers
                 ["required"] = new List<object> { "commands", "operations", "say", "reason", "unknown" },
                 ["properties"] = rootProperties,
                 ["$defs"] = new Dictionary<string, object> { ["command"] = command }
+            });
+        }
+
+        /// <summary>
+        /// The contract for one-order models. It intentionally has no command array, operation object, nullable
+        /// types, or range keywords: the response interpreter turns the selected vocabulary into the normal command
+        /// shape before applying the G-1 validation.
+        /// </summary>
+        public static string BuildSmall(AiSituationSummary summary)
+        {
+            var names = summary == null ? Array.Empty<AiNameTableEntry>() : summary.NameTable ?? Array.Empty<AiNameTableEntry>();
+            var scopes = names.Where(n => n.HasScope && n.IsOwn).Select(n => n.Name);
+            var goals = names.Where(n => n.HasGoal).Select(n => n.Name);
+            var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
+            var properties = new Dictionary<string, object>
+            {
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "unknown"),
+                ["scope"] = NullableEnum(scopes),
+                ["goal"] = NullableEnum(goals),
+                ["region"] = NullableEnum(regions),
+                ["control"] = NullableEnum(new[] { "Human", "Ai" }),
+                ["reason"] = new Dictionary<string, object> { ["type"] = "string" }
+            };
+            return JsonValueWriter.Write(new Dictionary<string, object>
+            {
+                ["type"] = "object", ["additionalProperties"] = false,
+                ["required"] = properties.Keys.Select(k => (object)k).ToList(),
+                ["properties"] = properties
             });
         }
 
@@ -235,8 +264,9 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 ";
 
         public const string StableInstructionsShort = @"
-あなたはRTSゲームの短い命令を変換する参謀です。指定されたJSON Schemaに従うJSONだけを返してください。
-commandsは1つまでです。operationsは空配列にしてください。scope・goal・region・producer・locationは名前表の値だけ、building・unit・civ・policyはSchemaのenumだけを使い、使わない項目はnullにします。対象不明、質問、条件付きの指示、複数の命令はunknown=true、commands=[]、operations=[]にして、reasonに「この AI では直せません。Claude・ChatGPT を選んでください」と書いてください。
+あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
+kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
+名前表にない名前（例：表にない拠点、第N軍）は絶対に作らず、kind=unknownにしてreasonに「表にない名前」と書いてください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
 ";
 
         public static string ForModel(string model)
@@ -244,7 +274,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             try
             {
                 var limits = AiModelCatalog.Get(model);
-                return limits.AllowsOperations && limits.MaxCommands > 1 ? StableInstructions : StableInstructionsShort;
+                return limits.SupportsComplexInstructions ? StableInstructions : StableInstructionsShort;
             }
             catch (ArgumentException) { return StableInstructions; }
         }
@@ -659,6 +689,7 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             try
             {
                 var root = AiJson.AsObject(AiJson.Parse(json));
+                if (root.ContainsKey("kind") && !root.ContainsKey("commands")) root = ExpandSmallAnswer(root);
                 var result = new AiCommandInterpretationResult { Say = AiJson.String(root, "say") ?? "", Reason = AiJson.String(root, "reason") ?? "" };
                 result.Unknown = AiJson.Bool(root, "unknown");
                 if (result.Unknown) return result;
@@ -694,6 +725,47 @@ commandsは1つまでです。operationsは空配列にしてください。scop
             {
                 return new AiCommandInterpretationResult { Reason = "読めない答え: " + e.Message };
             }
+        }
+
+        private static Dictionary<string, object> ExpandSmallAnswer(Dictionary<string, object> small)
+        {
+            string kind = AiJson.String(small, "kind");
+            string reason = AiJson.String(small, "reason") ?? "";
+            if (string.Equals(kind, "unknown", StringComparison.Ordinal) || string.IsNullOrEmpty(kind))
+                return new Dictionary<string, object>
+                {
+                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = "",
+                    ["reason"] = reason, ["unknown"] = true
+                };
+
+            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl" };
+            if (!allowed.Contains(kind, StringComparer.Ordinal))
+                return new Dictionary<string, object>
+                {
+                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = "",
+                    ["reason"] = string.IsNullOrEmpty(reason) ? "対応していない命令" : reason, ["unknown"] = true
+                };
+
+            var command = new Dictionary<string, object>();
+            if (kind == "SetRegionControl")
+            {
+                command["type"] = "economy";
+                command["kind"] = kind;
+                command["region"] = AiJson.String(small, "region") ?? "";
+                command["control"] = AiJson.String(small, "control") ?? "";
+            }
+            else
+            {
+                command["type"] = "policy";
+                command["kind"] = kind;
+                command["scope"] = AiJson.String(small, "scope") ?? "";
+                command["goal"] = AiJson.String(small, "goal") ?? "";
+            }
+            return new Dictionary<string, object>
+            {
+                ["commands"] = new List<object> { command }, ["operations"] = new List<object>(), ["say"] = "",
+                ["reason"] = reason, ["unknown"] = false
+            };
         }
 
         private static void ConvertCommand(Dictionary<string, object> command, int index, AiInterpretationContext c, ref ulong next, List<UserPolicyIntent> policies, List<EconomyCommand> economy)

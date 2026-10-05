@@ -90,6 +90,27 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void OllamaUsesNativeChatShapeAndReadsMessageAndNativeUsage()
+        {
+            var handler = new Handler { Reply = "{\"message\":{\"content\":\"{\\\"kind\\\":\\\"unknown\\\",\\\"scope\\\":\\\"\\\",\\\"goal\\\":\\\"\\\",\\\"region\\\":\\\"\\\",\\\"control\\\":\\\"\\\",\\\"reason\\\":\\\"質問\\\"}\"},\"prompt_eval_count\":12,\"eval_count\":7,\"done\":true}" };
+            using (var local = new LocalLlmCommandInterpreter("qwen3:8b", handler, endpoint: "ollama"))
+            {
+                local.Request(Request("local-llm"));
+                var reply = Poll(local);
+                Assert.That(handler.Request.RequestUri.AbsolutePath, Is.EqualTo("/api/chat"));
+                Assert.That(handler.Body, Does.Contain("\"stream\":false"));
+                Assert.That(handler.Body, Does.Contain("\"think\":false"));
+                Assert.That(handler.Body, Does.Contain("\"format\":{\"type\":\"object\""));
+                Assert.That(handler.Body, Does.Contain("\"temperature\":0"));
+                Assert.That(handler.Body, Does.Contain("\"num_predict\":256"));
+                Assert.That(handler.Body, Does.Not.Contain("response_format"));
+                Assert.That(reply.Json, Does.Contain("\"kind\":\"unknown\""));
+                Assert.That(reply.Usage.InputTokens, Is.EqualTo(12));
+                Assert.That(reply.Usage.OutputTokens, Is.EqualTo(7));
+            }
+        }
+
+        [Test]
         public void RefusalAndHttpFailureBecomeNoAnswerWithoutBodyOrKey()
         {
             var refusal = new Handler { Reply = "{\"stop_reason\":\"refusal\",\"content\":[],\"usage\":{}}" };

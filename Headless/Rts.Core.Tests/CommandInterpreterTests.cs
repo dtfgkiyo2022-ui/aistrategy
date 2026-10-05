@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
@@ -56,6 +57,30 @@ namespace Rts.Core.Tests
             var result = Interpret("{\"unknown\":true,\"reason\":\"対象が不明\",\"say\":\"\"}");
             Assert.That(result.Policies, Is.Empty); Assert.That(result.EconomyCommands, Is.Empty);
             Assert.That(result.Reason, Is.EqualTo("対象が不明"));
+        }
+
+        [Test]
+        public void SmallAnswerIsExpandedAndValidatedAsTheNormalPolicyCommand()
+        {
+            var summary = AiSituationSummary.From(Frame());
+            string scope = summary.NameTable.First(x => x.HasScope && x.Scope.Kind == ScopeKind.All).Name;
+            string goal = summary.NameTable.First(x => x.HasGoal).Name;
+            var result = AiResponseInterpreter.Interpret(
+                "{\"kind\":\"Defend\",\"scope\":\"" + scope + "\",\"goal\":\"" + goal + "\",\"region\":\"\",\"control\":\"\",\"reason\":\"\"}",
+                new AiInterpretationContext { Frame = Frame(), Summary = summary, StartedTick = 100, DeadlineTick = 340 });
+            Assert.That(result.Unknown, Is.False);
+            Assert.That(result.Policies.Count, Is.EqualTo(1));
+            Assert.That(result.Policies[0].Kind, Is.EqualTo(PolicyKind.Defend));
+            Assert.That(result.Policies[0].Goal.Id, Is.EqualTo(1u));
+        }
+
+        [Test]
+        public void SmallUnknownAnswerRemainsAnExplicitUnknown()
+        {
+            var result = Interpret("{\"kind\":\"unknown\",\"scope\":\"\",\"goal\":\"\",\"region\":\"\",\"control\":\"\",\"reason\":\"表にない名前\"}");
+            Assert.That(result.Unknown, Is.True);
+            Assert.That(result.Policies, Is.Empty);
+            Assert.That(result.Reason, Is.EqualTo("表にない名前"));
         }
 
         [Test]
