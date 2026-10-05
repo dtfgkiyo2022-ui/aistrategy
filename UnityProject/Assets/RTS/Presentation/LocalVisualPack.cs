@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
+using UnityEngine.Animations;
+using UnityEngine.Playables;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -18,6 +20,7 @@ namespace Rts.Presentation
         private const string Root = "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/";
         private const string Units = Root + "prefabs/";
         private const string Buildings = Root + "models/buildings/";
+        private const string AnimationRoot = Root + "animation/";
         private const string UnitMaterialRoot = Root + "models/materials/color/Units/TT_RTS_Units_";
         private const string BuildingMaterialRoot = Root + "models/materials/color/Buildings/TT_RTS_buildings_";
         private const float CoreWidth = 9f, OutpostWidth = 6f;
@@ -40,6 +43,37 @@ namespace Rts.Presentation
             public BuildingSpec(string file, float height, float widthScale = 1f) { File = file; Height = height; WidthScale = widthScale; }
         }
 
+        public enum UnitMotion
+        {
+            Idle,
+            Walk,
+            Attack
+        }
+
+        private sealed class AnimationSpec
+        {
+            public readonly string Idle;
+            public readonly string Walk;
+            public readonly string Attack;
+
+            public AnimationSpec(string idle, string walk, string attack)
+            {
+                Idle = AnimationRoot + idle;
+                Walk = AnimationRoot + walk;
+                Attack = AnimationRoot + attack;
+            }
+
+            public string Path(UnitMotion motion)
+            {
+                switch (motion)
+                {
+                    case UnitMotion.Walk: return Walk;
+                    case UnitMotion.Attack: return Attack;
+                    default: return Idle;
+                }
+            }
+        }
+
         // Unit kind -> pack prefab. Every kind has its own model, so the placeholder class marks are not needed with the pack.
         // Cavalry and light cavalry, and archers and skirmish archers, use different models so the pairs stay apart.
         private static readonly Dictionary<UnitKind, UnitSpec> UnitTable = new Dictionary<UnitKind, UnitSpec>
@@ -56,6 +90,26 @@ namespace Rts.Presentation
             { UnitKind.HeavyInfantry, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
             { UnitKind.SkirmishArcher, new UnitSpec("TT_Crossbowman.prefab", 2.4f) }
         };
+
+        // Unit model -> animation family.
+        // Infantry is used by scouts and villagers because their pack models share the same humanoid rig and proportions.
+        // The weapon-specific families keep attack motions visually believable.
+        private static readonly Dictionary<UnitKind, AnimationSpec> AnimationTable = new Dictionary<UnitKind, AnimationSpec>
+        {
+            { UnitKind.Infantry, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.Scout, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.Villager, new AnimationSpec("animation_infantry/Infantry/infantry_01_idle.FBX", "animation_infantry/Infantry/infantry_02_walk.FBX", "animation_infantry/Infantry/infantry_04_attack_A.FBX") },
+            { UnitKind.Archer, new AnimationSpec("animation_infantry/Archer/archer_01_idle.FBX", "animation_infantry/Archer/archer_02_walk.FBX", "animation_infantry/Archer/archer_04_attack_A.FBX") },
+            { UnitKind.SkirmishArcher, new AnimationSpec("animation_infantry/Crossbow/crossbow_01_idle.FBX", "animation_infantry/Crossbow/crossbow_02_walk.FBX", "animation_infantry/Crossbow/crossbow_04_attack_A.FBX") },
+            { UnitKind.Monk, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX") },
+            { UnitKind.Mercenary, new AnimationSpec("animation_infantry/TwoHanded/twohanded_01_idle.FBX", "animation_infantry/TwoHanded/twohanded_02_walk.FBX", "animation_infantry/TwoHanded/twohanded_04_attack_A.FBX") },
+            { UnitKind.HeavyInfantry, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") },
+            { UnitKind.Cavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
+            { UnitKind.LightCavalry, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
+            { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") }
+        };
+
+        private static readonly Dictionary<string, AnimationClip> animationClips = new Dictionary<string, AnimationClip>();
 
         // Building kind -> pack model. The core uses Castle and outposts Tower_A, so the castle building takes Keep and
         // towers take Tower_B to stay distinguishable. Blacksmith stands in for the smelter, kiln and steelworks (told apart
@@ -94,6 +148,105 @@ namespace Rts.Presentation
         public static string BuildingAssetPath(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? Buildings + s.File : null; }
 
         public static float UnitHeight(UnitKind kind) { return UnitTable.TryGetValue(kind, out var s) ? s.Height : 2.4f; }
+
+        public static string AnimationAssetPath(UnitKind kind, UnitMotion motion)
+        {
+            return AnimationTable.TryGetValue(kind, out var spec) ? spec.Path(motion) : null;
+        }
+
+        public sealed class AnimationHandle
+        {
+            private const float BlendSeconds = 0.15f;
+            private readonly PlayableGraph graph;
+            private readonly AnimationMixerPlayable mixer;
+            // The attack clips are imported without looping; it is wrapped by hand so a long fight keeps swinging.
+            private readonly AnimationClipPlayable attack;
+            private readonly double attackLength;
+            private int desired;
+            private bool disposed;
+
+            internal AnimationHandle(PlayableGraph graph, AnimationMixerPlayable mixer, AnimationClipPlayable attack, double attackLength)
+            {
+                this.graph = graph;
+                this.mixer = mixer;
+                this.attack = attack;
+                this.attackLength = attackLength;
+            }
+
+            public void SetDesired(bool moving, bool attacking, bool retreating)
+            {
+                desired = attacking ? 2 : (moving || retreating ? 1 : 0);
+            }
+
+            public void Tick(float deltaTime)
+            {
+                if (disposed) return;
+                if (attackLength > 0.0001 && attack.GetTime() > attackLength) attack.SetTime(attack.GetTime() % attackLength);
+                float step = BlendSeconds <= 0f ? 1f : deltaTime / BlendSeconds;
+                for (int i = 0; i < 3; i++)
+                {
+                    float target = i == desired ? 1f : 0f;
+                    mixer.SetInputWeight(i, Mathf.MoveTowards(mixer.GetInputWeight(i), target, step));
+                }
+            }
+
+            public void Dispose()
+            {
+                if (disposed) return;
+                disposed = true;
+                if (graph.IsValid()) graph.Destroy();
+            }
+        }
+
+        public static AnimationHandle TryCreateAnimation(GameObject instance, UnitKind kind, ulong id)
+        {
+#if UNITY_EDITOR
+            if (Disabled || instance == null || !AnimationTable.ContainsKey(kind)) return null;
+            var animator = instance.GetComponentInChildren<Animator>();
+            if (animator == null) return null;
+            var idle = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Idle));
+            var walk = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Walk));
+            var attack = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Attack));
+            if (idle == null || walk == null || attack == null) return null;
+            // Off-screen soldiers are not animated at all; a crowd of 200 only pays for the ones in view.
+            animator.cullingMode = AnimatorCullingMode.CullCompletely;
+            var graph = PlayableGraph.Create("RTS Unit Animation");
+            var mixer = AnimationMixerPlayable.Create(graph, 3);
+            var idlePlayable = AnimationClipPlayable.Create(graph, idle);
+            var walkPlayable = AnimationClipPlayable.Create(graph, walk);
+            var attackPlayable = AnimationClipPlayable.Create(graph, attack);
+            graph.Connect(idlePlayable, 0, mixer, 0);
+            graph.Connect(walkPlayable, 0, mixer, 1);
+            graph.Connect(attackPlayable, 0, mixer, 2);
+            mixer.SetInputWeight(0, 1f);
+            var output = AnimationPlayableOutput.Create(graph, "Animation", animator);
+            output.SetSourcePlayable(mixer);
+            // Each clip keeps its own time, so the offset goes on every clip: the soldiers do not step in unison.
+            float offset = (id % 97u) / 97f;
+            idlePlayable.SetTime(offset * idle.length);
+            walkPlayable.SetTime(offset * walk.length);
+            attackPlayable.SetTime(offset * attack.length);
+            graph.Play();
+            return new AnimationHandle(graph, mixer, attackPlayable, attack.length);
+#else
+            return null;
+#endif
+        }
+
+#if UNITY_EDITOR
+        private static AnimationClip LoadAnimationClip(string path)
+        {
+            if (path == null) return null;
+            if (animationClips.ContainsKey(path)) return animationClips[path];
+            AnimationClip clip = null;
+            var assets = AssetDatabase.LoadAllAssetsAtPath(path);
+            for (int i = 0; i < assets.Length; i++)
+                // An FBX also carries Unity's "__preview__" copy of each take; only the real clip is wanted.
+                if (assets[i] is AnimationClip candidate && !candidate.name.StartsWith("__preview__")) { clip = candidate; break; }
+            animationClips.Add(path, clip);
+            return clip;
+        }
+#endif
 
         /// <summary>Finished height of a building model, or 0 for kinds that keep the placeholder box.</summary>
         public static float BuildingHeight(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.Height : 0f; }
