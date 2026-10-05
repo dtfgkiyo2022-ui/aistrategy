@@ -65,6 +65,7 @@ namespace Rts.Providers
         protected abstract string BuildBody(InterpreterRequest request);
         protected abstract void AddHeaders(HttpRequestMessage request, string key);
         protected abstract string ProviderName { get; }
+        protected virtual string PreflightJson(InterpreterRequest request) => null;
 
         public void Request(InterpreterRequest request)
         {
@@ -73,9 +74,14 @@ namespace Rts.Providers
             AiModelCatalog.Get(request.Model);
             string key = readKey();
             if (requiresKey && string.IsNullOrEmpty(key)) throw new InvalidOperationException(ProviderName + " の API キーが設定されていません。");
-            string body = BuildBody(request);
+            string preflight = PreflightJson(request);
             var item = new Pending { RequestId = request.RequestId };
-            item.Task = SendAsync(request, body, key);
+            if (!string.IsNullOrEmpty(preflight)) item.Task = Task.FromResult(new TransportReply { Json = preflight });
+            else
+            {
+                string body = BuildBody(request);
+                item.Task = SendAsync(request, body, key);
+            }
             lock (gate) pending.Add(item);
         }
 
@@ -301,8 +307,14 @@ namespace Rts.Providers
         {
             var limits = AiModelCatalog.Get(request.Model);
             string schema = AiCommandSchema.Build(request.Summary, limits);
-            string userPrompt = request.Summary.DynamicPrompt(request.Instruction,
-                request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName);
+            string userPrompt;
+            if (limits.SupportsComplexInstructions)
+                userPrompt = request.Summary.DynamicPrompt(request.Instruction,
+                    request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName);
+            else
+                userPrompt = request.Summary.SmallModelPrompt(request.Instruction,
+                    request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null,
+                    request.FixedTargetName);
             if (limits.DisableThinking && request.Model.Equals("local-llm", StringComparison.OrdinalIgnoreCase))
                 userPrompt += "\n/no_think";
             var messages = new List<object>
@@ -340,6 +352,16 @@ namespace Rts.Providers
         }
         protected override string ProviderName => "ローカル LLM";
         protected override void AddHeaders(HttpRequestMessage request, string key) { }
+        protected override string PreflightJson(InterpreterRequest request)
+        {
+            string unknown = request.Summary == null ? null : request.Summary.FindUnknownInstructionName(request.Instruction);
+            if (string.IsNullOrEmpty(unknown)) return null;
+            return JsonValueWriter.Write(new Dictionary<string, object>
+            {
+                ["kind"] = "unknown", ["scope"] = "", ["goal"] = "", ["region"] = "", ["control"] = "",
+                ["reason"] = "表にない名前（" + unknown + "）"
+            });
+        }
         protected override string BuildBody(InterpreterRequest request)
         {
             if (endpoint == OllamaEndpoint) return OllamaBody(request);
@@ -353,7 +375,7 @@ namespace Rts.Providers
         {
             var limits = AiModelCatalog.Get(request.Model);
             string schema = AiCommandSchema.Build(request.Summary, limits);
-            string prompt = request.Summary.DynamicPrompt(request.Instruction,
+            string prompt = request.Summary.SmallModelPrompt(request.Instruction,
                 request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null,
                 request.FixedTargetName);
             prompt += "\n/no_think";
