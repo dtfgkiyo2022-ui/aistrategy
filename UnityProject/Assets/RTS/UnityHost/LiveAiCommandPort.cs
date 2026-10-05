@@ -80,13 +80,15 @@ namespace Rts.UnityHost
         private readonly List<LiveAiInstruction> history = new List<LiveAiInstruction>();
         private readonly AiBudgetMeter budget;
         private OperationTable operationTable;
+        private readonly Action<string> changeDoctrine;
 
         public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
-            OperationTable operationTable = null)
+            OperationTable operationTable = null, Action<string> changeDoctrine = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
             this.operationTable = operationTable;
+            this.changeDoctrine = changeDoctrine;
             var runtime = new RuntimeCommandInterpreterRouter();
             ownedInterpreter = runtime;
             coordinator = new CommandInterpreterCoordinator(runtime);
@@ -95,11 +97,12 @@ namespace Rts.UnityHost
 
         /// <summary>Test/development constructor; the supplied interpreter prevents any real network access.</summary>
         public LiveAiCommandPort(CommandGateway gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
-            decimal budgetYen = 3m, OperationTable operationTable = null)
+            decimal budgetYen = 3m, OperationTable operationTable = null, Action<string> changeDoctrine = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
             this.operationTable = operationTable;
+            this.changeDoctrine = changeDoctrine;
             coordinator = new CommandInterpreterCoordinator(interpreter ?? throw new ArgumentNullException(nameof(interpreter)));
             budget = new AiBudgetMeter(budgetYen);
         }
@@ -199,7 +202,8 @@ namespace Rts.UnityHost
                 item.Policies = result.Policies ?? Array.Empty<UserPolicyIntent>();
                 item.Issued = AiInstructionText.Describe(result);
 
-                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0))
+                bool hasDoctrine = result.Doctrine != null;
+                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0 && !hasDoctrine))
                 {
                     item.State = reply.Late ? AiInstructionState.Expired : AiInstructionState.Unknown;
                     if (reply.Late && string.IsNullOrEmpty(item.Reason)) item.Reason = "締め切りを過ぎた答え";
@@ -209,6 +213,7 @@ namespace Rts.UnityHost
                     continue;
                 }
 
+                bool reservationClosed = false;
                 try
                 {
                     var latest = frame == null ? null : frame();
@@ -222,6 +227,16 @@ namespace Rts.UnityHost
                             if (!added.Accepted) throw new InvalidOperationException(added.Reason);
                         }
                     }
+                    // Doctrine switching must happen after the interpretation reservation closes.  Otherwise the
+                    // replacement PresetController's proposal would be rejected as an overlapping autonomous input.
+                    // Concrete orders are submitted after the switch, so a simultaneous spoken order keeps human priority.
+                    if (hasDoctrine)
+                    {
+                        gateway.EndInterpretation(item.ReservationId);
+                        reservationClosed = true;
+                        if (changeDoctrine == null) throw new InvalidOperationException("全体方針を切り替える受け口がありません。");
+                        changeDoctrine(result.Doctrine);
+                    }
                     if (result.Policies.Count != 0) item.HumanRequestId = gateway.SubmitBatch(result.Policies);
                     foreach (var command in result.EconomyCommands) gateway.SubmitEconomy(command);
                     item.State = AiInstructionState.Executing;
@@ -233,7 +248,7 @@ namespace Rts.UnityHost
                 }
                 finally
                 {
-                    gateway.EndInterpretation(item.ReservationId);
+                    if (!reservationClosed && gateway.IsInterpretationOpen(item.ReservationId)) gateway.EndInterpretation(item.ReservationId);
                 }
             }
             Refresh(frame == null ? null : frame());
@@ -322,12 +337,24 @@ namespace Rts.UnityHost
         {
             if (result == null) return Array.Empty<string>();
             var lines = new List<string>();
+            if (result.Doctrine != null) lines.Add(Doctrine(result.Doctrine));
             foreach (var policy in result.Policies ?? Array.Empty<UserPolicyIntent>()) lines.Add(Policy(policy));
             foreach (var command in result.EconomyCommands ?? Array.Empty<EconomyCommand>()) lines.Add(Economy(command));
             foreach (var operation in result.Operations ?? Array.Empty<OperationDefinition>())
                 lines.Add("作戦：" + operation.When.Describe() + "なら、" + string.Join("・", operation.Then.Select(a =>
                     a.IsPolicy ? Policy(a.Policy) : Economy(a.Economy))));
             return lines;
+        }
+
+        private static string Doctrine(string doctrine)
+        {
+            switch (doctrine)
+            {
+                case "maintain": return "全体方針：維持型（守り気味）に切り替え";
+                case "concentrate": return "全体方針：集中型（攻め気味）に切り替え";
+                case "none": return "全体方針：お任せなし（自分で操作）に切り替え";
+                default: return "全体方針：" + doctrine + "に切り替え";
+            }
         }
 
         public static string Policy(UserPolicyIntent policy)

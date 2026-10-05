@@ -99,9 +99,24 @@ namespace Rts.Providers
             string kind = Choice(answers, "instruction_kind");
             string target = Choice(answers, "instruction_target");
             string goal = Choice(answers, "instruction_goal");
-            if (Confidence(answers, "instruction_kind") < 0.6 || kind == JevChoice.Unknown ||
-                Confidence(answers, "instruction_target") < 0.6 || target == JevChoice.Unknown)
+            if (Confidence(answers, "instruction_kind") < 0.6 || kind == JevChoice.Unknown)
                 return "{\"unknown\":true,\"reason\":\"Jevでは短い定型の指示だけを解釈できます。\",\"commands\":[]}";
+
+            if (kind == "doctrine")
+            {
+                string doctrine = Choice(answers, "instruction_doctrine");
+                if (Confidence(answers, "instruction_doctrine") < 0.6 ||
+                    (doctrine != "none" && doctrine != "maintain" && doctrine != "concentrate"))
+                    return "{\"unknown\":true,\"reason\":\"全体方針を確定できません。\",\"commands\":[]}";
+                return JsonValueWriter.Write(new Dictionary<string, object>
+                {
+                    ["kind"] = "SetDoctrine", ["scope"] = "", ["goal"] = "", ["region"] = "", ["control"] = "",
+                    ["doctrine"] = doctrine, ["reason"] = ""
+                });
+            }
+
+            if (Confidence(answers, "instruction_target") < 0.6 || target == JevChoice.Unknown)
+                return "{\"unknown\":true,\"reason\":\"対象を確定できません。\",\"commands\":[]}";
 
             var targetEntry = FindTarget(request.Summary, target);
             var scopeEntry = request.HasFixedTarget ? null : targetEntry;

@@ -135,7 +135,7 @@ namespace Rts.Simulation
                 o.Kind == PolicyKind.Focus && (o.Goal.Kind == GoalKind.None || o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId == o.Target.FactionId) ||
                 o.Kind == PolicyKind.AllowAbandon && (o.Target.Kind != ScopeKind.Outpost && o.Target.Kind != ScopeKind.Region || o.Goal.Kind != GoalKind.None) ||
                 o.Kind == PolicyKind.MaintainReserve && (o.Target.Kind != ScopeKind.All && o.Target.Kind != ScopeKind.Region || o.Goal.Kind != GoalKind.None) ||
-                o.Kind == PolicyKind.ReturnToAuto && (o.Source != CommandSource.Human || o.Goal.Kind != GoalKind.None) ||
+                o.Kind == PolicyKind.ReturnToAuto && (o.Source != CommandSource.Human && o.Source != CommandSource.Doctrine || o.Goal.Kind != GoalKind.None) ||
                 o.Kind == PolicyKind.Defend && (o.Target.Kind == ScopeKind.All || o.Goal.Kind != GoalKind.Outpost && o.Goal.Kind != GoalKind.Core ||
                     o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId != o.Target.FactionId) ||
                 o.Kind == PolicyKind.Scout && (o.Target.Kind != ScopeKind.Army && o.Target.Kind != ScopeKind.Region || o.Target.Kind == ScopeKind.Army && world.Armies[o.Target.Id - 1].Definition.Role != "scout" ||
@@ -163,7 +163,7 @@ namespace Rts.Simulation
             foreach (var c in commandStates)
             {
                 if (c == self || Terminal(c) || !Overlap(c, order)) continue;
-                if (order.Source != CommandSource.Human && c.Order.Source == CommandSource.Human &&
+                if (order.Kind != PolicyKind.ReturnToAuto && order.Source != CommandSource.Human && c.Order.Source == CommandSource.Human &&
                     (c.Status != CommandStatus.Executing || Field(c.Order.Kind) == Field(order.Kind))) return ReasonCode.Superseded;
                 if (order.Source == CommandSource.Ai && c.Order.Source == CommandSource.Doctrine && Field(c.Order.Kind) == Field(order.Kind)) return ReasonCode.Superseded;
             }
@@ -364,8 +364,16 @@ namespace Rts.Simulation
             foreach (var old in commandStates.ToArray())
             {
                 if (old == c || Terminal(old) || !Overlap(old, o)) continue;
-                bool reset = o.Kind == PolicyKind.ReturnToAuto && old.Order.Source == CommandSource.Human;
-                bool replace = Field(old.Order.Kind) == Field(o.Kind) && (o.Source < old.Order.Source || o.Source == old.Order.Source && c.LogIndex > old.LogIndex);
+                // Doctrine ReturnToAuto is a new input form.
+                // Existing recordings never contain it because doctrine presets did not emit it and Simulation rejected it.
+                // Therefore replay results for existing recordings remain unchanged.
+                bool reset = o.Kind == PolicyKind.ReturnToAuto && old.Order.Source == o.Source &&
+                    (o.Source == CommandSource.Human || o.Source == CommandSource.Doctrine);
+                // A Human ReturnToAuto keeps its old effect: it also replaces lower-priority commands of its field (1).
+                // Only the new Doctrine form is limited to resetting Doctrine commands, so it never touches Ai ones.
+                bool replace = !(o.Kind == PolicyKind.ReturnToAuto && o.Source == CommandSource.Doctrine) &&
+                    Field(old.Order.Kind) == Field(o.Kind) &&
+                    (o.Source < old.Order.Source || o.Source == old.Order.Source && c.LogIndex > old.LogIndex);
                 if (!reset && !replace) continue;
                 if (old.Status == CommandStatus.Executing && o.Target.Kind != ScopeKind.All && !old.Order.Target.Equals(o.Target))
                 {

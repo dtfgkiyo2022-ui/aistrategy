@@ -124,6 +124,7 @@ namespace Rts.UnityHost
         private JevPolicyProvider jev;
         private HttpJevTransport jevTransport;
         private IDisposable judgementTransport;
+        private IPolicyProvider activeExternal;
         private LiveAiCommandPort liveAi;
         private OperationTable operationTable;
 
@@ -209,6 +210,7 @@ namespace Rts.UnityHost
             jevTransport = null;
             if (judgementTransport != null) judgementTransport.Dispose();
             judgementTransport = null;
+            activeExternal = null;
             gatewayOrders = 0;
         }
 
@@ -340,13 +342,15 @@ namespace Rts.UnityHost
                     external = jev;
                 }
             }
+            activeExternal = external;
             AutonomousPollSchedule externalSchedule = null;
             if (external != null)
                 externalSchedule = AutonomousPollSchedule.OnChange(fineJudgementEnabled ? Math.Max(20, fineJudgementIntervalTicks) : 600);
             gateway = new CommandGateway(simulation, provider, null,
                 externalSchedule, external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
-            liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable);
+            liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable,
+                changeDoctrine: preset => SwitchOwnDoctrine(preset));
             enemyFactionId = 3 - viewFactionId;
             enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
@@ -391,6 +395,29 @@ namespace Rts.UnityHost
         {
             if (liveAi == null) throw new InvalidOperationException("試合が開始されていません。");
             return liveAi.BeginInterpretation(instruction, fixedTarget, model);
+        }
+
+        /// <summary>
+        /// Changes the player's doctrine without restarting the match.  The old doctrine is cleared by a logged
+        /// Doctrine ReturnToAuto input, then the replacement controller observes the current tick before proposing.
+        /// The setup choice is updated as well, while the setup panel still restarts a match when changed directly.
+        /// </summary>
+        public bool SwitchOwnDoctrine(string preset)
+        {
+            if (simulation == null || gateway == null || port == null) return false;
+            if (activeExternal != null) return false;
+            if (Array.IndexOf(PolicyPresets.Names, preset) < 0)
+                throw new ArgumentException("Preset must be none, maintain, maintain-legacy or concentrate.", nameof(preset));
+            if (preset == ownPreset) return true;
+            long tick = simulation.Capture(ownFactionId).Tick;
+            // ResetDoctrine is logged before the new controller's proposal.  Both apply at tick+1, so every old
+            // doctrine field is removed first; this is also why switching to none really returns to human control.
+            gateway.ResetDoctrine(ownFactionId, checked(tick + 1));
+            var replacement = PolicyPresets.CreateController(preset, ownFactionId, gateway);
+            replacement.Initialize(tick);
+            own = replacement;
+            ownPreset = preset;
+            return true;
         }
 
         public decimal EstimateAiCost(string instruction, string model, ScopeKey? fixedTarget = null)

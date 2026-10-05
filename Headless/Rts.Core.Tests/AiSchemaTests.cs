@@ -57,6 +57,9 @@ namespace Rts.Core.Tests
                 CollectionAssert.Contains(scopeEnum, "全部隊");
                 CollectionAssert.Contains(scopeEnum, "", "an empty string is how the schema says 'not given'");
                 CollectionAssert.DoesNotContain(scopeEnum, "存在しない軍");
+                var command = root.GetProperty("$defs").GetProperty("command");
+                CollectionAssert.Contains(command.GetProperty("properties").GetProperty("type").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "doctrine");
+                CollectionAssert.Contains(command.GetProperty("properties").GetProperty("preset").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "concentrate");
                 var condition = root.GetProperty("properties").GetProperty("operations").GetProperty("items").GetProperty("properties").GetProperty("when");
                 CollectionAssert.Contains(condition.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "And");
             }
@@ -75,6 +78,8 @@ namespace Rts.Core.Tests
                 CollectionAssert.Contains(properties, "scope");
                 CollectionAssert.Contains(properties, "goal");
                 CollectionAssert.Contains(properties, "reason");
+                CollectionAssert.Contains(properties, "doctrine");
+                CollectionAssert.Contains(document.RootElement.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "SetDoctrine");
                 CollectionAssert.DoesNotContain(properties, "commands");
                 CollectionAssert.DoesNotContain(properties, "operations");
             }

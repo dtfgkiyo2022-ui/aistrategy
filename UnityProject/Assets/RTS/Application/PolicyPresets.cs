@@ -104,8 +104,17 @@ namespace Rts.Application
 
         public void Initialize()
         {
+            Initialize(0);
+        }
+
+        /// <summary>Starts this preset from an already-running match tick.</summary>
+        public void Initialize(long tick)
+        {
+            if (tick < 0) throw new ArgumentOutOfRangeException(nameof(tick));
             if (preset == "none") return;
-            ProposeInitial(0);
+            // The first proposal uses the supplied observation tick.  The host clears the previous doctrine
+            // before constructing a replacement, so this proposal is the new doctrine's first whole-army input.
+            ProposeInitial(tick);
         }
 
         public void Step(FactionFrame frame)
