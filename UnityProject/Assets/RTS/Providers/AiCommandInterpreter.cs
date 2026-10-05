@@ -266,7 +266,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         public const string StableInstructionsShort = @"
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
 kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
-名前表にない名前（例：表にない拠点、第N軍）は絶対に作らず、kind=unknownにしてreasonに「表にない名前」と書いてください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
+表にない名前の判定はゲーム側が行います。scope と goal は、必ず名前表の中から選んでください。指示文に出てきた名前と同じものを選んでください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
 ";
 
         public static string ForModel(string model)
@@ -355,21 +355,27 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             => AiCommandSchema.StableInstructions + "\n" + DynamicPrompt(instruction, fixedTarget);
 
         public string Prompt(string instruction, ScopeKey? fixedTarget, string model)
-            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget);
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget, null, IsSmallModel(model));
 
         public string Prompt(string instruction, string fixedTargetName)
             => AiCommandSchema.StableInstructions + "\n" + DynamicPrompt(instruction, null, fixedTargetName);
 
         public string Prompt(string instruction, string fixedTargetName, string model)
-            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, null, fixedTargetName);
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, null, fixedTargetName, IsSmallModel(model));
 
         public string Prompt(string instruction, ScopeKey? fixedTarget, string model, string fixedTargetName)
-            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget, fixedTargetName);
+            => AiCommandSchema.ForModel(model) + "\n" + DynamicPrompt(instruction, fixedTarget, fixedTargetName, IsSmallModel(model));
+
+        public string SmallModelPrompt(string instruction, ScopeKey? fixedTarget = null, string fixedTargetName = null)
+            => AiCommandSchema.StableInstructionsShort + "\n" + DynamicPrompt(instruction, fixedTarget, fixedTargetName, true);
 
         public string DynamicPrompt(string instruction, ScopeKey? fixedTarget = null)
-            => DynamicPrompt(instruction, fixedTarget, null);
+            => DynamicPrompt(instruction, fixedTarget, null, false);
 
         public string DynamicPrompt(string instruction, ScopeKey? fixedTarget, string fixedTargetName)
+            => DynamicPrompt(instruction, fixedTarget, fixedTargetName, false);
+
+        private string DynamicPrompt(string instruction, ScopeKey? fixedTarget, string fixedTargetName, bool includeInstructionNames)
         {
             var names = new StringBuilder();
             foreach (var group in CompactNameTable())
@@ -381,9 +387,100 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             }
             string selected = fixedTargetName;
             if (string.IsNullOrEmpty(selected) && fixedTarget.HasValue) selected = NameFor(fixedTarget.Value);
+            string instructionNames = includeInstructionNames ? InstructionNamesHint(instruction) : "";
             return "名前表（この文字列だけを使う）:\n" + names +
                 "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
+                (string.IsNullOrEmpty(instructionNames) ? "" : "\n" + instructionNames) +
                 "\n指示:\n" + (instruction ?? "");
+        }
+
+        private static bool IsSmallModel(string model)
+        {
+            try { return !AiModelCatalog.Get(model).SupportsComplexInstructions; }
+            catch (ArgumentException) { return false; }
+        }
+
+        /// <summary>
+        /// 指示文にそのまま出てきた名前表の名前（別名を含む）を、長い名前から順に返します。
+        /// 短い別名が長い名前の一部に含まれる場合は、長い名前だけを採用します。
+        /// </summary>
+        public IReadOnlyList<string> FindInstructionNames(string instruction)
+        {
+            var text = instruction ?? "";
+            var found = new List<Tuple<int, string>>();
+            var occupied = new bool[text.Length];
+            foreach (var entry in (NameTable ?? Array.Empty<AiNameTableEntry>())
+                .Where(e => e != null && !string.IsNullOrEmpty(e.Name))
+                .OrderByDescending(e => e.Name.Length)
+                .ThenBy(e => e.Name, StringComparer.Ordinal))
+            {
+                int start = 0;
+                while (start < text.Length)
+                {
+                    int index = text.IndexOf(entry.Name, start, StringComparison.Ordinal);
+                    if (index < 0) break;
+                    int end = index + entry.Name.Length;
+                    bool overlaps = false;
+                    for (int i = index; i < end; i++) if (occupied[i]) { overlaps = true; break; }
+                    if (!overlaps)
+                    {
+                        found.Add(Tuple.Create(index, entry.Name));
+                        for (int i = index; i < end; i++) occupied[i] = true;
+                    }
+                    start = end;
+                }
+            }
+            found.Sort((a, b) => a.Item1 != b.Item1 ? a.Item1.CompareTo(b.Item1) : b.Item2.Length.CompareTo(a.Item2.Length));
+            return found.Select(x => x.Item2).ToArray();
+        }
+
+        /// <summary>
+        /// 名前らしい形は「西の拠点」「第9軍」「区域3」「西軍」のような狭い形だけです。
+        /// 一般の名詞や文章を未知名として扱わないため、任意のカタカナ語や形容詞は対象にしません。
+        /// </summary>
+        public string FindUnknownInstructionName(string instruction)
+        {
+            var text = instruction ?? "";
+            foreach (Match match in Regex.Matches(text,
+                @"[\p{IsCJKUnifiedIdeographs}々ー・]{1,12}の拠点|第[0-9０-９一二三四五六七八九十百]+軍|区域[0-9０-９一二三四五六七八九十百]+|[\p{IsCJKUnifiedIdeographs}々ー・]{1,12}軍"))
+            {
+                string candidate = match.Value;
+                int suffix = candidate.LastIndexOf("の拠点", StringComparison.Ordinal);
+                if (suffix > 0) candidate = candidate.Substring(Math.Max(0, suffix - 1));
+                if (IsCommonWord(candidate)) continue;
+                if (!FindInstructionNamesAt(text, match.Index, match.Length, candidate)) return candidate;
+            }
+            return null;
+        }
+
+        // Ordinary words that have the shape of a name but name no single thing (eval 10-05: 「そこに全軍で向かって」 was
+        // refused as an unknown name). They go to the model as usual.
+        private static readonly string[] CommonWords =
+        {
+            "全軍", "自軍", "敵軍", "援軍", "友軍", "味方軍", "我軍", "大軍", "本軍", "主力軍",
+            "敵の拠点", "自分の拠点", "味方の拠点", "我の拠点", "近くの拠点", "次の拠点", "その拠点", "この拠点", "あの拠点"
+        };
+
+        private static bool IsCommonWord(string candidate)
+        {
+            foreach (var word in CommonWords)
+                if (candidate.EndsWith(word, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private bool FindInstructionNamesAt(string text, int index, int length, string candidate)
+        {
+            if (string.IsNullOrEmpty(candidate)) return false;
+            bool known = (NameTable ?? Array.Empty<AiNameTableEntry>()).Any(e => e != null && e.Name == candidate);
+            if (!known) return false;
+            int found = text.IndexOf(candidate, index, StringComparison.Ordinal);
+            return found >= index && found < index + length;
+        }
+
+        private string InstructionNamesHint(string instruction)
+        {
+            var mentioned = FindInstructionNames(instruction);
+            return mentioned.Count == 0 ? "" : "指示に出てきた名前：" + string.Join("、", mentioned);
         }
 
         private sealed class CompactNameEntry

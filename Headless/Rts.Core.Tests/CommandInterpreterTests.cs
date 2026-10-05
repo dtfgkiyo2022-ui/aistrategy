@@ -119,6 +119,22 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void InstructionNamesPreferTheLongestTableNameAndOnlyNarrowShapesAreUnknown()
+        {
+            var summary = AiSituationSummary.From(Frame());
+            summary.AddGoalAlias("北", new PolicyGoal(GoalKind.Outpost, 1, NorthPoint), true, NorthPoint);
+            Assert.That(summary.FindInstructionNames("北の拠点を守れ"), Is.EqualTo(new[] { "北の拠点" }));
+            Assert.That(summary.FindUnknownInstructionName("西の拠点を守れ"), Is.EqualTo("西の拠点"));
+            Assert.That(summary.FindUnknownInstructionName("第9軍を退かせて"), Is.EqualTo("第9軍"));
+            Assert.That(summary.FindUnknownInstructionName("区域3を自分で担当"), Is.Null);
+            Assert.That(summary.FindUnknownInstructionName("普通に守れ"), Is.Null);
+            // Ordinary words with a name's shape are left to the model (eval 10-05).
+            Assert.That(summary.FindUnknownInstructionName("そこに全軍で向かって"), Is.Null);
+            Assert.That(summary.FindUnknownInstructionName("敵の拠点を攻めろ"), Is.Null);
+            Assert.That(summary.FindUnknownInstructionName("敵軍が来たら下がって"), Is.Null);
+        }
+
+        [Test]
         public void JapaneseEconomyNamesBecomeGameEnums()
         {
             var result = Interpret("{\"commands\":[{\"type\":\"economy\",\"kind\":\"SetEconomyPolicy\",\"policy\":\"内政\"},{\"type\":\"economy\",\"kind\":\"PlaceBuilding\",\"building\":\"塔\",\"location\":\"お任せ\"},{\"type\":\"economy\",\"kind\":\"Train\",\"unit\":\"歩兵\",\"producer\":\"コア\"}],\"say\":\"\"}", Frame(true, false),

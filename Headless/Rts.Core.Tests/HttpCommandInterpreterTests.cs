@@ -19,11 +19,13 @@ namespace Rts.Tests.Headless
         {
             internal HttpRequestMessage Request;
             internal string Body;
+            internal int Calls;
             internal HttpStatusCode Status = HttpStatusCode.OK;
             internal string Reply = "{}";
             internal Queue<HttpResponseMessage> Responses = new Queue<HttpResponseMessage>();
             protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
             {
+                Calls++;
                 Request = request; Body = await request.Content.ReadAsStringAsync().ConfigureAwait(false);
                 if (Responses.Count != 0) return Responses.Dequeue();
                 return new HttpResponseMessage(Status) { Content = new StringContent(Reply, Encoding.UTF8, "application/json") };
@@ -87,6 +89,41 @@ namespace Rts.Tests.Headless
             var localHandler = new Handler { Reply = "{\"choices\":[{\"message\":{\"content\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\"}\"}}]}" };
             using (var local = new LocalLlmCommandInterpreter("qwen-test", localHandler))
             { local.Request(Request("local-llm")); Poll(local); Assert.That(localHandler.Request.Headers.Authorization, Is.Null); Assert.That(localHandler.Body, Does.Contain("qwen-test")); Assert.That(localHandler.Body, Does.Contain("\"max_tokens\":2048")); Assert.That(localHandler.Body, Does.Contain("/no_think")); }
+        }
+
+        [Test]
+        public void SmallModelGetsInstructionNameHintAndUnknownNameNeverReachesTheModel()
+        {
+            var knownHandler = new Handler { Reply = "{\"message\":{\"content\":\"{\\\"kind\\\":\\\"unknown\\\",\\\"scope\\\":\\\"\\\",\\\"goal\\\":\\\"\\\",\\\"region\\\":\\\"\\\",\\\"control\\\":\\\"\\\",\\\"reason\\\":\\\"\\\"}\"}}" };
+            using (var known = new LocalLlmCommandInterpreter("qwen-test", knownHandler, endpoint: "ollama"))
+            {
+                var request = Request("local-llm"); request.Instruction = "北の拠点を守れ";
+                known.Request(request); Poll(known);
+                Assert.That(knownHandler.Calls, Is.EqualTo(1));
+                Assert.That(knownHandler.Body, Does.Contain("指示に出てきた名前：北の拠点"));
+                Assert.That(knownHandler.Body, Does.Not.Contain("名前表にない名前（例：表にない拠点、第N軍）は絶対に作らず"));
+            }
+
+            var unknownHandler = new Handler { Reply = "{\"message\":{\"content\":\"{}\"}}" };
+            using (var unknown = new LocalLlmCommandInterpreter("qwen-test", unknownHandler, endpoint: "ollama"))
+            {
+                var request = Request("local-llm"); request.Instruction = "西の拠点を守れ";
+                unknown.Request(request); var reply = Poll(unknown);
+                Assert.That(unknownHandler.Calls, Is.EqualTo(0));
+                Assert.That(reply.Json, Does.Contain("表にない名前（西の拠点）"));
+            }
+        }
+
+        [Test]
+        public void CloudPromptDoesNotReceiveTheSmallModelNameHint()
+        {
+            var handler = new Handler { Reply = "{\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\",\\\"reason\\\":null,\\\"unknown\\\":false}\"}]}" };
+            using (var interpreter = new ClaudeCommandInterpreter(() => Key, handler))
+            {
+                var request = Request("claude-haiku-4-5"); request.Instruction = "北の拠点を守れ";
+                interpreter.Request(request); Poll(interpreter);
+                Assert.That(handler.Body, Does.Not.Contain("指示に出てきた名前："));
+            }
         }
 
         [Test]

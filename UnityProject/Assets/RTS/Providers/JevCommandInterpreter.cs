@@ -16,6 +16,7 @@ namespace Rts.Providers
         {
             internal InterpreterRequest Request;
             internal Task<JevAnswers> Task;
+            internal string PreflightJson;
         }
 
         private readonly Func<string> readKey;
@@ -34,6 +35,15 @@ namespace Rts.Providers
         {
             if (request == null) throw new ArgumentNullException(nameof(request));
             if (disposed) throw new ObjectDisposedException(nameof(JevCommandInterpreter));
+            string unknownName = request.Summary == null ? null : request.Summary.FindUnknownInstructionName(request.Instruction);
+            if (!string.IsNullOrEmpty(unknownName))
+            {
+                lock (gate) pending.Add(new Pending { Request = request, PreflightJson = JsonValueWriter.Write(new Dictionary<string, object>
+                {
+                    ["unknown"] = true, ["reason"] = "表にない名前（" + unknownName + "）", ["commands"] = Array.Empty<object>()
+                }) });
+                return;
+            }
             if (transport == null) transport = new HttpJevTransport(readKey);
             string questions = JevQuestions.Build(new JevQuestionContext { InstructionTranslationNeeded = true, IncludeComprehension = false });
             string state = JsonValueWriter.Write(new Dictionary<string, object>
@@ -57,16 +67,16 @@ namespace Rts.Providers
                 for (int i = pending.Count - 1; i >= 0; i--)
                 {
                     var p = pending[i];
-                    if (!p.Task.IsCompleted) continue;
+                    if (p.PreflightJson == null && !p.Task.IsCompleted) continue;
                     pending.RemoveAt(i);
                     try
                     {
-                        var answers = p.Task.GetAwaiter().GetResult();
+                        var answers = p.PreflightJson == null ? p.Task.GetAwaiter().GetResult() : null;
                         ready.Add(new InterpreterReply
                         {
                             RequestId = p.Request.RequestId,
                             ReturnedTick = tick,
-                            Json = ToCommandJson(p.Request, answers),
+                            Json = p.PreflightJson ?? ToCommandJson(p.Request, answers),
                             Usage = new AiTokenUsage((int)Math.Max(0, answers?.Usage?.InputTokens ?? 0),
                                 (int)Math.Max(0, answers?.Usage?.OutputTokens ?? 0)),
                             Model = p.Request.Model
