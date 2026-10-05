@@ -17,22 +17,14 @@ namespace Rts.Presentation
 
         public bool BlocksClick(Vector2 screenPoint)
         {
-            var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return ClockRect().Contains(guiPoint) || TimelineRect().Contains(guiPoint);
+            return UiHitAreas.Shared.ContainsScreen(screenPoint, Screen.height);
         }
 
         private IMatchClock Clock { get { return clock ?? (clock = clockSource as IMatchClock); } }
 
-        // Under the stock bar that runs across the top (EconomyPanel), so the two never overlap.
-        private static Rect ClockRect() { return new Rect(Screen.width / 2f - 200f, 40f, 400f, 58f); }
+        private static Rect ClockRect() { return UiLayout.Calculate(Screen.width, Screen.height).TopCenter; }
 
-        private static Rect TimelineRect()
-        {
-            float top = 8f + 2f * (8f * 20f + 30f) + 16f;
-            float bottom = Screen.height - 10f;
-            float height = Mathf.Clamp(bottom - top, 62f, VisibleLines * 18f + 26f);
-            return new Rect(Screen.width - 432f, bottom - height, 422f, height);
-        }
+        private static Rect TimelineRect() { return UiLayout.Calculate(Screen.width, Screen.height).Timeline; }
 
         private void Update()
         {
@@ -41,34 +33,38 @@ namespace Rts.Presentation
 
         private void OnGUI()
         {
+            UiStyles.Begin();
+            UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var clockRect = ClockRect();
             var current = Clock;
             // Minutes and seconds first (20 ticks a second); the raw tick stays for checking replays and logs.
-            GUI.Box(clockRect, current == null ? UiText.T("Clock", "時計")
+            UiStyles.Box(clockRect, current == null ? UiText.T("Clock", "時計")
                 : UiText.T("Elapsed ", "経過 ") + MatchOutcome.Clock(current.Tick) + "  (t=" + current.Tick + ")"
                     + UiText.T("  faction ", "  陣営 ") + current.ViewFactionId);
+            UiHitAreas.Shared.Register(clockRect);
             if (current != null)
             {
                 float x = clockRect.x + 8f;
-                if (GUI.Button(new Rect(x, clockRect.y + 26f, 64f, 24f), current.Paused ? UiText.T("Play", "再生") : UiText.T("Pause", "停止")))
+                if (GUI.Button(new Rect(x, clockRect.y + 28f, 56f, 22f), current.Paused ? UiText.T("Play", "再生") : UiText.T("Pause", "停止")))
                     current.Paused = !current.Paused;
-                x += 68f;
-                if (GUI.Button(new Rect(x, clockRect.y + 26f, 64f, 24f), "+1 tick")) current.StepOneTick();
-                x += 68f;
+                x += 60f;
+                if (GUI.Button(new Rect(x, clockRect.y + 28f, 48f, 22f), "+1")) current.StepOneTick();
+                x += 52f;
                 foreach (int speed in new[] { 1, 2, 4 })
                 {
                     bool on = current.SpeedMultiplier == speed;
-                    if (GUI.Toggle(new Rect(x, clockRect.y + 26f, 40f, 24f), on, "x" + speed, GUI.skin.button) && !on)
+                    if (GUI.Toggle(new Rect(x, clockRect.y + 28f, 32f, 22f), on, "x" + speed, GUI.skin.button) && !on)
                         current.SpeedMultiplier = speed;
-                    x += 44f;
+                    x += 36f;
                 }
-                x += 8f;
-                if (GUI.Button(new Rect(x, clockRect.y + 26f, 100f, 24f), UiText.T("View faction ", "陣営を見る ") + (3 - current.ViewFactionId)))
+                x += 4f;
+                if (GUI.Button(new Rect(x, clockRect.y + 28f, 72f, 22f), UiText.T("View ", "陣営 ") + (3 - current.ViewFactionId)))
                     current.ViewFactionId = 3 - current.ViewFactionId;
             }
 
             var timelineRect = TimelineRect();
-            GUI.Box(timelineRect, UiText.T("Timeline", "時系列"));
+            UiStyles.Box(timelineRect, UiText.T("Timeline", "時系列"));
+            UiHitAreas.Shared.Register(timelineRect);
             var entries = timeline.Entries;
             int lines = Mathf.Max(1, (int)((timelineRect.height - 26f) / 18f));
             int first = Mathf.Max(0, entries.Count - lines);

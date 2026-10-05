@@ -33,7 +33,9 @@ namespace Rts.Presentation
             focus.z = Mathf.Clamp(focus.z, 0f, mapHeight);
 
             float wheel = Input.mouseScrollDelta.y;
-            if (Mathf.Abs(wheel) > 0.01f) distance = Mathf.Clamp(distance - wheel * zoomStep, minDistance, maxDistance);
+            if (!UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)
+                && Mathf.Abs(wheel) > 0.01f)
+                distance = Mathf.Clamp(distance - wheel * zoomStep, minDistance, maxDistance);
 
             transform.position = focus - transform.forward * distance;
         }
