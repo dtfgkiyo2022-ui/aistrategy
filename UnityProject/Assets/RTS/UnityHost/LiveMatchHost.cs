@@ -135,6 +135,7 @@ namespace Rts.UnityHost
         [SerializeField] private string developmentAiModel = "local-llm";
         private string developmentAiMessage = "";
         private bool developmentAiModelListOpen;
+        private const string AiInstructionControl = "AiInstruction";
 
         /// <summary>細かい判断を試し遊びの陣営1で使うか。変更は次の試合から有効です。</summary>
         public bool FineJudgementEnabled
@@ -458,10 +459,22 @@ namespace Rts.UnityHost
             var rect = AiPanelRect;
             UiStyles.Box(rect, "試し遊び：参謀");
             UiHitAreas.Shared.Register(rect);
-            developmentAiInstruction = GUI.TextField(new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f), developmentAiInstruction ?? "");
+            var field = new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f);
+            bool focused = GUI.GetNameOfFocusedControl() == AiInstructionControl;
+            // Enter sends, but not while the IME is still converting: then Enter only confirms the conversion.
+            var current = Event.current;
+            bool enter = focused && current.type == EventType.KeyDown
+                && (current.keyCode == KeyCode.Return || current.keyCode == KeyCode.KeypadEnter)
+                && string.IsNullOrEmpty(Input.compositionString);
+            if (enter) current.Use();
+            GUI.SetNextControlName(AiInstructionControl);
+            developmentAiInstruction = GUI.TextField(field, developmentAiInstruction ?? "");
+            // The IME candidate list opens where this says; set after the field so the field cannot move it back to a
+            // corner of the window (as seen in the Game view on 10-05).
+            if (focused) Input.compositionCursorPos = new Vector2(field.x, field.yMax);
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
                 developmentAiModelListOpen = !developmentAiModelListOpen;
-            if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る"))
+            if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る") || enter)
             {
                 developmentAiModelListOpen = false;
                 try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = ""; }
