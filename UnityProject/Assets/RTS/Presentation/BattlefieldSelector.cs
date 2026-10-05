@@ -20,13 +20,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var camera = Camera.main;
             if (camera == null) return;
             if (Input.GetMouseButtonDown(0))
             {
                 pressed = false;
-                if (panel != null && panel.BlocksClick(Input.mousePosition)) return;
-                if (timelinePanel != null && timelinePanel.BlocksClick(Input.mousePosition)) return;
+                if (UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)) return;
                 if (panel != null && panel.TryConsumeGroundClick(camera, Input.mousePosition)) return;
                 pressed = true;
                 pressAt = Input.mousePosition;

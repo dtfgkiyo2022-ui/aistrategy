@@ -167,6 +167,9 @@ namespace Rts.UnityHost
         public decimal AiRemainingBudgetYen => liveAi == null ? 3m : liveAi.RemainingBudgetYen;
         public decimal AiRemainingFreeYen => 0m;
 
+        /// <summary>Public placement supplied to the temporary strategist UI and to hit-area registration.</summary>
+        public Rect AiPanelRect { get { return UiLayout.Calculate(Screen.width, Screen.height).Strategist; } }
+
         public bool KeyAvailable { get { return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable(KeyVariable)); } }
 
         public bool Enabled
@@ -448,11 +451,13 @@ namespace Rts.UnityHost
         private void OnGUI()
         {
             if (!developmentAiEntry || liveAi == null || simulation == null) return;
+            UiStyles.Begin();
+            UiHitAreas.Shared.BeginFrame(Time.frameCount);
             // IMGUI text fields only receive Japanese (IME) composition when the mode is forced on.
             Input.imeCompositionMode = IMECompositionMode.On;
-            // Placed under the command-log toggle so the two do not overlap.
-            var rect = new Rect(Screen.width - 430f, 40f, 422f, 172f);
-            GUI.Box(rect, "試し遊び：参謀（開発用）");
+            var rect = AiPanelRect;
+            UiStyles.Box(rect, "試し遊び：参謀");
+            UiHitAreas.Shared.Register(rect);
             developmentAiInstruction = GUI.TextField(new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f), developmentAiInstruction ?? "");
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
                 developmentAiModelListOpen = !developmentAiModelListOpen;
@@ -474,7 +479,8 @@ namespace Rts.UnityHost
             {
                 var models = AiModels;
                 var list = new Rect(rect.x + 8f, rect.y + 80f, rect.width - 156f, models.Count * 24f + 4f);
-                GUI.Box(list, "");
+                GUI.Box(list, GUIContent.none, UiStyles.Panel);
+                UiHitAreas.Shared.Register(list);
                 for (int i = 0; i < models.Count; i++)
                 {
                     var option = models[i];

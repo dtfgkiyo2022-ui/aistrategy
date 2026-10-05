@@ -65,13 +65,7 @@ namespace Rts.Presentation
 
         public bool BlocksClick(Vector2 screenPoint)
         {
-            if (ExtraBlocksClick != null && ExtraBlocksClick(screenPoint)) return true;
-            var guiPoint = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return ButtonsRect().Contains(guiPoint) || LogToggleRect().Contains(guiPoint)
-                || (logOpen && (LogRect().Contains(guiPoint) || StatusRect().Contains(guiPoint)))
-                || SupplyRect().Contains(guiPoint) || SetupButtonRect().Contains(guiPoint) || LanguageButtonRect().Contains(guiPoint)
-                || (setupOpen && SetupRect().Contains(guiPoint))
-                || (Outcome().HasValue && ResultRect().Contains(guiPoint));
+            return UiHitAreas.Shared.ContainsScreen(screenPoint, Screen.height);
         }
 
         // Left click while waiting for a ground target: returns true when the click was consumed.
@@ -98,23 +92,24 @@ namespace Rts.Presentation
         private const int ButtonRows = 7;
         private const float HeaderHeight = 44f;
 
-        private Rect ButtonsRect() { return new Rect(10f, Screen.height - 10f - ButtonRows * (ButtonHeight + 4f) - HeaderHeight, ButtonWidth + 8f, ButtonRows * (ButtonHeight + 4f) + 4f + HeaderHeight); }
+        private UiLayoutRects Layout() { return UiLayout.Calculate(Screen.width, Screen.height); }
+        private Rect ButtonsRect() { return Layout().Commands; }
 
-        private Rect StatusRect() { return new Rect(Screen.width - 430f, LogRect().yMax + 8f, 422f, MaxLogLines * 20f + 30f); }
+        private Rect StatusRect() { return Layout().LogStatus; }
 
-        private Rect SupplyRect() { return new Rect(10f, 40f, 250f, 26f + 22f * 3f); }
+        private Rect SupplyRect() { return Layout().Supply; }
 
         // The match settings (reply delay, opponent, map, outside AI) change rarely and each restarts the match, so they
         // share one panel that stays folded; open, it sits over the supply box and the top of the battlefield.
-        private Rect SetupButtonRect() { return new Rect(10f, 8f, 250f, 26f); }
-        private Rect LanguageButtonRect() { return new Rect(264f, 8f, 90f, 26f); }
+        private Rect SetupButtonRect() { return new Rect(Layout().TopRight.x, Layout().TopRight.y, Layout().TopRight.width * 0.64f, 28f); }
+        private Rect LanguageButtonRect() { var r = Layout().TopRight; return new Rect(r.x + r.width * 0.66f, r.y, r.width * 0.34f, 28f); }
 
         /// <summary>Called after the player switches the on-screen language, so the host can remember it.</summary>
         public System.Action<bool> LanguageChanged;
         private const float SetupRow = 30f;
-        private Rect SetupRect() { return new Rect(10f, 40f, 470f, 26f + SetupRow * 6f + 62f); }
+        private Rect SetupRect() { return Layout().Setup; }
 
-        private Rect ResultRect() { return new Rect(Screen.width / 2f - 190f, Screen.height / 2f - 80f, 380f, 160f); }
+        private Rect ResultRect() { return Layout().Result; }
 
         private MatchOutcome? Outcome()
         {
@@ -125,15 +120,21 @@ namespace Rts.Presentation
         private bool logOpen;
 
         /// <summary>The fold button at the top of the right column; the log opens under it.</summary>
-        private Rect LogToggleRect() { return new Rect(Screen.width - 430f, 8f, 422f, 26f); }
+        private Rect LogToggleRect() { return Layout().LogToggle; }
 
-        private Rect LogRect() { return new Rect(Screen.width - 430f, 38f, 422f, MaxLogLines * 20f + 30f); }
+        private Rect LogRect() { return Layout().LogEntries; }
 
         private void OnGUI()
         {
             if (port == null) return;
+            UiStyles.Begin();
+            UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var buttons = ButtonsRect();
-            GUI.Box(buttons, UiText.T("Commands", "命令"));
+            UiStyles.Box(buttons, UiText.T("Commands", "命令"));
+            UiHitAreas.Shared.Register(buttons);
+            UiHitAreas.Shared.Register(LogToggleRect());
+            UiHitAreas.Shared.Register(SetupButtonRect());
+            UiHitAreas.Shared.Register(LanguageButtonRect());
             var selection = view.Selected;
             bool armySelected = selection.Kind == SelectionKind.Army;
             string selectionText = view.DescribeSelection();
@@ -170,8 +171,13 @@ namespace Rts.Presentation
             if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Cancel", "取消")))
                 awaitingGround = false;
 
-            if (!setupOpen) DrawSupply();
-            if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup (close)", "試合の設定（閉じる）") : UiText.T("Match setup (delay, opponent, map, outside AI)", "試合の設定（遅延・相手・マップ・外部AI）"))) setupOpen = !setupOpen;
+            if (!setupOpen)
+            {
+                DrawSupply();
+                UiHitAreas.Shared.Register(SupplyRect());
+            }
+            else UiHitAreas.Shared.Register(SetupRect());
+            if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup ▲", "試合の設定 ▲") : UiText.T("Match setup ▼", "試合の設定 ▼"))) setupOpen = !setupOpen;
             // Shows the language it switches to, in that language.
             if (GUI.Button(LanguageButtonRect(), UiText.Japanese ? "English" : "日本語"))
             {
@@ -184,12 +190,14 @@ namespace Rts.Presentation
                 : UiText.T("Command log and status v", "命令の記録と状態を開く ▼"))) logOpen = !logOpen;
             if (!logOpen) { if (setupOpen) DrawSetup(); DrawResult(); return; }
             var statusRect = StatusRect();
-            GUI.Box(statusRect, UiText.T("Command status (7 states)", "命令の状態（7段階）"));
+            UiStyles.Box(statusRect, UiText.T("Command status (7 states)", "命令の状態（7段階）"));
+            UiHitAreas.Shared.Register(statusRect);
             var frame = view.LatestFrame;
             if (frame != null)
             {
                 int shown = 0;
-                for (int i = frame.Commands.Count - 1; i >= 0 && shown < MaxLogLines; i--, shown++)
+                int statusLines = Mathf.Max(1, (int)((statusRect.height - 26f) / 20f));
+                for (int i = frame.Commands.Count - 1; i >= 0 && shown < Mathf.Min(MaxLogLines, statusLines); i--, shown++)
                 {
                     var c = frame.Commands[i];
                     string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
@@ -203,8 +211,10 @@ namespace Rts.Presentation
             }
 
             var logRect = LogRect();
-            GUI.Box(logRect, UiText.T("Command log", "命令の記録"));
-            for (int i = 0; i < log.Count; i++)
+            UiStyles.Box(logRect, UiText.T("Command log", "命令の記録"));
+            UiHitAreas.Shared.Register(logRect);
+            int logLines = Mathf.Max(0, (int)((logRect.height - 26f) / 20f));
+            for (int i = 0; i < log.Count && i < logLines; i++)
                 GUI.Label(new Rect(logRect.x + 6f, logRect.y + 22f + i * 20f, logRect.width - 12f, 20f), log[i]);
 
             if (setupOpen) DrawSetup();
@@ -218,11 +228,10 @@ namespace Rts.Presentation
             var outcome = Outcome();
             if (!outcome.HasValue) return;
             var rect = ResultRect();
-            GUI.Box(rect, outcome.Value.Headline);
-            var big = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = true };
-            var small = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.UpperCenter, wordWrap = true };
-            GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, big);
-            GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, small);
+            UiStyles.Box(rect, outcome.Value.Headline);
+            UiHitAreas.Shared.Register(rect);
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, UiStyles.Heading);
+            GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, UiStyles.Tiny);
             if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
                 matchRestart.RestartMatch();
         }
@@ -236,7 +245,7 @@ namespace Rts.Presentation
         {
             var frame = view.LatestFrame;
             var rect = SupplyRect();
-            GUI.Box(rect, UiText.T("Supply / reinforcements", "兵站・増援"));
+            UiStyles.Box(rect, UiText.T("Supply / reinforcements", "兵站・増援"));
             if (frame == null) return;
             GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), UiText.T("Units ", "兵 ") + frame.AliveCount + " / " + frame.FactionCap);
             int row = 1;
@@ -252,7 +261,7 @@ namespace Rts.Presentation
         private void DrawSetup()
         {
             var rect = SetupRect();
-            GUI.Box(rect, UiText.T("Match setup (every change restarts the match)", "試合の設定（変えると試合が最初から始まります）"));
+            UiStyles.Box(rect, UiText.T("Match setup", "試合の設定"));
             float x = rect.x + 8f, y = rect.y + 24f, labelWidth = 96f, cell = (rect.width - 16f - labelWidth) / 4f;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
