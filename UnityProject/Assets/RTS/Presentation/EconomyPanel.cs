@@ -22,7 +22,7 @@ namespace Rts.Presentation
     /// </summary>
     public sealed class EconomyPanel : MonoBehaviour
     {
-        // Between the command buttons on the left (238 px) and the log/timeline column on the right (440 px).
+        // UiLayout owns the actual columns. These limits remain documentation for the economy content's intended width.
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
@@ -59,29 +59,16 @@ namespace Rts.Presentation
         private enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
 
-        private Rect PanelRect()
-        {
-            float room = Screen.width - LeftColumn - RightColumn;
-            float width = Mathf.Clamp(room - 8f, MinWidth, MaxWidth);
-            float x = room >= MinWidth ? LeftColumn + (room - width) / 2f : Screen.width / 2f - width / 2f;
-            return new Rect(x, Screen.height - 10f - TabbedHeight, width, TabbedHeight);
-        }
+        private Rect PanelRect() { return UiLayout.Calculate(Screen.width, Screen.height).Economy; }
 
         /// <summary>
-        /// The bar across the top between the setup buttons (left, 354 px) and the log column (right, 430 px): the age and
-        /// the stock are always in view there, so the panel below only holds buttons.
+        /// The left segment of the shared full-width top band: age, stock and population stay in view there.
         /// </summary>
-        private Rect TopBarRect()
-        {
-            float left = 364f, right = Screen.width - 438f;
-            return new Rect(left, 8f, Mathf.Max(200f, right - left), 26f);
-        }
+        private Rect TopBarRect() { return UiLayout.Calculate(Screen.width, Screen.height).TopLeft; }
 
         public bool BlocksClick(Vector2 screenPoint)
         {
-            if (port == null) return false;
-            var point = new Vector2(screenPoint.x, Screen.height - screenPoint.y);
-            return PanelRect().Contains(point) || (Economy() != null && TopBarRect().Contains(point));
+            return UiHitAreas.Shared.ContainsScreen(screenPoint, Screen.height);
         }
 
         private void SetMode(Mode next)
@@ -332,10 +319,13 @@ namespace Rts.Presentation
         private void OnGUI()
         {
             if (port == null) return;
+            UiStyles.Begin();
+            UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var economy = Economy();
             if (economy != null) DrawTopBar(economy);
             var rect = PanelRect();
-            GUI.Box(rect, economy == null ? UiText.T("Economy (off on this map)", "内政（このマップでは無し）") : UiText.T("Economy", "内政"));
+            UiStyles.Box(rect, economy == null ? UiText.T("Economy (off on this map)", "内政（このマップでは無し）") : UiText.T("Economy", "内政"));
+            UiHitAreas.Shared.Register(rect);
             float x = rect.x + 8f, y = rect.y + 22f, w = rect.width - 16f, half = (w - 8f) / 2f, right = x + half + 8f;
             if (economy == null) { DrawNotes(new Rect(x, y, w, rect.yMax - y - 4f)); return; }
 
@@ -364,7 +354,8 @@ namespace Rts.Presentation
         private void DrawTopBar(EconomyView economy)
         {
             var bar = TopBarRect();
-            GUI.Box(bar, "");
+            UiStyles.Box(bar, UiText.T("Age & resources", "時代・資源"));
+            UiHitAreas.Shared.Register(bar);
             string age = !economy.Ages ? "" : economy.AdvanceRemaining > 0
                 ? UiText.T("Advancing to ", "進めている：") + AgeName(economy.AdvancingTo, economy.Civ == CivKind.Primitive ? 1 : 2) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
                 : AgeName(economy.Civ, economy.Age) + "  |  ";

@@ -20,8 +20,11 @@ namespace Rts.Presentation
         private BattlefieldView view;
         private readonly Dictionary<uint, GameObject> resources = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, LocalVisualPack.AnimationHandle> ownVillagerAnimations = new Dictionary<uint, LocalVisualPack.AnimationHandle>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
+        private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
+        private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
         // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
         private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
         private GUIStyle tagStyle;
@@ -73,11 +76,20 @@ namespace Rts.Presentation
             ghost.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(legalLooking ? new Color(0.4f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f));
         }
 
+        // Leaving Play mode destroys the villagers without going through Clear; their animation graphs must still go.
+        private void OnDestroy()
+        {
+            foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
+        }
+
         public void Clear()
         {
             foreach (var go in resources.Values) Destroy(go);
             foreach (var go in ownVillagers.Values) Destroy(go);
             foreach (var go in enemyVillagers) Destroy(go);
+            foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
             foreach (var go in buildings.Values) Destroy(go);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
@@ -86,6 +98,8 @@ namespace Rts.Presentation
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
+            packedBuildings.Clear();
             belts.Clear(); items.Clear();
         }
 
@@ -100,7 +114,14 @@ namespace Rts.Presentation
             SyncBelts(economy);
             foreach (var pair in ownVillagers)
                 if (villagerTargets.TryGetValue(pair.Key, out var target))
+                {
+                    var moving = (pair.Value.transform.position - target).sqrMagnitude > 0.0025f;
+                    if (ownVillagerAnimations.TryGetValue(pair.Key, out var animation))
+                        animation.SetDesired(moving, false, false);
                     pair.Value.transform.position = Vector3.MoveTowards(pair.Value.transform.position, target, VillagerSpeed * Time.deltaTime);
+                }
+            foreach (var animation in ownVillagerAnimations.Values) animation.Tick(Time.deltaTime);
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Tick(Time.deltaTime);
         }
 
         private void SyncResources(EconomyView economy)
@@ -134,25 +155,36 @@ namespace Rts.Presentation
         {
             var seen = new HashSet<uint>();
             int enemy = 0;
+            bool villagerPacked = LocalVisualPack.HasUnit(UnitKind.Villager);
             foreach (var v in economy.Villagers)
             {
-                var p = ToWorld(v.Position) + Vector3.up * 0.5f;
+                // A pack villager stands with its feet on the ground; the placeholder capsule is centred half a metre up.
+                var p = ToWorld(v.Position) + (villagerPacked ? Vector3.zero : Vector3.up * 0.5f);
                 if (v.IsOwn)
                 {
                     seen.Add(v.Id);
                     if (!ownVillagers.TryGetValue(v.Id, out var go))
                     {
-                        go = Capsule("Villager " + v.Id, OwnVillagerColor);
+                        go = CreateVillager("Villager " + v.Id, true);
                         go.transform.position = p;
                         ownVillagers.Add(v.Id, go);
+                        var animation = LocalVisualPack.TryCreateAnimation(go, UnitKind.Villager, v.Id);
+                        if (animation != null) ownVillagerAnimations.Add(v.Id, animation);
                     }
                     villagerTargets[v.Id] = p;
                     SetFlag(go.transform, v.PlayerHeld, new Vector3(0f, 1.4f, 0f), new Vector3(0.18f, 0.7f, 0.18f));
                 }
                 else
                 {
-                    if (enemy == enemyVillagers.Count) enemyVillagers.Add(Capsule("Enemy villager", EnemyVillagerColor));
+                    if (enemy == enemyVillagers.Count)
+                    {
+                        var enemyObject = CreateVillager("Enemy villager", false);
+                        enemyVillagers.Add(enemyObject);
+                        enemyVillagerAnimations.Add(LocalVisualPack.TryCreateAnimation(enemyObject, UnitKind.Villager, (ulong)(enemy + 1)));
+                    }
                     enemyVillagers[enemy].SetActive(true);
+                    if (enemyVillagerAnimations[enemy] != null)
+                        enemyVillagerAnimations[enemy].SetDesired(false, false, false);
                     enemyVillagers[enemy].transform.position = p;
                     enemy++;
                 }
@@ -160,7 +192,17 @@ namespace Rts.Presentation
             for (int i = enemy; i < enemyVillagers.Count; i++) enemyVillagers[i].SetActive(false);
             var gone = new List<uint>();
             foreach (var id in ownVillagers.Keys) if (!seen.Contains(id)) gone.Add(id);
-            foreach (var id in gone) { Destroy(ownVillagers[id]); ownVillagers.Remove(id); villagerTargets.Remove(id); }
+            foreach (var id in gone)
+            {
+                if (ownVillagerAnimations.TryGetValue(id, out var animation))
+                {
+                    animation.Dispose();
+                    ownVillagerAnimations.Remove(id);
+                }
+                Destroy(ownVillagers[id]);
+                ownVillagers.Remove(id);
+                villagerTargets.Remove(id);
+            }
         }
 
         private void SyncBuildings(EconomyView economy)
@@ -171,9 +213,13 @@ namespace Rts.Presentation
                 seen.Add(b.Id);
                 if (!buildings.TryGetValue(b.Id, out var go))
                 {
-                    go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    if (LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
+                        b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go))
+                        packedBuildings.Add(b.Id);
+                    else
+                        go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     go.name = b.Kind + " " + b.Id;
-                    Destroy(go.GetComponent<Collider>());
+                    if (go.GetComponent<Collider>() != null) Destroy(go.GetComponent<Collider>());
                     go.transform.SetParent(transform, false);
                     if (b.Kind != BuildingKind.Barracks)
                     {
@@ -202,9 +248,20 @@ namespace Rts.Presentation
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
                 var p = ToWorld(b.Center);
-                go.transform.position = new Vector3(p.x, height / 2f, p.z);
-                go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
-                go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                if (packedBuildings.Contains(b.Id))
+                {
+                    // The model is built at its finished height; under construction it rises with the progress.
+                    float rise = finished ? 1f : height / full;
+                    LocalVisualPack.SetBuildingProgress(go, rise);
+                    go.transform.position = new Vector3(p.x, 0f, p.z);
+                    height = LocalVisualPack.BuildingHeight(b.Kind) * rise;
+                }
+                else
+                {
+                    go.transform.position = new Vector3(p.x, height / 2f, p.z);
+                    go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
+                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                }
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.PlayerHeld)
                 {
@@ -223,6 +280,9 @@ namespace Rts.Presentation
                 else if (buildingFlags.TryGetValue(b.Id, out var old)) { Destroy(old); buildingFlags.Remove(b.Id); }
             }
             Remove(buildings, seen);
+            var packedGone = new List<uint>();
+            foreach (var id in packedBuildings) if (!seen.Contains(id)) packedGone.Add(id);
+            foreach (var id in packedGone) packedBuildings.Remove(id);
             Remove(buildingFlags, seen);
             Remove(ports, seen);
             var untagged = new List<uint>();
@@ -399,6 +459,16 @@ namespace Rts.Presentation
             go.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f);
             go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
             return go;
+        }
+
+        private GameObject CreateVillager(string name, bool own)
+        {
+            if (LocalVisualPack.TryCreateUnit(UnitKind.Villager, own, transform, out var packed))
+            {
+                packed.name = name;
+                return packed;
+            }
+            return Capsule(name, own ? OwnVillagerColor : EnemyVillagerColor);
         }
 
         private static void Remove(Dictionary<uint, GameObject> visuals, HashSet<uint> seen)
