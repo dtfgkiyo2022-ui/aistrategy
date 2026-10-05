@@ -136,6 +136,8 @@ namespace Rts.UnityHost
         private string developmentAiMessage = "";
         private bool developmentAiModelListOpen;
         private const string AiInstructionControl = "AiInstruction";
+        private bool aiFieldFocused;
+        private Rect aiFieldRect;
 
         /// <summary>細かい判断を試し遊びの陣営1で使うか。変更は次の試合から有効です。</summary>
         public bool FineJudgementEnabled
@@ -445,6 +447,11 @@ namespace Rts.UnityHost
             }
         }
 
+        private void LateUpdate()
+        {
+            if (aiFieldFocused) Input.compositionCursorPos = new Vector2(aiFieldRect.x, aiFieldRect.yMax);
+        }
+
         /// <summary>
         /// Temporary play-test entry owned by the host. The production chat UI can call Speak directly; this small
         /// inspector-friendly panel keeps the G-5 path usable before that UI exists.
@@ -452,6 +459,8 @@ namespace Rts.UnityHost
         private void OnGUI()
         {
             if (!developmentAiEntry || liveAi == null || simulation == null) return;
+            // In front of the other panels, so nothing drawn later can sit over the staff panel and take its clicks.
+            GUI.depth = -10;
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             // IMGUI text fields only receive Japanese (IME) composition when the mode is forced on.
@@ -469,8 +478,10 @@ namespace Rts.UnityHost
             if (enter) current.Use();
             GUI.SetNextControlName(AiInstructionControl);
             developmentAiInstruction = GUI.TextField(field, developmentAiInstruction ?? "");
-            // The IME candidate list opens where this says; set after the field so the field cannot move it back to a
-            // corner of the window (as seen in the Game view on 10-05).
+            // The IME candidate list opens where this says. The field itself keeps resetting it (to a corner of the Game
+            // view, 10-05), so it is set again here and once more in LateUpdate, after all GUI events of the frame.
+            aiFieldFocused = focused;
+            aiFieldRect = field;
             if (focused) Input.compositionCursorPos = new Vector2(field.x, field.yMax);
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
                 developmentAiModelListOpen = !developmentAiModelListOpen;
@@ -480,18 +491,24 @@ namespace Rts.UnityHost
                 try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = ""; }
                 catch (Exception e) { developmentAiMessage = e.Message; }
             }
-            if (GUI.Button(new Rect(rect.x + 8f, rect.y + 84f, 132f, 24f), "直前を取り消す"))
-                developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
-            GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f),
-                "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
-            GUI.Label(new Rect(rect.x + 8f, rect.y + 112f, rect.width - 16f, 56f),
-                string.IsNullOrEmpty(developmentAiMessage) ? LastInstructionText() : developmentAiMessage);
-
-            // Drawn last so the open list sits on top of the rest of the panel.
-            if (developmentAiModelListOpen)
+            if (!developmentAiModelListOpen)
             {
+                if (GUI.Button(new Rect(rect.x + 8f, rect.y + 84f, 132f, 24f), "直前を取り消す"))
+                    developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
+                GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f),
+                    "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 112f, rect.width - 16f, 56f),
+                    string.IsNullOrEmpty(developmentAiMessage) ? LastInstructionText() : developmentAiMessage);
+            }
+            else
+            {
+                // The open list takes the place of the rows below, inside the panel, three to a row: a list hanging
+                // below the panel sat under the command-log button, which took the clicks (10-05).
                 var models = AiModels;
-                var list = new Rect(rect.x + 8f, rect.y + 80f, rect.width - 156f, models.Count * 24f + 4f);
+                const int columns = 3;
+                int rows = (models.Count + columns - 1) / columns;
+                var list = new Rect(rect.x + 8f, rect.y + 82f, rect.width - 16f, rows * 24f + 4f);
+                float cell = (list.width - 4f) / columns;
                 GUI.Box(list, GUIContent.none, UiStyles.Panel);
                 UiHitAreas.Shared.Register(list);
                 for (int i = 0; i < models.Count; i++)
@@ -499,8 +516,8 @@ namespace Rts.UnityHost
                     var option = models[i];
                     var previous = GUI.enabled;
                     GUI.enabled = option.Available;
-                    if (GUI.Button(new Rect(list.x + 2f, list.y + 2f + i * 24f, list.width - 4f, 22f),
-                            ModelLabel(option.Model) + (option.Available ? "" : "（キー未設定）")))
+                    var cellRect = new Rect(list.x + 2f + (i % columns) * cell, list.y + 2f + (i / columns) * 24f, cell - 2f, 22f);
+                    if (GUI.Button(cellRect, ModelLabel(option.Model) + (option.Available ? "" : "（キー未設定）")))
                     {
                         developmentAiModel = option.Model;
                         developmentAiModelListOpen = false;
