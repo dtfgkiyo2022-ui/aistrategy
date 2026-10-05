@@ -11,6 +11,12 @@ namespace Rts.Tactics
         string Tick(string viewJson);
     }
 
+    /// <summary>Optional diagnostics emitted by a tactic runtime for the current call.</summary>
+    public interface ITacticLogSource
+    {
+        IReadOnlyList<string> TakeConsoleLines();
+    }
+
     /// <summary>Optional receiver for the three whole-faction doctrine shortcuts.</summary>
     public interface ITacticGlobalPolicyPort
     {
@@ -36,6 +42,8 @@ namespace Rts.Tactics
         public bool Disabled { get; internal set; }
         public int SentPolicies { get; internal set; }
         public int SentEconomy { get; internal set; }
+        public IReadOnlyList<string> ConsoleLines { get; internal set; } = Array.Empty<string>();
+        public IReadOnlyList<string> ConsoleLog => ConsoleLines;
     }
 
     /// <summary>Calls one faction's tactic every twenty simulation ticks and sends ordinary logged proposals.</summary>
@@ -79,12 +87,14 @@ namespace Rts.Tactics
             var frame = frames.Latest(factionId) ?? throw new InvalidOperationException("Frame source returned null.");
             var result = new TacticHostTickResult { Tick = frame.Tick, Commands = new TacticCommandResult() };
             if (!started) Start("{}");
+            CaptureConsoleLines(result);
             if (disabled || frame.Tick % DecisionIntervalTicks != 0) { result.Disabled = disabled; return result; }
             result.Called = true;
             try
             {
                 result.ViewJson = TacticViewWriter.Write(frame);
                 result.CommandJson = runtime.Tick(result.ViewJson) ?? throw new InvalidOperationException("戦術がnullの命令JSONを返しました。");
+                CaptureConsoleLines(result);
                 result.Commands = TacticCommandReader.Read(result.CommandJson, frame);
                 if (result.Commands.IsMalformed) throw new FormatException(result.Commands.Error ?? "命令JSONを読めません。");
                 if (result.Commands.GlobalPolicy != null) globalPolicyPort?.SetGlobalPolicy(factionId, result.Commands.GlobalPolicy, frame.Tick);
@@ -98,6 +108,7 @@ namespace Rts.Tactics
             }
             catch (Exception e)
             {
+                CaptureConsoleLines(result);
                 result.Failure = RecordFailure(frame.Tick, e); result.Disabled = disabled; result.Commands = new TacticCommandResult();
             }
             return result;
@@ -111,6 +122,13 @@ namespace Rts.Tactics
             if (consecutiveFailures >= FailureLimit) disabled = true;
             var failure = new TacticFailure { Tick = tick, RuntimeName = Name, Reason = error.GetType().Name + ": " + error.Message, Consecutive = consecutiveFailures };
             failures.Add(failure); return failure;
+        }
+
+        private void CaptureConsoleLines(TacticHostTickResult result)
+        {
+            if (!(runtime is ITacticLogSource source)) return;
+            var lines = source.TakeConsoleLines();
+            if (lines != null && lines.Count != 0) result.ConsoleLines = lines;
         }
     }
 }

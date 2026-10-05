@@ -1,0 +1,9 @@
+{
+  "name": "rush",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "全軍を敵のコアへ向かわせる突撃戦術。"
+}

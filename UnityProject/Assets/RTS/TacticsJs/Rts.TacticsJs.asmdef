@@ -1,0 +1,21 @@
+{
+  "name": "Rts.TacticsJs",
+  "rootNamespace": "Rts.TacticsJs",
+  "references": [
+    "Rts.Contracts",
+    "Rts.Tactics"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "Jint.dll",
+    "Acornima.dll",
+    "System.Runtime.CompilerServices.Unsafe.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": true
+}

@@ -6,6 +6,7 @@ using Rts.Contracts;
 using Rts.Replay;
 using Rts.Simulation;
 using Rts.Tactics;
+using Rts.TacticsJs;
 using Battle = Rts.Simulation.Simulation;
 
 namespace Rts.Headless.Cli;
@@ -36,6 +37,8 @@ internal static class TacticMatchCommand
         var source = new FrameSource(simulation);
         var west = CreateHost(westName, 1, source, gateway);
         var east = CreateHost(eastName, 2, source, gateway);
+        west?.Start(SetupJson(scenario, 1));
+        east?.Start(SetupJson(scenario, 2));
         var westAuto = CreateAuto(westName, 1, gateway); var eastAuto = CreateAuto(eastName, 2, gateway);
         westAuto?.Initialize(); eastAuto?.Initialize();
         var lines = new List<string>();
@@ -61,8 +64,21 @@ internal static class TacticMatchCommand
     private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway)
     {
         if (name == "auto") return null;
-        ITacticRuntime runtime = name == "idle" ? (ITacticRuntime)new IdleTactic() : new RushTactic();
+        ITacticRuntime runtime;
+        if (name == "idle") runtime = new IdleTactic();
+        else if (name == "rush") runtime = new RushTactic();
+        else
+        {
+            var loaded = TacticFolder.Load(name);
+            if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
+            runtime = loaded.Runtime;
+        }
         return new TacticHost(faction, source, gateway, gateway, runtime);
+    }
+
+    private static string SetupJson(ScenarioDefinition scenario, uint faction)
+    {
+        return "{\"matchSeed\":" + scenario.Seed.ToString(CultureInfo.InvariantCulture) + ",\"factionId\":" + faction.ToString(CultureInfo.InvariantCulture) + "}";
     }
 
     // "auto" deliberately adds no logged input: it is the simulation's existing hands-off AI.
@@ -78,6 +94,7 @@ internal static class TacticMatchCommand
             tactic = name,
             sentPolicies = result.SentPolicies,
             sentEconomy = result.SentEconomy,
+            console = result.ConsoleLines,
             commands = result.CommandJson,
             rejected = result.Commands.Rejected.Select(x => new { index = x.Index, type = x.Type, reason = x.Reason }).ToArray(),
             failure = result.Failure == null ? null : new { reason = result.Failure.Reason, consecutive = result.Failure.Consecutive },
@@ -88,7 +105,8 @@ internal static class TacticMatchCommand
 
     private static void ValidateTactic(string name)
     {
-        if (name != "idle" && name != "rush" && name != "auto") throw new InvalidDataException("戦術はidle、rush、autoのいずれかです。");
+        if (name == "idle" || name == "rush" || name == "auto") return;
+        if (!Directory.Exists(name)) throw new InvalidDataException("戦術はidle、rush、auto、または存在するフォルダパスです。");
     }
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
 }
