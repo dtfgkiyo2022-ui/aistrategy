@@ -20,7 +20,9 @@ namespace Rts.Presentation
         private BattlefieldView view;
         private readonly Dictionary<uint, GameObject> resources = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, LocalVisualPack.AnimationHandle> ownVillagerAnimations = new Dictionary<uint, LocalVisualPack.AnimationHandle>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
+        private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
         private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
         // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
@@ -74,11 +76,20 @@ namespace Rts.Presentation
             ghost.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(legalLooking ? new Color(0.4f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f));
         }
 
+        // Leaving Play mode destroys the villagers without going through Clear; their animation graphs must still go.
+        private void OnDestroy()
+        {
+            foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
+        }
+
         public void Clear()
         {
             foreach (var go in resources.Values) Destroy(go);
             foreach (var go in ownVillagers.Values) Destroy(go);
             foreach (var go in enemyVillagers) Destroy(go);
+            foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
             foreach (var go in buildings.Values) Destroy(go);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
@@ -87,6 +98,7 @@ namespace Rts.Presentation
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
             packedBuildings.Clear();
             belts.Clear(); items.Clear();
         }
@@ -102,7 +114,14 @@ namespace Rts.Presentation
             SyncBelts(economy);
             foreach (var pair in ownVillagers)
                 if (villagerTargets.TryGetValue(pair.Key, out var target))
+                {
+                    var moving = (pair.Value.transform.position - target).sqrMagnitude > 0.0025f;
+                    if (ownVillagerAnimations.TryGetValue(pair.Key, out var animation))
+                        animation.SetDesired(moving, false, false);
                     pair.Value.transform.position = Vector3.MoveTowards(pair.Value.transform.position, target, VillagerSpeed * Time.deltaTime);
+                }
+            foreach (var animation in ownVillagerAnimations.Values) animation.Tick(Time.deltaTime);
+            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Tick(Time.deltaTime);
         }
 
         private void SyncResources(EconomyView economy)
@@ -149,14 +168,23 @@ namespace Rts.Presentation
                         go = CreateVillager("Villager " + v.Id, true);
                         go.transform.position = p;
                         ownVillagers.Add(v.Id, go);
+                        var animation = LocalVisualPack.TryCreateAnimation(go, UnitKind.Villager, v.Id);
+                        if (animation != null) ownVillagerAnimations.Add(v.Id, animation);
                     }
                     villagerTargets[v.Id] = p;
                     SetFlag(go.transform, v.PlayerHeld, new Vector3(0f, 1.4f, 0f), new Vector3(0.18f, 0.7f, 0.18f));
                 }
                 else
                 {
-                    if (enemy == enemyVillagers.Count) enemyVillagers.Add(CreateVillager("Enemy villager", false));
+                    if (enemy == enemyVillagers.Count)
+                    {
+                        var enemyObject = CreateVillager("Enemy villager", false);
+                        enemyVillagers.Add(enemyObject);
+                        enemyVillagerAnimations.Add(LocalVisualPack.TryCreateAnimation(enemyObject, UnitKind.Villager, (ulong)(enemy + 1)));
+                    }
                     enemyVillagers[enemy].SetActive(true);
+                    if (enemyVillagerAnimations[enemy] != null)
+                        enemyVillagerAnimations[enemy].SetDesired(false, false, false);
                     enemyVillagers[enemy].transform.position = p;
                     enemy++;
                 }
@@ -164,7 +192,17 @@ namespace Rts.Presentation
             for (int i = enemy; i < enemyVillagers.Count; i++) enemyVillagers[i].SetActive(false);
             var gone = new List<uint>();
             foreach (var id in ownVillagers.Keys) if (!seen.Contains(id)) gone.Add(id);
-            foreach (var id in gone) { Destroy(ownVillagers[id]); ownVillagers.Remove(id); villagerTargets.Remove(id); }
+            foreach (var id in gone)
+            {
+                if (ownVillagerAnimations.TryGetValue(id, out var animation))
+                {
+                    animation.Dispose();
+                    ownVillagerAnimations.Remove(id);
+                }
+                Destroy(ownVillagers[id]);
+                ownVillagers.Remove(id);
+                villagerTargets.Remove(id);
+            }
         }
 
         private void SyncBuildings(EconomyView economy)

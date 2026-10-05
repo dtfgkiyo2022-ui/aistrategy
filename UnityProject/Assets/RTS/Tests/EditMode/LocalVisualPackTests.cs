@@ -58,5 +58,35 @@ namespace Rts.Tests.EditMode
                 LocalVisualPack.Disabled = false;
             }
         }
+
+        [Test]
+        public void EveryUnitKindHasWellFormedAnimationPaths()
+        {
+            foreach (UnitKind kind in Enum.GetValues(typeof(UnitKind)))
+            {
+                foreach (LocalVisualPack.UnitMotion motion in Enum.GetValues(typeof(LocalVisualPack.UnitMotion)))
+                {
+                    var path = LocalVisualPack.AnimationAssetPath(kind, motion);
+                    Assert.IsNotNull(path, kind + " must have an animation family");
+                    Assert.IsTrue(path.StartsWith("Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/animation/", StringComparison.Ordinal));
+                    Assert.IsTrue(path.EndsWith(".FBX", StringComparison.Ordinal));
+                    Assert.IsFalse(path.Contains("_rm", StringComparison.Ordinal));
+                }
+            }
+        }
+
+        [Test]
+        public void MissingPackDoesNotCreateAnimationHandle()
+        {
+            LocalVisualPack.Disabled = true;
+            try
+            {
+                Assert.IsFalse(LocalVisualPack.HasUnit(UnitKind.Infantry));
+            }
+            finally
+            {
+                LocalVisualPack.Disabled = false;
+            }
+        }
     }
 }

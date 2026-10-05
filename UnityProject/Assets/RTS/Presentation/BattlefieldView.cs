@@ -26,6 +26,7 @@ namespace Rts.Presentation
             public Transform HpFill;
             public int Hp;
             public bool IsEnemy;
+            public LocalVisualPack.AnimationHandle Animation;
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
@@ -255,6 +256,8 @@ namespace Rts.Presentation
         {
             sinceUpdate += Time.deltaTime;
             Apply(sinceUpdate / TickSeconds);
+            foreach (var visual in units.Values)
+                if (visual.Animation != null) visual.Animation.Tick(Time.deltaTime);
         }
 
         private static ulong UnitKey(RenderUnit unit)
@@ -272,7 +275,14 @@ namespace Rts.Presentation
                 var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null || LocalVisualPack.HasUnit(unit.Kind) ? 0f : 1.1f);
                 if (!units.TryGetValue(key, out var visual))
                 {
-                    visual = new Visual { Object = CreateUnitObject(unit), From = target, IsEnemy = !unit.IsOwn };
+                    var objectToAnimate = CreateUnitObject(unit);
+                    visual = new Visual
+                    {
+                        Object = objectToAnimate,
+                        Animation = LocalVisualPack.TryCreateAnimation(objectToAnimate, unit.Kind, key),
+                        From = target,
+                        IsEnemy = !unit.IsOwn
+                    };
                     units.Add(key, visual);
                 }
                 else
@@ -281,6 +291,8 @@ namespace Rts.Presentation
                     if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
                 visual.To = target;
+                if (visual.Animation != null)
+                    visual.Animation.SetDesired(unit.IsMoving, unit.IsAttacking, unit.IsRetreating);
             }
 
             scratchUnitIds.Clear();
@@ -288,6 +300,7 @@ namespace Rts.Presentation
                 if (!present.Contains(pair.Key)) scratchUnitIds.Add(pair.Key);
             foreach (var id in scratchUnitIds)
             {
+                if (units[id].Animation != null) units[id].Animation.Dispose();
                 Discard(units[id].Object);
                 units.Remove(id);
             }
@@ -669,10 +682,21 @@ namespace Rts.Presentation
                 visual.HpFill.parent.rotation = camera.transform.rotation;
         }
 
+        // Leaving Play mode destroys the soldiers without going through ResetVisuals; their animation graphs must still go.
+        private void OnDestroy()
+        {
+            foreach (var visual in units.Values)
+                if (visual.Animation != null) visual.Animation.Dispose();
+        }
+
         /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>
         public void ResetVisuals()
         {
-            foreach (var visual in units.Values) Discard(visual.Object);
+            foreach (var visual in units.Values)
+            {
+                if (visual.Animation != null) visual.Animation.Dispose();
+                Discard(visual.Object);
+            }
             units.Clear(); previousUnitPositions.Clear();
             foreach (var visual in armies.Values) Discard(visual.Object);
             armies.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();
