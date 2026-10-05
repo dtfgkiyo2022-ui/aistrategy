@@ -20,7 +20,8 @@ namespace Rts.Presentation
         public static GUIStyle Button { get { Ensure(); return button; } }
         public static GUIStyle Panel { get { Ensure(); return panel; } }
         public static GUIStyle Tiny { get { Ensure(); return tiny; } }
-        public static float HeaderHeight { get { return 24f * Scale; } }
+        // Panels place their first row about 22 px down, so the strip stays near that whatever the scale.
+        public static float HeaderHeight { get { return Mathf.Max(20f, 22f * Scale); } }
 
         public static void Begin()
         {
@@ -39,7 +40,14 @@ namespace Rts.Presentation
             GUI.Box(rect, GUIContent.none, Panel);
             var header = new Rect(rect.x, rect.y, rect.width, Mathf.Min(HeaderHeight, rect.height));
             GUI.DrawTexture(header, headerTexture, ScaleMode.StretchToFill, false);
-            GUI.Label(new Rect(rect.x + 7f, rect.y + 2f, rect.width - 14f, HeaderHeight - 2f), title, Heading);
+            // The title fills the strip exactly (no padding, centred vertically), so its lower half is never cut off.
+            GUI.Label(new Rect(rect.x + 7f, rect.y, rect.width - 14f, header.height), title, Heading);
+        }
+
+        /// <summary>A panel without a title strip, for bars whose own text sits on the top line.</summary>
+        public static void Plain(Rect rect)
+        {
+            GUI.Box(rect, GUIContent.none, Panel);
         }
 
         private static void Ensure()
@@ -56,9 +64,12 @@ namespace Rts.Presentation
             };
             heading = new GUIStyle(body)
             {
-                fontSize = Mathf.RoundToInt(17f * Scale),
+                fontSize = Mathf.RoundToInt(15f * Scale),
                 fontStyle = FontStyle.Bold,
-                wordWrap = true
+                wordWrap = false,
+                alignment = TextAnchor.MiddleLeft,
+                padding = new RectOffset(0, 0, 0, 0),
+                margin = new RectOffset(0, 0, 0, 0)
             };
             button = new GUIStyle(GUI.skin.button)
             {

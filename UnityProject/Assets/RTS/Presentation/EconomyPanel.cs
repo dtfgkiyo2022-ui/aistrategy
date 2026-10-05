@@ -354,7 +354,8 @@ namespace Rts.Presentation
         private void DrawTopBar(EconomyView economy)
         {
             var bar = TopBarRect();
-            UiStyles.Box(bar, UiText.T("Age & resources", "時代・資源"));
+            // No title strip: the age and stock line itself sits on the top line of the bar.
+            UiStyles.Plain(bar);
             UiHitAreas.Shared.Register(bar);
             string age = !economy.Ages ? "" : economy.AdvanceRemaining > 0
                 ? UiText.T("Advancing to ", "進めている：") + AgeName(economy.AdvancingTo, economy.Civ == CivKind.Primitive ? 1 : 2) + " " + Seconds(economy.AdvanceRemaining) + "  |  "

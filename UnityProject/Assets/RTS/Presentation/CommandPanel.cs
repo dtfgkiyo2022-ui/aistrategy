@@ -238,7 +238,12 @@ namespace Rts.Presentation
 
         private static string Seconds(long ticks)
         {
-            return (ticks < 0 ? 0 : ticks / 20f).ToString("0.0") + "s";
+            return (ticks < 0 ? 0 : ticks / 20f).ToString("0.0") + UiText.T("s", "秒");
+        }
+
+        private static string ReinforcementSite(GoalKind kind)
+        {
+            return kind == GoalKind.Core ? UiText.T("Core", "コア") : kind == GoalKind.Outpost ? UiText.T("Outpost", "拠点") : kind.ToString();
         }
 
         private void DrawSupply()
@@ -253,7 +258,7 @@ namespace Rts.Presentation
             {
                 if (row > 2) break;
                 GUI.Label(new Rect(rect.x + 6f, rect.y + 22f + row * 22f, rect.width - 12f, 20f),
-                    r.Kind + " " + r.Id + UiText.T(": next in ", "：次まで ") + Seconds(r.TicksRemaining));
+                    ReinforcementSite(r.Kind) + " " + r.Id + UiText.T(": next reinforcement in ", "：次の増援まで ") + Seconds(r.TicksRemaining));
                 row++;
             }
         }
