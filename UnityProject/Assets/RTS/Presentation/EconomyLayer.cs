@@ -22,6 +22,7 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
+        private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
         // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
         private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
         private GUIStyle tagStyle;
@@ -86,6 +87,7 @@ namespace Rts.Presentation
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            packedBuildings.Clear();
             belts.Clear(); items.Clear();
         }
 
@@ -134,15 +136,17 @@ namespace Rts.Presentation
         {
             var seen = new HashSet<uint>();
             int enemy = 0;
+            bool villagerPacked = LocalVisualPack.HasUnit(UnitKind.Villager);
             foreach (var v in economy.Villagers)
             {
-                var p = ToWorld(v.Position) + Vector3.up * 0.5f;
+                // A pack villager stands with its feet on the ground; the placeholder capsule is centred half a metre up.
+                var p = ToWorld(v.Position) + (villagerPacked ? Vector3.zero : Vector3.up * 0.5f);
                 if (v.IsOwn)
                 {
                     seen.Add(v.Id);
                     if (!ownVillagers.TryGetValue(v.Id, out var go))
                     {
-                        go = Capsule("Villager " + v.Id, OwnVillagerColor);
+                        go = CreateVillager("Villager " + v.Id, true);
                         go.transform.position = p;
                         ownVillagers.Add(v.Id, go);
                     }
@@ -151,7 +155,7 @@ namespace Rts.Presentation
                 }
                 else
                 {
-                    if (enemy == enemyVillagers.Count) enemyVillagers.Add(Capsule("Enemy villager", EnemyVillagerColor));
+                    if (enemy == enemyVillagers.Count) enemyVillagers.Add(CreateVillager("Enemy villager", false));
                     enemyVillagers[enemy].SetActive(true);
                     enemyVillagers[enemy].transform.position = p;
                     enemy++;
@@ -171,9 +175,13 @@ namespace Rts.Presentation
                 seen.Add(b.Id);
                 if (!buildings.TryGetValue(b.Id, out var go))
                 {
-                    go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    if (LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
+                        b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go))
+                        packedBuildings.Add(b.Id);
+                    else
+                        go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     go.name = b.Kind + " " + b.Id;
-                    Destroy(go.GetComponent<Collider>());
+                    if (go.GetComponent<Collider>() != null) Destroy(go.GetComponent<Collider>());
                     go.transform.SetParent(transform, false);
                     if (b.Kind != BuildingKind.Barracks)
                     {
@@ -202,9 +210,20 @@ namespace Rts.Presentation
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
                 var p = ToWorld(b.Center);
-                go.transform.position = new Vector3(p.x, height / 2f, p.z);
-                go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
-                go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                if (packedBuildings.Contains(b.Id))
+                {
+                    // The model is built at its finished height; under construction it rises with the progress.
+                    float rise = finished ? 1f : height / full;
+                    LocalVisualPack.SetBuildingProgress(go, rise);
+                    go.transform.position = new Vector3(p.x, 0f, p.z);
+                    height = LocalVisualPack.BuildingHeight(b.Kind) * rise;
+                }
+                else
+                {
+                    go.transform.position = new Vector3(p.x, height / 2f, p.z);
+                    go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
+                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                }
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.PlayerHeld)
                 {
@@ -223,6 +242,9 @@ namespace Rts.Presentation
                 else if (buildingFlags.TryGetValue(b.Id, out var old)) { Destroy(old); buildingFlags.Remove(b.Id); }
             }
             Remove(buildings, seen);
+            var packedGone = new List<uint>();
+            foreach (var id in packedBuildings) if (!seen.Contains(id)) packedGone.Add(id);
+            foreach (var id in packedGone) packedBuildings.Remove(id);
             Remove(buildingFlags, seen);
             Remove(ports, seen);
             var untagged = new List<uint>();
@@ -399,6 +421,16 @@ namespace Rts.Presentation
             go.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f);
             go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
             return go;
+        }
+
+        private GameObject CreateVillager(string name, bool own)
+        {
+            if (LocalVisualPack.TryCreateUnit(UnitKind.Villager, own, transform, out var packed))
+            {
+                packed.name = name;
+                return packed;
+            }
+            return Capsule(name, own ? OwnVillagerColor : EnemyVillagerColor);
         }
 
         private static void Remove(Dictionary<uint, GameObject> visuals, HashSet<uint> seen)
