@@ -651,8 +651,11 @@ namespace Rts.UnityHost
             });
             if (!string.IsNullOrEmpty(item.Say) && !string.IsNullOrEmpty(item.Reason) && item.Reason != item.Say)
                 chatLines.Add(new ChatLine { Text = "　理由：" + item.Reason, Color = detail });
+            // A late or refused answer may still carry commands; they were not carried out, and the log must say so.
+            bool carriedOut = item.State == AiInstructionState.Executing || item.State == AiInstructionState.Completed
+                || item.State == AiInstructionState.Cancelled;
             foreach (var issued in item.Issued ?? Array.Empty<string>())
-                chatLines.Add(new ChatLine { Text = "　→ " + issued, Color = detail });
+                chatLines.Add(new ChatLine { Text = "　→ " + issued + (carriedOut ? "" : "（実行せず）"), Color = detail });
             foreach (var rejected in item.RejectedReasons ?? Array.Empty<string>())
                 chatLines.Add(new ChatLine { Text = "　× 却下：" + rejected, Color = bad });
             chatLines.Add(new ChatLine
