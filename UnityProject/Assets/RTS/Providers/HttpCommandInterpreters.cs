@@ -388,6 +388,9 @@ namespace Rts.Providers
                     new Dictionary<string, object> { ["role"] = "user", ["content"] = prompt }
                 },
                 ["stream"] = false,
+                // Ollama unloads an idle model after 5 minutes and reloading takes tens of seconds, past the 30 s
+                // game deadline (10-05 play test). Keep it loaded through a match.
+                ["keep_alive"] = "30m",
                 ["format"] = MiniJson.Parse(schema),
                 ["options"] = new Dictionary<string, object> { ["temperature"] = 0d, ["num_predict"] = 256L },
                 // Kept for older OpenAI-compatible local gateways; Ollama uses options.num_predict above.

@@ -44,11 +44,15 @@ namespace Rts.Presentation
             else if (frame.Tick == lastTick) return;
             lastTick = frame.Tick;
 
+            // New contacts of one tick make one line: a column coming into view used to fill the timeline line by line.
+            int sighted = 0;
             foreach (var contact in frame.Observation.Contacts)
             {
                 if (contact.IsArmyContact || !knownContacts.Add(contact.ContactId)) continue;
-                Add(frame.Tick, UiText.T("Enemy sighted (contact ", "敵を発見（接触 ") + contact.ContactId + UiText.T(")", "）"));
+                sighted++;
             }
+            if (sighted > 0)
+                Add(frame.Tick, UiText.T("Enemy sighted (", "敵を発見（") + sighted + UiText.T(")", "体）"));
 
             foreach (var objective in frame.Objectives)
             {
