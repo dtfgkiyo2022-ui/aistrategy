@@ -37,7 +37,8 @@ flowchart TD
 | Rts.Replay | 正規バイナリ化、ログI/O、ハッシュ、差分 | Contracts（内部状態は診断DTOで受領） |
 | Rts.Application | 入力受付、順序確定、スタブ、シミュレーション実行・再生統括 | Contracts, Simulation, Replay |
 | Rts.Presentation | GameObject、UI、カメラ、入力の変換 | Contractsのみ |
-| Rts.UnityHost | MonoBehaviourの時計、配線、Applicationと表示の接続 | Application, Presentation, Contracts |
+| Rts.Providers | 外部のAI（参謀・Jev・ローカル LLM）への接続、言葉→命令の変換（2026-10 追加） | Contracts |
+| Rts.UnityHost | MonoBehaviourの時計、配線、Applicationと表示の接続 | Application, Presentation, Contracts, Simulation, Replay, Providers（Simulation・Replay・Providers は 2026-09〜10 に実態に合わせて追加。2026-10-06 オーナー承認） |
 | Rts.Editor / Rts.Tests.EditMode | 設定変換・ビルド／テスト | 必要な上記アセンブリ |
 
 Simulationが真の状態の唯一の所有者。DecisionはSimulationを参照できないため、WorldState、全敵配列、空間索引を受け取れない。Applicationがプロバイダーへ渡せるのも陣営別観測のみ。描画に必要なfloat変換はPresentationで行う。診断用全状態の出口は通常の表示ポートから分離する。
@@ -55,6 +56,7 @@ UnityProject/
     Replay/          Rts.Replay.asmdef
     Application/     Rts.Application.asmdef
     Presentation/    Rts.Presentation.asmdef
+    Providers/       Rts.Providers.asmdef
     UnityHost/       Rts.UnityHost.asmdef
     Editor/          Rts.Editor.asmdef
     Tests/EditMode/  Rts.Tests.EditMode.asmdef
