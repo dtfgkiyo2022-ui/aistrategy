@@ -85,6 +85,7 @@ namespace Rts.Providers
             try
             {
                 DateTime retryDeadline = DateTime.UtcNow.AddSeconds(Math.Max(1, Math.Min(60, requestInfo.DeadlineTick > requestInfo.StartedTick ? requestInfo.DeadlineTick - requestInfo.StartedTick : 1)));
+                bool retriedWithoutThinking = false;
                 for (int attempt = 0; attempt < 4; attempt++)
                 {
                     using (var request = new HttpRequestMessage(HttpMethod.Post, url))
@@ -102,7 +103,21 @@ namespace Rts.Providers
                                 await Task.Delay(delay).ConfigureAwait(false);
                                 continue;
                             }
-                            if (!response.IsSuccessStatusCode) return HttpFailure(response.StatusCode);
+                            if (!response.IsSuccessStatusCode)
+                            {
+                                // Some Ollama models reject the optional thinking switch. Retry once without it.
+                                if (!retriedWithoutThinking && (response.StatusCode == HttpStatusCode.BadRequest || (int)response.StatusCode == 422))
+                                {
+                                    string fallbackBody = BodyWithoutThinking(requestInfo, body);
+                                    if (!string.IsNullOrEmpty(fallbackBody))
+                                    {
+                                        body = fallbackBody;
+                                        retriedWithoutThinking = true;
+                                        continue;
+                                    }
+                                }
+                                return HttpFailure(response.StatusCode);
+                            }
                             string text = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                             return ReadResponse(text);
                         }
@@ -120,6 +135,8 @@ namespace Rts.Providers
                 return new TransportReply { FailureReason = ProviderName + " の応答を読めませんでした。" };
             }
         }
+
+        protected virtual string BodyWithoutThinking(InterpreterRequest request, string body) => null;
 
         private TransportReply HttpFailure(HttpStatusCode status)
             => new TransportReply { FailureReason = ProviderName + " の通信に失敗しました（HTTP " + (int)status + "）。" };
@@ -179,7 +196,7 @@ namespace Rts.Providers
                 if (root.TryGetValue("choices", out var choicesValue) && choicesValue is List<object> choices && choices.Count != 0 &&
                     choices[0] is Dictionary<string, object> choice && string.Equals(String(choice, "finish_reason"), "length", StringComparison.OrdinalIgnoreCase))
                     return Bad("出力上限に達したため、答えなしです。");
-                string json = ExtractClaude(root) ?? ExtractOpenAi(root);
+                string json = ExtractOllama(root) ?? ExtractClaude(root) ?? ExtractOpenAi(root);
                 if (string.IsNullOrEmpty(json)) return Bad("モデルから答えがありませんでした。");
                 return new TransportReply { Json = json, Usage = usage };
             }
@@ -197,6 +214,12 @@ namespace Rts.Providers
                 if (type == "text" && item.TryGetValue("text", out var text) && text is string s) return s;
             }
             return null;
+        }
+
+        private static string ExtractOllama(Dictionary<string, object> root)
+        {
+            if (!(root.TryGetValue("message", out var raw) && raw is Dictionary<string, object> message)) return null;
+            return String(message, "content");
         }
 
         private static string ExtractOpenAi(Dictionary<string, object> root)
@@ -217,10 +240,10 @@ namespace Rts.Providers
 
         private static AiTokenUsage Usage(Dictionary<string, object> root)
         {
-            var u = root.TryGetValue("usage", out var raw) ? raw as Dictionary<string, object> : null;
+            var u = root.TryGetValue("usage", out var raw) ? raw as Dictionary<string, object> : root;
             if (u == null) return new AiTokenUsage(0, 0);
-            int input = Int(u, "input_tokens", Int(u, "prompt_tokens", 0));
-            int output = Int(u, "output_tokens", Int(u, "completion_tokens", 0));
+            int input = Int(u, "input_tokens", Int(u, "prompt_tokens", Int(u, "prompt_eval_count", 0)));
+            int output = Int(u, "output_tokens", Int(u, "completion_tokens", Int(u, "eval_count", 0)));
             int cacheRead = Int(u, "cache_read_input_tokens", Int(u, "prompt_tokens_details", 0));
             if (u.TryGetValue("input_tokens_details", out var details) && details is Dictionary<string, object> d)
                 cacheRead = Int(d, "cached_tokens", cacheRead);
@@ -299,18 +322,81 @@ namespace Rts.Providers
 
     public sealed class LocalLlmCommandInterpreter : HttpCommandInterpreter
     {
-        public const string DefaultUrl = "http://127.0.0.1:11434/v1/chat/completions";
+        public const string DefaultEndpoint = "ollama";
+        public const string OllamaEndpoint = "ollama";
+        public const string OpenAiCompatibleEndpoint = "openai";
+        public const string DefaultOllamaUrl = "http://127.0.0.1:11434/api/chat";
+        public const string DefaultOpenAiCompatibleUrl = "http://127.0.0.1:11434/v1/chat/completions";
+        public const string DefaultUrl = DefaultOllamaUrl;
         private readonly string localModel;
-        public LocalLlmCommandInterpreter(string model, HttpMessageHandler handler = null, string url = DefaultUrl, TimeSpan? timeout = null)
-            : base(() => null, handler, url, false, timeout ?? TimeSpan.FromSeconds(60)) { localModel = string.IsNullOrEmpty(model) ? throw new ArgumentException("ローカルモデル名が必要です。", nameof(model)) : model; }
+        private readonly string endpoint;
+        public string Endpoint => endpoint;
+        public LocalLlmCommandInterpreter(string model, HttpMessageHandler handler = null, string url = null,
+            TimeSpan? timeout = null, string endpoint = DefaultEndpoint)
+            : base(() => null, handler, ResolveUrl(url, endpoint), false, timeout ?? TimeSpan.FromSeconds(60))
+        {
+            localModel = string.IsNullOrEmpty(model) ? throw new ArgumentException("ローカルモデル名が必要です。", nameof(model)) : model;
+            this.endpoint = NormalizeEndpoint(endpoint);
+        }
         protected override string ProviderName => "ローカル LLM";
         protected override void AddHeaders(HttpRequestMessage request, string key) { }
         protected override string BuildBody(InterpreterRequest request)
         {
+            if (endpoint == OllamaEndpoint) return OllamaBody(request);
             var copy = new InterpreterRequest { RequestId = request.RequestId, FactionId = request.FactionId, Instruction = request.Instruction, Summary = request.Summary,
                 Model = request.Model, HasFixedTarget = request.HasFixedTarget, FixedTarget = request.FixedTarget, FixedTargetName = request.FixedTargetName };
-            // OpenAI's newer models only take max_completion_tokens; OpenAI-compatible local servers (Ollama) take max_tokens.
+            // OpenAI-compatible local servers take max_tokens.
             return OpenAiCommandInterpreter.OpenAiBody(copy, localModel, false);
+        }
+
+        private string OllamaBody(InterpreterRequest request)
+        {
+            var limits = AiModelCatalog.Get(request.Model);
+            string schema = AiCommandSchema.Build(request.Summary, limits);
+            string prompt = request.Summary.DynamicPrompt(request.Instruction,
+                request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null,
+                request.FixedTargetName);
+            prompt += "\n/no_think";
+            var body = new Dictionary<string, object>
+            {
+                ["model"] = localModel,
+                ["messages"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["role"] = "system", ["content"] = AiCommandSchema.ForModel(request.Model) + "\nJSON Schema:\n" + schema },
+                    new Dictionary<string, object> { ["role"] = "user", ["content"] = prompt }
+                },
+                ["stream"] = false,
+                ["format"] = MiniJson.Parse(schema),
+                ["options"] = new Dictionary<string, object> { ["temperature"] = 0d, ["num_predict"] = 256L },
+                // Kept for older OpenAI-compatible local gateways; Ollama uses options.num_predict above.
+                ["max_tokens"] = (long)limits.MaxOutputTokens
+            };
+            if (limits.DisableThinking) body["think"] = false;
+            return JsonValueWriter.Write(body);
+        }
+
+        protected override string BodyWithoutThinking(InterpreterRequest request, string body)
+        {
+            if (endpoint != OllamaEndpoint || body.IndexOf("\"think\":false", StringComparison.Ordinal) < 0) return null;
+            var root = MiniJson.Parse(body) as Dictionary<string, object>;
+            if (root == null || !root.Remove("think")) return null;
+            return JsonValueWriter.Write(root);
+        }
+
+        private static string NormalizeEndpoint(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return DefaultEndpoint;
+            if (value.Equals("ollama", StringComparison.OrdinalIgnoreCase)) return OllamaEndpoint;
+            if (value.Equals("openai", StringComparison.OrdinalIgnoreCase) || value.Equals("openai-compatible", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("lmstudio", StringComparison.OrdinalIgnoreCase) || value.Equals("lm-studio", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("llama-server", StringComparison.OrdinalIgnoreCase)) return OpenAiCompatibleEndpoint;
+            throw new ArgumentException("ローカルLLMの窓口は ollama または openai です。", nameof(value));
+        }
+
+        private static string ResolveUrl(string url, string endpoint)
+        {
+            if (!string.IsNullOrEmpty(url)) return url;
+            return NormalizeEndpoint(endpoint) == OllamaEndpoint ? DefaultOllamaUrl : DefaultOpenAiCompatibleUrl;
         }
     }
 

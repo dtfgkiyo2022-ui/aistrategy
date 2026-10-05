@@ -296,7 +296,8 @@ namespace Rts.UnityHost
                 created = new OpenAiCommandInterpreter(() => Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
             else if (string.Equals(model, "local-llm", StringComparison.OrdinalIgnoreCase))
                 created = new LocalLlmCommandInterpreter(Environment.GetEnvironmentVariable("LOCAL_LLM_MODEL") ?? "qwen3.5:4b",
-                    url: Environment.GetEnvironmentVariable("LOCAL_LLM_URL") ?? LocalLlmCommandInterpreter.DefaultUrl);
+                    url: Environment.GetEnvironmentVariable("LOCAL_LLM_URL"),
+                    endpoint: Environment.GetEnvironmentVariable("LOCAL_LLM_ENDPOINT") ?? LocalLlmCommandInterpreter.DefaultEndpoint);
             else if (string.Equals(model, "jev", StringComparison.OrdinalIgnoreCase))
                 created = new JevCommandInterpreter(() => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
             else throw new ArgumentException("未知のモデルです。", nameof(model));

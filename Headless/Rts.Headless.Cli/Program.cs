@@ -143,7 +143,7 @@ internal static class Program
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
             if (args[0] == "eval-interpreter")
             {
-                var evalAllowed = new[] { "--eval-set", "--model", "--out", "--csv" };
+                var evalAllowed = new[] { "--eval-set", "--model", "--out", "--csv", "--local-llm-endpoint" };
                 if (options.Keys.Except(evalAllowed).Any()) throw new InvalidDataException("Unknown option.");
                 return EvalInterpreterCommand.Run(options);
             }

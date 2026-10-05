@@ -45,12 +45,14 @@ internal static class EvalInterpreterCommand
     {
         string setPath = Required(options, "--eval-set");
         string model = options.TryGetValue("--model", out var selectedModel) ? selectedModel : "fake";
+        string localEndpoint = options.TryGetValue("--local-llm-endpoint", out var selectedEndpoint)
+            ? selectedEndpoint : Environment.GetEnvironmentVariable("LOCAL_LLM_ENDPOINT") ?? LocalLlmCommandInterpreter.DefaultEndpoint;
         string csvPath = options.TryGetValue("--csv", out var csv) ? csv : (options.TryGetValue("--out", out var output) ? output + ".csv" : "eval-interpreter.csv");
         var cases = Read(setPath);
         var rows = new List<ScoreRow>();
         foreach (var item in cases)
         {
-            try { rows.Add(RunOne(item, model)); }
+            try { rows.Add(RunOne(item, model, localEndpoint)); }
             catch (Exception e) { throw new InvalidDataException("評価問題 " + item.Id + " で失敗しました: " + e.Message, e); }
         }
         var summary = Summarize(model, rows);
@@ -60,7 +62,7 @@ internal static class EvalInterpreterCommand
         return rows.All(r => r.Correct) ? 0 : 2;
     }
 
-    private static ScoreRow RunOne(EvalCase item, string model)
+    private static ScoreRow RunOne(EvalCase item, string model, string localEndpoint)
     {
         var frame = FixedFrame();
         var summary = AiSituationSummary.From(frame);
@@ -85,7 +87,7 @@ internal static class EvalInterpreterCommand
         }
         else
         {
-            using (var interpreter = CreateInterpreter(model))
+                using (var interpreter = CreateInterpreter(model, localEndpoint))
             {
                 var request = new InterpreterRequest { RequestId = 1, FactionId = frame.FactionId, Instruction = item.Text, FixedTarget = selected.GetValueOrDefault(), HasFixedTarget = selected.HasValue || !string.IsNullOrEmpty(selectedName), FixedTargetName = selectedName,
                     Summary = summary, Model = providerModel, StartedTick = frame.Tick, DeadlineTick = context.DeadlineTick };
@@ -113,11 +115,13 @@ internal static class EvalInterpreterCommand
             CostYen = reply.CostYen, Score = score, ResultReason = reply.Result.Reason, IssuedCount = reply.Result.Policies.Count + reply.Result.EconomyCommands.Count, RejectedReasons = string.Join("|", reply.Result.Rejected.Select(x => x.Reason)) };
     }
 
-    private static HttpCommandInterpreter CreateInterpreter(string model)
+    private static HttpCommandInterpreter CreateInterpreter(string model, string localEndpoint)
     {
         if (model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase)) return new ClaudeCommandInterpreter(() => Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"), timeout: TimeSpan.FromSeconds(60));
         if (model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase)) return new OpenAiCommandInterpreter(() => Environment.GetEnvironmentVariable("OPENAI_API_KEY"), timeout: TimeSpan.FromSeconds(60));
-        if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return new LocalLlmCommandInterpreter(Environment.GetEnvironmentVariable("LOCAL_LLM_MODEL") ?? "local-model", url: Environment.GetEnvironmentVariable("LOCAL_LLM_URL") ?? LocalLlmCommandInterpreter.DefaultUrl, timeout: TimeSpan.FromSeconds(60));
+        if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return new LocalLlmCommandInterpreter(
+            Environment.GetEnvironmentVariable("LOCAL_LLM_MODEL") ?? "local-model",
+            url: Environment.GetEnvironmentVariable("LOCAL_LLM_URL"), endpoint: localEndpoint, timeout: TimeSpan.FromSeconds(60));
         throw new InvalidDataException("評価対象のモデル名が不明です: " + model);
     }
 
