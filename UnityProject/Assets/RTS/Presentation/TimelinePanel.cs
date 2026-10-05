@@ -70,7 +70,7 @@ namespace Rts.Presentation
             int first = Mathf.Max(0, entries.Count - lines);
             for (int i = first; i < entries.Count; i++)
                 GUI.Label(new Rect(timelineRect.x + 6f, timelineRect.y + 20f + (i - first) * 18f, timelineRect.width - 12f, 18f),
-                    "t" + entries[i].Tick + "  " + entries[i].Text);
+                    MatchOutcome.Clock(entries[i].Tick) + "  " + entries[i].Text);
         }
     }
 }
