@@ -140,6 +140,7 @@ namespace Rts.Tests.Headless
                 Assert.That(handler.Body, Does.Contain("\"format\":{\"type\":\"object\""));
                 Assert.That(handler.Body, Does.Contain("\"temperature\":0"));
                 Assert.That(handler.Body, Does.Contain("\"num_predict\":256"));
+                Assert.That(handler.Body, Does.Contain("\"keep_alive\":\"30m\""));
                 Assert.That(handler.Body, Does.Not.Contain("response_format"));
                 Assert.That(reply.Json, Does.Contain("\"kind\":\"unknown\""));
                 Assert.That(reply.Usage.InputTokens, Is.EqualTo(12));
