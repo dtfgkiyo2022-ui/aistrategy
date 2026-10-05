@@ -46,6 +46,8 @@ namespace Rts.UnityHost
         private TacticMatchSide ownTacticSide;
         private TacticChoice enemyTacticChoice;
         private TacticChoice ownTacticChoice;
+        private MatchPackWriter matchPack;
+        private string matchPackPath = "";
 
         /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
         private sealed class OwnDoctrineChoice : IOpponentControl
@@ -152,6 +154,7 @@ namespace Rts.UnityHost
         public void StepOneTick() { StepOnce(); }
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
+        public string MatchPackPath { get { return matchPackPath; } }
 
         /// <summary>Measurement only (stage 5): repeats every soldier this many times. 1 is the normal match.</summary>
         public static int ScenarioMultiplier = 1;
@@ -417,6 +420,8 @@ namespace Rts.UnityHost
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
+            matchPack = null;
+            matchPackPath = "";
             operationTable = new OperationTable(viewFactionId);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
             StopLiveAi();
@@ -476,6 +481,7 @@ namespace Rts.UnityHost
 
             view.SetTerrain(ScenarioTerrain.From(scenario.Map));
             view.Push(simulation.Capture(viewFactionId));
+            TryStartMatchPack(scenario);
             panel.Bind(port, viewFactionId, viewFactionId, view);
             panel.ExternalAi = this;
             panel.MatchRestart = this;
@@ -499,6 +505,7 @@ namespace Rts.UnityHost
             economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
+            panel.MatchPackPathProvider = () => MatchPackPath;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
@@ -554,23 +561,70 @@ namespace Rts.UnityHost
         {
             if (simulation == null || HasEnded) return;
             // Tactic calls are deliberately before the gateway step, matching tactic-match in the CLI.
+            TacticHostTickResult ownTacticResult = null;
+            TacticHostTickResult enemyTacticResult = null;
             if (ownFactionId == 1)
             {
-                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticSide.Host.Tick();
-                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticSide.Host.Tick();
+                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
             }
             else
             {
-                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticSide.Host.Tick();
-                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticSide.Host.Tick();
+                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
+                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+            }
+            if (matchPack != null)
+            {
+                matchPack.RecordTactic(ownTacticResult, ownFactionId, ownTactic);
+                matchPack.RecordTactic(enemyTacticResult, enemyFactionId, enemyTactic);
             }
             gateway.Step();
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
             if (liveAi != null) liveAi.Poll(frame.Tick);
-            if (frame.Result.HasEnded) return;
+            matchPack?.RecordAfterStep(simulation);
+            if (frame.Result.HasEnded)
+            {
+                FinishMatchPack();
+                return;
+            }
             enemy.Step(simulation.Capture(enemyFactionId));
             own.Step(simulation.Capture(ownFactionId));
+            if (HasEnded) FinishMatchPack();
+        }
+
+        private void TryStartMatchPack(ScenarioDefinition scenario)
+        {
+            try
+            {
+                string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                string root = Path.Combine(documents, "AiCommandRts", "Packs");
+                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", System.Globalization.CultureInfo.InvariantCulture);
+                matchPackPath = Path.Combine(root, stamp + "_" + scenario.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                matchPack = new MatchPackWriter(matchPackPath, scenario, string.IsNullOrEmpty(ownTactic) ? ownPreset : ownTactic, string.IsNullOrEmpty(enemyTactic) ? enemyPreset : enemyTactic);
+                matchPack.RecordInitial(simulation);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
+            {
+                matchPack = null;
+                matchPackPath = "";
+                Debug.LogWarning("Could not start match pack; the match continues: " + e.Message);
+            }
+        }
+
+        private void FinishMatchPack()
+        {
+            if (matchPack == null) return;
+            try
+            {
+                matchPack.Complete(simulation, gateway.Inputs, simulation.Capture(1).Tick);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
+            {
+                Debug.LogWarning("Could not write match pack; the match has ended: " + e.Message);
+                matchPackPath = "";
+            }
+            finally { matchPack = null; }
         }
 
         private const string LanguageKey = "rts.language.japanese";

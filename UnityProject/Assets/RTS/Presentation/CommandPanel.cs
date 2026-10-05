@@ -52,6 +52,9 @@ namespace Rts.Presentation
         /// <summary>Lets the host expose the own side's optional tactic and its diagnostics.</summary>
         public ITacticControl OwnTactic { get { return ownTactic; } set { ownTactic = value; } }
 
+        /// <summary>Returns the completed match-pack path for the result overlay, if saving succeeded.</summary>
+        public System.Func<string> MatchPackPathProvider;
+
         /// <summary>Random economy map or the classic one. Null hides the row.</summary>
         public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
 
@@ -240,6 +243,9 @@ namespace Rts.Presentation
             UiHitAreas.Shared.Register(rect);
             GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, UiStyles.Heading);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, UiStyles.Tiny);
+            string packPath = MatchPackPathProvider == null ? "" : MatchPackPathProvider();
+            if (!string.IsNullOrEmpty(packPath))
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 110f, rect.width - 24f, 32f), UiText.T("Pack saved: " + packPath, "記録パックの保存先：" + packPath), UiStyles.Tiny);
             if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
                 matchRestart.RestartMatch();
         }

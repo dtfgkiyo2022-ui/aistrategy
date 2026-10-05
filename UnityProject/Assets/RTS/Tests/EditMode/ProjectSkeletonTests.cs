@@ -35,9 +35,10 @@ namespace Rts.Tests.EditMode
             ["Providers"] = new[] { "Rts.Contracts" },
             ["Tactics"] = new[] { "Rts.Contracts" },
             ["TacticsJs"] = new[] { "Rts.Contracts", "Rts.Tactics" },
+            ["TacticsTools"] = new[] { "Rts.Contracts", "Rts.Tactics", "Rts.Simulation", "Rts.Replay", "Rts.Application" },
             ["Presentation"] = new[] { "Rts.Contracts" },
             ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts",
-                "Rts.Simulation", "Rts.Replay", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs" },
+                "Rts.Simulation", "Rts.Replay", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs", "Rts.TacticsTools" },
             ["Editor"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
                 "Rts.Application", "Rts.Providers", "Rts.Presentation", "Rts.UnityHost" },
             ["Tests.EditMode"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
@@ -98,6 +99,7 @@ namespace Rts.Tests.EditMode
         [TestCase("Application")]
         [TestCase("Providers")]
         [TestCase("Tactics")]
+        [TestCase("TacticsTools")]
         public void PureAssembliesHaveNoTransitiveUnityDependency(string name)
         {
             var root = AppDomain.CurrentDomain.GetAssemblies().Single(a => a.GetName().Name == "Rts." + name);

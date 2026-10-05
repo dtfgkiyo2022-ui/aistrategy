@@ -42,14 +42,26 @@ internal static class TacticMatchCommand
         var westAuto = CreateAuto(westName, 1, gateway); var eastAuto = CreateAuto(eastName, 2, gateway);
         westAuto?.Initialize(); eastAuto?.Initialize();
         var lines = new List<string>();
+        MatchPackWriter pack = null;
+        if (options.TryGetValue("--pack-out", out var packPath))
+        {
+            pack = new MatchPackWriter(packPath, scenario, westName, eastName);
+            pack.RecordInitial(simulation);
+        }
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
-            WriteHostLog(lines, west?.Tick(), 1, westName);
-            WriteHostLog(lines, east?.Tick(), 2, eastName);
+            var westResult = west?.Tick();
+            var eastResult = east?.Tick();
+            WriteHostLog(lines, westResult, 1, westName);
+            WriteHostLog(lines, eastResult, 2, eastName);
+            pack?.RecordTactic(westResult, 1, westName);
+            pack?.RecordTactic(eastResult, 2, eastName);
             gateway.Step();
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
+            pack?.RecordAfterStep(simulation);
         }
+        pack?.Complete(simulation, gateway.Inputs, ticks);
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))
         {
