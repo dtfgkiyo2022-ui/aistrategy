@@ -159,6 +159,36 @@ namespace Rts.Application
         public ulong Submit(UserPolicyIntent intent) => SubmitBatch(new[] { intent });
         public ulong SubmitBatch(IReadOnlyList<UserPolicyIntent> intents) => Enqueue(intents, true, 240);
         public ulong SubmitInterpreted(UserPolicyIntent intent, int? deadlineTicks = null) => Enqueue(new[] { intent }, false, deadlineTicks ?? AiProfile.DeadlineTicks);
+
+        /// <summary>
+        /// Clears the doctrine commands for one faction at the next tick.  This is a logged Doctrine ReturnToAuto
+        /// boundary command, so human and autonomous commands remain in the simulation.
+        /// A replacement doctrine is queued after this method, so the two inputs have a deterministic order.
+        /// </summary>
+        public ulong ResetDoctrine(uint faction, long applyTick)
+        {
+            if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
+            if (applyTick <= tick) throw new ArgumentException("The reset must apply after the current tick.", nameof(applyTick));
+            var batch = nextBatch++;
+            var scope = new ScopeKey(faction, ScopeKind.All, 0);
+            var request = new Request
+            {
+                Id = nextRequest++, Batch = batch, Sequence = 0, ReceivedTick = tick,
+                Deadline = applyTick, Direct = true
+            };
+            request.Orders = new[]
+            {
+                new PolicyOrder(nextCommand++, batch, CommandSource.Doctrine,
+                    scope, PolicyKind.ReturnToAuto, default(PolicyGoal), 100,
+                    new LossBudget(1000), new EndCondition(EndKind.UntilReplaced, 0), 0, simulation.Revision(scope),
+                    simulation.Versions(scope).Where(v => !v.Scope.Equals(scope)).ToArray(), tick,
+                    new Expiration(long.MaxValue, 0, ExpireFlags.None))
+            };
+            requests.Add(request);
+            arrivals.Add(new Arrival { Request = request, Kind = InputKind.Proposal, Tick = tick, Sequence = request.Sequence });
+            return request.Id;
+        }
+
         private ulong Enqueue(IReadOnlyList<UserPolicyIntent> intents, bool direct, int deadlineTicks)
         {
             if (intents == null || intents.Count == 0 || deadlineTicks < 0) throw new ArgumentException("Empty request or negative deadline.");

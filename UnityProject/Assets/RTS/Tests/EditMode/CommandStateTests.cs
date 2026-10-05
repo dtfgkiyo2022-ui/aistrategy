@@ -179,6 +179,38 @@ namespace Rts.Tests.EditMode
             Assert.That(h.View(reset).Status, Is.EqualTo(CommandStatus.Completed));
             Assert.That(h.View(a).Status, Is.EqualTo(CommandStatus.Cancelled)); Assert.That(h.View(b).Status, Is.EqualTo(CommandStatus.Cancelled));
         }
+        [Test]
+        public void DoctrineReturnToAutoCancelsOnlyOverlappingDoctrinePolicies()
+        {
+            var h = new Harness();
+            var human = h.Human(All);
+            var reserve = h.Order(All, PolicyKind.MaintainReserve, CommandSource.Doctrine);
+            var abandon = h.Order(Outpost, PolicyKind.AllowAbandon, CommandSource.Doctrine);
+            h.Step(h.Input(InputKind.Proposal, new[] { reserve, abandon }));
+
+            var reset = h.Order(All, PolicyKind.ReturnToAuto, CommandSource.Doctrine);
+            h.Step(h.Input(InputKind.Proposal, new[] { reset }));
+
+            Assert.That(h.View(reset).Status, Is.EqualTo(CommandStatus.Completed));
+            Assert.That(h.View(reserve).Status, Is.EqualTo(CommandStatus.Cancelled));
+            Assert.That(h.View(abandon).Status, Is.EqualTo(CommandStatus.Cancelled));
+            Assert.That(h.View(human).Status, Is.EqualTo(CommandStatus.Executing));
+        }
+        [Test]
+        public void HumanReturnToAutoLeavesDoctrinePoliciesInPlace()
+        {
+            var h = new Harness();
+            var doctrine = h.Order(All, PolicyKind.MaintainReserve, CommandSource.Doctrine);
+            h.Step(h.Input(InputKind.Proposal, new[] { doctrine }));
+            var ai = h.Order(Outpost, PolicyKind.AllowAbandon, CommandSource.Ai);
+            h.Step(h.Input(InputKind.Proposal, new[] { ai }));
+
+            var reset = h.Human(All, PolicyKind.ReturnToAuto);
+
+            Assert.That(h.View(reset).Status, Is.EqualTo(CommandStatus.Completed));
+            Assert.That(h.View(doctrine).Status, Is.EqualTo(CommandStatus.Executing));
+            Assert.That(h.View(ai).Status, Is.EqualTo(CommandStatus.Executing));
+        }
         [TestCase(PolicyKind.AllowAbandon)] [TestCase(PolicyKind.MaintainReserve)] [TestCase(PolicyKind.Defend)] [TestCase(PolicyKind.Scout)]
         public void CatalogPoliciesAreHeldAndMovementPoliciesAreComposed(PolicyKind kind)
         {

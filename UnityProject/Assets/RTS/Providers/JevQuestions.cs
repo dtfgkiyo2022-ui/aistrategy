@@ -43,7 +43,10 @@ namespace Rts.Providers
             "\"operation_north_broken\":{\"type\":\"noul\",\"instructions\":\"北の拠点が崩れた状態である。\"}";
 
         private const string InstructionKind =
-            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"unknown\":\"わからない\"}}";
+            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"doctrine\":\"全体方針を変える\",\"unknown\":\"わからない\"}}";
+
+        private const string InstructionDoctrine =
+            "\"instruction_doctrine\":{\"type\":\"choice\",\"instructions\":\"全体方針は次の1つである。\",\"criteria\":{\"concentrate\":\"攻め気味・積極的に・押していく\",\"maintain\":\"守り気味・慎重に・維持\",\"none\":\"全部自分でやる・お任せをやめる\",\"unknown\":\"わからない\"}}";
 
         private const string InstructionTarget =
             "\"instruction_target\":{\"type\":\"choice\",\"instructions\":\"指示文の対象はstateに載っている名前の1つである。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\",\"my_core\":\"自分のコア\",\"enemy_core\":\"敵のコア\",\"unknown\":\"わからない\"}}";
@@ -79,6 +82,7 @@ namespace Rts.Providers
                 parts.Add(InstructionKind);
                 parts.Add(InstructionTarget);
                 parts.Add(InstructionGoal);
+                parts.Add(InstructionDoctrine);
             }
             if (context.IncludeComprehension == true)
             {

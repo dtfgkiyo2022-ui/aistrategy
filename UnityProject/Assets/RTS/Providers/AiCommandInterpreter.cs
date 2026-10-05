@@ -96,11 +96,12 @@ namespace Rts.Providers
             var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
             var properties = new Dictionary<string, object>
             {
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "unknown"),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "unknown"),
                 ["scope"] = NullableEnum(scopes),
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }),
+                ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["reason"] = new Dictionary<string, object> { ["type"] = "string" }
             };
             return JsonValueWriter.Write(new Dictionary<string, object>
@@ -116,14 +117,15 @@ namespace Rts.Providers
         {
             var props = new Dictionary<string, object>
             {
-                ["type"] = EnumSchema("policy", "economy"),
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain"),
+                ["type"] = EnumSchema("policy", "economy", "doctrine"),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
                 ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
                 ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
                 ["civ"] = NullableEnum(new[] { "原始", "農耕", "冶金", "森林", "石工", "商業", "騎兵", "橋梁", "学術", "信仰", "漁業", "山岳", "関所", "都市", "聖域", "Primitive", "Agrarian", "Metallurgy", "Forestry", "Masonry", "Caravan", "Cavalry", "Bridge", "Academy", "Cult", "Fishing", "Mountain", "Tollgate", "Metropolis", "Sanctuary" }),
                 ["policy"] = NullableEnum(new[] { "軍事", "内政", "経済", "成長", "均衡", "バランス", "Military", "Growth", "Balanced" }),
+                ["preset"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }), ["sequence"] = NullableInteger(), ["count"] = NullableInteger(),
                 ["reservePermille"] = NullableInteger(), ["allowedLossPermille"] = NullableInteger(), ["enabled"] = NullableBoolean()
             };
@@ -235,6 +237,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 出力前に、typeとkindの組み合わせ、名前表への一致、所有者、goalの必要性、regionとcontrolの組み合わせ、建物・兵・文明・policyのenum変換、数の範囲、unknownとcommandsの整合性を順に確認してください。
 特に、scopeとgoalは役割が違います。北の拠点を守るならscope=全部隊、goal=北の拠点です。北軍で守るならscope=北軍、goal=北の拠点です。南軍を北へ向かわせるならscope=南軍、goal=北の拠点です。目標をscopeに入れたり、動かす部隊をgoalに入れたりしません。
 特に、区域の命令は三種類を区別します。区域3を人間担当にするのはSetRegionControl、区域3の内政を軍事重視にするのはSetEconomyPolicy、区域3を守るのはpolicy型のDefendです。最初の二つはeconomy型で、三つ目はpolicy型です。
+全体方針の命令も出せます。攻め気味・積極的に・押していくはtype=doctrine、preset=concentrate、守り気味・慎重に・維持はpreset=maintain、全部自分でやる・お任せをやめるはpreset=noneです。具体的な命令と同時に出してもかまいません。全体方針以外の命令ではpresetを空文字にします。sayで方針を変えたと言うときは、必ずcommandsにtype=doctrineの命令を入れます。sayだけで済ませません。
 特に、「任せる」は対象によって意味が変わります。全部隊や部隊ならReturnToAuto、区域ならSetRegionControlでcontrol=Aiです。内政全体を任せるという文だけでは、既存の自動内政へ戻す操作か方針変更かを区別できない場合があるため、文の対象を確認します。
 特に、放棄の許可と撤退は違います。拠点を捨ててよいはAllowAbandonで、部隊が下がるはRetreatです。予備の保持と部隊の撤退も違うため、保持割合はMaintainReserveのreservePermilleにだけ入れます。
 特に、場所の「近く」は目標goalではなくPlaceBuildingのlocationです。支城や資源の固まりの近くに建てる場合、その地点が名前表にあるときだけlocationに使います。名前表にない方角や距離からセル番号を作りません。
@@ -266,6 +269,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         public const string StableInstructionsShort = @"
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
 kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
+全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
 表にない名前の判定はゲーム側が行います。scope と goal は、必ず名前表の中から選んでください。指示文に出てきた名前と同じものを選んでください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
 ";
 
@@ -291,6 +295,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public IReadOnlyList<AiRejectedCommand> Rejected { get; internal set; } = Array.Empty<AiRejectedCommand>();
         public string Say { get; internal set; } = "";
         public string Reason { get; internal set; } = "";
+        /// <summary>選ばれた自軍の全体方針。全体方針の命令がない場合はnull。</summary>
+        public string Doctrine { get; internal set; }
         public bool Unknown { get; internal set; }
 
         public string Report
@@ -792,6 +798,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 if (result.Unknown) return result;
                 var policies = new List<UserPolicyIntent>();
                 var economy = new List<EconomyCommand>();
+                var doctrines = new List<string>();
                 var rejected = new List<AiRejectedCommand>();
                 var commands = DistinctCommands(AiJson.Array(root, "commands"));
                 var operationObjects = AiJson.Array(root, "operations");
@@ -805,7 +812,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                         var command = AiJson.AsObject(commands[i]);
                         if (string.Equals(AiJson.String(command, "type"), "operation", StringComparison.OrdinalIgnoreCase))
                             operations.Add(ConvertOperation(command, context, ref nextSequence));
-                        else ConvertCommand(command, i, context, ref nextSequence, policies, economy);
+                        else ConvertCommand(command, i, context, ref nextSequence, policies, economy, doctrines);
                     }
                     catch (AiCommandException e) { rejected.Add(new AiRejectedCommand { Index = i, Kind = e.Kind, Reason = e.Message }); }
                 }
@@ -816,6 +823,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                         catch (AiCommandException e) { rejected.Add(new AiRejectedCommand { Index = i, Kind = "operation", Reason = e.Message }); }
                     }
                 result.Policies = policies.AsReadOnly(); result.EconomyCommands = economy.AsReadOnly(); result.Operations = operations.AsReadOnly(); result.Rejected = rejected.AsReadOnly();
+                if (doctrines.Count != 0) result.Doctrine = doctrines[0];
                 return result;
             }
             catch (Exception e) when (e is FormatException || e is InvalidOperationException || e is OverflowException)
@@ -835,7 +843,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     ["reason"] = reason, ["unknown"] = true
                 };
 
-            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl" };
+            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine" };
             if (!allowed.Contains(kind, StringComparer.Ordinal))
                 return new Dictionary<string, object>
                 {
@@ -851,6 +859,12 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 command["region"] = AiJson.String(small, "region") ?? "";
                 command["control"] = AiJson.String(small, "control") ?? "";
             }
+            else if (kind == "SetDoctrine")
+            {
+                command["type"] = "doctrine";
+                command["kind"] = "";
+                command["preset"] = AiJson.String(small, "doctrine") ?? "";
+            }
             else
             {
                 command["type"] = "policy";
@@ -865,13 +879,28 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             };
         }
 
-        private static void ConvertCommand(Dictionary<string, object> command, int index, AiInterpretationContext c, ref ulong next, List<UserPolicyIntent> policies, List<EconomyCommand> economy)
+        private static void ConvertCommand(Dictionary<string, object> command, int index, AiInterpretationContext c, ref ulong next, List<UserPolicyIntent> policies, List<EconomyCommand> economy, List<string> doctrines = null)
         {
             string type = AiJson.String(command, "type"); string kindText = AiJson.String(command, "kind");
+            if (string.Equals(type, "doctrine", StringComparison.OrdinalIgnoreCase))
+            {
+                ConvertDoctrine(command, doctrines);
+                return;
+            }
             if (string.IsNullOrEmpty(type) || string.IsNullOrEmpty(kindText)) throw new AiCommandException("形が違う", kindText);
             if (type == "policy") ConvertPolicy(command, kindText, c, ref next, policies);
             else if (type == "economy") ConvertEconomy(command, kindText, c, ref next, economy);
             else throw new AiCommandException("対応していない命令の種類", kindText);
+        }
+
+        private static void ConvertDoctrine(Dictionary<string, object> command, List<string> doctrines)
+        {
+            if (doctrines == null) throw new AiCommandException("全体方針は条件付き命令にできない", "doctrine");
+            string preset = AiJson.String(command, "preset");
+            if (preset != "none" && preset != "maintain" && preset != "concentrate")
+                throw new AiCommandException("全体方針が不明", "doctrine");
+            if (doctrines.Count != 0) throw new AiCommandException("全体方針は1つまで", "doctrine");
+            doctrines.Add(preset);
         }
 
         private static OperationDefinition ConvertOperation(Dictionary<string, object> command, AiInterpretationContext c, ref ulong next)

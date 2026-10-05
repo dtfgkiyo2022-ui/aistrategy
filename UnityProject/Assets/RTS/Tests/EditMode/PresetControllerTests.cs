@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Replay;
 using Battle = Rts.Simulation.Simulation;
 using Rts.Simulation;
 
@@ -126,6 +128,69 @@ namespace Rts.Tests.EditMode
             left.Initialize(); right.Initialize();
             left.Step(Frame(1, 1)); right.Step(Frame(1, 1));
             Assert.That(a.Batches.SelectMany(x => x).Select(x => x.Kind), Is.EqualTo(b.Batches.SelectMany(x => x).Select(x => x.Kind)));
+        }
+
+        [Test]
+        public void InitializeAtCurrentTickUsesThatTickForTheFirstProposal()
+        {
+            var concentratePort = new Port();
+            var concentrate = new PresetController("concentrate", 1, concentratePort);
+            concentrate.Initialize(600);
+            Assert.That(concentratePort.Batches.Single().Single(o => o.Kind == PolicyKind.Focus).ObservedTick, Is.EqualTo(600));
+            Assert.That(concentratePort.Batches.Single().Single(o => o.Kind == PolicyKind.Focus).Goal.Id, Is.EqualTo(1u));
+
+            var maintainPort = new Port();
+            var maintain = new PresetController("maintain", 1, maintainPort);
+            maintain.Initialize(600);
+            maintain.Step(Frame(601, 1));
+            Assert.That(maintainPort.Batches[0].Single().ObservedTick, Is.EqualTo(600));
+            Assert.That(maintainPort.Batches.Skip(1).SelectMany(x => x).Any(o => o.Kind == PolicyKind.Defend), Is.True);
+        }
+
+        [Test]
+        public void MidMatchDoctrineInputsReplayWithIdenticalHashes()
+        {
+            var scenario = WeekTwoScenario.Create();
+            var first = RunSwitchInputs(scenario);
+            var second = RunSwitchInputs(scenario);
+            Assert.That(first.Select(InputBinary.Encode), Is.EqualTo(second.Select(InputBinary.Encode)));
+
+            var expected = new List<byte[]>();
+            using (var stream = new MemoryStream())
+            {
+                ReplayRunner.Record(stream, scenario, first, 1200, Build(), (state, hash, events) => expected.Add(hash.Concat(events).ToArray()));
+                stream.Position = 0;
+                int count = 0;
+                var replay = ReplayRunner.Replay(stream, Build(), (state, hash, events) => Assert.That(hash.Concat(events), Is.EqualTo(expected[count++])));
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(count, Is.EqualTo(expected.Count));
+            }
+            var reset = first.Single(i => i.Kind == InputKind.Proposal && i.Orders.Any(o => o.Kind == PolicyKind.ReturnToAuto));
+            Assert.That(reset.Orders.Single(o => o.Kind == PolicyKind.ReturnToAuto).Source, Is.EqualTo(CommandSource.Doctrine));
+            Assert.That(first.Any(i => i.Kind == InputKind.Proposal && i.Orders.Any(o => o.Kind == PolicyKind.Focus && o.ObservedTick == 600)), Is.True);
+        }
+
+        private static BuildIdentity Build() => new BuildIdentity { Commit = "test", SourceHash = new string('a', 64), Backend = "test" };
+
+        private static ScheduledInput[] RunSwitchInputs(ScenarioDefinition scenario)
+        {
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            var controller = new PresetController("maintain", 1, gateway);
+            controller.Initialize();
+            for (int i = 0; i < 1200 && !simulation.Capture(1).Result.HasEnded; i++)
+            {
+                long tick = simulation.Capture(1).Tick;
+                if (tick == 600)
+                {
+                    gateway.ResetDoctrine(1, 601);
+                    controller = new PresetController("concentrate", 1, gateway);
+                    controller.Initialize(600);
+                }
+                gateway.Step();
+                controller.Step(simulation.Capture(1));
+            }
+            return gateway.Inputs.ToArray();
         }
     }
 }

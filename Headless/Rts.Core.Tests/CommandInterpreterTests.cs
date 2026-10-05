@@ -44,6 +44,27 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void DoctrineCommandIsReadAndValidatedAlongsideConcreteCommands()
+        {
+            var result = Interpret("{\"commands\":[{\"type\":\"doctrine\",\"kind\":\"\",\"preset\":\"concentrate\"},{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"全部隊\",\"goal\":\"北の拠点\"}],\"say\":\"\"}");
+            Assert.That(result.Doctrine, Is.EqualTo("concentrate"));
+            Assert.That(result.Policies, Has.Count.EqualTo(1));
+
+            var invalid = Interpret("{\"commands\":[{\"type\":\"doctrine\",\"kind\":\"\",\"preset\":\"reckless\"}],\"say\":\"\"}");
+            Assert.That(invalid.Doctrine, Is.Null);
+            Assert.That(invalid.Rejected, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void SmallDoctrineCommandIsExpandedAndValidated()
+        {
+            var result = Interpret("{\"kind\":\"SetDoctrine\",\"scope\":\"\",\"goal\":\"\",\"region\":\"\",\"control\":\"\",\"doctrine\":\"maintain\",\"reason\":\"\"}");
+            Assert.That(result.Unknown, Is.False);
+            Assert.That(result.Doctrine, Is.EqualTo("maintain"));
+            Assert.That(result.Policies, Is.Empty);
+        }
+
+        [Test]
         public void InvalidNamesOwnershipAndRangeAreReportedAndDropped()
         {
             var result = Interpret("{\"commands\":[{\"type\":\"policy\",\"kind\":\"Focus\",\"scope\":\"北の拠点\",\"goal\":\"北の拠点\"},{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"ない軍\",\"goal\":\"北の拠点\"}],\"say\":\"\"}");
