@@ -134,6 +134,7 @@ namespace Rts.UnityHost
         [SerializeField] private string developmentAiInstruction = "北の拠点を守れ";
         [SerializeField] private string developmentAiModel = "local-llm";
         private string developmentAiMessage = "";
+        private bool developmentAiModelListOpen;
 
         /// <summary>細かい判断を試し遊びの陣営1で使うか。変更は次の試合から有効です。</summary>
         public bool FineJudgementEnabled
@@ -447,20 +448,79 @@ namespace Rts.UnityHost
         private void OnGUI()
         {
             if (!developmentAiEntry || liveAi == null || simulation == null) return;
-            var rect = new Rect(Screen.width - 370f, 8f, 360f, 146f);
+            // IMGUI text fields only receive Japanese (IME) composition when the mode is forced on.
+            Input.imeCompositionMode = IMECompositionMode.On;
+            // Placed under the command-log toggle so the two do not overlap.
+            var rect = new Rect(Screen.width - 430f, 40f, 422f, 172f);
             GUI.Box(rect, "試し遊び：参謀（開発用）");
             developmentAiInstruction = GUI.TextField(new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f), developmentAiInstruction ?? "");
-            developmentAiModel = GUI.TextField(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), developmentAiModel ?? "gpt-6-luna");
+            if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
+                developmentAiModelListOpen = !developmentAiModelListOpen;
             if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る"))
             {
-                try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = "解釈中"; }
+                developmentAiModelListOpen = false;
+                try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = ""; }
                 catch (Exception e) { developmentAiMessage = e.Message; }
             }
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 84f, 132f, 24f), "直前を取り消す"))
                 developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
-            GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f), developmentAiMessage ?? "");
-            GUI.Label(new Rect(rect.x + 8f, rect.y + 114f, rect.width - 16f, 24f),
+            GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f),
                 "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
+            GUI.Label(new Rect(rect.x + 8f, rect.y + 112f, rect.width - 16f, 56f),
+                string.IsNullOrEmpty(developmentAiMessage) ? LastInstructionText() : developmentAiMessage);
+
+            // Drawn last so the open list sits on top of the rest of the panel.
+            if (developmentAiModelListOpen)
+            {
+                var models = AiModels;
+                var list = new Rect(rect.x + 8f, rect.y + 80f, rect.width - 156f, models.Count * 24f + 4f);
+                GUI.Box(list, "");
+                for (int i = 0; i < models.Count; i++)
+                {
+                    var option = models[i];
+                    var previous = GUI.enabled;
+                    GUI.enabled = option.Available;
+                    if (GUI.Button(new Rect(list.x + 2f, list.y + 2f + i * 24f, list.width - 4f, 22f),
+                            ModelLabel(option.Model) + (option.Available ? "" : "（キー未設定）")))
+                    {
+                        developmentAiModel = option.Model;
+                        developmentAiModelListOpen = false;
+                    }
+                    GUI.enabled = previous;
+                }
+            }
+        }
+
+        private string ModelLabel(string model)
+        {
+            switch (model)
+            {
+                case "local-llm": return "ローカルLLM（無料）";
+                case "jev": return "Jev（命令1つ）";
+                default: return model ?? "";
+            }
+        }
+
+        /// <summary>One-line state of the latest spoken instruction, so the result is visible without opening the log.</summary>
+        private string LastInstructionText()
+        {
+            var history = AiInstructions;
+            if (history.Count == 0) return "";
+            var last = history[history.Count - 1];
+            string state;
+            switch (last.State)
+            {
+                case AiInstructionState.Interpreting: state = "解釈中…"; break;
+                case AiInstructionState.Executing: state = "実行中"; break;
+                case AiInstructionState.Completed: state = "完了"; break;
+                case AiInstructionState.Cancelled: state = "取り消し"; break;
+                case AiInstructionState.Expired: state = "時間切れ"; break;
+                default: state = "わからない"; break;
+            }
+            var detail = !string.IsNullOrEmpty(last.Say) ? last.Say : last.Reason;
+            if (last.RejectedReasons != null && last.RejectedReasons.Count > 0)
+                detail = (detail ?? "") + "（却下：" + string.Join("、", last.RejectedReasons) + "）";
+            return state + "　" + (detail ?? "") + "　" + last.ActualCostYen.ToString("0.000") + "円";
         }
     }
 }
