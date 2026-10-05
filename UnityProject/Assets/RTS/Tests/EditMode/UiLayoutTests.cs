@@ -97,7 +97,8 @@ namespace Rts.Tests.EditMode
             areas.BeginFrame(1);
             areas.Register(new Rect(10f, 20f, 100f, 50f));
             areas.BeginFrame(2);
-            Assert.IsTrue(areas.ContainsScreen(new Vector2(20f, 730f), 800f));
+            // Screen y 760 is GUI y 40, inside 20..70 (Rect.Contains excludes the bottom edge, so not 70 itself).
+            Assert.IsTrue(areas.ContainsScreen(new Vector2(20f, 760f), 800f));
             Assert.IsFalse(areas.ContainsScreen(new Vector2(20f, 650f), 800f));
         }
     }
