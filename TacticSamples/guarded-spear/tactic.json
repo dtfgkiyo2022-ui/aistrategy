@@ -6,6 +6,8 @@
   "entry": "main.js",
   "apiVersion": 1,
   "description": "攻撃用の歩兵軍団を敵コアへ送り、偵察軍団は自コアを守る戦術。",
+  "style": "auto",
+  "recommended": true,
   "signals": [
     { "name": "allIn", "label": "総攻撃", "needsPoint": false },
     { "name": "holdHere", "label": "ここを守れ", "needsPoint": true }

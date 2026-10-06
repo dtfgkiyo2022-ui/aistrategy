@@ -46,6 +46,7 @@ namespace Rts.UnityHost
         [SerializeField] private string ownTactic = "";
         private TacticCatalogEntry[] tacticEntries = Array.Empty<TacticCatalogEntry>();
         private string[] tacticChoices = new[] { TacticMatchSetup.None };
+        private TacticChoiceView[] tacticChoiceViews = { new TacticChoiceView(TacticMatchSetup.None, "", "", false, "") };
         private TacticMatchSide enemyTacticSide;
         private TacticMatchSide ownTacticSide;
         private TacticChoice enemyTacticChoice;
@@ -164,16 +165,19 @@ namespace Rts.UnityHost
             private readonly LiveMatchHost host;
             private readonly bool ownSide;
             private string[] choices = new[] { TacticMatchSetup.None };
+            private IReadOnlyList<TacticChoiceView> choiceViews = new[] { new TacticChoiceView(TacticMatchSetup.None, "", "", false, "") };
             private TacticHost tacticHost;
             private string reloadMessage = "";
 
             internal TacticChoice(LiveMatchHost host, bool ownSide) { this.host = host; this.ownSide = ownSide; }
-            internal void Bind(string[] choices, TacticHost tacticHost)
+            internal void Bind(string[] choices, IReadOnlyList<TacticChoiceView> choiceViews, TacticHost tacticHost)
             {
                 this.choices = choices ?? new[] { TacticMatchSetup.None };
+                this.choiceViews = choiceViews ?? new[] { new TacticChoiceView(TacticMatchSetup.None, "", "", false, "") };
                 this.tacticHost = tacticHost;
             }
             public string[] Choices { get { return choices; } }
+            public IReadOnlyList<TacticChoiceView> ChoiceViews { get { return choiceViews; } }
             public string Current
             {
                 get { return ownSide ? host.ownTactic : host.enemyTactic; }
@@ -501,8 +505,16 @@ namespace Rts.UnityHost
             var entries = TacticCatalog.Scan(parents, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
             tacticEntries = new List<TacticCatalogEntry>(entries).ToArray();
             var choices = new List<string> { TacticMatchSetup.None };
-            foreach (var entry in tacticEntries) if (entry.IsSelectable) choices.Add(entry.Path);
+            var choiceViews = new List<TacticChoiceView> { new TacticChoiceView(TacticMatchSetup.None, "", "", false, "") };
+            foreach (var entry in tacticEntries)
+            {
+                if (!entry.IsSelectable) continue;
+                choices.Add(entry.Path);
+                choiceViews.Add(new TacticChoiceView(entry.Path, entry.DisplayName, entry.Metadata.Style,
+                    entry.Metadata.Recommended, entry.Metadata.Description));
+            }
             tacticChoices = choices.ToArray();
+            tacticChoiceViews = choiceViews.ToArray();
             ResolveSmokeTactics();
             if (Array.IndexOf(tacticChoices, ownTactic) < 0) ownTactic = TacticMatchSetup.None;
             if (Array.IndexOf(tacticChoices, enemyTactic) < 0) enemyTactic = TacticMatchSetup.None;
@@ -582,8 +594,8 @@ namespace Rts.UnityHost
         public void RefreshTacticList()
         {
             RefreshTacticCatalog();
-            if (enemyTacticChoice != null) enemyTacticChoice.Bind(tacticChoices, enemyTacticSide == null ? null : enemyTacticSide.Host);
-            if (ownTacticChoice != null) ownTacticChoice.Bind(tacticChoices, ownTacticSide == null ? null : ownTacticSide.Host);
+            if (enemyTacticChoice != null) enemyTacticChoice.Bind(tacticChoices, tacticChoiceViews, enemyTacticSide == null ? null : enemyTacticSide.Host);
+            if (ownTacticChoice != null) ownTacticChoice.Bind(tacticChoices, tacticChoiceViews, ownTacticSide == null ? null : ownTacticSide.Host);
         }
 
         private static void OpenPlayerFolder(string leaf)
@@ -756,8 +768,8 @@ namespace Rts.UnityHost
                 panel.OwnDoctrine = ownDoctrine;
                 if (enemyTacticChoice == null) enemyTacticChoice = new TacticChoice(this, false);
                 if (ownTacticChoice == null) ownTacticChoice = new TacticChoice(this, true);
-                enemyTacticChoice.Bind(tacticChoices, enemyTacticSide.Host);
-                ownTacticChoice.Bind(tacticChoices, ownTacticSide.Host);
+                enemyTacticChoice.Bind(tacticChoices, tacticChoiceViews, enemyTacticSide.Host);
+                ownTacticChoice.Bind(tacticChoices, tacticChoiceViews, ownTacticSide.Host);
                 enemyTacticChoice.SetReloadMessage("");
                 ownTacticChoice.SetReloadMessage("");
                 enemyTacticStamp = TacticFileStamp.Capture(enemyTactic);
@@ -885,7 +897,7 @@ namespace Rts.UnityHost
             ownTactic = selection;
             own = PolicyPresets.CreateController(replacement.HasTactic ? "none" : ownPreset, ownFactionId, gateway);
             own.Initialize(tick);
-            ownTacticChoice?.Bind(tacticChoices, ownTacticSide.Host);
+            ownTacticChoice?.Bind(tacticChoices, tacticChoiceViews, ownTacticSide.Host);
             ownTacticStamp = TacticFileStamp.Capture(ownTactic);
             ownTacticChoice?.SetReloadMessage("");
             string report = replacement.HasTactic ? "戦術を " + replacement.Host.Name + " に切り替えました" : "戦術をやめ、お任せに戻しました";
@@ -927,7 +939,7 @@ namespace Rts.UnityHost
                 ownTacticSide = replacement;
                 own = PolicyPresets.CreateController("none", ownFactionId, gateway);
                 own.Initialize(tick);
-                ownTacticChoice?.Bind(tacticChoices, replacement.Host);
+                ownTacticChoice?.Bind(tacticChoices, tacticChoiceViews, replacement.Host);
                 ownTacticChoice?.SetReloadMessage("戦術を読み直しました：" + replacement.Host.Name);
                 ownTacticStamp = TacticFileStamp.Capture(selection);
             }
@@ -936,7 +948,7 @@ namespace Rts.UnityHost
                 enemyTacticSide = replacement;
                 enemy = PolicyPresets.CreateController("none", enemyFactionId, gateway);
                 enemy.Initialize(tick);
-                enemyTacticChoice?.Bind(tacticChoices, replacement.Host);
+                enemyTacticChoice?.Bind(tacticChoices, tacticChoiceViews, replacement.Host);
                 enemyTacticChoice?.SetReloadMessage("戦術を読み直しました：" + replacement.Host.Name);
                 enemyTacticStamp = TacticFileStamp.Capture(selection);
             }
