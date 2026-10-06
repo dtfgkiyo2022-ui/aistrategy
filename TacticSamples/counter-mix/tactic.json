@@ -1,0 +1,14 @@
+{
+  "name": "counter-mix",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "見えている敵の兵種に合わせて、相性のよい兵種を混ぜる守備・反攻戦術。",
+  "params": [
+    { "name": "counterRatioPermille", "label": "兵種切替の優勢割合（‰）", "type": "int", "default": 600, "min": 400, "max": 900, "step": 50 },
+    { "name": "attackThreshold", "label": "反攻に出る兵の数", "type": "int", "default": 18, "min": 5, "max": 60, "step": 1 },
+    { "name": "counterSharePermille", "label": "相性兵を作る割合（‰）", "type": "int", "default": 700, "min": 300, "max": 1000, "step": 50 }
+  ]
+}
