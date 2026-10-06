@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Rts.Contracts;
 
 namespace Rts.Tactics
@@ -32,12 +33,13 @@ namespace Rts.Tactics
             IFrameSource frames,
             ICommandPort commandPort,
             IEconomyPort economyPort,
-            ITacticGlobalPolicyPort globalPolicyPort = null)
+            ITacticGlobalPolicyPort globalPolicyPort = null,
+            Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions = null)
         {
             if (string.IsNullOrEmpty(selection)) return new TacticMatchSide(None, null, null);
             if (loadRuntime == null) throw new ArgumentNullException(nameof(loadRuntime));
             var runtime = loadRuntime(selection) ?? throw new InvalidOperationException("戦術ランタイムを作成できません。");
-            var host = new TacticHost(factionId, frames, commandPort, economyPort, runtime, globalPolicyPort);
+            var host = new TacticHost(factionId, frames, commandPort, economyPort, runtime, globalPolicyPort, versions);
             return new TacticMatchSide(selection, host, "none");
         }
     }

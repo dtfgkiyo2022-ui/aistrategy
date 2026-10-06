@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Tactics;
 using Rts.Providers;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -116,7 +117,7 @@ internal static class SayCommand
                         var policy = action.Policy;
                         var order = new PolicyOrder(0, 0, CommandSource.Ai, policy.Target, policy.Kind, policy.Goal, policy.Priority,
                             policy.AllowedLoss, policy.End, policy.ReservePermille, 0, Array.Empty<PolicyVersion>(), frame.Tick, policy.Expiration);
-                        gateway.Propose(faction, fired.Id, new[] { order }, checked(frame.Tick + 1));
+                        gateway.Propose(faction, fired.Id, TacticOrderVersions.Stamp(new[] { order }, scope => gateway.FactionVersions(faction).Versions(scope)), checked(frame.Tick + 1));
                     }
                     report.Issued.Add(action.Policy.Kind + ":" + action.Policy.Target.Kind + ":" + action.Policy.Goal.Kind);
                 }

@@ -88,7 +88,8 @@ internal static class TacticMatchCommand
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             runtime = loaded.Runtime;
         }
-        return new TacticHost(faction, source, gateway, gateway, runtime);
+        return new TacticHost(faction, source, gateway, gateway, runtime,
+            versions: scope => gateway.FactionVersions(faction).Versions(scope));
     }
 
     private static string SetupJson(ScenarioDefinition scenario, uint faction)

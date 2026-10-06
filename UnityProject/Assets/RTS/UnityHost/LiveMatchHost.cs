@@ -397,7 +397,7 @@ namespace Rts.UnityHost
         /// </summary>
         private TacticMatchSide CreateTacticSide(uint factionId, ref string selection)
         {
-            try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway); }
+            try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway, null, scope => gateway.FactionVersions(factionId).Versions(scope)); }
             catch (Exception e) when (e is InvalidDataException || e is InvalidOperationException || e is ArgumentException)
             {
                 Debug.LogWarning("Tactic for faction " + factionId + " could not be loaded; playing without it: " + e.Message);

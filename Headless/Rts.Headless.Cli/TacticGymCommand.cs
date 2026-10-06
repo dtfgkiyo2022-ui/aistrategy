@@ -59,7 +59,7 @@ public sealed class TacticGymSession : IDisposable
             // Keep the same behavior here; ordinary policy and economy commands are still submitted below.
         }
         if (commands.Policies.Count != 0)
-            gateway.Propose(faction, sequence++, commands.Policies, checked(frame.Tick + 1));
+            gateway.Propose(faction, sequence++, TacticOrderVersions.Stamp(commands.Policies, scope => gateway.FactionVersions(faction).Versions(scope)), checked(frame.Tick + 1));
         foreach (var economy in commands.EconomyCommands) gateway.SubmitEconomy(economy);
 
         for (int i = 0; i < ticks && Tick < maxTicks && !simulation.Capture(faction).Result.HasEnded; i++)
@@ -121,7 +121,8 @@ public sealed class TacticGymSession : IDisposable
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             runtime = loaded.Runtime;
         }
-        return new TacticHost(faction, new SessionFrameSource(simulation), gateway, gateway, runtime);
+        return new TacticHost(faction, new SessionFrameSource(simulation), gateway, gateway, runtime,
+            versions: scope => gateway.FactionVersions(faction).Versions(scope));
     }
 
     private static string SetupJson(ScenarioDefinition scenario, uint faction)

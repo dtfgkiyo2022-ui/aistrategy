@@ -31,7 +31,7 @@ public sealed class TacticTests
     {
         var frame = Frame(Array.Empty<VisibleEnemy>());
         string json = "{\"version\":1,\"commands\":[" +
-            "{\"type\":\"policy\",\"kind\":\"Focus\",\"target\":{\"kind\":\"Army\",\"id\":7},\"goal\":{\"kind\":\"Core\",\"id\":2},\"priority\":80,\"allowedLossPermille\":500,\"reservePermille\":100}," +
+            "{\"type\":\"policy\",\"kind\":\"Focus\",\"target\":{\"kind\":\"Army\",\"id\":7},\"goal\":{\"kind\":\"Core\",\"id\":2},\"priority\":80,\"allowedLossPermille\":500,\"reservePermille\":0}," +
             "{\"type\":\"mystery\"}," +
             "{\"type\":\"policy\",\"kind\":\"Focus\",\"target\":{\"kind\":\"Army\",\"id\":999},\"goal\":{\"kind\":\"Core\",\"id\":2}}]}";
         var result = TacticCommandReader.Read(json, frame);
@@ -102,6 +102,32 @@ public sealed class TacticTests
             Assert.That(outcome.FirstMismatchTick, Is.Null);
             Assert.That(outcome.IsFault, Is.False);
         }
+    }
+
+    /// <summary>
+    /// Sending is not enough: the simulation must take the tactic's orders. Without the current policy versions every
+    /// order after the first revision was dropped as StaleVersion and a tactic played exactly like no tactic (10-06).
+    /// </summary>
+    [Test]
+    public void TacticOrdersAreTakenByTheSimulationNotDroppedAsStale()
+    {
+        var sim = new Battle(MapGenerator.Generate(2, true));
+        var gateway = new CommandGateway(sim);
+        var host = new TacticHost(1, new SimulationFrames(sim), gateway, gateway, new RushTactic(),
+            versions: scope => gateway.FactionVersions(1).Versions(scope));
+        var seen = new Dictionary<ulong, CommandView>();
+        for (int i = 0; i < 2400 && !sim.Capture(1).Result.HasEnded; i++)
+        {
+            host.Tick();
+            gateway.Step();
+            foreach (var c in sim.Capture(1).Commands) if (c.Source == CommandSource.Ai) seen[c.CommandId] = c;
+        }
+        Assert.That(seen.Count, Is.GreaterThan(10), "the tactic's orders must show up as commands");
+        int stale = seen.Values.Count(c => c.Reason == ReasonCode.StaleVersion);
+        int taken = seen.Values.Count(c => c.Status == CommandStatus.Executing || c.Status == CommandStatus.Completed
+            || c.Reason == ReasonCode.Superseded);
+        Assert.That(stale, Is.EqualTo(0), "orders dropped as StaleVersion");
+        Assert.That(taken, Is.GreaterThan(0), "no order of the tactic was ever executed");
     }
 
     [Test]

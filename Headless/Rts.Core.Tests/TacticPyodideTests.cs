@@ -31,7 +31,7 @@ namespace Rts.Core.Tests
             var scenario = MapGenerator.Generate(2, true);
             var simulation = new Battle(scenario);
             var gateway = new CommandGateway(simulation);
-            using var host = new TacticHost(1, new Frames(simulation), gateway, gateway, runtime);
+            using var host = new TacticHost(1, new Frames(simulation), gateway, gateway, runtime, versions: scope => gateway.FactionVersions(1).Versions(scope));
             var startup = Stopwatch.StartNew();
             host.Start("{\"matchSeed\":2,\"factionId\":1}");
             startup.Stop();

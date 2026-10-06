@@ -1,0 +1,9 @@
+{
+  "name": "outpost-first",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "序盤は前哨の確保と防衛を優先し、兵力が整ったら敵コアへ進む戦術。"
+}

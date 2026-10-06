@@ -24,6 +24,6 @@ def on_tick(view):
         'target': {'kind': 'Army', 'id': army['id']},
         'goal': {'kind': 'Core', 'id': target_core},
         'priority': 100, 'allowedLossPermille': 1000 if attack else 300,
-        'reservePermille': 0 if attack else 200,
+        'reservePermille': 0,
     } for army in view['ownArmies']]
     return {'commands': commands}
