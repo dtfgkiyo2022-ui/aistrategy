@@ -35,6 +35,15 @@ python practice/examples/simple_policy_search.py --episodes 2
 
 後者は兵力しきい値を5通り試し、勝率の集計を `best.json` に書き、`TacticSamples/threshold-from-json/main.js` の先頭の `ATTACK_THRESHOLD` を書き換えます。
 
+つまみを対戦結果で自動調整する例もあります。これは機械学習の一番簡単な形である「探索」です。指定した `params` の候補を世代ごとに試し、東西を入れ替えた試合の勝ち数を主にして、決着の早さも使って選びます。既定では同時実行数が2です。
+
+```powershell
+python practice/examples/tune_params.py TacticSamples/guarded-spear guardLossPermille --generations 2 --seeds 2 --jobs 2
+python practice/examples/tune_params.py TacticSamples/guarded-spear guardLossPermille --apply
+```
+
+結果は `practice/out/tune-guarded-spear.json` に保存されます。`--apply` を付けると、最良値を `practice/out/guarded-spear/tactic.json` のコピーへ書き込みます。`TacticSamples` の見本そのものは変更しません。探索の次の段階として、`TacticSamples/numpy-mlp` の見本では numpy の小さなニューラルネットワークで重みを学びます。
+
 ## CLI の要求と応答
 
 CLI は標準入力・標準出力を JSON Lines として扱います。ログと `--profile` の測定値は標準エラーです。
@@ -78,4 +87,3 @@ python -m unittest practice.tests.test_env
 ```
 
 テストは `RTS_CLI` が設定されているか、Release DLL が存在する場合に `reset` → `step` 5回 → `close` を確認します。
-
