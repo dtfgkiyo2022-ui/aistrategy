@@ -23,6 +23,8 @@ D:/rts-verify/smoke/player/Game.exe -batchmode -nographics -rts-smoke -rts-smoke
 | 戦術 | 言語 | 結果 |
 |---|---|---|
 | guarded-spear | JS（Jint） | 動いた。120回呼び、480件の命令がすべて受け付けられ実行された。1回 p50 0.66ms |
-| numpy-mlp | Python（Deno＋Pyodide） | **動かない**。Deno を起動できない |
+| numpy-mlp | Python（Deno＋Pyodide） | 最初は**動かなかった**（Deno を起動できない）。下の修正のあとは動いた：120回呼び、失敗0、480件の命令がすべて受け付けられた（467件が実行まで進んだ）。1回 p50 0.89ms。終了後に deno.exe は残らない |
 
-Python の原因：Unity 6（6000.3）の IL2CPP は、Windows で `System.Diagnostics.Process.Start` を実装していません（`libil2cpp/icalls/System/System.Diagnostics/Process.cpp` の `CreateProcess_internal` が「未実装」で false を返す）。そのため `Win32Exception ... Native error= Success` になります。Headless（.NET）とエディタ（Mono）では動きます。直すには、Windows の API（`CreateProcessW`・`CreatePipe`）を直接呼んで子プロセスを起動する必要があります。
+Python の原因：Unity 6（6000.3）の IL2CPP は、Windows で `System.Diagnostics.Process.Start` を実装していません（`libil2cpp/icalls/System/System.Diagnostics/Process.cpp` の `CreateProcess_internal` が「未実装」で false を返す）。そのため `Win32Exception ... Native error= Success` になります。修正は Windows だけ `CreateProcessW`・`CreatePipe`・Job Object を直接呼び、UTF-8 の標準入出力をつなぐ方法です。
+
+子プロセスの環境変数は `DENO_DIR` だけにしています。`SystemRoot` を渡すと最初の `start` の呼び出しが約 27ms から 50ms に遅くなり、1回 50ms の上限を超えました。標準出力は専用のスレッドで行ごとに読み、スレッドプールを経由しません。

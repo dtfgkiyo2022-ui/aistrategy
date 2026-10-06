@@ -96,6 +96,7 @@
     <Compile Include="LatePushTests.cs" />
     <Compile Include="TacticJsTests.cs" />
     <Compile Include="TacticPyodideTests.cs" />
+    <Compile Include="Win32ChildProcessTests.cs" />
     <Compile Include="TacticCatalogTests.cs" />
     <Compile Include="TacticPackTests.cs" />
     <Compile Include="TacticGymTests.cs" />
