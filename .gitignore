@@ -49,3 +49,7 @@
 # Python のキャッシュ
 __pycache__/
 *.pyc
+
+# Python practice outputs (simple_policy_search.py etc.)
+practice/out/
+__pycache__/

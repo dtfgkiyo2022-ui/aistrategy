@@ -1,0 +1,9 @@
+{
+  "name": "threshold-from-json",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "兵力のしきい値を超えたら敵コアへ攻める、Python の探索結果を入れられる戦術。"
+}
