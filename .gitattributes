@@ -63,3 +63,8 @@
 *.woff filter=lfs diff=lfs merge=lfs -text !eol
 *.woff2 filter=lfs diff=lfs merge=lfs -text !eol
 *.unitypackage filter=lfs diff=lfs merge=lfs -text !eol
+# Tactic runtimes bundled for Python tactics (Deno, Pyodide). 2026-10-06
+*.exe filter=lfs diff=lfs merge=lfs -text !eol
+*.wasm filter=lfs diff=lfs merge=lfs -text !eol
+*.whl filter=lfs diff=lfs merge=lfs -text !eol
+*.zip filter=lfs diff=lfs merge=lfs -text !eol

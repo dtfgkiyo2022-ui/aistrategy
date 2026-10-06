@@ -35,8 +35,9 @@ internal static class TacticMatchCommand
         var simulation = new Battle(scenario);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
-        var west = CreateHost(westName, 1, source, gateway);
-        var east = CreateHost(eastName, 2, source, gateway);
+        string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
+        using var west = CreateHost(westName, 1, source, gateway, runtimes);
+        using var east = CreateHost(eastName, 2, source, gateway, runtimes);
         west?.Start(SetupJson(scenario, 1));
         east?.Start(SetupJson(scenario, 2));
         var westAuto = CreateAuto(westName, 1, gateway); var eastAuto = CreateAuto(eastName, 2, gateway);
@@ -61,6 +62,8 @@ internal static class TacticMatchCommand
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
             pack?.RecordAfterStep(simulation);
         }
+        west?.Dispose();
+        east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))
@@ -73,7 +76,7 @@ internal static class TacticMatchCommand
         return result.IsFault ? 4 : 0;
     }
 
-    private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway)
+    private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway, string runtimes)
     {
         if (name == "auto") return null;
         ITacticRuntime runtime;
@@ -81,11 +84,12 @@ internal static class TacticMatchCommand
         else if (name == "rush") runtime = new RushTactic();
         else
         {
-            var loaded = TacticFolder.Load(name);
+            var loaded = TacticFolder.Load(name, runtimes);
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             runtime = loaded.Runtime;
         }
-        return new TacticHost(faction, source, gateway, gateway, runtime);
+        return new TacticHost(faction, source, gateway, gateway, runtime,
+            versions: scope => gateway.FactionVersions(faction).Versions(scope));
     }
 
     private static string SetupJson(ScenarioDefinition scenario, uint faction)

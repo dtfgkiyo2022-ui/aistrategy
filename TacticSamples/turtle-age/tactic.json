@@ -1,0 +1,9 @@
+{
+  "name": "turtle-age",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "コアを守りながら時代を進め、Age3と十分な兵力がそろってから反撃する戦術。"
+}

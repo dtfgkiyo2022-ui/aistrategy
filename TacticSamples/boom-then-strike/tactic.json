@@ -1,0 +1,9 @@
+{
+  "name": "boom-then-strike",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "成長重視で内政と時代を伸ばし、時刻と兵力の条件がそろったら全軍で攻撃する戦術。"
+}

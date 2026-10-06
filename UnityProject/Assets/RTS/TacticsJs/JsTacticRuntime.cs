@@ -194,6 +194,11 @@ namespace Rts.TacticsJs
                         case 'n': result.Append('\n'); break;
                         case 'r': result.Append('\r'); break;
                         case 't': result.Append('\t'); break;
+                        case 'u':
+                            if (index + 4 > text.Length) throw new FormatException("JSON Unicodeエスケープが未完了です。");
+                            result.Append((char)ushort.Parse(text.Substring(index, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+                            index += 4;
+                            break;
                         default: throw new FormatException("未知のJSONエスケープです。");
                     }
                 }

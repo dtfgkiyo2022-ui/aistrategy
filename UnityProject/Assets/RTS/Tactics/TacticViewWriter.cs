@@ -78,7 +78,10 @@ namespace Rts.Tactics
         {
             var e = frame.Economy;
             if (e == null) { b.Append("null"); return; }
-            b.Append("{\"food\":").Append(e.Food).Append(",\"wood\":").Append(e.Wood).Append(",\"ore\":").Append(e.Ore).Append(",\"metal\":").Append(e.Metal).Append(",\"stone\":").Append(e.Stone).Append(",\"gold\":").Append(e.Gold).Append(",\"gems\":").Append(e.Gems).Append(",\"population\":").Append(e.Population).Append(",\"populationCap\":").Append(e.PopulationCap).Append(",\"civilisation\":").Append(TacticJson.Quote(e.Civ.ToString())).Append(",\"age\":").Append(e.Age).Append(",\"auto\":").Append(e.AutoEconomy ? "true" : "false").Append(",\"policy\":").Append(TacticJson.Quote(e.Policy.ToString()));
+            var next = NextAgeCost(e);
+            bool canAdvanceNow = e.Ages && e.Age < 3 && e.AdvancingTo == CivKind.Primitive &&
+                e.Food >= next.food && e.Wood >= next.wood && e.Gold >= next.gold;
+            b.Append("{\"food\":").Append(e.Food).Append(",\"wood\":").Append(e.Wood).Append(",\"ore\":").Append(e.Ore).Append(",\"metal\":").Append(e.Metal).Append(",\"stone\":").Append(e.Stone).Append(",\"gold\":").Append(e.Gold).Append(",\"gems\":").Append(e.Gems).Append(",\"population\":").Append(e.Population).Append(",\"populationCap\":").Append(e.PopulationCap).Append(",\"civilisation\":").Append(TacticJson.Quote(e.Civ.ToString())).Append(",\"age\":").Append(e.Age).Append(",\"agesEnabled\":").Append(e.Ages ? "true" : "false").Append(",\"advancingTo\":").Append(TacticJson.Quote(e.AdvancingTo.ToString())).Append(",\"advanceRemainingTicks\":").Append(e.AdvanceRemaining).Append(",\"nextAgeCost\":{\"food\":").Append(next.food).Append(",\"wood\":").Append(next.wood).Append(",\"gold\":").Append(next.gold).Append("},\"canAdvanceNow\":").Append(canAdvanceNow ? "true" : "false").Append(",\"auto\":").Append(e.AutoEconomy ? "true" : "false").Append(",\"policy\":").Append(TacticJson.Quote(e.Policy.ToString()));
             b.Append(",\"villagers\":["); var villagers = e.Villagers.Where(x => x.IsOwn && x.Id != 0).OrderBy(x => x.Id).ToArray();
             for (int i = 0; i < villagers.Length; i++) { if (i != 0) b.Append(','); var v = villagers[i]; b.Append("{\"id\":").Append(v.Id).Append(",\"position\":"); Point(b, v.Position); b.Append(",\"activity\":").Append(TacticJson.Quote(v.Activity.ToString())).Append(",\"hp\":").Append(v.Hp).Append('}'); }
             b.Append("],\"buildings\":["); var buildings = e.Buildings.Where(x => x.FactionId == frame.FactionId).OrderBy(x => x.Id).ToArray();
@@ -86,6 +89,14 @@ namespace Rts.Tactics
             b.Append("],\"resources\":["); var resources = e.Resources.OrderBy(x => x.Id).ToArray();
             for (int i = 0; i < resources.Length; i++) { if (i != 0) b.Append(','); var x = resources[i]; b.Append("{\"id\":").Append(x.Id).Append(",\"kind\":").Append(TacticJson.Quote(x.Kind.ToString())).Append(",\"position\":"); Point(b, x.Position); b.Append(",\"remaining\":").Append(x.Remaining).Append('}'); }
             b.Append("]}");
+        }
+
+        private static (int food, int wood, int gold) NextAgeCost(EconomyView e)
+        {
+            if (!e.Ages || e.Age >= 3) return (0, 0, 0);
+            if (e.Civ == CivKind.Primitive) return (e.AdvanceFoodCost, e.AdvanceWoodCost, 0);
+            if (e.Age == 1) return (e.Age2FoodCost, e.Age2WoodCost, 0);
+            return (e.Age3FoodCost, e.Age3WoodCost, e.NextAgeGoldCost);
         }
 
         private static void Point(StringBuilder b, SimPoint p)

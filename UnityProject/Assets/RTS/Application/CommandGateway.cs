@@ -141,7 +141,8 @@ namespace Rts.Application
             if (command == null || command.FactionId < 1 || command.FactionId > 2) throw new ArgumentException("Invalid economy command.", nameof(command));
             economy.Add(command);
         }
-        internal IFactionPolicyVersions FactionVersions(uint faction)
+        /// <summary>The faction's current policy versions, for proposals that must not be dropped as stale.</summary>
+        public IFactionPolicyVersions FactionVersions(uint faction)
         {
             if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
             return new FactionVersionReader(simulation, faction);

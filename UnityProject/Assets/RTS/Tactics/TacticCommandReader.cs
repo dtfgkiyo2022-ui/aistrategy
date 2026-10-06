@@ -78,10 +78,19 @@ namespace Rts.Tactics
             int priority = checked((int)TacticJson.Integer(c, "priority", 100)); if (priority < 0 || priority > 100) throw new InvalidOperationException("優先度は0から100です。");
             int loss = checked((int)TacticJson.Integer(c, "allowedLossPermille", TacticJson.Integer(c, "lossPermille", 1000))); if (loss < 0 || loss > 1000) throw new InvalidOperationException("損害の予算は0から1000です。");
             int reserve = checked((int)TacticJson.Integer(c, "reservePermille", 0)); if (reserve < 0 || reserve > 1000) throw new InvalidOperationException("予備の割合は0から1000です。");
+            // The same rules as Simulation.Payload, checked here so a tactic gets the reason instead of a silent Impossible.
+            if (reserve != 0 && kind != PolicyKind.MaintainReserve) throw new InvalidOperationException("reservePermille は MaintainReserve の方針でだけ使えます（ほかは0）。");
+            if (kind == PolicyKind.Focus && goal.Kind == GoalKind.Core && OwnObjective(frame, goal)) throw new InvalidOperationException("Focus の目標に自分のコアは指定できません（守るなら Defend）。");
+            if (kind == PolicyKind.Defend && (targetScope.Kind == ScopeKind.All || goal.Kind != GoalKind.Outpost && goal.Kind != GoalKind.Core)) throw new InvalidOperationException("Defend は部隊か区域に出し、目標は自分の拠点かコアです。");
+            if ((kind == PolicyKind.AllowAbandon || kind == PolicyKind.MaintainReserve) && goal.Kind != GoalKind.None) throw new InvalidOperationException("この方針には目標を付けません。");
+            if (kind == PolicyKind.ReturnToAuto) throw new InvalidOperationException("ReturnToAuto は戦術からは出せません（人の操作とプリセットだけ）。");
+            if (kind == PolicyKind.Scout && (targetScope.Kind != ScopeKind.Army && targetScope.Kind != ScopeKind.Region || goal.Kind != GoalKind.Point && goal.Kind != GoalKind.Outpost)) throw new InvalidOperationException("Scout は斥候の部隊か区域に出し、目標は地点か拠点です。");
             var end = End(c); long validUntil = TacticJson.Integer(c, "validUntilTick", checked(frame.Tick + 20)); int maxAge = checked((int)TacticJson.Integer(c, "maxObservationAgeTicks", 20));
             if (maxAge < 0 || validUntil < frame.Tick) throw new InvalidOperationException("命令の有効期間が不正です。");
             var flags = ExpireFlags.None;
             string flagText = TacticJson.String(c, "expire", false); if (!string.IsNullOrEmpty(flagText) && !EnumValue(flagText, out flags)) throw new InvalidOperationException("失効条件が不明です。");
+            // An AI order must be able to expire when the view it was based on gets too old (Simulation.Payload).
+            flags |= ExpireFlags.ObservationTooOld;
             return new PolicyOrder(0, 0, CommandSource.Ai, targetScope, kind, goal, (byte)priority, new LossBudget((ushort)loss), end, (ushort)reserve, 0, Array.Empty<PolicyVersion>(), frame.Tick, new Expiration(validUntil, maxAge, flags));
         }
 
@@ -113,7 +122,10 @@ namespace Rts.Tactics
                     if (tech < 1 || tech > 27) throw new InvalidOperationException("研究項目が範囲外です。");
                     return EconomyCommand.Research(frame.FactionId, sequence, blacksmith, (TechKind)tech);
                 case EconomyCommandKind.AdvanceAge:
-                    if (!e.Ages) throw new InvalidOperationException("この試合では時代を進められません。");
+                    if (!e.Ages) throw new InvalidOperationException("agesEnabled が false の試合では時代を進められません（戦況 economy.agesEnabled を確認してください）。");
+                    if (e.AdvancingTo != CivKind.Primitive) throw new InvalidOperationException("時代進行中です（戦況 economy.advancingTo と economy.advanceRemainingTicks を確認してください）。");
+                    var ageCost = e.Civ == CivKind.Primitive ? (e.AdvanceFoodCost, e.AdvanceWoodCost, 0) : e.Age == 1 ? (e.Age2FoodCost, e.Age2WoodCost, 0) : (e.Age3FoodCost, e.Age3WoodCost, e.NextAgeGoldCost);
+                    if (e.Age >= 3 || e.Food < ageCost.Item1 || e.Wood < ageCost.Item2 || e.Gold < ageCost.Item3) throw new InvalidOperationException("時代進行の費用が不足しています（戦況 economy.nextAgeCost と economy.canAdvanceNow を確認してください）。");
                     CivKind civ = EnumRequired<CivKind>(TacticJson.String(c, "civ", true), "文明"); if (civ == CivKind.Primitive) throw new InvalidOperationException("原始文明へは進めません。");
                     return EconomyCommand.Advance(frame.FactionId, sequence, civ);
                 case EconomyCommandKind.SetEconomyPolicy:
@@ -142,7 +154,8 @@ namespace Rts.Tactics
             if (kind == GoalKind.None) return default(PolicyGoal);
             var objective = frame.Objectives.FirstOrDefault(x => x.Kind == kind && x.Id == id);
             if (objective.Id == 0 && id != 0 || !frame.Objectives.Any(x => x.Kind == kind && x.Id == id)) throw new InvalidOperationException("観測していない目標です。");
-            return new PolicyGoal(kind, id, point.RawEqual(default(SimPoint)) ? objective.Position : point);
+            // The simulation accepts a position only on a Point goal; an outpost or core goal is named by its id alone.
+            return new PolicyGoal(kind, id, default(SimPoint));
         }
 
         private static EndCondition End(Dictionary<string, object> c)

@@ -1,0 +1,9 @@
+{
+  "name": "numpy MLP：守る／攻める",
+  "author": "AI Command RTS",
+  "version": "1.0.0",
+  "language": "python",
+  "entry": "main.py",
+  "apiVersion": 1,
+  "description": "numpyで小さな全結合モデルを読み込み、観測した兵力と時刻から守備・攻撃を選びます。"
+}

@@ -17,6 +17,12 @@ namespace Rts.Tactics
         IReadOnlyList<string> TakeConsoleLines();
     }
 
+    /// <summary>Optional limits for runtimes whose failures require an earlier fallback.</summary>
+    public interface ITacticFailurePolicy
+    {
+        int ConsecutiveFailureLimit { get; }
+    }
+
     /// <summary>Optional receiver for the three whole-faction doctrine shortcuts.</summary>
     public interface ITacticGlobalPolicyPort
     {
@@ -47,7 +53,7 @@ namespace Rts.Tactics
     }
 
     /// <summary>Calls one faction's tactic every twenty simulation ticks and sends ordinary logged proposals.</summary>
-    public sealed class TacticHost
+    public sealed class TacticHost : IDisposable
     {
         public const int DecisionIntervalTicks = 20;
         public const int FailureLimit = 10;
@@ -57,6 +63,7 @@ namespace Rts.Tactics
         private readonly IEconomyPort economyPort;
         private readonly ITacticRuntime runtime;
         private readonly ITacticGlobalPolicyPort globalPolicyPort;
+        private readonly Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions;
         private readonly List<TacticFailure> failures = new List<TacticFailure>();
         private readonly List<string> recentConsoleLines = new List<string>();
         private ulong sequence = 1;
@@ -67,10 +74,11 @@ namespace Rts.Tactics
         private int sentCommandCount;
         private int rejectedCommandCount;
 
-        public TacticHost(uint factionId, IFrameSource frames, ICommandPort commandPort, IEconomyPort economyPort, ITacticRuntime runtime, ITacticGlobalPolicyPort globalPolicyPort = null)
+        public TacticHost(uint factionId, IFrameSource frames, ICommandPort commandPort, IEconomyPort economyPort, ITacticRuntime runtime, ITacticGlobalPolicyPort globalPolicyPort = null,
+            Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions = null)
         {
             if (factionId < 1 || factionId > 2) throw new ArgumentOutOfRangeException(nameof(factionId));
-            this.factionId = factionId; this.frames = frames ?? throw new ArgumentNullException(nameof(frames)); this.commandPort = commandPort ?? throw new ArgumentNullException(nameof(commandPort)); this.economyPort = economyPort; this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime)); this.globalPolicyPort = globalPolicyPort;
+            this.factionId = factionId; this.frames = frames ?? throw new ArgumentNullException(nameof(frames)); this.commandPort = commandPort ?? throw new ArgumentNullException(nameof(commandPort)); this.economyPort = economyPort; this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime)); this.globalPolicyPort = globalPolicyPort; this.versions = versions;
         }
 
         public string Name => runtime.Name;
@@ -110,7 +118,7 @@ namespace Rts.Tactics
                 if (result.Commands.GlobalPolicy != null) globalPolicyPort?.SetGlobalPolicy(factionId, result.Commands.GlobalPolicy, frame.Tick);
                 if (result.Commands.Policies.Count != 0)
                 {
-                    commandPort.Propose(factionId, sequence++, result.Commands.Policies, checked(frame.Tick + 1));
+                    commandPort.Propose(factionId, sequence++, WithCurrentVersions(result.Commands.Policies), checked(frame.Tick + 1));
                     result.SentPolicies = result.Commands.Policies.Count;
                 }
                 if (economyPort != null) foreach (var command in result.Commands.EconomyCommands) { economyPort.SubmitEconomy(command); result.SentEconomy++; }
@@ -130,10 +138,14 @@ namespace Rts.Tactics
         private TacticFailure RecordFailure(long tick, Exception error)
         {
             consecutiveFailures++;
-            if (consecutiveFailures >= FailureLimit) disabled = true;
+            int limit = runtime is ITacticFailurePolicy policy ? policy.ConsecutiveFailureLimit : FailureLimit;
+            if (consecutiveFailures >= limit) Dispose();
             var failure = new TacticFailure { Tick = tick, RuntimeName = Name, Reason = error.GetType().Name + ": " + error.Message, Consecutive = consecutiveFailures };
             failures.Add(failure); return failure;
         }
+
+        private IReadOnlyList<PolicyOrder> WithCurrentVersions(IReadOnlyList<PolicyOrder> orders)
+            => versions == null ? orders : TacticOrderVersions.Stamp(orders, versions);
 
         private void CaptureConsoleLines(TacticHostTickResult result)
         {
@@ -149,5 +161,42 @@ namespace Rts.Tactics
 
         // Kept here instead of depending on the JavaScript assembly: native tactics can also expose logs.
         private const int RecentConsoleLimit = 20;
+
+        public void Dispose()
+        {
+            if (disabled) return;
+            disabled = true;
+            (runtime as IDisposable)?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Stamps tactic orders with the policy versions the faction can see now, the same way the doctrine presets do.
+    /// An order carrying revision 0 is dropped by the simulation as StaleVersion once its target has been revised,
+    /// so without this a tactic stops having any effect after the first policy change (found 2026-10-06).
+    /// </summary>
+    public static class TacticOrderVersions
+    {
+        public static IReadOnlyList<PolicyOrder> Stamp(IReadOnlyList<PolicyOrder> orders, Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions)
+        {
+            if (orders == null) throw new ArgumentNullException(nameof(orders));
+            if (versions == null) throw new ArgumentNullException(nameof(versions));
+            var stamped = new PolicyOrder[orders.Count];
+            for (int i = 0; i < orders.Count; i++)
+            {
+                var o = orders[i];
+                var snapshot = versions(o.Target) ?? Array.Empty<PolicyVersion>();
+                ulong revision = 0;
+                var parents = new List<PolicyVersion>();
+                foreach (var v in snapshot)
+                {
+                    if (v.Scope.Equals(o.Target)) revision = v.Revision;
+                    else parents.Add(v);
+                }
+                stamped[i] = new PolicyOrder(o.CommandId, o.BatchId, o.Source, o.Target, o.Kind, o.Goal, o.Priority,
+                    o.AllowedLoss, o.End, o.ReservePermille, revision, parents.ToArray(), o.ObservedTick, o.Expiration);
+            }
+            return stamped;
+        }
     }
 }

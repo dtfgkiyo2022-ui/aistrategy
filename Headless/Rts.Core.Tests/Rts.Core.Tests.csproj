@@ -95,8 +95,10 @@
     <Compile Include="RegionTests.cs" />
     <Compile Include="LatePushTests.cs" />
     <Compile Include="TacticJsTests.cs" />
+    <Compile Include="TacticPyodideTests.cs" />
     <Compile Include="TacticCatalogTests.cs" />
     <Compile Include="TacticPackTests.cs" />
+    <Compile Include="TacticGymTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>

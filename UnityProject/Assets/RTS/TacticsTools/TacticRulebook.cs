@@ -93,7 +93,7 @@ namespace Rts.Tactics
                 ("visibleEnemies[]", "現在見えている敵の id/kind/position"), ("visibleEnemies[].position", "x/z。メートル"),
                 ("contacts[]", "id/position/lastSeenTick/min/max/visible/uncertain/strengthUnknown/absent/covered"), ("contacts[].covered", "この接触に含まれる観測済み接触ID"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
-                ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/auto/policy"),
+                ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy")
             };

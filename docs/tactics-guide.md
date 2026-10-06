@@ -1,0 +1,111 @@
+# 戦術を作って遊ぶ手引き
+
+この手引きは、プログラミングが少しできる人にも、ほとんど初めての人にも向けたものです。
+
+> **今の版について（2026-10）**：`dotnet ...` で始まるコマンド（ルールブックを作る・試合を画面なしで回す・練習場）は、開発中のリポジトリから動かす前提です。製品版ではこれらをゲームに組み込む予定です。それまでは、試合の記録パックの中にある `rulebook.md`（その試合のルールブック）を使ってください。
+
+## 目次
+
+1. [戦術とは何か](#戦術とは何か)
+2. [戦術を置く場所](#戦術を置く場所)
+3. [はじめての戦術](#はじめての戦術)
+4. [Claude Code・ChatGPTに頼む文例](#claude-codechatgptに頼む文例)
+5. [試合の後の振り返り](#試合の後の振り返り)
+6. [練習場で学習して戦術に入れる](#練習場で学習して戦術に入れる)
+7. [決まりごと](#決まりごと)
+
+## 戦術とは何か
+
+戦術は「お任せの戦い方」を自分のプログラムで決める仕組みです。試合中はおよそ1秒ごとに見えている戦況を受け取り、方針や内政の命令を返します。兵士一人ひとりを操作するのではなく、「守る」「集める」「攻める」のような大きな判断を任せます。
+
+## 戦術を置く場所
+
+戦術は次のフォルダに1つずつ置きます。`<名前>` は半角英数字などの分かりやすい名前にしてください。
+
+```text
+Documents\AiCommandRts\Tactics\<名前>\
+  tactic.json
+  main.js          （JavaScriptの場合）
+  または main.py   （Pythonの場合）
+```
+
+`tactic.json` には名前、作者、言語、入口、APIの版などを書きます。既存の `TacticSamples` のフォルダをコピーして始めると安全です。ゲームの試合設定を開いて「一覧を更新」を押すと、選択肢だけが読み直されます。試合はやり直しません。戦術のフォルダがなければ、パネルの「戦術のフォルダを開く」で作成できます。
+
+## はじめての戦術
+
+まず、同梱の `defend-then-push` を自分のフォルダへコピーします。PowerShellなら次のようにします。
+
+```powershell
+$tactics = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'AiCommandRts\Tactics'
+New-Item -ItemType Directory -Force $tactics | Out-Null
+Copy-Item -Recurse -Force '.\TacticSamples\defend-then-push' (Join-Path $tactics 'my-first-tactic')
+```
+
+`my-first-tactic\main.js` をメモ帳やClaude Codeで開き、`soldiers > 30` の `30` を `40` に変えます。これは「兵が40人を超えるまで守る」という変更です。ゲームを起動して、試合の設定で「一覧を更新」を押し、自軍の戦術に `my-first-tactic` を選びます。何度か試合を行い、守る時間や攻め始める時期が変わったかを記録パックで確かめてください。
+
+## Claude Code・ChatGPTに頼む文例
+
+コードが分からなくても、ルールと目的を伝えれば作れます。次の文をそのまま貼り、必要な部分だけ書き換えてください。
+
+```text
+ルールブック（tactic-rulebook で作る rulebook.md）を読んで、敵の兵が自軍コアに近づいたら最寄りの軍団を守備に回し、危険がなくなったら敵コアを攻める戦術を書いて。tactic.json と main.js を含むフォルダで出力して。
+```
+
+```text
+この記録パック（Documents\AiCommandRts\Packs\＜試合のフォルダ＞）を読んで、負けた理由と直し方を考えて。原因を推測と事実に分け、my-first-tactic\main.js を直して。変更点と試す数字も説明して。
+```
+
+```text
+ルールブックとこの戦術フォルダを読んで、Python（numpy）で同じ方針を書いて。Pyodideの試合内ではファイル・ネット・環境変数を使わず、tactic.json、main.py、必要ならmodelsフォルダだけを作って。
+```
+
+```text
+defend-then-push を元に、守る人数のしきい値を試合の開始時の兵力と経過tickから計算する戦術へ変更して。既存の命令形式を守り、変更したファイルだけを示して。
+```
+
+ルールブックはCLIで作れます。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-rulebook --out .\rulebook
+Get-Content .\rulebook\rulebook.md
+```
+
+## 試合の後の振り返り
+
+試合が終わると記録パックが `Documents\AiCommandRts\Packs\` に保存されます。パネルの「記録パックのフォルダを開く」から開けます。まずパック内の `README.md` を読み、その指示どおりに進めてください。次に見る順番の目安は次のとおりです。
+
+1. `README.md`：このパックの版、試合条件、見るべきファイル。
+2. 時系列のJSONやCSV：いつ接敵し、拠点を失い、命令を出したか。
+3. 命令の記録：どのtickにどの戦術の命令が出て、受理・破棄・失敗になったか。
+4. `replay` と状態ハッシュ：同じ試合を再生できるか。
+5. 振り返り：霧を外した診断と、敗因の候補。推測は事実と分けて読む。
+
+「兵力が足りなかった」のような結果だけでなく、「北を守る命令を出した直後に南を失った」「返事が遅れて命令が間に合わなかった」のように、次に試す数字や方針を1つ決めるのがコツです。
+
+## 練習場で学習して戦術に入れる
+
+ゲームの外にある `practice/` は、試合を何度も回して数字やモデルを試す場所です。まずCLIをビルドし、PowerShellでDLLの場所を設定します。
+
+```powershell
+dotnet build Headless/Rts.Headless.Cli/Rts.Headless.Cli.csproj -c Release
+$env:RTS_CLI = (Resolve-Path Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll)
+python -m unittest practice.tests.test_env
+```
+
+しきい値を探す例は `practice/examples/simple_policy_search.py` です。結果を `TacticSamples/threshold-from-json` のような戦術フォルダへ入れ、ゲームで選びます。`threshold-from-json` は、兵力がしきい値を超えるまで守り、その後に攻めます。
+
+機械学習を使うなら `TacticSamples/numpy-mlp` を見本にします。`practice/` で学習した重みを `models/policy.npz` に保存し、`main.py` がそのデータを読む形にします。試合中に学習を実行するのではなく、試合の外で学習したデータを試合中に推論するだけにしてください。
+
+```powershell
+python practice/examples/simple_policy_search.py --episodes 2
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-match --map-seed 2 --ticks 1200 --west-tactic TacticSamples/numpy-mlp --east-tactic auto
+```
+
+## 決まりごと
+
+- 戦術の判断は1回50ms以内を目安にします。返事が間に合わない回は命令なしで、今の方針が続きます。
+- 失敗が続くと戦術は停止し、試合の残りは標準のお任せに戻ります。
+- 戦術はファイル、ネットワーク、環境変数、キー、プロセス起動に触れません。共有された戦術も箱の中で動きます。
+- 試合に使うのは `tactic.json` とコード、同梱したデータだけです。npmやpipを試合中に取りに行きません。
+- 人の命令が戦術より優先されます。困ったときは一度戦術を外して、人の命令だけで同じ状況を試してください。
+- Pythonでnumpyを使う場合はPyodideの見本に合わせます。普通のPythonは自分のPCで試す用途に限り、他人と共有する戦術には使いません。

@@ -17,7 +17,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -273,7 +273,15 @@ namespace Rts.UnityHost
             liveAi = null;
         }
 
-        private void OnDestroy() { StopLiveAi(); StopExternal(); }
+        private void OnDestroy() { StopTactics(); StopLiveAi(); StopExternal(); }
+
+        private void OnDisable() { StopTactics(); }
+
+        private void StopTactics()
+        {
+            ownTacticSide?.Host?.Dispose();
+            enemyTacticSide?.Host?.Dispose();
+        }
 
         // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
         // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
@@ -341,7 +349,7 @@ namespace Rts.UnityHost
             string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (!string.IsNullOrEmpty(documents)) parents.Add(Path.Combine(documents, "AiCommandRts", "Tactics"));
 
-            var entries = TacticCatalog.Scan(parents);
+            var entries = TacticCatalog.Scan(parents, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
             tacticEntries = new List<TacticCatalogEntry>(entries).ToArray();
             var choices = new List<string> { TacticMatchSetup.None };
             foreach (var entry in tacticEntries) if (entry.IsSelectable) choices.Add(entry.Path);
@@ -350,9 +358,35 @@ namespace Rts.UnityHost
             if (Array.IndexOf(tacticChoices, enemyTactic) < 0) enemyTactic = TacticMatchSetup.None;
         }
 
+        public void OpenTacticsFolder()
+        {
+            OpenPlayerFolder("Tactics");
+        }
+
+        public void OpenPacksFolder()
+        {
+            OpenPlayerFolder("Packs");
+        }
+
+        public void RefreshTacticList()
+        {
+            RefreshTacticCatalog();
+            if (enemyTacticChoice != null) enemyTacticChoice.Bind(tacticChoices, enemyTacticSide == null ? null : enemyTacticSide.Host);
+            if (ownTacticChoice != null) ownTacticChoice.Bind(tacticChoices, ownTacticSide == null ? null : ownTacticSide.Host);
+        }
+
+        private static void OpenPlayerFolder(string leaf)
+        {
+            string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (string.IsNullOrEmpty(documents)) return;
+            string folder = Path.Combine(documents, "AiCommandRts", leaf);
+            Directory.CreateDirectory(folder);
+            UnityEngine.Application.OpenURL("file:///" + folder.Replace('\\', '/'));
+        }
+
         private static ITacticRuntime LoadTacticRuntime(string path)
         {
-            var loaded = TacticFolder.Load(path);
+            var loaded = TacticFolder.Load(path, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             return loaded.Runtime;
         }
@@ -363,7 +397,7 @@ namespace Rts.UnityHost
         /// </summary>
         private TacticMatchSide CreateTacticSide(uint factionId, ref string selection)
         {
-            try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway); }
+            try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway, null, scope => gateway.FactionVersions(factionId).Versions(scope)); }
             catch (Exception e) when (e is InvalidDataException || e is InvalidOperationException || e is ArgumentException)
             {
                 Debug.LogWarning("Tactic for faction " + factionId + " could not be loaded; playing without it: " + e.Message);
@@ -384,6 +418,7 @@ namespace Rts.UnityHost
 
         public void Begin()
         {
+            StopTactics();
             if (mapSeed == 0) mapSeed = FreshSeed();
             RefreshTacticCatalog();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
@@ -506,6 +541,7 @@ namespace Rts.UnityHost
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
             panel.MatchPackPathProvider = () => MatchPackPath;
+            panel.PlayerFiles = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
@@ -614,6 +650,7 @@ namespace Rts.UnityHost
 
         private void FinishMatchPack()
         {
+            StopTactics();
             if (matchPack == null) return;
             try
             {

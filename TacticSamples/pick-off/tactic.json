@@ -1,0 +1,9 @@
+{
+  "name": "pick-off",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "自軍より小さいと推定できる接触へ集中し、大きな接触からは自軍コアへ退く戦術。"
+}
