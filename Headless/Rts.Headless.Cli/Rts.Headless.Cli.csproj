@@ -8,6 +8,11 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />
+    <!-- The JavaScript tactic runtime (Jint) runs outside the simulation, like the providers, so it is linked here, not in Rts.Core. -->
+    <Compile Include="../../UnityProject/Assets/RTS/TacticsJs/**/*.cs" Link="TacticsJs/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Reference Include="Jint" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/Jint.dll" />
+    <Reference Include="Acornima" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/Acornima.dll" />
+    <Reference Include="System.Runtime.CompilerServices.Unsafe" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/System.Runtime.CompilerServices.Unsafe.dll" />
     <!-- The external-model provider. It is not part of the deterministic core, so it is linked here, not in Rts.Core. -->
     <Compile Include="../../UnityProject/Assets/RTS/Providers/**/*.cs" Link="Providers/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

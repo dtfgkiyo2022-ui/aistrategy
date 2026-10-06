@@ -15,6 +15,9 @@
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" PrivateAssets="all" />
     <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />
     <ProjectReference Include="../Rts.Headless.Cli/Rts.Headless.Cli.csproj" />
+    <Reference Include="Jint" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/Jint.dll" />
+    <Reference Include="Acornima" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/Acornima.dll" />
+    <Reference Include="System.Runtime.CompilerServices.Unsafe" HintPath="../../UnityProject/Assets/RTS/TacticsJs/Plugins/System.Runtime.CompilerServices.Unsafe.dll" />
     <Compile Include="IndicatorTests.cs" />
     <Compile Include="PhaseDiffTests.cs" />
     <Compile Include="ScenarioScaleTests.cs" />
@@ -91,6 +94,7 @@
     <Compile Include="EconomyScaleMeasurementTests.cs" />
     <Compile Include="RegionTests.cs" />
     <Compile Include="LatePushTests.cs" />
+    <Compile Include="TacticJsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
   </ItemGroup>

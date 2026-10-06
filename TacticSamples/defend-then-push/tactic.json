@@ -1,0 +1,9 @@
+{
+  "name": "defend-then-push",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "兵力が30人を超えるまで自陣コアを守り、その後に全軍で敵コアへ進む戦術。"
+}
