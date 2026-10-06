@@ -115,6 +115,14 @@ python -m unittest practice.tests.test_env
 
 しきい値を探す例は `practice/examples/simple_policy_search.py` です。結果を `TacticSamples/threshold-from-json` のような戦術フォルダへ入れ、ゲームで選びます。`threshold-from-json` は、兵力がしきい値を超えるまで守り、その後に攻めます。
 
+戦術の `params` を対戦結果から自動で調整するなら、`practice/examples/tune_params.py` を使います。これは機械学習の一番簡単な形である「探索」の見本で、候補値を世代ごとに試し、東西を入れ替えた数試合の勝ち数と決着の早さから次の候補を選びます。結果は `practice/out/tune-<戦術名>.json` に残り、`--apply` を付けた場合だけ `practice/out/<戦術名>/` にコピーした戦術の既定値へ反映します。
+
+```powershell
+python practice/examples/tune_params.py TacticSamples/guarded-spear guardLossPermille --generations 2 --seeds 2 --jobs 2
+```
+
+探索の次は、`TacticSamples/numpy-mlp` の見本のように numpy で重みを学習し、試合中は学習済みデータを読む流れです。つまり、まず数字の探索、次にモデルの重みの学習、最後に戦術へ組み込む、という順番です。
+
 機械学習を使うなら `TacticSamples/numpy-mlp` を見本にします。`practice/` で学習した重みを `models/policy.npz` に保存し、`main.py` がそのデータを読む形にします。試合中に学習を実行するのではなく、試合の外で学習したデータを試合中に推論するだけにしてください。
 
 ```powershell
