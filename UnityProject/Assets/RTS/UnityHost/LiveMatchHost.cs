@@ -50,6 +50,12 @@ namespace Rts.UnityHost
         private TacticChoice ownTacticChoice;
         private MatchPackWriter matchPack;
         private string matchPackPath = "";
+        [SerializeField] private bool enemyTacticAutoReload;
+        [SerializeField] private bool ownTacticAutoReload;
+        private readonly TacticReloadPoller tacticReloadPoller = new TacticReloadPoller(TimeSpan.FromSeconds(3));
+        private TacticFileStamp enemyTacticStamp;
+        private TacticFileStamp ownTacticStamp;
+        private string rulebookStatus = "";
 
         /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
         private sealed class OwnDoctrineChoice : IOpponentControl
@@ -76,6 +82,7 @@ namespace Rts.UnityHost
             private readonly bool ownSide;
             private string[] choices = new[] { TacticMatchSetup.None };
             private TacticHost tacticHost;
+            private string reloadMessage = "";
 
             internal TacticChoice(LiveMatchHost host, bool ownSide) { this.host = host; this.ownSide = ownSide; }
             internal void Bind(string[] choices, TacticHost tacticHost)
@@ -112,6 +119,19 @@ namespace Rts.UnityHost
             }
             public IReadOnlyDictionary<string, object> ParamValues { get { return tacticHost == null ? new Dictionary<string, object>() : tacticHost.ParamValues; } }
             public bool SetParam(string name, object value) { return tacticHost != null && ownSide && tacticHost.SetParam(name, value); }
+            public bool AutoReload
+            {
+                get { return ownSide ? host.ownTacticAutoReload : host.enemyTacticAutoReload; }
+                set { if (ownSide) host.ownTacticAutoReload = value; else host.enemyTacticAutoReload = value; }
+            }
+            public string ReloadMessage { get { return reloadMessage; } }
+            public bool Reload()
+            {
+                var result = host.TryReloadTactic(ownSide, false);
+                reloadMessage = result.Success ? result.Report : result.Reason;
+                return result.Success;
+            }
+            internal void SetReloadMessage(string message) { reloadMessage = message ?? ""; }
         }
         private float accumulated;
         private int speedMultiplier = 1;
@@ -379,6 +399,34 @@ namespace Rts.UnityHost
             OpenPlayerFolder("Packs");
         }
 
+        public string RulebookStatus { get { return rulebookStatus; } }
+
+        public void ExportRulebook()
+        {
+            if (currentScenario == null)
+            {
+                rulebookStatus = "ルールブックを書き出せません：試合が開始されていません。";
+                return;
+            }
+            try
+            {
+                string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                if (string.IsNullOrEmpty(documents)) throw new IOException("Documentsフォルダが見つかりません。");
+                string folder = Path.Combine(documents, "AiCommandRts", "Rulebook");
+                Directory.CreateDirectory(folder);
+                var book = TacticRulebook.Write(currentScenario);
+                File.WriteAllText(Path.Combine(folder, "rulebook.md"), book.markdown, new System.Text.UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(folder, "rulebook.json"), book.json, new System.Text.UTF8Encoding(false));
+                rulebookStatus = "ルールブックを書き出しました：" + folder;
+                OpenFolder(folder);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
+            {
+                rulebookStatus = "ルールブックを書き出せません：" + e.Message;
+                Debug.LogWarning(rulebookStatus);
+            }
+        }
+
         public void RefreshTacticList()
         {
             RefreshTacticCatalog();
@@ -392,6 +440,11 @@ namespace Rts.UnityHost
             if (string.IsNullOrEmpty(documents)) return;
             string folder = Path.Combine(documents, "AiCommandRts", leaf);
             Directory.CreateDirectory(folder);
+            UnityEngine.Application.OpenURL("file:///" + folder.Replace('\\', '/'));
+        }
+
+        private static void OpenFolder(string folder)
+        {
             UnityEngine.Application.OpenURL("file:///" + folder.Replace('\\', '/'));
         }
 
@@ -542,6 +595,10 @@ namespace Rts.UnityHost
             if (ownTacticChoice == null) ownTacticChoice = new TacticChoice(this, true);
             enemyTacticChoice.Bind(tacticChoices, enemyTacticSide.Host);
             ownTacticChoice.Bind(tacticChoices, ownTacticSide.Host);
+            enemyTacticChoice.SetReloadMessage("");
+            ownTacticChoice.SetReloadMessage("");
+            enemyTacticStamp = TacticFileStamp.Capture(enemyTactic);
+            ownTacticStamp = TacticFileStamp.Capture(ownTactic);
             panel.OpponentTactic = enemyTacticChoice;
             panel.OwnTactic = ownTacticChoice;
             // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
@@ -649,8 +706,90 @@ namespace Rts.UnityHost
             own = PolicyPresets.CreateController(replacement.HasTactic ? "none" : ownPreset, ownFactionId, gateway);
             own.Initialize(tick);
             ownTacticChoice?.Bind(tacticChoices, ownTacticSide.Host);
+            ownTacticStamp = TacticFileStamp.Capture(ownTactic);
+            ownTacticChoice?.SetReloadMessage("");
             string report = replacement.HasTactic ? "戦術を " + replacement.Host.Name + " に切り替えました" : "戦術をやめ、お任せに戻しました";
             return AiTacticChangeResult.Ok(report);
+        }
+
+        private AiTacticChangeResult TryReloadTactic(bool ownSide, bool automatic)
+        {
+            if (simulation == null || gateway == null || currentScenario == null)
+                return AiTacticChangeResult.Fail("試合が開始されていません。");
+            var oldSide = ownSide ? ownTacticSide : enemyTacticSide;
+            var oldHost = oldSide == null ? null : oldSide.Host;
+            string selection = ownSide ? ownTactic : enemyTactic;
+            uint factionId = ownSide ? ownFactionId : enemyFactionId;
+            if (oldHost == null || string.IsNullOrEmpty(selection))
+                return AiTacticChangeResult.Fail("読み直す戦術が選ばれていません。");
+
+            TacticMatchSide replacement = null;
+            try
+            {
+                replacement = TacticReloadBuilder.CreateReplacement(factionId, selection, LoadTacticRuntime, this, gateway, gateway,
+                    oldHost, TacticSetupJson(currentScenario, factionId), null,
+                    scope => gateway.FactionVersions(factionId).Versions(scope));
+            }
+            catch (Exception e)
+            {
+                replacement?.Host?.Dispose();
+                string reason = "戦術の読み直しに失敗しました: " + e.Message;
+                RecordTacticReload(factionId, selection, false, automatic, reason);
+                if (ownSide) ownTacticChoice?.SetReloadMessage(reason); else enemyTacticChoice?.SetReloadMessage(reason);
+                return AiTacticChangeResult.Fail(reason);
+            }
+
+            long tick = simulation.Capture(factionId).Tick;
+            gateway.ResetDoctrine(factionId, checked(tick + 1));
+            oldHost.Dispose();
+            if (ownSide)
+            {
+                ownTacticSide = replacement;
+                own = PolicyPresets.CreateController("none", ownFactionId, gateway);
+                own.Initialize(tick);
+                ownTacticChoice?.Bind(tacticChoices, replacement.Host);
+                ownTacticChoice?.SetReloadMessage("戦術を読み直しました：" + replacement.Host.Name);
+                ownTacticStamp = TacticFileStamp.Capture(selection);
+            }
+            else
+            {
+                enemyTacticSide = replacement;
+                enemy = PolicyPresets.CreateController("none", enemyFactionId, gateway);
+                enemy.Initialize(tick);
+                enemyTacticChoice?.Bind(tacticChoices, replacement.Host);
+                enemyTacticChoice?.SetReloadMessage("戦術を読み直しました：" + replacement.Host.Name);
+                enemyTacticStamp = TacticFileStamp.Capture(selection);
+            }
+            string report = (automatic ? "自動で" : "") + "戦術を読み直しました：" + replacement.Host.Name;
+            RecordTacticReload(factionId, selection, true, automatic, report);
+            return AiTacticChangeResult.Ok(report);
+        }
+
+        private void RecordTacticReload(uint factionId, string selection, bool success, bool automatic, string reason)
+        {
+            if (matchPack == null) return;
+            long tick = simulation == null ? 0 : simulation.Capture(factionId).Tick;
+            matchPack.RecordTacticReload(DateTime.UtcNow, tick, factionId, selection, success, automatic, reason);
+        }
+
+        private void CheckAutomaticTacticReloads()
+        {
+            if (!tacticReloadPoller.ShouldCheck(DateTime.UtcNow)) return;
+            CheckAutomaticTacticReload(false);
+            CheckAutomaticTacticReload(true);
+        }
+
+        private void CheckAutomaticTacticReload(bool ownSide)
+        {
+            var choice = ownSide ? ownTacticChoice : enemyTacticChoice;
+            if (choice == null || !choice.AutoReload || !choice.Active) return;
+            string selection = ownSide ? ownTactic : enemyTactic;
+            var current = TacticFileStamp.Capture(selection);
+            var previous = ownSide ? ownTacticStamp : enemyTacticStamp;
+            if (current == previous) return;
+            var result = TryReloadTactic(ownSide, true);
+            choice.SetReloadMessage(result.Success ? result.Report : result.Reason);
+            if (ownSide) ownTacticStamp = current; else enemyTacticStamp = current;
         }
 
         private string ResolveTacticSelection(string name)
@@ -788,6 +927,9 @@ namespace Rts.UnityHost
         private void Update()
         {
             if (simulation == null) return;
+            // Deliberately polled on Unity's main thread. This is a presentation convenience and never enters the
+            // simulation's decision path; the wall clock keeps it independent of pause and match speed.
+            CheckAutomaticTacticReloads();
             if (port.RestartRequested || externalRestartRequested || matchRestartRequested)
             {
                 aiDelayTicks = port.DelayTicks;

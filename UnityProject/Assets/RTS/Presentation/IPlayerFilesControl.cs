@@ -6,5 +6,7 @@ namespace Rts.Presentation
         void OpenTacticsFolder();
         void OpenPacksFolder();
         void RefreshTacticList();
+        void ExportRulebook();
+        string RulebookStatus { get; }
     }
 }

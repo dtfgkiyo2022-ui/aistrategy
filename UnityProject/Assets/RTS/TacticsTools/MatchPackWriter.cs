@@ -66,6 +66,22 @@ namespace Rts.Tactics
             b.Append('}'); tacticLines.Add(b.ToString());
         }
 
+        /// <summary>Records a manual or automatic tactic reload in the same JSONL stream as tactic calls.</summary>
+        public void RecordTacticReload(DateTime utcTime, long tick, uint factionId, string selection, bool success, bool automatic, string reason)
+        {
+            if (tacticLines.Count >= MaxTacticLogRecords) return;
+            var b = new StringBuilder(); b.Append('{');
+            Field(b, "kind", Quote("reload"));
+            Field(b, "timeUtc", Quote(utcTime.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)));
+            Field(b, "tick", tick.ToString(CultureInfo.InvariantCulture));
+            Field(b, "faction", factionId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "tactic", Quote(selection ?? ""));
+            Field(b, "automatic", automatic ? "true" : "false");
+            Field(b, "success", success ? "true" : "false");
+            Field(b, "reason", Quote(reason ?? ""));
+            b.Append('}'); tacticLines.Add(b.ToString());
+        }
+
         public void RecordAfterStep(Battle simulation)
         {
             if (simulation == null) throw new ArgumentNullException(nameof(simulation));
@@ -138,7 +154,7 @@ namespace Rts.Tactics
                 + "このフォルダは AI や人が試合を振り返り、戦術を直すための資料です。`pack.json` の `packVersion` は1です。\n\n"
                 + "- `summary.json`: 勝者、決着 tick・分、両陣営の戦術名、地図の種、ルールブックの版。\n"
                 + "- `replay.rpl`: 命令を再生できるリプレイ。\n"
-                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）。\n"
+                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）。読み直しは `kind=reload` として時刻、戦術、成功・失敗、理由を記録します。\n"
                 + "- `snapshots.jsonl`: 600tick（30秒）ごとの霧なし集計。兵種別の兵数、村人数、資源、建物数、拠点の持ち主、時代と文明。\n"
                 + "- `timeline.jsonl`: 両陣営から見えた `GameEvent` の時系列。\n"
                 + "- `rulebook.md`: この試合で使ったルールブック。\n\n"
