@@ -14,5 +14,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Replay/**/*.cs" Link="Replay/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../UnityProject/Assets/RTS/Application/**/*.cs" Link="Application/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../UnityProject/Assets/RTS/Tactics/**/*.cs" Link="Tactics/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../UnityProject/Assets/RTS/TacticsTools/**/*.cs" Link="TacticsTools/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

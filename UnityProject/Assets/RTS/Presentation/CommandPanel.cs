@@ -19,6 +19,7 @@ namespace Rts.Presentation
         private IExternalAiControl externalAi;
         private IMatchRestart matchRestart;
         private IOpponentControl opponent;
+        private ITacticControl opponentTactic;
         private IMapChoice mapChoice;
         private IMatchRuleChoice matchRuleChoice;
         private bool setupOpen;
@@ -41,8 +42,18 @@ namespace Rts.Presentation
         public IOpponentControl Opponent { get { return opponent; } set { opponent = value; } }
 
         private IOpponentControl ownDoctrine;
+        private ITacticControl ownTactic;
         /// <summary>Lets the player pick a doctrine for their own side too ("none" leaves the armies to the player). Null hides it.</summary>
         public IOpponentControl OwnDoctrine { get { return ownDoctrine; } set { ownDoctrine = value; } }
+
+        /// <summary>Lets the host expose the opponent's optional tactic and its diagnostics.</summary>
+        public ITacticControl OpponentTactic { get { return opponentTactic; } set { opponentTactic = value; } }
+
+        /// <summary>Lets the host expose the own side's optional tactic and its diagnostics.</summary>
+        public ITacticControl OwnTactic { get { return ownTactic; } set { ownTactic = value; } }
+
+        /// <summary>Returns the completed match-pack path for the result overlay, if saving succeeded.</summary>
+        public System.Func<string> MatchPackPathProvider;
 
         /// <summary>Random economy map or the classic one. Null hides the row.</summary>
         public IMapChoice MapChoice { get { return mapChoice; } set { mapChoice = value; } }
@@ -232,6 +243,9 @@ namespace Rts.Presentation
             UiHitAreas.Shared.Register(rect);
             GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, UiStyles.Heading);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, UiStyles.Tiny);
+            string packPath = MatchPackPathProvider == null ? "" : MatchPackPathProvider();
+            if (!string.IsNullOrEmpty(packPath))
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 110f, rect.width - 24f, 32f), UiText.T("Pack saved: " + packPath, "記録パックの保存先：" + packPath), UiStyles.Tiny);
             if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
                 matchRestart.RestartMatch();
         }
@@ -263,10 +277,28 @@ namespace Rts.Presentation
             }
         }
 
+        private Vector2 setupScroll;
+        private float setupContentHeight = 400f;
+
+        /// <summary>
+        /// The setup rows (two tactic choices and their status windows included) can be taller than the space left
+        /// above the economy panel, so they scroll inside the setup box instead of covering other panels.
+        /// </summary>
         private void DrawSetup()
         {
             var rect = SetupRect();
             UiStyles.Box(rect, UiText.T("Match setup", "試合の設定"));
+            var viewport = new Rect(rect.x, rect.y + 24f, rect.width, Mathf.Max(0f, rect.height - 28f));
+            bool scrolls = setupContentHeight > viewport.height;
+            var content = new Rect(0f, 0f, rect.width - (scrolls ? 18f : 0f), Mathf.Max(viewport.height, setupContentHeight));
+            setupScroll = GUI.BeginScrollView(viewport, setupScroll, content);
+            setupContentHeight = DrawSetupRows(new Rect(0f, -24f, content.width, content.height));
+            GUI.EndScrollView();
+        }
+
+        /// <summary>Draws the setup rows with <paramref name="rect"/> as the box; returns the height they used.</summary>
+        private float DrawSetupRows(Rect rect)
+        {
             float x = rect.x + 8f, y = rect.y + 24f, labelWidth = 96f, cell = (rect.width - 16f - labelWidth) / 4f;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
@@ -308,6 +340,16 @@ namespace Rts.Presentation
                 }
             }
             y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
+            DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
+            y += SetupRow;
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own tactic", "自軍の戦術"));
+            DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
+            y += SetupRow;
+            y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
+            y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Map", "マップ"));
             if (mapChoice != null)
@@ -354,15 +396,16 @@ namespace Rts.Presentation
             y += SetupRow;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Outside AI", "外部AI"));
-            if (externalAi == null) return;
+            if (externalAi == null) return y + SetupRow;
             var line = new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f);
-            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return; }
+            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return y + SetupRow; }
             bool ai = externalAi.Enabled;
             bool aiNow = GUI.Toggle(line, ai, ai ? UiText.T("On - asking an outside AI", "入 - 外部AIに聞いています") : UiText.T("Off - ask an outside AI", "切 - 外部AIに聞く"), GUI.skin.button);
             if (aiNow != ai) externalAi.Enabled = aiNow;
             // The notice stays next to the switch: turning it on sends what the faction can see to an outside service.
             GUI.Label(new Rect(x, y + 26f, rect.width - 16f, 34f), ai ? externalAi.Status.Replace("\n", "   ")
                 : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"));
+            return y + 64f;
         }
 
         private static string PresetLabel(string name)
@@ -375,6 +418,52 @@ namespace Rts.Presentation
                 case "maintain-legacy": return UiText.T("maintain-legacy", "維持型（旧）");
                 default: return name;
             }
+        }
+
+        private static void DrawTacticChoices(ITacticControl control, Rect area)
+        {
+            if (control == null) return;
+            var choices = control.Choices;
+            if (choices == null || choices.Length == 0) return;
+            float width = area.width / choices.Length;
+            for (int i = 0; i < choices.Length; i++)
+            {
+                bool on = control.Current == choices[i];
+                if (GUI.Toggle(new Rect(area.x + i * width, area.y, width - 4f, area.height), on,
+                    TacticLabel(choices[i]), GUI.skin.button) && !on) control.Current = choices[i];
+            }
+        }
+
+        private static string TacticLabel(string selection)
+        {
+            if (string.IsNullOrEmpty(selection)) return UiText.T("none (preset)", "なし（方針プリセット）");
+            return System.IO.Path.GetFileName(selection);
+        }
+
+        private static float DrawTacticStatus(ITacticControl control, string title, float x, float y, float width)
+        {
+            if (control == null || !control.Active) return y;
+            string failure = control.FailureCount == 0 ? UiText.T("none", "なし") : control.LastFailureReason;
+            string stopped = control.Disabled ? UiText.T(" STOPPED (10 consecutive failures)", " 停止（10回連続失敗）") : "";
+            string summary = title + ": " + control.Name
+                + UiText.T(" | last tick ", "｜最後のtick ") + control.LastTick
+                + UiText.T(" | commands ", "｜命令 ") + control.SentCommands
+                + UiText.T(" | discarded ", "｜破棄 ") + control.RejectedCommands
+                + UiText.T(" | failures ", "｜失敗 ") + control.FailureCount
+                + UiText.T(" | last reason ", "｜最後の理由 ") + failure + stopped;
+            GUI.Label(new Rect(x, y, width, 22f), summary, UiStyles.Tiny);
+            y += 20f;
+            var lines = control.ConsoleLines;
+            var recent = new List<string>();
+            if (lines != null)
+            {
+                int start = Mathf.Max(0, lines.Count - 5);
+                for (int i = start; i < lines.Count; i++) recent.Add(lines[i]);
+            }
+            string console = recent.Count == 0 ? UiText.T("none", "なし") : string.Join("\n", recent.ToArray());
+            GUI.Label(new Rect(x, y, width, 70f), UiText.T("console.log (latest 5): ", "console.log（最新5行）：") + console, UiStyles.Tiny);
+            y += 70f;
+            return y + 2f;
         }
 
         private ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }

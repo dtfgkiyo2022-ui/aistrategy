@@ -1,16 +1,12 @@
 {
-  "name": "Rts.UnityHost",
-  "rootNamespace": "Rts.UnityHost",
+  "name": "Rts.TacticsTools",
+  "rootNamespace": "Rts.Tactics",
   "references": [
-    "Rts.Application",
+    "Rts.Contracts",
+    "Rts.Tactics",
     "Rts.Simulation",
     "Rts.Replay",
-    "Rts.Presentation",
-    "Rts.Contracts",
-    "Rts.Providers",
-    "Rts.Tactics",
-    "Rts.TacticsJs",
-    "Rts.TacticsTools"
+    "Rts.Application"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
@@ -20,5 +16,5 @@
   "autoReferenced": false,
   "defineConstraints": [],
   "versionDefines": [],
-  "noEngineReferences": false
+  "noEngineReferences": true
 }

@@ -1,9 +1,13 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Presentation;
 using Rts.Providers;
 using Rts.Simulation;
+using Rts.Tactics;
+using Rts.TacticsJs;
 using UnityEngine;
 using Battle = Rts.Simulation.Simulation;
 
@@ -13,7 +17,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -34,6 +38,17 @@ namespace Rts.UnityHost
         private uint ownFactionId = 1;
         private OwnDoctrineChoice ownDoctrine;
 
+        [SerializeField] private string enemyTactic = "";
+        [SerializeField] private string ownTactic = "";
+        private TacticCatalogEntry[] tacticEntries = Array.Empty<TacticCatalogEntry>();
+        private string[] tacticChoices = new[] { TacticMatchSetup.None };
+        private TacticMatchSide enemyTacticSide;
+        private TacticMatchSide ownTacticSide;
+        private TacticChoice enemyTacticChoice;
+        private TacticChoice ownTacticChoice;
+        private MatchPackWriter matchPack;
+        private string matchPackPath = "";
+
         /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
         private sealed class OwnDoctrineChoice : IOpponentControl
         {
@@ -42,14 +57,50 @@ namespace Rts.UnityHost
             public string[] Choices { get { return Rts.Application.PolicyPresets.Names; } }
             public string Current
             {
-                get { return host.ownPreset; }
+                get { return host.ownTacticSide != null && host.ownTacticSide.HasTactic ? "none" : host.ownPreset; }
                 set
                 {
+                    if (host.ownTacticSide != null && host.ownTacticSide.HasTactic) return;
                     if (value == host.ownPreset || System.Array.IndexOf(Choices, value) < 0) return;
                     host.ownPreset = value;
                     host.matchRestartRequested = true;
                 }
             }
+        }
+
+        private sealed class TacticChoice : ITacticControl
+        {
+            private readonly LiveMatchHost host;
+            private readonly bool ownSide;
+            private string[] choices = new[] { TacticMatchSetup.None };
+            private TacticHost tacticHost;
+
+            internal TacticChoice(LiveMatchHost host, bool ownSide) { this.host = host; this.ownSide = ownSide; }
+            internal void Bind(string[] choices, TacticHost tacticHost)
+            {
+                this.choices = choices ?? new[] { TacticMatchSetup.None };
+                this.tacticHost = tacticHost;
+            }
+            public string[] Choices { get { return choices; } }
+            public string Current
+            {
+                get { return ownSide ? host.ownTactic : host.enemyTactic; }
+                set
+                {
+                    if (value == Current || Array.IndexOf(choices, value) < 0) return;
+                    if (ownSide) host.ownTactic = value; else host.enemyTactic = value;
+                    host.matchRestartRequested = true;
+                }
+            }
+            public bool Active { get { return tacticHost != null; } }
+            public string Name { get { return tacticHost == null ? "" : tacticHost.Name; } }
+            public long LastTick { get { return tacticHost == null ? -1 : tacticHost.LastCallTick; } }
+            public int SentCommands { get { return tacticHost == null ? 0 : tacticHost.SentCommandCount; } }
+            public int RejectedCommands { get { return tacticHost == null ? 0 : tacticHost.RejectedCommandCount; } }
+            public int FailureCount { get { return tacticHost == null ? 0 : tacticHost.Failures.Count; } }
+            public string LastFailureReason { get { return tacticHost == null || tacticHost.LastFailure == null ? "" : tacticHost.LastFailure.Reason; } }
+            public bool Disabled { get { return tacticHost != null && tacticHost.Disabled; } }
+            public IReadOnlyList<string> ConsoleLines { get { return tacticHost == null ? Array.Empty<string>() : tacticHost.RecentConsoleLines; } }
         }
         private float accumulated;
         private int speedMultiplier = 1;
@@ -90,9 +141,10 @@ namespace Rts.UnityHost
         public string[] Choices { get { return Rts.Application.PolicyPresets.Names; } }
         public string Current
         {
-            get { return enemyPreset; }
+            get { return enemyTacticSide != null && enemyTacticSide.HasTactic ? "none" : enemyPreset; }
             set
             {
+                if (enemyTacticSide != null && enemyTacticSide.HasTactic) return;
                 if (value == enemyPreset || System.Array.IndexOf(Choices, value) < 0) return;
                 enemyPreset = value;
                 matchRestartRequested = true; // both sides start again from tick 0, as with the reply delay
@@ -102,6 +154,7 @@ namespace Rts.UnityHost
         public void StepOneTick() { StepOnce(); }
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
+        public string MatchPackPath { get { return matchPackPath; } }
 
         /// <summary>Measurement only (stage 5): repeats every soldier this many times. 1 is the normal match.</summary>
         public static int ScenarioMultiplier = 1;
@@ -273,9 +326,66 @@ namespace Rts.UnityHost
 
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
 
+        FactionFrame IFrameSource.Latest(uint factionId)
+        {
+            return simulation == null ? null : simulation.Capture(factionId);
+        }
+
+        private void RefreshTacticCatalog()
+        {
+            var parents = new List<string>();
+            if (UnityEngine.Application.isEditor)
+                parents.Add(Path.GetFullPath(Path.Combine(UnityEngine.Application.dataPath, "..", "..", "TacticSamples")));
+            else
+                parents.Add(Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticSamples"));
+            string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrEmpty(documents)) parents.Add(Path.Combine(documents, "AiCommandRts", "Tactics"));
+
+            var entries = TacticCatalog.Scan(parents);
+            tacticEntries = new List<TacticCatalogEntry>(entries).ToArray();
+            var choices = new List<string> { TacticMatchSetup.None };
+            foreach (var entry in tacticEntries) if (entry.IsSelectable) choices.Add(entry.Path);
+            tacticChoices = choices.ToArray();
+            if (Array.IndexOf(tacticChoices, ownTactic) < 0) ownTactic = TacticMatchSetup.None;
+            if (Array.IndexOf(tacticChoices, enemyTactic) < 0) enemyTactic = TacticMatchSetup.None;
+        }
+
+        private static ITacticRuntime LoadTacticRuntime(string path)
+        {
+            var loaded = TacticFolder.Load(path);
+            if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
+            return loaded.Runtime;
+        }
+
+        /// <summary>
+        /// A tactic folder that stopped loading (edited or removed after the scan) must not stop the match from
+        /// starting: that side falls back to no tactic and the reason goes to the console.
+        /// </summary>
+        private TacticMatchSide CreateTacticSide(uint factionId, ref string selection)
+        {
+            try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway); }
+            catch (Exception e) when (e is InvalidDataException || e is InvalidOperationException || e is ArgumentException)
+            {
+                Debug.LogWarning("Tactic for faction " + factionId + " could not be loaded; playing without it: " + e.Message);
+                selection = TacticMatchSetup.None;
+                return TacticMatchSetup.Create(factionId, TacticMatchSetup.None, LoadTacticRuntime, this, gateway, gateway);
+            }
+        }
+
+        private static string TacticSetupJson(ScenarioDefinition scenario, uint factionId)
+        {
+            return "{\"matchSeed\":" + scenario.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ",\"factionId\":" + factionId.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                + ",\"map\":{\"widthMeters\":" + scenario.Map.WidthMeters
+                + ",\"heightMeters\":" + scenario.Map.HeightMeters
+                + ",\"widthCells\":" + scenario.Map.WidthCells
+                + ",\"heightCells\":" + scenario.Map.HeightCells + "}}";
+        }
+
         public void Begin()
         {
             if (mapSeed == 0) mapSeed = FreshSeed();
+            RefreshTacticCatalog();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
             // The academy needs gold on the map, so the all-civilisations match asks the generator for the gold placement too.
@@ -310,6 +420,8 @@ namespace Rts.UnityHost
             }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
+            matchPack = null;
+            matchPackPath = "";
             operationTable = new OperationTable(viewFactionId);
             var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
             StopLiveAi();
@@ -352,11 +464,15 @@ namespace Rts.UnityHost
             liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable,
                 changeDoctrine: preset => SwitchOwnDoctrine(preset));
             enemyFactionId = 3 - viewFactionId;
-            enemy = PolicyPresets.CreateController(enemyPreset, enemyFactionId, gateway);
+            enemyTacticSide = CreateTacticSide(enemyFactionId, ref enemyTactic);
+            if (enemyTacticSide.Host != null) enemyTacticSide.Host.Start(TacticSetupJson(scenario, enemyFactionId));
+            enemy = PolicyPresets.CreateController(enemyTacticSide.HasTactic ? "none" : enemyPreset, enemyFactionId, gateway);
             enemy.Initialize();
             ownFactionId = viewFactionId;
+            ownTacticSide = CreateTacticSide(ownFactionId, ref ownTactic);
+            if (ownTacticSide.Host != null) ownTacticSide.Host.Start(TacticSetupJson(scenario, ownFactionId));
             // An outside AI already steers the own side; a doctrine on top of it would fight it.
-            own = PolicyPresets.CreateController(external != null ? "none" : ownPreset, ownFactionId, gateway);
+            own = PolicyPresets.CreateController(external != null || ownTacticSide.HasTactic ? "none" : ownPreset, ownFactionId, gateway);
             own.Initialize();
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
@@ -365,12 +481,19 @@ namespace Rts.UnityHost
 
             view.SetTerrain(ScenarioTerrain.From(scenario.Map));
             view.Push(simulation.Capture(viewFactionId));
+            TryStartMatchPack(scenario);
             panel.Bind(port, viewFactionId, viewFactionId, view);
             panel.ExternalAi = this;
             panel.MatchRestart = this;
             panel.Opponent = this;
             if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
             panel.OwnDoctrine = ownDoctrine;
+            if (enemyTacticChoice == null) enemyTacticChoice = new TacticChoice(this, false);
+            if (ownTacticChoice == null) ownTacticChoice = new TacticChoice(this, true);
+            enemyTacticChoice.Bind(tacticChoices, enemyTacticSide.Host);
+            ownTacticChoice.Bind(tacticChoices, ownTacticSide.Host);
+            panel.OpponentTactic = enemyTacticChoice;
+            panel.OwnTactic = ownTacticChoice;
             // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
             if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
             if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
@@ -382,6 +505,7 @@ namespace Rts.UnityHost
             economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
+            panel.MatchPackPathProvider = () => MatchPackPath;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
@@ -406,6 +530,7 @@ namespace Rts.UnityHost
         {
             if (simulation == null || gateway == null || port == null) return false;
             if (activeExternal != null) return false;
+            if (ownTacticSide != null && ownTacticSide.HasTactic) return false;
             if (Array.IndexOf(PolicyPresets.Names, preset) < 0)
                 throw new ArgumentException("Preset must be none, maintain, maintain-legacy or concentrate.", nameof(preset));
             if (preset == ownPreset) return true;
@@ -435,13 +560,71 @@ namespace Rts.UnityHost
         public void StepOnce()
         {
             if (simulation == null || HasEnded) return;
+            // Tactic calls are deliberately before the gateway step, matching tactic-match in the CLI.
+            TacticHostTickResult ownTacticResult = null;
+            TacticHostTickResult enemyTacticResult = null;
+            if (ownFactionId == 1)
+            {
+                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
+            }
+            else
+            {
+                if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
+                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+            }
+            if (matchPack != null)
+            {
+                matchPack.RecordTactic(ownTacticResult, ownFactionId, ownTactic);
+                matchPack.RecordTactic(enemyTacticResult, enemyFactionId, enemyTactic);
+            }
             gateway.Step();
             var frame = simulation.Capture(viewFactionId);
             view.Push(frame);
             if (liveAi != null) liveAi.Poll(frame.Tick);
-            if (frame.Result.HasEnded) return;
+            matchPack?.RecordAfterStep(simulation);
+            if (frame.Result.HasEnded)
+            {
+                FinishMatchPack();
+                return;
+            }
             enemy.Step(simulation.Capture(enemyFactionId));
             own.Step(simulation.Capture(ownFactionId));
+            if (HasEnded) FinishMatchPack();
+        }
+
+        private void TryStartMatchPack(ScenarioDefinition scenario)
+        {
+            try
+            {
+                string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                string root = Path.Combine(documents, "AiCommandRts", "Packs");
+                string stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", System.Globalization.CultureInfo.InvariantCulture);
+                matchPackPath = Path.Combine(root, stamp + "_" + scenario.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                matchPack = new MatchPackWriter(matchPackPath, scenario, string.IsNullOrEmpty(ownTactic) ? ownPreset : ownTactic, string.IsNullOrEmpty(enemyTactic) ? enemyPreset : enemyTactic);
+                matchPack.RecordInitial(simulation);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
+            {
+                matchPack = null;
+                matchPackPath = "";
+                Debug.LogWarning("Could not start match pack; the match continues: " + e.Message);
+            }
+        }
+
+        private void FinishMatchPack()
+        {
+            if (matchPack == null) return;
+            try
+            {
+                matchPack.Complete(simulation, gateway.Inputs, simulation.Capture(1).Tick);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
+            {
+                Debug.LogWarning("Could not write match pack; the match has ended: " + e.Message);
+                matchPackPath = "";
+            }
+            finally { matchPack = null; }
         }
 
         private const string LanguageKey = "rts.language.japanese";

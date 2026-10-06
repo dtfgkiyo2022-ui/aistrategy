@@ -58,10 +58,14 @@ namespace Rts.Tactics
         private readonly ITacticRuntime runtime;
         private readonly ITacticGlobalPolicyPort globalPolicyPort;
         private readonly List<TacticFailure> failures = new List<TacticFailure>();
+        private readonly List<string> recentConsoleLines = new List<string>();
         private ulong sequence = 1;
         private int consecutiveFailures;
         private bool started;
         private bool disabled;
+        private long lastCallTick = -1;
+        private int sentCommandCount;
+        private int rejectedCommandCount;
 
         public TacticHost(uint factionId, IFrameSource frames, ICommandPort commandPort, IEconomyPort economyPort, ITacticRuntime runtime, ITacticGlobalPolicyPort globalPolicyPort = null)
         {
@@ -73,6 +77,10 @@ namespace Rts.Tactics
         public bool Disabled => disabled;
         public IReadOnlyList<TacticFailure> Failures => failures.AsReadOnly();
         public TacticFailure LastFailure => failures.Count == 0 ? null : failures[failures.Count - 1];
+        public long LastCallTick => lastCallTick;
+        public int SentCommandCount => sentCommandCount;
+        public int RejectedCommandCount => rejectedCommandCount;
+        public IReadOnlyList<string> RecentConsoleLines => recentConsoleLines.AsReadOnly();
 
         public void Start(string setupJson = "{}")
         {
@@ -90,6 +98,7 @@ namespace Rts.Tactics
             CaptureConsoleLines(result);
             if (disabled || frame.Tick % DecisionIntervalTicks != 0) { result.Disabled = disabled; return result; }
             result.Called = true;
+            lastCallTick = frame.Tick;
             try
             {
                 result.ViewJson = TacticViewWriter.Write(frame);
@@ -97,6 +106,7 @@ namespace Rts.Tactics
                 CaptureConsoleLines(result);
                 result.Commands = TacticCommandReader.Read(result.CommandJson, frame);
                 if (result.Commands.IsMalformed) throw new FormatException(result.Commands.Error ?? "命令JSONを読めません。");
+                rejectedCommandCount += result.Commands.Rejected.Count;
                 if (result.Commands.GlobalPolicy != null) globalPolicyPort?.SetGlobalPolicy(factionId, result.Commands.GlobalPolicy, frame.Tick);
                 if (result.Commands.Policies.Count != 0)
                 {
@@ -104,6 +114,7 @@ namespace Rts.Tactics
                     result.SentPolicies = result.Commands.Policies.Count;
                 }
                 if (economyPort != null) foreach (var command in result.Commands.EconomyCommands) { economyPort.SubmitEconomy(command); result.SentEconomy++; }
+                sentCommandCount += result.SentPolicies + result.SentEconomy;
                 consecutiveFailures = 0;
             }
             catch (Exception e)
@@ -128,7 +139,15 @@ namespace Rts.Tactics
         {
             if (!(runtime is ITacticLogSource source)) return;
             var lines = source.TakeConsoleLines();
-            if (lines != null && lines.Count != 0) result.ConsoleLines = lines;
+            if (lines != null && lines.Count != 0)
+            {
+                result.ConsoleLines = lines;
+                recentConsoleLines.AddRange(lines);
+                while (recentConsoleLines.Count > RecentConsoleLimit) recentConsoleLines.RemoveAt(0);
+            }
         }
+
+        // Kept here instead of depending on the JavaScript assembly: native tactics can also expose logs.
+        private const int RecentConsoleLimit = 20;
     }
 }
