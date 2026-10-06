@@ -9,11 +9,12 @@
 1. [戦術とは何か](#戦術とは何か)
 2. [戦術を置く場所](#戦術を置く場所)
 3. [はじめての戦術](#はじめての戦術)
-4. [Claude Code・ChatGPTに頼む文例](#claude-codechatgptに頼む文例)
-5. [試合の後の振り返り](#試合の後の振り返り)
-6. [練習場で学習して戦術に入れる](#練習場で学習して戦術に入れる)
-7. [戦術のつまみ](#戦術のつまみ)
-8. [決まりごと](#決まりごと)
+4. [Claude Codeで直す → 読み直す](#claude-codeで直す--読み直す)
+5. [Claude Code・ChatGPTに頼む文例](#claude-codechatgptに頼む文例)
+6. [試合の後の振り返り](#試合の後の振り返り)
+7. [練習場で学習して戦術に入れる](#練習場で学習して戦術に入れる)
+8. [戦術のつまみ](#戦術のつまみ)
+9. [決まりごと](#決まりごと)
 
 ## 戦術とは何か
 
@@ -44,6 +45,14 @@ Copy-Item -Recurse -Force '.\TacticSamples\defend-then-push' (Join-Path $tactics
 
 `my-first-tactic\tactic.json` をメモ帳やClaude Codeで開き、`attackThreshold` の `default` を `30` から `40` に変えます。これは「兵が40人を超えるまで守る」という変更です。ゲームを起動して、試合の設定で「一覧を更新」を押し、自軍の戦術に `my-first-tactic` を選びます。何度か試合を行い、守る時間や攻め始める時期が変わったかを記録パックで確かめてください。
 
+## Claude Codeで直す → 読み直す
+
+試合を止めたりやり直したりせずに、記録パックを見ながら戦術を直せます。まずパック内の `tactic-log.jsonl` と `snapshots.jsonl` をClaude Codeに読ませ、事実と推測を分けて次に試す変更を相談します。Claude Codeで `main.js`、`main.py`、または `tactic.json` を保存したら、ゲームの試合設定にある対象戦術の「読み直す」を押してください。現在の戦術をその場で作り直し、同じフォルダの新しい定義を次の呼び出しから使います。試合はtick 0に戻りません。
+
+同じ名前のつまみが新しい定義にもあり、値が新しい範囲とstep（choiceならchoices）に合っていれば、現在値を引き継ぎます。引き継げないつまみは新しい既定値になります。読み込みに失敗した場合は前の戦術のまま試合を続け、パネルに理由を表示します。
+
+「自動で読み直す」を入れると、ゲームが数秒に一度、戦術フォルダの `tactic.json`・`main.js`・`main.py` の更新日時を確認し、変化があったときだけ同じ読み直しを行います。既定は切です。成功・失敗・時刻・対象戦術は記録パックの `tactic-log.jsonl` に残ります。
+
 ## Claude Code・ChatGPTに頼む文例
 
 コードが分からなくても、ルールと目的を伝えれば作れます。次の文をそのまま貼り、必要な部分だけ書き換えてください。
@@ -70,6 +79,8 @@ defend-then-push を元に、守る人数のしきい値を試合の開始時の
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-rulebook --out .\rulebook
 Get-Content .\rulebook\rulebook.md
 ```
+
+ゲーム内でも、試合設定の「フォルダ」欄にある「ルールブックを書き出す」を押せます。現在の試合シナリオからルールブックを作り、`Documents\AiCommandRts\Rulebook\rulebook.md` と `rulebook.json` に保存して、そのフォルダを開きます。Claude Codeに戦術を書いてもらうときは、この `rulebook.md` を先に読ませてください。
 
 ## 戦術のつまみ
 

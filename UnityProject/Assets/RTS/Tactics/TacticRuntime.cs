@@ -108,6 +108,22 @@ namespace Rts.Tactics
             return TrySetParam(name, value, out _);
         }
 
+        /// <summary>
+        /// Applies values carried from the previous definition before the replacement runtime starts. This deliberately
+        /// does not create a user parameter-change record: reloading is a definition change, not a knob edit.
+        /// </summary>
+        public void ApplyInitialParameterValues(IReadOnlyDictionary<string, object> values)
+        {
+            if (started) throw new InvalidOperationException("Initial tactic parameters must be applied before Start().");
+            if (values == null) return;
+            foreach (var parameter in parameters)
+            {
+                if (!values.TryGetValue(parameter.Name, out var value)) continue;
+                if (parameter.TryNormalize(value, out var normalized, out _)) parameterValues[parameter.Name] = normalized;
+            }
+            if (runtime is ITacticParameterRuntime parameterRuntime) parameterRuntime.SetParameters(parameterValues);
+        }
+
         public bool TrySetParam(string name, object value, out string reason)
         {
             reason = null;

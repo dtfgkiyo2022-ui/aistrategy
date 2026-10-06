@@ -134,5 +134,6 @@
     <Compile Include="InterpretationReservationGatewayTests.cs" />
     <Compile Include="AiSchemaTests.cs" />
     <Compile Include="TacticTests.cs" />
+    <Compile Include="TacticReloadTests.cs" />
   </ItemGroup>
 </Project>

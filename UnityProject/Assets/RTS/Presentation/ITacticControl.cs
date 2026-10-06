@@ -20,6 +20,9 @@ namespace Rts.Presentation
         IReadOnlyList<TacticParamView> Parameters { get; }
         IReadOnlyDictionary<string, object> ParamValues { get; }
         bool SetParam(string name, object value);
+        bool AutoReload { get; set; }
+        string ReloadMessage { get; }
+        bool Reload();
     }
 
     /// <summary>
