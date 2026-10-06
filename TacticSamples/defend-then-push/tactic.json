@@ -5,5 +5,8 @@
   "language": "js",
   "entry": "main.js",
   "apiVersion": 1,
-  "description": "兵力が30人を超えるまで自陣コアを守り、その後に全軍で敵コアへ進む戦術。"
+  "description": "兵力が設定した人数を超えるまで自陣コアを守り、その後に全軍で敵コアへ進む戦術。",
+  "params": [
+    { "name": "attackThreshold", "label": "攻めに切り替える兵の数", "type": "int", "default": 30, "min": 5, "max": 100, "step": 5 }
+  ]
 }

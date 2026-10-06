@@ -12,7 +12,7 @@ namespace Rts.TacticsJs
     /// Runs one JavaScript tactic in one Jint engine for the lifetime of a match.
     /// The engine is deliberately configured without CLR access, modules, or host I/O.
     /// </summary>
-    public sealed class JsTacticRuntime : ITacticRuntime, ITacticLogSource
+    public sealed class JsTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticParameterRuntime
     {
         public const int SourceLimitBytes = 1024 * 1024;
         public const int ConsoleLineLimit = 20;
@@ -25,27 +25,40 @@ namespace Rts.TacticsJs
         private readonly string source;
         private readonly List<string> consoleLines = new List<string>();
         private readonly string runtimeName;
+        private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         private Engine engine;
         private SplitMix64 random;
         private bool started;
 
-        public JsTacticRuntime(string source, string name = "js")
+        public JsTacticRuntime(string source, string name = "js", IReadOnlyList<TacticParamDefinition> parameters = null)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             if (Encoding.UTF8.GetByteCount(source) > SourceLimitBytes) throw new ArgumentException("JavaScriptの入口ファイルが1MiBを超えています。", nameof(source));
             this.source = source;
             runtimeName = string.IsNullOrEmpty(name) ? "js" : name;
+            this.parameters = parameters ?? Array.Empty<TacticParamDefinition>();
+            foreach (var parameter in this.parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
             random = new SplitMix64(0);
             engine = CreateEngine();
         }
 
         public string Name => runtimeName;
+        public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+
+        public void SetParameters(IReadOnlyDictionary<string, object> values)
+        {
+            parameterValues.Clear();
+            foreach (var parameter in parameters)
+                parameterValues[parameter.Name] = values != null && values.TryGetValue(parameter.Name, out var value) ? value : parameter.DefaultValue;
+        }
 
         public void Start(string setupJson)
         {
             if (started) throw new InvalidOperationException("JsTacticRuntimeは既に開始されています。");
             started = true;
-            var setup = setupJson ?? "{}";
+            string inputSetup = setupJson ?? "{}";
+            var setup = inputSetup.IndexOf("\"params\"", StringComparison.Ordinal) >= 0 ? inputSetup : TacticParameterJson.AddParams(inputSetup, parameterValues);
             ulong seed = ReadSeed(setup);
             random = new SplitMix64(seed);
             engine.SetValue("__tacticSetupJson", setup);
@@ -57,11 +70,17 @@ namespace Rts.TacticsJs
         {
             if (!started) Start("{}");
             if (viewJson == null) throw new ArgumentNullException(nameof(viewJson));
-            engine.SetValue("__tacticViewJson", viewJson);
+            engine.SetValue("__tacticViewJson", WithParams(viewJson));
             var result = engine.Evaluate("(function() { var output = onTick(JSON.parse(__tacticViewJson)); if (output && output.version === undefined) output.version = 1; return JSON.stringify(output); })()");
             string text = result.ToString();
             if (string.IsNullOrEmpty(text) || text == "undefined") throw new InvalidOperationException("onTickはJSON化できる値を返してください。");
             return text;
+        }
+
+        private string WithParams(string json)
+        {
+            return json != null && json.IndexOf("\"params\"", StringComparison.Ordinal) >= 0
+                ? json : TacticParameterJson.AddParams(json ?? "{}", parameterValues);
         }
 
         public IReadOnlyList<string> TakeConsoleLines()
@@ -133,6 +152,18 @@ namespace Rts.TacticsJs
             parser.White();
             if (!parser.End) throw new FormatException("JSONの末尾にデータがあります。");
             return value;
+        }
+
+        internal static Dictionary<string, object> Object(object value, string name)
+        {
+            if (!(value is Dictionary<string, object> result)) throw new FormatException(name + "はオブジェクトです。");
+            return result;
+        }
+
+        internal static List<object> Array(object value, string name)
+        {
+            if (!(value is List<object> result)) throw new FormatException(name + "は配列です。");
+            return result;
         }
 
         private sealed class Parser

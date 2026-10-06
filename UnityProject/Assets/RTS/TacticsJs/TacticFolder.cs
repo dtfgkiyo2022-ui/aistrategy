@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Rts.Tactics;
@@ -14,6 +15,7 @@ namespace Rts.TacticsJs
         public string Entry { get; internal set; }
         public int ApiVersion { get; internal set; }
         public string Description { get; internal set; }
+        public IReadOnlyList<TacticParamDefinition> Params { get; internal set; } = Array.Empty<TacticParamDefinition>();
     }
 
     public sealed class TacticFolderLoadResult
@@ -53,7 +55,7 @@ namespace Rts.TacticsJs
                     string error = PyodideTacticRuntime.AvailabilityError(runtimesPath);
                     if (error != null) return new TacticFolderLoadResult { Metadata = metadata, Error = error };
                 }
-                ITacticRuntime runtime = python ? (ITacticRuntime)new PyodideTacticRuntime(path, runtimesPath, metadata.Name) : new JsTacticRuntime(source, metadata.Name);
+                ITacticRuntime runtime = python ? (ITacticRuntime)new PyodideTacticRuntime(path, runtimesPath, metadata.Name, metadata.Params) : new JsTacticRuntime(source, metadata.Name, metadata.Params);
                 return new TacticFolderLoadResult { Runtime = runtime, Metadata = metadata };
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is DecoderFallbackException || e is FormatException || e is ArgumentException || e is OverflowException)
@@ -73,7 +75,7 @@ namespace Rts.TacticsJs
         {
             var root = TacticJsonForRuntime.Parse(json) as System.Collections.Generic.Dictionary<string, object>;
             if (root == null) throw new FormatException("tactic.jsonはオブジェクトでなければなりません。");
-            return new TacticMetadata
+            var metadata = new TacticMetadata
             {
                 Name = RequiredString(root, "name"),
                 Author = RequiredString(root, "author"),
@@ -81,8 +83,50 @@ namespace Rts.TacticsJs
                 Language = RequiredString(root, "language"),
                 Entry = RequiredString(root, "entry"),
                 ApiVersion = checked((int)RequiredInteger(root, "apiVersion")),
-                Description = RequiredString(root, "description")
+                Description = RequiredString(root, "description"),
+                Params = ReadParams(root)
             };
+            return metadata;
+        }
+
+        private static IReadOnlyList<TacticParamDefinition> ReadParams(Dictionary<string, object> root)
+        {
+            if (!root.TryGetValue("params", out var raw) || raw == null) return Array.Empty<TacticParamDefinition>();
+            var list = TacticJsonForRuntime.Array(raw, "params");
+            var result = new List<TacticParamDefinition>();
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in list)
+            {
+                var obj = TacticJsonForRuntime.Object(item, "paramsの要素");
+                string name = RequiredString(obj, "name");
+                if (!names.Add(name)) throw new FormatException("paramsのnameが重複しています: " + name);
+                string label = RequiredString(obj, "label");
+                string type = RequiredString(obj, "type");
+                if (!obj.TryGetValue("default", out var defaultValue)) throw new FormatException("paramsのdefaultは必須です: " + name);
+                decimal? min = OptionalNumber(obj, "min", name);
+                decimal? max = OptionalNumber(obj, "max", name);
+                decimal? step = OptionalNumber(obj, "step", name);
+                IReadOnlyList<string> choices = null;
+                if (obj.TryGetValue("choices", out var choicesRaw))
+                {
+                    var choiceList = TacticJsonForRuntime.Array(choicesRaw, "paramsのchoices");
+                    var strings = new List<string>();
+                    foreach (var choice in choiceList)
+                        if (!(choice is string text)) throw new FormatException("paramsのchoicesは文字列配列です: " + name);
+                        else strings.Add(text);
+                    choices = strings;
+                }
+                result.Add(new TacticParamDefinition(name, label, type, defaultValue, min, max, step, choices));
+            }
+            return result.ToArray();
+        }
+
+        private static decimal? OptionalNumber(Dictionary<string, object> obj, string key, string paramName)
+        {
+            if (!obj.TryGetValue(key, out var raw) || raw == null) return null;
+            if (raw is long l) return l;
+            if (raw is decimal m) return m;
+            throw new FormatException("paramsの" + key + "は数値です: " + paramName);
         }
 
         private static string RequiredString(System.Collections.Generic.Dictionary<string, object> root, string key)

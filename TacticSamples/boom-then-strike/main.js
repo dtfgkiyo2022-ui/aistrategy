@@ -1,6 +1,4 @@
 // 長く内政するか、いつ全軍攻撃へ移るかを調整する定数。
-const STRIKE_TICK = 7200;
-const STRIKE_SOLDIERS = 42;
 const GROWTH_PRIORITY = 70;
 const STRIKE_PRIORITY = 100;
 var lastPhase = "";
@@ -14,7 +12,7 @@ function soldiers(view) {
 
 function onTick(view) {
   var enemyCore = view.factionId === 1 ? 2 : 1;
-  var striking = view.tick >= STRIKE_TICK && soldiers(view) >= STRIKE_SOLDIERS;
+  var striking = view.tick >= view.params.strikeTick && soldiers(view) >= view.params.strikeSoldiers;
   var phase = striking ? "strike" : "boom";
   if (phase !== lastPhase) {
     console.log("方針切替: " + phase + (striking ? "（条件達成）" : "（内政優先）"));

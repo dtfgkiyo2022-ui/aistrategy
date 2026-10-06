@@ -49,7 +49,7 @@ namespace Rts.Tactics
 
         public void RecordTactic(TacticHostTickResult result, uint factionId, string selection)
         {
-            if (result == null || !result.Called || tacticLines.Count >= MaxTacticLogRecords) return;
+            if (result == null || (!result.Called && (result.ParamChanges == null || result.ParamChanges.Count == 0)) || tacticLines.Count >= MaxTacticLogRecords) return;
             var commands = result.Commands ?? new TacticCommandResult();
             var b = new StringBuilder(); b.Append('{');
             Field(b, "tick", result.Tick.ToString(CultureInfo.InvariantCulture));
@@ -61,6 +61,7 @@ namespace Rts.Tactics
             Field(b, "rejected", RejectedJson(commands.Rejected));
             Field(b, "failure", result.Failure == null ? "null" : FailureJson(result.Failure));
             Field(b, "consoleLog", StringArrayJson(result.ConsoleLines));
+            Field(b, "paramChanges", ParamChangesJson(result.ParamChanges));
             Field(b, "disabled", result.Disabled ? "true" : "false");
             b.Append('}'); tacticLines.Add(b.ToString());
         }
@@ -137,7 +138,7 @@ namespace Rts.Tactics
                 + "このフォルダは AI や人が試合を振り返り、戦術を直すための資料です。`pack.json` の `packVersion` は1です。\n\n"
                 + "- `summary.json`: 勝者、決着 tick・分、両陣営の戦術名、地図の種、ルールブックの版。\n"
                 + "- `replay.rpl`: 命令を再生できるリプレイ。\n"
-                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`。\n"
+                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）。\n"
                 + "- `snapshots.jsonl`: 600tick（30秒）ごとの霧なし集計。兵種別の兵数、村人数、資源、建物数、拠点の持ち主、時代と文明。\n"
                 + "- `timeline.jsonl`: 両陣営から見えた `GameEvent` の時系列。\n"
                 + "- `rulebook.md`: この試合で使ったルールブック。\n\n"
@@ -158,6 +159,8 @@ namespace Rts.Tactics
         private static string ObjectivesJson(IEnumerable<MatchPackObjectiveSnapshot> values) => "[" + string.Join(",", values.Select(x => "{\"id\":" + x.Id + ",\"ownerFactionId\":" + x.OwnerFactionId + "}")) + "]";
         private static string RejectedJson(IEnumerable<TacticRejectedCommand> values) => "[" + string.Join(",", (values ?? Array.Empty<TacticRejectedCommand>()).Select(x => "{\"index\":" + x.Index + ",\"type\":" + Quote(x.Type) + ",\"reason\":" + Quote(x.Reason) + "}")) + "]";
         private static string FailureJson(TacticFailure x) => "{\"reason\":" + Quote(x.Reason) + ",\"consecutive\":" + x.Consecutive + "}";
+        private static string ParamChangesJson(IEnumerable<TacticParamChange> values)
+            => "[" + string.Join(",", (values ?? Array.Empty<TacticParamChange>()).Select(x => "{\"tick\":" + x.Tick.ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(x.Name) + ",\"from\":" + TacticParameterJson.Value(x.From) + ",\"to\":" + TacticParameterJson.Value(x.To) + "}")) + "]";
         private static string StringArrayJson(IEnumerable<string> values) => "[" + string.Join(",", (values ?? Array.Empty<string>()).Select(Quote)) + "]";
         private static string PointJson(SimPoint p) => "{\"x\":" + ((decimal)p.X.Raw / 65536m).ToString("0.###", CultureInfo.InvariantCulture) + ",\"z\":" + ((decimal)p.Z.Raw / 65536m).ToString("0.###", CultureInfo.InvariantCulture) + "}";
         private static string EventText(GameEvent e) => e.Kind + (e.Reason == ReasonCode.None ? "" : " (" + e.Reason + ")") + " subject=" + e.SubjectId;

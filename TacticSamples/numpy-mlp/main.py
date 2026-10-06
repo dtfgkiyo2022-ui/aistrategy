@@ -17,7 +17,8 @@ def features(view):
 
 def on_tick(view):
     hidden = np.maximum(features(view) @ weights['w1'] + weights['b1'], 0)
-    attack = int(np.argmax(hidden @ weights['w2'] + weights['b2'])) == 1
+    scores = hidden @ weights['w2'] + weights['b2']
+    attack = scores[1] >= scores[0] + view['params']['confidenceThreshold']
     target_core = 3 - view['factionId'] if attack else view['factionId']
     commands = [{
         'type': 'policy', 'kind': 'Focus' if attack else 'Defend',

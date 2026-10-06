@@ -80,6 +80,46 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void FolderValidatesTacticParams()
+        {
+            string valid = CreateFolder("{\"name\":\"params\",\"author\":\"test\",\"version\":\"1\",\"language\":\"js\",\"entry\":\"main.js\",\"apiVersion\":1,\"description\":\"test\",\"params\":[{\"name\":\"attackThreshold\",\"label\":\"threshold\",\"type\":\"int\",\"default\":30,\"min\":5,\"max\":100,\"step\":5}]}", "function onTick(view) { return {commands:[]}; }");
+            try { Assert.That(TacticFolder.Load(valid).IsSuccess, Is.True); }
+            finally { Directory.Delete(valid, true); }
+            foreach (string bad in new[]
+            {
+                "{\"name\":\"params\",\"author\":\"test\",\"version\":\"1\",\"language\":\"js\",\"entry\":\"main.js\",\"apiVersion\":1,\"description\":\"test\",\"params\":[{\"name\":\"bad_name\",\"label\":\"x\",\"type\":\"int\",\"default\":30,\"min\":5,\"max\":100,\"step\":5}]}",
+                "{\"name\":\"params\",\"author\":\"test\",\"version\":\"1\",\"language\":\"js\",\"entry\":\"main.js\",\"apiVersion\":1,\"description\":\"test\",\"params\":[{\"name\":\"x\",\"label\":\"x\",\"type\":\"int\",\"default\":101,\"min\":5,\"max\":100,\"step\":5}]}",
+                "{\"name\":\"params\",\"author\":\"test\",\"version\":\"1\",\"language\":\"js\",\"entry\":\"main.js\",\"apiVersion\":1,\"description\":\"test\",\"params\":[{\"name\":\"x\",\"label\":\"x\",\"type\":\"int\",\"default\":\"30\",\"min\":5,\"max\":100,\"step\":5}]}"
+            })
+            {
+                string path = CreateFolder(bad, "function onTick(view) { return {commands:[]}; }");
+                try { var result = TacticFolder.Load(path); Assert.That(result.IsSuccess, Is.False); Assert.That(result.Error, Is.Not.Empty); }
+                finally { Directory.Delete(path, true); }
+            }
+        }
+
+        [Test]
+        public void ParamValuesReachJsAndSetParamAppliesOnNextCall()
+        {
+            var definition = new TacticParamDefinition("attackThreshold", "threshold", "int", 30, 5, 100, 5);
+            var runtime = new JsTacticRuntime("function onStart(s){ console.log('start:' + s.params.attackThreshold); } function onTick(v){ console.log('view:' + v.params.attackThreshold); return {commands:[]}; }", "params", new[] { definition });
+            var simulation = new Battle(MapGenerator.Generate(99, true));
+            var gateway = new CommandGateway(simulation);
+            var host = new TacticHost(1, new SimulationFrames(simulation), gateway, gateway, runtime);
+            var first = host.Tick();
+            Assert.That(first.ViewJson, Does.Contain("\"attackThreshold\":30"));
+            Assert.That(host.SetParam("attackThreshold", 50), Is.True);
+            Assert.That(host.SetParam("attackThreshold", 101), Is.False);
+            for (int i = 0; i < 20; i++) gateway.Step();
+            var second = host.Tick();
+            Assert.That(second.ViewJson, Does.Contain("\"attackThreshold\":50"));
+            Assert.That(second.ParamChanges, Has.Count.EqualTo(1));
+            Assert.That(second.ParamChanges[0].From, Is.EqualTo(30));
+            Assert.That(second.ParamChanges[0].To, Is.EqualTo(50));
+            Assert.That(second.ConsoleLines.Any(x => x == "view:50"), Is.True);
+        }
+
+        [Test]
         public void RandomIsStableAndConsoleIsBounded()
         {
             const string source = "function onTick(view) { for (var i=0;i<25;i++) console.log('x'.repeat(300)); return {value:Math.random(),commands:[]}; }";

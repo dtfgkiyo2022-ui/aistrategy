@@ -138,7 +138,11 @@ internal static class Program
             {
                 string key=args[i]; if(!key.StartsWith("--",StringComparison.Ordinal))throw new InvalidDataException("Expected option.");
             string value=key=="--allow-build-mismatch"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"||key=="--all-civs"||key=="--large"||key=="--core-defence"||key=="--army-growth"||key=="--economy-scale"||key=="--late-push"||key=="--profile"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
-                if(!options.TryAdd(key,value))throw new InvalidDataException("Duplicate option "+key);
+                if(!options.TryAdd(key,value))
+                {
+                    if(key == "--west-param" || key == "--east-param") options[key] += "\n" + value;
+                    else throw new InvalidDataException("Duplicate option "+key);
+                }
             }
             string Required(string key)=>options.TryGetValue(key,out var value)?value:throw new InvalidDataException("Missing "+key);
             if (args[0] == "eval-interpreter")
@@ -148,7 +152,8 @@ internal static class Program
                 return EvalInterpreterCommand.Run(options);
             }
            string[] allowed=args[0] switch { "tactic-match"=>new[]{"--scenario","--map-seed","--ticks","--west-tactic","--east-tactic","--out","--log-out","--pack-out","--runtimes"}, "tactic-gym"=>new[]{"--profile"}, "tactic-rulebook"=>new[]{"--out","--map-seed"}, "say"=>new[]{"--scenario","--say","--out","--ticks","--faction"}, "analyze"=>new[]{"--in","--out","--allow-build-mismatch","--scenario","--ticks","--west-preset","--east-preset","--trace-out","--trace-every"}, "snapshot"=>new[]{"--scenario","--out","--ticks","--every","--faction","--west-preset","--east-preset"}, "intervene"=>new[]{"--scenario","--out","--ticks","--style","--east-preset","--delay","--ai-profile","--trigger-tick","--change-reserve","--summary-out"}, "grace"=>new[]{"--scenario","--out","--ticks","--faction","--criterion","--army","--outpost","--observed-tick","--order-kind","--order-scope","--order-scope-id","--order-goal","--order-goal-id","--reserve-permille","--order2-kind","--order2-scope","--order2-scope-id","--order2-goal","--order2-goal-id","--order2-reserve-permille","--min-r","--max-r","--r-step","--input-delay","--rate-bands"}, "jev-match"=>new[]{"--scenario","--ticks","--faction","--out","--schedule","--heartbeat","--min-confidence-permille","--repeat-after","--key-env","--timeout-seconds","--cycle-sleep-ms","--provider","--url","--model","--interval-ticks"},"bench"=>new[]{"--scenario","--map-seed","--large","--all-civs","--ticks","--warmup","--out","--record","--inputs","--alloc-types"},"genmap"=>new[]{"--seed","--out","--economy","--industry","--terrain"},"load"=>new[]{"--map-seed","--terrain","--all-civs","--large","--ticks","--west-preset","--east-preset","--out","--match-out","--idle-ticks","--core-defence","--core-defence-damage","--core-defence-targets","--core-defence-range","--core-defence-interval","--army-growth","--economy-scale","--late-push","--late-push-minute"},"record"=>new[]{"--scenario","--map-seed","--economy","--industry","--terrain","--out","--ticks","--inputs","--west-preset","--east-preset","--enemy-preset","--ai-delay","--ai-profile"},"replay"=>new[]{"--in","--hash-out","--dump-dir","--allow-build-mismatch"},"compare"=>new[]{"--left","--right","--replay","--allow-build-mismatch"},_=>throw new InvalidDataException("Unknown command.") };
-            if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
+             if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-param","--east-param"}).ToArray();
+             if(options.Keys.Except(allowed).Any())throw new InvalidDataException("Unknown option.");
             // load is a display-only measurement and deliberately does not inspect repository metadata.
             // load and bench are measurement-only paths. They intentionally avoid BuildInfo.Current(), which reads Git
             // metadata; this keeps measurement invocations usable in a checkout where Git access is prohibited.

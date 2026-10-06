@@ -9,7 +9,7 @@ using Rts.Tactics;
 namespace Rts.TacticsJs
 {
     /// <summary>One permission-restricted Deno process per match. Never runs system Python.</summary>
-    public sealed class PyodideTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticFailurePolicy, IDisposable
+    public sealed class PyodideTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticFailurePolicy, IDisposable, ITacticParameterRuntime
     {
         public const int StartupTimeoutMilliseconds = 10000;
         public const int CallTimeoutMilliseconds = 50;
@@ -23,17 +23,30 @@ namespace Rts.TacticsJs
         private bool started;
         private bool stopped;
         private int timeouts;
+        private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         public string Name { get; }
         public int ConsecutiveFailureLimit => 3;
         public bool IsStopped => stopped;
         public int? ProcessId { get; private set; }
         public double StartupMilliseconds { get; private set; }
 
-        public PyodideTacticRuntime(string folder, string runtimes, string name = "python")
+        public PyodideTacticRuntime(string folder, string runtimes, string name = "python", IReadOnlyList<TacticParamDefinition> parameters = null)
         {
             this.folder = Path.GetFullPath(folder);
             this.runtimes = Path.GetFullPath(runtimes ?? FindDefaultRuntimes());
             Name = name;
+            this.parameters = parameters ?? Array.Empty<TacticParamDefinition>();
+            foreach (var parameter in this.parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
+        }
+
+        public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+
+        public void SetParameters(IReadOnlyDictionary<string, object> values)
+        {
+            parameterValues.Clear();
+            foreach (var parameter in parameters)
+                parameterValues[parameter.Name] = values != null && values.TryGetValue(parameter.Name, out var value) ? value : parameter.DefaultValue;
         }
 
         public static string FindDefaultRuntimes()
@@ -96,13 +109,16 @@ namespace Rts.TacticsJs
             }
             catch { Dispose(); throw; }
             // Loading user code and on_start have the same budget as on_tick.
-            Call("start", setupJson ?? "{}");
+            string inputSetup = setupJson ?? "{}";
+            Call("start", inputSetup.IndexOf("\"params\"", StringComparison.Ordinal) >= 0 ? inputSetup : TacticParameterJson.AddParams(inputSetup, parameterValues));
         }
 
         public string Tick(string viewJson)
         {
             if (!started) Start("{}");
-            return Call("tick", viewJson ?? throw new ArgumentNullException(nameof(viewJson)));
+            string view = viewJson ?? throw new ArgumentNullException(nameof(viewJson));
+            if (view.IndexOf("\"params\"", StringComparison.Ordinal) < 0) view = TacticParameterJson.AddParams(view, parameterValues);
+            return Call("tick", view);
         }
 
         private string Call(string operation, string payload)

@@ -5,5 +5,9 @@
   "language": "js",
   "entry": "main.js",
   "apiVersion": 1,
-  "description": "成長重視で内政と時代を伸ばし、時刻と兵力の条件がそろったら全軍で攻撃する戦術。"
+  "description": "成長重視で内政と時代を伸ばし、設定した時刻と兵力の条件がそろったら全軍で攻撃する戦術。",
+  "params": [
+    { "name": "strikeTick", "label": "攻め始める時刻（tick）", "type": "int", "default": 7200, "min": 0, "max": 20000, "step": 20 },
+    { "name": "strikeSoldiers", "label": "攻め始める兵の数", "type": "int", "default": 42, "min": 5, "max": 100, "step": 1 }
+  ]
 }

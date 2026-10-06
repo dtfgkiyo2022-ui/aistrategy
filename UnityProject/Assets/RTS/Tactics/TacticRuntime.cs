@@ -50,6 +50,7 @@ namespace Rts.Tactics
         public int SentEconomy { get; internal set; }
         public IReadOnlyList<string> ConsoleLines { get; internal set; } = Array.Empty<string>();
         public IReadOnlyList<string> ConsoleLog => ConsoleLines;
+        public IReadOnlyList<TacticParamChange> ParamChanges { get; internal set; } = Array.Empty<TacticParamChange>();
     }
 
     /// <summary>Calls one faction's tactic every twenty simulation ticks and sends ordinary logged proposals.</summary>
@@ -64,6 +65,10 @@ namespace Rts.Tactics
         private readonly ITacticRuntime runtime;
         private readonly ITacticGlobalPolicyPort globalPolicyPort;
         private readonly Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions;
+        private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
+        private readonly List<TacticParamChange> parameterChanges = new List<TacticParamChange>();
+        private readonly List<TacticParamChange> pendingParameterChanges = new List<TacticParamChange>();
         private readonly List<TacticFailure> failures = new List<TacticFailure>();
         private readonly List<string> recentConsoleLines = new List<string>();
         private ulong sequence = 1;
@@ -79,6 +84,8 @@ namespace Rts.Tactics
         {
             if (factionId < 1 || factionId > 2) throw new ArgumentOutOfRangeException(nameof(factionId));
             this.factionId = factionId; this.frames = frames ?? throw new ArgumentNullException(nameof(frames)); this.commandPort = commandPort ?? throw new ArgumentNullException(nameof(commandPort)); this.economyPort = economyPort; this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime)); this.globalPolicyPort = globalPolicyPort; this.versions = versions;
+            parameters = runtime is ITacticParameterRuntime parameterRuntime ? parameterRuntime.Parameters ?? Array.Empty<TacticParamDefinition>() : Array.Empty<TacticParamDefinition>();
+            foreach (var parameter in parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
         }
 
         public string Name => runtime.Name;
@@ -89,12 +96,35 @@ namespace Rts.Tactics
         public int SentCommandCount => sentCommandCount;
         public int RejectedCommandCount => rejectedCommandCount;
         public IReadOnlyList<string> RecentConsoleLines => recentConsoleLines.AsReadOnly();
+        public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+        public IReadOnlyDictionary<string, object> ParamValues => parameterValues;
+        public IReadOnlyList<TacticParamChange> ParamChanges => parameterChanges.AsReadOnly();
+        public int ParamChangeCount => parameterChanges.Count;
+        public TacticParamChange LastParamChange => parameterChanges.Count == 0 ? null : parameterChanges[parameterChanges.Count - 1];
+
+        /// <summary>Changes one declared knob without clamping; invalid values are rejected.</summary>
+        public bool SetParam(string name, object value)
+        {
+            TacticParamDefinition definition = null;
+            foreach (var candidate in parameters) if (candidate.Name == name) { definition = candidate; break; }
+            if (definition == null || !definition.TryNormalize(value, out var normalized, out _)) return false;
+            var old = parameterValues[name];
+            if (Equals(old, normalized)) return true;
+            long tick = lastCallTick;
+            try { var frame = frames.Latest(factionId); if (frame != null) tick = frame.Tick; } catch (Exception) { }
+            var change = new TacticParamChange { Tick = tick, Name = name, From = old, To = normalized };
+            parameterValues[name] = normalized;
+            parameterChanges.Add(change);
+            pendingParameterChanges.Add(change);
+            if (runtime is ITacticParameterRuntime parameterRuntime) parameterRuntime.SetParameters(parameterValues);
+            return true;
+        }
 
         public void Start(string setupJson = "{}")
         {
             if (started) throw new InvalidOperationException("TacticHost has already started.");
             started = true;
-            try { runtime.Start(setupJson ?? "{}"); }
+            try { runtime.Start(TacticParameterJson.AddParams(setupJson ?? "{}", parameterValues)); }
             catch (Exception e) { RecordFailure(0, e); }
         }
 
@@ -102,6 +132,11 @@ namespace Rts.Tactics
         {
             var frame = frames.Latest(factionId) ?? throw new InvalidOperationException("Frame source returned null.");
             var result = new TacticHostTickResult { Tick = frame.Tick, Commands = new TacticCommandResult() };
+            if (pendingParameterChanges.Count != 0)
+            {
+                result.ParamChanges = pendingParameterChanges.ToArray();
+                pendingParameterChanges.Clear();
+            }
             if (!started) Start("{}");
             CaptureConsoleLines(result);
             if (disabled || frame.Tick % DecisionIntervalTicks != 0) { result.Disabled = disabled; return result; }
@@ -109,7 +144,7 @@ namespace Rts.Tactics
             lastCallTick = frame.Tick;
             try
             {
-                result.ViewJson = TacticViewWriter.Write(frame);
+                result.ViewJson = TacticViewWriter.Write(frame, parameterValues);
                 result.CommandJson = runtime.Tick(result.ViewJson) ?? throw new InvalidOperationException("戦術がnullの命令JSONを返しました。");
                 CaptureConsoleLines(result);
                 result.Commands = TacticCommandReader.Read(result.CommandJson, frame);

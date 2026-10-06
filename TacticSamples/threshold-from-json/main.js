@@ -1,11 +1,9 @@
-const ATTACK_THRESHOLD = 30;
-
 function onTick(view) {
   var ownCore = view.factionId;
   var enemyCore = view.factionId === 1 ? 2 : 1;
   var soldiers = 0;
   for (var i = 0; i < view.ownArmies.length; i++) soldiers += view.ownArmies[i].count;
-  var attacking = soldiers > ATTACK_THRESHOLD;
+  var attacking = soldiers > view.params.attackThreshold;
   var commands = [];
   for (var j = 0; j < view.ownArmies.length; j++) {
     var army = view.ownArmies[j];

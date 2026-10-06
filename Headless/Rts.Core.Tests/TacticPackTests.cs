@@ -70,6 +70,30 @@ namespace Rts.Core.Tests
             }
         }
 
+        [Test]
+        public void MatchPackRecordsParamChanges()
+        {
+            var scenario = MapGenerator.Generate(4124, true);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            var definition = new TacticParamDefinition("threshold", "threshold", "int", 30, 5, 100, 5);
+            var runtime = new JsTacticRuntime("function onTick(view){ return {commands:[]}; }", "params", new[] { definition });
+            var host = new TacticHost(1, new SimulationFrames(simulation), gateway, gateway, runtime);
+            string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, "tactic-pack-params-" + Guid.NewGuid().ToString("N"));
+            var pack = new MatchPackWriter(path, scenario, "params", "auto");
+            pack.RecordInitial(simulation);
+            host.Tick();
+            host.SetParam("threshold", 50);
+            for (int i = 0; i < 20; i++) gateway.Step();
+            pack.RecordTactic(host.Tick(), 1, "params");
+            pack.Complete(simulation, gateway.Inputs, 20);
+            string line = File.ReadAllText(Path.Combine(path, "tactic-log.jsonl"));
+            Assert.That(line, Does.Contain("\"paramChanges\""));
+            Assert.That(line, Does.Contain("\"name\":\"threshold\""));
+            Assert.That(line, Does.Contain("\"from\":30"));
+            Assert.That(line, Does.Contain("\"to\":50"));
+        }
+
         private static JsTacticRuntime LoadSample()
         {
             for (var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory); directory != null; directory = directory.Parent)

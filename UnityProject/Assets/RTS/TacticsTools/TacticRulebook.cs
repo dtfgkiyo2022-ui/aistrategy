@@ -30,7 +30,12 @@ namespace Rts.Tactics
             markdown.AppendLine("## 戦術ファイルの形");
             markdown.AppendLine();
             markdown.AppendLine("`tactic.json` は `name`, `author`, `version`, `language`, `entry`, `apiVersion`, `description` を持ちます。入口は `main.js` です。");
-            markdown.AppendLine("試合開始時に `onStart(setup)` を1回、以後20tick（1秒）ごとに `onTick(view)` を呼び、`{ version: 1, commands: [...] }` を返します。命令を返さない回は `{version:1,commands:[]}` とします。");
+            markdown.AppendLine("任意で `params` に、英数字の `name`、表示用 `label`、`type`（`int` / `number` / `bool` / `choice`）、`default` を並べます。数値は `min`, `max`, `step` も必須で、既定値と変更値は範囲内かつstepに一致しなければなりません。`choice` は `choices` 配列と、その中の `default` が必要です。");
+            markdown.AppendLine("試合開始時に `onStart(setup)` を1回、以後20tick（1秒）ごとに `onTick(view)` を呼び、`setup.params` と `view.params` に現在値の辞書を渡します。`{ version: 1, commands: [...] }` を返します。命令を返さない回は `{version:1,commands:[]}` とします。");
+            markdown.AppendLine();
+            markdown.AppendLine("## 戦術のつまみ `params`");
+            markdown.AppendLine();
+            markdown.AppendLine("`params` の数値例: `[{\"name\":\"attackThreshold\",\"label\":\"攻めに切り替える兵の数\",\"type\":\"int\",\"default\":30,\"min\":5,\"max\":100,\"step\":5}]`。`tactic-match` では `--west-param name=value` / `--east-param name=value`（複数可）で開始値を指定できます。試し遊びでは自軍は操作、相手は表示だけです。");
             markdown.AppendLine("1回の予算は50ms・100万文・再帰256・メモリ64MBです。失敗が10回続くとその試合では停止します。`console.log` は1回20行、1行200文字までです。`Math.random` は試合の種から決まります。");
             markdown.AppendLine();
             markdown.AppendLine("## 戦況 `view`");
@@ -95,7 +100,7 @@ namespace Rts.Tactics
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
-                ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy")
+                ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
         }
 

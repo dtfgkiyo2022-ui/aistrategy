@@ -5,5 +5,8 @@
   "language": "js",
   "entry": "main.js",
   "apiVersion": 1,
-  "description": "全軍を敵のコアへ向かわせる突撃戦術。"
+  "description": "全軍を敵のコアへ向かわせる突撃戦術。",
+  "params": [
+    { "name": "lossBudgetPermille", "label": "使う損害の予算（‰）", "type": "int", "default": 1000, "min": 0, "max": 1000, "step": 50 }
+  ]
 }

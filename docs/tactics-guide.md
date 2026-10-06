@@ -12,7 +12,8 @@
 4. [Claude Code・ChatGPTに頼む文例](#claude-codechatgptに頼む文例)
 5. [試合の後の振り返り](#試合の後の振り返り)
 6. [練習場で学習して戦術に入れる](#練習場で学習して戦術に入れる)
-7. [決まりごと](#決まりごと)
+7. [戦術のつまみ](#戦術のつまみ)
+8. [決まりごと](#決まりごと)
 
 ## 戦術とは何か
 
@@ -41,7 +42,7 @@ New-Item -ItemType Directory -Force $tactics | Out-Null
 Copy-Item -Recurse -Force '.\TacticSamples\defend-then-push' (Join-Path $tactics 'my-first-tactic')
 ```
 
-`my-first-tactic\main.js` をメモ帳やClaude Codeで開き、`soldiers > 30` の `30` を `40` に変えます。これは「兵が40人を超えるまで守る」という変更です。ゲームを起動して、試合の設定で「一覧を更新」を押し、自軍の戦術に `my-first-tactic` を選びます。何度か試合を行い、守る時間や攻め始める時期が変わったかを記録パックで確かめてください。
+`my-first-tactic\tactic.json` をメモ帳やClaude Codeで開き、`attackThreshold` の `default` を `30` から `40` に変えます。これは「兵が40人を超えるまで守る」という変更です。ゲームを起動して、試合の設定で「一覧を更新」を押し、自軍の戦術に `my-first-tactic` を選びます。何度か試合を行い、守る時間や攻め始める時期が変わったかを記録パックで確かめてください。
 
 ## Claude Code・ChatGPTに頼む文例
 
@@ -68,6 +69,26 @@ defend-then-push を元に、守る人数のしきい値を試合の開始時の
 ```powershell
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-rulebook --out .\rulebook
 Get-Content .\rulebook\rulebook.md
+```
+
+## 戦術のつまみ
+
+`tactic.json` の `params` に、試合中に変えられる設定を宣言できます。数値は `min`、`max`、`step` と `default` を書き、`int` は整数、`number` は小数です。`bool` は真偽値、`choice` は `choices` 配列から選ぶ文字列です。名前は半角英数字だけにします。
+
+```json
+"params": [
+  { "name": "attackThreshold", "label": "攻めに切り替える兵の数", "type": "int", "default": 30, "min": 5, "max": 100, "step": 5 },
+  { "name": "aggressive", "label": "積極攻撃", "type": "bool", "default": false },
+  { "name": "mode", "label": "攻撃モード", "type": "choice", "default": "safe", "choices": ["safe", "rush"] }
+]
+```
+
+`onStart(setup)` では `setup.params.attackThreshold`、毎回の `onTick(view)` では `view.params.attackThreshold` のように読みます。変更した値は次の呼び出しから戦術へ渡されます。試し遊びのパネルでは自軍のつまみだけ操作でき、相手は現在値だけ表示されます。
+
+CLIの開始値は次のように指定します（同じ側の指定は複数書けます）。
+
+```powershell
+dotnet ... tactic-match --map-seed 2 --ticks 1200 --west-tactic TacticSamples/defend-then-push --west-param attackThreshold=50
 ```
 
 ## 試合の後の振り返り

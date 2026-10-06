@@ -1,3 +1,4 @@
+using System;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -36,8 +37,8 @@ internal static class TacticMatchCommand
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
-        using var west = CreateHost(westName, 1, source, gateway, runtimes);
-        using var east = CreateHost(eastName, 2, source, gateway, runtimes);
+        using var west = CreateHost(westName, 1, source, gateway, runtimes, options.GetValueOrDefault("--west-param"));
+        using var east = CreateHost(eastName, 2, source, gateway, runtimes, options.GetValueOrDefault("--east-param"));
         west?.Start(SetupJson(scenario, 1));
         east?.Start(SetupJson(scenario, 2));
         var westAuto = CreateAuto(westName, 1, gateway); var eastAuto = CreateAuto(eastName, 2, gateway);
@@ -76,7 +77,7 @@ internal static class TacticMatchCommand
         return result.IsFault ? 4 : 0;
     }
 
-    private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway, string runtimes)
+    private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway, string runtimes, string paramText)
     {
         if (name == "auto") return null;
         ITacticRuntime runtime;
@@ -88,8 +89,27 @@ internal static class TacticMatchCommand
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             runtime = loaded.Runtime;
         }
-        return new TacticHost(faction, source, gateway, gateway, runtime,
+        var host = new TacticHost(faction, source, gateway, gateway, runtime,
             versions: scope => gateway.FactionVersions(faction).Versions(scope));
+        foreach (var assignment in (paramText ?? "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            int equals = assignment.IndexOf('=');
+            if (equals <= 0) throw new InvalidDataException("パラメータはname=valueで指定してください: " + assignment);
+            string namePart = assignment.Substring(0, equals);
+            string valuePart = assignment.Substring(equals + 1);
+            if (!host.SetParam(namePart, ParseParamValue(valuePart)))
+                throw new InvalidDataException("戦術パラメータが不正です: " + assignment);
+        }
+        return host;
+    }
+
+    private static object ParseParamValue(string text)
+    {
+        if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase)) return false;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var integer)) return integer;
+        if (decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)) return number;
+        return text;
     }
 
     private static string SetupJson(ScenarioDefinition scenario, uint faction)
@@ -114,6 +134,7 @@ internal static class TacticMatchCommand
             commands = result.CommandJson,
             rejected = result.Commands.Rejected.Select(x => new { index = x.Index, type = x.Type, reason = x.Reason }).ToArray(),
             failure = result.Failure == null ? null : new { reason = result.Failure.Reason, consecutive = result.Failure.Consecutive },
+            paramChanges = result.ParamChanges.Select(x => new { tick = x.Tick, name = x.Name, from = x.From, to = x.To }).ToArray(),
             disabled = result.Disabled
         };
         lines.Add(JsonSerializer.Serialize(record));

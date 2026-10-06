@@ -12,7 +12,9 @@ namespace Rts.Tactics
     {
         public const int Version = 1;
 
-        public static string Write(FactionFrame frame)
+        public static string Write(FactionFrame frame) => Write(frame, null);
+
+        public static string Write(FactionFrame frame, IReadOnlyDictionary<string, object> parameters)
         {
             if (frame == null) throw new ArgumentNullException(nameof(frame));
             var b = new StringBuilder(2048);
@@ -58,7 +60,8 @@ namespace Rts.Tactics
             b.Append(",\"regions\":[");
             var regions = (frame.Regions ?? Array.Empty<RegionView>()).OrderBy(x => x.Id).ToArray();
             for (int i = 0; i < regions.Length; i++) { if (i != 0) b.Append(','); var r = regions[i]; b.Append("{\"id\":").Append(r.Id).Append(",\"centerKind\":").Append(TacticJson.Quote(r.CenterKind.ToString())).Append(",\"centerId\":").Append(r.CenterId).Append(",\"center\":"); Point(b, r.Center); b.Append(",\"control\":").Append(TacticJson.Quote(r.Control.ToString())).Append(",\"policy\":").Append(TacticJson.Quote(r.Policy.ToString())).Append(",\"economyPolicy\":").Append(TacticJson.Quote(r.EconomyPolicy.ToString())).Append('}'); }
-            b.Append("]}");
+            b.Append("],\"params\":").Append(TacticParameterJson.Object(parameters));
+            b.Append('}');
             return b.ToString();
         }
 

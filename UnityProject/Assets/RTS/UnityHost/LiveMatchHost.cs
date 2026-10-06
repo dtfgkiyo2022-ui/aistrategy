@@ -101,6 +101,15 @@ namespace Rts.UnityHost
             public string LastFailureReason { get { return tacticHost == null || tacticHost.LastFailure == null ? "" : tacticHost.LastFailure.Reason; } }
             public bool Disabled { get { return tacticHost != null && tacticHost.Disabled; } }
             public IReadOnlyList<string> ConsoleLines { get { return tacticHost == null ? Array.Empty<string>() : tacticHost.RecentConsoleLines; } }
+            public IReadOnlyList<TacticParamView> Parameters { get { return tacticHost == null ? Array.Empty<TacticParamView>() : ToViews(tacticHost.Parameters); } }
+            private static TacticParamView[] ToViews(IReadOnlyList<TacticParamDefinition> definitions)
+            {
+                var views = new TacticParamView[definitions.Count];
+                for (int i = 0; i < views.Length; i++) { var d = definitions[i]; views[i] = new TacticParamView(d.Name, d.Label, d.Type, d.DefaultValue, d.Min, d.Max, d.Step, d.Choices); }
+                return views;
+            }
+            public IReadOnlyDictionary<string, object> ParamValues { get { return tacticHost == null ? new Dictionary<string, object>() : tacticHost.ParamValues; } }
+            public bool SetParam(string name, object value) { return tacticHost != null && ownSide && tacticHost.SetParam(name, value); }
         }
         private float accumulated;
         private int speedMultiplier = 1;
