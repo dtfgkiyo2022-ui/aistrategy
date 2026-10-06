@@ -13,7 +13,7 @@ using Battle = Rts.Simulation.Simulation;
 namespace Rts.Tactics
 {
     /// <summary>Writes the bounded, AI-readable files belonging to one match.</summary>
-    public sealed class MatchPackWriter
+    public sealed partial class MatchPackWriter
     {
         public const int Version = 1;
         public const int SnapshotIntervalTicks = 600;
@@ -45,6 +45,7 @@ namespace Rts.Tactics
             if (simulation == null) throw new ArgumentNullException(nameof(simulation));
             RecordEvents(simulation);
             RecordSnapshotIfDue(simulation);
+            RecordCredit(simulation);
         }
 
         public void RecordTactic(TacticHostTickResult result, uint factionId, string selection)
@@ -87,6 +88,7 @@ namespace Rts.Tactics
             if (simulation == null) throw new ArgumentNullException(nameof(simulation));
             RecordEvents(simulation);
             RecordSnapshotIfDue(simulation);
+            RecordCredit(simulation);
         }
 
         public void Complete(IEnumerable<ScheduledInput> inputs, long tickLimit)
@@ -102,11 +104,13 @@ namespace Rts.Tactics
             File.WriteAllText(Path.Combine(directory, "summary.json"), SummaryJson(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "README.md"), Readme(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "pack.json"), PackJson(), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "credit.json"), CreditJson(), new UTF8Encoding(false));
         }
 
         public void Complete(Battle simulation, IEnumerable<ScheduledInput> inputs, long tickLimit)
         {
             if (simulation == null) throw new ArgumentNullException(nameof(simulation));
+            RecordCredit(simulation, true);
             Complete(inputs, tickLimit);
             // Summary is written from the final simulation state, so replace the placeholder written by the overload.
             File.WriteAllText(Path.Combine(directory, "summary.json"), SummaryJson(simulation), new UTF8Encoding(false));
@@ -146,7 +150,7 @@ namespace Rts.Tactics
             Field(b, "rulebookVersion", Version.ToString(CultureInfo.InvariantCulture)); b.Append('}'); return b.ToString();
         }
 
-        private string PackJson() => "{\"packVersion\":1,\"files\":[\"summary.json\",\"replay.rpl\",\"tactic-log.jsonl\",\"timeline.jsonl\",\"snapshots.jsonl\",\"README.md\",\"rulebook.md\"]}";
+        private string PackJson() => "{\"packVersion\":1,\"files\":[\"summary.json\",\"replay.rpl\",\"tactic-log.jsonl\",\"timeline.jsonl\",\"snapshots.jsonl\",\"credit.json\",\"README.md\",\"rulebook.md\"]}";
 
         private string Readme()
         {
@@ -157,8 +161,10 @@ namespace Rts.Tactics
                 + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）。読み直しは `kind=reload` として時刻、戦術、成功・失敗、理由を記録します。\n"
                 + "- `snapshots.jsonl`: 600tick（30秒）ごとの霧なし集計。兵種別の兵数、村人数、資源、建物数、拠点の持ち主、時代と文明。\n"
                 + "- `timeline.jsonl`: 両陣営から見えた `GameEvent` の時系列。\n"
+                + "- `credit.json`: 部隊が従っていた命令の出どころ別の時間、損害、見えていた敵の撃破、拠点の出来事、命令の結果。\n"
                 + "- `rulebook.md`: この試合で使ったルールブック。\n\n"
-                + "戦術を直すときは、まず `summary.json` と `tactic-log.jsonl` の失敗・捨てた命令を確認します。次に `snapshots.jsonl` で差がついた時刻を探し、その前後を `timeline.jsonl` の出来事で見ます。必要なら `replay.rpl` を再生して確かめます。\n";
+                + CreditReadmeTable()
+                + "\n戦術を直すときは、まず `summary.json` と `tactic-log.jsonl` の失敗・捨てた命令を確認します。次に `credit.json` で人・お任せ・戦術のどの部隊がその場面にいたかを探し、`snapshots.jsonl` と `timeline.jsonl` で前後を見ます。必要なら `replay.rpl` を再生して確かめます。\n";
         }
 
         private static string SnapshotJson(MatchPackSnapshot s)
