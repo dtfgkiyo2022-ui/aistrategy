@@ -1,5 +1,5 @@
 // Age3に到達してから攻める。兵力の条件を上げるほど、より堅い亀になる。
-const ATTACK_AGE = "Age3";
+const ATTACK_AGE = 2;
 const ATTACK_SOLDIERS = 36;
 const TURTLE_LOSS = 120;
 const COUNTER_LOSS = 800;
@@ -28,7 +28,8 @@ function onTick(view) {
   }
   if (view.economy !== null && view.tick % 100 === 0) {
     commands.push({ type: "economy", kind: "SetEconomyPolicy", sequence: economySequence++, policy: counter ? "Military" : "Growth" });
-    if (!counter && age !== ATTACK_AGE) commands.push({ type: "economy", kind: "AdvanceAge", sequence: economySequence++, civ: view.economy.civilisation });
+    // The tactic view has no full age-readiness predicate, so omit
+    // AdvanceAge rather than submitting a command the simulation drops.
   }
   return { commands: commands };
 }
