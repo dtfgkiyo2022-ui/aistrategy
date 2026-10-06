@@ -27,6 +27,46 @@ public sealed class TacticTests
     }
 
     [Test]
+    public void ViewAddsKindNamesCompositionsSummaryAndKeepsThemDeterministic()
+    {
+        var armies = new[]
+        {
+            new OwnArmyView(1, 1, UnitKind.Infantry, new SimPoint(Fix(0), Fix(0)), 2, default),
+            new OwnArmyView(2, 1, UnitKind.Archer, new SimPoint(Fix(10), Fix(0)), 1, default)
+        };
+        var enemies = new[]
+        {
+            new VisibleEnemy(11, new SimPoint(Fix(5), Fix(5)), (byte)UnitKind.Archer),
+            new VisibleEnemy(12, new SimPoint(Fix(6), Fix(5)), (byte)UnitKind.Infantry)
+        };
+        var contacts = new[] { new EnemyContact(20, new SimPoint(Fix(5), Fix(5)), 0, 2, 2, true, new[] { 11U, 12U }) };
+        var frame = new FactionFrame(0, 1,
+            new[]
+            {
+                new RenderUnit(101, true, UnitKind.Infantry, new SimPoint(Fix(1), Fix(0)), false, false, false, true, 10),
+                new RenderUnit(102, true, UnitKind.Archer, new SimPoint(Fix(9), Fix(0)), false, false, false, true, 10),
+                new RenderUnit(103, true, UnitKind.Infantry, new SimPoint(Fix(0), Fix(1)), false, false, false, true, 10)
+            },
+            new FactionObservation(1, 0, armies, enemies, contacts, Array.Empty<KnownObjective>()),
+            Array.Empty<CommandView>(), Array.Empty<GameEvent>(), new FogView(new[] { true }, new[] { true }),
+            new MatchResult(false, 0, false, false, true));
+
+        string first = TacticViewWriter.Write(frame);
+        Assert.That(first, Is.EqualTo(TacticViewWriter.Write(frame)));
+        using (var doc = System.Text.Json.JsonDocument.Parse(first))
+        {
+            var root = doc.RootElement;
+            Assert.That(root.GetProperty("visibleEnemies")[0].GetProperty("kindName").GetString(), Is.EqualTo("Archer"));
+            Assert.That(root.GetProperty("ownArmies")[0].GetProperty("composition").GetProperty("Infantry").GetInt32(), Is.EqualTo(2));
+            Assert.That(root.GetProperty("ownArmies")[1].GetProperty("composition").GetProperty("Archer").GetInt32(), Is.EqualTo(1));
+            Assert.That(root.GetProperty("contacts")[0].GetProperty("visibleComposition").GetProperty("Archer").GetInt32(), Is.EqualTo(1));
+            Assert.That(root.GetProperty("enemySummary").GetProperty("visibleCount").GetInt32(), Is.EqualTo(2));
+            Assert.That(root.GetProperty("enemySummary").GetProperty("byKind").GetProperty("Infantry").GetInt32(), Is.EqualTo(1));
+        }
+        Assert.That(first, Does.Not.Contain("\"id\":99"));
+    }
+
+    [Test]
     public void AgeViewGuidesAdvanceAndAdvanceCommandChangesAge()
     {
         var scenario = MapGenerator.GenerateTerrain(1);

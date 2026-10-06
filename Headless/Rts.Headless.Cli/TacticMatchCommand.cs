@@ -26,7 +26,12 @@ internal static class TacticMatchCommand
         bool hasScenario = options.TryGetValue("--scenario", out var scenarioPath);
         bool hasSeed = options.TryGetValue("--map-seed", out var seedText);
         if (hasScenario == hasSeed) throw new InvalidDataException("--scenario または --map-seed の一方を指定してください。");
-        var scenario = hasScenario ? JsonInput.Scenario(scenarioPath) : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        var scenario = hasScenario
+            ? JsonInput.Scenario(scenarioPath)
+            : options.ContainsKey("--terrain")
+                ? MapGenerator.GenerateTerrain(ulong.Parse(seedText, CultureInfo.InvariantCulture))
+                : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");
         string westName = options.GetValueOrDefault("--west-tactic") ?? "auto";
