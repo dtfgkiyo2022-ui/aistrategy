@@ -11,7 +11,7 @@ function onTick(view) {
       target: { kind: "Army", id: army.id },
       goal: { kind: "Core", id: enemyCore },
       priority: 100,
-      allowedLossPermille: 1000,
+      allowedLossPermille: view.params.lossBudgetPermille,
       reservePermille: 0
     });
   }

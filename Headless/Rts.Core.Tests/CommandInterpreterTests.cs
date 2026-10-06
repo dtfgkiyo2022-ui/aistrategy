@@ -65,6 +65,37 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void TacticCommandsAreParsedAndCannotMixWithConcreteOrders()
+        {
+            var frame = Frame();
+            var summary = AiSituationSummary.From(frame);
+            summary.SetTacticInfo("rush", new[] { "rush", "defend" }, new[]
+            {
+                new AiTacticParameterInfo { Name = "attackThreshold", Label = "攻めに切り替える兵の数", Type = "int", Value = "30", Min = 5, Max = 100, Step = 5 }
+            });
+            var changed = AiResponseInterpreter.Interpret(
+                "{\"commands\":[{\"type\":\"tactic\",\"kind\":\"SetTacticParam\",\"tacticParam\":\"attackThreshold\",\"tacticParamValue\":\"20\"}],\"say\":\"\"}",
+                new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = 100, DeadlineTick = 340 });
+            Assert.That(changed.TacticCommands, Has.Count.EqualTo(1));
+            Assert.That(changed.TacticCommands[0].ParamValue, Is.EqualTo("20"));
+
+            var mixed = AiResponseInterpreter.Interpret(
+                "{\"commands\":[{\"type\":\"tactic\",\"kind\":\"SwitchTactic\",\"tactic\":\"defend\"},{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"全部隊\",\"goal\":\"北の拠点\"}],\"say\":\"\"}",
+                new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = 100, DeadlineTick = 340 });
+            Assert.That(mixed.TacticCommands, Is.Empty);
+            Assert.That(mixed.Policies, Is.Empty);
+            Assert.That(mixed.Rejected, Has.Some.Matches<AiRejectedCommand>(x => x.Reason.Contains("同時")));
+        }
+
+        [Test]
+        public void TacticParamIsRejectedWhenThereIsNoOwnTactic()
+        {
+            var result = Interpret("{\"commands\":[{\"type\":\"tactic\",\"kind\":\"SetTacticParam\",\"tacticParam\":\"attackThreshold\",\"tacticParamValue\":\"20\"}],\"say\":\"\"}");
+            Assert.That(result.TacticCommands, Is.Empty);
+            Assert.That(result.Rejected, Has.Some.Matches<AiRejectedCommand>(x => x.Reason.Contains("戦術")));
+        }
+
+        [Test]
         public void InvalidNamesOwnershipAndRangeAreReportedAndDropped()
         {
             var result = Interpret("{\"commands\":[{\"type\":\"policy\",\"kind\":\"Focus\",\"scope\":\"北の拠点\",\"goal\":\"北の拠点\"},{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"ない軍\",\"goal\":\"北の拠点\"}],\"say\":\"\"}");

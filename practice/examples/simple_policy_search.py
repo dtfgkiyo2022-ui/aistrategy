@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -35,12 +34,13 @@ def run_trial(cli: str | None, threshold: int, seed: int) -> int:
 
 
 def write_threshold(tactic_dir: Path, threshold: int) -> None:
-    main_js = tactic_dir / "main.js"
-    source = main_js.read_text(encoding="utf-8")
-    updated = re.sub(r"^const ATTACK_THRESHOLD = \d+;", f"const ATTACK_THRESHOLD = {threshold};", source, count=1, flags=re.MULTILINE)
-    if updated == source:
-        raise ValueError("main.js の先頭に ATTACK_THRESHOLD 定数がありません")
-    main_js.write_text(updated, encoding="utf-8", newline="\n")
+    metadata_path = tactic_dir / "tactic.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    params = next((param for param in metadata.get("params", []) if param.get("name") == "attackThreshold"), None)
+    if params is None:
+        raise ValueError("tactic.json に attackThreshold params がありません")
+    params["default"] = threshold
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> None:
@@ -67,4 +67,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

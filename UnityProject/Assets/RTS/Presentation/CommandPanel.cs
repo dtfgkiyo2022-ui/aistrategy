@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
@@ -353,7 +354,9 @@ namespace Rts.Presentation
             DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
             y += SetupRow;
             y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
+            y = DrawTacticParams(opponentTactic, false, x, y, rect.width - 16f);
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
+            y = DrawTacticParams(ownTactic, true, x, y, rect.width - 16f);
 
             if (playerFiles != null)
             {
@@ -480,6 +483,59 @@ namespace Rts.Presentation
             string console = recent.Count == 0 ? UiText.T("none", "なし") : string.Join("\n", recent.ToArray());
             GUI.Label(new Rect(x, y, width, 70f), UiText.T("console.log (latest 5): ", "console.log（最新5行）：") + console, UiStyles.Tiny);
             y += 70f;
+            return y + 2f;
+        }
+
+        private static float DrawTacticParams(ITacticControl control, bool editable, float x, float y, float width)
+        {
+            if (control == null || !control.Active || control.Parameters == null || control.Parameters.Count == 0) return y;
+            GUI.Label(new Rect(x, y, width, 22f), UiText.T("Tactic knobs", "戦術のつまみ"), UiStyles.Body);
+            y += 22f;
+            foreach (var parameter in control.Parameters)
+            {
+                object raw;
+                if (!control.ParamValues.TryGetValue(parameter.Name, out raw)) raw = parameter.DefaultValue;
+                string label = UiText.T(parameter.Name, parameter.Label);
+                if (parameter.Type == "bool")
+                {
+                    bool value = raw is bool b && b;
+                    if (editable)
+                    {
+                        bool next = GUI.Toggle(new Rect(x, y, width, 24f), value, label + ": " + (value ? "on" : "off"), GUI.skin.button);
+                        if (next != value) control.SetParam(parameter.Name, next);
+                    }
+                    else GUI.Label(new Rect(x, y, width, 24f), label + ": " + (value ? "on" : "off"));
+                }
+                else if (parameter.Type == "choice")
+                {
+                    GUI.Label(new Rect(x, y, width, 22f), label + ": " + (raw ?? ""));
+                    if (editable)
+                    {
+                        float cell = width / parameter.Choices.Count;
+                        for (int i = 0; i < parameter.Choices.Count; i++)
+                        {
+                            string choice = parameter.Choices[i];
+                            if (GUI.Button(new Rect(x + i * cell, y + 22f, cell - 4f, 22f), choice) && !Equals(raw, choice))
+                                control.SetParam(parameter.Name, choice);
+                        }
+                        y += 22f;
+                    }
+                }
+                else
+                {
+                    decimal current = raw is decimal m ? m : System.Convert.ToDecimal(raw, System.Globalization.CultureInfo.InvariantCulture);
+                    GUI.Label(new Rect(x, y, width, 20f), label + ": " + current.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+                    if (editable)
+                    {
+                        float slider = GUI.HorizontalSlider(new Rect(x + width * 0.42f, y + 4f, width * 0.56f, 18f),
+                            (float)current, (float)parameter.Min.Value, (float)parameter.Max.Value);
+                        decimal next = parameter.Type == "int" ? Math.Round((decimal)slider, 0, System.MidpointRounding.AwayFromZero) : (decimal)slider;
+                        if (parameter.Step.HasValue) next = parameter.Min.Value + Math.Round((next - parameter.Min.Value) / parameter.Step.Value, 0, System.MidpointRounding.AwayFromZero) * parameter.Step.Value;
+                        if (next != current) control.SetParam(parameter.Name, parameter.Type == "int" ? (object)(int)next : next);
+                    }
+                }
+                y += editable && parameter.Type == "choice" ? 48f : 26f;
+            }
             return y + 2f;
         }
 

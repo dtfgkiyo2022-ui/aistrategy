@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Rts.Presentation
@@ -16,5 +17,31 @@ namespace Rts.Presentation
         string LastFailureReason { get; }
         bool Disabled { get; }
         IReadOnlyList<string> ConsoleLines { get; }
+        IReadOnlyList<TacticParamView> Parameters { get; }
+        IReadOnlyDictionary<string, object> ParamValues { get; }
+        bool SetParam(string name, object value);
+    }
+
+    /// <summary>
+    /// One tactic knob as the panel draws it. Presentation may reference Contracts only, so UnityHost copies the
+    /// tactic's own definition (Rts.Tactics.TacticParamDefinition) into this.
+    /// </summary>
+    public sealed class TacticParamView
+    {
+        public TacticParamView(string name, string label, string type, object defaultValue,
+            decimal? min, decimal? max, decimal? step, IReadOnlyList<string> choices)
+        {
+            Name = name; Label = label; Type = type; DefaultValue = defaultValue;
+            Min = min; Max = max; Step = step; Choices = choices ?? Array.Empty<string>();
+        }
+
+        public string Name { get; }
+        public string Label { get; }
+        public string Type { get; }
+        public object DefaultValue { get; }
+        public decimal? Min { get; }
+        public decimal? Max { get; }
+        public decimal? Step { get; }
+        public IReadOnlyList<string> Choices { get; }
     }
 }

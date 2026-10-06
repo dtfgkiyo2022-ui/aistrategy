@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Presentation;
@@ -26,6 +27,7 @@ namespace Rts.UnityHost
         [SerializeField] private int aiDelayTicks;
 
         private Battle simulation;
+        private ScenarioDefinition currentScenario;
         private CommandGateway gateway;
         private LiveCommandPort port;
         private PresetController enemy;
@@ -101,6 +103,15 @@ namespace Rts.UnityHost
             public string LastFailureReason { get { return tacticHost == null || tacticHost.LastFailure == null ? "" : tacticHost.LastFailure.Reason; } }
             public bool Disabled { get { return tacticHost != null && tacticHost.Disabled; } }
             public IReadOnlyList<string> ConsoleLines { get { return tacticHost == null ? Array.Empty<string>() : tacticHost.RecentConsoleLines; } }
+            public IReadOnlyList<TacticParamView> Parameters { get { return tacticHost == null ? Array.Empty<TacticParamView>() : ToViews(tacticHost.Parameters); } }
+            private static TacticParamView[] ToViews(IReadOnlyList<TacticParamDefinition> definitions)
+            {
+                var views = new TacticParamView[definitions.Count];
+                for (int i = 0; i < views.Length; i++) { var d = definitions[i]; views[i] = new TacticParamView(d.Name, d.Label, d.Type, d.DefaultValue, d.Min, d.Max, d.Step, d.Choices); }
+                return views;
+            }
+            public IReadOnlyDictionary<string, object> ParamValues { get { return tacticHost == null ? new Dictionary<string, object>() : tacticHost.ParamValues; } }
+            public bool SetParam(string name, object value) { return tacticHost != null && ownSide && tacticHost.SetParam(name, value); }
         }
         private float accumulated;
         private int speedMultiplier = 1;
@@ -427,6 +438,7 @@ namespace Rts.UnityHost
             var scenario = economyMap && ScenarioMultiplier == 1 ? (largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations))
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
+            currentScenario = scenario;
             if (economyMap && ScenarioMultiplier == 1)
             {
                 scenario.Economy.MonksEnabled = monks;
@@ -497,7 +509,10 @@ namespace Rts.UnityHost
                 externalSchedule, external);
             port = new LiveCommandPort(gateway, aiDelayTicks);
             liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable,
-                changeDoctrine: preset => SwitchOwnDoctrine(preset));
+                changeDoctrine: preset => SwitchOwnDoctrine(preset),
+                changeTacticParam: (name, value) => TrySetOwnTacticParam(name, value),
+                switchTactic: name => TrySwitchOwnTactic(name),
+                enrichSummary: AddOwnTacticInfo);
             enemyFactionId = 3 - viewFactionId;
             enemyTacticSide = CreateTacticSide(enemyFactionId, ref enemyTactic);
             if (enemyTacticSide.Host != null) enemyTacticSide.Host.Start(TacticSetupJson(scenario, enemyFactionId));
@@ -579,6 +594,103 @@ namespace Rts.UnityHost
             own = replacement;
             ownPreset = preset;
             return true;
+        }
+
+        public bool SetOwnTacticParam(string name, string value)
+        {
+            return TrySetOwnTacticParam(name, value).Success;
+        }
+
+        private AiTacticChangeResult TrySetOwnTacticParam(string name, string value)
+        {
+            var host = ownTacticSide == null ? null : ownTacticSide.Host;
+            if (host == null) return AiTacticChangeResult.Fail("自軍に戦術がないため、つまみを変えられません。");
+            TacticParamDefinition definition = null;
+            foreach (var candidate in host.Parameters) if (candidate.Name == name) { definition = candidate; break; }
+            if (definition == null) return AiTacticChangeResult.Fail("つまみが見つかりません: " + (name ?? ""));
+            object parsed;
+            string parseReason;
+            if (!TryParseTacticValue(definition, value, out parsed, out parseReason)) return AiTacticChangeResult.Fail(parseReason);
+            object before = host.ParamValues[name];
+            if (!host.TrySetParam(name, parsed, out var reason)) return AiTacticChangeResult.Fail(reason);
+            object after = host.ParamValues[name];
+            return AiTacticChangeResult.Ok(definition.Label + "を " + TacticValue(before) + " → " + TacticValue(after) + " にしました");
+        }
+
+        public bool SwitchOwnTactic(string name)
+        {
+            return TrySwitchOwnTactic(name).Success;
+        }
+
+        private AiTacticChangeResult TrySwitchOwnTactic(string name)
+        {
+            if (simulation == null || gateway == null || currentScenario == null) return AiTacticChangeResult.Fail("試合が開始されていません。");
+            string selection = ResolveTacticSelection(name);
+            if (selection == null) return AiTacticChangeResult.Fail("戦術名が見つかりません: " + (name ?? ""));
+            if (selection == ownTactic) return AiTacticChangeResult.Ok("戦術はすでに " + (ownTacticSide != null && ownTacticSide.Host != null ? ownTacticSide.Host.Name : "なし") + " です");
+
+            TacticMatchSide replacement;
+            try
+            {
+                replacement = TacticMatchSetup.Create(ownFactionId, selection, LoadTacticRuntime, this, gateway, gateway, null,
+                    scope => gateway.FactionVersions(ownFactionId).Versions(scope));
+                replacement.Host?.Start(TacticSetupJson(currentScenario, ownFactionId));
+            }
+            catch (Exception e) when (e is InvalidDataException || e is InvalidOperationException || e is ArgumentException)
+            {
+                return AiTacticChangeResult.Fail("戦術を読み込めません: " + e.Message);
+            }
+
+            long tick = simulation.Capture(ownFactionId).Tick;
+            gateway.ResetDoctrine(ownFactionId, checked(tick + 1));
+            ownTacticSide?.Host?.Dispose();
+            ownTacticSide = replacement;
+            ownTactic = selection;
+            own = PolicyPresets.CreateController(replacement.HasTactic ? "none" : ownPreset, ownFactionId, gateway);
+            own.Initialize(tick);
+            ownTacticChoice?.Bind(tacticChoices, ownTacticSide.Host);
+            string report = replacement.HasTactic ? "戦術を " + replacement.Host.Name + " に切り替えました" : "戦術をやめ、お任せに戻しました";
+            return AiTacticChangeResult.Ok(report);
+        }
+
+        private string ResolveTacticSelection(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name == "なし") return TacticMatchSetup.None;
+            foreach (var entry in tacticEntries ?? Array.Empty<TacticCatalogEntry>())
+                if (entry.IsSelectable && (entry.Path == name || entry.DisplayName == name || entry.FolderName == name)) return entry.Path;
+            return null;
+        }
+
+        private void AddOwnTacticInfo(AiSituationSummary summary)
+        {
+            var host = ownTacticSide == null ? null : ownTacticSide.Host;
+            var available = (tacticEntries ?? Array.Empty<TacticCatalogEntry>()).Where(x => x.IsSelectable).Select(x => x.DisplayName);
+            var parameters = host == null ? Array.Empty<AiTacticParameterInfo>() : host.Parameters.Select(d => new AiTacticParameterInfo(d.Name, d.Label, d.Type,
+                host.ParamValues.TryGetValue(d.Name, out var value) ? TacticValue(value) : TacticValue(d.DefaultValue),
+                d.Min, d.Max, d.Step, d.Choices)).ToArray();
+            summary.SetTacticInfo(host == null ? "" : host.Name, available, parameters);
+        }
+
+        private static bool TryParseTacticValue(TacticParamDefinition definition, string text, out object value, out string reason)
+        {
+            value = null; reason = null; text = text ?? "";
+            if (definition.Type == "bool")
+            {
+                if (text == "true") { value = true; return true; }
+                if (text == "false") { value = false; return true; }
+                reason = "boolはtrueまたはfalseです。"; return false;
+            }
+            if (definition.Type == "choice") { value = text; return true; }
+            if (definition.Type == "int" && int.TryParse(text, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var integer)) { value = integer; return true; }
+            if (definition.Type == "number" && decimal.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var number)) { value = number; return true; }
+            reason = definition.Type + "は数値でなければなりません。"; return false;
+        }
+
+        private static string TacticValue(object value)
+        {
+            if (value is bool boolean) return boolean ? "true" : "false";
+            if (value is IFormattable formattable) return formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture);
+            return value == null ? "" : value.ToString();
         }
 
         public decimal EstimateAiCost(string instruction, string model, ScopeKey? fixedTarget = null)
