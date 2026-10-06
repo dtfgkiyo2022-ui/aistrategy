@@ -8,6 +8,7 @@ namespace Rts.Presentation
     public interface ITacticControl
     {
         string[] Choices { get; }
+        IReadOnlyList<TacticChoiceView> ChoiceViews { get; }
         string Current { get; set; }
         bool Active { get; }
         string Name { get; }
@@ -49,6 +50,25 @@ namespace Rts.Presentation
         public decimal? Max { get; }
         public decimal? Step { get; }
         public IReadOnlyList<string> Choices { get; }
+    }
+
+    /// <summary>One tactic choice as drawn by Presentation. UnityHost copies catalog metadata into this.</summary>
+    public sealed class TacticChoiceView
+    {
+        public TacticChoiceView(string selection, string displayName, string style, bool recommended, string description)
+        {
+            Selection = selection;
+            DisplayName = displayName;
+            Style = style;
+            Recommended = recommended;
+            Description = description ?? "";
+        }
+
+        public string Selection { get; }
+        public string DisplayName { get; }
+        public string Style { get; }
+        public bool Recommended { get; }
+        public string Description { get; }
     }
 
     /// <summary>One tactic signal as drawn by Presentation. The Tactics assembly is intentionally not referenced here.</summary>

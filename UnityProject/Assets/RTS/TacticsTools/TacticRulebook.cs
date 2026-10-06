@@ -29,7 +29,7 @@ namespace Rts.Tactics
             markdown.AppendLine();
             markdown.AppendLine("## 戦術ファイルの形");
             markdown.AppendLine();
-            markdown.AppendLine("`tactic.json` は `name`, `author`, `version`, `language`, `entry`, `apiVersion`, `description` を持ちます。入口は `main.js` です。");
+            markdown.AppendLine("`tactic.json` は `name`, `author`, `version`, `language`, `entry`, `apiVersion`, `description` を持ちます。入口は `main.js` です。任意で `style`（`auto`=全部お任せ型、`partner`=相棒型）と `recommended`（標準としておすすめするなら `true`）を指定できます。`style` はこの2値以外を指定できず、`recommended` は真偽値です。");
             markdown.AppendLine("任意で `params` に、英数字の `name`、表示用 `label`、`type`（`int` / `number` / `bool` / `choice`）、`default` を並べます。数値は `min`, `max`, `step` も必須で、既定値と変更値は範囲内かつstepに一致しなければなりません。`choice` は `choices` 配列と、その中の `default` が必要です。");
             markdown.AppendLine("任意で `signals` に、英数字の `name`、表示用 `label`、地点指定の要否 `needsPoint` を最大8個まで並べます。名前は重複できません。地点付きの合図は次の戦況の `view.signals` に `point.x` / `point.z` とともに1回だけ届きます。");
             markdown.AppendLine("試合開始時に `onStart(setup)` を1回、以後20tick（1秒）ごとに `onTick(view)` を呼び、`setup.params` と `view.params` に現在値の辞書を渡します。`{ version: 1, commands: [...] }` を返します。命令を返さない回は `{version:1,commands:[]}` とします。");

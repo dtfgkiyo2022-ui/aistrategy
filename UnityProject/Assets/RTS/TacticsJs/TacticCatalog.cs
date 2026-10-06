@@ -80,7 +80,8 @@ namespace Rts.TacticsJs
             }
 
             return entries
-                .OrderBy(x => x.FolderName, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(x => x.IsSelectable && x.Metadata.Recommended)
+                .ThenBy(x => x.FolderName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.FolderName, StringComparer.Ordinal)
                 .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();

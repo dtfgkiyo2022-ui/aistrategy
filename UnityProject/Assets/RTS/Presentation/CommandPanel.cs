@@ -370,6 +370,7 @@ namespace Rts.Presentation
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own tactic", "自軍の戦術"));
             y += Mathf.Max(SetupRow, DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
+            y = DrawTacticHint(ownTactic, x, y, rect.width - 16f);
             // The own tactic comes first: its knobs are the ones the player moves; the opponent's are shown only.
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticReloadControls(ownTactic, x, y, rect.width - 16f);
@@ -474,6 +475,25 @@ namespace Rts.Presentation
         private static float DrawTacticChoices(ITacticControl control, Rect area)
         {
             if (control == null) return 0f;
+            var views = control.ChoiceViews;
+            if (views != null && views.Count != 0)
+            {
+                float viewWidest = 0f;
+                for (int i = 0; i < views.Count; i++)
+                    viewWidest = Mathf.Max(viewWidest, GUI.skin.button.CalcSize(new GUIContent(TacticLabel(views[i]))).x + 12f);
+                int viewColumns = Mathf.Clamp((int)(area.width / Mathf.Max(1f, viewWidest)), 1, views.Count);
+                int viewRows = (views.Count + viewColumns - 1) / viewColumns;
+                float viewWidth = area.width / viewColumns;
+                const float choiceHeight = 44f;
+                for (int i = 0; i < views.Count; i++)
+                {
+                    var choice = views[i];
+                    bool on = control.Current == choice.Selection;
+                    var cell = new Rect(area.x + (i % viewColumns) * viewWidth, area.y + (i / viewColumns) * (choiceHeight + 4f), viewWidth - 4f, choiceHeight);
+                    if (GUI.Toggle(cell, on, TacticLabel(choice), GUI.skin.button) && !on) control.Current = choice.Selection;
+                }
+                return viewRows * choiceHeight + (viewRows - 1) * 4f;
+            }
             var choices = control.Choices;
             if (choices == null || choices.Length == 0) return 0f;
             float widest = 0f;
@@ -495,6 +515,33 @@ namespace Rts.Presentation
         {
             if (string.IsNullOrEmpty(selection)) return UiText.T("none (preset)", "なし（方針プリセット）");
             return System.IO.Path.GetFileName(selection);
+        }
+
+        private static string TacticLabel(TacticChoiceView choice)
+        {
+            if (string.IsNullOrEmpty(choice.Selection)) return TacticLabel(choice.Selection);
+            string name = string.IsNullOrEmpty(choice.DisplayName) ? System.IO.Path.GetFileName(choice.Selection) : choice.DisplayName;
+            string type = choice.Style == "auto" ? UiText.T("All hands-off", "全部お任せ型")
+                : choice.Style == "partner" ? UiText.T("Partner", "相棒型") : "";
+            string prefix = choice.Recommended ? UiText.T("Recommended: ", "おすすめ：") : "";
+            string suffix = type.Length == 0 ? "" : " (" + type + ")";
+            // Only the recommended pair carries its one-line description; on every button it made the list too tall.
+            return prefix + name + suffix + (!choice.Recommended || string.IsNullOrWhiteSpace(choice.Description) ? "" : "\n" + choice.Description);
+        }
+
+        private static float DrawTacticHint(ITacticControl control, float x, float y, float width)
+        {
+            if (control == null || string.IsNullOrEmpty(control.Current) || control.ChoiceViews == null) return y;
+            for (int i = 0; i < control.ChoiceViews.Count; i++)
+            {
+                var choice = control.ChoiceViews[i];
+                if (choice.Selection != control.Current || choice.Style != "partner") continue;
+                GUI.Label(new Rect(x, y, width, 40f), UiText.T(
+                    "This tactic leaves units you control alone. Select a unit and move it yourself.",
+                    "この戦術は、あなたが動かしている部隊には触れません。部隊を選んで動かしてみてください。"), UiStyles.Tiny);
+                return y + 42f;
+            }
+            return y;
         }
 
         private static float DrawTacticStatus(ITacticControl control, string title, float x, float y, float width)

@@ -15,6 +15,8 @@ namespace Rts.TacticsJs
         public string Entry { get; internal set; }
         public int ApiVersion { get; internal set; }
         public string Description { get; internal set; }
+        public string Style { get; internal set; }
+        public bool Recommended { get; internal set; }
         public IReadOnlyList<TacticParamDefinition> Params { get; internal set; } = Array.Empty<TacticParamDefinition>();
         public IReadOnlyList<TacticSignalDefinition> Signals { get; internal set; } = Array.Empty<TacticSignalDefinition>();
     }
@@ -85,6 +87,8 @@ namespace Rts.TacticsJs
                 Entry = RequiredString(root, "entry"),
                 ApiVersion = checked((int)RequiredInteger(root, "apiVersion")),
                 Description = RequiredString(root, "description"),
+                Style = OptionalStyle(root),
+                Recommended = OptionalBoolean(root, "recommended", false),
                 Params = ReadParams(root),
                 Signals = ReadSignals(root)
             };
@@ -146,6 +150,21 @@ namespace Rts.TacticsJs
             if (raw is long l) return l;
             if (raw is decimal m) return m;
             throw new FormatException("paramsの" + key + "は数値です: " + paramName);
+        }
+
+        private static string OptionalStyle(Dictionary<string, object> root)
+        {
+            if (!root.TryGetValue("style", out var value)) return null;
+            if (!(value is string style) || (style != "auto" && style != "partner"))
+                throw new FormatException("styleはautoまたはpartnerでなければなりません。");
+            return style;
+        }
+
+        private static bool OptionalBoolean(Dictionary<string, object> root, string key, bool fallback)
+        {
+            if (!root.TryGetValue(key, out var value)) return fallback;
+            if (!(value is bool boolean)) throw new FormatException(key + "は真偽値でなければなりません。");
+            return boolean;
         }
 
         private static string RequiredString(System.Collections.Generic.Dictionary<string, object> root, string key)
