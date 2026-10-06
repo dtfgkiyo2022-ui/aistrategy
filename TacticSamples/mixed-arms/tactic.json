@@ -1,0 +1,14 @@
+{
+  "name": "mixed-arms",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "内政と時代進行を優先し、Age2から弓兵と騎兵を混ぜて守ってから反攻する戦術。",
+  "params": [
+    { "name": "archerPermille", "label": "弓兵の目標割合（‰）", "type": "int", "default": 550, "min": 200, "max": 800, "step": 50 },
+    { "name": "attackThreshold", "label": "反攻に出る兵の数", "type": "int", "default": 28, "min": 10, "max": 80, "step": 2 },
+    { "name": "ageTarget", "label": "専用兵を作り始める時代", "type": "int", "default": 1, "min": 1, "max": 2, "step": 1 }
+  ]
+}

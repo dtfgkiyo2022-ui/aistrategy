@@ -102,6 +102,14 @@ CLIの開始値は次のように指定します（同じ側の指定は複数�
 dotnet ... tactic-match --map-seed 2 --ticks 1200 --west-tactic TacticSamples/defend-then-push --west-param attackThreshold=50
 ```
 
+`tactic-match` でゲーム本体に近い地形マップと時代進行を使う場合は、`--terrain --ages` を追加します。ゲーム本体の `LiveMatchHost.Begin` は通常、経済ありの地形マップ（`MapGenerator.GenerateTerrain`）を使うため、CLIでも次の組み合わせを基本にします。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-match --map-seed 2 --terrain --ages --ticks 12000 --west-tactic TacticSamples/mixed-arms --east-tactic auto
+```
+
+`--ages` は `economy.agesEnabled` を有効にし、`--terrain` は森・川・山を含む地形マップを選びます。時代を使わない従来の経済マップを再現する場合は、これらのフラグを付けません。
+
 ## 試合の後の振り返り
 
 試合が終わると記録パックが `Documents\AiCommandRts\Packs\` に保存されます。パネルの「記録パックのフォルダを開く」から開けます。まずパック内の `README.md` を読み、その指示どおりに進めてください。次に見る順番の目安は次のとおりです。

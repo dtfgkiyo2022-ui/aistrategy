@@ -34,6 +34,13 @@ function ageAtLeastTwo(economy) {
   return economy && (economy.age === "Age2" || economy.age === "Age3" || economy.age === 2 || economy.age === 3);
 }
 
+function ageNumber(economy) {
+  if (!economy) return 0;
+  if (economy.age === "Age3" || economy.age === 3) return 2;
+  if (economy.age === "Age2" || economy.age === 2) return 1;
+  return 0;
+}
+
 function ownKindCount(view, kind) {
   var count = 0;
   for (var i = 0; i < view.ownArmies.length; i++) {
@@ -116,7 +123,13 @@ function onTick(view) {
   }
 
   var economy = view.economy;
-  if (economy !== null && economy !== undefined) {
+  if (economy !== null && economy !== undefined && view.tick % 100 === 0) {
+    var age = ageNumber(economy);
+    commands.push({ type: "economy", kind: "SetEconomyPolicy", sequence: economySequence++, policy: "Military" });
+    if (economy.agesEnabled && economy.canAdvanceNow && economy.advancingTo === "Primitive" && age < 1) {
+      commands.push({ type: "economy", kind: "AdvanceAge", sequence: economySequence++, civ: economy.civilisation === "Primitive" ? "Agrarian" : economy.civilisation });
+      console.log("時代進行を開始");
+    }
     var producerKind = buildingFor(plan.desired);
     var producer = findBuilding(economy, producerKind);
     if (producer === null && !hasBuildingOrConstruction(economy, producerKind) && (economy.wood || 0) >= 150) {
