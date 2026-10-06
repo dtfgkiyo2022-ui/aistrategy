@@ -14,6 +14,12 @@ namespace Rts.Headless.Cli;
 
 internal static class TacticMatchCommand
 {
+    private sealed class ScheduledSignal
+    {
+        internal long Tick;
+        internal string Name;
+        internal SimPoint? Point;
+    }
     private sealed class FrameSource : IFrameSource
     {
         private readonly Battle simulation;
@@ -49,6 +55,7 @@ internal static class TacticMatchCommand
         var westAuto = CreateAuto(westName, 1, gateway); var eastAuto = CreateAuto(eastName, 2, gateway);
         westAuto?.Initialize(); eastAuto?.Initialize();
         var lines = new List<string>();
+        var westSignals = ParseSignals(options.GetValueOrDefault("--west-signal"));
         MatchPackWriter pack = null;
         if (options.TryGetValue("--pack-out", out var packPath))
         {
@@ -57,6 +64,13 @@ internal static class TacticMatchCommand
         }
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
+            long tick = simulation.Capture(1).Tick;
+            foreach (var signal in westSignals.Where(x => x.Tick == tick))
+            {
+                if (west == null) throw new InvalidDataException("--west-signalを送れません（west tacticがautoです）: " + signal.Name);
+                if (!west.SendSignal(signal.Name, signal.Point, out var reason))
+                    throw new InvalidDataException("--west-signalを送れません: " + (reason ?? signal.Name));
+            }
             var westResult = west?.Tick();
             var eastResult = east?.Tick();
             WriteHostLog(lines, westResult, 1, westName);
@@ -140,6 +154,7 @@ internal static class TacticMatchCommand
             rejected = result.Commands.Rejected.Select(x => new { index = x.Index, type = x.Type, reason = x.Reason }).ToArray(),
             failure = result.Failure == null ? null : new { reason = result.Failure.Reason, consecutive = result.Failure.Consecutive },
             paramChanges = result.ParamChanges.Select(x => new { tick = x.Tick, name = x.Name, from = x.From, to = x.To }).ToArray(),
+            signals = result.Signals.Select(x => new { tick = x.Tick, name = x.Name, point = x.Point.HasValue ? new { x = (decimal)x.Point.Value.X.Raw / 65536m, z = (decimal)x.Point.Value.Z.Raw / 65536m } : null }).ToArray(),
             disabled = result.Disabled
         };
         lines.Add(JsonSerializer.Serialize(record));
@@ -149,6 +164,37 @@ internal static class TacticMatchCommand
     {
         if (name == "idle" || name == "rush" || name == "auto") return;
         if (!Directory.Exists(name)) throw new InvalidDataException("戦術はidle、rush、auto、または存在するフォルダパスです。");
+    }
+    private static IReadOnlyList<ScheduledSignal> ParseSignals(string text)
+    {
+        var result = new List<ScheduledSignal>();
+        foreach (var raw in (text ?? "").Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            int colon = raw.IndexOf(':');
+            if (colon <= 0 || colon == raw.Length - 1) throw new InvalidDataException("--west-signalはtick:nameまたはtick:name@x,zです: " + raw);
+            if (!long.TryParse(raw.Substring(0, colon), NumberStyles.Integer, CultureInfo.InvariantCulture, out var tick) || tick < 0)
+                throw new InvalidDataException("--west-signalのtickが不正です: " + raw);
+            string value = raw.Substring(colon + 1);
+            int at = value.IndexOf('@');
+            string name = at < 0 ? value : value.Substring(0, at);
+            if (string.IsNullOrEmpty(name)) throw new InvalidDataException("--west-signalのnameが空です: " + raw);
+            SimPoint? point = null;
+            if (at >= 0)
+            {
+                string[] coordinates = value.Substring(at + 1).Split(',');
+                if (coordinates.Length != 2 || !decimal.TryParse(coordinates[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+                    || !decimal.TryParse(coordinates[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var z))
+                    throw new InvalidDataException("--west-signalの地点はx,zです: " + raw);
+                point = new SimPoint(Fix(x), Fix(z));
+            }
+            result.Add(new ScheduledSignal { Tick = tick, Name = name, Point = point });
+        }
+        return result;
+    }
+    private static Fix64 Fix(decimal value)
+    {
+        decimal raw = decimal.Round(value * 65536m, 0, MidpointRounding.ToEven);
+        return Fix64.FromRaw(checked((long)raw));
     }
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
 }

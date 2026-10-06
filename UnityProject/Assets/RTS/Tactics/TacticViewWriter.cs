@@ -15,6 +15,9 @@ namespace Rts.Tactics
         public static string Write(FactionFrame frame) => Write(frame, null);
 
         public static string Write(FactionFrame frame, IReadOnlyDictionary<string, object> parameters)
+            => Write(frame, parameters, null);
+
+        public static string Write(FactionFrame frame, IReadOnlyDictionary<string, object> parameters, IReadOnlyList<TacticSignal> signals)
         {
             if (frame == null) throw new ArgumentNullException(nameof(frame));
             var b = new StringBuilder(2048);
@@ -75,6 +78,21 @@ namespace Rts.Tactics
             b.Append(",\"regions\":[");
             var regions = (frame.Regions ?? Array.Empty<RegionView>()).OrderBy(x => x.Id).ToArray();
             for (int i = 0; i < regions.Length; i++) { if (i != 0) b.Append(','); var r = regions[i]; b.Append("{\"id\":").Append(r.Id).Append(",\"centerKind\":").Append(TacticJson.Quote(r.CenterKind.ToString())).Append(",\"centerId\":").Append(r.CenterId).Append(",\"center\":"); Point(b, r.Center); b.Append(",\"control\":").Append(TacticJson.Quote(r.Control.ToString())).Append(",\"policy\":").Append(TacticJson.Quote(r.Policy.ToString())).Append(",\"economyPolicy\":").Append(TacticJson.Quote(r.EconomyPolicy.ToString())).Append('}'); }
+            b.Append("],\"signals\":[");
+            var pendingSignals = signals ?? Array.Empty<TacticSignal>();
+            for (int i = 0; i < pendingSignals.Count; i++)
+            {
+                if (i != 0) b.Append(',');
+                var signal = pendingSignals[i];
+                b.Append("{\"name\":").Append(TacticJson.Quote(signal.Name ?? ""));
+                b.Append(",\"tick\":").Append(signal.Tick.ToString(CultureInfo.InvariantCulture));
+                if (signal.Point.HasValue)
+                {
+                    b.Append(",\"point\":");
+                    Point(b, signal.Point.Value);
+                }
+                b.Append('}');
+            }
             b.Append("],\"params\":").Append(TacticParameterJson.Object(parameters));
             b.Append('}');
             return b.ToString();

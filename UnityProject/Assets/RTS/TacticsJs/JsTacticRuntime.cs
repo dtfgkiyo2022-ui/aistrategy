@@ -12,7 +12,7 @@ namespace Rts.TacticsJs
     /// Runs one JavaScript tactic in one Jint engine for the lifetime of a match.
     /// The engine is deliberately configured without CLR access, modules, or host I/O.
     /// </summary>
-    public sealed class JsTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticParameterRuntime
+    public sealed class JsTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticParameterRuntime, ITacticSignalRuntime
     {
         public const int SourceLimitBytes = 1024 * 1024;
         public const int ConsoleLineLimit = 20;
@@ -26,18 +26,21 @@ namespace Rts.TacticsJs
         private readonly List<string> consoleLines = new List<string>();
         private readonly string runtimeName;
         private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly IReadOnlyList<TacticSignalDefinition> signals;
         private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         private Engine engine;
         private SplitMix64 random;
         private bool started;
 
-        public JsTacticRuntime(string source, string name = "js", IReadOnlyList<TacticParamDefinition> parameters = null)
+        public JsTacticRuntime(string source, string name = "js", IReadOnlyList<TacticParamDefinition> parameters = null,
+            IReadOnlyList<TacticSignalDefinition> signals = null)
         {
             if (source == null) throw new ArgumentNullException(nameof(source));
             if (Encoding.UTF8.GetByteCount(source) > SourceLimitBytes) throw new ArgumentException("JavaScriptの入口ファイルが1MiBを超えています。", nameof(source));
             this.source = source;
             runtimeName = string.IsNullOrEmpty(name) ? "js" : name;
             this.parameters = parameters ?? Array.Empty<TacticParamDefinition>();
+            this.signals = TacticSignalDefinition.Validate(signals);
             foreach (var parameter in this.parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
             random = new SplitMix64(0);
             engine = CreateEngine();
@@ -45,6 +48,7 @@ namespace Rts.TacticsJs
 
         public string Name => runtimeName;
         public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+        public IReadOnlyList<TacticSignalDefinition> Signals => signals;
 
         public void SetParameters(IReadOnlyDictionary<string, object> values)
         {

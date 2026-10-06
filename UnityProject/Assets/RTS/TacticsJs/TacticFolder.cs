@@ -16,6 +16,7 @@ namespace Rts.TacticsJs
         public int ApiVersion { get; internal set; }
         public string Description { get; internal set; }
         public IReadOnlyList<TacticParamDefinition> Params { get; internal set; } = Array.Empty<TacticParamDefinition>();
+        public IReadOnlyList<TacticSignalDefinition> Signals { get; internal set; } = Array.Empty<TacticSignalDefinition>();
     }
 
     public sealed class TacticFolderLoadResult
@@ -55,7 +56,7 @@ namespace Rts.TacticsJs
                     string error = PyodideTacticRuntime.AvailabilityError(runtimesPath);
                     if (error != null) return new TacticFolderLoadResult { Metadata = metadata, Error = error };
                 }
-                ITacticRuntime runtime = python ? (ITacticRuntime)new PyodideTacticRuntime(path, runtimesPath, metadata.Name, metadata.Params) : new JsTacticRuntime(source, metadata.Name, metadata.Params);
+                ITacticRuntime runtime = python ? (ITacticRuntime)new PyodideTacticRuntime(path, runtimesPath, metadata.Name, metadata.Params, metadata.Signals) : new JsTacticRuntime(source, metadata.Name, metadata.Params, metadata.Signals);
                 return new TacticFolderLoadResult { Runtime = runtime, Metadata = metadata };
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is DecoderFallbackException || e is FormatException || e is ArgumentException || e is OverflowException)
@@ -84,9 +85,27 @@ namespace Rts.TacticsJs
                 Entry = RequiredString(root, "entry"),
                 ApiVersion = checked((int)RequiredInteger(root, "apiVersion")),
                 Description = RequiredString(root, "description"),
-                Params = ReadParams(root)
+                Params = ReadParams(root),
+                Signals = ReadSignals(root)
             };
             return metadata;
+        }
+
+        private static IReadOnlyList<TacticSignalDefinition> ReadSignals(Dictionary<string, object> root)
+        {
+            if (!root.TryGetValue("signals", out var raw) || raw == null) return Array.Empty<TacticSignalDefinition>();
+            var list = TacticJsonForRuntime.Array(raw, "signals");
+            var result = new List<TacticSignalDefinition>();
+            foreach (var item in list)
+            {
+                var obj = TacticJsonForRuntime.Object(item, "signalsの要素");
+                string name = RequiredString(obj, "name");
+                string label = RequiredString(obj, "label");
+                if (!obj.TryGetValue("needsPoint", out var needsPoint) || !(needsPoint is bool))
+                    throw new FormatException("signalsのneedsPointは真偽値です: " + name);
+                result.Add(new TacticSignalDefinition(name, label, (bool)needsPoint));
+            }
+            return TacticSignalDefinition.Validate(result);
         }
 
         private static IReadOnlyList<TacticParamDefinition> ReadParams(Dictionary<string, object> root)

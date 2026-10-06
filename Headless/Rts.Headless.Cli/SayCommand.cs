@@ -212,7 +212,8 @@ internal static class SayCommand
             {
                 Name = d.Name, Label = d.Label, Type = d.Type, Value = Value(host.ParamValues[d.Name]), Min = d.Min, Max = d.Max, Step = d.Step, Choices = d.Choices
             }).ToArray();
-            summary.SetTacticInfo(displayName, AvailableNames(), parameters);
+            var signals = host.Signals.Select(s => new AiTacticSignalInfo(s.Name, s.Label, s.NeedsPoint)).ToArray();
+            summary.SetTacticInfo(displayName, AvailableNames(), parameters, signals);
             return summary;
         }
 
@@ -227,6 +228,12 @@ internal static class SayCommand
                 object before = host.ParamValues[command.ParamName];
                 if (!host.TrySetParam(command.ParamName, parsed, out reason)) return TacticChange.Fail(reason);
                 return TacticChange.Ok(definition.Label + "を " + Value(before) + " → " + Value(host.ParamValues[command.ParamName]) + " にしました");
+            }
+            if (command.Kind == "SendTacticSignal")
+            {
+                string reason;
+                if (!host.SendSignal(command.SignalName, command.Point, out reason)) return TacticChange.Fail(reason);
+                return TacticChange.Ok("戦術の合図「" + command.SignalName + "」を送りました");
             }
             string name = string.IsNullOrEmpty(command.TacticName) ? "auto" : ResolveName(command.TacticName);
             if (name == null) return TacticChange.Fail("戦術名が見つかりません: " + command.TacticName);
