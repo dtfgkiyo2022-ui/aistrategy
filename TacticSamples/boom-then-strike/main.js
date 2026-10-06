@@ -27,9 +27,10 @@ function onTick(view) {
   }
   if (view.economy !== null && view.tick % 100 === 0) {
     commands.push({ type: "economy", kind: "SetEconomyPolicy", sequence: economySequence++, policy: striking ? "Military" : "Growth" });
-    // 時代進行は資源条件を満たした回だけシミュレーション側で受理される。
-    // The tactic view does not expose the full age-readiness predicate, so
-    // omit AdvanceAge rather than submitting a command the simulation drops.
+    if (view.economy.agesEnabled && view.economy.canAdvanceNow) {
+      commands.push({ type: "economy", kind: "AdvanceAge", sequence: economySequence++, civ: view.economy.civilisation === "Primitive" ? "Agrarian" : view.economy.civilisation });
+      console.log("時代進行を開始");
+    }
   }
   return { commands: commands };
 }

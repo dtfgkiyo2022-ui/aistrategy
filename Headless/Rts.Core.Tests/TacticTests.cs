@@ -27,6 +27,39 @@ public sealed class TacticTests
     }
 
     [Test]
+    public void AgeViewGuidesAdvanceAndAdvanceCommandChangesAge()
+    {
+        var scenario = MapGenerator.GenerateTerrain(1);
+        scenario.Economy.Ages = true;
+        scenario.Economy.StartFood = 1000;
+        scenario.Economy.StartWood = 1000;
+        scenario.Economy.AdvanceFoodCost = 0;
+        scenario.Economy.AdvanceWoodCost = 0;
+        scenario.Economy.AdvanceTicks = 1;
+        var sim = new Battle(scenario);
+        var gateway = new CommandGateway(sim);
+        var before = sim.Capture(1);
+        var view = TacticViewWriter.Write(before);
+        using (var doc = System.Text.Json.JsonDocument.Parse(view))
+        {
+            var economy = doc.RootElement.GetProperty("economy");
+            Assert.That(economy.GetProperty("agesEnabled").GetBoolean(), Is.True);
+            Assert.That(economy.GetProperty("nextAgeCost").GetProperty("food").GetInt32(), Is.EqualTo(0));
+            Assert.That(economy.GetProperty("canAdvanceNow").GetBoolean(), Is.True);
+        }
+
+        var result = TacticCommandReader.Read("{\"version\":1,\"commands\":[{\"type\":\"economy\",\"kind\":\"AdvanceAge\",\"sequence\":1,\"civ\":\"Agrarian\"}]}", before);
+        Assert.That(result.Rejected, Is.Empty);
+        gateway.SubmitEconomy(result.EconomyCommands[0]);
+        gateway.Step();
+        var after = sim.Capture(1).Economy;
+        Assert.That(after.AdvancingTo == CivKind.Agrarian || after.Age > 0, Is.True);
+        Assert.That(after.AdvanceRemaining, Is.GreaterThanOrEqualTo(0));
+        for (int i = 0; i < 3 && sim.Capture(1).Economy.Age == 0; i++) gateway.Step();
+        Assert.That(sim.Capture(1).Economy.Age, Is.GreaterThan(0));
+    }
+
+    [Test]
     public void ReaderBuildsAiPolicyAndRejectsBadCommandIndividually()
     {
         var frame = Frame(Array.Empty<VisibleEnemy>());
