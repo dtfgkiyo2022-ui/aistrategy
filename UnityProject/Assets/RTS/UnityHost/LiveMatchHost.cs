@@ -194,14 +194,26 @@ namespace Rts.UnityHost
             public bool Disabled { get { return tacticHost != null && tacticHost.Disabled; } }
             public IReadOnlyList<string> ConsoleLines { get { return tacticHost == null ? Array.Empty<string>() : tacticHost.RecentConsoleLines; } }
             public IReadOnlyList<TacticParamView> Parameters { get { return tacticHost == null ? Array.Empty<TacticParamView>() : ToViews(tacticHost.Parameters); } }
+            public IReadOnlyList<TacticSignalView> Signals { get { return tacticHost == null ? Array.Empty<TacticSignalView>() : ToSignalViews(tacticHost.Signals); } }
             private static TacticParamView[] ToViews(IReadOnlyList<TacticParamDefinition> definitions)
             {
                 var views = new TacticParamView[definitions.Count];
                 for (int i = 0; i < views.Length; i++) { var d = definitions[i]; views[i] = new TacticParamView(d.Name, d.Label, d.Type, d.DefaultValue, d.Min, d.Max, d.Step, d.Choices); }
                 return views;
             }
+            private static TacticSignalView[] ToSignalViews(IReadOnlyList<TacticSignalDefinition> definitions)
+            {
+                var views = new TacticSignalView[definitions.Count];
+                for (int i = 0; i < views.Length; i++) { var d = definitions[i]; views[i] = new TacticSignalView(d.Name, d.Label, d.NeedsPoint); }
+                return views;
+            }
             public IReadOnlyDictionary<string, object> ParamValues { get { return tacticHost == null ? new Dictionary<string, object>() : tacticHost.ParamValues; } }
             public bool SetParam(string name, object value) { return tacticHost != null && ownSide && tacticHost.SetParam(name, value); }
+            public bool SendSignal(string name, SimPoint? point, out string reason)
+            {
+                if (tacticHost == null || !ownSide) { reason = "自軍の戦術に合図を送れません。"; return false; }
+                return tacticHost.SendSignal(name, point, out reason);
+            }
             public bool AutoReload
             {
                 get { return ownSide ? host.ownTacticAutoReload : host.enemyTacticAutoReload; }
@@ -709,6 +721,7 @@ namespace Rts.UnityHost
             liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable,
                 changeDoctrine: preset => SwitchOwnDoctrine(preset),
                 changeTacticParam: (name, value) => TrySetOwnTacticParam(name, value),
+                sendTacticSignal: (name, point) => TrySendOwnTacticSignal(name, point),
                 switchTactic: name => TrySwitchOwnTactic(name),
                 enrichSummary: AddOwnTacticInfo);
             enemyFactionId = 3 - viewFactionId;
@@ -829,6 +842,16 @@ namespace Rts.UnityHost
             if (!host.TrySetParam(name, parsed, out var reason)) return AiTacticChangeResult.Fail(reason);
             object after = host.ParamValues[name];
             return AiTacticChangeResult.Ok(definition.Label + "を " + TacticValue(before) + " → " + TacticValue(after) + " にしました");
+        }
+
+        private AiTacticChangeResult TrySendOwnTacticSignal(string name, SimPoint? point)
+        {
+            var host = ownTacticSide == null ? null : ownTacticSide.Host;
+            if (host == null) return AiTacticChangeResult.Fail("自軍に戦術がないため、合図を送れません。");
+            if (!host.SendSignal(name, point, out var reason)) return AiTacticChangeResult.Fail(reason);
+            string label = name;
+            foreach (var signal in host.Signals) if (signal.Name == name) { label = signal.Label; break; }
+            return AiTacticChangeResult.Ok(label + "を送りました");
         }
 
         public bool SwitchOwnTactic(string name)
@@ -964,7 +987,8 @@ namespace Rts.UnityHost
             var parameters = host == null ? Array.Empty<AiTacticParameterInfo>() : host.Parameters.Select(d => new AiTacticParameterInfo(d.Name, d.Label, d.Type,
                 host.ParamValues.TryGetValue(d.Name, out var value) ? TacticValue(value) : TacticValue(d.DefaultValue),
                 d.Min, d.Max, d.Step, d.Choices)).ToArray();
-            summary.SetTacticInfo(host == null ? "" : host.Name, available, parameters);
+            var signals = host == null ? Array.Empty<AiTacticSignalInfo>() : host.Signals.Select(d => new AiTacticSignalInfo(d.Name, d.Label, d.NeedsPoint)).ToArray();
+            summary.SetTacticInfo(host == null ? "" : host.Name, available, parameters, signals);
         }
 
         private static bool TryParseTacticValue(TacticParamDefinition definition, string text, out object value, out string reason)

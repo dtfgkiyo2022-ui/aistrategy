@@ -31,6 +31,7 @@ namespace Rts.Tactics
             markdown.AppendLine();
             markdown.AppendLine("`tactic.json` は `name`, `author`, `version`, `language`, `entry`, `apiVersion`, `description` を持ちます。入口は `main.js` です。");
             markdown.AppendLine("任意で `params` に、英数字の `name`、表示用 `label`、`type`（`int` / `number` / `bool` / `choice`）、`default` を並べます。数値は `min`, `max`, `step` も必須で、既定値と変更値は範囲内かつstepに一致しなければなりません。`choice` は `choices` 配列と、その中の `default` が必要です。");
+            markdown.AppendLine("任意で `signals` に、英数字の `name`、表示用 `label`、地点指定の要否 `needsPoint` を最大8個まで並べます。名前は重複できません。地点付きの合図は次の戦況の `view.signals` に `point.x` / `point.z` とともに1回だけ届きます。");
             markdown.AppendLine("試合開始時に `onStart(setup)` を1回、以後20tick（1秒）ごとに `onTick(view)` を呼び、`setup.params` と `view.params` に現在値の辞書を渡します。`{ version: 1, commands: [...] }` を返します。命令を返さない回は `{version:1,commands:[]}` とします。");
             markdown.AppendLine();
             markdown.AppendLine("## 戦術のつまみ `params`");
@@ -101,7 +102,7 @@ namespace Rts.Tactics
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
-                ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("params", "tactic.jsonで宣言したつまみの現在値")
+                ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
         }
 

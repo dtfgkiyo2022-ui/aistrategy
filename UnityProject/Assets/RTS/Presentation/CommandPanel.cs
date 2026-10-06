@@ -30,9 +30,20 @@ namespace Rts.Presentation
         private BattlefieldView view;
         private ulong issuerSequence;
         private bool awaitingGround;
+        private TacticSignalView awaitingSignal;
         private readonly List<string> log = new List<string>();
 
         public bool IsAwaitingGround { get { return awaitingGround; } }
+
+        private void Update()
+        {
+            if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
+            {
+                awaitingGround = false;
+                awaitingSignal = null;
+                AddLog(UiText.T("Cancelled.", "取り消しました。"));
+            }
+        }
 
         /// <summary>The optional outside AI. Null hides the panel, which is what the mock scene wants.</summary>
         public IExternalAiControl ExternalAi { get { return externalAi; } set { externalAi = value; } }
@@ -88,7 +99,7 @@ namespace Rts.Presentation
         public bool TryConsumeGroundClick(Camera camera, Vector2 screenPoint)
         {
             if (ExtraGroundClick != null && ExtraGroundClick(camera, screenPoint)) return true;
-            if (!awaitingGround || port == null) return false;
+            if ((!awaitingGround && awaitingSignal == null) || port == null) return false;
             var ray = camera.ScreenPointToRay(screenPoint);
             var ground = new Plane(Vector3.up, Vector3.zero);
             if (!ground.Raycast(ray, out float enter)) { AddLog(UiText.T("Click was not on the ground.", "地面ではない所をクリックしました。")); return true; }
@@ -96,6 +107,14 @@ namespace Rts.Presentation
             if (!GroundPointQuantizer.TryQuantize(hit.x, hit.z, mapWidthMeters, mapHeightMeters, out var point))
             {
                 AddLog(UiText.T("Click was outside the map.", "マップの外をクリックしました。"));
+                return true;
+            }
+            if (awaitingSignal != null)
+            {
+                var signal = awaitingSignal;
+                awaitingSignal = null;
+                if (!ownTactic.SendSignal(signal.Name, point, out var reason)) AddLog(reason);
+                else AddLog(UiText.T(signal.Label + " sent", signal.Label + "を送りました"));
                 return true;
             }
             awaitingGround = false;
@@ -523,12 +542,15 @@ namespace Rts.Presentation
             return y + 2f;
         }
 
-        private static float DrawTacticParams(ITacticControl control, bool editable, float x, float y, float width)
+        private float DrawTacticParams(ITacticControl control, bool editable, float x, float y, float width)
         {
-            if (control == null || !control.Active || control.Parameters == null || control.Parameters.Count == 0) return y;
-            GUI.Label(new Rect(x, y, width, 22f), UiText.T("Tactic knobs", "戦術のつまみ"), UiStyles.Body);
-            y += 22f;
-            foreach (var parameter in control.Parameters)
+            if (control == null || !control.Active) return y;
+            if (control.Parameters != null && control.Parameters.Count != 0)
+            {
+                GUI.Label(new Rect(x, y, width, 22f), UiText.T("Tactic knobs", "戦術のつまみ"), UiStyles.Body);
+                y += 22f;
+            }
+            foreach (var parameter in control.Parameters ?? Array.Empty<TacticParamView>())
             {
                 object raw;
                 if (!control.ParamValues.TryGetValue(parameter.Name, out raw)) raw = parameter.DefaultValue;
@@ -573,7 +595,32 @@ namespace Rts.Presentation
                 }
                 y += editable && parameter.Type == "choice" ? 48f : 26f;
             }
-            return y + 2f;
+            return DrawTacticSignals(control, editable, x, y, width) + 2f;
+        }
+
+        private float DrawTacticSignals(ITacticControl control, bool editable, float x, float y, float width)
+        {
+            if (control == null || !control.Active || !editable || control.Signals == null || control.Signals.Count == 0) return y;
+            GUI.Label(new Rect(x, y, width, 22f), UiText.T("Tactic signals", "戦術の合図"), UiStyles.Body);
+            y += 24f;
+            int columns = Mathf.Min(2, control.Signals.Count);
+            float cell = width / columns;
+            for (int i = 0; i < control.Signals.Count; i++)
+            {
+                var signal = control.Signals[i];
+                var rect = new Rect(x + (i % columns) * cell, y + (i / columns) * 28f, cell - 4f, 24f);
+                string text = signal.Label + (signal.NeedsPoint ? UiText.T(" (pick point)", "（地点を選ぶ）") : "");
+                if (!GUI.Button(rect, text)) continue;
+                if (signal.NeedsPoint)
+                {
+                    awaitingSignal = signal;
+                    awaitingGround = false;
+                    AddLog(UiText.T("Click the map for " + signal.Label + ". Esc/right-click cancels.", signal.Label + "の地点を地図でクリックしてください。Esc/右クリックで取消。"));
+                }
+                else if (!control.SendSignal(signal.Name, null, out var reason)) AddLog(reason);
+                else AddLog(UiText.T(signal.Label + " sent", signal.Label + "を送りました"));
+            }
+            return y + ((control.Signals.Count + columns - 1) / columns) * 28f;
         }
 
         private ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }

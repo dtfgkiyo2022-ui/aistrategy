@@ -50,12 +50,13 @@ namespace Rts.Providers
             var goals = names.Where(n => n.HasGoal).Select(n => n.Name);
             var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
             var tacticParams = summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name);
+            var tacticSignals = summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Signals.Select(p => p.Name);
             var tactics = summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.AvailableNames;
             // Keep dynamic enums semantic: army/region names are not training producers, and every name does not
             // need to be repeated as a building location. This is both smaller and easier for small models to select.
             var producers = names.Where(n => n.Category == "建物").Select(n => n.Name).Concat(new[] { "コア" });
             var locations = names.Where(n => n.HasGoal || n.Category == "地点").Select(n => n.Name).Concat(new[] { "お任せ" });
-            var command = CommandSchema(scopes, goals, regions, producers, locations, tacticParams, tactics);
+            var command = CommandSchema(scopes, goals, regions, producers, locations, tacticParams, tacticSignals, tactics);
             var commandRef = new Dictionary<string, object> { ["$ref"] = "#/$defs/command" };
             var condition = ConditionSchema(goals);
             var operation = new Dictionary<string, object>
@@ -98,7 +99,7 @@ namespace Rts.Providers
             var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
             var properties = new Dictionary<string, object>
             {
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic", "unknown"),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", "unknown"),
                 ["scope"] = NullableEnum(scopes),
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
@@ -106,6 +107,9 @@ namespace Rts.Providers
                 ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["tacticParam"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name)),
                 ["tacticParamValue"] = new Dictionary<string, object> { ["type"] = "string" },
+                ["tacticSignal"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Signals.Select(p => p.Name)),
+                ["tacticSignalX"] = new Dictionary<string, object> { ["type"] = "number" },
+                ["tacticSignalZ"] = new Dictionary<string, object> { ["type"] = "number" },
                 ["tactic"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.AvailableNames),
                 ["reason"] = new Dictionary<string, object> { ["type"] = "string" }
             };
@@ -119,12 +123,12 @@ namespace Rts.Providers
 
         private static Dictionary<string, object> CommandSchema(IEnumerable<string> scopes, IEnumerable<string> goals,
             IEnumerable<string> regions, IEnumerable<string> producers, IEnumerable<string> locations,
-            IEnumerable<string> tacticParams, IEnumerable<string> tactics)
+            IEnumerable<string> tacticParams, IEnumerable<string> tacticSignals, IEnumerable<string> tactics)
         {
             var props = new Dictionary<string, object>
             {
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "SetTacticParam", "SwitchTactic", ""),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
                 ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
@@ -135,7 +139,8 @@ namespace Rts.Providers
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }), ["sequence"] = NullableInteger(), ["count"] = NullableInteger(),
                 ["reservePermille"] = NullableInteger(), ["allowedLossPermille"] = NullableInteger(), ["enabled"] = NullableBoolean(),
                 ["tacticParam"] = NullableEnum(tacticParams), ["tacticParamValue"] = new Dictionary<string, object> { ["type"] = "string" },
-                ["tactic"] = NullableEnum(tactics)
+                ["tacticSignal"] = NullableEnum(tacticSignals), ["tacticSignalX"] = new Dictionary<string, object> { ["type"] = "number" },
+                ["tacticSignalZ"] = new Dictionary<string, object> { ["type"] = "number" }, ["tactic"] = NullableEnum(tactics)
             };
             return new Dictionary<string, object> { ["type"] = "object", ["additionalProperties"] = false,
                 ["required"] = props.Keys.Select(k => (object)k).ToList(), ["properties"] = props };
@@ -198,7 +203,7 @@ namespace Rts.Providers
 10. 曖昧、対象不明、敵の物を操作、未対応の操作は、勝手に補わずunknown=trueにします。commandsとoperationsは空配列にし、reasonを短く書きます。
 11. 条件付きの作戦はoperationsに入れます。whenは固定語彙の条件オブジェクト、thenはcommandsと同じ命令の配列、onceは一度だけならtrueです。whenの使わない項目はnull、ANDはallに条件を2つまで入れます。
 12. 文章に複数の独立した命令があるときは、各命令をcommandsに入れます。順番に意味がある場合は文の順番を保ちます。ひとつでも対象が不明なら、推測で一部だけ実行せずunknown=trueにします。
-13. 戦術のつまみを変えるときはtype=tactic、kind=SetTacticParam、tacticParamに名前、tacticParamValueに文字列の値を入れます。戦術を替えるときはtype=tactic、kind=SwitchTactic、tacticに候補名を入れます。空文字は戦術なしです。これらは具体的な命令やSetDoctrineと同時に出しません。
+13. 戦術のつまみを変えるときはtype=tactic、kind=SetTacticParam、tacticParamに名前、tacticParamValueに文字列の値を入れます。戦術を替えるときはtype=tactic、kind=SwitchTactic、tacticに候補名を入れます。人から戦術へ合図を送るときはtype=tactic、kind=SendTacticSignal、tacticSignalに名前を入れます。地点が必要な合図はtacticSignalXとtacticSignalZにメートル座標を入れ、不要なときは0にします。空文字は戦術なし／合図なしです。これらは具体的な命令やSetDoctrineと同時に出しません。
 
 項目の使い分け
 - policy型のkindはFocus（攻撃・向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、MaintainReserve（予備を残す）、Scout（偵察）、ReturnToAuto（自動方針に戻す）です。
@@ -279,7 +284,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
 kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
 全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
-戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
+戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。定義された合図を送る命令はkind=SendTacticSignal、tacticSignalと、必要ならtacticSignalX/tacticSignalZを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
 表にない名前の判定はゲーム側が行います。scope と goal は、必ず名前表の中から選んでください。指示文に出てきた名前と同じものを選んでください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
 ";
 
@@ -333,6 +338,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public string ParamName { get; internal set; }
         public string ParamValue { get; internal set; }
         public string TacticName { get; internal set; }
+        public string SignalName { get; internal set; }
+        public SimPoint? Point { get; internal set; }
     }
 
     public sealed class AiRejectedCommand
@@ -385,6 +392,16 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public string CurrentName { get; internal set; } = "";
         public IReadOnlyList<string> AvailableNames { get; internal set; } = Array.Empty<string>();
         public IReadOnlyList<AiTacticParameterInfo> Parameters { get; internal set; } = Array.Empty<AiTacticParameterInfo>();
+        public IReadOnlyList<AiTacticSignalInfo> Signals { get; internal set; } = Array.Empty<AiTacticSignalInfo>();
+    }
+
+    public sealed class AiTacticSignalInfo
+    {
+        public AiTacticSignalInfo(string name, string label, bool needsPoint)
+        { Name = name; Label = label; NeedsPoint = needsPoint; }
+        public string Name { get; }
+        public string Label { get; }
+        public bool NeedsPoint { get; }
     }
 
     /// <summary>参謀が見てよい情報だけから作った短い戦況と、その中の名前→ID表。</summary>
@@ -398,12 +415,17 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public AiTacticInfo TacticInfo { get; private set; } = new AiTacticInfo();
 
         public void SetTacticInfo(string currentName, IEnumerable<string> availableNames, IEnumerable<AiTacticParameterInfo> parameters)
+            => SetTacticInfo(currentName, availableNames, parameters, null);
+
+        public void SetTacticInfo(string currentName, IEnumerable<string> availableNames, IEnumerable<AiTacticParameterInfo> parameters,
+            IEnumerable<AiTacticSignalInfo> signals)
         {
             TacticInfo = new AiTacticInfo
             {
                 CurrentName = currentName ?? "",
                 AvailableNames = (availableNames ?? Array.Empty<string>()).Where(x => x != null).Distinct(StringComparer.Ordinal).ToArray(),
-                Parameters = (parameters ?? Array.Empty<AiTacticParameterInfo>()).Where(x => x != null).ToArray()
+                Parameters = (parameters ?? Array.Empty<AiTacticParameterInfo>()).Where(x => x != null).ToArray(),
+                Signals = (signals ?? Array.Empty<AiTacticSignalInfo>()).Where(x => x != null).ToArray()
             };
         }
 
@@ -465,15 +487,16 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             var info = TacticInfo ?? new AiTacticInfo();
             string current = string.IsNullOrEmpty(info.CurrentName) ? "なし" : info.CurrentName;
             string candidates = info.AvailableNames == null || info.AvailableNames.Count == 0 ? "なし" : string.Join("、", info.AvailableNames);
+            string signalText = info.Signals == null || info.Signals.Count == 0 ? "なし" : string.Join("；", info.Signals.Select(s => s.Name + "（" + s.Label + (s.NeedsPoint ? ",地点が必要" : "") + "）"));
             if (info.Parameters == null || info.Parameters.Count == 0)
-                return "現在=" + current + "、切替候補=" + candidates + "、つまみ=なし";
+                return "現在=" + current + "、切替候補=" + candidates + "、つまみ=なし、合図=" + signalText;
             var parameters = info.Parameters.Select(p =>
             {
                 string range = p.Type == "choice" ? "選択肢=" + string.Join("/", p.Choices ?? Array.Empty<string>()) :
                     p.Type == "bool" ? "真偽" : "範囲=" + p.Min.Value.ToString(CultureInfo.InvariantCulture) + ".." + p.Max.Value.ToString(CultureInfo.InvariantCulture);
                 return p.Name + "（" + p.Label + "）=" + p.Value + "、" + range;
             });
-            return "現在=" + current + "、切替候補=" + candidates + "、つまみ=" + string.Join("；", parameters);
+            return "現在=" + current + "、切替候補=" + candidates + "、つまみ=" + string.Join("；", parameters) + "、合図=" + signalText;
         }
 
         private static bool IsSmallModel(string model)
@@ -931,7 +954,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     ["reason"] = reason, ["unknown"] = true
                 };
 
-            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic" };
+            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal" };
             if (!allowed.Contains(kind, StringComparer.Ordinal))
                 return new Dictionary<string, object>
                 {
@@ -963,6 +986,13 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             {
                 command["type"] = "tactic"; command["kind"] = kind;
                 command["tactic"] = AiJson.String(small, "tactic") ?? "";
+            }
+            else if (kind == "SendTacticSignal")
+            {
+                command["type"] = "tactic"; command["kind"] = kind;
+                command["tacticSignal"] = AiJson.String(small, "tacticSignal") ?? "";
+                command["tacticSignalX"] = AiJson.Number(small, "tacticSignalX", 0);
+                command["tacticSignalZ"] = AiJson.Number(small, "tacticSignalZ", 0);
             }
             else
             {
@@ -1043,6 +1073,20 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 tactics.Add(new AiTacticCommand { Kind = kindText, ParamName = name, ParamValue = value });
                 return;
             }
+            if (kindText == "SendTacticSignal")
+            {
+                if (string.IsNullOrEmpty(info.CurrentName)) throw new AiCommandException("自軍に戦術がないため、合図を送れません", kindText);
+                string name = AiJson.String(command, "tacticSignal");
+                var definition = info.Signals.FirstOrDefault(p => p.Name == name);
+                if (definition == null) throw new AiCommandException(string.IsNullOrEmpty(name) ? "自軍に戦術の合図がありません" : "合図が名前表にない", kindText);
+                double x = AiJson.Number(command, "tacticSignalX", 0);
+                double z = AiJson.Number(command, "tacticSignalZ", 0);
+                bool hasPoint = x != 0 || z != 0;
+                if (definition.NeedsPoint && !hasPoint) throw new AiCommandException("この合図には地点が必要です", kindText);
+                if (!definition.NeedsPoint && hasPoint) throw new AiCommandException("この合図には地点を付けられません", kindText);
+                tactics.Add(new AiTacticCommand { Kind = kindText, SignalName = name, Point = hasPoint ? ToPoint(x, z) : (SimPoint?)null });
+                return;
+            }
             if (kindText == "SwitchTactic")
             {
                 string name = command.TryGetValue("tactic", out var raw) && raw is string text ? text : "";
@@ -1053,6 +1097,15 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 return;
             }
             throw new AiCommandException("対応していない戦術命令", kindText);
+        }
+
+        private static SimPoint ToPoint(double x, double z)
+        {
+            if (double.IsNaN(x) || double.IsInfinity(x) || double.IsNaN(z) || double.IsInfinity(z))
+                throw new AiCommandException("合図の地点が不正", "SendTacticSignal");
+            long rawX = checked((long)decimal.Round((decimal)x * 65536m, 0, MidpointRounding.ToEven));
+            long rawZ = checked((long)decimal.Round((decimal)z * 65536m, 0, MidpointRounding.ToEven));
+            return new SimPoint(Fix64.FromRaw(rawX), Fix64.FromRaw(rawZ));
         }
 
         private static List<object> DistinctCommands(List<object> commands)

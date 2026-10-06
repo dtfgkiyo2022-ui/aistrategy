@@ -91,12 +91,14 @@ namespace Rts.UnityHost
         private OperationTable operationTable;
         private readonly Action<string> changeDoctrine;
         private readonly Func<string, string, AiTacticChangeResult> changeTacticParam;
+        private readonly Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal;
         private readonly Func<string, AiTacticChangeResult> switchTactic;
         private readonly Action<AiSituationSummary> enrichSummary;
 
         public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
             OperationTable operationTable = null, Action<string> changeDoctrine = null,
             Func<string, string, AiTacticChangeResult> changeTacticParam = null,
+            Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal = null,
             Func<string, AiTacticChangeResult> switchTactic = null,
             Action<AiSituationSummary> enrichSummary = null)
         {
@@ -105,6 +107,7 @@ namespace Rts.UnityHost
             this.operationTable = operationTable;
             this.changeDoctrine = changeDoctrine;
             this.changeTacticParam = changeTacticParam;
+            this.sendTacticSignal = sendTacticSignal;
             this.switchTactic = switchTactic;
             this.enrichSummary = enrichSummary;
             var runtime = new RuntimeCommandInterpreterRouter();
@@ -117,6 +120,7 @@ namespace Rts.UnityHost
         public LiveAiCommandPort(CommandGateway gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
             decimal budgetYen = 3m, OperationTable operationTable = null, Action<string> changeDoctrine = null,
             Func<string, string, AiTacticChangeResult> changeTacticParam = null,
+            Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal = null,
             Func<string, AiTacticChangeResult> switchTactic = null,
             Action<AiSituationSummary> enrichSummary = null)
         {
@@ -125,6 +129,7 @@ namespace Rts.UnityHost
             this.operationTable = operationTable;
             this.changeDoctrine = changeDoctrine;
             this.changeTacticParam = changeTacticParam;
+            this.sendTacticSignal = sendTacticSignal;
             this.switchTactic = switchTactic;
             this.enrichSummary = enrichSummary;
             coordinator = new CommandInterpreterCoordinator(interpreter ?? throw new ArgumentNullException(nameof(interpreter)));
@@ -277,7 +282,9 @@ namespace Rts.UnityHost
                         {
                             AiTacticChangeResult changed = tactic.Kind == "SetTacticParam"
                                 ? changeTacticParam == null ? AiTacticChangeResult.Fail("戦術のつまみを変える受け口がありません。") : changeTacticParam(tactic.ParamName, tactic.ParamValue)
-                                : switchTactic == null ? AiTacticChangeResult.Fail("戦術を切り替える受け口がありません。") : switchTactic(tactic.TacticName);
+                                : tactic.Kind == "SendTacticSignal"
+                                    ? sendTacticSignal == null ? AiTacticChangeResult.Fail("戦術の合図を送る受け口がありません。") : sendTacticSignal(tactic.SignalName, tactic.Point)
+                                    : switchTactic == null ? AiTacticChangeResult.Fail("戦術を切り替える受け口がありません。") : switchTactic(tactic.TacticName);
                             if (!changed.Success) throw new InvalidOperationException(changed.Reason);
                             if (!string.IsNullOrEmpty(changed.Report))
                             {
@@ -400,9 +407,9 @@ namespace Rts.UnityHost
         private static string Tactic(AiTacticCommand command)
         {
             if (command == null) return "";
-            return command.Kind == "SetTacticParam"
-                ? "戦術のつまみ「" + command.ParamName + "」を " + command.ParamValue + " に変更"
-                : "戦術を " + (string.IsNullOrEmpty(command.TacticName) ? "なし" : command.TacticName) + " に切り替え";
+            if (command.Kind == "SetTacticParam") return "戦術のつまみ「" + command.ParamName + "」を " + command.ParamValue + " に変更";
+            if (command.Kind == "SendTacticSignal") return "戦術の合図「" + command.SignalName + "」を送信";
+            return "戦術を " + (string.IsNullOrEmpty(command.TacticName) ? "なし" : command.TacticName) + " に切り替え";
         }
 
         private static string Doctrine(string doctrine)

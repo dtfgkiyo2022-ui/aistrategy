@@ -62,6 +62,7 @@ namespace Rts.Tactics
             Field(b, "failure", result.Failure == null ? "null" : FailureJson(result.Failure));
             Field(b, "consoleLog", StringArrayJson(result.ConsoleLines));
             Field(b, "paramChanges", ParamChangesJson(result.ParamChanges));
+            Field(b, "signals", SignalsJson(result.Signals));
             Field(b, "disabled", result.Disabled ? "true" : "false");
             b.Append('}'); tacticLines.Add(b.ToString());
         }
@@ -154,7 +155,7 @@ namespace Rts.Tactics
                 + "このフォルダは AI や人が試合を振り返り、戦術を直すための資料です。`pack.json` の `packVersion` は1です。\n\n"
                 + "- `summary.json`: 勝者、決着 tick・分、両陣営の戦術名、地図の種、ルールブックの版。\n"
                 + "- `replay.rpl`: 命令を再生できるリプレイ。\n"
-                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）。読み直しは `kind=reload` として時刻、戦術、成功・失敗、理由を記録します。\n"
+                + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）、戦術へ渡した合図（`signals`）。読み直しは `kind=reload` として時刻、戦術、成功・失敗、理由を記録します。\n"
                 + "- `snapshots.jsonl`: 600tick（30秒）ごとの霧なし集計。兵種別の兵数、村人数、資源、建物数、拠点の持ち主、時代と文明。\n"
                 + "- `timeline.jsonl`: 両陣営から見えた `GameEvent` の時系列。\n"
                 + "- `rulebook.md`: この試合で使ったルールブック。\n\n"
@@ -177,6 +178,10 @@ namespace Rts.Tactics
         private static string FailureJson(TacticFailure x) => "{\"reason\":" + Quote(x.Reason) + ",\"consecutive\":" + x.Consecutive + "}";
         private static string ParamChangesJson(IEnumerable<TacticParamChange> values)
             => "[" + string.Join(",", (values ?? Array.Empty<TacticParamChange>()).Select(x => "{\"tick\":" + x.Tick.ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(x.Name) + ",\"from\":" + TacticParameterJson.Value(x.From) + ",\"to\":" + TacticParameterJson.Value(x.To) + "}")) + "]";
+        private static string SignalsJson(IEnumerable<TacticSignal> values)
+            => "[" + string.Join(",", (values ?? Array.Empty<TacticSignal>()).Select(x =>
+                "{\"tick\":" + x.Tick.ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(x.Name) +
+                (x.Point.HasValue ? ",\"point\":" + PointJson(x.Point.Value) : "") + "}")) + "]";
         private static string StringArrayJson(IEnumerable<string> values) => "[" + string.Join(",", (values ?? Array.Empty<string>()).Select(Quote)) + "]";
         private static string PointJson(SimPoint p) => "{\"x\":" + ((decimal)p.X.Raw / 65536m).ToString("0.###", CultureInfo.InvariantCulture) + ",\"z\":" + ((decimal)p.Z.Raw / 65536m).ToString("0.###", CultureInfo.InvariantCulture) + "}";
         private static string EventText(GameEvent e) => e.Kind + (e.Reason == ReasonCode.None ? "" : " (" + e.Reason + ")") + " subject=" + e.SubjectId;

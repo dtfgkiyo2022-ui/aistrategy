@@ -10,7 +10,7 @@ using Rts.Tactics;
 namespace Rts.TacticsJs
 {
     /// <summary>One permission-restricted Deno process per match. Never runs system Python.</summary>
-    public sealed class PyodideTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticFailurePolicy, IDisposable, ITacticParameterRuntime
+    public sealed class PyodideTacticRuntime : ITacticRuntime, ITacticLogSource, ITacticFailurePolicy, IDisposable, ITacticParameterRuntime, ITacticSignalRuntime
     {
         public const int StartupTimeoutMilliseconds = 10000;
         public const int CallTimeoutMilliseconds = 50;
@@ -27,6 +27,7 @@ namespace Rts.TacticsJs
         private bool stopped;
         private int timeouts;
         private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly IReadOnlyList<TacticSignalDefinition> signals;
         private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         public string Name { get; }
         public int ConsecutiveFailureLimit => 3;
@@ -34,16 +35,19 @@ namespace Rts.TacticsJs
         public int? ProcessId { get; private set; }
         public double StartupMilliseconds { get; private set; }
 
-        public PyodideTacticRuntime(string folder, string runtimes, string name = "python", IReadOnlyList<TacticParamDefinition> parameters = null)
+        public PyodideTacticRuntime(string folder, string runtimes, string name = "python", IReadOnlyList<TacticParamDefinition> parameters = null,
+            IReadOnlyList<TacticSignalDefinition> signals = null)
         {
             this.folder = Path.GetFullPath(folder);
             this.runtimes = Path.GetFullPath(runtimes ?? FindDefaultRuntimes());
             Name = name;
             this.parameters = parameters ?? Array.Empty<TacticParamDefinition>();
+            this.signals = TacticSignalDefinition.Validate(signals);
             foreach (var parameter in this.parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
         }
 
         public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+        public IReadOnlyList<TacticSignalDefinition> Signals => signals;
 
         public void SetParameters(IReadOnlyDictionary<string, object> values)
         {

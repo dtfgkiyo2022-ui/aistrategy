@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Rts.Contracts;
 
 namespace Rts.Presentation
 {
@@ -18,8 +19,10 @@ namespace Rts.Presentation
         bool Disabled { get; }
         IReadOnlyList<string> ConsoleLines { get; }
         IReadOnlyList<TacticParamView> Parameters { get; }
+        IReadOnlyList<TacticSignalView> Signals { get; }
         IReadOnlyDictionary<string, object> ParamValues { get; }
         bool SetParam(string name, object value);
+        bool SendSignal(string name, SimPoint? point, out string reason);
         bool AutoReload { get; set; }
         string ReloadMessage { get; }
         bool Reload();
@@ -46,5 +49,15 @@ namespace Rts.Presentation
         public decimal? Max { get; }
         public decimal? Step { get; }
         public IReadOnlyList<string> Choices { get; }
+    }
+
+    /// <summary>One tactic signal as drawn by Presentation. The Tactics assembly is intentionally not referenced here.</summary>
+    public sealed class TacticSignalView
+    {
+        public TacticSignalView(string name, string label, bool needsPoint)
+        { Name = name; Label = label; NeedsPoint = needsPoint; }
+        public string Name { get; }
+        public string Label { get; }
+        public bool NeedsPoint { get; }
     }
 }

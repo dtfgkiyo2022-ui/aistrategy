@@ -52,6 +52,7 @@ namespace Rts.Tactics
         public IReadOnlyList<string> ConsoleLines { get; internal set; } = Array.Empty<string>();
         public IReadOnlyList<string> ConsoleLog => ConsoleLines;
         public IReadOnlyList<TacticParamChange> ParamChanges { get; internal set; } = Array.Empty<TacticParamChange>();
+        public IReadOnlyList<TacticSignal> Signals { get; internal set; } = Array.Empty<TacticSignal>();
     }
 
     /// <summary>Calls one faction's tactic every twenty simulation ticks and sends ordinary logged proposals.</summary>
@@ -67,9 +68,11 @@ namespace Rts.Tactics
         private readonly ITacticGlobalPolicyPort globalPolicyPort;
         private readonly Func<ScopeKey, IReadOnlyList<PolicyVersion>> versions;
         private readonly IReadOnlyList<TacticParamDefinition> parameters;
+        private readonly IReadOnlyList<TacticSignalDefinition> signals;
         private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         private readonly List<TacticParamChange> parameterChanges = new List<TacticParamChange>();
         private readonly List<TacticParamChange> pendingParameterChanges = new List<TacticParamChange>();
+        private readonly List<TacticSignal> pendingSignals = new List<TacticSignal>();
         private readonly List<TacticFailure> failures = new List<TacticFailure>();
         private readonly List<string> recentConsoleLines = new List<string>();
         private readonly List<double> callMilliseconds = new List<double>();
@@ -87,6 +90,7 @@ namespace Rts.Tactics
             if (factionId < 1 || factionId > 2) throw new ArgumentOutOfRangeException(nameof(factionId));
             this.factionId = factionId; this.frames = frames ?? throw new ArgumentNullException(nameof(frames)); this.commandPort = commandPort ?? throw new ArgumentNullException(nameof(commandPort)); this.economyPort = economyPort; this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime)); this.globalPolicyPort = globalPolicyPort; this.versions = versions;
             parameters = runtime is ITacticParameterRuntime parameterRuntime ? parameterRuntime.Parameters ?? Array.Empty<TacticParamDefinition>() : Array.Empty<TacticParamDefinition>();
+            signals = runtime is ITacticSignalRuntime signalRuntime ? TacticSignalDefinition.Validate(signalRuntime.Signals) : Array.Empty<TacticSignalDefinition>();
             foreach (var parameter in parameters) parameterValues[parameter.Name] = parameter.DefaultValue;
         }
 
@@ -100,6 +104,7 @@ namespace Rts.Tactics
         public int RejectedCommandCount => rejectedCommandCount;
         public IReadOnlyList<string> RecentConsoleLines => recentConsoleLines.AsReadOnly();
         public IReadOnlyList<TacticParamDefinition> Parameters => parameters;
+        public IReadOnlyList<TacticSignalDefinition> Signals => signals;
         public IReadOnlyDictionary<string, object> ParamValues => parameterValues;
         public IReadOnlyList<TacticParamChange> ParamChanges => parameterChanges.AsReadOnly();
         public int ParamChangeCount => parameterChanges.Count;
@@ -146,6 +151,22 @@ namespace Rts.Tactics
             return true;
         }
 
+        /// <summary>Queues one declared human-to-tactic signal for the next tactic call.</summary>
+        public bool SendSignal(string name, SimPoint? point, out string reason)
+        {
+            reason = null;
+            TacticSignalDefinition definition = null;
+            foreach (var candidate in signals) if (candidate.Name == name) { definition = candidate; break; }
+            if (definition == null) { reason = "合図が見つかりません: " + (name ?? ""); return false; }
+            if (definition.NeedsPoint && !point.HasValue) { reason = "この合図には地点が必要です: " + definition.Name; return false; }
+            if (!definition.NeedsPoint && point.HasValue) { reason = "この合図には地点を付けられません: " + definition.Name; return false; }
+            if (disabled) { reason = "戦術が停止しているため、合図を送れません。"; return false; }
+            long tick = lastCallTick;
+            try { var frame = frames.Latest(factionId); if (frame != null) tick = frame.Tick; } catch (Exception) { }
+            pendingSignals.Add(new TacticSignal { Tick = tick, Name = definition.Name, Point = point });
+            return true;
+        }
+
         public void Start(string setupJson = "{}")
         {
             if (started) throw new InvalidOperationException("TacticHost has already started.");
@@ -163,6 +184,7 @@ namespace Rts.Tactics
                 result.ParamChanges = pendingParameterChanges.ToArray();
                 pendingParameterChanges.Clear();
             }
+            TacticSignal[] signalsForCall = Array.Empty<TacticSignal>();
             if (!started) Start("{}");
             CaptureConsoleLines(result);
             if (disabled || frame.Tick % DecisionIntervalTicks != 0) { result.Disabled = disabled; return result; }
@@ -170,7 +192,10 @@ namespace Rts.Tactics
             lastCallTick = frame.Tick;
             try
             {
-                result.ViewJson = TacticViewWriter.Write(frame, parameterValues);
+                signalsForCall = pendingSignals.ToArray();
+                pendingSignals.Clear();
+                result.Signals = signalsForCall;
+                result.ViewJson = TacticViewWriter.Write(frame, parameterValues, signalsForCall);
                 var watch = Stopwatch.StartNew();
                 result.CommandJson = runtime.Tick(result.ViewJson) ?? throw new InvalidOperationException("戦術がnullの命令JSONを返しました。");
                 watch.Stop();
