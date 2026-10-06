@@ -347,18 +347,17 @@ namespace Rts.Presentation
             y += SetupRow;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
-            DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
-            y += SetupRow;
+            y += Mathf.Max(SetupRow, DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own tactic", "自軍の戦術"));
-            DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f));
-            y += SetupRow;
-            y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
-            y = DrawTacticReloadControls(opponentTactic, x, y, rect.width - 16f);
-            y = DrawTacticParams(opponentTactic, false, x, y, rect.width - 16f);
+            y += Mathf.Max(SetupRow, DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
+            // The own tactic comes first: its knobs are the ones the player moves; the opponent's are shown only.
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticReloadControls(ownTactic, x, y, rect.width - 16f);
             y = DrawTacticParams(ownTactic, true, x, y, rect.width - 16f);
+            y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
+            y = DrawTacticReloadControls(opponentTactic, x, y, rect.width - 16f);
+            y = DrawTacticParams(opponentTactic, false, x, y, rect.width - 16f);
 
             if (playerFiles != null)
             {
@@ -449,18 +448,28 @@ namespace Rts.Presentation
             }
         }
 
-        private static void DrawTacticChoices(ITacticControl control, Rect area)
+        /// <summary>
+        /// Lays the tactic buttons out in as many rows as their names need, so no name is cut off.
+        /// Returns the height used (one row is <paramref name="area"/>'s height).
+        /// </summary>
+        private static float DrawTacticChoices(ITacticControl control, Rect area)
         {
-            if (control == null) return;
+            if (control == null) return 0f;
             var choices = control.Choices;
-            if (choices == null || choices.Length == 0) return;
-            float width = area.width / choices.Length;
+            if (choices == null || choices.Length == 0) return 0f;
+            float widest = 0f;
+            for (int i = 0; i < choices.Length; i++)
+                widest = Mathf.Max(widest, GUI.skin.button.CalcSize(new GUIContent(TacticLabel(choices[i]))).x + 12f);
+            int columns = Mathf.Clamp((int)(area.width / Mathf.Max(1f, widest)), 1, choices.Length);
+            int rows = (choices.Length + columns - 1) / columns;
+            float width = area.width / columns;
             for (int i = 0; i < choices.Length; i++)
             {
                 bool on = control.Current == choices[i];
-                if (GUI.Toggle(new Rect(area.x + i * width, area.y, width - 4f, area.height), on,
-                    TacticLabel(choices[i]), GUI.skin.button) && !on) control.Current = choices[i];
+                var cell = new Rect(area.x + (i % columns) * width, area.y + (i / columns) * (area.height + 4f), width - 4f, area.height);
+                if (GUI.Toggle(cell, on, TacticLabel(choices[i]), GUI.skin.button) && !on) control.Current = choices[i];
             }
+            return rows * area.height + (rows - 1) * 4f;
         }
 
         private static string TacticLabel(string selection)
