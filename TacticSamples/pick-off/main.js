@@ -10,12 +10,37 @@ function soldiers(view) {
   return n;
 }
 
+function compositionTotal(composition) {
+  var n = 0;
+  for (var kindName in composition) n += composition[kindName];
+  return n;
+}
+
+function visibleKindCount(view, contact, kindName) {
+  var n = 0;
+  for (var i = 0; i < view.visibleEnemies.length; i++) {
+    var enemy = view.visibleEnemies[i];
+    var covered = contact.covered || [];
+    var belongs = enemy.id === contact.id || covered.indexOf(enemy.id) >= 0;
+    if (belongs && enemy.kindName === kindName) n++;
+  }
+  return n;
+}
+
 function bestSmallContact(view, ownCount) {
   var best = null;
   for (var i = 0; i < view.contacts.length; i++) {
     var c = view.contacts[i];
-    if (!c.visible || c.strengthUnknown || c.absent || c.max >= ownCount - SIZE_MARGIN) continue;
-    if (best === null || c.max < best.max) best = c;
+    if (!c.visible || c.strengthUnknown || c.absent) continue;
+    var composition = c.visibleComposition || {};
+    var visibleCount = compositionTotal(composition);
+    var archerCount = visibleKindCount(view, c, "Archer");
+    if (visibleCount <= 0 || visibleCount >= ownCount - SIZE_MARGIN) continue;
+    if (archerCount * 3 > visibleCount) continue;
+    if (best === null || visibleCount < best.visibleCount ||
+        (visibleCount === best.visibleCount && c.id < best.id)) {
+      best = { id: c.id, position: c.position, visibleCount: visibleCount };
+    }
   }
   return best;
 }
