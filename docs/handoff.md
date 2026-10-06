@@ -1,6 +1,6 @@
 # オーナー側（A）作業の引き継ぎメモ
 
-最終更新：2026-10-06 朝（お任せの AI を「戦術＝プログラム」にする方針転換。T-0〜T-3 ができ、T-4 を Codex が作業中）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
+最終更新：2026-10-06 午後（戦術＝プログラムの T-1〜T-7 ができ、戦術の命令が効いていなかった不具合を直した。T-8 を Codex が作業中）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
 
 このメモは「今どこまで進んでいて、次に何をするか」と「このリポジトリで作業するときの落とし穴」をまとめたものです。恒常的なルールは `CLAUDE.md`、仕様は `docs/technical-design.md`、進め方は `ROADMAP.md` と GitHub Issues が正です。このメモと矛盾したら、そちらを優先してください。
 
@@ -10,7 +10,26 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-06 朝。これが最新）
+### 今どこにいるか（2026-10-06 午後。これが最新）
+
+- **main に入ったもの**：T-1（#306）、T-2 Jint の実行環境（#308）、T-3・T-4 試し遊びで戦術を選ぶ・ルールブックと記録パック（#309）
+- **重大な不具合を直した（main にはまだ入っていない）**：戦術の命令がシミュレーションで全部捨てられ、**どの戦術も何もしないのと同じだった**。原因は命令の中身（拠点・コアの目標に位置、AI の命令に必須の `ObservationTooOld` の失効なし、`reservePermille` を MaintainReserve 以外で使用）と、方針の版（`TargetRevision`・`Parents`）を付けずに出していたこと。`TacticCommandReader` を `Simulation.Payload` と同じ決まりにし、`TacticOrderVersions` で版を付ける。テストが「送った数」しか見ていなかったので、「シミュレーションが受け付けて実行した」ことを確かめるテストを足した（メモリ `tests-must-span-state-machine-timers.md` に「送った≠効いた」）。**main の試し遊びで戦術を選んでも、この修正が入るまで効かない**
+- ブランチの積み上がり（どれも Unity EditMode 合格、関連テスト合格）：
+  - `a/tactics-t5a` 練習場（CLI `tactic-gym`＋`practice/` の Python。12000tick 約10秒）
+  - `a/tactics-t5b` Python（Pyodide＋numpy）の戦術。Deno・Pyodide を `StreamingAssets/TacticRuntimes/` に同梱（Git LFS：`*.exe`・`*.wasm`・`*.whl`・`*.zip`、オーナー許可）
+  - `a/tactics-t6a` 製品版のビルドに見本を同梱・手引き `docs/tactics-guide.md`・フォルダを開くボタン
+  - `a/tactics-samples` 上の不具合の修正と見本4本（outpost-first・boom-then-strike・pick-off・turtle-age）
+  - `a/tactics-samples2` 見本の測り直し（rush が種1で3.3分勝ち。守り系は今のお任せに負ける）
+  - `a/tactics-ages` 戦況に時代の情報（`agesEnabled`・`canAdvanceNow` など）
+  - `a/tactics-t7` 戦術の「つまみ」（`tactic.json` の `params`、パネルのスライダー、`paramChanges`）
+  - `a/tactics-t8` 参謀から戦術の切り替え・つまみの変更（Codex 作業中。**Schema を変えるので本物の API で1問確かめてからマージ**）
+- 全体テスト（`a/tactics-samples` まで）を実行中。通ったら `a/tactics-ages` から PR を1本出す（関連テストで ages を確認済み）。そのあと t7、t8 の順に PR
+- Unity の Library は `aistrategy-wt-tactics7` にある（作業フォルダの間を移している）
+- 積み重ねた PR は、出したあと `mergeable` を確かめる（#309 が CONFLICTING で CI が1時間走らなかった。main を取り込んで push で直る）
+- 未調査：人の命令（Submit）と参謀の作戦（ゲーム内）も版0で出している。ゲートウェイ側で補う仕組みがあるはず（掘らない）
+- 次の候補：見本の戦術を強くする（今は全部お任せより弱い）、標準の戦術を JS で書き直す、Steam Workshop（Steamworks SDK のダウンロード許可とアプリ登録が要る）
+
+### 今どこにいるか（2026-10-06 朝）
 
 **オーナーの方針転換（10-06）：お任せの AI を「戦術＝プログラム」にする。** プレイヤーが Claude Code／ChatGPT で書いた戦術（JS／TS、Python は WebAssembly の箱）のフォルダをゲームが読み込み、お任せの戦い方にする。試合中の突発の判断は Jev／ローカル LLM。標準の戦術を同梱、Steam Workshop と GitHub で共有。機械学習は学習をゲームの外（Python の練習場）、試合では学習済みのモデル。設計は **`docs/technical-design-tactics.md`**、企画書も書き換え済み（#304）。メモリ `tactics-as-programs-pivot.md` に決定の要点。
 
