@@ -57,6 +57,15 @@ namespace Rts.UnityHost
         internal IReadOnlyList<UserPolicyIntent> Policies { get; set; } = Array.Empty<UserPolicyIntent>();
     }
 
+    public sealed class AiTacticChangeResult
+    {
+        public bool Success { get; internal set; }
+        public string Reason { get; internal set; } = "";
+        public string Report { get; internal set; } = "";
+        public static AiTacticChangeResult Ok(string report) => new AiTacticChangeResult { Success = true, Report = report ?? "" };
+        public static AiTacticChangeResult Fail(string reason) => new AiTacticChangeResult { Reason = reason ?? "変更できません。" };
+    }
+
     /// <summary>Presentation-facing read-only view of one G-4 operation-table entry.</summary>
     public sealed class LiveOperationView
     {
@@ -81,14 +90,23 @@ namespace Rts.UnityHost
         private readonly AiBudgetMeter budget;
         private OperationTable operationTable;
         private readonly Action<string> changeDoctrine;
+        private readonly Func<string, string, AiTacticChangeResult> changeTacticParam;
+        private readonly Func<string, AiTacticChangeResult> switchTactic;
+        private readonly Action<AiSituationSummary> enrichSummary;
 
         public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
-            OperationTable operationTable = null, Action<string> changeDoctrine = null)
+            OperationTable operationTable = null, Action<string> changeDoctrine = null,
+            Func<string, string, AiTacticChangeResult> changeTacticParam = null,
+            Func<string, AiTacticChangeResult> switchTactic = null,
+            Action<AiSituationSummary> enrichSummary = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
             this.operationTable = operationTable;
             this.changeDoctrine = changeDoctrine;
+            this.changeTacticParam = changeTacticParam;
+            this.switchTactic = switchTactic;
+            this.enrichSummary = enrichSummary;
             var runtime = new RuntimeCommandInterpreterRouter();
             ownedInterpreter = runtime;
             coordinator = new CommandInterpreterCoordinator(runtime);
@@ -97,12 +115,18 @@ namespace Rts.UnityHost
 
         /// <summary>Test/development constructor; the supplied interpreter prevents any real network access.</summary>
         public LiveAiCommandPort(CommandGateway gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
-            decimal budgetYen = 3m, OperationTable operationTable = null, Action<string> changeDoctrine = null)
+            decimal budgetYen = 3m, OperationTable operationTable = null, Action<string> changeDoctrine = null,
+            Func<string, string, AiTacticChangeResult> changeTacticParam = null,
+            Func<string, AiTacticChangeResult> switchTactic = null,
+            Action<AiSituationSummary> enrichSummary = null)
         {
             this.gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
             this.frame = frame;
             this.operationTable = operationTable;
             this.changeDoctrine = changeDoctrine;
+            this.changeTacticParam = changeTacticParam;
+            this.switchTactic = switchTactic;
+            this.enrichSummary = enrichSummary;
             coordinator = new CommandInterpreterCoordinator(interpreter ?? throw new ArgumentNullException(nameof(interpreter)));
             budget = new AiBudgetMeter(budgetYen);
         }
@@ -130,9 +154,16 @@ namespace Rts.UnityHost
             var f = frame == null ? null : frame();
             if (f == null) throw new InvalidOperationException("試合が開始されていません。");
             var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
-            var summary = AiSituationSummary.From(f);
+            var summary = Summary(f);
             return AiCostCalculator.EstimateYen(selected.Model, summary.Prompt(instruction ?? "",
                 fixedTarget), 200);
+        }
+
+        private AiSituationSummary Summary(FactionFrame current)
+        {
+            var summary = AiSituationSummary.From(current);
+            enrichSummary?.Invoke(summary);
+            return summary;
         }
 
         public ulong BeginInterpretation(string instruction, ScopeKey? fixedTarget, string model)
@@ -149,7 +180,7 @@ namespace Rts.UnityHost
             try
             {
                 ulong request = coordinator.Request(instruction ?? "", f, fixedTarget, selected.Model, f.Tick,
-                    selected.DeadlineTicks);
+                    selected.DeadlineTicks, suppliedSummary: Summary(f));
                 var item = new LiveAiInstruction
                 {
                     RequestId = request,
@@ -203,7 +234,8 @@ namespace Rts.UnityHost
                 item.Issued = AiInstructionText.Describe(result);
 
                 bool hasDoctrine = result.Doctrine != null;
-                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0 && !hasDoctrine))
+                bool hasTactic = result.TacticCommands != null && result.TacticCommands.Count != 0;
+                if (reply.Late || result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.Operations.Count == 0 && !hasDoctrine && !hasTactic))
                 {
                     item.State = reply.Late ? AiInstructionState.Expired : AiInstructionState.Unknown;
                     if (reply.Late && string.IsNullOrEmpty(item.Reason)) item.Reason = "締め切りを過ぎた答え";
@@ -236,6 +268,24 @@ namespace Rts.UnityHost
                         reservationClosed = true;
                         if (changeDoctrine == null) throw new InvalidOperationException("全体方針を切り替える受け口がありません。");
                         changeDoctrine(result.Doctrine);
+                    }
+                    if (hasTactic)
+                    {
+                        gateway.EndInterpretation(item.ReservationId);
+                        reservationClosed = true;
+                        foreach (var tactic in result.TacticCommands)
+                        {
+                            AiTacticChangeResult changed = tactic.Kind == "SetTacticParam"
+                                ? changeTacticParam == null ? AiTacticChangeResult.Fail("戦術のつまみを変える受け口がありません。") : changeTacticParam(tactic.ParamName, tactic.ParamValue)
+                                : switchTactic == null ? AiTacticChangeResult.Fail("戦術を切り替える受け口がありません。") : switchTactic(tactic.TacticName);
+                            if (!changed.Success) throw new InvalidOperationException(changed.Reason);
+                            if (!string.IsNullOrEmpty(changed.Report))
+                            {
+                                item.Say = string.IsNullOrEmpty(item.Say) ? changed.Report : item.Say + " " + changed.Report;
+                                var issued = new List<string>(item.Issued ?? Array.Empty<string>()) { changed.Report };
+                                item.Issued = issued.ToArray();
+                            }
+                        }
                     }
                     if (result.Policies.Count != 0) item.HumanRequestId = gateway.SubmitBatch(result.Policies);
                     foreach (var command in result.EconomyCommands) gateway.SubmitEconomy(command);
@@ -338,12 +388,21 @@ namespace Rts.UnityHost
             if (result == null) return Array.Empty<string>();
             var lines = new List<string>();
             if (result.Doctrine != null) lines.Add(Doctrine(result.Doctrine));
+            foreach (var tactic in result.TacticCommands ?? Array.Empty<AiTacticCommand>()) lines.Add(Tactic(tactic));
             foreach (var policy in result.Policies ?? Array.Empty<UserPolicyIntent>()) lines.Add(Policy(policy));
             foreach (var command in result.EconomyCommands ?? Array.Empty<EconomyCommand>()) lines.Add(Economy(command));
             foreach (var operation in result.Operations ?? Array.Empty<OperationDefinition>())
                 lines.Add("作戦：" + operation.When.Describe() + "なら、" + string.Join("・", operation.Then.Select(a =>
                     a.IsPolicy ? Policy(a.Policy) : Economy(a.Economy))));
             return lines;
+        }
+
+        private static string Tactic(AiTacticCommand command)
+        {
+            if (command == null) return "";
+            return command.Kind == "SetTacticParam"
+                ? "戦術のつまみ「" + command.ParamName + "」を " + command.ParamValue + " に変更"
+                : "戦術を " + (string.IsNullOrEmpty(command.TacticName) ? "なし" : command.TacticName) + " に切り替え";
         }
 
         private static string Doctrine(string doctrine)

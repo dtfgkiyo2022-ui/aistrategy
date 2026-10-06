@@ -60,9 +60,34 @@ namespace Rts.Core.Tests
                 var command = root.GetProperty("$defs").GetProperty("command");
                 CollectionAssert.Contains(command.GetProperty("properties").GetProperty("type").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "doctrine");
                 CollectionAssert.Contains(command.GetProperty("properties").GetProperty("preset").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "concentrate");
+                CollectionAssert.Contains(command.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "SetTacticParam");
+                CollectionAssert.Contains(command.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "SwitchTactic");
                 var condition = root.GetProperty("properties").GetProperty("operations").GetProperty("items").GetProperty("properties").GetProperty("when");
                 CollectionAssert.Contains(condition.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray(), "And");
             }
+        }
+
+        [Test]
+        public void TacticSchemaUsesOnlyCurrentKnobAndAvailableTacticNames()
+        {
+            var summary = AiSituationSummary.From(Frame());
+            summary.SetTacticInfo("rush", new[] { "rush", "defend" }, new[]
+            {
+                new AiTacticParameterInfo { Name = "attackThreshold", Label = "攻めに切り替える兵の数", Type = "int", Value = "30", Min = 5, Max = 100, Step = 5 }
+            });
+            using (var document = JsonDocument.Parse(AiCommandSchema.Build(summary, AiModelCatalog.Get("gpt-6-luna"))))
+            {
+                var command = document.RootElement.GetProperty("$defs").GetProperty("command");
+                var parameters = command.GetProperty("properties").GetProperty("tacticParam").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray();
+                CollectionAssert.Contains(parameters, "attackThreshold");
+                CollectionAssert.Contains(parameters, "");
+                var tactics = command.GetProperty("properties").GetProperty("tactic").GetProperty("enum").EnumerateArray().Select(x => x.GetString()).ToArray();
+                CollectionAssert.Contains(tactics, "rush");
+                CollectionAssert.Contains(tactics, "defend");
+            }
+            string prompt = summary.DynamicPrompt("攻めの兵を20人にして");
+            Assert.That(prompt, Does.Contain("attackThreshold（攻めに切り替える兵の数）=30"));
+            Assert.That(prompt, Does.Contain("範囲=5..100"));
         }
 
         [Test]

@@ -105,9 +105,16 @@ namespace Rts.Tactics
         /// <summary>Changes one declared knob without clamping; invalid values are rejected.</summary>
         public bool SetParam(string name, object value)
         {
+            return TrySetParam(name, value, out _);
+        }
+
+        public bool TrySetParam(string name, object value, out string reason)
+        {
+            reason = null;
             TacticParamDefinition definition = null;
             foreach (var candidate in parameters) if (candidate.Name == name) { definition = candidate; break; }
-            if (definition == null || !definition.TryNormalize(value, out var normalized, out _)) return false;
+            if (definition == null) { reason = "つまみが見つかりません: " + (name ?? ""); return false; }
+            if (!definition.TryNormalize(value, out var normalized, out reason)) return false;
             var old = parameterValues[name];
             if (Equals(old, normalized)) return true;
             long tick = lastCallTick;

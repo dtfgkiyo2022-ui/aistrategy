@@ -4,6 +4,7 @@ using System.Text.Json;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Tactics;
+using Rts.TacticsJs;
 using Rts.Providers;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
@@ -48,11 +49,13 @@ internal static class SayCommand
         var operationTables = new Dictionary<uint, OperationTable> { [1] = new OperationTable(1), [2] = new OperationTable(2) };
         var judgements = new Dictionary<uint, JevAnswers>();
         var reports = new List<SayResult>();
+        using var westTactic = SayTacticController.Create(options.GetValueOrDefault("--west-tactic"), scenario, sim, gateway, options.GetValueOrDefault("--runtimes"));
         for (long tick = 0; tick < ticks && !sim.Capture(1).Result.HasEnded; tick++)
         {
+            westTactic?.Tick();
             if (byTick.TryGetValue(tick, out var atTick))
                 foreach (var entry in atTick)
-                    InterpretAndSubmit(entry, defaultFaction, sim, gateway, reports, operationTables, judgements);
+                    InterpretAndSubmit(entry, defaultFaction, sim, gateway, reports, operationTables, judgements, westTactic);
             for (uint factionId = 1; factionId <= 2; factionId++)
             {
                 var frame = sim.Capture(factionId);
@@ -67,10 +70,10 @@ internal static class SayCommand
     }
 
     private static void InterpretAndSubmit(SayEntry entry, uint defaultFaction, Battle sim, CommandGateway gateway, List<SayResult> reports,
-        Dictionary<uint, OperationTable> operationTables, Dictionary<uint, JevAnswers> judgements)
+        Dictionary<uint, OperationTable> operationTables, Dictionary<uint, JevAnswers> judgements, SayTacticController westTactic)
     {
         uint faction = entry.Faction == 0 ? defaultFaction : entry.Faction;
-        var frame = sim.Capture(faction); var summary = AiSituationSummary.From(frame);
+        var frame = sim.Capture(faction); var summary = westTactic != null && faction == 1 ? westTactic.Summary(frame) : AiSituationSummary.From(frame);
         var table = operationTables[faction];
         if (entry.CancelOperation != 0)
         {
@@ -86,6 +89,12 @@ internal static class SayCommand
         string response = string.IsNullOrWhiteSpace(entry.Response) ? entry.Answer : entry.Response;
         var result = AiResponseInterpreter.Interpret(response, new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = frame.Tick, DeadlineTick = frame.Tick + AiModelCatalog.Get(entry.Model).DeadlineTicks, MaxObservationAgeTicks = AiModelCatalog.Get(entry.Model).DeadlineTicks });
         var report = new SayResult { Tick = frame.Tick, Faction = faction, Say = result.Say, Reason = result.Reason };
+        foreach (var tactic in result.TacticCommands)
+        {
+            var changed = westTactic != null && faction == 1 ? westTactic.Apply(tactic) : TacticChange.Fail("自軍戦術のCLI制御がありません。");
+            if (!changed.Success) report.Rejected.Add(changed.Reason);
+            else { report.Issued.Add(changed.Report); report.Say = string.IsNullOrEmpty(report.Say) ? changed.Report : report.Say + " " + changed.Report; }
+        }
         foreach (var policy in result.Policies) { gateway.SubmitInterpreted(policy, AiModelCatalog.Get(entry.Model).DeadlineTicks); report.Issued.Add(policy.Kind + ":" + policy.Target.Kind + ":" + policy.Goal.Kind); }
         foreach (var command in result.EconomyCommands) { gateway.SubmitEconomy(command); report.Issued.Add(command.Kind.ToString()); }
         foreach (var operation in result.Operations)
@@ -153,4 +162,112 @@ internal static class SayCommand
         cells.Add(b.ToString()); return cells;
     }
     private static string Required(Dictionary<string, string> options, string key) => options.TryGetValue(key, out var value) ? value : throw new InvalidDataException("Missing " + key);
+
+    private sealed class TacticChange
+    {
+        internal bool Success; internal string Reason = ""; internal string Report = "";
+        internal static TacticChange Ok(string report) => new TacticChange { Success = true, Report = report };
+        internal static TacticChange Fail(string reason) => new TacticChange { Reason = reason };
+    }
+
+    private sealed class SayTacticController : IDisposable
+    {
+        private sealed class Frames : IFrameSource
+        {
+            private readonly Battle simulation; internal Frames(Battle simulation) { this.simulation = simulation; }
+            public FactionFrame Latest(uint factionId) => simulation.Capture(factionId);
+        }
+        private readonly ScenarioDefinition scenario; private readonly Battle simulation; private readonly CommandGateway gateway; private readonly string runtimes;
+        private readonly Frames frames; private TacticHost host; private string selection; private string displayName;
+        private SayTacticController(string selection, ScenarioDefinition scenario, Battle simulation, CommandGateway gateway, string runtimes)
+        { this.selection = selection; this.scenario = scenario; this.simulation = simulation; this.gateway = gateway; this.runtimes = runtimes; frames = new Frames(simulation); Load(selection); }
+
+        internal static SayTacticController Create(string selection, ScenarioDefinition scenario, Battle simulation, CommandGateway gateway, string runtimes)
+        {
+            if (string.IsNullOrEmpty(selection) || selection == "auto") return null;
+            return new SayTacticController(selection, scenario, simulation, gateway, runtimes ?? PyodideTacticRuntime.FindDefaultRuntimes());
+        }
+
+        private void Load(string name)
+        {
+            ITacticRuntime runtime;
+            if (name == "idle") runtime = new IdleTactic();
+            else if (name == "rush") runtime = new RushTactic();
+            else
+            {
+                var loaded = TacticFolder.Load(name, runtimes);
+                if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
+                runtime = loaded.Runtime;
+            }
+            host = new TacticHost(1, frames, gateway, gateway, runtime, versions: scope => gateway.FactionVersions(1).Versions(scope));
+            host.Start("{\"matchSeed\":" + scenario.Seed.ToString(CultureInfo.InvariantCulture) + ",\"factionId\":1}");
+            selection = name; displayName = host.Name;
+        }
+
+        internal void Tick() { host?.Tick(); }
+        internal AiSituationSummary Summary(FactionFrame frame)
+        {
+            var summary = AiSituationSummary.From(frame);
+            var parameters = host.Parameters.Select(d => new AiTacticParameterInfo
+            {
+                Name = d.Name, Label = d.Label, Type = d.Type, Value = Value(host.ParamValues[d.Name]), Min = d.Min, Max = d.Max, Step = d.Step, Choices = d.Choices
+            }).ToArray();
+            summary.SetTacticInfo(displayName, AvailableNames(), parameters);
+            return summary;
+        }
+
+        internal TacticChange Apply(AiTacticCommand command)
+        {
+            if (command.Kind == "SetTacticParam")
+            {
+                var definition = host.Parameters.FirstOrDefault(x => x.Name == command.ParamName);
+                if (definition == null) return TacticChange.Fail("つまみが見つかりません: " + command.ParamName);
+                object parsed; string reason;
+                if (!Parse(definition, command.ParamValue, out parsed, out reason)) return TacticChange.Fail(reason);
+                object before = host.ParamValues[command.ParamName];
+                if (!host.TrySetParam(command.ParamName, parsed, out reason)) return TacticChange.Fail(reason);
+                return TacticChange.Ok(definition.Label + "を " + Value(before) + " → " + Value(host.ParamValues[command.ParamName]) + " にしました");
+            }
+            string name = string.IsNullOrEmpty(command.TacticName) ? "auto" : ResolveName(command.TacticName);
+            if (name == null) return TacticChange.Fail("戦術名が見つかりません: " + command.TacticName);
+            if (name != "idle" && name != "rush" && name != "auto" && !Directory.Exists(name)) return TacticChange.Fail("戦術名が見つかりません: " + name);
+            host.Dispose();
+            if (name == "auto") { host = null; displayName = ""; selection = "auto"; return TacticChange.Ok("戦術をやめ、お任せに戻しました"); }
+            Load(name); return TacticChange.Ok("戦術を " + displayName + " に切り替えました");
+        }
+
+        private string[] AvailableNames()
+        {
+            var names = new List<string> { "idle", "rush" };
+            if (Directory.Exists(selection))
+            {
+                string parent = Directory.GetParent(Path.GetFullPath(selection))?.FullName;
+                foreach (var entry in TacticCatalog.Scan(parent ?? "", runtimes).Where(x => x.IsSelectable)) names.Add(entry.DisplayName);
+            }
+            if (!string.IsNullOrEmpty(displayName)) names.Add(displayName);
+            return names.Distinct(StringComparer.Ordinal).ToArray();
+        }
+
+        private string ResolveName(string requested)
+        {
+            if (requested == "idle" || requested == "rush" || requested == "auto") return requested;
+            if (Directory.Exists(requested)) return requested;
+            if (!Directory.Exists(selection)) return null;
+            string parent = Directory.GetParent(Path.GetFullPath(selection))?.FullName;
+            var entry = TacticCatalog.Scan(parent ?? "", runtimes).FirstOrDefault(x => x.IsSelectable && (x.DisplayName == requested || x.FolderName == requested));
+            return entry?.Path;
+        }
+
+        private static bool Parse(TacticParamDefinition definition, string text, out object value, out string reason)
+        {
+            value = null; reason = null;
+            if (definition.Type == "bool") { if (text == "true") { value = true; return true; } if (text == "false") { value = false; return true; } reason = "boolはtrueまたはfalseです。"; return false; }
+            if (definition.Type == "choice") { value = text; return true; }
+            if (definition.Type == "int" && int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var i)) { value = i; return true; }
+            if (definition.Type == "number" && decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d)) { value = d; return true; }
+            reason = definition.Type + "は数値でなければなりません。"; return false;
+        }
+        private static string Value(object value) => value is bool b ? (b ? "true" : "false") : value is IFormattable f ? f.ToString(null, CultureInfo.InvariantCulture) : value?.ToString() ?? "";
+        public void Dispose() { host?.Dispose(); }
+    }
 }
