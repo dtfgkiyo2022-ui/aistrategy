@@ -135,5 +135,7 @@
     <Compile Include="AiSchemaTests.cs" />
     <Compile Include="TacticTests.cs" />
     <Compile Include="TacticReloadTests.cs" />
+    <Compile Include="SmokeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SmokeOptions.cs" Link="UnityHost/SmokeOptions.cs" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,8 @@
+<linker>
+  <assembly fullname="Jint" preserve="all" />
+  <assembly fullname="Acornima" preserve="all" />
+  <assembly fullname="System.Runtime.CompilerServices.Unsafe" preserve="all" />
+  <assembly fullname="Rts.Tactics" preserve="all" />
+  <assembly fullname="Rts.TacticsJs" preserve="all" />
+  <assembly fullname="Rts.TacticsTools" preserve="all" />
+</linker>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Rts.Contracts;
 
 namespace Rts.Tactics
@@ -71,6 +72,7 @@ namespace Rts.Tactics
         private readonly List<TacticParamChange> pendingParameterChanges = new List<TacticParamChange>();
         private readonly List<TacticFailure> failures = new List<TacticFailure>();
         private readonly List<string> recentConsoleLines = new List<string>();
+        private readonly List<double> callMilliseconds = new List<double>();
         private ulong sequence = 1;
         private int consecutiveFailures;
         private bool started;
@@ -93,6 +95,7 @@ namespace Rts.Tactics
         public IReadOnlyList<TacticFailure> Failures => failures.AsReadOnly();
         public TacticFailure LastFailure => failures.Count == 0 ? null : failures[failures.Count - 1];
         public long LastCallTick => lastCallTick;
+        public IReadOnlyList<double> CallMilliseconds => callMilliseconds.AsReadOnly();
         public int SentCommandCount => sentCommandCount;
         public int RejectedCommandCount => rejectedCommandCount;
         public IReadOnlyList<string> RecentConsoleLines => recentConsoleLines.AsReadOnly();
@@ -168,7 +171,10 @@ namespace Rts.Tactics
             try
             {
                 result.ViewJson = TacticViewWriter.Write(frame, parameterValues);
+                var watch = Stopwatch.StartNew();
                 result.CommandJson = runtime.Tick(result.ViewJson) ?? throw new InvalidOperationException("戦術がnullの命令JSONを返しました。");
+                watch.Stop();
+                callMilliseconds.Add(watch.Elapsed.TotalMilliseconds);
                 CaptureConsoleLines(result);
                 result.Commands = TacticCommandReader.Read(result.CommandJson, frame);
                 if (result.Commands.IsMalformed) throw new FormatException(result.Commands.Error ?? "命令JSONを読めません。");

@@ -20,6 +20,8 @@ namespace Rts.UnityHost
     /// </summary>
     public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl
     {
+        /// <summary>Set by the command-line bootstrap so scene hosts do not start a second match.</summary>
+        public static bool SmokeMode { get; set; }
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
         [SerializeField] private uint viewFactionId = 1;
@@ -56,6 +58,87 @@ namespace Rts.UnityHost
         private TacticFileStamp enemyTacticStamp;
         private TacticFileStamp ownTacticStamp;
         private string rulebookStatus = "";
+
+        private bool smokeRunner;
+        private SmokeOptions smokeOptions;
+        private int smokeSteps;
+        private string smokeWestLoadError = "";
+        private string smokeEastLoadError = "";
+        private string smokeWestLanguage = "";
+        private string smokeEastLanguage = "";
+        private SmokeSideAccumulator smokeWest;
+        private SmokeSideAccumulator smokeEast;
+        private bool smokeFinished;
+
+        private sealed class SmokeSideAccumulator
+        {
+            private readonly HashSet<ulong> accepted = new HashSet<ulong>();
+            private readonly HashSet<ulong> executed = new HashSet<ulong>();
+            private readonly List<string> console = new List<string>();
+
+            public int Calls;
+            public int SentCommands;
+            public int DiscardedCommands;
+            public int Failures;
+            public string LastFailureReason = "";
+            public TacticHost Host;
+
+            public void Record(TacticHostTickResult result, FactionFrame frame)
+            {
+                if (result == null) return;
+                if (result.Called) Calls++;
+                SentCommands += result.SentPolicies + result.SentEconomy;
+                DiscardedCommands += result.Commands == null ? 0 : result.Commands.Rejected.Count;
+                if (result.Failure != null) { Failures++; LastFailureReason = result.Failure.Reason ?? ""; }
+                if (result.ConsoleLines != null)
+                    foreach (string line in result.ConsoleLines)
+                        if (console.Count < 10) console.Add(line ?? "");
+                RecordFrame(frame);
+            }
+
+            public void RecordFrame(FactionFrame frame)
+            {
+                if (frame == null || frame.Commands == null) return;
+                foreach (var command in frame.Commands)
+                {
+                    if (command.Source != CommandSource.Ai) continue;
+                    accepted.Add(command.CommandId);
+                    if (command.Status == CommandStatus.Executing || command.Status == CommandStatus.Completed)
+                        executed.Add(command.CommandId);
+                }
+            }
+
+            public SmokeSideResult ToResult(string requested, string tactic, string language, bool loaded, string loadError)
+            {
+                double p50 = 0;
+                if (Host != null && Host.CallMilliseconds.Count != 0)
+                {
+                    var values = new List<double>(Host.CallMilliseconds);
+                    values.Sort();
+                    int upper = values.Count / 2;
+                    int lower = (values.Count - 1) / 2;
+                    p50 = (values[lower] + values[upper]) / 2.0;
+                }
+                return new SmokeSideResult
+                {
+                    RequestedTactic = requested,
+                    Tactic = tactic,
+                    Language = language,
+                    Loaded = loaded,
+                    LoadError = loadError ?? "",
+                    Calls = Calls,
+                    SentCommands = SentCommands,
+                    DiscardedCommands = DiscardedCommands,
+                    Failures = Failures,
+                    LastFailureReason = LastFailureReason,
+                    FirstFailureReason = Host != null && Host.Failures.Count != 0 ? Host.Failures[0].Reason ?? "" : "",
+                    ConsoleLog = console.ToArray(),
+                    AcceptedAiCommands = accepted.Count,
+                    ExecutedAiCommands = executed.Count,
+                    CallP50Milliseconds = p50
+                };
+            }
+        }
 
         /// <summary>The own-side doctrine picker for the setup panel; same choices as the opponent's.</summary>
         private sealed class OwnDoctrineChoice : IOpponentControl
@@ -186,6 +269,29 @@ namespace Rts.UnityHost
         public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
         public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
         public string MatchPackPath { get { return matchPackPath; } }
+
+        public void ConfigureSmoke(SmokeOptions options)
+        {
+            if (options == null) throw new ArgumentNullException(nameof(options));
+            smokeRunner = true;
+            smokeOptions = options;
+            SmokeMode = true;
+            viewFactionId = 1;
+            ownTactic = SmokeOptions.IsNone(options.WestTactic) ? TacticMatchSetup.None : options.WestTactic;
+            enemyTactic = SmokeOptions.IsNone(options.EastTactic) ? TacticMatchSetup.None : options.EastTactic;
+            ownPreset = "none";
+            enemyPreset = "none";
+            economyMap = true;
+            mapSeed = options.Seed ?? FreshSeed();
+            smokeSteps = 0;
+            smokeFinished = false;
+            smokeWestLoadError = "";
+            smokeEastLoadError = "";
+            smokeWestLanguage = "";
+            smokeEastLanguage = "";
+            smokeWest = new SmokeSideAccumulator();
+            smokeEast = new SmokeSideAccumulator();
+        }
 
         /// <summary>Measurement only (stage 5): repeats every soldier this many times. 1 is the normal match.</summary>
         public static int ScenarioMultiplier = 1;
@@ -385,8 +491,42 @@ namespace Rts.UnityHost
             var choices = new List<string> { TacticMatchSetup.None };
             foreach (var entry in tacticEntries) if (entry.IsSelectable) choices.Add(entry.Path);
             tacticChoices = choices.ToArray();
+            ResolveSmokeTactics();
             if (Array.IndexOf(tacticChoices, ownTactic) < 0) ownTactic = TacticMatchSetup.None;
             if (Array.IndexOf(tacticChoices, enemyTactic) < 0) enemyTactic = TacticMatchSetup.None;
+        }
+
+        private void ResolveSmokeTactics()
+        {
+            if (!smokeRunner || smokeOptions == null) return;
+            ownTactic = ResolveSmokeTactic(smokeOptions.WestTactic, true);
+            enemyTactic = ResolveSmokeTactic(smokeOptions.EastTactic, false);
+        }
+
+        private string ResolveSmokeTactic(string requested, bool west)
+        {
+            if (SmokeOptions.IsNone(requested)) return TacticMatchSetup.None;
+            var entry = tacticEntries.FirstOrDefault(candidate =>
+                string.Equals(candidate.FolderName, requested, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(candidate.DisplayName, requested, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(candidate.Path, requested, StringComparison.OrdinalIgnoreCase));
+            if (entry == null)
+            {
+                if (west) smokeWestLoadError = "TacticCatalogに戦術がありません: " + requested;
+                else smokeEastLoadError = "TacticCatalogに戦術がありません: " + requested;
+                return requested;
+            }
+            if (entry.Metadata != null)
+            {
+                if (west) smokeWestLanguage = entry.Metadata.Language ?? "";
+                else smokeEastLanguage = entry.Metadata.Language ?? "";
+            }
+            if (!entry.IsSelectable)
+            {
+                if (west) smokeWestLoadError = entry.Reason ?? "戦術を選択できません。";
+                else smokeEastLoadError = entry.Reason ?? "戦術を選択できません。";
+            }
+            return entry.Path;
         }
 
         public void OpenTacticsFolder()
@@ -464,6 +604,11 @@ namespace Rts.UnityHost
             try { return TacticMatchSetup.Create(factionId, selection, LoadTacticRuntime, this, gateway, gateway, null, scope => gateway.FactionVersions(factionId).Versions(scope)); }
             catch (Exception e) when (e is InvalidDataException || e is InvalidOperationException || e is ArgumentException)
             {
+                if (smokeRunner)
+                {
+                    if (factionId == 1) smokeWestLoadError = e.Message;
+                    else smokeEastLoadError = e.Message;
+                }
                 Debug.LogWarning("Tactic for faction " + factionId + " could not be loaded; playing without it: " + e.Message);
                 selection = TacticMatchSetup.None;
                 return TacticMatchSetup.Create(factionId, TacticMatchSetup.None, LoadTacticRuntime, this, gateway, gateway);
@@ -483,7 +628,7 @@ namespace Rts.UnityHost
         public void Begin()
         {
             StopTactics();
-            if (mapSeed == 0) mapSeed = FreshSeed();
+            if (mapSeed == 0 && (!smokeRunner || smokeOptions == null || !smokeOptions.Seed.HasValue)) mapSeed = FreshSeed();
             RefreshTacticCatalog();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
@@ -582,41 +727,53 @@ namespace Rts.UnityHost
                     PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
                     new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
 
-            view.SetTerrain(ScenarioTerrain.From(scenario.Map));
-            view.Push(simulation.Capture(viewFactionId));
+            if (view != null)
+            {
+                view.SetTerrain(ScenarioTerrain.From(scenario.Map));
+                view.Push(simulation.Capture(viewFactionId));
+            }
             TryStartMatchPack(scenario);
-            panel.Bind(port, viewFactionId, viewFactionId, view);
-            panel.ExternalAi = this;
-            panel.MatchRestart = this;
-            panel.Opponent = this;
-            if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
-            panel.OwnDoctrine = ownDoctrine;
-            if (enemyTacticChoice == null) enemyTacticChoice = new TacticChoice(this, false);
-            if (ownTacticChoice == null) ownTacticChoice = new TacticChoice(this, true);
-            enemyTacticChoice.Bind(tacticChoices, enemyTacticSide.Host);
-            ownTacticChoice.Bind(tacticChoices, ownTacticSide.Host);
-            enemyTacticChoice.SetReloadMessage("");
-            ownTacticChoice.SetReloadMessage("");
-            enemyTacticStamp = TacticFileStamp.Capture(enemyTactic);
-            ownTacticStamp = TacticFileStamp.Capture(ownTactic);
-            panel.OpponentTactic = enemyTacticChoice;
-            panel.OwnTactic = ownTacticChoice;
+            if (panel != null)
+            {
+                panel.Bind(port, viewFactionId, viewFactionId, view);
+                panel.ExternalAi = this;
+                panel.MatchRestart = this;
+                panel.Opponent = this;
+                if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
+                panel.OwnDoctrine = ownDoctrine;
+                if (enemyTacticChoice == null) enemyTacticChoice = new TacticChoice(this, false);
+                if (ownTacticChoice == null) ownTacticChoice = new TacticChoice(this, true);
+                enemyTacticChoice.Bind(tacticChoices, enemyTacticSide.Host);
+                ownTacticChoice.Bind(tacticChoices, ownTacticSide.Host);
+                enemyTacticChoice.SetReloadMessage("");
+                ownTacticChoice.SetReloadMessage("");
+                enemyTacticStamp = TacticFileStamp.Capture(enemyTactic);
+                ownTacticStamp = TacticFileStamp.Capture(ownTactic);
+                panel.OpponentTactic = enemyTacticChoice;
+                panel.OwnTactic = ownTacticChoice;
+            }
             // Added at run time so the scene file stays as it is. Unity's fake null defeats ??, hence the explicit checks.
-            if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
-            if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
-            if (economyPanel == null) economyPanel = GetComponent<EconomyPanel>();
-            if (economyPanel == null) economyPanel = gameObject.AddComponent<EconomyPanel>();
-            economyLayer.Clear();
-            economyLayer.Bind(view);
-            economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
-            economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
-            panel.MapChoice = this;
-            panel.MatchRuleChoice = this;
-            panel.MatchPackPathProvider = () => MatchPackPath;
-            panel.PlayerFiles = this;
-            panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
-            panel.ExtraBlocksClick = economyPanel.BlocksClick;
-            panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
+            if (!smokeRunner)
+            {
+                if (economyLayer == null) economyLayer = GetComponent<EconomyLayer>();
+                if (economyLayer == null) economyLayer = gameObject.AddComponent<EconomyLayer>();
+                if (economyPanel == null) economyPanel = GetComponent<EconomyPanel>();
+                if (economyPanel == null) economyPanel = gameObject.AddComponent<EconomyPanel>();
+                economyLayer.Clear();
+                economyLayer.Bind(view);
+                economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+                economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
+                if (panel != null)
+                {
+                    panel.MapChoice = this;
+                    panel.MatchRuleChoice = this;
+                    panel.MatchPackPathProvider = () => MatchPackPath;
+                    panel.PlayerFiles = this;
+                    panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
+                    panel.ExtraBlocksClick = economyPanel.BlocksClick;
+                    panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
+                }
+            }
         }
 
         /// <summary>Verification entry: sends a standard command through the same port the UI uses.</summary>
@@ -867,7 +1024,12 @@ namespace Rts.UnityHost
             }
             gateway.Step();
             var frame = simulation.Capture(viewFactionId);
-            view.Push(frame);
+            if (smokeRunner)
+            {
+                if (smokeWest != null) smokeWest.Record(ownFactionId == 1 ? ownTacticResult : enemyTacticResult, simulation.Capture(1));
+                if (smokeEast != null) smokeEast.Record(ownFactionId == 2 ? ownTacticResult : enemyTacticResult, simulation.Capture(2));
+            }
+            if (view != null) view.Push(frame);
             if (liveAi != null) liveAi.Poll(frame.Tick);
             matchPack?.RecordAfterStep(simulation);
             if (frame.Result.HasEnded)
@@ -882,6 +1044,7 @@ namespace Rts.UnityHost
 
         private void TryStartMatchPack(ScenarioDefinition scenario)
         {
+            if (smokeRunner) return;
             try
             {
                 string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -919,6 +1082,11 @@ namespace Rts.UnityHost
 
         private void Start()
         {
+            if (SmokeMode && !smokeRunner)
+            {
+                enabled = false;
+                return;
+            }
             // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
             UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
             Begin();
@@ -927,6 +1095,11 @@ namespace Rts.UnityHost
         private void Update()
         {
             if (simulation == null) return;
+            if (smokeRunner)
+            {
+                RunSmokeBatch();
+                return;
+            }
             // Deliberately polled on Unity's main thread. This is a presentation convenience and never enters the
             // simulation's decision path; the wall clock keeps it independent of pause and match speed.
             CheckAutomaticTacticReloads();
@@ -945,6 +1118,66 @@ namespace Rts.UnityHost
             {
                 accumulated -= tickSeconds;
                 StepOnce();
+            }
+        }
+
+        private void RunSmokeBatch()
+        {
+            while (smokeSteps < smokeOptions.Ticks && !HasEnded)
+            {
+                StepOnce();
+                smokeSteps++;
+            }
+            if (HasEnded || smokeSteps >= smokeOptions.Ticks) FinishSmoke();
+        }
+
+        private void FinishSmoke()
+        {
+            if (smokeOptions == null || smokeFinished) return;
+            smokeFinished = true;
+            var frame = simulation.Capture(1);
+            if (smokeWest != null) smokeWest.Host = ownTacticSide == null ? null : ownTacticSide.Host;
+            if (smokeEast != null) smokeEast.Host = enemyTacticSide == null ? null : enemyTacticSide.Host;
+            SmokeSideResult west = smokeWest == null ? new SmokeSideResult() : smokeWest.ToResult(
+                smokeOptions.WestTactic,
+                ownTacticSide != null && ownTacticSide.Host != null ? ownTacticSide.Host.Name : smokeOptions.WestTactic,
+                smokeWestLanguage,
+                ownTacticSide != null && ownTacticSide.Host != null,
+                smokeWestLoadError);
+            SmokeSideResult east = smokeEast == null ? new SmokeSideResult() : smokeEast.ToResult(
+                smokeOptions.EastTactic,
+                enemyTacticSide != null && enemyTacticSide.Host != null ? enemyTacticSide.Host.Name : smokeOptions.EastTactic,
+                smokeEastLanguage,
+                enemyTacticSide != null && enemyTacticSide.Host != null,
+                smokeEastLoadError);
+            var result = new SmokeResult
+            {
+                TicksRequested = smokeOptions.Ticks,
+                Tick = frame.Tick,
+                Seed = mapSeed,
+                WinnerFactionId = frame.Result.WinnerFactionId,
+                Winner = frame.Result.IsDraw ? "draw" : frame.Result.WinnerFactionId == 1 ? "west" : frame.Result.WinnerFactionId == 2 ? "east" : "undecided",
+                JsCallP50Milliseconds = string.Equals(west.Language, "js", StringComparison.OrdinalIgnoreCase)
+                    ? west.CallP50Milliseconds : string.Equals(east.Language, "js", StringComparison.OrdinalIgnoreCase) ? east.CallP50Milliseconds : 0,
+                PythonCallP50Milliseconds = string.Equals(west.Language, "python", StringComparison.OrdinalIgnoreCase)
+                    ? west.CallP50Milliseconds : string.Equals(east.Language, "python", StringComparison.OrdinalIgnoreCase) ? east.CallP50Milliseconds : 0,
+                West = west,
+                East = east
+            };
+            try
+            {
+                string output = Path.GetFullPath(smokeOptions.OutputPath);
+                string parent = Path.GetDirectoryName(output);
+                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                File.WriteAllText(output, SmokeJson.Write(result), new System.Text.UTF8Encoding(false));
+                Debug.Log("RTS smoke result written to " + output);
+                StopTactics();
+                UnityEngine.Application.Quit(0);
+            }
+            catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException)
+            {
+                Debug.LogError("RTS smoke result could not be written: " + e.Message);
+                UnityEngine.Application.Quit(1);
             }
         }
 
