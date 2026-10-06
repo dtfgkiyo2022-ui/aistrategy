@@ -1,0 +1,15 @@
+{
+  "name": "guarded-spear",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "攻撃用の歩兵軍団を敵コアへ送り、偵察軍団は自コアを守る戦術。",
+  "params": [
+    { "name": "spearheadMinimum", "label": "攻撃へ回す軍団の最小兵力", "type": "int", "default": 5, "min": 1, "max": 30, "step": 1 },
+    { "name": "attackPriority", "label": "攻撃の優先度", "type": "int", "default": 100, "min": 0, "max": 100, "step": 5 },
+    { "name": "guardPriority", "label": "警戒の優先度", "type": "int", "default": 100, "min": 0, "max": 100, "step": 5 },
+    { "name": "guardLossPermille", "label": "警戒軍団の許容損害（‰）", "type": "int", "default": 250, "min": 0, "max": 1000, "step": 50 }
+  ]
+}
