@@ -5,5 +5,9 @@
   "language": "js",
   "entry": "main.js",
   "apiVersion": 1,
-  "description": "自軍より小さいと推定できる接触へ集中し、大きな接触からは自軍コアへ退く戦術。"
+  "description": "自軍より小さい接触へ一定時間集中し、攻めない時間を置いてから再評価する戦術。",
+  "params": [
+    { "name": "commitTicks", "label": "攻撃を続ける時間", "type": "int", "default": 600, "min": 100, "max": 2000, "step": 100 },
+    { "name": "retreatTicks", "label": "後退を続ける時間", "type": "int", "default": 300, "min": 100, "max": 1200, "step": 100 }
+  ]
 }

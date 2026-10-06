@@ -1,7 +1,11 @@
-// 小さい敵と見なす上限、攻撃時の損害許容を調整する定数。
+// 小さい接触を選ぶ基準と、攻撃・後退の命令優先度。
 const SIZE_MARGIN = 2;
 const PICK_PRIORITY = 100;
 const RETREAT_PRIORITY = 95;
+var phase = "retreat";
+var phaseUntil = 0;
+var targetId = null;
+var targetPosition = null;
 var lastDecision = "";
 
 function soldiers(view) {
@@ -45,19 +49,39 @@ function bestSmallContact(view, ownCount) {
   return best;
 }
 
+function choosePhase(view, target, now) {
+  if (phase === "attack" && now < phaseUntil) return;
+  if (phase === "retreat" && now < phaseUntil) return;
+
+  if (target !== null) {
+    phase = "attack";
+    phaseUntil = now + view.params.commitTicks;
+    targetId = target.id;
+    targetPosition = target.position;
+  } else {
+    phase = "retreat";
+    phaseUntil = now + view.params.retreatTicks;
+    targetId = null;
+    targetPosition = null;
+  }
+}
+
 function onTick(view) {
   var ownCount = soldiers(view);
   var target = bestSmallContact(view, ownCount);
-  var decision = target ? "pick:" + target.id : "retreat";
+  var now = view.tick;
+  choosePhase(view, target, now);
+  var attacking = phase === "attack";
+  var decision = attacking ? "pick:" + targetId : "retreat";
   if (decision !== lastDecision) {
-    console.log(target ? "小さい接触へ集中: " + target.id : "有利な接触なし: コアへ後退");
+    console.log(attacking ? "小さい接触へ集中: " + targetId : "攻撃を止めてコアへ後退");
     lastDecision = decision;
   }
-  var commands = [{ type: "global", policy: target ? "concentrate" : "maintain" }];
+  var commands = [{ type: "global", policy: attacking ? "concentrate" : "maintain" }];
   for (var i = 0; i < view.ownArmies.length; i++) {
     var army = view.ownArmies[i];
-    commands.push(target ? {
-      type: "policy", kind: "Focus", target: { kind: "Army", id: army.id }, goal: { kind: "Point", point: target.position }, priority: PICK_PRIORITY, allowedLossPermille: 500, reservePermille: 0
+    commands.push(attacking ? {
+      type: "policy", kind: "Focus", target: { kind: "Army", id: army.id }, goal: { kind: "Point", point: targetPosition }, priority: PICK_PRIORITY, allowedLossPermille: 500, reservePermille: 0
     } : {
       type: "policy", kind: "Retreat", target: { kind: "Army", id: army.id }, goal: { kind: "Core", id: view.factionId }, priority: RETREAT_PRIORITY, allowedLossPermille: 150, reservePermille: 0
     });
