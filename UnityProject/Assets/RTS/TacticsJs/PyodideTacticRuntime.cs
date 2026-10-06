@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -18,7 +19,9 @@ namespace Rts.TacticsJs
         private readonly string runtimes;
         private readonly List<string> logs = new List<string>();
         private Process process;
+        private Win32ChildProcess win32Process;
         private Task<string> pending;
+        private bool win32ResponsePending;
         private string cacheDirectory;
         private bool started;
         private bool stopped;
@@ -81,29 +84,57 @@ namespace Rts.TacticsJs
                 if (pyodide.Contains(",") || folder.Contains(",")) throw new ArgumentException("Python戦術のパスにカンマは使えません。");
                 cacheDirectory = Path.Combine(Path.GetTempPath(), "rts-pyodide-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(cacheDirectory);
-                var info = new ProcessStartInfo
+                string deno = Path.Combine(runtimes, "deno", "deno.exe");
+                string arguments = "run --no-prompt --no-remote --cached-only " + Quote("--allow-read=" + pyodide + "," + folder)
+                    + " " + Quote(Path.Combine(runtimes, "pyodide-host.mjs")) + " " + Quote(folder);
+                var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    FileName = Path.Combine(runtimes, "deno", "deno.exe"),
-                    Arguments = "run --no-prompt --no-remote --cached-only " + Quote("--allow-read=" + pyodide + "," + folder)
-                        + " " + Quote(Path.Combine(runtimes, "pyodide-host.mjs")) + " " + Quote(folder),
-                    WorkingDirectory = runtimes,
-                    UseShellExecute = false, CreateNoWindow = true,
-                    RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-                    StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8
+                    ["DENO_DIR"] = cacheDirectory
                 };
-                info.Environment.Clear();
-                info.Environment["DENO_DIR"] = cacheDirectory;
-                process = Process.Start(info) ?? throw new IOException("Denoを起動できません。");
-                ProcessId = process.Id;
-                // Drain stderr without accumulating attacker-controlled output in memory.
-                var stderr = process.StandardError;
-                _ = Task.Run(async () => { var buffer = new char[1024]; try { while (await stderr.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false) != 0) { } } catch (IOException) { } catch (ObjectDisposedException) { } });
-                pending = ReadResponse(process.StandardOutput);
-                int remaining = Math.Max(1, StartupTimeoutMilliseconds - (int)watch.ElapsedMilliseconds);
-                if (!pending.Wait(remaining)) throw new TimeoutException("Pyodideの起動が10秒を超えました。");
-                string ready = pending.GetAwaiter().GetResult();
-                pending = null;
+                if (Win32ChildProcess.IsSupported)
+                {
+                    // Same environment as the Process path: DENO_DIR only. Passing SystemRoot made the
+                    // first "start" call about 23ms slower (27ms -> 50ms, over the call budget; measured 10-06).
+                    win32Process = Win32ChildProcess.Start(deno, arguments, runtimes, environment);
+                    ProcessId = win32Process.Id;
+                }
+                else
+                {
+                    var info = new ProcessStartInfo
+                    {
+                        FileName = deno,
+                        Arguments = arguments,
+                        WorkingDirectory = runtimes,
+                        UseShellExecute = false, CreateNoWindow = true,
+                        RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                        StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    };
+                    info.Environment.Clear();
+                    foreach (var item in environment) info.Environment[item.Key] = item.Value;
+                    process = Process.Start(info) ?? throw new IOException("Denoを起動できません。");
+                    ProcessId = process.Id;
+                }
+                // Win32ChildProcess drains stderr on its own thread. Its synchronous pipe
+                // reader also avoids sending ReadAsync work to the CLR thread pool.
+                string ready;
+                if (win32Process != null)
+                {
+                    int remaining = Math.Max(1, StartupTimeoutMilliseconds - (int)watch.ElapsedMilliseconds);
+                    if (!win32Process.TryReadStandardOutputLine(remaining, out ready))
+                        throw new TimeoutException("Pyodideの起動が10秒を超えました。");
+                }
+                else
+                {
+                    // Drain stderr without accumulating attacker-controlled output in memory.
+                    var stderr = StandardError;
+                    _ = Task.Run(async () => { var buffer = new char[1024]; try { while (await stderr.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false) != 0) { } } catch (IOException) { } catch (ObjectDisposedException) { } });
+                    pending = ReadResponse(StandardOutput);
+                    int remaining = Math.Max(1, StartupTimeoutMilliseconds - (int)watch.ElapsedMilliseconds);
+                    if (!pending.Wait(remaining)) throw new TimeoutException("Pyodideの起動が10秒を超えました。");
+                    ready = pending.GetAwaiter().GetResult();
+                    pending = null;
+                }
                 if (ready != "{\"ready\":true}") throw new IOException("Pyodideの起動に失敗しました: " + ready);
                 StartupMilliseconds = watch.Elapsed.TotalMilliseconds;
             }
@@ -126,6 +157,7 @@ namespace Rts.TacticsJs
             if (stopped) throw new InvalidOperationException("Python戦術は停止しています。");
             logs.Clear();
             var watch = Stopwatch.StartNew();
+            if (win32Process != null) return CallWin32(operation, payload, watch);
             // A timed-out call may still be executing. Never enqueue another request behind it,
             // and never use its late output as commands for a newer observation.
             if (pending != null)
@@ -136,8 +168,8 @@ namespace Rts.TacticsJs
             }
             int remaining = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
             if (remaining <= 0) return Timeout();
-            var input = process.StandardInput;
-            var output = process.StandardOutput;
+            var input = StandardInput;
+            var output = StandardOutput;
             pending = Task.Run(async () =>
             {
                 await input.WriteLineAsync("{\"op\":\"" + operation + "\",\"payload\":" + JsonString(payload) + "}").ConfigureAwait(false);
@@ -147,6 +179,57 @@ namespace Rts.TacticsJs
             if (!pending.Wait(remaining)) return Timeout();
             string response = pending.GetAwaiter().GetResult();
             pending = null;
+            CheckJsonDepth(response);
+            var root = TacticJsonForRuntime.Parse(response) as Dictionary<string, object>;
+            if (root == null) throw new IOException("Pythonからの応答が不正です。");
+            if (root.TryGetValue("logs", out var items) && items is List<object> lines)
+                foreach (var line in lines)
+                {
+                    if (logs.Count == JsTacticRuntime.ConsoleLineLimit) break;
+                    string text = line as string ?? "";
+                    logs.Add(text.Length > 200 ? text.Substring(0, 200) : text);
+                }
+            if (root.TryGetValue("error", out var error)) throw new InvalidOperationException(error as string ?? "Python戦術が失敗しました。");
+            string commandJson = root.TryGetValue("output", out var result) && result is string json ? json : "{\"version\":1,\"commands\":[]}";
+            CheckJsonDepth(commandJson);
+            if (watch.ElapsedMilliseconds >= CallTimeoutMilliseconds) return Timeout();
+            timeouts = 0;
+            return commandJson;
+        }
+
+        private string CallWin32(string operation, string payload, Stopwatch watch)
+        {
+            // A timed-out call may still be executing. Wait for and discard exactly its
+            // late response before sending the next request, so responses cannot shift by one.
+            if (win32ResponsePending)
+            {
+                int remaining = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+                if (remaining <= 0) return Timeout();
+                string lateResponse;
+                if (!win32Process.TryReadStandardOutputLine(remaining, out lateResponse)) return Timeout();
+                win32ResponsePending = false;
+            }
+
+            int beforeWrite = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+            if (beforeWrite <= 0) return Timeout();
+            var input = StandardInput;
+            // The protocol request is normally far below a Windows pipe's capacity, so a
+            // synchronous WriteLine+Flush avoids a thread-pool hop. An unusually large input
+            // can still block here; it is rejected by the call budget on the following read.
+            input.WriteLine("{\"op\":\"" + operation + "\",\"payload\":" + JsonString(payload) + "}");
+            input.Flush();
+            win32ResponsePending = true;
+
+            int remainingAfterWrite = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+            if (remainingAfterWrite <= 0) return Timeout();
+            string response;
+            if (!win32Process.TryReadStandardOutputLine(remainingAfterWrite, out response)) return Timeout();
+            win32ResponsePending = false;
+            return CompleteResponse(response, watch);
+        }
+
+        private string CompleteResponse(string response, Stopwatch watch)
+        {
             CheckJsonDepth(response);
             var root = TacticJsonForRuntime.Parse(response) as Dictionary<string, object>;
             if (root == null) throw new IOException("Pythonからの応答が不正です。");
@@ -190,12 +273,21 @@ namespace Rts.TacticsJs
         {
             if (stopped) return;
             stopped = true;
+            if (win32Process != null)
+            {
+                try { if (!win32Process.HasExited) win32Process.Kill(); win32Process.WaitForExit(2000); }
+                catch (Win32Exception) { }
+                catch (ObjectDisposedException) { }
+                finally { win32Process.Dispose(); win32Process = null; }
+            }
             if (process != null)
             {
                 try { if (!process.HasExited) process.Kill(); process.WaitForExit(2000); }
                 catch (InvalidOperationException) { }
                 finally { process.Dispose(); process = null; }
             }
+            pending = null;
+            win32ResponsePending = false;
             // This is the exact private directory created above, never a caller-supplied path.
             if (cacheDirectory != null)
             {
@@ -204,6 +296,10 @@ namespace Rts.TacticsJs
         }
 
         private static string Quote(string value) => "\"" + value.Replace("\"", "\\\"").TrimEnd('\\') + "\"";
+
+        private StreamWriter StandardInput => win32Process != null ? win32Process.StandardInput : process.StandardInput;
+        private StreamReader StandardOutput => win32Process != null ? win32Process.StandardOutput : process.StandardOutput;
+        private StreamReader StandardError => win32Process != null ? win32Process.StandardError : process.StandardError;
 
         // stdout is untrusted: the tactic can also write via js.Deno.stdout. Bound nesting
         // before either recursive JSON parser runs in the game process.
