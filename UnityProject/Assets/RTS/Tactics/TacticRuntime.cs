@@ -17,6 +17,12 @@ namespace Rts.Tactics
         IReadOnlyList<string> TakeConsoleLines();
     }
 
+    /// <summary>Optional limits for runtimes whose failures require an earlier fallback.</summary>
+    public interface ITacticFailurePolicy
+    {
+        int ConsecutiveFailureLimit { get; }
+    }
+
     /// <summary>Optional receiver for the three whole-faction doctrine shortcuts.</summary>
     public interface ITacticGlobalPolicyPort
     {
@@ -47,7 +53,7 @@ namespace Rts.Tactics
     }
 
     /// <summary>Calls one faction's tactic every twenty simulation ticks and sends ordinary logged proposals.</summary>
-    public sealed class TacticHost
+    public sealed class TacticHost : IDisposable
     {
         public const int DecisionIntervalTicks = 20;
         public const int FailureLimit = 10;
@@ -130,7 +136,8 @@ namespace Rts.Tactics
         private TacticFailure RecordFailure(long tick, Exception error)
         {
             consecutiveFailures++;
-            if (consecutiveFailures >= FailureLimit) disabled = true;
+            int limit = runtime is ITacticFailurePolicy policy ? policy.ConsecutiveFailureLimit : FailureLimit;
+            if (consecutiveFailures >= limit) Dispose();
             var failure = new TacticFailure { Tick = tick, RuntimeName = Name, Reason = error.GetType().Name + ": " + error.Message, Consecutive = consecutiveFailures };
             failures.Add(failure); return failure;
         }
@@ -149,5 +156,12 @@ namespace Rts.Tactics
 
         // Kept here instead of depending on the JavaScript assembly: native tactics can also expose logs.
         private const int RecentConsoleLimit = 20;
+
+        public void Dispose()
+        {
+            if (disabled) return;
+            disabled = true;
+            (runtime as IDisposable)?.Dispose();
+        }
     }
 }

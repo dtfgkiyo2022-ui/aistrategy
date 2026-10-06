@@ -12,7 +12,7 @@ using Battle = Rts.Simulation.Simulation;
 namespace Rts.Headless.Cli;
 
 /// <summary>One headless Gymnasium-like match. The player's commands do not pass through TacticHost.</summary>
-public sealed class TacticGymSession
+public sealed class TacticGymSession : IDisposable
 {
     public const double CoreDamageRewardCoefficient = 0.001;
     private readonly uint faction;
@@ -45,6 +45,8 @@ public sealed class TacticGymSession
     public string ViewJson => TacticViewWriter.Write(simulation.Capture(faction));
     public long Tick => simulation.Capture(faction).Tick;
 
+    public void Dispose() => opponentHost?.Dispose();
+
     public TacticGymStepResult Step(string commandJson, int ticks)
     {
         if (ticks < 1 || ticks > 600) throw new ArgumentOutOfRangeException(nameof(ticks), "ticksは1から600です。");
@@ -70,6 +72,7 @@ public sealed class TacticGymSession
         bool ended = after.Result.HasEnded;
         bool timedOut = !ended && after.Tick >= maxTicks;
         bool done = ended || timedOut;
+        if (done) Dispose();
         uint winner = ended ? after.Result.WinnerFactionId : 0;
         long ownCoreHp = CoreHp(after, faction, out _);
         long enemyCoreHp = CoreHp(after, faction == 1 ? 2U : 1U, out bool enemyKnown);
@@ -161,21 +164,25 @@ internal static class TacticGymCommand
         bool profile = options.ContainsKey("--profile");
         TacticGymSession session = null;
         string line;
-        while ((line = Console.ReadLine()) != null)
+        try
         {
-            if (string.IsNullOrWhiteSpace(line)) continue;
-            string response;
-            bool close;
-            try { response = Handle(line, ref session, profile, out close); }
-            catch (Exception e) when (e is JsonException || e is InvalidDataException || e is FormatException || e is ArgumentException || e is OverflowException)
-            { response = Error(e.Message); close = false; }
-            catch (Exception e)
-            { response = Error(e.Message); close = false; }
-            Console.WriteLine(response);
-            Console.Out.Flush();
-            if (close) break;
+            while ((line = Console.ReadLine()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                string response;
+                bool close;
+                try { response = Handle(line, ref session, profile, out close); }
+                catch (Exception e) when (e is JsonException || e is InvalidDataException || e is FormatException || e is ArgumentException || e is OverflowException)
+                { response = Error(e.Message); close = false; }
+                catch (Exception e)
+                { response = Error(e.Message); close = false; }
+                Console.WriteLine(response);
+                Console.Out.Flush();
+                if (close) break;
+            }
+            return 0;
         }
-        return 0;
+        finally { session?.Dispose(); }
     }
 
     private static string Handle(string line, ref TacticGymSession session, bool profile, out bool close)
@@ -185,7 +192,7 @@ internal static class TacticGymCommand
         var root = document.RootElement;
         if (root.ValueKind != JsonValueKind.Object) throw new InvalidDataException("要求はJSONオブジェクトです。");
         string op = RequiredString(root, "op");
-        if (op == "close") { session = null; close = true; return JsonSerializer.Serialize(new { ok = true }, Json); }
+        if (op == "close") { session?.Dispose(); session = null; close = true; return JsonSerializer.Serialize(new { ok = true }, Json); }
         if (op == "reset")
         {
             ulong seed = RequiredUInt64(root, "mapSeed");
@@ -195,6 +202,8 @@ internal static class TacticGymCommand
             var flags = ReadFlags(root);
             var scenario = TacticGymScenarios.Create(seed, flags);
             ValidateOpponent(opponent);
+            session?.Dispose();
+            session = null;
             session = new TacticGymSession(scenario, faction, opponent, maxTicks);
             var view = JsonDocument.Parse(session.ViewJson).RootElement.Clone();
             return JsonSerializer.Serialize(new { ok = true, view, tick = 0L }, Json);

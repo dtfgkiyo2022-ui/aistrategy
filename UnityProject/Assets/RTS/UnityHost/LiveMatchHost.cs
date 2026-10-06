@@ -273,7 +273,15 @@ namespace Rts.UnityHost
             liveAi = null;
         }
 
-        private void OnDestroy() { StopLiveAi(); StopExternal(); }
+        private void OnDestroy() { StopTactics(); StopLiveAi(); StopExternal(); }
+
+        private void OnDisable() { StopTactics(); }
+
+        private void StopTactics()
+        {
+            ownTacticSide?.Host?.Dispose();
+            enemyTacticSide?.Host?.Dispose();
+        }
 
         // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
         // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
@@ -341,7 +349,7 @@ namespace Rts.UnityHost
             string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (!string.IsNullOrEmpty(documents)) parents.Add(Path.Combine(documents, "AiCommandRts", "Tactics"));
 
-            var entries = TacticCatalog.Scan(parents);
+            var entries = TacticCatalog.Scan(parents, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
             tacticEntries = new List<TacticCatalogEntry>(entries).ToArray();
             var choices = new List<string> { TacticMatchSetup.None };
             foreach (var entry in tacticEntries) if (entry.IsSelectable) choices.Add(entry.Path);
@@ -352,7 +360,7 @@ namespace Rts.UnityHost
 
         private static ITacticRuntime LoadTacticRuntime(string path)
         {
-            var loaded = TacticFolder.Load(path);
+            var loaded = TacticFolder.Load(path, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
             if (!loaded.IsSuccess) throw new InvalidDataException("戦術フォルダを読み込めません: " + loaded.Error);
             return loaded.Runtime;
         }
@@ -384,6 +392,7 @@ namespace Rts.UnityHost
 
         public void Begin()
         {
+            StopTactics();
             if (mapSeed == 0) mapSeed = FreshSeed();
             RefreshTacticCatalog();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
@@ -614,6 +623,7 @@ namespace Rts.UnityHost
 
         private void FinishMatchPack()
         {
+            StopTactics();
             if (matchPack == null) return;
             try
             {

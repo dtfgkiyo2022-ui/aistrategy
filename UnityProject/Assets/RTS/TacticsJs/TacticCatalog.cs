@@ -28,7 +28,7 @@ namespace Rts.TacticsJs
     /// <summary>Lists tactic folders directly below a set of parent folders without Unity dependencies.</summary>
     public static class TacticCatalog
     {
-        public static IReadOnlyList<TacticCatalogEntry> Scan(IEnumerable<string> parentFolders)
+        public static IReadOnlyList<TacticCatalogEntry> Scan(IEnumerable<string> parentFolders, string runtimesPath = null)
         {
             var entries = new List<TacticCatalogEntry>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -65,10 +65,11 @@ namespace Rts.TacticsJs
 
                     try
                     {
-                        var loaded = TacticFolder.Load(fullPath);
+                        var loaded = TacticFolder.Load(fullPath, runtimesPath);
                         entries.Add(loaded.IsSuccess
                             ? new TacticCatalogEntry(folderName, fullPath, loaded.Metadata, null)
                             : new TacticCatalogEntry(folderName, fullPath, loaded.Metadata, loaded.Error));
+                        (loaded.Runtime as IDisposable)?.Dispose();
                     }
                     catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is FormatException
                         || e is ArgumentException || e is OverflowException || e is InvalidOperationException)
