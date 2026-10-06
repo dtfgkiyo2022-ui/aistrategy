@@ -22,6 +22,7 @@ namespace Rts.Presentation
         private ITacticControl opponentTactic;
         private IMapChoice mapChoice;
         private IMatchRuleChoice matchRuleChoice;
+        private IPlayerFilesControl playerFiles;
         private bool setupOpen;
         private uint factionId;
         private uint ownCoreId;
@@ -60,6 +61,9 @@ namespace Rts.Presentation
 
         /// <summary>Optional economy-map rules. Null hides the row.</summary>
         public IMatchRuleChoice MatchRuleChoice { get { return matchRuleChoice; } set { matchRuleChoice = value; } }
+
+        /// <summary>Lets the Unity host open the player's folders and rescan tactics without restarting.</summary>
+        public IPlayerFilesControl PlayerFiles { get { return playerFiles; } set { playerFiles = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -350,6 +354,19 @@ namespace Rts.Presentation
             y += SetupRow;
             y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
+
+            if (playerFiles != null)
+            {
+                GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Folders", "フォルダ"));
+                float folderWidth = (rect.width - 16f - labelWidth) / 3f;
+                if (GUI.Button(new Rect(x + labelWidth, y, folderWidth - 4f, 24f), UiText.T("Open tactics folder", "戦術のフォルダを開く")))
+                    playerFiles.OpenTacticsFolder();
+                if (GUI.Button(new Rect(x + labelWidth + folderWidth, y, folderWidth - 4f, 24f), UiText.T("Open packs folder", "記録パックのフォルダを開く")))
+                    playerFiles.OpenPacksFolder();
+                if (GUI.Button(new Rect(x + labelWidth + folderWidth * 2f, y, folderWidth - 4f, 24f), UiText.T("Refresh list", "一覧を更新")))
+                    playerFiles.RefreshTacticList();
+                y += SetupRow;
+            }
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Map", "マップ"));
             if (mapChoice != null)

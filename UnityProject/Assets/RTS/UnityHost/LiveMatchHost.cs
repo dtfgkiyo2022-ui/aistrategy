@@ -17,7 +17,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
@@ -358,6 +358,32 @@ namespace Rts.UnityHost
             if (Array.IndexOf(tacticChoices, enemyTactic) < 0) enemyTactic = TacticMatchSetup.None;
         }
 
+        public void OpenTacticsFolder()
+        {
+            OpenPlayerFolder("Tactics");
+        }
+
+        public void OpenPacksFolder()
+        {
+            OpenPlayerFolder("Packs");
+        }
+
+        public void RefreshTacticList()
+        {
+            RefreshTacticCatalog();
+            if (enemyTacticChoice != null) enemyTacticChoice.Bind(tacticChoices, enemyTacticSide == null ? null : enemyTacticSide.Host);
+            if (ownTacticChoice != null) ownTacticChoice.Bind(tacticChoices, ownTacticSide == null ? null : ownTacticSide.Host);
+        }
+
+        private static void OpenPlayerFolder(string leaf)
+        {
+            string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (string.IsNullOrEmpty(documents)) return;
+            string folder = Path.Combine(documents, "AiCommandRts", leaf);
+            Directory.CreateDirectory(folder);
+            UnityEngine.Application.OpenURL("file:///" + folder.Replace('\\', '/'));
+        }
+
         private static ITacticRuntime LoadTacticRuntime(string path)
         {
             var loaded = TacticFolder.Load(path, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
@@ -515,6 +541,7 @@ namespace Rts.UnityHost
             panel.MapChoice = this;
             panel.MatchRuleChoice = this;
             panel.MatchPackPathProvider = () => MatchPackPath;
+            panel.PlayerFiles = this;
             panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
             panel.ExtraBlocksClick = economyPanel.BlocksClick;
             panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
