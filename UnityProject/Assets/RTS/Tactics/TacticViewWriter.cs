@@ -22,12 +22,14 @@ namespace Rts.Tactics
             b.Append(",\"factionId\":").Append(frame.FactionId.ToString(CultureInfo.InvariantCulture));
             b.Append(",\"ownArmies\":[");
             var armies = (frame.Observation?.OwnArmies ?? Array.Empty<OwnArmyView>()).OrderBy(x => x.Id).ToArray();
+            var compositions = ArmyCompositions(frame, armies);
             for (int i = 0; i < armies.Length; i++)
             {
                 if (i != 0) b.Append(',');
                 var a = armies[i];
                 b.Append("{\"id\":").Append(a.Id).Append(",\"kind\":").Append(TacticJson.Quote(a.Kind.ToString()));
                 b.Append(",\"count\":").Append(a.AliveCount);
+                b.Append(",\"composition\":"); Composition(b, compositions[i]);
                 b.Append(",\"position\":"); Point(b, a.Position);
                 b.Append(",\"homeObjective\":"); Goal(b, a.HomeObjective);
                 b.Append('}');
@@ -37,7 +39,7 @@ namespace Rts.Tactics
             for (int i = 0; i < enemies.Length; i++)
             {
                 if (i != 0) b.Append(','); var e = enemies[i];
-                b.Append("{\"id\":").Append(e.ContactId).Append(",\"kind\":").Append(e.Kind).Append(",\"position\":"); Point(b, e.Position); b.Append('}');
+                b.Append("{\"id\":").Append(e.ContactId).Append(",\"kind\":").Append(e.Kind).Append(",\"kindName\":").Append(TacticJson.Quote(((UnitKind)e.Kind).ToString())).Append(",\"position\":"); Point(b, e.Position); b.Append('}');
             }
             b.Append("],\"contacts\":[");
             var contacts = (frame.Observation?.Contacts ?? Array.Empty<EnemyContact>()).OrderBy(x => x.ContactId).ToArray();
@@ -48,11 +50,13 @@ namespace Rts.Tactics
                 b.Append(",\"lastSeenTick\":").Append(c.LastSeenTick).Append(",\"min\":").Append(c.EstimateMin).Append(",\"max\":").Append(c.EstimateMax);
                 b.Append(",\"visible\":").Append(c.IsCurrentlyVisible ? "true" : "false").Append(",\"uncertain\":").Append(c.IsUncertain ? "true" : "false");
                 b.Append(",\"strengthUnknown\":").Append(c.IsStrengthUnknown ? "true" : "false").Append(",\"absent\":").Append(c.IsAbsentAtLastPosition ? "true" : "false");
+                b.Append(",\"visibleComposition\":"); Composition(b, ContactComposition(c, enemies));
                 b.Append(",\"covered\":["); var covered = (c.CoveredContactIds ?? Array.Empty<uint>()).OrderBy(x => x).ToArray();
                 for (int j = 0; j < covered.Length; j++) { if (j != 0) b.Append(','); b.Append(covered[j]); }
                 b.Append("]}");
             }
-            b.Append("],\"objectives\":[");
+            b.Append("],\"enemySummary\":"); EnemySummary(b, enemies);
+            b.Append(",\"objectives\":[");
             var objectives = (frame.Observation?.Objectives ?? Array.Empty<KnownObjective>()).OrderBy(x => x.Kind).ThenBy(x => x.Id).ToArray();
             for (int i = 0; i < objectives.Length; i++) { if (i != 0) b.Append(','); Objective(b, objectives[i]); }
             b.Append(']');
@@ -63,6 +67,72 @@ namespace Rts.Tactics
             b.Append("],\"params\":").Append(TacticParameterJson.Object(parameters));
             b.Append('}');
             return b.ToString();
+        }
+
+        // Contracts do not link a soldier to its army, so each own soldier (villagers excluded) counts toward the
+        // nearest army; ties go to the lower army id. Armies are already sorted by id.
+        private static Dictionary<string, int>[] ArmyCompositions(FactionFrame frame, OwnArmyView[] armies)
+        {
+            var result = new Dictionary<string, int>[armies.Length];
+            for (int i = 0; i < armies.Length; i++) result[i] = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (frame.Units == null || armies.Length == 0) return result;
+            foreach (var unit in frame.Units)
+            {
+                if (!unit.IsOwn || unit.Kind == UnitKind.Villager) continue;
+                int nearest = 0;
+                long best = long.MaxValue;
+                for (int i = 0; i < armies.Length; i++)
+                {
+                    long dx = (long)unit.Position.X.Raw - armies[i].Position.X.Raw;
+                    long dz = (long)unit.Position.Z.Raw - armies[i].Position.Z.Raw;
+                    long distance = dx * dx + dz * dz;
+                    if (distance < best) { best = distance; nearest = i; }
+                }
+                string name = unit.Kind.ToString();
+                var counts = result[nearest];
+                counts[name] = counts.TryGetValue(name, out var value) ? value + 1 : 1;
+            }
+            return result;
+        }
+
+        private static IReadOnlyDictionary<string, int> ContactComposition(EnemyContact contact, VisibleEnemy[] enemies)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var enemy in enemies)
+            {
+                bool belongs = enemy.ContactId == contact.ContactId ||
+                    (contact.CoveredContactIds ?? Array.Empty<uint>()).Contains(enemy.ContactId);
+                if (!belongs) continue;
+                string name = ((UnitKind)enemy.Kind).ToString();
+                counts[name] = counts.TryGetValue(name, out var value) ? value + 1 : 1;
+            }
+            return counts;
+        }
+
+        private static void Composition(StringBuilder b, IReadOnlyDictionary<string, int> counts)
+        {
+            b.Append('{');
+            bool first = true;
+            foreach (var pair in counts.OrderBy(x => x.Key, StringComparer.Ordinal))
+            {
+                if (!first) b.Append(',');
+                first = false;
+                b.Append(TacticJson.Quote(pair.Key)).Append(':').Append(pair.Value);
+            }
+            b.Append('}');
+        }
+
+        private static void EnemySummary(StringBuilder b, VisibleEnemy[] enemies)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var enemy in enemies)
+            {
+                string name = ((UnitKind)enemy.Kind).ToString();
+                counts[name] = counts.TryGetValue(name, out var value) ? value + 1 : 1;
+            }
+            b.Append("{\"visibleCount\":").Append(enemies.Length).Append(",\"byKind\":");
+            Composition(b, counts);
+            b.Append('}');
         }
 
         private static void Objective(StringBuilder b, KnownObjective x)
