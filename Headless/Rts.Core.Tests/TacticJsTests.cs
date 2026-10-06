@@ -19,12 +19,12 @@ namespace Rts.Core.Tests
         [Test]
         public void SamplesLoadAndReturnCommands()
         {
-            foreach (string name in new[] { "rush", "defend-then-push" })
+            foreach (string name in new[] { "rush", "defend-then-push", "adjutant" })
             {
                 var loaded = TacticFolder.Load(Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "TacticSamples", name));
                 Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
                 loaded.Runtime.Start("{\"matchSeed\":7,\"factionId\":1}");
-                string output = loaded.Runtime.Tick("{\"version\":1,\"tick\":0,\"factionId\":1,\"ownArmies\":[{\"id\":1,\"kind\":\"Infantry\",\"count\":10}],\"visibleEnemies\":[],\"contacts\":[],\"objectives\":[{\"kind\":\"Core\",\"id\":1,\"position\":{\"x\":0,\"z\":0},\"ownerKnown\":true,\"ownerFactionId\":1,\"hpKnown\":true,\"hp\":1000,\"lastSeenTick\":0,\"capturingFactionId\":0,\"captureTicks\":0,\"captureDurationTicks\":0}],\"economy\":null,\"regions\":[]}");
+                string output = loaded.Runtime.Tick("{\"version\":1,\"tick\":0,\"factionId\":1,\"ownArmies\":[{\"id\":1,\"kind\":\"Infantry\",\"count\":10,\"controlledBy\":\"None\",\"homeObjective\":{\"kind\":\"Core\",\"id\":1,\"point\":{\"x\":0,\"z\":0}}}],\"visibleEnemies\":[],\"contacts\":[],\"orders\":[],\"objectives\":[{\"kind\":\"Core\",\"id\":1,\"position\":{\"x\":0,\"z\":0},\"ownerKnown\":true,\"ownerFactionId\":1,\"hpKnown\":true,\"hp\":1000,\"lastSeenTick\":0,\"capturingFactionId\":0,\"captureTicks\":0,\"captureDurationTicks\":0}],\"economy\":null,\"regions\":[],\"params\":{\"guardPriority\":90,\"guardLossPermille\":200,\"preferOutpost\":true}}");
                 Assert.That(output, Does.Contain("\"version\":1"));
                 Assert.That(output, Does.Contain("\"commands\""));
             }
@@ -33,7 +33,7 @@ namespace Rts.Core.Tests
         [Test]
         public void BothSamplesRunAgainstAutoAndReplay()
         {
-            foreach (string name in new[] { "rush", "defend-then-push" })
+                foreach (string name in new[] { "rush", "defend-then-push", "adjutant" })
             {
                 var loaded = TacticFolder.Load(SamplePath(name));
                 Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
@@ -66,6 +66,27 @@ namespace Rts.Core.Tests
                     Assert.That(outcome.FirstMismatchTick, Is.Null);
                     Assert.That(outcome.IsFault, Is.False);
                 }
+            }
+        }
+
+        [Test]
+        public void AdjutantLeavesHumanControlledArmyAlone()
+        {
+            var loaded = TacticFolder.Load(SamplePath("adjutant"));
+            Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
+            loaded.Runtime.Start("{\"matchSeed\":7,\"factionId\":1,\"params\":{\"guardPriority\":90,\"guardLossPermille\":200,\"preferOutpost\":true}}");
+            string view = "{\"version\":1,\"tick\":0,\"factionId\":1," +
+                "\"ownArmies\":[" +
+                "{\"id\":1,\"kind\":\"Infantry\",\"count\":10,\"controlledBy\":\"Human\",\"homeObjective\":{\"kind\":\"Core\",\"id\":1,\"point\":{\"x\":0,\"z\":0}}}," +
+                "{\"id\":2,\"kind\":\"Infantry\",\"count\":10,\"controlledBy\":\"None\",\"homeObjective\":{\"kind\":\"Core\",\"id\":1,\"point\":{\"x\":0,\"z\":0}}}]," +
+                "\"orders\":[{\"id\":4,\"source\":\"Human\",\"kind\":\"Focus\",\"target\":{\"kind\":\"Army\",\"id\":1},\"goal\":{\"kind\":\"Core\",\"id\":2,\"point\":{\"x\":0,\"z\":0}},\"status\":\"Executing\"}]," +
+                "\"objectives\":[{\"kind\":\"Core\",\"id\":1,\"ownerKnown\":true,\"ownerFactionId\":1}]," +
+                "\"economy\":null,\"regions\":[],\"params\":{\"guardPriority\":90,\"guardLossPermille\":200,\"preferOutpost\":true}}";
+            using (var doc = System.Text.Json.JsonDocument.Parse(loaded.Runtime.Tick(view)))
+            {
+                var commands = doc.RootElement.GetProperty("commands").EnumerateArray().ToArray();
+                Assert.That(commands.Any(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetUInt32() == 1), Is.False);
+                Assert.That(commands.Any(c => c.TryGetProperty("target", out var target) && target.GetProperty("id").GetUInt32() == 2), Is.True);
             }
         }
 

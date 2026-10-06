@@ -32,6 +32,7 @@ namespace Rts.Tactics
                 var a = armies[i];
                 b.Append("{\"id\":").Append(a.Id).Append(",\"kind\":").Append(TacticJson.Quote(a.Kind.ToString()));
                 b.Append(",\"count\":").Append(a.AliveCount);
+                b.Append(",\"controlledBy\":").Append(TacticJson.Quote(ControlledBy(frame, a)));
                 b.Append(",\"composition\":"); Composition(b, compositions[i]);
                 b.Append(",\"position\":"); Point(b, a.Position);
                 b.Append(",\"homeObjective\":"); Goal(b, a.HomeObjective);
@@ -63,6 +64,16 @@ namespace Rts.Tactics
             var objectives = (frame.Observation?.Objectives ?? Array.Empty<KnownObjective>()).OrderBy(x => x.Kind).ThenBy(x => x.Id).ToArray();
             for (int i = 0; i < objectives.Length; i++) { if (i != 0) b.Append(','); Objective(b, objectives[i]); }
             b.Append(']');
+            b.Append(",\"orders\":[");
+            var orders = (frame.Commands ?? Array.Empty<CommandView>())
+                .Where(x => x.Target.FactionId == frame.FactionId && IsEffective(x))
+                .OrderBy(x => x.CommandId).ToArray();
+            for (int i = 0; i < orders.Length; i++)
+            {
+                if (i != 0) b.Append(',');
+                Order(b, orders[i]);
+            }
+            b.Append(']');
             b.Append(",\"economy\":"); Economy(b, frame);
             b.Append(",\"regions\":[");
             var regions = (frame.Regions ?? Array.Empty<RegionView>()).OrderBy(x => x.Id).ToArray();
@@ -85,6 +96,84 @@ namespace Rts.Tactics
             b.Append("],\"params\":").Append(TacticParameterJson.Object(parameters));
             b.Append('}');
             return b.ToString();
+        }
+
+        // Interpreting, Pending and Executing are live commands. Completed and later statuses are terminal,
+        // so they are deliberately absent from orders even though CommandView retains them.
+        private static bool IsEffective(CommandView command)
+            => command.Status == CommandStatus.Interpreting || command.Status == CommandStatus.Pending || command.Status == CommandStatus.Executing;
+
+        private static string ControlledBy(FactionFrame frame, OwnArmyView army)
+        {
+            CommandView? selected = null;
+            foreach (var command in frame.Commands ?? Array.Empty<CommandView>())
+            {
+                if (!IsEffective(command) || command.Target.FactionId != frame.FactionId || !IsCombat(command.Kind) || !AffectsArmy(frame, command, army)) continue;
+                if (!selected.HasValue || (byte)command.Source < (byte)selected.Value.Source ||
+                    (command.Source == selected.Value.Source && command.CommandId > selected.Value.CommandId)) selected = command;
+            }
+            return selected.HasValue ? selected.Value.Source.ToString() : "None";
+        }
+
+        private static bool IsCombat(PolicyKind kind)
+            => kind == PolicyKind.Focus || kind == PolicyKind.Retreat || kind == PolicyKind.Defend || kind == PolicyKind.Scout;
+
+        private static bool AffectsArmy(FactionFrame frame, CommandView command, OwnArmyView army)
+        {
+            switch (command.Target.Kind)
+            {
+                case ScopeKind.All:
+                    return true;
+                case ScopeKind.Army:
+                    return command.Target.Id == army.Id;
+                case ScopeKind.Outpost:
+                    // The home objective is the stable outpost relation exposed by OwnArmyView.
+                    return army.HomeObjective.Kind == GoalKind.Outpost && army.HomeObjective.Id == command.Target.Id;
+                case ScopeKind.Region:
+                    return RegionForArmy(frame, army) == command.Target.Id;
+                default:
+                    return false;
+            }
+        }
+
+        // Simulation assigns cells to the nearest live region centre, with the lower region id breaking ties. The
+        // faction frame exposes those same centres; using the army reference point gives tactics the same stable
+        // region choice without adding map details to Contracts.
+        private static uint RegionForArmy(FactionFrame frame, OwnArmyView army)
+        {
+            uint best = 0;
+            long bestDistance = long.MaxValue;
+            foreach (var region in frame.Regions ?? Array.Empty<RegionView>())
+            {
+                if (region.CenterKind == RegionCenterKind.None) continue;
+                long dx = (long)army.Position.X.Raw - region.Center.X.Raw;
+                long dz = (long)army.Position.Z.Raw - region.Center.Z.Raw;
+                long distance = checked(dx * dx + dz * dz);
+                if (best == 0 || distance < bestDistance || distance == bestDistance && region.Id < best)
+                {
+                    best = region.Id;
+                    bestDistance = distance;
+                }
+            }
+            return best;
+        }
+
+        private static void Order(StringBuilder b, CommandView x)
+        {
+            b.Append("{\"id\":").Append(x.CommandId);
+            b.Append(",\"source\":").Append(TacticJson.Quote(x.Source.ToString()));
+            b.Append(",\"kind\":").Append(TacticJson.Quote(x.Kind.ToString()));
+            b.Append(",\"target\":"); Scope(b, x.Target);
+            b.Append(",\"goal\":"); Goal(b, x.Goal);
+            b.Append(",\"status\":").Append(TacticJson.Quote(x.Status.ToString()));
+            b.Append(",\"acceptedTick\":").Append(x.AcceptedTick);
+            b.Append(",\"applyTick\":").Append(x.ApplyTick);
+            b.Append('}');
+        }
+
+        private static void Scope(StringBuilder b, ScopeKey x)
+        {
+            b.Append("{\"kind\":").Append(TacticJson.Quote(x.Kind.ToString())).Append(",\"id\":").Append(x.Id).Append('}');
         }
 
         // Contracts do not link a soldier to its army, so each own soldier (villagers excluded) counts toward the
