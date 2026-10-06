@@ -67,6 +67,51 @@ public sealed class TacticTests
     }
 
     [Test]
+    public void ViewShowsLiveHumanOrdersAndControlledByWithoutTheOtherFaction()
+    {
+        var sim = new Battle(MapGenerator.Generate(2, true));
+        var gateway = new CommandGateway(sim);
+        var westArmy = sim.Capture(1).Observation.OwnArmies.OrderBy(a => a.Id).First();
+        var eastArmy = sim.Capture(2).Observation.OwnArmies.OrderBy(a => a.Id).First();
+        ulong westRequest = gateway.Submit(new UserPolicyIntent(1,
+            new ScopeKey(1, ScopeKind.Army, westArmy.Id), PolicyKind.Defend, new PolicyGoal(GoalKind.Core, 1, default), 80,
+            new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 0,
+            new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+        gateway.Submit(new UserPolicyIntent(1,
+            new ScopeKey(2, ScopeKind.Army, eastArmy.Id), PolicyKind.Defend, new PolicyGoal(GoalKind.Core, 2, default), 80,
+            new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 0,
+            new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+        for (int i = 0; i < 45; i++) gateway.Step();
+
+        var frame = sim.Capture(1);
+        Assert.That(frame.Commands.Any(c => c.Source == CommandSource.Human && c.Status == CommandStatus.Executing), Is.True);
+        string first = TacticViewWriter.Write(frame);
+        string second = TacticViewWriter.Write(frame);
+        Assert.That(second, Is.EqualTo(first));
+        using (var doc = System.Text.Json.JsonDocument.Parse(first))
+        {
+            var root = doc.RootElement;
+            var orders = root.GetProperty("orders");
+            Assert.That(orders.GetArrayLength(), Is.EqualTo(1));
+            Assert.That(orders[0].GetProperty("source").GetString(), Is.EqualTo("Human"));
+            Assert.That(orders[0].GetProperty("status").GetString(), Is.EqualTo("Executing"));
+            Assert.That(orders[0].GetProperty("target").GetProperty("kind").GetString(), Is.EqualTo("Army"));
+            var army = root.GetProperty("ownArmies").EnumerateArray().Single(a => a.GetProperty("id").GetUInt32() == westArmy.Id);
+            Assert.That(army.GetProperty("controlledBy").GetString(), Is.EqualTo("Human"));
+        }
+        Assert.That(frame.Commands.Any(c => c.Target.FactionId != frame.FactionId), Is.False);
+
+        gateway.Cancel(westRequest);
+        gateway.Step();
+        using (var doc = System.Text.Json.JsonDocument.Parse(TacticViewWriter.Write(sim.Capture(1))))
+        {
+            Assert.That(doc.RootElement.GetProperty("orders").GetArrayLength(), Is.EqualTo(0));
+            var army = doc.RootElement.GetProperty("ownArmies").EnumerateArray().Single(a => a.GetProperty("id").GetUInt32() == westArmy.Id);
+            Assert.That(army.GetProperty("controlledBy").GetString(), Is.EqualTo("None"));
+        }
+    }
+
+    [Test]
     public void AgeViewGuidesAdvanceAndAdvanceCommandChangesAge()
     {
         var scenario = MapGenerator.GenerateTerrain(1);
