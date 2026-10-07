@@ -137,6 +137,7 @@
     <Compile Include="TacticTests.cs" />
     <Compile Include="TacticSignalTests.cs" />
     <Compile Include="HumanOrderReplayTests.cs" />
+    <Compile Include="SayCommandTests.cs" />
     <Compile Include="TacticReloadTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/LiveAiCommandPort.cs" Link="UnityHost/LiveAiCommandPort.cs" />
