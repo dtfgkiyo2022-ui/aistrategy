@@ -1,0 +1,41 @@
+:root {
+    --hud-panel: #efe3c8;
+    --hud-panel-border: #4a3a26;
+    --hud-panel-inner-border: rgba(156, 135, 98, 0.55);
+    --hud-resource-panel: #f8efd9;
+    --hud-resource-border: #9c8762;
+    --hud-divider: #9c8762;
+    --hud-input: #f8efd9;
+    --hud-button: #a2381f;
+    --hud-button-text: #fbf2de;
+    --hud-shadow: rgba(46, 36, 24, 0.35);
+    --hud-text: #2e2418;
+    --hud-muted-text: #7a6a52;
+    --hud-heading: #3a1f12;
+    --hud-accent: #a2381f;
+    --hud-good: #4f7a35;
+    --hud-warning: #a2381f;
+    --hud-font-size: 15px;
+    --hud-small-font-size: 11px;
+    --hud-heading-size: 20px;
+    --hud-age-stage-size: 10px;
+    --hud-top-height: 68px;
+    --hud-padding: 8px;
+    --hud-gap: 7px;
+    --hud-border-width: 2px;
+    --hud-radius: 2px;
+    --hud-inner-radius: 0px;
+    --hud-icon-radius: 0px;
+    --hud-icon-size: 12px;
+    --hud-resource-width: 64px;
+    --hud-resource-height: 36px;
+    --hud-status-line-height: 17px;
+    --hud-number-width: 48px;
+    --hud-age-width: 176px;
+    --hud-status-width: 134px;
+    --hud-heading-letter-spacing: 0px;
+}
+
+.hud-panel-shadow {
+    display: flex;
+}

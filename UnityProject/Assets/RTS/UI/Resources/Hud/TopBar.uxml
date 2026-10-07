@@ -1,11 +1,21 @@
 <ui:UXML xmlns:ui="UnityEngine.UIElements">
     <ui:VisualElement name="hud-root" class="hud-root">
+        <ui:VisualElement name="top-frame" class="hud-top-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
         <ui:VisualElement name="top-bar" class="hud-top-bar">
+            <ui:VisualElement class="hud-panel-inner-border" />
             <ui:VisualElement class="hud-top-line">
-                <ui:Label name="age-label" class="hud-age" />
+                <ui:VisualElement class="hud-age-block">
+                    <ui:Label name="age-label" class="hud-age hud-heading" />
+                    <ui:Label name="age-stage-label" class="hud-age-stage" />
+                </ui:VisualElement>
                 <ui:VisualElement name="resource-row" class="hud-resource-row" />
+                <ui:VisualElement class="hud-status-block">
+                    <ui:Label name="population-label" class="hud-population" />
+                    <ui:Label name="idle-label" class="hud-idle" />
+                </ui:VisualElement>
             </ui:VisualElement>
-            <ui:Label name="population-label" class="hud-population" />
+        </ui:VisualElement>
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
