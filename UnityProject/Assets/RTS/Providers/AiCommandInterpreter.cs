@@ -204,6 +204,7 @@ namespace Rts.Providers
 11. 条件付きの作戦はoperationsに入れます。whenは固定語彙の条件オブジェクト、thenはcommandsと同じ命令の配列、onceは一度だけならtrueです。whenの使わない項目はnull、ANDはallに条件を2つまで入れます。
 12. 文章に複数の独立した命令があるときは、各命令をcommandsに入れます。順番に意味がある場合は文の順番を保ちます。ひとつでも対象が不明なら、推測で一部だけ実行せずunknown=trueにします。
 13. 戦術のつまみを変えるときはtype=tactic、kind=SetTacticParam、tacticParamに名前、tacticParamValueに文字列の値を入れます。戦術を替えるときはtype=tactic、kind=SwitchTactic、tacticに候補名を入れます。人から戦術へ合図を送るときはtype=tactic、kind=SendTacticSignal、tacticSignalに名前を入れます。地点が必要な合図はtacticSignalXとtacticSignalZにメートル座標を入れ、不要なときは0にします。空文字は戦術なし／合図なしです。これらは具体的な命令やSetDoctrineと同時に出しません。
+14. 自軍の戦術に合図があり（「自軍の戦術:」の「合図=」）、指示がその合図の表示名や意味に当たるときは、具体的な命令ではなく必ずSendTacticSignalを出します。たとえば合図「allIn（総攻撃）」があれば「総攻撃して」「全軍で攻めて」はtacticSignal=allIn、「下がれ」「押し込め」も同様です。目標が書かれていない攻撃・撤退の指示でも、当たる合図があればunknownにしません。
 
 項目の使い分け
 - policy型のkindはFocus（攻撃・向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、MaintainReserve（予備を残す）、Scout（偵察）、ReturnToAuto（自動方針に戻す）です。
@@ -252,6 +253,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 特に、scopeとgoalは役割が違います。北の拠点を守るならscope=全部隊、goal=北の拠点です。北軍で守るならscope=北軍、goal=北の拠点です。南軍を北へ向かわせるならscope=南軍、goal=北の拠点です。目標をscopeに入れたり、動かす部隊をgoalに入れたりしません。
 特に、区域の命令は三種類を区別します。区域3を人間担当にするのはSetRegionControl、区域3の内政を軍事重視にするのはSetEconomyPolicy、区域3を守るのはpolicy型のDefendです。最初の二つはeconomy型で、三つ目はpolicy型です。
 全体方針の命令も出せます。攻め気味・積極的に・押していくはtype=doctrine、preset=concentrate、守り気味・慎重に・維持はpreset=maintain、全部自分でやる・お任せをやめるはpreset=noneです。具体的な命令と同時に出してもかまいません。全体方針以外の命令ではpresetを空文字にします。sayで方針を変えたと言うときは、必ずcommandsにtype=doctrineの命令を入れます。sayだけで済ませません。
+戦術の合図も同じです。「自軍の戦術:」の「合図=」に当たる合図があるときは、総攻撃・押し込め・下がれ・撤退などもFocusやRetreatではなく、必ずcommandsにtype=tactic、kind=SendTacticSignalの命令を入れます。sayで合図を送ると言うときもsayだけで済ませません。
 特に、「任せる」は対象によって意味が変わります。全部隊や部隊ならReturnToAuto、区域ならSetRegionControlでcontrol=Aiです。内政全体を任せるという文だけでは、既存の自動内政へ戻す操作か方針変更かを区別できない場合があるため、文の対象を確認します。
 特に、放棄の許可と撤退は違います。拠点を捨ててよいはAllowAbandonで、部隊が下がるはRetreatです。予備の保持と部隊の撤退も違うため、保持割合はMaintainReserveのreservePermilleにだけ入れます。
 特に、場所の「近く」は目標goalではなくPlaceBuildingのlocationです。支城や資源の固まりの近くに建てる場合、その地点が名前表にあるときだけlocationに使います。名前表にない方角や距離からセル番号を作りません。
@@ -285,6 +287,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
 全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
 戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。定義された合図を送る命令はkind=SendTacticSignal、tacticSignalと、必要ならtacticSignalX/tacticSignalZを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
+戦術に合図があり、指示がその合図の表示名や意味に当たるとき（例：合図「allIn（総攻撃）」に「総攻撃して」）は、目標が書かれていなくても必ずkind=SendTacticSignalにします。
 表にない名前の判定はゲーム側が行います。scope と goal は、必ず名前表の中から選んでください。指示文に出てきた名前と同じものを選んでください。曖昧、質問、条件付き、複数の命令もkind=unknownにします。Schemaにないキー、説明、Markdownは返さないでください。
 ";
 

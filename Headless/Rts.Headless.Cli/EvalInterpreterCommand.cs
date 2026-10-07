@@ -20,6 +20,8 @@ internal static class EvalInterpreterCommand
         internal JsonElement Expect;
         internal string Reason = "";
         internal string[] Tags = Array.Empty<string>();
+        // Optional "signals" of the player's own tactic, so a question can check that the model picks SendTacticSignal.
+        internal AiTacticSignalInfo[] Signals = Array.Empty<AiTacticSignalInfo>();
     }
     private sealed class ScoreRow
     {
@@ -67,6 +69,8 @@ internal static class EvalInterpreterCommand
         var frame = FixedFrame();
         var summary = AiSituationSummary.From(frame);
         AddEvaluationAliases(summary);
+        if (item.Signals.Length != 0)
+            summary.SetTacticInfo("guarded-spear", new[] { "guarded-spear" }, Array.Empty<AiTacticParameterInfo>(), item.Signals);
         var selected = ParseSelected(item.Selected);
         string providerModel = model.Equals("fake", StringComparison.OrdinalIgnoreCase) ? "local-llm" : model;
         AiModelCatalog.Get(providerModel);
@@ -176,6 +180,10 @@ internal static class EvalInterpreterCommand
         if (IsUnknown(item.Expect)) return result.Unknown || (result.Policies.Count == 0 && result.EconomyCommands.Count == 0);
         if (conditionalMayRefuse) return result.Unknown || ScoreConditional(item.Id, result);
         if (result.Unknown) return false;
+        if (item.Expect.ValueKind == JsonValueKind.Array && item.Expect.GetArrayLength() == 1 &&item.Expect[0].GetProperty("kind").GetString() == "SendTacticSignal")
+            return result.Policies.Count == 0 && result.EconomyCommands.Count == 0 && result.TacticCommands.Count == 1
+                && result.TacticCommands[0].Kind == "SendTacticSignal"
+                && result.TacticCommands[0].SignalName == item.Expect[0].GetProperty("signal").GetString();
         var expected = item.Expect.EnumerateArray().SelectMany(e =>
             e.TryGetProperty("count", out var count) && (e.GetProperty("kind").GetString() == "Train" || e.GetProperty("kind").GetString() == "PlaceBuilding")
                 ? Enumerable.Repeat(e, count.GetInt32()) : new[] { e }).ToArray();
@@ -335,7 +343,7 @@ internal static class EvalInterpreterCommand
     }
     private static bool IsUnknown(JsonElement e) => e.ValueKind == JsonValueKind.String && e.GetString() == "unknown";
     private static List<EvalCase> Read(string path)
-    { var result = new List<EvalCase>(); foreach (string line in File.ReadLines(path, Encoding.UTF8)) { if (string.IsNullOrWhiteSpace(line)) continue; using var doc = JsonDocument.Parse(line); var root = doc.RootElement; result.Add(new EvalCase { Id = root.GetProperty("id").GetInt32(), Text = root.GetProperty("text").GetString() ?? "", Selected = root.GetProperty("selected").ValueKind == JsonValueKind.Null ? null : root.GetProperty("selected").GetString(), Expect = root.GetProperty("expect").Clone(), Reason = root.TryGetProperty("reason", out var reason) ? reason.GetString() : "", Tags = root.GetProperty("tags").EnumerateArray().Select(x => x.GetString()).ToArray() }); } return result; }
+    { var result = new List<EvalCase>(); foreach (string line in File.ReadLines(path, Encoding.UTF8)) { if (string.IsNullOrWhiteSpace(line)) continue; using var doc = JsonDocument.Parse(line); var root = doc.RootElement; result.Add(new EvalCase { Id = root.GetProperty("id").GetInt32(), Text = root.GetProperty("text").GetString() ?? "", Selected = root.GetProperty("selected").ValueKind == JsonValueKind.Null ? null : root.GetProperty("selected").GetString(), Expect = root.GetProperty("expect").Clone(), Reason = root.TryGetProperty("reason", out var reason) ? reason.GetString() : "", Tags = root.GetProperty("tags").EnumerateArray().Select(x => x.GetString()).ToArray(), Signals = root.TryGetProperty("signals", out var signals) ? signals.EnumerateArray().Select(s => new AiTacticSignalInfo(s.GetProperty("name").GetString(), s.GetProperty("label").GetString(), s.TryGetProperty("needsPoint", out var needsPoint) && needsPoint.GetBoolean())).ToArray() : Array.Empty<AiTacticSignalInfo>() }); } return result; }
     private static void WriteCsv(string path, IEnumerable<ScoreRow> rows)
     { using var w = new StreamWriter(path, false, new UTF8Encoding(false)); w.WriteLine("id,text,tags,answer_json,expected_refusal,correct,false_refusal,elapsed_ms,input_tokens,output_tokens,cache_read_input_tokens,cost_yen,score,result_reason,issued_count,rejected_reasons"); foreach (var r in rows) w.WriteLine(string.Join(",", new[] { r.Id.ToString(CultureInfo.InvariantCulture), Csv(r.Text), Csv(r.Tags), Csv(r.AnswerJson), r.ExpectedRefusal.ToString(), r.Correct.ToString(), r.FalseRefusal.ToString(), r.ElapsedMs.ToString(CultureInfo.InvariantCulture), r.InputTokens.ToString(CultureInfo.InvariantCulture), r.OutputTokens.ToString(CultureInfo.InvariantCulture), r.CacheReadInputTokens.ToString(CultureInfo.InvariantCulture), r.CostYen.ToString(CultureInfo.InvariantCulture), Csv(r.Score), Csv(r.ResultReason), r.IssuedCount.ToString(CultureInfo.InvariantCulture), Csv(r.RejectedReasons) })); }
     private static string Csv(string s) => "\"" + (s ?? "").Replace("\"", "\"\"") + "\"";
