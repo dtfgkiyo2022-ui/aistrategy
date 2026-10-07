@@ -156,7 +156,7 @@ CLIで試すときは `--west-signal "1200:allIn"`、地点付きなら `--west-
 ゲームの外にある `practice/` は、試合を何度も回して数字やモデルを試す場所です。まずCLIをビルドし、PowerShellでDLLの場所を設定します。
 
 ```powershell
-dotnet build Headless/Rts.Headless.Cli/Rts.Headless.Cli.csproj -c Release
+dotnet build Headless/Rts.Headless.Cli/Rts.Headless.Cli.csproj -c Release -p:UseSharedCompilation=false -nodeReuse:false
 $env:RTS_CLI = (Resolve-Path Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll)
 python -m unittest practice.tests.test_env
 ```
@@ -177,6 +177,15 @@ python practice/examples/tune_params.py TacticSamples/guarded-spear guardLossPer
 python practice/examples/simple_policy_search.py --episodes 2
 dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-match --map-seed 2 --ticks 1200 --west-tactic TacticSamples/numpy-mlp --east-tactic auto
 ```
+
+実際に遊んだ試合の人の操作を練習場へ持ち込むには、まず記録パックの `replay.rpl` から指定陣営の方針命令を取り出します。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll human-orders --pack Documents/AiCommandRts/Packs/<試合> --faction 1 --out D:/rts-verify/humanreplay/human-orders.jsonl
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic-match --map-seed 2 --ticks 1200 --west-tactic TacticSamples/adjutant --west-human D:/rts-verify/humanreplay/human-orders.jsonl
+```
+
+Python の練習場では `RtsEnv(human_orders="...")` として渡せます。自分の操作を入れた試合と入れない試合で、戦術の成績がどう変わるか比べてみてください。記録した操作は相手が変わると対象の部隊・拠点が無くなり、合わなくなることがあります。記録パックの内政命令は入力に出どころが残らないため、この変換では対象外です。
 
 ## 決まりごと
 

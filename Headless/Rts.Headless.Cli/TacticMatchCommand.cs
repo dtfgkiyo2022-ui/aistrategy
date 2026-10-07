@@ -56,6 +56,9 @@ internal static class TacticMatchCommand
         westAuto?.Initialize(); eastAuto?.Initialize();
         var lines = new List<string>();
         var westSignals = ParseSignals(options.GetValueOrDefault("--west-signal"));
+        var westHuman = LoadHumanOrders(options.GetValueOrDefault("--west-human"), 1, ticks);
+        var eastHuman = LoadHumanOrders(options.GetValueOrDefault("--east-human"), 2, ticks);
+        var loggedDiscarded = new HashSet<ulong>();
         MatchPackWriter pack = null;
         if (options.TryGetValue("--pack-out", out var packPath))
         {
@@ -65,6 +68,8 @@ internal static class TacticMatchCommand
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
             long tick = simulation.Capture(1).Tick;
+            QueueHumanOrders(westHuman, tick, 1, simulation, gateway, lines);
+            QueueHumanOrders(eastHuman, tick, 2, simulation, gateway, lines);
             foreach (var signal in westSignals.Where(x => x.Tick == tick))
             {
                 if (west == null) throw new InvalidDataException("--west-signalを送れません（west tacticがautoです）: " + signal.Name);
@@ -78,6 +83,7 @@ internal static class TacticMatchCommand
             pack?.RecordTactic(westResult, 1, westName);
             pack?.RecordTactic(eastResult, 2, eastName);
             gateway.Step();
+            RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
             pack?.RecordAfterStep(simulation);
@@ -138,6 +144,73 @@ internal static class TacticMatchCommand
 
     // "auto" deliberately adds no logged input: it is the simulation's existing hands-off AI.
     private static PresetController CreateAuto(string name, uint faction, CommandGateway gateway) => null;
+
+    private static List<HumanOrderRecord> LoadHumanOrders(string path, uint faction, long ticks)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return new List<HumanOrderRecord>();
+        var records = HumanOrderJson.Read(path);
+        foreach (var record in records)
+        {
+            if (record.Tick < 0) throw new InvalidDataException("human-orders の tick が負です。");
+            record.ToIntent(faction);
+        }
+        return records.Where(x => x.Tick < ticks).OrderBy(x => x.Tick).ThenBy(x => x.Sequence).ToList();
+    }
+
+    private static void QueueHumanOrders(IReadOnlyList<HumanOrderRecord> records, long tick, uint faction,
+        Battle simulation, CommandGateway gateway, List<string> lines)
+    {
+        var due = records.Where(x => x.Tick == tick).ToList();
+        if (due.Count == 0) return;
+        int missing = 0, submitted = 0;
+        foreach (var group in due.GroupBy(x => x.Sequence == 0 ? 1UL : x.Sequence).OrderBy(x => x.Key))
+        {
+            var valid = new List<UserPolicyIntent>();
+            foreach (var record in group)
+            {
+                if (!TargetExists(simulation.Capture(faction), record.Target)) { missing++; continue; }
+                valid.Add(record.ToIntent(faction));
+            }
+            if (valid.Count != 0)
+            {
+                gateway.SubmitBatch(valid);
+                submitted += valid.Count;
+            }
+        }
+        lines.Add(JsonSerializer.Serialize(new
+        {
+            tick,
+            faction,
+            humanReplay = new { submitted, targetMissing = missing }
+        }));
+    }
+
+    private static bool TargetExists(FactionFrame frame, HumanScope target)
+    {
+        if (target == null || !Enum.TryParse(target.Kind, true, out ScopeKind kind)) return false;
+        if (kind == ScopeKind.All) return target.Id == 0;
+        if (kind == ScopeKind.Army) return frame.Observation.OwnArmies.Any(x => x.Id == target.Id);
+        if (kind == ScopeKind.Outpost) return frame.Objectives.Any(x => x.Kind == GoalKind.Outpost && x.Id == target.Id && x.IsOwnerKnown && x.OwnerFactionId == frame.FactionId);
+        if (kind == ScopeKind.Region) return frame.Regions.Any(x => x.Id == target.Id);
+        return false;
+    }
+
+    private static void RecordHumanReplayDiscards(Battle simulation, List<string> lines, HashSet<ulong> logged)
+    {
+        for (uint faction = 1; faction <= 2; faction++)
+        {
+            var discarded = simulation.Capture(faction).Commands
+                .Where(x => x.Source == CommandSource.Human && (x.Status == CommandStatus.Impossible || x.Status == CommandStatus.Expired || x.Status == CommandStatus.Cancelled))
+                .Where(x => logged.Add(x.CommandId)).ToArray();
+            foreach (var command in discarded)
+                lines.Add(JsonSerializer.Serialize(new
+                {
+                    tick = simulation.Capture(faction).Tick,
+                    faction,
+                    humanReplay = new { discarded = 1, commandId = command.CommandId, reason = command.Reason.ToString(), status = command.Status.ToString() }
+                }));
+        }
+    }
 
     private static void WriteHostLog(List<string> lines, TacticHostTickResult result, uint faction, string name)
     {
