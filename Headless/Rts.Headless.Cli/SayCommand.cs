@@ -95,6 +95,20 @@ internal static class SayCommand
             judgements[faction] = answer;
         }
         string response = string.IsNullOrWhiteSpace(entry.Response) ? entry.Answer : entry.Response;
+        if (westTactic != null && faction == 1 &&
+            AiTacticSignalMatcher.TryMatch(entry.Instruction ?? "", summary, null, out var direct))
+        {
+            var directReport = new SayResult { Tick = frame.Tick, Faction = faction };
+            var changed = westTactic.ApplyDirect(direct);
+            if (changed.Success)
+            {
+                directReport.Say = "合図「" + direct.Label + "」を送りました（AI を使わずに判定）";
+                directReport.Issued.Add(directReport.Say);
+            }
+            else directReport.Rejected.Add(changed.Reason);
+            reports.Add(directReport);
+            return;
+        }
         var result = AiResponseInterpreter.Interpret(response, new AiInterpretationContext { Frame = frame, Summary = summary, StartedTick = frame.Tick, DeadlineTick = frame.Tick + AiModelCatalog.Get(entry.Model).DeadlineTicks, MaxObservationAgeTicks = AiModelCatalog.Get(entry.Model).DeadlineTicks });
         var report = new SayResult { Tick = frame.Tick, Faction = faction, Say = result.Say, Reason = result.Reason };
         foreach (var tactic in result.TacticCommands)
@@ -249,6 +263,13 @@ internal static class SayCommand
             host.Dispose();
             if (name == "auto") { host = null; displayName = ""; selection = "auto"; return TacticChange.Ok("戦術をやめ、お任せに戻しました"); }
             Load(name); return TacticChange.Ok("戦術を " + displayName + " に切り替えました");
+        }
+
+        internal TacticChange ApplyDirect(AiDirectTacticSignal signal)
+        {
+            string reason;
+            if (!host.SendSignal(signal.Name, signal.Point, out reason)) return TacticChange.Fail(reason);
+            return TacticChange.Ok("合図「" + signal.Label + "」を送りました（AI を使わずに判定）");
         }
 
         private string[] AvailableNames()
