@@ -15,22 +15,36 @@ namespace Rts.Presentation
     {
         public const string SettingKey = "rts.hud.toolkit";
         private const string UxmlResourcePath = "Hud/TopBar";
-        private const string UssResourcePath = "Hud/HudTheme";
+        private const string BaseUssResourcePath = "Hud/HudTheme";
 
         private BattlefieldView view;
         private UIDocument document;
         private PanelSettings panelSettings;
-        private FontAsset runtimeFont;
+        private StyleSheet baseTheme;
+        private StyleSheet activeTheme;
         private VisualElement hudRoot;
         private Label ageLabel;
+        private Label ageStageLabel;
         private VisualElement resourceRow;
         private Label populationLabel;
+        private Label idleLabel;
         private readonly List<TopBarResourceVisibility.ResourceEntry> resources =
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<ResourceSlot> slots = new List<ResourceSlot>();
+        private readonly ThemeFontSet[] themeFonts = new ThemeFontSet[HudThemeCatalog.Count];
         private string lastAge = "";
+        private string lastAgeStage = "";
         private string lastPopulation = "";
+        private string lastIdle = "";
+        private int activeThemeIndex = -1;
         private bool warnedMissingFont;
+
+        private sealed class ThemeFontSet
+        {
+            public bool Attempted;
+            public FontAsset Heading;
+            public FontAsset Body;
+        }
 
         private sealed class ResourceSlot
         {
@@ -66,6 +80,18 @@ namespace Rts.Presentation
             turnedOff = !on;
         }
 
+        public static int ThemeIndex
+        {
+            get { return HudThemeCatalog.ClampIndex(PlayerPrefs.GetInt(HudThemeCatalog.PlayerPrefsKey, 0)); }
+        }
+
+        /// <summary>The selected theme is applied by the HUD update on the next frame.</summary>
+        public static void SetTheme(int index)
+        {
+            PlayerPrefs.SetInt(HudThemeCatalog.PlayerPrefsKey, HudThemeCatalog.ClampIndex(index));
+            PlayerPrefs.Save();
+        }
+
         public void Bind(BattlefieldView battlefield)
         {
             view = battlefield;
@@ -87,7 +113,8 @@ namespace Rts.Presentation
             }
 
             EnsureDocument();
-            if (hudRoot == null || ageLabel == null || resourceRow == null || populationLabel == null) return;
+            if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
+                populationLabel == null || idleLabel == null) return;
             var frame = view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
             if (economy == null)
@@ -97,6 +124,7 @@ namespace Rts.Presentation
             }
 
             hudRoot.style.display = DisplayStyle.Flex;
+            ApplySelectedTheme();
             Refresh(economy);
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
@@ -126,24 +154,71 @@ namespace Rts.Presentation
             }
 
             var root = document.rootVisualElement;
-            var theme = Resources.Load<StyleSheet>(UssResourcePath);
-            if (theme != null) root.styleSheets.Add(theme);
-            else Debug.LogWarning("UI Toolkit HUD USS not found at Resources/" + UssResourcePath + ".");
+            baseTheme = Resources.Load<StyleSheet>(BaseUssResourcePath);
+            if (baseTheme != null) root.styleSheets.Add(baseTheme);
+            else Debug.LogWarning("UI Toolkit HUD USS not found at Resources/" + BaseUssResourcePath + ".");
             tree.CloneTree(root);
 
             hudRoot = root.Q<VisualElement>("hud-root");
             ageLabel = root.Q<Label>("age-label");
+            ageStageLabel = root.Q<Label>("age-stage-label");
             resourceRow = root.Q<VisualElement>("resource-row");
             populationLabel = root.Q<Label>("population-label");
-            if (hudRoot == null || ageLabel == null || resourceRow == null || populationLabel == null)
+            idleLabel = root.Q<Label>("idle-label");
+            if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
+                populationLabel == null || idleLabel == null)
             {
                 Debug.LogWarning("UI Toolkit HUD UXML is missing one of the required top-bar elements.");
                 return;
             }
             root.pickingMode = PickingMode.Ignore;
             hudRoot.pickingMode = PickingMode.Ignore;
-            runtimeFont = CreateJapaneseFont();
-            if (runtimeFont != null) root.style.unityFontDefinition = new StyleFontDefinition(runtimeFont);
+            ApplySelectedTheme();
+        }
+
+        private void ApplySelectedTheme()
+        {
+            if (document == null || hudRoot == null) return;
+            int selected = ThemeIndex;
+            if (selected == activeThemeIndex) return;
+
+            var root = document.rootVisualElement;
+            if (activeTheme != null) root.styleSheets.Remove(activeTheme);
+            var definition = HudThemeCatalog.Get(selected);
+            activeTheme = Resources.Load<StyleSheet>(definition.ResourcePath);
+            if (activeTheme != null) root.styleSheets.Add(activeTheme);
+            else Debug.LogWarning("UI Toolkit HUD theme USS not found at Resources/" + definition.ResourcePath + ".");
+            activeThemeIndex = selected;
+            ApplyFonts(root, selected, definition);
+        }
+
+        private void ApplyFonts(VisualElement root, int themeIndex, HudThemeCatalog.Definition definition)
+        {
+            var fonts = themeFonts[themeIndex];
+            if (fonts == null)
+            {
+                fonts = new ThemeFontSet();
+                themeFonts[themeIndex] = fonts;
+            }
+            if (!fonts.Attempted)
+            {
+                fonts.Attempted = true;
+                fonts.Heading = CreateFont(definition.HeadingFontFamilies);
+                fonts.Body = CreateFont(definition.BodyFontFamilies);
+                if (fonts.Heading == null) fonts.Heading = fonts.Body;
+            }
+
+            if (fonts.Body != null) root.style.unityFontDefinition = new StyleFontDefinition(fonts.Body);
+            if (fonts.Heading != null)
+            {
+                root.Query<VisualElement>(className: "hud-heading").ForEach(element =>
+                    element.style.unityFontDefinition = new StyleFontDefinition(fonts.Heading));
+            }
+            else if (!warnedMissingFont)
+            {
+                warnedMissingFont = true;
+                Debug.LogWarning("UI Toolkit HUD could not create a theme font; using the default UI Toolkit font.");
+            }
         }
 
         private void Refresh(EconomyView economy)
@@ -156,13 +231,28 @@ namespace Rts.Presentation
                 lastAge = age;
             }
 
+            string ageStage = TopBarDisplayText.AgeStage(economy);
+            if (ageStage != lastAgeStage)
+            {
+                ageStageLabel.text = ageStage;
+                lastAgeStage = ageStage;
+            }
+
             int idle = CountIdle(economy);
-            string population = TopBarDisplayText.Population(economy.Population, economy.PopulationCap, idle);
+            string population = UiText.T("Pop ", "人口 ") + TopBarDisplayText.FormatCount(economy.Population)
+                + "/" + TopBarDisplayText.FormatCount(economy.PopulationCap);
             if (population != lastPopulation)
             {
                 populationLabel.text = population;
                 lastPopulation = population;
             }
+            string idleText = UiText.T("Idle ", "待機 ") + TopBarDisplayText.FormatCount(idle);
+            if (idleText != lastIdle)
+            {
+                idleLabel.text = idleText;
+                lastIdle = idleText;
+            }
+            idleLabel.EnableInClassList("is-warning", idle > 0);
 
             TopBarResourceVisibility.Fill(economy, resources);
             bool sameLayout = resources.Count == slots.Count;
@@ -206,6 +296,7 @@ namespace Rts.Presentation
                 name.AddToClassList("hud-resource-name");
                 var value = new Label();
                 value.AddToClassList("hud-resource-value");
+                value.AddToClassList("hud-number");
                 text.Add(name);
                 text.Add(value);
                 card.Add(icon);
@@ -223,9 +314,9 @@ namespace Rts.Presentation
             return count;
         }
 
-        private FontAsset CreateJapaneseFont()
+        private static FontAsset CreateFont(string[] families)
         {
-            foreach (var family in new[] { "Yu Gothic UI", "Meiryo", "MS Gothic" })
+            foreach (var family in families)
             {
                 try
                 {
@@ -237,17 +328,18 @@ namespace Rts.Presentation
                     // The next family is the fallback. Font creation is optional and must not stop the HUD.
                 }
             }
-            if (!warnedMissingFont)
-            {
-                warnedMissingFont = true;
-                Debug.LogWarning("UI Toolkit HUD could not create a Japanese OS font; using the default UI Toolkit font.");
-            }
             return null;
         }
 
         private void OnDestroy()
         {
-            if (runtimeFont != null) Destroy(runtimeFont);
+            for (int i = 0; i < themeFonts.Length; i++)
+            {
+                var fonts = themeFonts[i];
+                if (fonts == null) continue;
+                if (fonts.Heading != null && fonts.Heading != fonts.Body) Destroy(fonts.Heading);
+                if (fonts.Body != null) Destroy(fonts.Body);
+            }
             if (panelSettings != null) Destroy(panelSettings);
         }
     }

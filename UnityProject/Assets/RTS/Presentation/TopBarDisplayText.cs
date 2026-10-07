@@ -15,6 +15,15 @@ namespace Rts.Presentation
             return AgeName(economy.Civ, economy.Age) + "  |  ";
         }
 
+        public static string AgeStage(EconomyView economy)
+        {
+            if (economy == null || !economy.Ages) return "";
+            // AdvancingTo names the civilisation being entered, not a stage; the stage being entered is the next one.
+            int age = economy.AdvanceRemaining > 0 ? economy.Age + 1 : economy.Age;
+            string numeral = age <= 1 ? "I" : age == 2 ? "II" : "III";
+            return UiText.T("AGE ", "段階 ") + numeral;
+        }
+
         public static string Population(int population, int populationCap, int idle)
         {
             return UiText.T("Pop ", "人口 ") + FormatCount(population) + "/" + FormatCount(populationCap)

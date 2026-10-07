@@ -9,18 +9,27 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 ## USS の変数
 
+`HudTheme.uss` は並び・位置・共通の大きさだけを持つ土台です。色、枠、角、文字の大きさ、帯の高さと余白は、選択中の次のテーマ USS の `:root` 変数で決まります。`HudToolkit` は `Resources/Hud/HudTheme` を常に読み、`Resources/Hud/Themes/` のテーマを一つだけ追加します。設定欄の「見た目の案」は `rts.hud.theme` に保存し、次のフレームに選択中のファイルを付け替えます。
+
+- `Themes/ThemeStone.uss`：A 石と真鍮。`#241f19` の不透明な板、真鍮色の枠、明朝の見出し。
+- `Themes/ThemeTable.uss`：B 作戦卓。半透明の青黒い板、青緑の枠、広い字間と BIZ UDGothic 系の文字。
+- `Themes/ThemeParchment.uss`：C 羊皮紙の軍図。`#efe3c8` の板、濃い 2px 枠、右下へずらした濃い板を影の代わりに使用。
+
+3案の名前・USS の Resources パス・見出し/本文フォントの候補順は、UnityEngine に依存しない `Rts.Presentation.HudThemeCatalog` にまとめています。フォントはテーマごとに `FontAsset.CreateFontAsset` で一度だけ試し、切り替え後もキャッシュを使います。
+
 - `--hud-panel`：帯の背景色
 - `--hud-panel-border`：帯の枠色
 - `--hud-accent`：時代名などの強調色
 - `--hud-text`：通常の文字色
 - `--hud-muted-text`：資源名の文字色
-- `--hud-icon-food` / `--hud-icon-wood` / `--hud-icon-ore` / `--hud-icon-metal`
-- `--hud-icon-stone` / `--hud-icon-gems` / `--hud-icon-gold`
-- `--hud-icon-charcoal` / `--hud-icon-steel` / `--hud-icon-bow-gear`
 - `--hud-font-size` / `--hud-small-font-size`：文字の大きさ
 - `--hud-border-width`：枠の太さ
 - `--hud-radius`：角の丸み
 - `--hud-gap` / `--hud-padding`：欄間の間隔と帯の内側余白
+- `--hud-top-height` / `--hud-age-width` / `--hud-status-width`：案ごとの帯の高さと左右欄の幅
+- `--hud-heading-size` / `--hud-age-stage-size` / `--hud-number-width`：見出し、段表示、桁をそろえる数値欄の寸法
+- `--hud-heading` / `--hud-good` / `--hud-warning`：見出し、良い状態、注意状態の色
+- `--hud-resource-border` / `--hud-input` / `--hud-button` / `--hud-button-text`：資源欄、入力、ボタン用の色
 
 資源の小さな四角は `.hud-resource-icon` です。画像を用意した段階で、この要素を背景画像などに差し替えます。
 
@@ -34,7 +43,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 ## フォント
 
-フォントファイルは同梱しません。`HudToolkit` が Unity 6 の `UnityEngine.TextCore.Text.FontAsset.CreateFontAsset` を使い、OS の `Yu Gothic UI`、`Meiryo`、`MS Gothic` を順に `Regular` で試します。すべて失敗した場合は UI Toolkit の既定フォントに戻し、警告を出します。将来同梱フォントへ差し替える場合も、この一か所を変更します。
+フォントファイルは同梱しません。`HudThemeCatalog` の案ごとの候補を `HudToolkit` が Unity 6 の `UnityEngine.TextCore.Text.FontAsset.CreateFontAsset` に渡し、`Regular` で試します。見出し用が失敗した場合は本文用、本文用も失敗した場合は UI Toolkit の既定フォントに戻します。見出しは UXML の `.hud-heading` 要素にだけ見出し用 FontAsset を付けます。
 
 ## 切り替え
 

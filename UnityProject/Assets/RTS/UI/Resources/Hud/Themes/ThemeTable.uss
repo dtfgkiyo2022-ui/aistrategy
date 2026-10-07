@@ -1,0 +1,37 @@
+:root {
+    --hud-panel: rgba(12, 22, 30, 0.78);
+    --hud-panel-border: rgba(95, 208, 198, 0.28);
+    --hud-panel-inner-border: rgba(127, 151, 166, 0.22);
+    --hud-resource-panel: rgba(255, 255, 255, 0.05);
+    --hud-resource-border: rgba(127, 151, 166, 0.22);
+    --hud-divider: rgba(127, 151, 166, 0.22);
+    --hud-input: rgba(255, 255, 255, 0.05);
+    --hud-button: #5fd0c6;
+    --hud-button-text: #06221f;
+    --hud-shadow: rgba(0, 0, 0, 0.18);
+    --hud-text: #dbe7ee;
+    --hud-muted-text: #7f97a6;
+    --hud-heading: #f2f7fa;
+    --hud-accent: #5fd0c6;
+    --hud-good: #5fd0c6;
+    --hud-warning: #f0a35e;
+    --hud-font-size: 15px;
+    --hud-small-font-size: 11px;
+    --hud-heading-size: 19px;
+    --hud-age-stage-size: 10px;
+    --hud-top-height: 70px;
+    --hud-padding: 8px;
+    --hud-gap: 8px;
+    --hud-border-width: 1px;
+    --hud-radius: 8px;
+    --hud-inner-radius: 5px;
+    --hud-icon-radius: 4px;
+    --hud-icon-size: 12px;
+    --hud-resource-width: 66px;
+    --hud-resource-height: 38px;
+    --hud-status-line-height: 17px;
+    --hud-number-width: 50px;
+    --hud-age-width: 174px;
+    --hud-status-width: 138px;
+    --hud-heading-letter-spacing: 1px;
+}

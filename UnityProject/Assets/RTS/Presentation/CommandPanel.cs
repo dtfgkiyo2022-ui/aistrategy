@@ -337,6 +337,22 @@ namespace Rts.Presentation
                 HudToolkit.SetEnabled(!toolkit);
             y += SetupRow;
 
+            if (toolkit)
+            {
+                GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("HUD theme", "見た目の案"));
+                float themeWidth = (rect.width - 16f - labelWidth) / HudThemeCatalog.Count;
+                int selectedTheme = HudToolkit.ThemeIndex;
+                for (int i = 0; i < HudThemeCatalog.Count; i++)
+                {
+                    var theme = HudThemeCatalog.Get(i);
+                    bool on = selectedTheme == i;
+                    if (GUI.Toggle(new Rect(x + labelWidth + i * themeWidth, y, themeWidth - 4f, 24f), on,
+                            UiText.T(theme.EnglishName, theme.JapaneseName), GUI.skin.button) && !on)
+                        HudToolkit.SetTheme(i);
+                }
+                y += SetupRow;
+            }
+
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
             if (delayControl != null)
             {
