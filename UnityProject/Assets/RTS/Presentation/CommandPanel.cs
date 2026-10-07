@@ -365,16 +365,17 @@ namespace Rts.Presentation
             }
             y += SetupRow;
 
-            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
-            y += Mathf.Max(SetupRow, DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
-
+            // The own tactic comes first, with its knobs and signals right under its list: those are what the player
+            // moves during a match. The opponent's list and knobs follow and are shown only.
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Own tactic", "自軍の戦術"));
             y += Mathf.Max(SetupRow, DrawTacticChoices(ownTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
             y = DrawTacticHint(ownTactic, x, y, rect.width - 16f);
-            // The own tactic comes first: its knobs are the ones the player moves; the opponent's are shown only.
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticReloadControls(ownTactic, x, y, rect.width - 16f);
             y = DrawTacticParams(ownTactic, true, x, y, rect.width - 16f);
+
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
+            y += Mathf.Max(SetupRow, DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);
             y = DrawTacticStatus(opponentTactic, UiText.T("Opponent tactic status", "相手の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticReloadControls(opponentTactic, x, y, rect.width - 16f);
             y = DrawTacticParams(opponentTactic, false, x, y, rect.width - 16f);
@@ -484,15 +485,24 @@ namespace Rts.Presentation
                 int viewColumns = Mathf.Clamp((int)(area.width / Mathf.Max(1f, viewWidest)), 1, views.Count);
                 int viewRows = (views.Count + viewColumns - 1) / viewColumns;
                 float viewWidth = area.width / viewColumns;
-                const float choiceHeight = 44f;
-                for (int i = 0; i < views.Count; i++)
+                // Only a row holding a recommended tactic (name plus a description line) is two lines tall.
+                float rowY = area.y;
+                for (int row = 0; row < viewRows; row++)
                 {
-                    var choice = views[i];
-                    bool on = control.Current == choice.Selection;
-                    var cell = new Rect(area.x + (i % viewColumns) * viewWidth, area.y + (i / viewColumns) * (choiceHeight + 4f), viewWidth - 4f, choiceHeight);
-                    if (GUI.Toggle(cell, on, TacticLabel(choice), GUI.skin.button) && !on) control.Current = choice.Selection;
+                    bool twoLines = false;
+                    for (int i = row * viewColumns; i < Math.Min(views.Count, (row + 1) * viewColumns); i++)
+                        if (views[i].Recommended && !string.IsNullOrWhiteSpace(views[i].Description)) twoLines = true;
+                    float rowHeight = twoLines ? 44f : area.height;
+                    for (int i = row * viewColumns; i < Math.Min(views.Count, (row + 1) * viewColumns); i++)
+                    {
+                        var choice = views[i];
+                        bool on = control.Current == choice.Selection;
+                        var cell = new Rect(area.x + (i % viewColumns) * viewWidth, rowY, viewWidth - 4f, rowHeight);
+                        if (GUI.Toggle(cell, on, TacticLabel(choice), GUI.skin.button) && !on) control.Current = choice.Selection;
+                    }
+                    rowY += rowHeight + 4f;
                 }
-                return viewRows * choiceHeight + (viewRows - 1) * 4f;
+                return rowY - area.y - 4f;
             }
             var choices = control.Choices;
             if (choices == null || choices.Length == 0) return 0f;
@@ -633,10 +643,22 @@ namespace Rts.Presentation
                     GUI.Label(new Rect(x, y, width, 20f), label + ": " + current.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
                     if (editable)
                     {
-                        float slider = GUI.HorizontalSlider(new Rect(x + width * 0.42f, y + 4f, width * 0.56f, 18f),
+                        // The bare slider was nearly invisible on the dark panel (owner, 10-08): a box behind it and
+                        // −/+ buttons that move one step make the knob findable and usable without dragging.
+                        decimal step = parameter.Step ?? (parameter.Type == "int" ? 1m : (parameter.Max.Value - parameter.Min.Value) / 20m);
+                        float left = x + width * 0.42f, sliderWidth = width * 0.56f;
+                        GUI.Box(new Rect(left + 28f, y, sliderWidth - 56f, 22f), GUIContent.none);
+                        decimal next = current;
+                        if (GUI.Button(new Rect(left, y, 24f, 22f), "−")) next = current - step;
+                        if (GUI.Button(new Rect(left + sliderWidth - 24f, y, 24f, 22f), "+")) next = current + step;
+                        float slider = GUI.HorizontalSlider(new Rect(left + 34f, y + 5f, sliderWidth - 68f, 18f),
                             (float)current, (float)parameter.Min.Value, (float)parameter.Max.Value);
-                        decimal next = parameter.Type == "int" ? Math.Round((decimal)slider, 0, System.MidpointRounding.AwayFromZero) : (decimal)slider;
-                        if (parameter.Step.HasValue) next = parameter.Min.Value + Math.Round((next - parameter.Min.Value) / parameter.Step.Value, 0, System.MidpointRounding.AwayFromZero) * parameter.Step.Value;
+                        if (next == current)
+                        {
+                            next = parameter.Type == "int" ? Math.Round((decimal)slider, 0, System.MidpointRounding.AwayFromZero) : (decimal)slider;
+                            if (parameter.Step.HasValue) next = parameter.Min.Value + Math.Round((next - parameter.Min.Value) / parameter.Step.Value, 0, System.MidpointRounding.AwayFromZero) * parameter.Step.Value;
+                        }
+                        next = Math.Min(parameter.Max.Value, Math.Max(parameter.Min.Value, next));
                         if (next != current) control.SetParam(parameter.Name, parameter.Type == "int" ? (object)(int)next : next);
                     }
                 }
