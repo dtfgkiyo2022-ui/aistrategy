@@ -35,10 +35,18 @@ internal static class SayCommand
 
     internal static int Run(Dictionary<string, string> options)
     {
-        string scenarioPath = Required(options, "--scenario"); string scriptPath = Required(options, "--say");
+        bool hasScenario = options.TryGetValue("--scenario", out var scenarioPath);
+        bool hasSeed = options.TryGetValue("--map-seed", out var seedText);
+        if (hasScenario == hasSeed) throw new InvalidDataException("--scenario または --map-seed の一方を指定してください。");
+        string scriptPath = Required(options, "--say");
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         uint defaultFaction = options.TryGetValue("--faction", out var faction) ? uint.Parse(faction, CultureInfo.InvariantCulture) : 1;
-        var scenario = JsonInput.Scenario(scenarioPath);
+        var scenario = hasScenario
+            ? JsonInput.Scenario(scenarioPath)
+            : options.ContainsKey("--terrain")
+                ? MapGenerator.GenerateTerrain(ulong.Parse(seedText, CultureInfo.InvariantCulture))
+                : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         var entries = Read(scriptPath);
         var byTick = entries.GroupBy(e => e.Tick).ToDictionary(g => g.Key, g => g.OrderBy(e => e.Faction).ToList());
         var sim = new Battle(scenario);

@@ -1,0 +1,20 @@
+{
+  "name": "rally",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "人の合図で残りの部隊を集結・突撃・撤退させ、合図がない間は守備と兵力温存を続ける相棒。",
+  "style": "partner",
+  "signals": [
+    { "name": "rally", "label": "ここに集まれ", "needsPoint": true },
+    { "name": "push", "label": "押し込め", "needsPoint": false },
+    { "name": "fallback", "label": "下がれ", "needsPoint": false }
+  ],
+  "params": [
+    { "name": "guardPriority", "label": "平時の守備優先度", "type": "int", "default": 80, "min": 50, "max": 100, "step": 5 },
+    { "name": "signalPriority", "label": "合図時の優先度", "type": "int", "default": 100, "min": 70, "max": 100, "step": 5 },
+    { "name": "reservePermille", "label": "合図なしの温存率（高いほど損害を避ける）", "type": "int", "default": 300, "min": 0, "max": 1000, "step": 50 }
+  ]
+}
