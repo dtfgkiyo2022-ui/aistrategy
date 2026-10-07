@@ -99,6 +99,9 @@ namespace Rts.Providers
             return ready;
         }
 
+        /// <summary>The name-table entry for the whole own force (AiSituationSummary adds it to every summary).</summary>
+        private const string AllArmiesScope = "全部隊";
+
         internal static string ToCommandJson(InterpreterRequest request, JevAnswers answers)
         {
             if (answers == null) return "{\"unknown\":true,\"reason\":\"Jevの答えがありません。\",\"commands\":[]}";
@@ -169,9 +172,15 @@ namespace Rts.Providers
                 return "{\"unknown\":true,\"reason\":\"対象を確定できません。\",\"commands\":[]}";
 
             var targetEntry = FindTarget(request.Summary, target);
-            var scopeEntry = request.HasFixedTarget ? null : targetEntry;
-            if (!request.HasFixedTarget && (scopeEntry == null || !scopeEntry.HasScope || !scopeEntry.IsOwn))
-                return "{\"unknown\":true,\"reason\":\"対象を名前表から確定できません。\",\"commands\":[]}";
+            // The answered target is where to attack or defend, not who goes: "北の拠点を守れ" with nothing selected is
+            // every army defending that outpost, and "敵コアを攻めろ" must not be refused for naming an enemy (10-08,
+            // signalprompt set). A retreat names who pulls back, so an own scope stays the scope; otherwise everyone.
+            string scopeName = null;
+            if (!request.HasFixedTarget)
+            {
+                bool ownScope = targetEntry != null && targetEntry.HasScope && targetEntry.IsOwn;
+                scopeName = kind == JevChoice.Retreat && ownScope ? targetEntry.Name : AllArmiesScope;
+            }
             if ((kind == "focus" || kind == "defend") && Confidence(answers, "instruction_goal") < 0.6)
                 return "{\"unknown\":true,\"reason\":\"目標の確信度が足りません。\",\"commands\":[]}";
 
@@ -181,7 +190,7 @@ namespace Rts.Providers
             if (policy == null) return "{\"unknown\":true,\"reason\":\"対応していない指示です。\",\"commands\":[]}";
 
             var command = new Dictionary<string, object> { ["type"] = "policy", ["kind"] = policy };
-            if (!request.HasFixedTarget) command["scope"] = scopeEntry.Name;
+            if (scopeName != null) command["scope"] = scopeName;
             if (policy == "Focus" || policy == "Defend")
             {
                 var goalEntry = targetEntry != null && targetEntry.HasGoal ? targetEntry : FirstGoal(request.Summary);
