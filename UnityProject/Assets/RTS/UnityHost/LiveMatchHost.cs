@@ -342,6 +342,7 @@ namespace Rts.UnityHost
         [SerializeField] private string developmentAiModel = "local-llm";
         private string developmentAiMessage = "";
         private bool developmentAiModelListOpen;
+        private const string StrategistModelKey = "rts.strategist.model";
         private const string AiInstructionControl = "AiInstruction";
         private bool aiFieldFocused;
         private Rect aiFieldRect;
@@ -736,6 +737,7 @@ namespace Rts.UnityHost
                 sendTacticSignal: (name, point) => TrySendOwnTacticSignal(name, point),
                 switchTactic: name => TrySwitchOwnTactic(name),
                 enrichSummary: AddOwnTacticInfo);
+            RestoreStrategistModel();
             enemyFactionId = 3 - viewFactionId;
             enemyTacticSide = CreateTacticSide(enemyFactionId, ref enemyTactic);
             if (enemyTacticSide.Host != null) enemyTacticSide.Host.Start(TacticSetupJson(scenario, enemyFactionId));
@@ -1227,6 +1229,59 @@ namespace Rts.UnityHost
             return new Vector2(field.x, field.yMax + field.height + 8f);
         }
 
+        private void RestoreStrategistModel()
+        {
+            var available = AiModels.Where(option => option.Available).Select(option => option.Model);
+            string restored = StrategistUiRules.RestoreModel(PlayerPrefs.GetString(StrategistModelKey, developmentAiModel), available);
+            if (!string.IsNullOrEmpty(restored)) developmentAiModel = restored;
+        }
+
+        /// <summary>
+        /// The own army or outpost selected on the map, sent with the instruction so that "hold here" has a subject.
+        /// A core has no scope of its own, and the view keeps only own armies, so anything else is sent without one.
+        /// </summary>
+        private ScopeKey? StrategistTarget()
+        {
+            if (view == null) return null;
+            var selected = view.Selected;
+            switch (selected.Kind)
+            {
+                case SelectionKind.Army: return new ScopeKey(viewFactionId, ScopeKind.Army, selected.Id);
+                case SelectionKind.Outpost: return new ScopeKey(viewFactionId, ScopeKind.Outpost, selected.Id);
+                default: return null;
+            }
+        }
+
+        private static string StrategistTargetLabel(ScopeKey? target)
+        {
+            if (!target.HasValue) return "対象：なし（地図で選ぶと一緒に送ります）";
+            return "対象：" + (target.Value.Kind == ScopeKind.Army ? "軍団 " : "拠点 ") + target.Value.Id;
+        }
+
+        private string estimateInstruction;
+        private string estimateModel;
+        private ScopeKey? estimateTarget;
+        private float estimateAt = -1f;
+        private decimal estimateYen;
+
+        /// <summary>
+        /// The estimate builds the whole situation summary, so it is worked out again only when what would be sent
+        /// changes, or once a second as the situation moves - not on every GUI event.
+        /// </summary>
+        private decimal NextEstimate(string instruction, string model, ScopeKey? target)
+        {
+            if (instruction == estimateInstruction && model == estimateModel && Nullable.Equals(target, estimateTarget)
+                && estimateAt >= 0f && Time.unscaledTime - estimateAt < 1f)
+                return estimateYen;
+            estimateInstruction = instruction;
+            estimateModel = model;
+            estimateTarget = target;
+            estimateAt = Time.unscaledTime;
+            try { estimateYen = string.IsNullOrEmpty(instruction) ? 0m : EstimateAiCost(instruction, model, target); }
+            catch (Exception) { estimateYen = 0m; }
+            return estimateYen;
+        }
+
         private void LateUpdate()
         {
             if (aiFieldFocused) Input.compositionCursorPos = ImeCandidatePosition(aiFieldRect);
@@ -1246,7 +1301,7 @@ namespace Rts.UnityHost
             // IMGUI text fields only receive Japanese (IME) composition when the mode is forced on.
             Input.imeCompositionMode = IMECompositionMode.On;
             var rect = AiPanelRect;
-            UiStyles.Box(rect, "試し遊び：参謀");
+            UiStyles.Box(rect, "参謀");
             UiHitAreas.Shared.Register(rect);
             var field = new Rect(rect.x + 8f, rect.y + 26f, rect.width - 16f, 24f);
             bool focused = GUI.GetNameOfFocusedControl() == AiInstructionControl;
@@ -1258,6 +1313,7 @@ namespace Rts.UnityHost
             if (enter) current.Use();
             GUI.SetNextControlName(AiInstructionControl);
             developmentAiInstruction = GUI.TextField(field, developmentAiInstruction ?? "");
+            var strategistTarget = StrategistTarget();
             // The IME candidate list opens where this says. The field itself keeps resetting it (to a corner of the Game
             // view, 10-05), so it is set again here and once more in LateUpdate, after all GUI events of the frame.
             aiFieldFocused = focused;
@@ -1265,19 +1321,34 @@ namespace Rts.UnityHost
             if (focused) Input.compositionCursorPos = ImeCandidatePosition(field);
             if (GUI.Button(new Rect(rect.x + 8f, rect.y + 54f, rect.width - 156f, 24f), ModelLabel(developmentAiModel) + "  ▼"))
                 developmentAiModelListOpen = !developmentAiModelListOpen;
+            decimal nextEstimate = NextEstimate(developmentAiInstruction, developmentAiModel, strategistTarget);
             if (GUI.Button(new Rect(rect.x + rect.width - 140f, rect.y + 54f, 132f, 24f), "送る") || enter)
             {
                 developmentAiModelListOpen = false;
-                try { Speak(developmentAiInstruction, null, developmentAiModel); developmentAiMessage = ""; }
+                try { Speak(developmentAiInstruction, strategistTarget, developmentAiModel); developmentAiMessage = ""; }
                 catch (Exception e) { developmentAiMessage = e.Message; }
             }
             if (!developmentAiModelListOpen)
             {
-                if (GUI.Button(new Rect(rect.x + 8f, rect.y + 84f, 132f, 24f), "直前を取り消す"))
+                // Row 1: what goes with the instruction, and the cost of one send when the chosen AI is an expensive one.
+                bool expensive = StrategistUiRules.IsExpensive(nextEstimate);
+                GUI.Label(new Rect(rect.x + 8f, rect.y + 82f, rect.width - (expensive ? 120f : 16f), 22f), StrategistTargetLabel(strategistTarget));
+                if (expensive)
+                    GUI.Label(new Rect(rect.xMax - 108f, rect.y + 82f, 100f, 22f), "1回 約" + nextEstimate.ToString("0.0") + "円");
+                // Row 2: undo, and what this match has spent so far.
+                if (GUI.Button(new Rect(rect.x + 8f, rect.y + 106f, 132f, 24f), "直前を取り消す"))
                     developmentAiMessage = CancelLastAiInstruction() ? "取り消しました" : "取り消せる指示はありません";
-                GUI.Label(new Rect(rect.x + 148f, rect.y + 84f, rect.width - 156f, 24f),
-                    "費用 " + AiMatchCostYen.ToString("0.000") + "円 / 残り " + AiRemainingBudgetYen.ToString("0.000") + "円");
-                float top = rect.y + 112f;
+                GUI.Label(new Rect(rect.x + 148f, rect.y + 107f, rect.width - 156f, 22f),
+                    "AI " + AiMatchCostYen.ToString("0.0") + "円 / 予算の残り " + AiRemainingBudgetYen.ToString("0.0") + "円");
+                float top = rect.y + 134f;
+                if (StrategistUiRules.ShouldWarnBudget(AiRemainingBudgetYen, nextEstimate))
+                {
+                    var previousColor = GUI.color;
+                    GUI.color = new Color(1f, 0.35f, 0.25f);
+                    GUI.Label(new Rect(rect.x + 8f, top, rect.width - 16f, 22f), "予算を超えそうです");
+                    GUI.color = previousColor;
+                    top += 24f;
+                }
                 if (!string.IsNullOrEmpty(developmentAiMessage))
                 {
                     GUI.Label(new Rect(rect.x + 8f, top, rect.width - 16f, 22f), developmentAiMessage);
@@ -1305,6 +1376,8 @@ namespace Rts.UnityHost
                     if (GUI.Button(cellRect, ModelLabel(option.Model) + (option.Available ? "" : "（キー未設定）")))
                     {
                         developmentAiModel = option.Model;
+                        PlayerPrefs.SetString(StrategistModelKey, developmentAiModel);
+                        PlayerPrefs.Save();
                         developmentAiModelListOpen = false;
                     }
                     GUI.enabled = previous;
