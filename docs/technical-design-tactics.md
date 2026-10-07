@@ -108,6 +108,12 @@ my-tactic/
 - 戦術に渡さないもの：API キー、環境変数、ファイル、ネット。Jev／LLM への問い合わせは、ゲームが代わりに送る（キーは戦術に見せない）
 - 試合をまたぐ記憶：戦術のフォルダとは別の、ゲームが管理する小さな保存領域【1MB】。共有のときには入れない
 
+### Workshop公開の流れ（第1段）
+
+自分の `Documents/AiCommandRts/Tactics/` にある戦術だけを、ゲームが一時フォルダへ検証・コピーしてから Workshop に送る。`tactic.json`、入口ソース、`README.md`、`params` などは含めるが、隠しファイル、試合をまたぐ記憶、合計 50MB を超えるファイルは含めない。`TacticFolder.Load` で読めないフォルダは公開しない。題は `name`、説明は README の先頭（なければ `description`）、タグは言語と `style` から作る。初回は App ID **480**（Valveの開発用仮置き）で `CreateItem`、以後は同じ番号を `StartItemUpdate` で更新する。既定の公開範囲は非公開で、画面から変更する。
+
+対応表は戦術フォルダの外、ゲームの保存場所（Unity の `persistentDataPath`）に `workshop-tactics.json` として置く。購読したアイテムはインストール先のフォルダを `TacticFolder.Load` で確認して一覧へ加え、一覧には `［Workshop］` を付ける。App ID 480 は製品登録後に定数1か所を差し替える。
+
 ## 8. ユーザーに見せるもの
 
 - **ルールブック**：戦況の項目・命令の語彙・ルールの数値（版番号つき）。戦術を書く人と、Claude Code／ChatGPT に読ませる資料を兼ねる。コードの定義から自動で作る

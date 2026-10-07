@@ -91,5 +91,42 @@ namespace Rts.TacticsJs
         {
             return Scan((IEnumerable<string>)parentFolders);
         }
+
+        /// <summary>Loads folders whose tactic.json is directly in the supplied folder (for Workshop installs).</summary>
+        public static IReadOnlyList<TacticCatalogEntry> ScanFolders(IEnumerable<string> folders, string runtimesPath = null)
+        {
+            var entries = new List<TacticCatalogEntry>();
+            if (folders == null) return entries.AsReadOnly();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string folder in folders)
+            {
+                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                string fullPath;
+                try { fullPath = Path.GetFullPath(folder); }
+                catch (Exception e) when (e is ArgumentException || e is IOException)
+                { entries.Add(new TacticCatalogEntry(folder, folder, null, "パスを読めません: " + e.Message)); continue; }
+                if (!seen.Add(fullPath)) continue;
+                string folderName = Path.GetFileName(fullPath);
+                if (!File.Exists(Path.Combine(fullPath, "tactic.json")))
+                { entries.Add(new TacticCatalogEntry(folderName, fullPath, null, "tactic.jsonがありません。")); continue; }
+                try
+                {
+                    var loaded = TacticFolder.Load(fullPath, runtimesPath);
+                    entries.Add(loaded.IsSuccess
+                        ? new TacticCatalogEntry(folderName, fullPath, loaded.Metadata, null)
+                        : new TacticCatalogEntry(folderName, fullPath, loaded.Metadata, loaded.Error));
+                    (loaded.Runtime as IDisposable)?.Dispose();
+                }
+                catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is FormatException
+                    || e is ArgumentException || e is OverflowException || e is InvalidOperationException)
+                { entries.Add(new TacticCatalogEntry(folderName, fullPath, null, "読み込みに失敗しました: " + e.Message)); }
+            }
+            return entries
+                .OrderByDescending(x => x.IsSelectable && x.Metadata.Recommended)
+                .ThenBy(x => x.FolderName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => x.FolderName, StringComparer.Ordinal)
+                .ThenBy(x => x.Path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
     }
 }

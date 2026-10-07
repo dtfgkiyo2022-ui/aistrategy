@@ -30,6 +30,7 @@
 /UnityProject/crashlytics-build.properties
 /UnityProject/Assets/StreamingAssets/aa.meta
 /UnityProject/Assets/StreamingAssets/aa/
+/UnityProject/steam_appid.txt
 # .NET (Issue #5)
 /Headless/**/bin/
 /Headless/**/obj/
