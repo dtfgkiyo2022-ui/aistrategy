@@ -270,9 +270,11 @@ namespace Rts.Core.Tests
                 enrichSummary: summary => summary.SetTacticInfo("signal-test", new[] { "signal-test" },
                     Array.Empty<AiTacticParameterInfo>(), new[] { new AiTacticSignalInfo("allIn", "総攻撃", false) })))
             {
-                port.BeginInterpretation("総攻撃して", null, "gpt-6-luna");
+                var target = new ScopeKey(1, ScopeKind.Army, 1);
+                port.BeginInterpretation("総攻撃して", target, "gpt-6-luna");
                 Assert.That(interpreterCalls, Is.EqualTo(0));
                 Assert.That(calledName, Is.EqualTo("allIn"));
+                Assert.That(port.Instructions.Last().FixedTarget, Is.EqualTo(target));
                 Assert.That(port.MatchCostYen, Is.EqualTo(0m));
                 Assert.That(port.Instructions.Last().State, Is.EqualTo(AiInstructionState.Executing));
                 Assert.That(port.Instructions.Last().Say, Does.Contain("AI を使わずに判定"));
