@@ -171,6 +171,19 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void OnStartMayTakeLongerThanATickButATickMayNot()
+        {
+            // 80ms is over the 50ms of a tick and far below the 1000ms of the first call.
+            const string wait = "var t = Date.now(); while (Date.now() - t < 80) {}";
+            var runtime = new JsTacticRuntime("function onStart(s){ " + wait + " } function onTick(v){ return {commands:[]}; }", "slow-start");
+            Assert.That(() => runtime.Start("{}"), Throws.Nothing);
+            Assert.That(runtime.Tick("{}"), Does.Contain("commands"));
+            var slowTick = new JsTacticRuntime("function onTick(v){ " + wait + " return {commands:[]}; }", "slow-tick");
+            slowTick.Start("{}");
+            Assert.That(() => slowTick.Tick("{}"), Throws.Exception.With.Message.Contains("50ms"));
+        }
+
+        [Test]
         public void MeasuresJsCallTimeForReport()
         {
             var runtime = new JsTacticRuntime("function onTick(v){ return {commands:[]}; }");
