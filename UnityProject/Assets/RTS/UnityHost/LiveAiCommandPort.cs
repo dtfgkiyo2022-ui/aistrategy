@@ -94,6 +94,7 @@ namespace Rts.UnityHost
         private readonly Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal;
         private readonly Func<string, AiTacticChangeResult> switchTactic;
         private readonly Action<AiSituationSummary> enrichSummary;
+        private ulong nextDirectRequestId = ulong.MaxValue;
 
         public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
             OperationTable operationTable = null, Action<string> changeDoctrine = null,
@@ -176,16 +177,20 @@ namespace Rts.UnityHost
             var f = frame == null ? null : frame();
             if (f == null) throw new InvalidOperationException("試合が開始されていません。");
             var selected = AiModelCatalog.Get(model ?? "gpt-6-luna");
-            if (!AiModelAvailability.IsConfigured(selected.Model) && ownedInterpreter != null)
-                throw new InvalidOperationException("選択したAIはこのPCで使えません。");
             if (fixedTarget.HasValue && fixedTarget.Value.FactionId != f.FactionId)
                 throw new ArgumentException("選択対象は自陣営のものにしてください。", nameof(fixedTarget));
+
+            var summary = Summary(f);
+            if (AiTacticSignalMatcher.TryMatch(instruction ?? "", summary, fixedTarget, out var direct))
+                return SendDirectSignal(f, instruction, selected.Model, fixedTarget, direct);
+            if (!AiModelAvailability.IsConfigured(selected.Model) && ownedInterpreter != null)
+                throw new InvalidOperationException("選択したAIはこのPCで使えません。");
 
             ulong reservation = gateway.BeginInterpretation(f.FactionId, fixedTarget);
             try
             {
                 ulong request = coordinator.Request(instruction ?? "", f, fixedTarget, selected.Model, f.Tick,
-                    selected.DeadlineTicks, suppliedSummary: Summary(f));
+                    selected.DeadlineTicks, suppliedSummary: summary);
                 var item = new LiveAiInstruction
                 {
                     RequestId = request,
@@ -211,6 +216,46 @@ namespace Rts.UnityHost
                 gateway.EndInterpretation(reservation);
                 throw;
             }
+        }
+
+        private ulong SendDirectSignal(FactionFrame f, string instruction, string model, ScopeKey? fixedTarget,
+            AiDirectTacticSignal direct)
+        {
+            var item = new LiveAiInstruction
+            {
+                RequestId = nextDirectRequestId--,
+                ReservationId = 0,
+                FactionId = f.FactionId,
+                FixedTarget = fixedTarget,
+                Instruction = instruction ?? "",
+                Model = model,
+                StartedTick = f.Tick,
+                DeadlineTick = f.Tick,
+                State = AiInstructionState.Unknown,
+                Say = "",
+                Reason = "",
+                RejectedReasons = Array.Empty<string>(),
+                EstimatedCostYen = 0m,
+                ActualCostYen = 0m,
+                Issued = Array.Empty<string>()
+            };
+            history.Add(item);
+            if (sendTacticSignal == null)
+            {
+                item.Reason = "戦術の合図を送る受け口がありません。";
+                return item.RequestId;
+            }
+            var changed = sendTacticSignal(direct.Name, direct.Point);
+            if (!changed.Success)
+            {
+                item.Reason = changed.Reason;
+                return item.RequestId;
+            }
+            string report = "合図「" + direct.Label + "」を送りました（AI を使わずに判定）";
+            item.Say = report;
+            item.Issued = new[] { report };
+            item.State = AiInstructionState.Executing;
+            return item.RequestId;
         }
 
         /// <summary>Polls the provider without waiting; call once per Unity/game tick.</summary>

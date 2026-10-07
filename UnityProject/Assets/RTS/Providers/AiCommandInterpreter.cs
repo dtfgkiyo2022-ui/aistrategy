@@ -407,6 +407,49 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public bool NeedsPoint { get; }
     }
 
+    /// <summary>指示文から安全に直接送信できる自軍戦術の合図。</summary>
+    public sealed class AiDirectTacticSignal
+    {
+        public AiDirectTacticSignal(string name, string label, SimPoint? point)
+        { Name = name; Label = label; Point = point; }
+        public string Name { get; }
+        public string Label { get; }
+        public SimPoint? Point { get; }
+    }
+
+    public static class AiTacticSignalMatcher
+    {
+        /// <summary>
+        /// Returns a signal only when the instruction contains exactly one signal label and no name-table name.
+        /// Point-required signals also need a selected name-table goal with a usable point.
+        /// </summary>
+        public static bool TryMatch(string instruction, AiSituationSummary summary, ScopeKey? selectedTarget,
+            out AiDirectTacticSignal match)
+        {
+            match = null;
+            if (string.IsNullOrEmpty(instruction) || summary == null || summary.TacticInfo == null) return false;
+            if ((summary.NameTable ?? Array.Empty<AiNameTableEntry>()).Any(x => x != null &&
+                !string.IsNullOrEmpty(x.Name) && instruction.Contains(x.Name, StringComparison.Ordinal))) return false;
+
+            var signals = summary.TacticInfo.Signals ?? Array.Empty<AiTacticSignalInfo>();
+            var matches = signals.Where(x => x != null && !string.IsNullOrEmpty(x.Label) &&
+                instruction.Contains(x.Label, StringComparison.Ordinal)).ToArray();
+            if (matches.Length != 1) return false;
+            var signal = matches[0];
+            SimPoint? point = null;
+            if (signal.NeedsPoint)
+            {
+                if (!selectedTarget.HasValue) return false;
+                var selected = (summary.NameTable ?? Array.Empty<AiNameTableEntry>()).FirstOrDefault(x =>
+                    x != null && x.HasScope && x.Scope.Equals(selectedTarget.Value) && x.HasGoal);
+                if (selected == null) return false;
+                point = selected.Point;
+            }
+            match = new AiDirectTacticSignal(signal.Name, signal.Label, point);
+            return true;
+        }
+    }
+
     /// <summary>参謀が見てよい情報だけから作った短い戦況と、その中の名前→ID表。</summary>
     public sealed class AiSituationSummary
     {

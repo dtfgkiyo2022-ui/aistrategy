@@ -231,6 +231,54 @@ namespace Rts.Core.Tests
             }
         }
 
+        [Test]
+        public void DirectSignalMatcherRequiresOneLabelAndNoNameTableMatch()
+        {
+            var simulation = new Battle(MapGenerator.Generate(3106, true));
+            var summary = AiSituationSummary.From(simulation.Capture(1));
+            summary.SetTacticInfo("signal-test", new[] { "signal-test" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("allIn", "総攻撃", false) });
+
+            Assert.That(AiTacticSignalMatcher.TryMatch("総攻撃して", summary, null, out var direct), Is.True);
+            Assert.That(direct.Name, Is.EqualTo("allIn"));
+
+            string knownName = summary.NameTable.First(x => !string.IsNullOrEmpty(x.Name)).Name;
+            Assert.That(AiTacticSignalMatcher.TryMatch(knownName + "で総攻撃", summary, null, out _), Is.False);
+
+            summary.SetTacticInfo("signal-test", new[] { "signal-test" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("allIn", "総攻撃", false), new AiTacticSignalInfo("push", "押し込め", false) });
+            Assert.That(AiTacticSignalMatcher.TryMatch("総攻撃して押し込め", summary, null, out _), Is.False);
+
+            summary.SetTacticInfo("signal-test", new[] { "signal-test" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("rally", "集まれ", true) });
+            Assert.That(AiTacticSignalMatcher.TryMatch("集まれ", summary, null, out _), Is.False);
+
+            summary.SetTacticInfo("signal-test", new[] { "signal-test" }, Array.Empty<AiTacticParameterInfo>(), Array.Empty<AiTacticSignalInfo>());
+            Assert.That(AiTacticSignalMatcher.TryMatch("総攻撃", summary, null, out _), Is.False);
+        }
+
+        [Test]
+        public void DirectSignalBypassesInterpreterAndCostsNothing()
+        {
+            var simulation = new Battle(MapGenerator.Generate(3107, true));
+            var gateway = new CommandGateway(simulation);
+            int interpreterCalls = 0;
+            var fake = new FakeCommandInterpreter(0, _ => { interpreterCalls++; return "{}"; });
+            string calledName = null;
+            using (var port = new LiveAiCommandPort(gateway, fake, () => simulation.Capture(1),
+                sendTacticSignal: (name, point) => { calledName = name; return AiTacticChangeResult.Ok(""); },
+                enrichSummary: summary => summary.SetTacticInfo("signal-test", new[] { "signal-test" },
+                    Array.Empty<AiTacticParameterInfo>(), new[] { new AiTacticSignalInfo("allIn", "総攻撃", false) })))
+            {
+                port.BeginInterpretation("総攻撃して", null, "gpt-6-luna");
+                Assert.That(interpreterCalls, Is.EqualTo(0));
+                Assert.That(calledName, Is.EqualTo("allIn"));
+                Assert.That(port.MatchCostYen, Is.EqualTo(0m));
+                Assert.That(port.Instructions.Last().State, Is.EqualTo(AiInstructionState.Executing));
+                Assert.That(port.Instructions.Last().Say, Does.Contain("AI を使わずに判定"));
+            }
+        }
+
         private static int RunCli(string folder, string log, string signal, int ticks)
             => Rts.Headless.Cli.Program.Main(new[]
             {
