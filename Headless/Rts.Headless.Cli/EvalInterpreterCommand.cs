@@ -113,12 +113,12 @@ internal static class EvalInterpreterCommand
         bool expectedRefusal = IsUnknown(item.Expect);
         bool conditional = item.Tags.Any(t => t.Equals("G-4", StringComparison.OrdinalIgnoreCase));
         bool correct = Score(item, reply.Result, summary, conditional);
-        bool falseRefusal = !expectedRefusal && !conditional && !item.Tags.Contains("no-llm", StringComparer.Ordinal) && (reply.Result.Unknown || reply.Result.Policies.Count + reply.Result.EconomyCommands.Count == 0);
+        bool falseRefusal = !expectedRefusal && !conditional && !item.Tags.Contains("no-llm", StringComparer.Ordinal) && (reply.Result.Unknown || reply.Result.Policies.Count + reply.Result.EconomyCommands.Count + reply.Result.TacticCommands.Count == 0);
         string score = correct ? "correct" : expectedRefusal ? "unexpected-command" : falseRefusal ? "false-refusal" : "wrong-command";
         return new ScoreRow { Id = item.Id, Text = item.Text, Tags = string.Join("|", item.Tags), AnswerJson = answerForCsv,
             ExpectedRefusal = expectedRefusal, Correct = correct, FalseRefusal = falseRefusal, ElapsedMs = elapsed,
             InputTokens = reply.Usage.InputTokens, OutputTokens = reply.Usage.OutputTokens, CacheReadInputTokens = reply.Usage.CacheReadInputTokens,
-            CostYen = reply.CostYen, Score = score, ResultReason = reply.Result.Reason, IssuedCount = reply.Result.Policies.Count + reply.Result.EconomyCommands.Count, RejectedReasons = string.Join("|", reply.Result.Rejected.Select(x => x.Reason)) };
+            CostYen = reply.CostYen, Score = score, ResultReason = reply.Result.Reason, IssuedCount = reply.Result.Policies.Count + reply.Result.EconomyCommands.Count + reply.Result.TacticCommands.Count, RejectedReasons = string.Join("|", reply.Result.Rejected.Select(x => x.Reason)) };
     }
 
     private static ICommandInterpreter CreateInterpreter(string model, string localEndpoint)

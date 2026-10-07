@@ -94,7 +94,7 @@ namespace Rts.Providers
                 if (!(pair.Value is Dictionary<string, object> answer)) continue;
                 if (answer.TryGetValue("choice", out var choiceValue) && choiceValue is string rawChoice)
                 {
-                    string choice = Game(rawChoice);
+                    string choice = pair.Key == "instruction_signal" ? rawChoice : Game(rawChoice);
                     if (choice != null) result.Choices[pair.Key] = choice;
                     // A missing confidence stays 0, so an answer without one never clears the threshold.
                     if (answer.TryGetValue("confidence", out var confidence) && confidence is double c
@@ -134,6 +134,13 @@ namespace Rts.Providers
                 case "unknown": return JevChoice.Unknown;
                 case "hold": return "hold";
                 case "capture": return "capture";
+                // The staff officer's instruction kinds and doctrines. Without these a real answer of "signal" or
+                // "doctrine" read as no choice at all; the tests with ready-made answers never came through here.
+                case "signal": return "signal";
+                case "doctrine": return "doctrine";
+                case "none": return "none";
+                case "maintain": return "maintain";
+                case "concentrate": return "concentrate";
                 default: return null; // unknown or missing: no choice
             }
         }

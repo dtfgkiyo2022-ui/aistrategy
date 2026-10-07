@@ -15,6 +15,9 @@ namespace Rts.Providers
 
         /// <summary>Null means the provider's configured first/every-N cadence.</summary>
         public bool? IncludeComprehension;
+
+        /// <summary>Own tactic signals to expose to an instruction translation request.</summary>
+        public IReadOnlyList<AiTacticSignalInfo> SignalDefinitions;
     }
 
     /// <summary>
@@ -28,7 +31,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q9";
+        public const string Version = "q10";
 
         private const string DecisivePoint =
             "\"decisive_point\":{\"type\":\"choice\",\"instructions\":\"次の1分間に勝敗を左右する場所はどこであるか。stateの観測だけで判断する。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\",\"my_core\":\"自分のコア\",\"enemy_core\":\"敵のコア\"}}";
@@ -79,7 +82,9 @@ namespace Rts.Providers
             if (context.OperationConditionNeeded) parts.Add(OperationNorthBroken);
             if (context.InstructionTranslationNeeded)
             {
-                parts.Add(InstructionKind);
+                bool hasSignals = context.SignalDefinitions != null && context.SignalDefinitions.Count != 0;
+                parts.Add(hasSignals ? InstructionKindWithSignal : InstructionKind);
+                if (hasSignals) parts.Add(BuildInstructionSignal(context.SignalDefinitions));
                 parts.Add(InstructionTarget);
                 parts.Add(InstructionGoal);
                 parts.Add(InstructionDoctrine);
@@ -91,6 +96,26 @@ namespace Rts.Providers
                 parts.Add(OutpostHeldByEnemy);
             }
             return "{" + string.Join(",", parts) + "}";
+        }
+
+        private const string InstructionKindWithSignal =
+            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"doctrine\":\"全体方針を変える\",\"signal\":\"戦術の合図を送る\",\"unknown\":\"わからない\"}}";
+
+        private static string BuildInstructionSignal(IReadOnlyList<AiTacticSignalInfo> signals)
+        {
+            var criteria = new List<string>();
+            foreach (var signal in signals)
+            {
+                if (signal == null || string.IsNullOrEmpty(signal.Name)) continue;
+                criteria.Add(JsonString(signal.Name) + ":" + JsonString(signal.Label ?? signal.Name));
+            }
+            criteria.Add("\"unknown\":\"わからない\"");
+            return "\"instruction_signal\":{\"type\":\"choice\",\"instructions\":\"送る戦術の合図は次の1つである。\",\"criteria\":{" + string.Join(",", criteria) + "}}";
+        }
+
+        private static string JsonString(string value)
+        {
+            return "\"" + (value ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
         }
 
         /// <summary>Returns the question keys, in the same order as the JSON object.</summary>
