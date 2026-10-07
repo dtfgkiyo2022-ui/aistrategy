@@ -45,7 +45,13 @@ namespace Rts.Providers
                 return;
             }
             if (transport == null) transport = new HttpJevTransport(readKey);
-            string questions = JevQuestions.Build(new JevQuestionContext { InstructionTranslationNeeded = true, IncludeComprehension = false });
+            var signals = request.Summary?.TacticInfo?.Signals ?? Array.Empty<AiTacticSignalInfo>();
+            string questions = JevQuestions.Build(new JevQuestionContext
+            {
+                InstructionTranslationNeeded = true,
+                IncludeComprehension = false,
+                SignalDefinitions = signals
+            });
             string state = JsonValueWriter.Write(new Dictionary<string, object>
             {
                 ["stateVersion"] = "command-g5",
@@ -93,10 +99,54 @@ namespace Rts.Providers
             return ready;
         }
 
-        private static string ToCommandJson(InterpreterRequest request, JevAnswers answers)
+        internal static string ToCommandJson(InterpreterRequest request, JevAnswers answers)
         {
             if (answers == null) return "{\"unknown\":true,\"reason\":\"Jevの答えがありません。\",\"commands\":[]}";
             string kind = Choice(answers, "instruction_kind");
+            // The real Jev hardly ever answers "signal" for the kind: "総攻撃して" comes back as focus and "いったん下がって"
+            // as retreat, each with the target unknown, while the signal question is answered at 0.99-1.0 (10-08,
+            // signalprompt set). So an attack, defence or retreat with no target is a signal too when one is picked
+            // with confidence - the same rule the LLM prompt gives (rule 14). A named target keeps the policy.
+            string pickedSignal = Choice(answers, "instruction_signal");
+            string answeredTarget = Choice(answers, "instruction_target");
+            bool untargetedSignal = (kind == "focus" || kind == JevChoice.Defend || kind == JevChoice.Retreat)
+                && (answeredTarget == null || answeredTarget == JevChoice.Unknown)
+                && pickedSignal != null && pickedSignal != JevChoice.Unknown
+                && Confidence(answers, "instruction_signal") >= 0.6;
+            if (kind == "signal" || untargetedSignal)
+            {
+                string signalName = pickedSignal;
+                if (Confidence(answers, "instruction_kind") < 0.6 ||
+                    Confidence(answers, "instruction_signal") < 0.6 ||
+                    signalName == JevChoice.Unknown)
+                    return "{\"unknown\":true,\"reason\":\"戦術の合図を確定できません。\",\"commands\":[]}";
+
+                var signal = (request.Summary?.TacticInfo?.Signals ?? Array.Empty<AiTacticSignalInfo>())
+                    .FirstOrDefault(s => s != null && s.Name == signalName);
+                if (signal == null)
+                    return "{\"unknown\":true,\"reason\":\"戦術の合図を確定できません。\",\"commands\":[]}";
+                if (signal.NeedsPoint && !request.HasFixedTarget)
+                    return "{\"unknown\":true,\"reason\":\"地点を選んでから話しかけてください。\",\"commands\":[]}";
+
+                var result = new Dictionary<string, object>
+                {
+                    ["kind"] = "SendTacticSignal",
+                    ["tacticSignal"] = signal.Name,
+                    ["tacticSignalX"] = 0d,
+                    ["tacticSignalZ"] = 0d,
+                    ["reason"] = ""
+                };
+                if (signal.NeedsPoint)
+                {
+                    var selected = (request.Summary?.NameTable ?? Array.Empty<AiNameTableEntry>())
+                        .FirstOrDefault(e => e != null && e.HasScope && e.Scope.Equals(request.FixedTarget) && e.HasGoal);
+                    if (selected == null)
+                        return "{\"unknown\":true,\"reason\":\"地点を選んでから話しかけてください。\",\"commands\":[]}";
+                    result["tacticSignalX"] = selected.Point.X.Raw / 65536d;
+                    result["tacticSignalZ"] = selected.Point.Z.Raw / 65536d;
+                }
+                return JsonValueWriter.Write(result);
+            }
             string target = Choice(answers, "instruction_target");
             string goal = Choice(answers, "instruction_goal");
             if (Confidence(answers, "instruction_kind") < 0.6 || kind == JevChoice.Unknown)

@@ -61,6 +61,109 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void SignalQuestionsAreAddedOnlyWhenOwnTacticHasSignals()
+        {
+            var without = JevQuestions.Build(new JevQuestionContext { InstructionTranslationNeeded = true, IncludeComprehension = false });
+            Assert.That(without, Does.Not.Contain("instruction_signal"));
+            Assert.That(without, Does.Not.Contain("\"signal\":\"戦術の合図を送る\""));
+
+            var with = JevQuestions.Build(new JevQuestionContext
+            {
+                InstructionTranslationNeeded = true,
+                IncludeComprehension = false,
+                SignalDefinitions = new[]
+                {
+                    new AiTacticSignalInfo("allIn", "総攻撃", false),
+                    new AiTacticSignalInfo("holdHere", "ここを守れ", true)
+                }
+            });
+            Assert.That(with, Does.Contain("instruction_signal"));
+            Assert.That(with, Does.Contain("\"allIn\":\"総攻撃\""));
+            Assert.That(with, Does.Contain("\"holdHere\":\"ここを守れ\""));
+            Assert.That(with, Does.Contain("\"unknown\":\"わからない\""));
+        }
+
+        [Test]
+        public void ConfidentSignalAnswerBecomesSendTacticSignal()
+        {
+            var summary = new AiSituationSummary();
+            summary.SetTacticInfo("rush", new[] { "rush" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("allIn", "総攻撃", false) });
+            var answers = new JevAnswers();
+            answers.Choices["instruction_kind"] = "signal";
+            answers.ChoiceConfidences["instruction_kind"] = 0.9;
+            answers.Choices["instruction_signal"] = "allIn";
+            answers.ChoiceConfidences["instruction_signal"] = 0.9;
+
+            string json = JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, answers);
+            Assert.That(json, Does.Contain("\"kind\":\"SendTacticSignal\""));
+            Assert.That(json, Does.Contain("\"tacticSignal\":\"allIn\""));
+        }
+
+        [Test]
+        public void RealAnswerKindsSignalAndDoctrineAreRead()
+        {
+            // Read once mapped every unlisted choice to "no choice", so a real "signal" or "doctrine" answer was lost.
+            var transport = new HttpJevTransport(() => "k");
+            var answers = transport.Read("{\"answers\":{"
+                + "\"instruction_kind\":{\"type\":\"choice\",\"choice\":\"signal\",\"confidence\":0.9},"
+                + "\"instruction_doctrine\":{\"type\":\"choice\",\"choice\":\"maintain\",\"confidence\":0.9},"
+                + "\"instruction_signal\":{\"type\":\"choice\",\"choice\":\"allIn\",\"confidence\":1.0}}}");
+            Assert.That(answers.Choices["instruction_kind"], Is.EqualTo("signal"));
+            Assert.That(answers.Choices["instruction_doctrine"], Is.EqualTo("maintain"));
+            Assert.That(answers.Choices["instruction_signal"], Is.EqualTo("allIn"));
+        }
+
+        [Test]
+        public void AnAttackWithNoTargetIsTheSignalButANamedTargetKeepsThePolicy()
+        {
+            // The real Jev answers "総攻撃して" as focus with the target unknown and allIn at 1.0 (10-08).
+            var summary = new AiSituationSummary();
+            summary.SetTacticInfo("rush", new[] { "rush" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("allIn", "総攻撃", false) });
+            var untargeted = new JevAnswers();
+            untargeted.Choices["instruction_kind"] = "focus";
+            untargeted.ChoiceConfidences["instruction_kind"] = 0.92;
+            untargeted.Choices["instruction_signal"] = "allIn";
+            untargeted.ChoiceConfidences["instruction_signal"] = 1.0;
+            untargeted.Choices["instruction_target"] = JevChoice.Unknown;
+            untargeted.ChoiceConfidences["instruction_target"] = 0.74;
+            Assert.That(JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, untargeted),
+                Does.Contain("\"tacticSignal\":\"allIn\""));
+
+            var named = new JevAnswers();
+            named.Choices["instruction_kind"] = "focus";
+            named.ChoiceConfidences["instruction_kind"] = 0.92;
+            named.Choices["instruction_signal"] = "allIn";
+            named.ChoiceConfidences["instruction_signal"] = 1.0;
+            named.Choices["instruction_target"] = JevChoice.EnemyCore;
+            named.ChoiceConfidences["instruction_target"] = 0.9;
+            Assert.That(JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, named),
+                Does.Not.Contain("SendTacticSignal"));
+        }
+
+        [Test]
+        public void LowConfidenceAndMissingPointSignalAnswersBecomeUnknown()
+        {
+            var summary = new AiSituationSummary();
+            summary.SetTacticInfo("rush", new[] { "rush" }, Array.Empty<AiTacticParameterInfo>(),
+                new[] { new AiTacticSignalInfo("holdHere", "ここを守れ", true) });
+            var low = new JevAnswers();
+            low.Choices["instruction_kind"] = "signal";
+            low.ChoiceConfidences["instruction_kind"] = 0.9;
+            low.Choices["instruction_signal"] = "holdHere";
+            low.ChoiceConfidences["instruction_signal"] = 0.5;
+            Assert.That(JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, low), Does.Contain("\"unknown\":true"));
+
+            var noTarget = new JevAnswers();
+            noTarget.Choices["instruction_kind"] = "signal";
+            noTarget.ChoiceConfidences["instruction_kind"] = 0.9;
+            noTarget.Choices["instruction_signal"] = "holdHere";
+            noTarget.ChoiceConfidences["instruction_signal"] = 0.9;
+            Assert.That(JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, noTarget), Does.Contain("地点を選んでから話しかけてください"));
+        }
+
+        [Test]
         public void ComprehensionIsFirstAndThenEveryConfiguredNumberOfCalls()
         {
             var transport = new CapturingTransport();
