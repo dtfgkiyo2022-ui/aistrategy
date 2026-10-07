@@ -37,6 +37,8 @@ namespace Rts.Presentation
         private Facing facing = Facing.East;
         private int dragStart = -1;
         private readonly List<string> notes = new List<string>();
+        private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
+            new List<TopBarResourceVisibility.ResourceEntry>();
 
         public bool IsPlacing { get { return mode != Mode.None; } }
 
@@ -322,7 +324,8 @@ namespace Rts.Presentation
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var economy = Economy();
-            if (economy != null) DrawTopBar(economy);
+            // The default remains IMGUI. The runtime Toolkit component owns the same band only when explicitly enabled.
+            if (economy != null && !HudToolkit.IsEnabled) DrawTopBar(economy);
             var rect = PanelRect();
             UiStyles.Box(rect, economy == null ? UiText.T("Economy (off on this map)", "内政（このマップでは無し）") : UiText.T("Economy", "内政"));
             UiHitAreas.Shared.Register(rect);
@@ -357,17 +360,15 @@ namespace Rts.Presentation
             // No title strip: the age and stock line itself sits on the top line of the bar.
             UiStyles.Plain(bar);
             UiHitAreas.Shared.Register(bar);
-            string age = !economy.Ages ? "" : economy.AdvanceRemaining > 0
-                ? UiText.T("Advancing to ", "進めている：") + AgeName(economy.AdvancingTo, economy.Civ == CivKind.Primitive ? 1 : 2) + " " + Seconds(economy.AdvanceRemaining) + "  |  "
-                : AgeName(economy.Civ, economy.Age) + "  |  ";
-            string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
-            if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
-            if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone + UiText.T("  Gems ", "  宝石 ") + economy.Gems;
-            if (TopBarResourceVisibility.ShowGold(economy)) stock += UiText.T("  Gold ", "  金 ") + economy.Gold;
-            if (TopBarResourceVisibility.ShowCharcoal(economy)) stock += UiText.T("  Charcoal ", "  木炭 ") + economy.Charcoal;
-            if (TopBarResourceVisibility.ShowSteel(economy)) stock += UiText.T("  Steel ", "  鋼 ") + economy.Steel;
-            if (TopBarResourceVisibility.ShowBowGear(economy)) stock += UiText.T("  Bow gear ", "  弓具 ") + economy.BowGear;
-            string people = UiText.T("  |  Pop ", "  |  人口 ") + economy.Population + "/" + economy.PopulationCap + UiText.T("  Idle ", "  待機 ") + CountIdle(economy);
+            string age = TopBarDisplayText.Age(economy);
+            TopBarResourceVisibility.Fill(economy, topBarResources);
+            string stock = "";
+            for (int i = 0; i < topBarResources.Count; i++)
+            {
+                var resource = topBarResources[i];
+                stock += (i == 0 ? "" : "  ") + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
+            }
+            string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy));
             var line = new GUIContent(age + stock + people);
             var rect = new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f);
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
