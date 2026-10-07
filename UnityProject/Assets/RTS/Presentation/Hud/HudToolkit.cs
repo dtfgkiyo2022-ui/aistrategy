@@ -40,23 +40,37 @@ namespace Rts.Presentation
             public int Value;
         }
 
-        /// <summary>PlayerPrefs is intentionally opt-in; the command-line flag is a convenient temporary override.</summary>
+        private static bool? commandLineFlag;
+        private static bool turnedOff;
+
+        /// <summary>
+        /// PlayerPrefs is intentionally opt-in; the command-line flag is a convenient temporary override that the
+        /// setup panel's switch can still turn off for this run. The flag is read once, not on every GUI event.
+        /// </summary>
         public static bool IsEnabled
         {
             get
             {
                 if (PlayerPrefs.GetInt(SettingKey, 0) == 1) return true;
-                foreach (var argument in System.Environment.GetCommandLineArgs())
-                    if (argument == "-hud-toolkit") return true;
-                return false;
+                if (!commandLineFlag.HasValue)
+                    commandLineFlag = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-hud-toolkit") >= 0;
+                return commandLineFlag.Value && !turnedOff;
             }
+        }
+
+        /// <summary>The setup panel's switch: remembered on this PC, and takes effect on the next frame.</summary>
+        public static void SetEnabled(bool on)
+        {
+            PlayerPrefs.SetInt(SettingKey, on ? 1 : 0);
+            PlayerPrefs.Save();
+            turnedOff = !on;
         }
 
         public void Bind(BattlefieldView battlefield)
         {
             view = battlefield;
             enabled = true;
-            EnsureDocument();
+            if (IsEnabled) EnsureDocument();
         }
 
         private void OnEnable()
