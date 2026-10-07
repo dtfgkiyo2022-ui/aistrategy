@@ -363,9 +363,24 @@ namespace Rts.Presentation
             string stock = UiText.T("Food ", "食料 ") + economy.Food + UiText.T("  Wood ", "  木材 ") + economy.Wood;
             if (economy.Industry) stock += UiText.T("  Ore ", "  鉱石 ") + economy.Ore + UiText.T("  Metal ", "  金属 ") + economy.Metal;
             if (economy.Ages) stock += UiText.T("  Stone ", "  石 ") + economy.Stone + UiText.T("  Gems ", "  宝石 ") + economy.Gems;
+            if (TopBarResourceVisibility.ShowGold(economy)) stock += UiText.T("  Gold ", "  金 ") + economy.Gold;
+            if (TopBarResourceVisibility.ShowCharcoal(economy)) stock += UiText.T("  Charcoal ", "  木炭 ") + economy.Charcoal;
+            if (TopBarResourceVisibility.ShowSteel(economy)) stock += UiText.T("  Steel ", "  鋼 ") + economy.Steel;
+            if (TopBarResourceVisibility.ShowBowGear(economy)) stock += UiText.T("  Bow gear ", "  弓具 ") + economy.BowGear;
             string people = UiText.T("  |  Pop ", "  |  人口 ") + economy.Population + "/" + economy.PopulationCap + UiText.T("  Idle ", "  待機 ") + CountIdle(economy);
-            GUI.Label(new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f), age + stock + people);
+            var line = new GUIContent(age + stock + people);
+            var rect = new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f);
+            // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
+            var normal = GUI.skin.label;
+            float wide = normal.CalcSize(line).x;
+            if (wide <= rect.width) { GUI.Label(rect, line); return; }
+            if (topBarSmall == null) topBarSmall = new GUIStyle(normal);
+            int baseSize = normal.fontSize > 0 ? normal.fontSize : 13;
+            topBarSmall.fontSize = Mathf.Max(9, Mathf.FloorToInt(baseSize * rect.width / wide));
+            GUI.Label(rect, line, topBarSmall);
         }
+
+        private static GUIStyle topBarSmall;
 
         private void TabButton(Rect r, Tab target, string label)
         {
