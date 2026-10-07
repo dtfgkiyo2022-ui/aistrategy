@@ -1,0 +1,28 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="staff-frame" class="hud-staff-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="staff-panel" class="hud-staff-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:VisualElement class="staff-header">
+                <ui:Label name="staff-title" class="hud-heading staff-title" text="参謀" />
+                <ui:Button name="staff-ai-button" class="staff-ai-button" text="AI を選ぶ  ▼" />
+            </ui:VisualElement>
+            <ui:ScrollView name="staff-scroll" class="staff-scroll" />
+            <ui:Label name="staff-empty-label" class="staff-empty-label" text="参謀に話しかけると、ここにやり取りが出ます。" />
+            <ui:VisualElement class="staff-footer">
+                <ui:VisualElement class="staff-meta-row">
+                    <ui:Label name="staff-target-label" class="staff-target-label" />
+                    <ui:Label name="staff-estimate-label" class="staff-estimate-label" />
+                </ui:VisualElement>
+                <ui:TextField name="staff-input" class="staff-input" />
+                <ui:VisualElement class="staff-action-row">
+                    <ui:Button name="staff-send-button" class="staff-send-button" text="送る" />
+                    <ui:Button name="staff-cancel-button" class="staff-cancel-button" text="直前を取り消す" />
+                    <ui:Label name="staff-cost-label" class="staff-cost-label" />
+                </ui:VisualElement>
+                <ui:Label name="staff-notice-label" class="staff-notice-label" />
+            </ui:VisualElement>
+            <ui:VisualElement name="staff-ai-options" class="staff-ai-options" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
