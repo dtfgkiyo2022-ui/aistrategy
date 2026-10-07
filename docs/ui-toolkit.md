@@ -65,3 +65,11 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 AI の一覧は押すと開く自前の選択欄です。利用できない AI は無効なボタンとして表示します。見た目の案ごとの吹き出し、札、入力欄、ボタンの色・枠・角は `ThemeStone.uss`、`ThemeTable.uss`、`ThemeParchment.uss` の `--hud-staff-*` 変数で切り替わります。
 
 `rts.hud.toolkit` が有効なときだけこの欄を表示し、同時に `LiveMatchHost.OnGUI` の参謀欄を描きません。既定の設定では従来の IMGUI を使います。
+
+## 命令の欄
+
+`Resources/Hud/Commands.uxml` と `HudTheme.uss` が、`UiLayout.Commands` と同じ場所に命令の欄を作ります。左側に現在の選択（軍団なら軍団番号と生存数、拠点・コアならその説明、未選択なら選び方）を表示し、右側に攻撃・撤退・自コア防衛・拠点放棄・予備30%・お任せ復帰・取消を配置します。ボタン横の小さな空欄は、後でキー割り当てを表示するための場所です。
+
+`HudToolkit` は `CommandPanel` を受け取り、`CommandPanel.BeginAttackPick`、`IssueRetreat`、`IssueDefendOwnCore`、`IssueAllowAbandon`、`IssueMaintainReserve`、`IssueReturnToAuto`、`CancelGroundPick` をボタンから呼びます。従来の IMGUI も同じメソッドを呼ぶため、命令の組み立てと送信は一重です。最終的な送信は従来どおり `ICommandPort` 経由だけで、UI Toolkit はシミュレーション状態を直接変更しません。
+
+新しい画面が有効な間は `CommandPanel.OnGUI` の命令の箱だけを描かず、試合の設定・言語・命令の記録・補給は従来の IMGUI のまま残ります。命令の矩形は `UiHitAreas.Shared.Register` に登録するため、ボタンの外側を含めて地図の選択へクリックが抜けません。攻撃の地点待ちは既存の `TryConsumeGroundClick` を使い、地面のクリック処理も変えていません。
