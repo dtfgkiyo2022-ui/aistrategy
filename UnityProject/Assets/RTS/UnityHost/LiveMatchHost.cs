@@ -448,6 +448,7 @@ namespace Rts.UnityHost
         private ulong mapSeed;
         private EconomyLayer economyLayer;
         private EconomyPanel economyPanel;
+        private HudToolkit hudToolkit;
 
         public bool EconomyMap
         {
@@ -802,6 +803,16 @@ namespace Rts.UnityHost
                 economyLayer.Bind(view);
                 economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
                 economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
+                if (hudToolkit == null) hudToolkit = GetComponent<HudToolkit>();
+                if (HudToolkit.IsEnabled)
+                {
+                    if (hudToolkit == null) hudToolkit = gameObject.AddComponent<HudToolkit>();
+                    hudToolkit.Bind(view);
+                }
+                else if (hudToolkit != null)
+                {
+                    hudToolkit.enabled = false;
+                }
                 if (panel != null)
                 {
                     panel.MapChoice = this;

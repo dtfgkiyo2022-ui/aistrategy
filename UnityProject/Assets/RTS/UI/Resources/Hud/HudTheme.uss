@@ -1,0 +1,126 @@
+:root {
+    --hud-panel: rgba(13, 20, 28, 0.92);
+    --hud-panel-border: rgba(168, 194, 214, 0.7);
+    --hud-accent: rgb(229, 187, 83);
+    --hud-text: rgb(241, 245, 247);
+    --hud-muted-text: rgb(174, 193, 204);
+    --hud-icon-food: rgb(192, 139, 61);
+    --hud-icon-wood: rgb(112, 75, 43);
+    --hud-icon-ore: rgb(103, 119, 132);
+    --hud-icon-metal: rgb(181, 190, 196);
+    --hud-icon-stone: rgb(139, 145, 151);
+    --hud-icon-gems: rgb(83, 185, 207);
+    --hud-icon-gold: rgb(222, 177, 50);
+    --hud-icon-charcoal: rgb(65, 70, 73);
+    --hud-icon-steel: rgb(110, 151, 175);
+    --hud-icon-bow-gear: rgb(153, 105, 67);
+    --hud-font-size: 15px;
+    --hud-small-font-size: 11px;
+    --hud-border-width: 1px;
+    --hud-radius: 5px;
+    --hud-gap: 4px;
+    --hud-padding: 6px;
+}
+
+.hud-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+}
+
+.hud-top-bar {
+    position: absolute;
+    left: 10px;
+    right: 58%;
+    top: 10px;
+    height: 58px;
+    padding: var(--hud-padding);
+    background-color: var(--hud-panel);
+    border-width: var(--hud-border-width);
+    border-color: var(--hud-panel-border);
+    border-radius: var(--hud-radius);
+    color: var(--hud-text);
+    font-size: var(--hud-font-size);
+}
+
+.hud-top-line {
+    flex-direction: row;
+    height: 35px;
+    align-items: center;
+}
+
+.hud-age {
+    color: var(--hud-accent);
+    min-width: 150px;
+    max-width: 230px;
+    overflow: hidden;
+    white-space: nowrap;
+    -unity-text-align: middle-left;
+}
+
+.hud-resource-row {
+    flex-direction: row;
+    flex-grow: 1;
+    flex-shrink: 1;
+    overflow: hidden;
+}
+
+.hud-resource {
+    flex-direction: row;
+    flex-shrink: 0;
+    min-width: 58px;
+    height: 28px;
+    margin-right: var(--hud-gap);
+    padding-left: 3px;
+    padding-right: 4px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-width: var(--hud-border-width);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 3px;
+    align-items: center;
+}
+
+.hud-resource-icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    background-color: var(--hud-accent);
+    border-radius: 2px;
+}
+
+.hud-resource-text {
+    flex-direction: column;
+    justify-content: center;
+}
+
+.hud-resource-name {
+    color: var(--hud-muted-text);
+    font-size: var(--hud-small-font-size);
+    white-space: nowrap;
+}
+
+.hud-resource-value {
+    color: var(--hud-text);
+    font-size: var(--hud-font-size);
+    white-space: nowrap;
+}
+
+.hud-population {
+    height: 17px;
+    color: var(--hud-text);
+    -unity-text-align: middle-right;
+}
+
+#resource-Food .hud-resource-icon { background-color: var(--hud-icon-food); }
+#resource-Wood .hud-resource-icon { background-color: var(--hud-icon-wood); }
+#resource-Ore .hud-resource-icon { background-color: var(--hud-icon-ore); }
+#resource-Metal .hud-resource-icon { background-color: var(--hud-icon-metal); }
+#resource-Stone .hud-resource-icon { background-color: var(--hud-icon-stone); }
+#resource-Gems .hud-resource-icon { background-color: var(--hud-icon-gems); }
+#resource-Gold .hud-resource-icon { background-color: var(--hud-icon-gold); }
+#resource-Charcoal .hud-resource-icon { background-color: var(--hud-icon-charcoal); }
+#resource-Steel .hud-resource-icon { background-color: var(--hud-icon-steel); }
+#resource-BowGear .hud-resource-icon { background-color: var(--hud-icon-bow-gear); }
