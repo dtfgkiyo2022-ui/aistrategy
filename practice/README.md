@@ -7,7 +7,7 @@
 リポジトリ直下で CLI をビルドします。
 
 ```powershell
-dotnet build Headless/Rts.Headless.Cli/Rts.Headless.Cli.csproj -c Release
+dotnet build Headless/Rts.Headless.Cli/Rts.Headless.Cli.csproj -c Release -p:UseSharedCompilation=false -nodeReuse:false
 $env:RTS_CLI = (Resolve-Path Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll)
 ```
 
@@ -23,6 +23,21 @@ observation, info = env.reset(seed=123)
 observation, reward, terminated, truncated, info = env.step([])
 env.close()
 ```
+
+実際に遊んだ試合の人の命令を練習場へ持ち込むこともできます。まず記録パックから、指定陣営の方針命令だけを JSON Lines に取り出します。
+
+```powershell
+dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll human-orders --pack Documents/AiCommandRts/Packs/<試合> --faction 1 --out D:/rts-verify/humanreplay/human-orders.jsonl
+```
+
+`tactic-match` では `--west-human` または `--east-human`、Python の `RtsEnv` では `human_orders`（`reset` の `humanOrders`）にそのファイルを渡します。指定 tick に、元の command ID ではなく現在の試合の人命令として出し直されます。
+
+```python
+env = RtsEnv(human_orders="D:/rts-verify/humanreplay/human-orders.jsonl")
+observation, info = env.reset(seed=123)
+```
+
+自分の操作を入れた試合と入れない試合で、戦術の成績がどう変わるか比べてみてください。記録した操作は相手や状況が変わると、対象が無くなったり合わなくなったりすることがあります。記録パックの内政命令は入力に出どころが残らないため、この変換では対象外です。
 
 `observation` は `TacticViewWriter` 版1の JSON を Python の `dict` にしたものです。`step` の action は `TacticCommandReader` 版1の `commands` 配列です。よく使う命令は `practice.actions.focus`、`defend`、`train`、`place_building` で組み立てられます。
 

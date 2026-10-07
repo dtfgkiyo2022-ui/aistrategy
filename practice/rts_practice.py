@@ -35,6 +35,7 @@ class RtsEnv(_EnvBase):
         max_ticks: int = 12000,
         ticks: int = 20,
         rule_flags: dict[str, bool] | None = None,
+        human_orders: str | os.PathLike[str] | None = None,
     ) -> None:
         self.cli_path = str(cli_path or os.environ.get("RTS_CLI", ""))
         if not self.cli_path:
@@ -50,6 +51,7 @@ class RtsEnv(_EnvBase):
         self.max_ticks = max_ticks
         self.ticks = ticks
         self.rule_flags = dict(rule_flags or {})
+        self.human_orders = str(human_orders) if human_orders is not None else None
         self._process: subprocess.Popen[str] | None = None
         self._last_tick = 0
 
@@ -63,6 +65,7 @@ class RtsEnv(_EnvBase):
         max_ticks = int(options.pop("max_ticks", options.pop("maxTicks", self.max_ticks)))
         rule_flags = dict(self.rule_flags)
         rule_flags.update(options.pop("rule_flags", options.pop("ruleFlags", {})))
+        human_orders = options.pop("human_orders", options.pop("humanOrders", self.human_orders))
         if options:
             raise ValueError(f"未対応の reset options: {', '.join(sorted(options))}")
         self._ensure_process()
@@ -74,12 +77,14 @@ class RtsEnv(_EnvBase):
                 "opponent": opponent,
                 "maxTicks": max_ticks,
                 "ruleFlags": rule_flags,
+                "humanOrders": str(human_orders) if human_orders else "",
             }
         )
         self._last_tick = int(response["tick"])
         self.faction = faction
         self.opponent = opponent
         self.max_ticks = max_ticks
+        self.human_orders = str(human_orders) if human_orders else None
         return response["view"], {"tick": self._last_tick}
 
     def step(self, action):
@@ -139,4 +144,3 @@ class RtsEnv(_EnvBase):
         if not response.get("ok", False):
             raise ValueError(response.get("error", "tactic-gym の要求が失敗しました"))
         return response
-

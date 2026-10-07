@@ -21,11 +21,12 @@ public sealed class TacticGymSession : IDisposable
     private readonly Battle simulation;
     private readonly CommandGateway gateway;
     private readonly TacticHost opponentHost;
+    private readonly IReadOnlyList<HumanOrderRecord> humanOrders;
     private long previousEnemyCoreHp = -1;
     private long previousOwnCoreHp;
     private ulong sequence = 1;
 
-    public TacticGymSession(ScenarioDefinition scenario, uint faction, string opponent, long maxTicks)
+    public TacticGymSession(ScenarioDefinition scenario, uint faction, string opponent, long maxTicks, IReadOnlyList<HumanOrderRecord> humanOrders = null)
     {
         if (scenario == null) throw new ArgumentNullException(nameof(scenario));
         if (faction < 1 || faction > 2) throw new ArgumentOutOfRangeException(nameof(faction));
@@ -34,6 +35,13 @@ public sealed class TacticGymSession : IDisposable
         this.faction = faction;
         this.opponent = opponent;
         this.maxTicks = maxTicks;
+        this.humanOrders = humanOrders ?? Array.Empty<HumanOrderRecord>();
+        foreach (var record in this.humanOrders)
+        {
+            if (record.Tick < 0 || record.Target == null || record.Target.FactionId != faction)
+                throw new InvalidDataException("練習場の human-orders が指定陣営または tick と一致しません。");
+            record.ToIntent(faction);
+        }
         simulation = new Battle(scenario);
         gateway = new CommandGateway(simulation);
         opponentHost = CreateOpponent(opponent, faction == 1 ? 2U : 1U, gateway, simulation);
@@ -62,8 +70,21 @@ public sealed class TacticGymSession : IDisposable
             gateway.Propose(faction, sequence++, TacticOrderVersions.Stamp(commands.Policies, scope => gateway.FactionVersions(faction).Versions(scope)), checked(frame.Tick + 1));
         foreach (var economy in commands.EconomyCommands) gateway.SubmitEconomy(economy);
 
+        int humanSubmitted = 0, humanTargetMissing = 0;
         for (int i = 0; i < ticks && Tick < maxTicks && !simulation.Capture(faction).Result.HasEnded; i++)
         {
+            long currentTick = Tick;
+            var due = humanOrders.Where(x => x.Tick == currentTick).ToList();
+            foreach (var group in due.GroupBy(x => x.Sequence == 0 ? 1UL : x.Sequence).OrderBy(x => x.Key))
+            {
+                var valid = new List<UserPolicyIntent>();
+                foreach (var record in group)
+                {
+                    if (!TargetExists(simulation.Capture(faction), record.Target)) { humanTargetMissing++; continue; }
+                    valid.Add(record.ToIntent(faction));
+                }
+                if (valid.Count != 0) { gateway.SubmitBatch(valid); humanSubmitted += valid.Count; }
+            }
             opponentHost?.Tick();
             gateway.Step();
         }
@@ -99,7 +120,18 @@ public sealed class TacticGymSession : IDisposable
             ["damageReward"] = damageReward,
             ["timeLimit"] = timedOut
         };
+        info["humanReplay"] = new { submitted = humanSubmitted, targetMissing = humanTargetMissing };
         return new TacticGymStepResult(TacticViewWriter.Write(after), after.Tick, done, winner, reward, info);
+    }
+
+    private static bool TargetExists(FactionFrame frame, HumanScope target)
+    {
+        if (target == null || !Enum.TryParse(target.Kind, true, out ScopeKind kind)) return false;
+        if (kind == ScopeKind.All) return target.Id == 0;
+        if (kind == ScopeKind.Army) return frame.Observation.OwnArmies.Any(x => x.Id == target.Id);
+        if (kind == ScopeKind.Outpost) return frame.Objectives.Any(x => x.Kind == GoalKind.Outpost && x.Id == target.Id && x.IsOwnerKnown && x.OwnerFactionId == frame.FactionId);
+        if (kind == ScopeKind.Region) return frame.Regions.Any(x => x.Id == target.Id);
+        return false;
     }
 
     private static long CoreHp(FactionFrame frame, uint owner, out bool known)
@@ -200,12 +232,19 @@ internal static class TacticGymCommand
             uint faction = checked((uint)RequiredLong(root, "faction"));
             string opponent = RequiredString(root, "opponent");
             long maxTicks = RequiredLong(root, "maxTicks");
+            IReadOnlyList<HumanOrderRecord> humanOrders = Array.Empty<HumanOrderRecord>();
+            if (root.TryGetProperty("humanOrders", out var humanPath))
+            {
+                if (humanPath.ValueKind != JsonValueKind.String) throw new InvalidDataException("humanOrders はファイルパス文字列です。");
+                string path = humanPath.GetString();
+                if (!string.IsNullOrWhiteSpace(path)) humanOrders = HumanOrderJson.Read(path);
+            }
             var flags = ReadFlags(root);
             var scenario = TacticGymScenarios.Create(seed, flags);
             ValidateOpponent(opponent);
             session?.Dispose();
             session = null;
-            session = new TacticGymSession(scenario, faction, opponent, maxTicks);
+            session = new TacticGymSession(scenario, faction, opponent, maxTicks, humanOrders);
             var view = JsonDocument.Parse(session.ViewJson).RootElement.Clone();
             return JsonSerializer.Serialize(new { ok = true, view, tick = 0L }, Json);
         }
