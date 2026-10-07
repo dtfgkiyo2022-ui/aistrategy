@@ -17,6 +17,7 @@ namespace Rts.Presentation
         public const string SettingKey = "rts.hud.toolkit";
         private const string UxmlResourcePath = "Hud/TopBar";
         private const string StaffUxmlResourcePath = "Hud/Staff";
+        private const string CommandsUxmlResourcePath = "Hud/Commands";
         private const string BaseUssResourcePath = "Hud/HudTheme";
 
         private BattlefieldView view;
@@ -25,6 +26,7 @@ namespace Rts.Presentation
         private StyleSheet baseTheme;
         private StyleSheet activeTheme;
         private VisualElement hudRoot;
+        private VisualElement topFrame;
         private Label ageLabel;
         private Label ageStageLabel;
         private VisualElement resourceRow;
@@ -44,6 +46,21 @@ namespace Rts.Presentation
         private Button staffCancelButton;
         private TextField staffInput;
         private IStaffControl staff;
+        private CommandPanel commandPanel;
+        private VisualElement commandsFrame;
+        private VisualElement commandsPanel;
+        private Label commandsTitle;
+        private Label commandsHelp;
+        private Label commandsSelectionTitle;
+        private Label commandsSelectionDetail;
+        private Label commandsSelectionHint;
+        private Button commandAttack;
+        private Button commandRetreat;
+        private Button commandDefend;
+        private Button commandAbandon;
+        private Button commandReserve;
+        private Button commandAuto;
+        private Button commandCancel;
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
@@ -127,8 +144,14 @@ namespace Rts.Presentation
 
         public void Bind(BattlefieldView battlefield, IStaffControl staffControl)
         {
+            Bind(battlefield, staffControl, null);
+        }
+
+        public void Bind(BattlefieldView battlefield, IStaffControl staffControl, CommandPanel commandControl)
+        {
             view = battlefield;
             staff = staffControl;
+            commandPanel = commandControl;
             enabled = true;
             if (IsEnabled) EnsureDocument();
         }
@@ -144,6 +167,7 @@ namespace Rts.Presentation
             {
                 if (hudRoot != null) hudRoot.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
+                if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
                 return;
             }
@@ -153,18 +177,21 @@ namespace Rts.Presentation
                 populationLabel == null || idleLabel == null) return;
             var frame = view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
-            if (economy == null)
+            if (economy == null && commandPanel == null && staff == null)
             {
                 hudRoot.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
+                if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
                 return;
             }
 
             hudRoot.style.display = DisplayStyle.Flex;
             ApplySelectedTheme();
-            Refresh(economy);
+            if (topFrame != null) topFrame.style.display = economy == null ? DisplayStyle.None : DisplayStyle.Flex;
+            if (economy != null) Refresh(economy);
             RefreshStaff();
+            RefreshCommands();
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
             // treats this Toolkit panel as occupied and does not let map selection or orders leak underneath it.
@@ -172,6 +199,8 @@ namespace Rts.Presentation
             UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).TopLeft);
             if (staffFrame != null && staffFrame.resolvedStyle.display != DisplayStyle.None)
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Strategist);
+            if (commandsFrame != null && commandsFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Commands);
         }
 
         private void EnsureDocument()
@@ -202,8 +231,12 @@ namespace Rts.Presentation
             var staffTree = Resources.Load<VisualTreeAsset>(StaffUxmlResourcePath);
             if (staffTree != null) staffTree.CloneTree(root);
             else Debug.LogWarning("UI Toolkit staff UXML not found at Resources/" + StaffUxmlResourcePath + ".");
+            var commandsTree = Resources.Load<VisualTreeAsset>(CommandsUxmlResourcePath);
+            if (commandsTree != null) commandsTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit commands UXML not found at Resources/" + CommandsUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
+            topFrame = root.Q<VisualElement>("top-frame");
             ageLabel = root.Q<Label>("age-label");
             ageStageLabel = root.Q<Label>("age-stage-label");
             resourceRow = root.Q<VisualElement>("resource-row");
@@ -222,6 +255,20 @@ namespace Rts.Presentation
             staffSendButton = root.Q<Button>("staff-send-button");
             staffCancelButton = root.Q<Button>("staff-cancel-button");
             staffInput = root.Q<TextField>("staff-input");
+            commandsFrame = root.Q<VisualElement>("commands-frame");
+            commandsPanel = root.Q<VisualElement>("commands-panel");
+            commandsTitle = root.Q<Label>("commands-title");
+            commandsHelp = root.Q<Label>("commands-help");
+            commandsSelectionTitle = root.Q<Label>("commands-selection-title");
+            commandsSelectionDetail = root.Q<Label>("commands-selection-detail");
+            commandsSelectionHint = root.Q<Label>("commands-selection-hint");
+            commandAttack = root.Q<Button>("command-attack");
+            commandRetreat = root.Q<Button>("command-retreat");
+            commandDefend = root.Q<Button>("command-defend");
+            commandAbandon = root.Q<Button>("command-abandon");
+            commandReserve = root.Q<Button>("command-reserve");
+            commandAuto = root.Q<Button>("command-auto");
+            commandCancel = root.Q<Button>("command-cancel");
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
@@ -232,7 +279,10 @@ namespace Rts.Presentation
             hudRoot.pickingMode = PickingMode.Ignore;
             if (staffFrame != null) staffFrame.pickingMode = PickingMode.Position;
             if (staffPanel != null) staffPanel.pickingMode = PickingMode.Position;
+            if (commandsFrame != null) commandsFrame.pickingMode = PickingMode.Position;
+            if (commandsPanel != null) commandsPanel.pickingMode = PickingMode.Position;
             BindStaffEvents();
+            BindCommandEvents();
             ApplySelectedTheme();
         }
 
@@ -290,6 +340,102 @@ namespace Rts.Presentation
             staffInput.RegisterCallback<FocusInEvent>(_ => SetStaffInputFocus(true));
             staffInput.RegisterCallback<FocusOutEvent>(_ => SetStaffInputFocus(false));
             staffInput.RegisterCallback<KeyDownEvent>(OnStaffKeyDown);
+        }
+
+        private void BindCommandEvents()
+        {
+            if (commandAttack == null || commandRetreat == null || commandDefend == null || commandAbandon == null ||
+                commandReserve == null || commandAuto == null || commandCancel == null) return;
+            commandAttack.clicked += () => { if (commandPanel != null) commandPanel.BeginAttackPick(); };
+            commandRetreat.clicked += () => { if (commandPanel != null) commandPanel.IssueRetreat(); };
+            commandDefend.clicked += () => { if (commandPanel != null) commandPanel.IssueDefendOwnCore(); };
+            commandAbandon.clicked += () => { if (commandPanel != null) commandPanel.IssueAllowAbandon(); };
+            commandReserve.clicked += () => { if (commandPanel != null) commandPanel.IssueMaintainReserve(); };
+            commandAuto.clicked += () => { if (commandPanel != null) commandPanel.IssueReturnToAuto(); };
+            commandCancel.clicked += () => { if (commandPanel != null) commandPanel.CancelGroundPick(); };
+        }
+
+        private void RefreshCommands()
+        {
+            if (commandsFrame == null) return;
+            if (commandPanel == null || view == null)
+            {
+                commandsFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            var rect = UiLayout.Calculate(Screen.width, Screen.height).Commands;
+            commandsFrame.style.left = Length.Percent(Screen.width <= 0f ? 0f : rect.x / Screen.width * 100f);
+            commandsFrame.style.top = Length.Percent(Screen.height <= 0f ? 0f : rect.y / Screen.height * 100f);
+            commandsFrame.style.width = Length.Percent(Screen.width <= 0f ? 0f : rect.width / Screen.width * 100f);
+            commandsFrame.style.height = Length.Percent(Screen.height <= 0f ? 0f : rect.height / Screen.height * 100f);
+            commandsFrame.style.display = DisplayStyle.Flex;
+
+            var selection = view.Selected;
+            if (commandsTitle != null) commandsTitle.text = UiText.T("Commands", "命令");
+            if (commandsHelp != null) commandsHelp.text = UiText.T("Select a force, then issue an order", "軍団を選び、命令を出す");
+
+            if (selection.Kind == SelectionKind.Army)
+            {
+                int alive = SelectedAliveCount();
+                if (commandsSelectionTitle != null)
+                    commandsSelectionTitle.text = UiText.T("Army " + selection.Id, "軍団 " + selection.Id);
+                if (commandsSelectionDetail != null)
+                    commandsSelectionDetail.text = UiText.T("Alive " + alive, "生存 " + alive);
+                if (commandsSelectionHint != null)
+                    commandsSelectionHint.text = view.SelectedArmies.Count > 1
+                        ? UiText.T("Selected armies: " + view.SelectedArmies.Count, "選択中の軍団数：" + view.SelectedArmies.Count)
+                        : UiText.T("WASD move, wheel zoom", "WASDで移動、ホイールで拡大縮小");
+            }
+            else if (selection.Kind == SelectionKind.Outpost)
+            {
+                if (commandsSelectionTitle != null) commandsSelectionTitle.text = UiText.T("Outpost " + selection.Id, "拠点 " + selection.Id);
+                if (commandsSelectionDetail != null) commandsSelectionDetail.text = view.DescribeSelection();
+                if (commandsSelectionHint != null) commandsSelectionHint.text = UiText.T("Select an army to command it", "命令するには軍団を選択");
+            }
+            else if (selection.Kind == SelectionKind.Core)
+            {
+                if (commandsSelectionTitle != null) commandsSelectionTitle.text = UiText.T("Core " + selection.Id, "コア " + selection.Id);
+                if (commandsSelectionDetail != null) commandsSelectionDetail.text = view.DescribeSelection();
+                if (commandsSelectionHint != null) commandsSelectionHint.text = UiText.T("Select an army to command it", "命令するには軍団を選択");
+            }
+            else
+            {
+                if (commandsSelectionTitle != null) commandsSelectionTitle.text = UiText.T("Nothing selected", "未選択");
+                if (commandsSelectionDetail != null) commandsSelectionDetail.text = "";
+                if (commandsSelectionHint != null) commandsSelectionHint.text = UiText.T(
+                    "Click an army or drag a box to select", "軍団をクリック、またはドラッグで囲む");
+            }
+
+            bool armySelected = selection.Kind == SelectionKind.Army && view.SelectedArmies.Count != 0;
+            bool outpostSelected = selection.Kind == SelectionKind.Outpost;
+            ConfigureCommandButton(commandAttack, commandPanel.IsAwaitingGround
+                ? UiText.T("Attack: click ground", "攻撃：地面をクリック")
+                : UiText.T("Attack", "攻撃"), armySelected);
+            ConfigureCommandButton(commandRetreat, UiText.T("Retreat", "撤退"), armySelected);
+            ConfigureCommandButton(commandDefend, UiText.T("Defend core", "コアを守る"), armySelected);
+            ConfigureCommandButton(commandAbandon, UiText.T("Abandon outpost", "拠点を放棄"), outpostSelected);
+            ConfigureCommandButton(commandReserve, UiText.T("Reserve 30%", "予備30%"), true);
+            ConfigureCommandButton(commandAuto, UiText.T("Back to auto", "お任せに戻す"), true);
+            ConfigureCommandButton(commandCancel, UiText.T("Cancel", "取消"), commandPanel.IsAwaitingGround);
+        }
+
+        private int SelectedAliveCount()
+        {
+            if (view == null || view.LatestFrame == null) return 0;
+            int alive = 0;
+            var selected = view.SelectedArmies;
+            foreach (var army in view.LatestFrame.Observation.OwnArmies)
+                for (int i = 0; i < selected.Count; i++)
+                    if (army.Id == selected[i]) { alive += army.AliveCount; break; }
+            return alive;
+        }
+
+        private static void ConfigureCommandButton(Button button, string text, bool enabled)
+        {
+            if (button == null) return;
+            button.text = text;
+            button.SetEnabled(enabled);
         }
 
         private void ToggleStaffAiList()

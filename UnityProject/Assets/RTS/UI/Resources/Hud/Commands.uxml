@@ -1,0 +1,49 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="commands-frame" class="hud-commands-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="commands-panel" class="hud-commands-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:VisualElement class="commands-header">
+                <ui:Label name="commands-title" class="hud-heading commands-title" text="命令" />
+                <ui:Label name="commands-help" class="commands-help" />
+            </ui:VisualElement>
+            <ui:VisualElement class="commands-content">
+                <ui:VisualElement class="commands-selection">
+                    <ui:Label name="commands-selection-title" class="hud-heading commands-selection-title" />
+                    <ui:Label name="commands-selection-detail" class="commands-selection-detail" />
+                    <ui:Label name="commands-selection-hint" class="commands-selection-hint" />
+                </ui:VisualElement>
+                <ui:VisualElement name="commands-grid" class="commands-grid">
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-attack" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-retreat" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-defend" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-abandon" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-reserve" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-auto" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-cancel" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -405,3 +405,127 @@
 .staff-ai-option:last-child {
     margin-bottom: 0;
 }
+
+.hud-commands-frame {
+    position: absolute;
+}
+
+.hud-commands-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    padding: var(--hud-padding);
+    background-color: var(--hud-panel);
+    border-width: var(--hud-border-width);
+    border-color: var(--hud-panel-border);
+    border-radius: var(--hud-radius);
+    color: var(--hud-text);
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.commands-header {
+    flex-direction: row;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 24px;
+}
+
+.commands-title {
+    color: var(--hud-heading);
+    font-size: var(--hud-heading-size);
+    flex-shrink: 0;
+}
+
+.commands-help {
+    flex-grow: 1;
+    margin-left: var(--hud-gap);
+    color: var(--hud-muted-text);
+    font-size: var(--hud-small-font-size);
+    white-space: nowrap;
+    overflow: hidden;
+    -unity-text-align: middle-right;
+}
+
+.commands-content {
+    flex-direction: row;
+    flex-grow: 1;
+    min-height: 0;
+    margin-top: 4px;
+}
+
+.commands-selection {
+    width: 38%;
+    flex-shrink: 0;
+    padding-right: var(--hud-gap);
+    border-right-width: 1px;
+    border-right-color: var(--hud-divider);
+    flex-direction: column;
+}
+
+.commands-selection-title {
+    color: var(--hud-heading);
+    font-size: var(--hud-heading-size);
+    white-space: normal;
+}
+
+.commands-selection-detail,
+.commands-selection-hint {
+    color: var(--hud-muted-text);
+    font-size: var(--hud-small-font-size);
+    white-space: normal;
+}
+
+.commands-selection-hint {
+    margin-top: 6px;
+}
+
+.commands-grid {
+    flex-grow: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    padding-left: var(--hud-gap);
+}
+
+.command-cell {
+    flex-direction: row;
+    width: 25%;
+    min-height: 36px;
+    padding-right: 2px;
+    padding-bottom: 4px;
+}
+
+.command-button {
+    flex-grow: 1;
+    min-height: 29px;
+    padding-left: 2px;
+    padding-right: 2px;
+    color: var(--hud-button-text);
+    background-color: var(--hud-button);
+    border-width: var(--hud-border-width);
+    border-color: var(--hud-panel-border);
+    border-radius: var(--hud-radius);
+    font-size: var(--hud-small-font-size);
+    white-space: normal;
+}
+
+.command-button:hover {
+    background-color: var(--hud-accent);
+}
+
+.command-button:disabled {
+    color: var(--hud-muted-text);
+    background-color: var(--hud-resource-panel);
+    border-color: var(--hud-divider);
+}
+
+.command-key-hint {
+    width: 6px;
+    flex-shrink: 0;
+    color: var(--hud-muted-text);
+    font-size: var(--hud-small-font-size);
+    -unity-text-align: middle-center;
+}

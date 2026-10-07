@@ -168,47 +168,48 @@ namespace Rts.Presentation
             if (port == null) return;
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
-            var buttons = ButtonsRect();
-            UiStyles.Box(buttons, UiText.T("Commands", "命令"));
-            UiHitAreas.Shared.Register(buttons);
             UiHitAreas.Shared.Register(LogToggleRect());
             UiHitAreas.Shared.Register(SetupButtonRect());
             UiHitAreas.Shared.Register(LanguageButtonRect());
-            var selection = view.Selected;
-            bool armySelected = selection.Kind == SelectionKind.Army;
-            string selectionText = view.DescribeSelection();
-            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 20f, buttons.width - 12f, 20f),
-                selectionText.Length > 0 ? selectionText : UiText.T("Nothing selected: click an army or drag a box", "未選択：軍団をクリック、またはドラッグで囲む"));
-            GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), UiText.T("WASD move, wheel zoom", "WASDで移動、ホイールで拡大縮小"));
-            float y = buttons.y + 24f + HeaderHeight;
+            if (!HudToolkit.IsEnabled)
+            {
+                var buttons = ButtonsRect();
+                UiStyles.Box(buttons, UiText.T("Commands", "命令"));
+                UiHitAreas.Shared.Register(buttons);
+                var selection = view.Selected;
+                bool armySelected = selection.Kind == SelectionKind.Army;
+                string selectionText = view.DescribeSelection();
+                GUI.Label(new Rect(buttons.x + 6f, buttons.y + 20f, buttons.width - 12f, 20f),
+                    selectionText.Length > 0 ? selectionText : UiText.T("Nothing selected: click an army or drag a box", "未選択：軍団をクリック、またはドラッグで囲む"));
+                GUI.Label(new Rect(buttons.x + 6f, buttons.y + 38f, buttons.width - 12f, 20f), UiText.T("WASD move, wheel zoom", "WASDで移動、ホイールで拡大縮小"));
+                float y = buttons.y + 24f + HeaderHeight;
 
-            GUI.enabled = armySelected;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? UiText.T("Attack: click ground", "攻撃：地面をクリック") : UiText.T("Attack (pick ground)", "攻撃（地点を選ぶ）")))
-                awaitingGround = true;
-            y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Retreat", "撤退")))
-                foreach (uint army in SelectedArmies())
-                    Send(PolicyKind.Retreat, ArmyScope(army), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Retreat Army ", "撤退 軍団 ") + army);
-            y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Defend own core", "自コアを守る")))
-                foreach (uint army in SelectedArmies())
-                    Send(PolicyKind.Defend, ArmyScope(army), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0, UiText.T("Defend Army ", "防衛 軍団 ") + army + UiText.T(" -> Core ", " → コア ") + ownCoreId);
-            y += ButtonHeight + 4f;
+                GUI.enabled = armySelected;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? UiText.T("Attack: click ground", "攻撃：地面をクリック") : UiText.T("Attack (pick ground)", "攻撃（地点を選ぶ）")))
+                    BeginAttackPick();
+                y += ButtonHeight + 4f;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Retreat", "撤退")))
+                    IssueRetreat();
+                y += ButtonHeight + 4f;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Defend own core", "自コアを守る")))
+                    IssueDefendOwnCore();
+                y += ButtonHeight + 4f;
 
-            GUI.enabled = selection.Kind == SelectionKind.Outpost;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Allow abandon outpost", "拠点の放棄を許す")))
-                Send(PolicyKind.AllowAbandon, new ScopeKey(factionId, ScopeKind.Outpost, selection.Id), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Allow abandon Outpost ", "放棄を許可 拠点 ") + selection.Id);
-            y += ButtonHeight + 4f;
+                GUI.enabled = selection.Kind == SelectionKind.Outpost;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Allow abandon outpost", "拠点の放棄を許す")))
+                    IssueAllowAbandon();
+                y += ButtonHeight + 4f;
 
-            GUI.enabled = true;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Keep reserve 30%", "予備を30%保つ")))
-                Send(PolicyKind.MaintainReserve, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 300, UiText.T("Keep reserve 30% (all)", "予備を30%保つ（全軍）"));
-            y += ButtonHeight + 4f;
-            if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Return to auto", "お任せに戻す")))
-                Send(PolicyKind.ReturnToAuto, new ScopeKey(factionId, ScopeKind.All, 0), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0, UiText.T("Return to auto (all)", "お任せに戻す（全軍）"));
-            y += ButtonHeight + 4f;
-            if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Cancel", "取消")))
-                awaitingGround = false;
+                GUI.enabled = true;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Keep reserve 30%", "予備を30%保つ")))
+                    IssueMaintainReserve();
+                y += ButtonHeight + 4f;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Return to auto", "お任せに戻す")))
+                    IssueReturnToAuto();
+                y += ButtonHeight + 4f;
+                if (awaitingGround && GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Cancel", "取消")))
+                    CancelGroundPick();
+            }
 
             if (!setupOpen)
             {
@@ -742,10 +743,69 @@ namespace Rts.Presentation
             return y + ((control.Signals.Count + columns - 1) / columns) * 28f;
         }
 
-        private ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }
+        /// <summary>Starts the same ground-pick flow used by the legacy IMGUI command button.</summary>
+        public void BeginAttackPick()
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return;
+            awaitingGround = true;
+        }
+
+        /// <summary>Sends retreat for every currently selected army through ICommandPort.</summary>
+        public void IssueRetreat()
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return;
+            foreach (uint army in SelectedArmies())
+                Send(PolicyKind.Retreat, ArmyScope(army), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0,
+                    UiText.T("Retreat Army ", "撤退 軍団 ") + army);
+        }
+
+        /// <summary>Sends defend-own-core for every currently selected army through ICommandPort.</summary>
+        public void IssueDefendOwnCore()
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return;
+            foreach (uint army in SelectedArmies())
+                Send(PolicyKind.Defend, ArmyScope(army), new PolicyGoal(GoalKind.Core, ownCoreId, default(SimPoint)), 0,
+                    UiText.T("Defend Army ", "防衛 軍団 ") + army + UiText.T(" -> Core ", " → コア ") + ownCoreId);
+        }
+
+        /// <summary>Allows the selected outpost to be abandoned through ICommandPort.</summary>
+        public void IssueAllowAbandon()
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Outpost) return;
+            uint outpost = view.Selected.Id;
+            Send(PolicyKind.AllowAbandon, new ScopeKey(factionId, ScopeKind.Outpost, outpost),
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0,
+                UiText.T("Allow abandon Outpost ", "放棄を許可 拠点 ") + outpost);
+        }
+
+        /// <summary>Sends the all-armies reserve policy through ICommandPort.</summary>
+        public void IssueMaintainReserve()
+        {
+            if (port == null) return;
+            Send(PolicyKind.MaintainReserve, new ScopeKey(factionId, ScopeKind.All, 0),
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 300,
+                UiText.T("Keep reserve 30% (all)", "予備を30%保つ（全軍）"));
+        }
+
+        /// <summary>Returns all armies to automatic control through ICommandPort.</summary>
+        public void IssueReturnToAuto()
+        {
+            if (port == null) return;
+            Send(PolicyKind.ReturnToAuto, new ScopeKey(factionId, ScopeKind.All, 0),
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0,
+                UiText.T("Return to auto (all)", "お任せに戻す（全軍）"));
+        }
+
+        /// <summary>Stops the attack ground-pick state used by both command UIs.</summary>
+        public void CancelGroundPick()
+        {
+            awaitingGround = false;
+        }
+
+        public ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }
 
         /// <summary>A copy, so sending (which may change the frame) never walks a list that is changing.</summary>
-        private uint[] SelectedArmies()
+        public uint[] SelectedArmies()
         {
             var armies = new uint[view.SelectedArmies.Count];
             for (int i = 0; i < armies.Length; i++) armies[i] = view.SelectedArmies[i];
