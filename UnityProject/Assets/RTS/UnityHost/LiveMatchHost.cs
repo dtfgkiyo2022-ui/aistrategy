@@ -19,7 +19,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl, IStaffControl
     {
         /// <summary>Set by the command-line bootstrap so scene hosts do not start a second match.</summary>
         public static bool SmokeMode { get; set; }
@@ -379,6 +379,73 @@ namespace Rts.UnityHost
         public decimal AiMatchCostYen => liveAi == null ? 0m : liveAi.MatchCostYen;
         public decimal AiRemainingBudgetYen => liveAi == null ? 3m : liveAi.RemainingBudgetYen;
         public decimal AiRemainingFreeYen => 0m;
+
+        // IStaffControl: the UI sees only Presentation-owned views. Target and model details remain host-owned so the
+        // existing reservation path is shared by IMGUI and UI Toolkit.
+        public IReadOnlyList<StaffAiOption> AiChoices
+        {
+            get
+            {
+                var models = AiModels;
+                var choices = new StaffAiOption[models.Count];
+                for (int i = 0; i < models.Count; i++)
+                {
+                    var model = models[i];
+                    choices[i] = new StaffAiOption(model.Model, ModelLabel(model.Model), model.Available);
+                }
+                return choices;
+            }
+        }
+
+        public string SelectedAiName
+        {
+            get { return developmentAiModel ?? ""; }
+            set
+            {
+                if (string.IsNullOrEmpty(value) || value == developmentAiModel) return;
+                var choice = AiModels.FirstOrDefault(option => option.Model == value);
+                if (choice == null || !choice.Available) return;
+                developmentAiModel = value;
+                PlayerPrefs.SetString(StrategistModelKey, developmentAiModel);
+                PlayerPrefs.Save();
+            }
+        }
+
+        public string TargetLabel { get { return StrategistTargetLabel(StrategistTarget()); } }
+
+        public decimal EstimateYen(string instruction)
+        {
+            return NextEstimate(instruction ?? "", developmentAiModel, StrategistTarget());
+        }
+
+        public bool IsExpensiveEstimate(decimal estimateYen)
+        {
+            return StrategistUiRules.IsExpensive(estimateYen);
+        }
+
+        public decimal SpentYen { get { return AiMatchCostYen; } }
+        public decimal RemainingBudgetYen { get { return AiRemainingBudgetYen; } }
+
+        public bool ShowBudgetWarning(string instruction)
+        {
+            return StrategistUiRules.ShouldWarnBudget(RemainingBudgetYen, EstimateYen(instruction));
+        }
+
+        public IReadOnlyList<StaffChatLine> Conversation
+        {
+            get
+            {
+                var history = AiInstructions;
+                var views = new List<StaffInstructionView>(history.Count);
+                foreach (var item in history)
+                    views.Add(new StaffInstructionView(MatchOutcome.Clock(item.StartedTick), ModelLabel(item.Model),
+                        item.Instruction, StaffInstructionState(item.State), item.Say, item.Reason, item.Issued,
+                        item.RejectedReasons, item.EstimatedCostYen, item.ActualCostYen));
+                return StaffChatText.Build(views);
+            }
+        }
+
+        public string LastNotice { get { return developmentAiMessage ?? ""; } }
 
         /// <summary>Public placement supplied to the temporary strategist UI and to hit-area registration.</summary>
         public Rect AiPanelRect { get { return UiLayout.Calculate(Screen.width, Screen.height).Strategist; } }
@@ -806,7 +873,7 @@ namespace Rts.UnityHost
                 // Always present: it stays hidden and builds nothing until the setup panel's switch turns it on.
                 if (hudToolkit == null) hudToolkit = GetComponent<HudToolkit>();
                 if (hudToolkit == null) hudToolkit = gameObject.AddComponent<HudToolkit>();
-                hudToolkit.Bind(view);
+                hudToolkit.Bind(view, this);
                 if (panel != null)
                 {
                     panel.MapChoice = this;
@@ -829,6 +896,27 @@ namespace Rts.UnityHost
         {
             if (liveAi == null) throw new InvalidOperationException("試合が開始されていません。");
             return liveAi.BeginInterpretation(instruction, fixedTarget, model);
+        }
+
+        /// <summary>IStaffControl entry: the host supplies the selected model and current map target.</summary>
+        public void Speak(string instruction)
+        {
+            try
+            {
+                Speak(instruction ?? "", StrategistTarget(), developmentAiModel);
+                developmentAiMessage = "";
+            }
+            catch (Exception e)
+            {
+                developmentAiMessage = e.Message;
+            }
+        }
+
+        public bool CancelLast()
+        {
+            bool cancelled = CancelLastAiInstruction();
+            developmentAiMessage = cancelled ? "取り消しました" : "取り消せる指示はありません";
+            return cancelled;
         }
 
         /// <summary>
@@ -1318,7 +1406,7 @@ namespace Rts.UnityHost
         /// </summary>
         private void OnGUI()
         {
-            if (!developmentAiEntry || liveAi == null || simulation == null) return;
+            if (HudToolkit.IsEnabled || !developmentAiEntry || liveAi == null || simulation == null) return;
             // In front of the other panels, so nothing drawn later can sit over the staff panel and take its clicks.
             GUI.depth = -10;
             UiStyles.Begin();
@@ -1420,15 +1508,21 @@ namespace Rts.UnityHost
             }
         }
 
+        private static string StaffInstructionState(AiInstructionState state)
+        {
+            switch (state)
+            {
+                case AiInstructionState.Interpreting: return StaffInstructionView.Interpreting;
+                case AiInstructionState.Executing: return StaffInstructionView.Executing;
+                case AiInstructionState.Completed: return StaffInstructionView.Completed;
+                case AiInstructionState.Cancelled: return StaffInstructionView.Cancelled;
+                case AiInstructionState.Expired: return StaffInstructionView.Expired;
+                default: return StaffInstructionView.Unknown;
+            }
+        }
+
         private Vector2 chatScroll;
         private int chatShownCount = -1;
-        private readonly System.Collections.Generic.List<ChatLine> chatLines = new System.Collections.Generic.List<ChatLine>();
-
-        private struct ChatLine
-        {
-            public string Text;
-            public Color Color;
-        }
 
         /// <summary>
         /// The conversation with the staff officer, oldest at the top: what was said, the reply, what it ordered, what
@@ -1437,17 +1531,15 @@ namespace Rts.UnityHost
         private void DrawChatLog(Rect area)
         {
             if (area.height < 24f) return;
-            var history = AiInstructions;
-            chatLines.Clear();
-            foreach (var item in history) AddChatLines(item);
-            if (chatLines.Count == 0)
+            var history = Conversation;
+            if (history.Count == 0)
             {
                 GUI.Label(new Rect(area.x + 4f, area.y, area.width - 8f, 22f), "参謀に話しかけると、ここにやり取りが出ます。");
                 return;
             }
             float width = area.width - 20f;
             float total = 0f;
-            foreach (var line in chatLines) total += UiStyles.Body.CalcHeight(new GUIContent(line.Text), width) + 2f;
+            foreach (var line in history) total += UiStyles.Body.CalcHeight(new GUIContent(StaffLineText(line)), width) + 2f;
             if (history.Count != chatShownCount)
             {
                 chatShownCount = history.Count;
@@ -1456,55 +1548,30 @@ namespace Rts.UnityHost
             chatScroll = GUI.BeginScrollView(area, chatScroll, new Rect(0f, 0f, width, total));
             float y = 0f;
             var old = GUI.contentColor;
-            foreach (var line in chatLines)
+            foreach (var line in history)
             {
-                float h = UiStyles.Body.CalcHeight(new GUIContent(line.Text), width);
-                GUI.contentColor = line.Color;
-                GUI.Label(new Rect(0f, y, width, h), line.Text, UiStyles.Body);
+                string text = StaffLineText(line);
+                float h = UiStyles.Body.CalcHeight(new GUIContent(text), width);
+                GUI.contentColor = StaffLineColor(line.Tone);
+                GUI.Label(new Rect(0f, y, width, h), text, UiStyles.Body);
                 y += h + 2f;
             }
             GUI.contentColor = old;
             GUI.EndScrollView();
         }
 
-        private void AddChatLines(LiveAiInstruction item)
+        private static string StaffLineText(StaffChatLine line)
         {
-            var you = new Color(0.75f, 0.88f, 1f);
-            var staff = Color.white;
-            var detail = new Color(0.8f, 0.8f, 0.8f);
-            var bad = new Color(1f, 0.6f, 0.5f);
-            chatLines.Add(new ChatLine { Text = MatchOutcome.Clock(item.StartedTick) + " あなた：" + item.Instruction, Color = you });
-            string state;
-            switch (item.State)
-            {
-                case AiInstructionState.Interpreting: state = "考え中…"; break;
-                case AiInstructionState.Executing: state = "実行中"; break;
-                case AiInstructionState.Completed: state = "完了"; break;
-                case AiInstructionState.Cancelled: state = "取り消し"; break;
-                case AiInstructionState.Expired: state = "時間切れ"; break;
-                default: state = "わからない"; break;
-            }
-            string reply = !string.IsNullOrEmpty(item.Say) ? item.Say : item.Reason;
-            chatLines.Add(new ChatLine
-            {
-                Text = "参謀（" + ModelLabel(item.Model) + "）：" + (string.IsNullOrEmpty(reply) ? state : reply),
-                Color = item.State == AiInstructionState.Unknown || item.State == AiInstructionState.Expired ? bad : staff
-            });
-            if (!string.IsNullOrEmpty(item.Say) && !string.IsNullOrEmpty(item.Reason) && item.Reason != item.Say)
-                chatLines.Add(new ChatLine { Text = "　理由：" + item.Reason, Color = detail });
-            // A late or refused answer may still carry commands; they were not carried out, and the log must say so.
-            bool carriedOut = item.State == AiInstructionState.Executing || item.State == AiInstructionState.Completed
-                || item.State == AiInstructionState.Cancelled;
-            foreach (var issued in item.Issued ?? Array.Empty<string>())
-                chatLines.Add(new ChatLine { Text = "　→ " + issued + (carriedOut ? "" : "（実行せず）"), Color = detail });
-            foreach (var rejected in item.RejectedReasons ?? Array.Empty<string>())
-                chatLines.Add(new ChatLine { Text = "　× 却下：" + rejected, Color = bad });
-            chatLines.Add(new ChatLine
-            {
-                Text = "　［" + state + "　" + (item.State == AiInstructionState.Interpreting
-                    ? "見積もり " + item.EstimatedCostYen.ToString("0.000") : item.ActualCostYen.ToString("0.000")) + "円］",
-                Color = detail
-            });
+            if (line == null) return "";
+            return string.IsNullOrEmpty(line.Speaker) ? line.Body : line.Time + " " + line.Speaker + "：" + line.Body;
+        }
+
+        private static Color StaffLineColor(string tone)
+        {
+            if (tone == StaffChatLine.YouTone) return new Color(0.75f, 0.88f, 1f);
+            if (tone == StaffChatLine.BadTone) return new Color(1f, 0.6f, 0.5f);
+            if (tone == StaffChatLine.DetailTone) return new Color(0.8f, 0.8f, 0.8f);
+            return Color.white;
         }
     }
 }

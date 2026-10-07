@@ -12,6 +12,7 @@ namespace Rts.Presentation
         private readonly List<Rect> current = new List<Rect>();
         private readonly List<Rect> previous = new List<Rect>();
         private int frame = -1;
+        private bool keyboardCaptured;
 
         public static UiHitAreas Shared { get; } = new UiHitAreas();
 
@@ -41,11 +42,20 @@ namespace Rts.Presentation
             return ContainsGui(new Vector2(screenPoint.x, screenHeight - screenPoint.y));
         }
 
+        /// <summary>Text inputs use this to stop camera keyboard shortcuts while IME composition is active.</summary>
+        public bool KeyboardCaptured { get { return keyboardCaptured; } }
+
+        public void SetKeyboardCaptured(bool captured)
+        {
+            keyboardCaptured = captured;
+        }
+
         public void Reset()
         {
             current.Clear();
             previous.Clear();
             frame = -1;
+            keyboardCaptured = false;
         }
     }
 }

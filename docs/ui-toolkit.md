@@ -30,6 +30,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - `--hud-heading-size` / `--hud-age-stage-size` / `--hud-number-width`：見出し、段表示、桁をそろえる数値欄の寸法
 - `--hud-heading` / `--hud-good` / `--hud-warning`：見出し、良い状態、注意状態の色
 - `--hud-resource-border` / `--hud-input` / `--hud-button` / `--hud-button-text`：資源欄、入力、ボタン用の色
+- `--hud-staff-*`：参謀欄の板、吹き出し（あなた／参謀／詳しく／悪い）、札、入力欄、選択欄、ボタンの地・字・枠・角
 
 資源の小さな四角は `.hud-resource-icon` です。画像を用意した段階で、この要素を背景画像などに差し替えます。
 
@@ -52,3 +53,15 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - 一時的な確認は起動引数 `-hud-toolkit` で有効にできます。
 
 今回の実装では `TopBarResourceVisibility` と `TopBarDisplayText` が資源の出し分け・数の書式・時代表示を共有し、IMGUI と UI Toolkit の内容を揃えています。
+
+## 参謀の欄
+
+`Resources/Hud/Staff.uxml` と `HudTheme.uss` が、右側の `UiLayout.Strategist` と同じ位置に参謀の欄を作ります。`HudToolkit` は `IStaffControl` だけを読み、AI の選択、対象、見積もり、費用、予算、やり取りを表示します。やり取りの行は増えたときだけ VisualElement を追加し、既存行の状態や本文だけを更新してから新しい行へスクロールします。
+
+表示側の口は `Presentation/IStaffControl.cs` です。`LiveMatchHost` が対象と選択中 AI を保持し、送信時には従来どおり `LiveAiCommandPort` の予約・解釈経路へ渡します。履歴の状態判定と文面生成は Unity に依存しない `StaffChatText` にまとめています。
+
+`TextField` はフォーカス中に IME を有効にし、Enter は `Input.compositionString` が空のときだけ送信します。変換中の Enter は候補確定に任せます。フォーカス中は `UiHitAreas` のキーボード捕捉を有効にするため、地図の WASD／矢印操作は止まります。マウスクリックについても、従来の IMGUI と同じ `UiLayout.Calculate(...).Strategist` を `UiHitAreas.Shared.Register` に登録します。
+
+AI の一覧は押すと開く自前の選択欄です。利用できない AI は無効なボタンとして表示します。見た目の案ごとの吹き出し、札、入力欄、ボタンの色・枠・角は `ThemeStone.uss`、`ThemeTable.uss`、`ThemeParchment.uss` の `--hud-staff-*` 変数で切り替わります。
+
+`rts.hud.toolkit` が有効なときだけこの欄を表示し、同時に `LiveMatchHost.OnGUI` の参謀欄を描きません。既定の設定では従来の IMGUI を使います。

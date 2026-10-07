@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace Rts.Presentation
     {
         public const string SettingKey = "rts.hud.toolkit";
         private const string UxmlResourcePath = "Hud/TopBar";
+        private const string StaffUxmlResourcePath = "Hud/Staff";
         private const string BaseUssResourcePath = "Hud/HudTheme";
 
         private BattlefieldView view;
@@ -28,6 +30,25 @@ namespace Rts.Presentation
         private VisualElement resourceRow;
         private Label populationLabel;
         private Label idleLabel;
+        private VisualElement staffFrame;
+        private VisualElement staffPanel;
+        private ScrollView staffScroll;
+        private VisualElement staffOptions;
+        private Label staffTargetLabel;
+        private Label staffEstimateLabel;
+        private Label staffCostLabel;
+        private Label staffNoticeLabel;
+        private Label staffEmptyLabel;
+        private Button staffAiButton;
+        private Button staffSendButton;
+        private Button staffCancelButton;
+        private TextField staffInput;
+        private IStaffControl staff;
+        private bool staffInputFocused;
+        private bool staffAiListOpen;
+        private string staffAiSignature = "";
+        private int renderedStaffLineCount;
+        private readonly List<StaffLineSlot> staffLineSlots = new List<StaffLineSlot>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> resources =
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<ResourceSlot> slots = new List<ResourceSlot>();
@@ -52,6 +73,13 @@ namespace Rts.Presentation
             public string Label;
             public Label ValueLabel;
             public int Value;
+        }
+
+        private sealed class StaffLineSlot
+        {
+            public VisualElement Row;
+            public VisualElement Bubble;
+            public Label Label;
         }
 
         private static bool? commandLineFlag;
@@ -94,7 +122,13 @@ namespace Rts.Presentation
 
         public void Bind(BattlefieldView battlefield)
         {
+            Bind(battlefield, null);
+        }
+
+        public void Bind(BattlefieldView battlefield, IStaffControl staffControl)
+        {
             view = battlefield;
+            staff = staffControl;
             enabled = true;
             if (IsEnabled) EnsureDocument();
         }
@@ -109,6 +143,8 @@ namespace Rts.Presentation
             if (!IsEnabled || view == null)
             {
                 if (hudRoot != null) hudRoot.style.display = DisplayStyle.None;
+                if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
+                SetStaffInputFocus(false);
                 return;
             }
 
@@ -120,17 +156,22 @@ namespace Rts.Presentation
             if (economy == null)
             {
                 hudRoot.style.display = DisplayStyle.None;
+                if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
+                SetStaffInputFocus(false);
                 return;
             }
 
             hudRoot.style.display = DisplayStyle.Flex;
             ApplySelectedTheme();
             Refresh(economy);
+            RefreshStaff();
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
             // treats this Toolkit panel as occupied and does not let map selection or orders leak underneath it.
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).TopLeft);
+            if (staffFrame != null && staffFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Strategist);
         }
 
         private void EnsureDocument()
@@ -158,6 +199,9 @@ namespace Rts.Presentation
             if (baseTheme != null) root.styleSheets.Add(baseTheme);
             else Debug.LogWarning("UI Toolkit HUD USS not found at Resources/" + BaseUssResourcePath + ".");
             tree.CloneTree(root);
+            var staffTree = Resources.Load<VisualTreeAsset>(StaffUxmlResourcePath);
+            if (staffTree != null) staffTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit staff UXML not found at Resources/" + StaffUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
             ageLabel = root.Q<Label>("age-label");
@@ -165,6 +209,19 @@ namespace Rts.Presentation
             resourceRow = root.Q<VisualElement>("resource-row");
             populationLabel = root.Q<Label>("population-label");
             idleLabel = root.Q<Label>("idle-label");
+            staffFrame = root.Q<VisualElement>("staff-frame");
+            staffPanel = root.Q<VisualElement>("staff-panel");
+            staffScroll = root.Q<ScrollView>("staff-scroll");
+            staffOptions = root.Q<VisualElement>("staff-ai-options");
+            staffTargetLabel = root.Q<Label>("staff-target-label");
+            staffEstimateLabel = root.Q<Label>("staff-estimate-label");
+            staffCostLabel = root.Q<Label>("staff-cost-label");
+            staffNoticeLabel = root.Q<Label>("staff-notice-label");
+            staffEmptyLabel = root.Q<Label>("staff-empty-label");
+            staffAiButton = root.Q<Button>("staff-ai-button");
+            staffSendButton = root.Q<Button>("staff-send-button");
+            staffCancelButton = root.Q<Button>("staff-cancel-button");
+            staffInput = root.Q<TextField>("staff-input");
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
@@ -173,6 +230,9 @@ namespace Rts.Presentation
             }
             root.pickingMode = PickingMode.Ignore;
             hudRoot.pickingMode = PickingMode.Ignore;
+            if (staffFrame != null) staffFrame.pickingMode = PickingMode.Position;
+            if (staffPanel != null) staffPanel.pickingMode = PickingMode.Position;
+            BindStaffEvents();
             ApplySelectedTheme();
         }
 
@@ -219,6 +279,183 @@ namespace Rts.Presentation
                 warnedMissingFont = true;
                 Debug.LogWarning("UI Toolkit HUD could not create a theme font; using the default UI Toolkit font.");
             }
+        }
+
+        private void BindStaffEvents()
+        {
+            if (staffAiButton == null || staffSendButton == null || staffCancelButton == null || staffInput == null) return;
+            staffAiButton.clicked += ToggleStaffAiList;
+            staffSendButton.clicked += SendStaff;
+            staffCancelButton.clicked += CancelStaff;
+            staffInput.RegisterCallback<FocusInEvent>(_ => SetStaffInputFocus(true));
+            staffInput.RegisterCallback<FocusOutEvent>(_ => SetStaffInputFocus(false));
+            staffInput.RegisterCallback<KeyDownEvent>(OnStaffKeyDown);
+        }
+
+        private void ToggleStaffAiList()
+        {
+            staffAiListOpen = !staffAiListOpen;
+            if (staffOptions != null) staffOptions.style.display = staffAiListOpen ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void SelectStaffAi(string name)
+        {
+            if (staff == null) return;
+            staff.SelectedAiName = name;
+            staffAiListOpen = false;
+            if (staffOptions != null) staffOptions.style.display = DisplayStyle.None;
+        }
+
+        private void SendStaff()
+        {
+            if (staff == null || staffInput == null) return;
+            staff.Speak(staffInput.value ?? "");
+        }
+
+        private void CancelStaff()
+        {
+            if (staff != null) staff.CancelLast();
+        }
+
+        private void OnStaffKeyDown(KeyDownEvent evt)
+        {
+            bool enter = evt.keyCode == KeyCode.Return || evt.keyCode == KeyCode.KeypadEnter;
+            // During IME conversion Enter confirms the candidate; only a plain Enter sends the instruction.
+            if (!enter || !string.IsNullOrEmpty(Input.compositionString)) return;
+            evt.StopPropagation();
+            evt.PreventDefault();
+            SendStaff();
+        }
+
+        private void SetStaffInputFocus(bool focused)
+        {
+            staffInputFocused = focused;
+            UiHitAreas.Shared.SetKeyboardCaptured(focused);
+            Input.imeCompositionMode = focused ? IMECompositionMode.On : IMECompositionMode.Auto;
+        }
+
+        private void RefreshStaff()
+        {
+            if (staffFrame == null) return;
+            if (staff == null)
+            {
+                staffFrame.style.display = DisplayStyle.None;
+                SetStaffInputFocus(false);
+                return;
+            }
+
+            var rect = UiLayout.Calculate(Screen.width, Screen.height).Strategist;
+            staffFrame.style.left = Length.Percent(Screen.width <= 0f ? 0f : rect.x / Screen.width * 100f);
+            staffFrame.style.top = Length.Percent(Screen.height <= 0f ? 0f : rect.y / Screen.height * 100f);
+            staffFrame.style.width = Length.Percent(Screen.width <= 0f ? 0f : rect.width / Screen.width * 100f);
+            staffFrame.style.height = Length.Percent(Screen.height <= 0f ? 0f : rect.height / Screen.height * 100f);
+            staffFrame.style.display = DisplayStyle.Flex;
+
+            RefreshStaffChoices();
+            staffTargetLabel.text = staff.TargetLabel ?? "";
+            staffCostLabel.text = "AI " + staff.SpentYen.ToString("0.0") + "円 / 予算の残り "
+                + staff.RemainingBudgetYen.ToString("0.0") + "円";
+
+            decimal estimate = 0m;
+            try { estimate = staff.EstimateYen(staffInput == null ? "" : staffInput.value ?? ""); }
+            catch (Exception) { }
+            bool expensive = staff.IsExpensiveEstimate(estimate);
+            staffEstimateLabel.text = expensive ? "1回 約" + estimate.ToString("0.0") + "円" : "";
+            staffEstimateLabel.EnableInClassList("is-visible", expensive);
+            bool warning = false;
+            try { warning = staff.ShowBudgetWarning(staffInput == null ? "" : staffInput.value ?? ""); }
+            catch (Exception) { }
+            staffNoticeLabel.text = warning ? "予算を超えそうです" : (staff.LastNotice ?? "");
+            staffNoticeLabel.EnableInClassList("is-warning", warning);
+            staffNoticeLabel.EnableInClassList("is-visible", warning || !string.IsNullOrEmpty(staff.LastNotice));
+            RefreshStaffConversation(staff.Conversation);
+
+            if (staffInputFocused && staffInput != null)
+            {
+                Input.imeCompositionMode = IMECompositionMode.On;
+                var field = staffInput.worldBound;
+                Input.compositionCursorPos = new Vector2(field.x, field.y + field.height + 8f);
+            }
+        }
+
+        private void RefreshStaffChoices()
+        {
+            if (staffOptions == null || staffAiButton == null || staff == null) return;
+            var choices = staff.AiChoices ?? Array.Empty<StaffAiOption>();
+            string signature = choices.Count.ToString();
+            for (int i = 0; i < choices.Count; i++)
+                signature += "|" + choices[i].Name + ":" + choices[i].DisplayName + ":" + choices[i].Available;
+            if (signature != staffAiSignature)
+            {
+                staffAiSignature = signature;
+                staffOptions.Clear();
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    var choice = choices[i];
+                    var option = new Button(() => SelectStaffAi(choice.Name));
+                    option.text = choice.DisplayName + (choice.Available ? "" : "（キー未設定）");
+                    option.SetEnabled(choice.Available);
+                    option.AddToClassList("staff-ai-option");
+                    staffOptions.Add(option);
+                }
+            }
+
+            string selectedName = staff.SelectedAiName ?? "";
+            string selectedLabel = selectedName;
+            for (int i = 0; i < choices.Count; i++)
+                if (choices[i].Name == selectedName) { selectedLabel = choices[i].DisplayName; break; }
+            staffAiButton.text = string.IsNullOrEmpty(selectedLabel) ? "AI を選ぶ  ▼" : selectedLabel + "  ▼";
+            staffOptions.style.display = staffAiListOpen ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void RefreshStaffConversation(IReadOnlyList<StaffChatLine> lines)
+        {
+            if (staffScroll == null) return;
+            lines = lines ?? Array.Empty<StaffChatLine>();
+            bool grew = lines.Count > renderedStaffLineCount;
+            if (lines.Count < renderedStaffLineCount)
+            {
+                staffScroll.Clear();
+                staffLineSlots.Clear();
+                renderedStaffLineCount = 0;
+                grew = lines.Count != 0;
+            }
+
+            for (int i = renderedStaffLineCount; i < lines.Count; i++)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("staff-line");
+                var bubble = new VisualElement();
+                bubble.AddToClassList("staff-bubble");
+                var label = new Label();
+                label.AddToClassList("staff-line-text");
+                bubble.Add(label);
+                row.Add(bubble);
+                staffScroll.Add(row);
+                staffLineSlots.Add(new StaffLineSlot { Row = row, Bubble = bubble, Label = label });
+            }
+            renderedStaffLineCount = lines.Count;
+
+            for (int i = 0; i < lines.Count; i++) ApplyStaffLine(staffLineSlots[i], lines[i]);
+            if (staffEmptyLabel != null) staffEmptyLabel.style.display = lines.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            if (grew)
+                staffScroll.schedule.Execute(() => staffScroll.scrollOffset = new Vector2(0f, float.MaxValue));
+        }
+
+        private static void ApplyStaffLine(StaffLineSlot slot, StaffChatLine line)
+        {
+            if (slot == null || line == null) return;
+            string prefix = string.IsNullOrEmpty(line.Speaker) ? "" : (line.Time + " " + line.Speaker + "：");
+            slot.Label.text = prefix + line.Body;
+            slot.Row.EnableInClassList("staff-line-you", line.Tone == StaffChatLine.YouTone);
+            slot.Row.EnableInClassList("staff-line-staff", line.Tone == StaffChatLine.StaffTone);
+            slot.Row.EnableInClassList("staff-line-detail", line.Tone == StaffChatLine.DetailTone);
+            slot.Row.EnableInClassList("staff-line-bad", line.Tone == StaffChatLine.BadTone);
+            slot.Row.EnableInClassList("staff-line-status", line.Speaker == "状態");
+            slot.Bubble.EnableInClassList("staff-tone-you", line.Tone == StaffChatLine.YouTone);
+            slot.Bubble.EnableInClassList("staff-tone-staff", line.Tone == StaffChatLine.StaffTone);
+            slot.Bubble.EnableInClassList("staff-tone-detail", line.Tone == StaffChatLine.DetailTone);
+            slot.Bubble.EnableInClassList("staff-tone-bad", line.Tone == StaffChatLine.BadTone);
         }
 
         private void Refresh(EconomyView economy)

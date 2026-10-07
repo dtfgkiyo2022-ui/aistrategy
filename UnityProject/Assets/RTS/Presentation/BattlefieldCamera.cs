@@ -26,7 +26,9 @@ namespace Rts.Presentation
 
         private void LateUpdate()
         {
-            var move = new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
+            var move = UiHitAreas.Shared.KeyboardCaptured
+                ? Vector3.zero
+                : new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
             if (move.sqrMagnitude > 1f) move.Normalize();
             focus += move * (panSpeed * distance * Time.unscaledDeltaTime);
             focus.x = Mathf.Clamp(focus.x, 0f, mapWidth);
