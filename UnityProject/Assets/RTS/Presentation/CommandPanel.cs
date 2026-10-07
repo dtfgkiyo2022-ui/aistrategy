@@ -24,6 +24,7 @@ namespace Rts.Presentation
         private IMapChoice mapChoice;
         private IMatchRuleChoice matchRuleChoice;
         private IPlayerFilesControl playerFiles;
+        private IWorkshopControl workshop;
         private bool setupOpen;
         private uint factionId;
         private uint ownCoreId;
@@ -76,6 +77,9 @@ namespace Rts.Presentation
 
         /// <summary>Lets the Unity host open the player's folders and rescan tactics without restarting.</summary>
         public IPlayerFilesControl PlayerFiles { get { return playerFiles; } set { playerFiles = value; } }
+
+        /// <summary>Lets the Unity host expose optional Steam Workshop actions without a Steamworks reference here.</summary>
+        public IWorkshopControl Workshop { get { return workshop; } set { workshop = value; } }
 
         public void Bind(ICommandPort commandPort, uint faction, uint ownCore, BattlefieldView battlefield)
         {
@@ -373,6 +377,28 @@ namespace Rts.Presentation
             y = DrawTacticStatus(ownTactic, UiText.T("Own tactic status", "自軍の戦術の状態"), x, y, rect.width - 16f);
             y = DrawTacticReloadControls(ownTactic, x, y, rect.width - 16f);
             y = DrawTacticParams(ownTactic, true, x, y, rect.width - 16f);
+            if (workshop != null)
+            {
+                GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Workshop", "Workshop"));
+                bool canPublish = ownTactic != null && workshop.CanPublishTactic(ownTactic.Current);
+                GUI.enabled = canPublish && workshop.SteamAvailable;
+                if (GUI.Button(new Rect(x + labelWidth, y, 150f, 24f), UiText.T("Publish tactic", "戦術を公開")))
+                    workshop.PublishTactic(ownTactic.Current);
+                GUI.enabled = true;
+                string[] visibility = workshop.VisibilityChoices ?? new string[0];
+                float visibilityWidth = visibility.Length == 0 ? 0f : (rect.width - 16f - labelWidth - 158f) / visibility.Length;
+                for (int i = 0; i < visibility.Length; i++)
+                {
+                    bool on = workshop.Visibility == visibility[i];
+                    if (GUI.Toggle(new Rect(x + labelWidth + 158f + i * visibilityWidth, y, visibilityWidth - 4f, 24f), on, visibility[i], GUI.skin.button) && !on)
+                        workshop.Visibility = visibility[i];
+                }
+                y += SetupRow;
+                if (GUI.Button(new Rect(x + labelWidth, y, 150f, 24f), UiText.T("Refresh Workshop", "Workshopを読み直す")))
+                    workshop.RefreshWorkshopTactics();
+                GUI.Label(new Rect(x + labelWidth + 158f, y, rect.width - 16f - labelWidth - 158f, 42f), workshop.WorkshopStatus ?? "", UiStyles.Tiny);
+                y += 46f;
+            }
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Opponent tactic", "相手の戦術"));
             y += Mathf.Max(SetupRow, DrawTacticChoices(opponentTactic, new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f)) + 6f);

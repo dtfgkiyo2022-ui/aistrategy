@@ -9,6 +9,7 @@ using Rts.Providers;
 using Rts.Simulation;
 using Rts.Tactics;
 using Rts.TacticsJs;
+using Rts.Workshop;
 using UnityEngine;
 using Battle = Rts.Simulation.Simulation;
 
@@ -59,6 +60,7 @@ namespace Rts.UnityHost
         private TacticFileStamp enemyTacticStamp;
         private TacticFileStamp ownTacticStamp;
         private string rulebookStatus = "";
+        private SteamWorkshopService workshop;
 
         private bool smokeRunner;
         private SmokeOptions smokeOptions;
@@ -503,15 +505,24 @@ namespace Rts.UnityHost
             string documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             if (!string.IsNullOrEmpty(documents)) parents.Add(Path.Combine(documents, "AiCommandRts", "Tactics"));
 
-            var entries = TacticCatalog.Scan(parents, Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes"));
-            tacticEntries = new List<TacticCatalogEntry>(entries).ToArray();
+            string runtimesPath = Path.Combine(UnityEngine.Application.streamingAssetsPath, "TacticRuntimes");
+            var entries = new List<TacticCatalogEntry>(TacticCatalog.Scan(parents, runtimesPath));
+            var workshopPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (workshop != null && workshop.SubscribedTacticFolders != null)
+            {
+                foreach (string folder in workshop.SubscribedTacticFolders)
+                    if (!string.IsNullOrWhiteSpace(folder)) workshopPaths.Add(Path.GetFullPath(folder));
+                entries.AddRange(TacticCatalog.ScanFolders(workshop.SubscribedTacticFolders, runtimesPath));
+            }
+            tacticEntries = entries.GroupBy(x => x.Path, StringComparer.OrdinalIgnoreCase).Select(group => group.First()).ToArray();
             var choices = new List<string> { TacticMatchSetup.None };
             var choiceViews = new List<TacticChoiceView> { new TacticChoiceView(TacticMatchSetup.None, "", "", false, "") };
             foreach (var entry in tacticEntries)
             {
                 if (!entry.IsSelectable) continue;
                 choices.Add(entry.Path);
-                choiceViews.Add(new TacticChoiceView(entry.Path, entry.DisplayName, entry.Metadata.Style,
+                string displayName = workshopPaths.Contains(Path.GetFullPath(entry.Path)) ? "［Workshop］" + entry.DisplayName : entry.DisplayName;
+                choiceViews.Add(new TacticChoiceView(entry.Path, displayName, entry.Metadata.Style,
                     entry.Metadata.Recommended, entry.Metadata.Description));
             }
             tacticChoices = choices.ToArray();
@@ -594,6 +605,7 @@ namespace Rts.UnityHost
 
         public void RefreshTacticList()
         {
+            if (workshop != null) workshop.RefreshWorkshopTactics();
             RefreshTacticCatalog();
             if (enemyTacticChoice != null) enemyTacticChoice.Bind(tacticChoices, tacticChoiceViews, enemyTacticSide == null ? null : enemyTacticSide.Host);
             if (ownTacticChoice != null) ownTacticChoice.Bind(tacticChoices, tacticChoiceViews, ownTacticSide == null ? null : ownTacticSide.Host);
@@ -796,6 +808,7 @@ namespace Rts.UnityHost
                     panel.MatchRuleChoice = this;
                     panel.MatchPackPathProvider = () => MatchPackPath;
                     panel.PlayerFiles = this;
+                    panel.Workshop = workshop;
                     panel.LanguageChanged = japanese => { PlayerPrefs.SetInt(LanguageKey, japanese ? 1 : 0); PlayerPrefs.Save(); };
                     panel.ExtraBlocksClick = economyPanel.BlocksClick;
                     panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
@@ -1127,6 +1140,13 @@ namespace Rts.UnityHost
             }
             // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
             UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
+            if (!smokeRunner)
+            {
+                workshop = GetComponent<SteamWorkshopService>();
+                if (workshop == null) workshop = gameObject.AddComponent<SteamWorkshopService>();
+                workshop.SubscribedTacticsChanged = RefreshTacticCatalog;
+                workshop.RefreshWorkshopTactics();
+            }
             Begin();
         }
 

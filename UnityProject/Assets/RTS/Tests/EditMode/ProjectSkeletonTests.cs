@@ -36,9 +36,10 @@ namespace Rts.Tests.EditMode
             ["Tactics"] = new[] { "Rts.Contracts" },
             ["TacticsJs"] = new[] { "Rts.Contracts", "Rts.Tactics" },
             ["TacticsTools"] = new[] { "Rts.Contracts", "Rts.Tactics", "Rts.Simulation", "Rts.Replay", "Rts.Application" },
+            ["Workshop"] = new[] { "Rts.Contracts", "Rts.Presentation", "Rts.Tactics", "Rts.TacticsJs", "Rts.TacticsTools" },
             ["Presentation"] = new[] { "Rts.Contracts" },
             ["UnityHost"] = new[] { "Rts.Application", "Rts.Presentation", "Rts.Contracts",
-                "Rts.Simulation", "Rts.Replay", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs", "Rts.TacticsTools" },
+                "Rts.Simulation", "Rts.Replay", "Rts.Providers", "Rts.Tactics", "Rts.TacticsJs", "Rts.TacticsTools", "Rts.Workshop" },
             ["Editor"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
                 "Rts.Application", "Rts.Providers", "Rts.Presentation", "Rts.UnityHost" },
             ["Tests.EditMode"] = new[] { "Rts.Contracts", "Rts.Decision", "Rts.Simulation", "Rts.Replay",
@@ -75,6 +76,7 @@ namespace Rts.Tests.EditMode
                         ? new[] { "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime" }
                         : name == "Tests.EditMode" ? new[] { "UnityEngine.TestRunner", "UnityEditor.TestRunner" }
                         : name == "TacticsJs" ? new[] { "Jint", "Acornima", "System.Runtime.CompilerServices.Unsafe" }
+                        : name == "Workshop" ? new[] { "com.rlabrecque.steamworks.net" }
                         : Array.Empty<string>();
                     Assert.That(packages, Does.Contain(reference), "Rts." + name + " -> " + reference);
                 }

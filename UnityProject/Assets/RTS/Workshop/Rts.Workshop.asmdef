@@ -1,0 +1,21 @@
+{
+  "name": "Rts.Workshop",
+  "rootNamespace": "Rts.Workshop",
+  "references": [
+    "Rts.Contracts",
+    "Rts.Presentation",
+    "Rts.Tactics",
+    "Rts.TacticsJs",
+    "Rts.TacticsTools",
+    "com.rlabrecque.steamworks.net"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

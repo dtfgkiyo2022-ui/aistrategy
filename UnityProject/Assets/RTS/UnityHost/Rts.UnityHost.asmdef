@@ -10,7 +10,8 @@
     "Rts.Providers",
     "Rts.Tactics",
     "Rts.TacticsJs",
-    "Rts.TacticsTools"
+    "Rts.TacticsTools",
+    "Rts.Workshop"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
