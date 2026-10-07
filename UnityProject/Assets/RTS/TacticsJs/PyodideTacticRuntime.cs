@@ -14,6 +14,8 @@ namespace Rts.TacticsJs
     {
         public const int StartupTimeoutMilliseconds = 10000;
         public const int CallTimeoutMilliseconds = 50;
+        // Loading Pyodide user code and running on_start may incur one-time engine/JIT work on a busy PC.
+        public const int StartCallTimeoutMilliseconds = 1000;
         public const string NumpyWheel = "numpy-2.4.6-cp314-cp314-pyemscripten_2026_0_wasm32.whl";
         private readonly string folder;
         private readonly string runtimes;
@@ -143,9 +145,9 @@ namespace Rts.TacticsJs
                 StartupMilliseconds = watch.Elapsed.TotalMilliseconds;
             }
             catch { Dispose(); throw; }
-            // Loading user code and on_start have the same budget as on_tick.
+            // Loading user code and on_start get a longer one-time budget; every tick remains 50ms.
             string inputSetup = setupJson ?? "{}";
-            Call("start", inputSetup.IndexOf("\"params\"", StringComparison.Ordinal) >= 0 ? inputSetup : TacticParameterJson.AddParams(inputSetup, parameterValues));
+            Call("start", inputSetup.IndexOf("\"params\"", StringComparison.Ordinal) >= 0 ? inputSetup : TacticParameterJson.AddParams(inputSetup, parameterValues), StartCallTimeoutMilliseconds);
         }
 
         public string Tick(string viewJson)
@@ -153,25 +155,25 @@ namespace Rts.TacticsJs
             if (!started) Start("{}");
             string view = viewJson ?? throw new ArgumentNullException(nameof(viewJson));
             if (view.IndexOf("\"params\"", StringComparison.Ordinal) < 0) view = TacticParameterJson.AddParams(view, parameterValues);
-            return Call("tick", view);
+            return Call("tick", view, CallTimeoutMilliseconds);
         }
 
-        private string Call(string operation, string payload)
+        private string Call(string operation, string payload, int timeoutMilliseconds)
         {
             if (stopped) throw new InvalidOperationException("Python戦術は停止しています。");
             logs.Clear();
             var watch = Stopwatch.StartNew();
-            if (win32Process != null) return CallWin32(operation, payload, watch);
+            if (win32Process != null) return CallWin32(operation, payload, watch, timeoutMilliseconds);
             // A timed-out call may still be executing. Never enqueue another request behind it,
             // and never use its late output as commands for a newer observation.
             if (pending != null)
             {
-                if (!pending.Wait(CallTimeoutMilliseconds)) return Timeout();
+                if (!pending.Wait(timeoutMilliseconds)) return Timeout(timeoutMilliseconds);
                 pending.GetAwaiter().GetResult();
                 pending = null;
             }
-            int remaining = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
-            if (remaining <= 0) return Timeout();
+            int remaining = timeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+            if (remaining <= 0) return Timeout(timeoutMilliseconds);
             var input = StandardInput;
             var output = StandardOutput;
             pending = Task.Run(async () =>
@@ -180,7 +182,7 @@ namespace Rts.TacticsJs
                 await input.FlushAsync().ConfigureAwait(false);
                 return await ReadResponse(output).ConfigureAwait(false);
             });
-            if (!pending.Wait(remaining)) return Timeout();
+            if (!pending.Wait(remaining)) return Timeout(timeoutMilliseconds);
             string response = pending.GetAwaiter().GetResult();
             pending = null;
             CheckJsonDepth(response);
@@ -196,26 +198,26 @@ namespace Rts.TacticsJs
             if (root.TryGetValue("error", out var error)) throw new InvalidOperationException(error as string ?? "Python戦術が失敗しました。");
             string commandJson = root.TryGetValue("output", out var result) && result is string json ? json : "{\"version\":1,\"commands\":[]}";
             CheckJsonDepth(commandJson);
-            if (watch.ElapsedMilliseconds >= CallTimeoutMilliseconds) return Timeout();
+            if (watch.ElapsedMilliseconds >= timeoutMilliseconds) return Timeout(timeoutMilliseconds);
             timeouts = 0;
             return commandJson;
         }
 
-        private string CallWin32(string operation, string payload, Stopwatch watch)
+        private string CallWin32(string operation, string payload, Stopwatch watch, int timeoutMilliseconds)
         {
             // A timed-out call may still be executing. Wait for and discard exactly its
             // late response before sending the next request, so responses cannot shift by one.
             if (win32ResponsePending)
             {
-                int remaining = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
-                if (remaining <= 0) return Timeout();
+                int remaining = timeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+                if (remaining <= 0) return Timeout(timeoutMilliseconds);
                 string lateResponse;
-                if (!win32Process.TryReadStandardOutputLine(remaining, out lateResponse)) return Timeout();
+                if (!win32Process.TryReadStandardOutputLine(remaining, out lateResponse)) return Timeout(timeoutMilliseconds);
                 win32ResponsePending = false;
             }
 
-            int beforeWrite = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
-            if (beforeWrite <= 0) return Timeout();
+            int beforeWrite = timeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+            if (beforeWrite <= 0) return Timeout(timeoutMilliseconds);
             var input = StandardInput;
             // The protocol request is normally far below a Windows pipe's capacity, so a
             // synchronous WriteLine+Flush avoids a thread-pool hop. An unusually large input
@@ -224,15 +226,15 @@ namespace Rts.TacticsJs
             input.Flush();
             win32ResponsePending = true;
 
-            int remainingAfterWrite = CallTimeoutMilliseconds - (int)watch.ElapsedMilliseconds;
-            if (remainingAfterWrite <= 0) return Timeout();
+            int remainingAfterWrite = timeoutMilliseconds - (int)watch.ElapsedMilliseconds;
+            if (remainingAfterWrite <= 0) return Timeout(timeoutMilliseconds);
             string response;
-            if (!win32Process.TryReadStandardOutputLine(remainingAfterWrite, out response)) return Timeout();
+            if (!win32Process.TryReadStandardOutputLine(remainingAfterWrite, out response)) return Timeout(timeoutMilliseconds);
             win32ResponsePending = false;
-            return CompleteResponse(response, watch);
+            return CompleteResponse(response, watch, timeoutMilliseconds);
         }
 
-        private string CompleteResponse(string response, Stopwatch watch)
+        private string CompleteResponse(string response, Stopwatch watch, int timeoutMilliseconds)
         {
             CheckJsonDepth(response);
             var root = TacticJsonForRuntime.Parse(response) as Dictionary<string, object>;
@@ -247,15 +249,15 @@ namespace Rts.TacticsJs
             if (root.TryGetValue("error", out var error)) throw new InvalidOperationException(error as string ?? "Python戦術が失敗しました。");
             string commandJson = root.TryGetValue("output", out var result) && result is string json ? json : "{\"version\":1,\"commands\":[]}";
             CheckJsonDepth(commandJson);
-            if (watch.ElapsedMilliseconds >= CallTimeoutMilliseconds) return Timeout();
+            if (watch.ElapsedMilliseconds >= timeoutMilliseconds) return Timeout(timeoutMilliseconds);
             timeouts = 0;
             return commandJson;
         }
 
-        private string Timeout()
+        private string Timeout(int timeoutMilliseconds)
         {
             if (++timeouts >= 3) Dispose();
-            throw new TimeoutException("Python戦術の呼び出しが50msを超えました。");
+            throw new TimeoutException("Python戦術の呼び出しが" + timeoutMilliseconds + "msを超えました。");
         }
 
         private static async Task<string> ReadResponse(StreamReader reader)

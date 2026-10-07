@@ -141,7 +141,9 @@ def on_tick(view):
             int pid = fixture.Runtime.ProcessId.Value;
             for (int i = 0; i < 61; i++) { host.Tick(); gateway.Step(); }
             Assert.That(host.Failures, Has.Count.EqualTo(3));
-            Assert.That(host.Failures.All(x => x.Reason.Contains("50ms")), Is.True);
+            string expectedBudget = source.Contains("on_start", StringComparison.Ordinal) ? "1000ms" : "50ms";
+            Assert.That(host.Failures[0].Reason, Does.Contain(expectedBudget));
+            Assert.That(host.Failures.Skip(1).All(x => x.Reason.Contains("50ms")), Is.True);
             Assert.That(host.Disabled, Is.True);
             Assert.That(fixture.Runtime.IsStopped, Is.True);
             AssertExited(pid);

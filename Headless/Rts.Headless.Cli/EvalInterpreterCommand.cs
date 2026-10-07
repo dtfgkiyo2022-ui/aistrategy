@@ -91,7 +91,8 @@ internal static class EvalInterpreterCommand
         }
         else
         {
-                using (var interpreter = CreateInterpreter(model, localEndpoint))
+            var interpreter = CreateInterpreter(model, localEndpoint);
+            try
             {
                 var request = new InterpreterRequest { RequestId = 1, FactionId = frame.FactionId, Instruction = item.Text, FixedTarget = selected.GetValueOrDefault(), HasFixedTarget = selected.HasValue || !string.IsNullOrEmpty(selectedName), FixedTargetName = selectedName,
                     Summary = summary, Model = providerModel, StartedTick = frame.Tick, DeadlineTick = context.DeadlineTick };
@@ -106,6 +107,7 @@ internal static class EvalInterpreterCommand
                 var result = string.IsNullOrEmpty(transportReply.FailureReason) ? AiResponseInterpreter.Interpret(transportReply.Json, context) : new AiCommandInterpretationResult { Unknown = true, Reason = transportReply.FailureReason };
                 reply = new InterpretedReply { Result = result, Usage = transportReply.Usage, CostYen = AiCostCalculator.Calculate(providerModel, transportReply.Usage) };
             }
+            finally { (interpreter as IDisposable)?.Dispose(); }
         }
         long elapsed = (long)(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
         bool expectedRefusal = IsUnknown(item.Expect);
@@ -119,13 +121,15 @@ internal static class EvalInterpreterCommand
             CostYen = reply.CostYen, Score = score, ResultReason = reply.Result.Reason, IssuedCount = reply.Result.Policies.Count + reply.Result.EconomyCommands.Count, RejectedReasons = string.Join("|", reply.Result.Rejected.Select(x => x.Reason)) };
     }
 
-    private static HttpCommandInterpreter CreateInterpreter(string model, string localEndpoint)
+    private static ICommandInterpreter CreateInterpreter(string model, string localEndpoint)
     {
         if (model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase)) return new ClaudeCommandInterpreter(() => Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"), timeout: TimeSpan.FromSeconds(60));
         if (model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase)) return new OpenAiCommandInterpreter(() => Environment.GetEnvironmentVariable("OPENAI_API_KEY"), timeout: TimeSpan.FromSeconds(60));
         if (model.Equals("local-llm", StringComparison.OrdinalIgnoreCase)) return new LocalLlmCommandInterpreter(
             Environment.GetEnvironmentVariable("LOCAL_LLM_MODEL") ?? "local-model",
             url: Environment.GetEnvironmentVariable("LOCAL_LLM_URL"), endpoint: localEndpoint, timeout: TimeSpan.FromSeconds(60));
+        if (model.Equals("jev", StringComparison.OrdinalIgnoreCase)) return new JevCommandInterpreter(
+            () => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
         throw new InvalidDataException("評価対象のモデル名が不明です: " + model);
     }
 

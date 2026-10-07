@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using System.Threading;
 using Jint;
+using Jint.Constraints;
 using Rts.Contracts;
 using Rts.Tactics;
 
@@ -21,6 +23,8 @@ namespace Rts.TacticsJs
         public const int StatementLimit = 1_000_000;
         public const int RecursionLimit = 256;
         public static readonly TimeSpan CallTimeout = TimeSpan.FromMilliseconds(50);
+        // Loading the source and running onStart may incur one-time engine/JIT work on a busy PC.
+        public static readonly TimeSpan StartCallTimeout = TimeSpan.FromMilliseconds(1000);
 
         private readonly string source;
         private readonly List<string> consoleLines = new List<string>();
@@ -29,6 +33,7 @@ namespace Rts.TacticsJs
         private readonly IReadOnlyList<TacticSignalDefinition> signals;
         private readonly Dictionary<string, object> parameterValues = new Dictionary<string, object>(StringComparer.Ordinal);
         private Engine engine;
+        private TacticTimeoutConstraint timeout;
         private SplitMix64 random;
         private bool started;
 
@@ -66,8 +71,11 @@ namespace Rts.TacticsJs
             ulong seed = ReadSeed(setup);
             random = new SplitMix64(seed);
             engine.SetValue("__tacticSetupJson", setup);
+            timeout = engine.Constraints.Find<TacticTimeoutConstraint>();
+            timeout.Begin(StartCallTimeout);
             engine.Execute(source);
             engine.Execute("if (typeof onStart === 'function') onStart(JSON.parse(__tacticSetupJson));");
+            timeout.Begin(CallTimeout);
         }
 
         public string Tick(string viewJson)
@@ -75,10 +83,36 @@ namespace Rts.TacticsJs
             if (!started) Start("{}");
             if (viewJson == null) throw new ArgumentNullException(nameof(viewJson));
             engine.SetValue("__tacticViewJson", WithParams(viewJson));
+            timeout.Begin(CallTimeout);
             var result = engine.Evaluate("(function() { var output = onTick(JSON.parse(__tacticViewJson)); if (output && output.version === undefined) output.version = 1; return JSON.stringify(output); })()");
             string text = result.ToString();
             if (string.IsNullOrEmpty(text) || text == "undefined") throw new InvalidOperationException("onTickはJSON化できる値を返してください。");
             return text;
+        }
+
+        /// <summary>
+        /// Jint's own TimeoutInterval has one budget for every call, but the first call gets a longer one. Like Jint's,
+        /// this stops on a timer, so the per-statement check reads a flag instead of the clock.
+        /// </summary>
+        private sealed class TacticTimeoutConstraint : Constraint
+        {
+            private CancellationTokenSource timer;
+            private TimeSpan budget;
+
+            public void Begin(TimeSpan value)
+            {
+                timer?.Dispose();
+                budget = value;
+                timer = new CancellationTokenSource(value);
+            }
+
+            public override void Reset() { }
+
+            public override void Check()
+            {
+                if (timer != null && timer.IsCancellationRequested)
+                    throw new TimeoutException("JavaScript戦術の呼び出しが" + budget.TotalMilliseconds + "msを超えました。");
+            }
         }
 
         private string WithParams(string json)
@@ -101,7 +135,7 @@ namespace Rts.TacticsJs
                 .LimitMemory(MemoryLimitBytes)
                 .MaxStatements(StatementLimit)
                 .LimitRecursion(RecursionLimit)
-                .TimeoutInterval(CallTimeout));
+                .Constraint(new TacticTimeoutConstraint()));
             created.SetValue("__tacticConsoleLog", new Action<string>(RecordConsole));
             created.SetValue("__tacticRandom", new Func<double>(NextRandom));
             created.Execute(@"
