@@ -329,6 +329,14 @@ namespace Rts.Presentation
         {
             float x = rect.x + 8f, y = rect.y + 24f, labelWidth = 96f, cell = (rect.width - 16f - labelWidth) / 4f;
 
+            // The UI Toolkit screen is being built a panel at a time (docs/ui-toolkit.md); this lets it be tried in place.
+            GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("New screen", "新しい画面"));
+            bool toolkit = HudToolkit.IsEnabled;
+            if (GUI.Toggle(new Rect(x + labelWidth, y, cell * 2f - 4f, 24f), toolkit,
+                    toolkit ? UiText.T("On (trial)", "使う（試作）") : UiText.T("Off", "使わない"), GUI.skin.button) != toolkit)
+                HudToolkit.SetEnabled(!toolkit);
+            y += SetupRow;
+
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Reply delay", "返答の遅延"));
             if (delayControl != null)
             {

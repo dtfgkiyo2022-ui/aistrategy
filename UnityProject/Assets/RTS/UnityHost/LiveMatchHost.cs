@@ -803,16 +803,10 @@ namespace Rts.UnityHost
                 economyLayer.Bind(view);
                 economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
                 economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
+                // Always present: it stays hidden and builds nothing until the setup panel's switch turns it on.
                 if (hudToolkit == null) hudToolkit = GetComponent<HudToolkit>();
-                if (HudToolkit.IsEnabled)
-                {
-                    if (hudToolkit == null) hudToolkit = gameObject.AddComponent<HudToolkit>();
-                    hudToolkit.Bind(view);
-                }
-                else if (hudToolkit != null)
-                {
-                    hudToolkit.enabled = false;
-                }
+                if (hudToolkit == null) hudToolkit = gameObject.AddComponent<HudToolkit>();
+                hudToolkit.Bind(view);
                 if (panel != null)
                 {
                     panel.MapChoice = this;
