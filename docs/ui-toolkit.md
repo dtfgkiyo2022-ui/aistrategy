@@ -79,3 +79,11 @@ AI の一覧は押すと開く自前の選択欄です。利用できない AI �
 `HudToolkit` は `CommandPanel` を受け取り、`CommandPanel.BeginAttackPick`、`IssueRetreat`、`IssueDefendOwnCore`、`IssueAllowAbandon`、`IssueMaintainReserve`、`IssueReturnToAuto`、`CancelGroundPick` をボタンから呼びます。従来の IMGUI も同じメソッドを呼ぶため、命令の組み立てと送信は一重です。最終的な送信は従来どおり `ICommandPort` 経由だけで、UI Toolkit はシミュレーション状態を直接変更しません。
 
 新しい画面が有効な間は `CommandPanel.OnGUI` の命令の箱だけを描かず、試合の設定・言語・命令の記録・補給は従来の IMGUI のまま残ります。命令の矩形は `UiHitAreas.Shared.Register` に登録するため、ボタンの外側を含めて地図の選択へクリックが抜けません。攻撃の地点待ちは既存の `TryConsumeGroundClick` を使い、地面のクリック処理も変えていません。
+
+## 内政の欄
+
+`Resources/Hud/Economy.uxml` と `HudTheme.uss` が、`UiLayout.Economy`（画面下中央の横長の矩形）に内政の欄を作ります。上段は建てる・作る・研究・方針のタブ、下段は選択中タブのアクション一覧です。行は横に詰めず、ボタンと押せない理由を一行に置いて、行が多いときは縦にスクロールします。時代を進める・文明の選択、待機中の村人の割り当て、地面に置く途中の説明、最後の知らせもこの欄に含めます。
+
+`EconomyPanel` の `GetToolkitActions` が、現在の `EconomyView` と既存の判定条件からボタン文言・押せるか・理由を返します。`SelectToolkitTab` と `ExecuteToolkitAction` は IMGUI と UI Toolkit の両方の入口で、実行時には従来どおり `EconomyCommand` を `IEconomyPort` へ送り、表示側からシミュレーションを直接変更しません。建物の場所、ベルト・壁のドラッグ、R による向き、取消は既存の `TryConsumeGroundClick` と `Update` の仕組みを使います。
+
+アクションの VisualElement は ID と行種別が変わったときだけ作り直し、資源量・キュー・研究状態・押せるか・理由・文言は既存行へ反映します。UI Toolkit が有効なときだけ `EconomyPanel.OnGUI` の内政の箱を止め、同じ `UiLayout.Economy` を `UiHitAreas.Shared.Register` に登録します。`rts.hud.toolkit` が未設定または 0 の場合は、従来の IMGUI が既定です。

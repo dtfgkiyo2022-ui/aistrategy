@@ -20,7 +20,7 @@ namespace Rts.Presentation
     /// click (the footprint is centred on the clicked cell, R turns the output side); belts are drawn by dragging on the
     /// ground, one bend at most. The simulation decides whether any of it is legal.
     /// </summary>
-    public sealed class EconomyPanel : MonoBehaviour
+    public sealed partial class EconomyPanel : MonoBehaviour
     {
         // UiLayout owns the actual columns. These limits remain documentation for the economy content's intended width.
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
@@ -58,7 +58,7 @@ namespace Rts.Presentation
         // the research tab five.
         private const float TabbedHeight = 22f + 26f + 11f * 26f + 24f;
 
-        private enum Tab { Build, Make, Research, Policy }
+        public enum Tab { Build, Make, Research, Policy }
         private Tab tab = Tab.Build;
 
         private Rect PanelRect() { return UiLayout.Calculate(Screen.width, Screen.height).Economy; }
@@ -321,6 +321,9 @@ namespace Rts.Presentation
         private void OnGUI()
         {
             if (port == null) return;
+            // The Toolkit owns the complete economy panel when explicitly enabled. Keeping this return before
+            // BeginFrame also leaves the Toolkit's hit rectangle intact for the map input guard.
+            if (HudToolkit.IsEnabled) return;
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var economy = Economy();

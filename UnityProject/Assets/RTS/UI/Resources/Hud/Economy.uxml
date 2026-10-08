@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="economy-frame" class="hud-economy-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="economy-panel" class="hud-economy-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:VisualElement class="economy-header">
+                <ui:Label name="economy-title" class="hud-heading economy-title" text="内政" />
+                <ui:Label name="economy-header-status" class="economy-header-status" />
+            </ui:VisualElement>
+            <ui:VisualElement name="economy-tabs" class="economy-tabs">
+                <ui:Button name="economy-tab-build" class="economy-tab" text="建てる" />
+                <ui:Button name="economy-tab-make" class="economy-tab" text="作る" />
+                <ui:Button name="economy-tab-research" class="economy-tab" text="研究" />
+                <ui:Button name="economy-tab-policy" class="economy-tab" text="方針" />
+            </ui:VisualElement>
+            <ui:ScrollView name="economy-actions" class="economy-actions" />
+            <ui:Label name="economy-hint" class="economy-hint" />
+            <ui:Label name="economy-notice" class="economy-notice" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

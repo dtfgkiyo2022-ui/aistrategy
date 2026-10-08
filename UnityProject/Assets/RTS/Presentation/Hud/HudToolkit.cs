@@ -19,6 +19,7 @@ namespace Rts.Presentation
         private const string RuntimeThemeResourcePath = "Hud/HudRuntimeTheme";
         private const string StaffUxmlResourcePath = "Hud/Staff";
         private const string CommandsUxmlResourcePath = "Hud/Commands";
+        private const string EconomyUxmlResourcePath = "Hud/Economy";
         private const string BaseUssResourcePath = "Hud/HudTheme";
         private const string RegularFontResourcePath = "Hud/Fonts/NotoSansJP-Regular";
         private const string BoldFontResourcePath = "Hud/Fonts/NotoSansJP-Bold";
@@ -79,11 +80,23 @@ namespace Rts.Presentation
         private Button commandReserve;
         private Button commandAuto;
         private Button commandCancel;
+        private EconomyPanel economyPanel;
+        private VisualElement economyFrame;
+        private VisualElement economyActions;
+        private Label economyTitle;
+        private Label economyHeaderStatus;
+        private Label economyHint;
+        private Label economyNotice;
+        private Button economyTabBuild;
+        private Button economyTabMake;
+        private Button economyTabResearch;
+        private Button economyTabPolicy;
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
         private int renderedStaffLineCount;
         private readonly List<StaffLineSlot> staffLineSlots = new List<StaffLineSlot>();
+        private readonly List<EconomyActionSlot> economyActionSlots = new List<EconomyActionSlot>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> resources =
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<ResourceSlot> slots = new List<ResourceSlot>();
@@ -101,6 +114,7 @@ namespace Rts.Presentation
         private string lastIdle = "";
         private int activeThemeIndex = -1;
         private bool warnedMissingFont;
+        private string economyActionSignature = "";
 
         private sealed class ThemeFontSet
         {
@@ -123,6 +137,13 @@ namespace Rts.Presentation
             public VisualElement Row;
             public VisualElement Bubble;
             public Label Label;
+        }
+
+        private sealed class EconomyActionSlot
+        {
+            public VisualElement Row;
+            public Button Button;
+            public Label Reason;
         }
 
         private static bool? commandLineFlag;
@@ -170,12 +191,18 @@ namespace Rts.Presentation
 
         public void Bind(BattlefieldView battlefield, IStaffControl staffControl)
         {
-            Bind(battlefield, staffControl, null);
+            Bind(battlefield, null, staffControl, null);
         }
 
         public void Bind(BattlefieldView battlefield, IStaffControl staffControl, CommandPanel commandControl)
         {
+            Bind(battlefield, null, staffControl, commandControl);
+        }
+
+        public void Bind(BattlefieldView battlefield, EconomyPanel economyControl, IStaffControl staffControl, CommandPanel commandControl)
+        {
             view = battlefield;
+            economyPanel = economyControl;
             staff = staffControl;
             commandPanel = commandControl;
             enabled = true;
@@ -192,6 +219,7 @@ namespace Rts.Presentation
             if (!IsEnabled || view == null)
             {
                 if (hudRoot != null) hudRoot.style.display = DisplayStyle.None;
+                if (economyFrame != null) economyFrame.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
                 if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
@@ -206,6 +234,7 @@ namespace Rts.Presentation
             if (economy == null && commandPanel == null && staff == null)
             {
                 hudRoot.style.display = DisplayStyle.None;
+                if (economyFrame != null) economyFrame.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
                 if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
@@ -217,6 +246,7 @@ namespace Rts.Presentation
             ApplySelectedTheme();
             if (topFrame != null) topFrame.style.display = economy == null ? DisplayStyle.None : DisplayStyle.Flex;
             if (economy != null) Refresh(economy);
+            RefreshEconomy(economy);
             RefreshStaff();
             RefreshCommands();
 
@@ -228,12 +258,14 @@ namespace Rts.Presentation
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Strategist);
             if (commandsFrame != null && commandsFrame.resolvedStyle.display != DisplayStyle.None)
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Commands);
+            if (economyFrame != null && economyFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Economy);
         }
 
         private float layoutLogAt = -1f;
 
         /// <summary>
-        /// Writes the laid-out size of the root and the three panels once, a second after the HUD first shows, so a
+        /// Writes the laid-out size of the root and the HUD panels once, a second after the HUD first shows, so a
         /// collapsed layout can be read from Editor.log without a screenshot (the panels collapsed once, 10-08).
         /// </summary>
         private void LogLayoutOnce()
@@ -245,8 +277,9 @@ namespace Rts.Presentation
             var root = document.rootVisualElement;
             Debug.Log("RTS HUD layout: root=" + root.worldBound
                 + " top=" + Bound(root.Q<VisualElement>("top-bar"))
-                + " staff=" + Bound(root.Q<VisualElement>(className: "hud-staff-frame"))
-                + " commands=" + Bound(root.Q<VisualElement>(className: "hud-commands-frame"))
+                 + " staff=" + Bound(root.Q<VisualElement>(className: "hud-staff-frame"))
+                 + " commands=" + Bound(root.Q<VisualElement>(className: "hud-commands-frame"))
+                 + " economy=" + Bound(root.Q<VisualElement>(className: "hud-economy-frame"))
                 + " font=" + (root.resolvedStyle.unityFontDefinition.fontAsset != null ? root.resolvedStyle.unityFontDefinition.fontAsset.name : "none"));
         }
 
@@ -296,6 +329,9 @@ namespace Rts.Presentation
             var commandsTree = Resources.Load<VisualTreeAsset>(CommandsUxmlResourcePath);
             if (commandsTree != null) commandsTree.CloneTree(root);
             else Debug.LogWarning("UI Toolkit commands UXML not found at Resources/" + CommandsUxmlResourcePath + ".");
+            var economyTree = Resources.Load<VisualTreeAsset>(EconomyUxmlResourcePath);
+            if (economyTree != null) economyTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit economy UXML not found at Resources/" + EconomyUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
             topFrame = root.Q<VisualElement>("top-frame");
@@ -334,6 +370,16 @@ namespace Rts.Presentation
             commandReserve = root.Q<Button>("command-reserve");
             commandAuto = root.Q<Button>("command-auto");
             commandCancel = root.Q<Button>("command-cancel");
+            economyFrame = root.Q<VisualElement>("economy-frame");
+            economyActions = root.Q<VisualElement>("economy-actions");
+            economyTitle = root.Q<Label>("economy-title");
+            economyHeaderStatus = root.Q<Label>("economy-header-status");
+            economyHint = root.Q<Label>("economy-hint");
+            economyNotice = root.Q<Label>("economy-notice");
+            economyTabBuild = root.Q<Button>("economy-tab-build");
+            economyTabMake = root.Q<Button>("economy-tab-make");
+            economyTabResearch = root.Q<Button>("economy-tab-research");
+            economyTabPolicy = root.Q<Button>("economy-tab-policy");
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
@@ -346,8 +392,10 @@ namespace Rts.Presentation
             if (staffPanel != null) staffPanel.pickingMode = PickingMode.Position;
             if (commandsFrame != null) commandsFrame.pickingMode = PickingMode.Position;
             if (commandsPanel != null) commandsPanel.pickingMode = PickingMode.Position;
+            if (economyFrame != null) economyFrame.pickingMode = PickingMode.Position;
             BindStaffEvents();
             BindCommandEvents();
+            BindEconomyEvents();
             ApplySelectedTheme();
         }
 
@@ -436,6 +484,95 @@ namespace Rts.Presentation
             commandReserve.clicked += () => { if (commandPanel != null) commandPanel.IssueMaintainReserve(); };
             commandAuto.clicked += () => { if (commandPanel != null) commandPanel.IssueReturnToAuto(); };
             commandCancel.clicked += () => { if (commandPanel != null) commandPanel.CancelGroundPick(); };
+        }
+
+        private void BindEconomyEvents()
+        {
+            if (economyTabBuild == null || economyTabMake == null || economyTabResearch == null || economyTabPolicy == null) return;
+            economyTabBuild.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Build);
+            economyTabMake.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Make);
+            economyTabResearch.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Research);
+            economyTabPolicy.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Policy);
+        }
+
+        private void SelectEconomyTab(EconomyPanel.Tab tab)
+        {
+            if (economyPanel != null) economyPanel.SelectToolkitTab(tab);
+        }
+
+        private static void SetFrameRect(VisualElement frame, Rect rect, float width, float height)
+        {
+            if (frame == null) return;
+            frame.style.left = Length.Percent(width <= 0f ? 0f : rect.x / width * 100f);
+            frame.style.top = Length.Percent(height <= 0f ? 0f : rect.y / height * 100f);
+            frame.style.width = Length.Percent(width <= 0f ? 0f : rect.width / width * 100f);
+            frame.style.height = Length.Percent(height <= 0f ? 0f : rect.height / height * 100f);
+        }
+
+        private void RefreshEconomy(EconomyView economy)
+        {
+            if (economyFrame == null) return;
+            if (economyPanel == null || economy == null)
+            {
+                economyFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            SetFrameRect(economyFrame, UiLayout.Calculate(Screen.width, Screen.height).Economy, Screen.width, Screen.height);
+            economyFrame.style.display = DisplayStyle.Flex;
+            if (economyTitle != null) economyTitle.text = UiText.T("Economy", "内政");
+            if (economyHeaderStatus != null) economyHeaderStatus.text = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
+            RefreshEconomyTabs();
+
+            var actions = economyPanel.GetToolkitActions();
+            string signature = actions.Count.ToString();
+            for (int actionIndex = 0; actionIndex < actions.Count; actionIndex++)
+                signature += "|" + actions[actionIndex].Id + ":" + actions[actionIndex].Message;
+            if (signature != economyActionSignature)
+            {
+                economyActionSignature = signature;
+                economyActions.Clear();
+                economyActionSlots.Clear();
+                for (int actionIndex = 0; actionIndex < actions.Count; actionIndex++)
+                {
+                    var row = new VisualElement();
+                    row.AddToClassList("economy-action-row");
+                    var action = actions[actionIndex];
+                    string actionId = action.Id;
+                    var button = new Button(() => economyPanel.ExecuteToolkitAction(actionId));
+                    button.AddToClassList("economy-action");
+                    var reason = new Label();
+                    reason.AddToClassList("economy-reason");
+                    row.Add(button);
+                    row.Add(reason);
+                    economyActions.Add(row);
+                    economyActionSlots.Add(new EconomyActionSlot { Row = row, Button = button, Reason = reason });
+                }
+            }
+
+            for (int actionIndex = 0; actionIndex < actions.Count; actionIndex++)
+            {
+                var action = actions[actionIndex];
+                var slot = economyActionSlots[actionIndex];
+                slot.Button.text = action.Label;
+                slot.Button.SetEnabled(action.Enabled && !action.Message);
+                slot.Button.EnableInClassList("is-selected", action.Selected);
+                slot.Button.EnableInClassList("is-message", action.Message);
+                slot.Reason.text = action.Reason;
+                slot.Reason.style.display = string.IsNullOrEmpty(action.Reason) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            if (economyHint != null) economyHint.text = economyPanel.PlacementHint;
+            if (economyNotice != null) economyNotice.text = economyPanel.LatestNotice;
+        }
+
+        private void RefreshEconomyTabs()
+        {
+            if (economyPanel == null) return;
+            var selected = economyPanel.SelectedTab;
+            if (economyTabBuild != null) economyTabBuild.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Build);
+            if (economyTabMake != null) economyTabMake.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Make);
+            if (economyTabResearch != null) economyTabResearch.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Research);
+            if (economyTabPolicy != null) economyTabPolicy.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Policy);
         }
 
         private void RefreshCommands()
