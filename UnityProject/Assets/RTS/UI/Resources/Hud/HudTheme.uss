@@ -706,6 +706,26 @@
     -unity-text-align: middle-left;
 }
 
+.economy-blueprint-tools {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    background-color: var(--hud-resource-panel);
+    border-width: 1px;
+    border-color: var(--hud-divider);
+    border-radius: var(--hud-inner-radius);
+    padding: 4px;
+}
+
+.economy-blueprint-tools Label,
+.economy-blueprint-tools Button {
+    margin: 0;
+}
+
+.economy-blueprint-tools Label {
+    padding: 0;
+}
+
 .economy-hint,
 .economy-notice {
     flex-shrink: 0;

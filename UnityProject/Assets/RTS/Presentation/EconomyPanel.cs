@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
@@ -26,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, RemoveBelt }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -58,7 +59,7 @@ namespace Rts.Presentation
         // the research tab five.
         private const float TabbedHeight = 22f + 26f + 11f * 26f + 24f;
 
-        public enum Tab { Build, Make, Research, Policy }
+        public enum Tab { Build, Make, Research, Policy, Blueprints }
         private Tab tab = Tab.Build;
 
         private Rect PanelRect() { return UiLayout.Calculate(Screen.width, Screen.height).Economy; }
@@ -91,11 +92,16 @@ namespace Rts.Presentation
             {
                 case Mode.Belt:
                 case Mode.Wall:
+                case Mode.RemoveArea:
+                case Mode.BlueprintSave:
                     dragStart = cell; // the run is sent when the button comes up (Update)
                     return true;
                 case Mode.RemoveBelt:
                     port.SubmitEconomy(EconomyCommand.RemoveBelt(faction, ++sequence, cell));
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
+                    return true;
+                case Mode.BlueprintPaste:
+                    PasteBlueprintAt(cell);
                     return true;
             }
             var kind = KindOf(mode);
@@ -252,17 +258,19 @@ namespace Rts.Presentation
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
 
-        /// <summary>From <paramref name="from"/> along x first, then along z; each belt faces the next, the last keeps going.</summary>
+        /// <summary>Builds an L path. Shift chooses vertical-then-horizontal; otherwise horizontal-then-vertical.</summary>
         private List<int> BeltRun(int from, int to, List<Facing> facings)
         {
             var cells = new List<int>();
             facings.Clear();
             int x = from % MapWidthCells, z = from / MapWidthCells, tx = to % MapWidthCells, tz = to / MapWidthCells;
             cells.Add(from);
-            while ((x != tx || z != tz) && cells.Count < EconomyCommand.MaxBeltRun)
+            bool verticalFirst = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+            while (x != tx || z != tz)
             {
                 Facing step;
-                if (x != tx) { step = tx > x ? Facing.East : Facing.West; x += tx > x ? 1 : -1; }
+                bool takeVertical = verticalFirst ? z != tz : x == tx;
+                if (!takeVertical) { step = tx > x ? Facing.East : Facing.West; x += tx > x ? 1 : -1; }
                 else { step = tz > z ? Facing.North : Facing.South; z += tz > z ? 1 : -1; }
                 facings.Add(step);
                 cells.Add(z * MapWidthCells + x);
@@ -271,16 +279,47 @@ namespace Rts.Presentation
             return cells;
         }
 
+        private void SubmitBeltPath(List<int> cells, List<Facing> facings)
+        {
+            for (int offset = 0; offset < cells.Count; offset += EconomyCommand.MaxBeltRun)
+            {
+                int count = Math.Min(EconomyCommand.MaxBeltRun, cells.Count - offset);
+                port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells.GetRange(offset, count), facings.GetRange(offset, count)));
+            }
+        }
+
         private void Update()
         {
             if (mode == Mode.None || layer == null) return;
             var camera = Camera.main;
             if (camera == null) return;
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { SetMode(Mode.None); return; }
-            if (Input.GetKeyDown(KeyCode.R)) facing = (Facing)(((int)facing + 1) % 4);
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
+                else facing = (Facing)(((int)facing + 1) % 4);
+            }
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
+            if (mode == Mode.RemoveArea || mode == Mode.BlueprintSave)
+            {
+                var area = dragStart >= 0 && onMap ? RectangleCells(dragStart, cell) : onMap ? new List<int> { cell } : null;
+                layer.ShowBeltPreview(area, mode == Mode.BlueprintSave);
+                if (dragStart >= 0 && Input.GetMouseButtonUp(0) && onMap)
+                {
+                    var completedArea = RectangleCells(dragStart, cell);
+                    if (mode == Mode.RemoveArea) RemoveArea(completedArea);
+                    else SaveBlueprintFromArea(completedArea);
+                    dragStart = -1;
+                }
+                return;
+            }
+            if (mode == Mode.BlueprintPaste)
+            {
+                UpdateBlueprintPreview(onMap ? cell : -1);
+                return;
+            }
             if (mode == Mode.Belt || mode == Mode.Wall)
             {
                 bool wall = mode == Mode.Wall;
@@ -300,7 +339,7 @@ namespace Rts.Presentation
                         }
                         else
                         {
-                            port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, run, facings));
+                            SubmitBeltPath(run, facings);
                             Note(run.Count + UiText.T(" belt cell(s) requested.", " マスのベルトを依頼しました。"));
                         }
                     }
