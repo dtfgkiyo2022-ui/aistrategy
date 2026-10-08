@@ -145,7 +145,7 @@ public sealed class TacticTests
     }
 
     [Test]
-    public void ReaderBuildsAiPolicyAndRejectsBadCommandIndividually()
+    public void ReaderBuildsTacticPolicyAndRejectsBadCommandIndividually()
     {
         var frame = Frame(Array.Empty<VisibleEnemy>());
         string json = "{\"version\":1,\"commands\":[" +
@@ -154,7 +154,7 @@ public sealed class TacticTests
             "{\"type\":\"policy\",\"kind\":\"Focus\",\"target\":{\"kind\":\"Army\",\"id\":999},\"goal\":{\"kind\":\"Core\",\"id\":2}}]}";
         var result = TacticCommandReader.Read(json, frame);
         Assert.That(result.Policies, Has.Count.EqualTo(1));
-        Assert.That(result.Policies[0].Source, Is.EqualTo(CommandSource.Ai));
+        Assert.That(result.Policies[0].Source, Is.EqualTo(CommandSource.Tactic));
         Assert.That(result.Policies[0].ObservedTick, Is.EqualTo(0));
         Assert.That(result.Policies[0].AllowedLoss.Permille, Is.EqualTo(500));
         Assert.That(result.Rejected, Has.Count.EqualTo(2));
@@ -238,7 +238,7 @@ public sealed class TacticTests
         {
             host.Tick();
             gateway.Step();
-            foreach (var c in sim.Capture(1).Commands) if (c.Source == CommandSource.Ai) seen[c.CommandId] = c;
+            foreach (var c in sim.Capture(1).Commands) if (c.Source == CommandSource.Tactic) seen[c.CommandId] = c;
         }
         Assert.That(seen.Count, Is.GreaterThan(10), "the tactic's orders must show up as commands");
         int stale = seen.Values.Count(c => c.Reason == ReasonCode.StaleVersion);
@@ -246,6 +246,47 @@ public sealed class TacticTests
             || c.Reason == ReasonCode.Superseded);
         Assert.That(stale, Is.EqualTo(0), "orders dropped as StaleVersion");
         Assert.That(taken, Is.GreaterThan(0), "no order of the tactic was ever executed");
+    }
+
+    [Test]
+    public void TacticAndStaffOrdersHaveTheSameSimulationOutcome()
+    {
+        string[] Run(CommandSource source)
+        {
+            var sim = new Battle(MapGenerator.Generate(2, true));
+            var target = new ScopeKey(1, ScopeKind.Army, sim.Capture(1).Observation.OwnArmies.OrderBy(a => a.Id).First().Id);
+            var order = new PolicyOrder(1, 1, source, target, PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Core, 2, default), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, sim.Revision(target),
+                sim.Versions(target).Where(v => !v.Scope.Equals(target)).ToArray(), 0,
+                new Expiration(long.MaxValue, 20, ExpireFlags.ObservationTooOld));
+            var input = new ScheduledInput(1, InputKind.Proposal, 0, 1, 1, 1, new[] { order });
+            var states = new List<string>();
+            for (long tick = 1; tick <= 120; tick++)
+            {
+                sim.Step(tick, tick == 1 ? new[] { input } : Array.Empty<ScheduledInput>());
+                states.Add(string.Join("\n", DiagnosticComparison.Fields(sim.CaptureDiagnostic())
+                    .Where(p => !p.Key.EndsWith("Source", StringComparison.Ordinal))
+                    .Select(p => p.Key + "=" + p.Value)));
+            }
+            return states.ToArray();
+        }
+
+        Assert.That(Run(CommandSource.Tactic), Is.EqualTo(Run(CommandSource.Ai)));
+    }
+
+    [Test]
+    public void TacticSourceRoundTripsThroughReplayInputCodec()
+    {
+        var input = new ScheduledInput(1, InputKind.Proposal, 0, 1, 1, 1, new[]
+        {
+            new PolicyOrder(1, 1, CommandSource.Tactic, new ScopeKey(1, ScopeKind.Army, 1), PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Core, 2, default), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, 0, Array.Empty<PolicyVersion>(), 0,
+                new Expiration(20, 20, ExpireFlags.ObservationTooOld))
+        });
+        var copy = InputBinary.Decode(InputBinary.Encode(input));
+        Assert.That(copy.Orders.Single().Source, Is.EqualTo(CommandSource.Tactic));
     }
 
     [Test]

@@ -101,7 +101,7 @@ namespace Rts.Simulation
                         }
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }
-                var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).ToArray();
+                var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).ToArray();
                 var decisionPolicies = PolicyOrdersForDecision(f, policies);
                 ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty(world.Config.Rules.DefaultReservePermille).First();
                 var abandoned = decisionPolicies.Where(o => o.Kind == PolicyKind.AllowAbandon && o.Target.Kind == ScopeKind.Outpost).Select(o => o.Target.Id).OrderBy(id => id).ToArray();
