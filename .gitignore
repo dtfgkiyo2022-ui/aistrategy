@@ -46,6 +46,8 @@
 # 購入者だけが持つ。購入した素材は Assets/ThirdParty/ に置き、リポジトリには入れない）
 /UnityProject/Assets/ThirdParty.meta
 /UnityProject/Assets/ThirdParty/
+# 素材パックへの参照を含む自動生成マニフェスト
+/UnityProject/Assets/RTS/Generated/
 
 # Python のキャッシュ
 __pycache__/
@@ -54,3 +56,4 @@ __pycache__/
 # Python practice outputs (simple_policy_search.py etc.)
 practice/out/
 __pycache__/
+/UnityProject/Assets/RTS/Generated.meta

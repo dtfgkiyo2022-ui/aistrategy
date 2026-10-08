@@ -1,0 +1,16 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="setup-controls-frame" class="hud-setup-controls-frame">
+        <ui:Button name="setup-toggle" class="hud-top-control" />
+        <ui:Button name="language-toggle" class="hud-top-control hud-language-toggle" />
+    </ui:VisualElement>
+    <ui:VisualElement name="setup-frame" class="hud-setup-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="setup-panel" class="hud-setup-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="setup-title" class="hud-heading setup-title" />
+            <ui:ScrollView name="setup-scroll" class="setup-scroll">
+                <ui:VisualElement name="setup-content" class="setup-content" />
+            </ui:ScrollView>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

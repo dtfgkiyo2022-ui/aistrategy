@@ -36,6 +36,9 @@ namespace Rts.Presentation
 
         public bool IsAwaitingGround { get { return awaitingGround; } }
         public bool IsSetupOpen { get { return setupOpen; } }
+        public bool IsLogOpen { get { return logOpen; } }
+        public ICommandDelayControl DelayControl { get { return delayControl; } }
+        public IReadOnlyList<string> LogEntries { get { return log; } }
 
         private void Update()
         {
@@ -89,6 +92,23 @@ namespace Rts.Presentation
             factionId = faction;
             ownCoreId = ownCore;
             view = battlefield;
+        }
+
+        /// <summary>Shared fold state for the IMGUI and UI Toolkit settings button.</summary>
+        public void SetSetupOpen(bool open) { setupOpen = open; }
+
+        public void ToggleSetup() { setupOpen = !setupOpen; }
+
+        /// <summary>Shared fold state for the IMGUI and UI Toolkit command-log button.</summary>
+        public void SetLogOpen(bool open) { logOpen = open; }
+
+        public void ToggleLog() { logOpen = !logOpen; }
+
+        /// <summary>Switches the language and notifies the Unity host through the existing hook.</summary>
+        public void ToggleLanguage()
+        {
+            UiText.Japanese = !UiText.Japanese;
+            if (LanguageChanged != null) LanguageChanged(UiText.Japanese);
         }
 
         /// <summary>Another panel on the same screen (the economy panel): its area blocks clicks and it may take a ground click first.</summary>
@@ -157,6 +177,41 @@ namespace Rts.Presentation
             return frame == null ? (MatchOutcome?)null : MatchOutcome.Describe(frame.Result, factionId, frame.Tick);
         }
 
+        /// <summary>Shared result data for the IMGUI and UI Toolkit overlays.</summary>
+        public MatchOutcome? CurrentOutcome { get { return Outcome(); } }
+
+        public string MatchPackText()
+        {
+            string packPath = MatchPackPathProvider == null ? "" : MatchPackPathProvider();
+            return string.IsNullOrEmpty(packPath) ? "" : UiText.T("Pack saved: " + packPath, "記録パックの保存先：" + packPath);
+        }
+
+        public int CommandStatusCount
+        {
+            get
+            {
+                var frame = view == null ? null : view.LatestFrame;
+                return frame == null ? 0 : Math.Min(MaxLogLines, frame.Commands.Count);
+            }
+        }
+
+        /// <summary>Returns newest-first command status text, using the same wording as the legacy panel.</summary>
+        public string CommandStatusText(int newestIndex)
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || newestIndex < 0 || newestIndex >= CommandStatusCount) return "";
+            int index = frame.Commands.Count - 1 - newestIndex;
+            var command = frame.Commands[index];
+            string reason = command.Reason == ReasonCode.None ? "" : " (" + command.Reason + ")";
+            string wait = "";
+            if (command.Status == CommandStatus.Interpreting)
+                wait = UiText.T(" waiting for the reply (", " 返答待ち（") + Seconds(frame.Tick - command.AcceptedTick) + ")";
+            else if (command.Status == CommandStatus.Pending)
+                wait = UiText.T(" applies in ", " 適用まで ") + Seconds(command.ApplyTick - frame.Tick);
+            return "#" + command.CommandId + " " + command.Kind + " " + command.Target.Kind + " " + command.Target.Id
+                + " [" + command.Status + "]" + wait + reason;
+        }
+
         private bool logOpen;
 
         /// <summary>The fold button at the top of the right column; the log opens under it.</summary>
@@ -166,7 +221,9 @@ namespace Rts.Presentation
 
         private void OnGUI()
         {
-            if (port == null) return;
+            // The new screen owns every panel moved to UI Toolkit. In this mode OnGUI must neither draw nor
+            // register hit rectangles; otherwise an invisible legacy rectangle can block map input.
+            if (port == null || HudToolkit.IsEnabled) return;
             UiStyles.Begin();
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             UiHitAreas.Shared.Register(LogToggleRect());
@@ -221,17 +278,14 @@ namespace Rts.Presentation
                 DrawSupply();
                 UiHitAreas.Shared.Register(SupplyRect());
             }
-            if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup ▲", "試合の設定 ▲") : UiText.T("Match setup ▼", "試合の設定 ▼"))) setupOpen = !setupOpen;
+            if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup ▲", "試合の設定 ▲") : UiText.T("Match setup ▼", "試合の設定 ▼"))) ToggleSetup();
             // Shows the language it switches to, in that language.
             if (GUI.Button(LanguageButtonRect(), UiText.Japanese ? "English" : "日本語"))
-            {
-                UiText.Japanese = !UiText.Japanese;
-                if (LanguageChanged != null) LanguageChanged(UiText.Japanese);
-            }
+                ToggleLanguage();
 
             // The command log and status stay folded unless the player opens them: they are for checking, not playing.
             if (GUI.Button(LogToggleRect(), logOpen ? UiText.T("Fold the command log ^", "命令の記録と状態を畳む ▲")
-                : UiText.T("Command log and status v", "命令の記録と状態を開く ▼"))) logOpen = !logOpen;
+                : UiText.T("Command log and status v", "命令の記録と状態を開く ▼"))) ToggleLog();
             if (!logOpen) { if (setupOpen) DrawSetup(); DrawResult(); return; }
             var statusRect = StatusRect();
             UiStyles.Box(statusRect, UiText.T("Command status (7 states)", "命令の状態（7段階）"));
@@ -243,14 +297,8 @@ namespace Rts.Presentation
                 int statusLines = Mathf.Max(1, (int)((statusRect.height - 26f) / UiStyles.LineHeight));
                 for (int i = frame.Commands.Count - 1; i >= 0 && shown < Mathf.Min(MaxLogLines, statusLines); i--, shown++)
                 {
-                    var c = frame.Commands[i];
-                    string reason = c.Reason == ReasonCode.None ? "" : " (" + c.Reason + ")";
-                    string wait = "";
-                    // While interpreting there is no apply tick yet, so show how long the reply has been awaited.
-                    if (c.Status == CommandStatus.Interpreting) wait = UiText.T(" waiting for the reply (", " 返答待ち（") + Seconds(frame.Tick - c.AcceptedTick) + ")";
-                    else if (c.Status == CommandStatus.Pending) wait = UiText.T(" applies in ", " 適用まで ") + Seconds(c.ApplyTick - frame.Tick);
                     GUI.Label(new Rect(statusRect.x + 6f, statusRect.y + 22f + shown * UiStyles.LineHeight, statusRect.width - 12f, UiStyles.LineHeight),
-                        "#" + c.CommandId + " " + c.Kind + " " + c.Target.Kind + " " + c.Target.Id + " [" + c.Status + "]" + wait + reason);
+                        CommandStatusText(frame.Commands.Count - 1 - i));
                 }
             }
 
@@ -276,9 +324,9 @@ namespace Rts.Presentation
             UiHitAreas.Shared.Register(rect);
             GUI.Label(new Rect(rect.x + 8f, rect.y + 22f, rect.width - 16f, 44f), outcome.Value.Headline, UiStyles.Heading);
             GUI.Label(new Rect(rect.x + 12f, rect.y + 70f, rect.width - 24f, 40f), outcome.Value.Detail, UiStyles.Tiny);
-            string packPath = MatchPackPathProvider == null ? "" : MatchPackPathProvider();
-            if (!string.IsNullOrEmpty(packPath))
-                GUI.Label(new Rect(rect.x + 12f, rect.y + 110f, rect.width - 24f, 32f), UiText.T("Pack saved: " + packPath, "記録パックの保存先：" + packPath), UiStyles.Tiny);
+            string packText = MatchPackText();
+            if (!string.IsNullOrEmpty(packText))
+                GUI.Label(new Rect(rect.x + 12f, rect.y + 110f, rect.width - 24f, 32f), packText, UiStyles.Tiny);
             if (matchRestart != null && GUI.Button(new Rect(rect.x + rect.width / 2f - 80f, rect.y + rect.height - 44f, 160f, 32f), UiText.T("Play again", "もう一度")))
                 matchRestart.RestartMatch();
         }
@@ -544,7 +592,7 @@ namespace Rts.Presentation
             return y + 22f;
         }
 
-        private static string PresetLabel(string name)
+        public static string PresetLabel(string name)
         {
             switch (name)
             {
@@ -608,13 +656,13 @@ namespace Rts.Presentation
             return rows * area.height + (rows - 1) * 4f;
         }
 
-        private static string TacticLabel(string selection)
+        public static string TacticLabel(string selection)
         {
             if (string.IsNullOrEmpty(selection)) return UiText.T("none (preset)", "なし（方針プリセット）");
             return System.IO.Path.GetFileName(selection);
         }
 
-        private static string TacticLabel(TacticChoiceView choice)
+        public static string TacticLabel(TacticChoiceView choice)
         {
             if (string.IsNullOrEmpty(choice.Selection)) return TacticLabel(choice.Selection);
             string name = string.IsNullOrEmpty(choice.DisplayName) ? System.IO.Path.GetFileName(choice.Selection) : choice.DisplayName;
@@ -626,34 +674,44 @@ namespace Rts.Presentation
             return prefix + name + suffix + (!choice.Recommended || string.IsNullOrWhiteSpace(choice.Description) ? "" : "\n" + choice.Description);
         }
 
-        private static float DrawTacticHint(ITacticControl control, float x, float y, float width)
+        public static string TacticHintText(ITacticControl control)
         {
-            if (control == null || string.IsNullOrEmpty(control.Current) || control.ChoiceViews == null) return y;
+            if (control == null || string.IsNullOrEmpty(control.Current) || control.ChoiceViews == null) return "";
             for (int i = 0; i < control.ChoiceViews.Count; i++)
             {
                 var choice = control.ChoiceViews[i];
                 if (choice.Selection != control.Current || choice.Style != "partner") continue;
-                GUI.Label(new Rect(x, y, width, 40f), UiText.T(
+                return UiText.T(
                     "This tactic leaves units you control alone. Select a unit and move it yourself.",
-                    "この戦術は、あなたが動かしている部隊には触れません。部隊を選んで動かしてみてください。"), UiStyles.Tiny);
-                return y + 42f;
+                    "この戦術は、あなたが動かしている部隊には触れません。部隊を選んで動かしてみてください。");
             }
-            return y;
+            return "";
         }
 
-        private static float DrawTacticStatus(ITacticControl control, string title, float x, float y, float width)
+        private static float DrawTacticHint(ITacticControl control, float x, float y, float width)
         {
-            if (control == null || !control.Active) return y;
+            string hint = TacticHintText(control);
+            if (string.IsNullOrEmpty(hint)) return y;
+            GUI.Label(new Rect(x, y, width, 40f), hint, UiStyles.Tiny);
+            return y + 42f;
+        }
+
+        public static string TacticStatusText(ITacticControl control, string title)
+        {
+            if (control == null || !control.Active) return "";
             string failure = control.FailureCount == 0 ? UiText.T("none", "なし") : control.LastFailureReason;
             string stopped = control.Disabled ? UiText.T(" STOPPED (10 consecutive failures)", " 停止（10回連続失敗）") : "";
-            string summary = title + ": " + control.Name
+            return title + ": " + control.Name
                 + UiText.T(" | last tick ", "｜最後のtick ") + control.LastTick
                 + UiText.T(" | commands ", "｜命令 ") + control.SentCommands
                 + UiText.T(" | discarded ", "｜破棄 ") + control.RejectedCommands
                 + UiText.T(" | failures ", "｜失敗 ") + control.FailureCount
                 + UiText.T(" | last reason ", "｜最後の理由 ") + failure + stopped;
-            GUI.Label(new Rect(x, y, width, 22f), summary, UiStyles.Tiny);
-            y += 20f;
+        }
+
+        public static string TacticConsoleText(ITacticControl control)
+        {
+            if (control == null || !control.Active) return "";
             var lines = control.ConsoleLines;
             var recent = new List<string>();
             if (lines != null)
@@ -661,10 +719,56 @@ namespace Rts.Presentation
                 int start = Mathf.Max(0, lines.Count - 5);
                 for (int i = start; i < lines.Count; i++) recent.Add(lines[i]);
             }
-            string console = recent.Count == 0 ? UiText.T("none", "なし") : string.Join("\n", recent.ToArray());
-            GUI.Label(new Rect(x, y, width, 70f), UiText.T("console.log (latest 5): ", "console.log（最新5行）：") + console, UiStyles.Tiny);
-            y += 70f;
-            return y + 2f;
+            return UiText.T("console.log (latest 5): ", "console.log（最新5行）：")
+                + (recent.Count == 0 ? UiText.T("none", "なし") : string.Join("\n", recent.ToArray()));
+        }
+
+        private static float DrawTacticStatus(ITacticControl control, string title, float x, float y, float width)
+        {
+            string summary = TacticStatusText(control, title);
+            if (string.IsNullOrEmpty(summary)) return y;
+            GUI.Label(new Rect(x, y, width, 22f), summary, UiStyles.Tiny);
+            y += 20f;
+            GUI.Label(new Rect(x, y, width, 70f), TacticConsoleText(control), UiStyles.Tiny);
+            return y + 72f;
+        }
+
+        public static string TacticParameterLabel(TacticParamView parameter)
+        {
+            return UiText.T(parameter.Name, parameter.Label);
+        }
+
+        public static object TacticParameterValue(ITacticControl control, TacticParamView parameter)
+        {
+            object raw;
+            if (control != null && control.ParamValues != null && control.ParamValues.TryGetValue(parameter.Name, out raw)) return raw;
+            return parameter.DefaultValue;
+        }
+
+        public void BeginTacticSignal(ITacticControl control, TacticSignalView signal)
+        {
+            if (control == null || signal == null) return;
+            if (signal.NeedsPoint)
+            {
+                awaitingSignal = signal;
+                awaitingGround = false;
+                AddLog(UiText.T("Click the map for " + signal.Label + ". Esc/right-click cancels.", signal.Label + "の地点を地図でクリックしてください。Esc/右クリックで取消。"));
+            }
+            else if (!control.SendSignal(signal.Name, null, out var reason)) AddLog(reason);
+            else AddLog(UiText.T(signal.Label + " sent", signal.Label + "を送りました"));
+        }
+
+        public void SetTacticParameter(ITacticControl control, TacticParamView parameter, decimal value)
+        {
+            if (control == null || parameter == null) return;
+            decimal min = parameter.Min ?? value;
+            decimal max = parameter.Max ?? value;
+            decimal next = Math.Min(max, Math.Max(min, value));
+            if (parameter.Step.HasValue && parameter.Step.Value > 0m)
+                next = min + Math.Round((next - min) / parameter.Step.Value, 0, MidpointRounding.AwayFromZero) * parameter.Step.Value;
+            next = Math.Min(max, Math.Max(min, next));
+            if (parameter.Type == "int") control.SetParam(parameter.Name, (int)Math.Round(next, 0, MidpointRounding.AwayFromZero));
+            else control.SetParam(parameter.Name, next);
         }
 
         private static float DrawTacticReloadControls(ITacticControl control, float x, float y, float width)
@@ -696,9 +800,8 @@ namespace Rts.Presentation
             }
             foreach (var parameter in control.Parameters ?? Array.Empty<TacticParamView>())
             {
-                object raw;
-                if (!control.ParamValues.TryGetValue(parameter.Name, out raw)) raw = parameter.DefaultValue;
-                string label = UiText.T(parameter.Name, parameter.Label);
+                object raw = TacticParameterValue(control, parameter);
+                string label = TacticParameterLabel(parameter);
                 if (parameter.Type == "bool")
                 {
                     bool value = raw is bool b && b;
@@ -766,15 +869,7 @@ namespace Rts.Presentation
                 var signal = control.Signals[i];
                 var rect = new Rect(x + (i % columns) * cell, y + (i / columns) * 28f, cell - 4f, 24f);
                 string text = signal.Label + (signal.NeedsPoint ? UiText.T(" (pick point)", "（地点を選ぶ）") : "");
-                if (!GUI.Button(rect, text)) continue;
-                if (signal.NeedsPoint)
-                {
-                    awaitingSignal = signal;
-                    awaitingGround = false;
-                    AddLog(UiText.T("Click the map for " + signal.Label + ". Esc/right-click cancels.", signal.Label + "の地点を地図でクリックしてください。Esc/右クリックで取消。"));
-                }
-                else if (!control.SendSignal(signal.Name, null, out var reason)) AddLog(reason);
-                else AddLog(UiText.T(signal.Label + " sent", signal.Label + "を送りました"));
+                if (GUI.Button(rect, text)) BeginTacticSignal(control, signal);
             }
             return y + ((control.Signals.Count + columns - 1) / columns) * 28f;
         }

@@ -11,12 +11,14 @@ namespace Rts.Presentation
 {
     /// <summary>
     /// Optional visuals from a purchased asset pack (Toony Tiny RTS Set). The pack lives under Assets/ThirdParty/, which
-    /// is git-ignored (an Extension Asset needs one license per person holding the files), so this code refers to it
-    /// only by path and works without it: every method reports false when the pack is missing, and the caller falls
-    /// back to the placeholder models. Nothing here is referenced from a scene or prefab.
+    /// is git-ignored (an Extension Asset needs one license per person holding the files). The editor reads the pack by
+    /// path; a build reads the generated LocalVisualPackManifest. Both paths work without the pack: every method reports
+    /// false when the relevant asset is missing, and the caller falls back to the placeholder models.
     /// </summary>
     public static class LocalVisualPack
     {
+        public const string ManifestAssetPath = "Assets/RTS/Generated/Resources/LocalVisualPackManifest.asset";
+        public const string ManifestResourceName = "LocalVisualPackManifest";
         private const string Root = "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/";
         private const string Units = Root + "prefabs/";
         private const string Buildings = Root + "models/buildings/";
@@ -164,6 +166,25 @@ namespace Rts.Presentation
             return AnimationTable.TryGetValue(kind, out var spec) ? spec.Path(motion) : null;
         }
 
+        public static string CoreAssetPath() { return Buildings + "Castle.FBX"; }
+
+        public static string OutpostAssetPath() { return Buildings + OutpostModel; }
+
+        public static string UnitMaterialAssetPath(bool own)
+        {
+            return UnitMaterialRoot + (own ? "blue" : "red") + ".mat";
+        }
+
+        public static string BuildingMaterialAssetPath(uint owner)
+        {
+            return BuildingMaterialRoot + (owner == 1 ? "blue" : owner == 2 ? "red" : "white") + ".mat";
+        }
+
+        public static string AnimationKey(UnitKind kind, UnitMotion motion)
+        {
+            return LocalVisualPackManifest.AnimationKey(kind, motion);
+        }
+
         public sealed class AnimationHandle
         {
             private const float BlendSeconds = 0.15f;
@@ -254,16 +275,15 @@ namespace Rts.Presentation
 
         public static AnimationHandle TryCreateAnimation(GameObject instance, UnitKind kind, ulong id)
         {
-#if UNITY_EDITOR
             if (Disabled || instance == null || !AnimationTable.ContainsKey(kind)) return null;
             var animator = instance.GetComponentInChildren<Animator>();
             if (animator == null) return null;
-            var idle = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Idle));
-            var walk = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Walk));
-            var attack = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Attack));
+            var idle = LoadAnimationClip(kind, UnitMotion.Idle);
+            var walk = LoadAnimationClip(kind, UnitMotion.Walk);
+            var attack = LoadAnimationClip(kind, UnitMotion.Attack);
             if (idle == null || walk == null || attack == null) return null;
-            var work = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Work));
-            var death = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Death));
+            var work = LoadAnimationClip(kind, UnitMotion.Work);
+            var death = LoadAnimationClip(kind, UnitMotion.Death);
             // Off-screen soldiers are not animated at all; a crowd of 200 only pays for the ones in view.
             animator.cullingMode = AnimatorCullingMode.CullCompletely;
             var graph = PlayableGraph.Create("RTS Unit Animation");
@@ -293,9 +313,6 @@ namespace Rts.Presentation
             graph.Play();
             return new AnimationHandle(graph, mixer, idlePlayable, walkPlayable, attackPlayable, workPlayable,
                 deathPlayable, attack.length, hasWork ? work.length : 0d, hasWork, hasDeath);
-#else
-            return null;
-#endif
         }
 
 #if UNITY_EDITOR
@@ -313,35 +330,47 @@ namespace Rts.Presentation
         }
 #endif
 
+        private static AnimationClip LoadAnimationClip(UnitKind kind, UnitMotion motion)
+        {
+#if UNITY_EDITOR
+            return LoadAnimationClip(AnimationAssetPath(kind, motion));
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetAnimation(kind, motion);
+#endif
+        }
+
         /// <summary>Finished height of a building model, or 0 for kinds that keep the placeholder box.</summary>
         public static float BuildingHeight(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.Height : 0f; }
 
         public static float BuildingWidthScale(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f; }
 
-        public static bool HasUnit(UnitKind kind) { return Exists(UnitAssetPath(kind)); }
+        public static bool HasUnit(UnitKind kind) { return !Disabled && LoadUnitModel(kind) != null; }
 
-        public static bool HasBuilding(BuildingKind kind) { return Exists(BuildingAssetPath(kind)); }
+        public static bool HasBuilding(BuildingKind kind) { return !Disabled && LoadBuildingModel(kind) != null; }
 
-        public static bool HasCore() { return Exists(Buildings + "Castle.FBX"); }
+        public static bool HasCore() { return !Disabled && LoadCoreModel() != null; }
 
-        public static bool HasOutpost() { return Exists(Buildings + OutpostModel); }
+        public static bool HasOutpost() { return !Disabled && LoadOutpostModel() != null; }
 
         /// <summary>Creates an outpost tower under parent, white (neutral) until SetOutpostOwner colors it.</summary>
         public static bool TryCreateOutpost(Transform parent, out GameObject instance, out float height)
         {
-            return TryCreate(Buildings + OutpostModel, BuildingMaterial(0), parent, OutpostWidth, true, out instance, out height);
+            return TryCreate(LoadOutpostModel(), LoadMaterial(LocalVisualPackManifest.BuildingWhiteMaterialKey,
+                BuildingMaterialAssetPath(0)), parent, OutpostWidth, true, out instance, out height);
         }
 
         /// <summary>Colors an outpost tower by its owner: 1 west blue, 2 east red, anything else neutral white.</summary>
         public static void SetOutpostOwner(GameObject instance, uint owner)
         {
-            Recolor(instance, BuildingMaterial(owner));
+            Recolor(instance, LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)));
         }
 
         /// <summary>Creates a unit of the pack under parent, feet on the parent's y, team blue (own) or red (enemy).</summary>
         public static bool TryCreateUnit(UnitKind kind, bool own, Transform parent, out GameObject instance)
         {
-            return TryCreate(UnitAssetPath(kind), UnitMaterialRoot + (own ? "blue" : "red") + ".mat",
+            return TryCreate(LoadUnitModel(kind), LoadMaterial(own ? LocalVisualPackManifest.UnitBlueMaterialKey : LocalVisualPackManifest.UnitRedMaterialKey,
+                UnitMaterialAssetPath(own)),
                 parent, UnitHeight(kind), false, out instance, out _);
         }
 
@@ -355,7 +384,8 @@ namespace Rts.Presentation
             instance = null;
             float height = BuildingHeight(kind);
             if (height <= 0f) return false;
-            return TryCreateStretched(BuildingAssetPath(kind), BuildingMaterial(owner), parent, width, height, out instance);
+            return TryCreateStretched(LoadBuildingModel(kind), LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)),
+                parent, width, height, out instance);
         }
 
         /// <summary>Under construction a building rises from the ground: progress 0..1 scales the holder's height only.</summary>
@@ -368,20 +398,83 @@ namespace Rts.Presentation
         /// <summary>Creates the core building under parent; height is the top of the model, for placing the HP bar.</summary>
         public static bool TryCreateCore(bool west, Transform parent, out GameObject instance, out float height)
         {
-            return TryCreate(Buildings + "Castle.FBX", BuildingMaterial(west ? 1u : 2u), parent, CoreWidth, true, out instance, out height);
+            uint owner = west ? 1u : 2u;
+            return TryCreate(LoadCoreModel(), LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)),
+                parent, CoreWidth, true, out instance, out height);
         }
 
-        private static string BuildingMaterial(uint owner)
+        private static string BuildingMaterialKey(uint owner)
         {
-            return BuildingMaterialRoot + (owner == 1 ? "blue" : owner == 2 ? "red" : "white") + ".mat";
+            return owner == 1 ? LocalVisualPackManifest.BuildingBlueMaterialKey :
+                owner == 2 ? LocalVisualPackManifest.BuildingRedMaterialKey : LocalVisualPackManifest.BuildingWhiteMaterialKey;
         }
 
+        private static LocalVisualPackManifest LoadManifest()
+        {
 #if UNITY_EDITOR
-        private static bool Exists(string path) { return !Disabled && path != null && AssetDatabase.LoadAssetAtPath<GameObject>(path) != null; }
+            return AssetDatabase.LoadAssetAtPath<LocalVisualPackManifest>(ManifestAssetPath);
+#else
+            return Resources.Load<LocalVisualPackManifest>(ManifestResourceName);
+#endif
+        }
 
-        private static void Recolor(GameObject instance, string materialPath)
+        private static GameObject LoadUnitModel(UnitKind kind)
         {
-            var material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (Disabled) return null;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<GameObject>(UnitAssetPath(kind));
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetUnit(kind);
+#endif
+        }
+
+        private static GameObject LoadBuildingModel(BuildingKind kind)
+        {
+            if (Disabled) return null;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<GameObject>(BuildingAssetPath(kind));
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetBuilding(kind);
+#endif
+        }
+
+        private static GameObject LoadCoreModel()
+        {
+            if (Disabled) return null;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<GameObject>(CoreAssetPath());
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetCore();
+#endif
+        }
+
+        private static GameObject LoadOutpostModel()
+        {
+            if (Disabled) return null;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<GameObject>(OutpostAssetPath());
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetOutpost();
+#endif
+        }
+
+        private static Material LoadMaterial(string key, string editorPath)
+        {
+            if (Disabled) return null;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<Material>(editorPath);
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetMaterial(key);
+#endif
+        }
+
+        private static void Recolor(GameObject instance, Material material)
+        {
             if (material == null || instance == null) return;
             foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
             {
@@ -392,18 +485,16 @@ namespace Rts.Presentation
             }
         }
 
-        private static bool TryCreate(string modelPath, string materialPath, Transform parent, float size, bool bySpan,
+        private static bool TryCreate(GameObject model, Material material, Transform parent, float size, bool bySpan,
             out GameObject instance, out float height)
         {
             instance = null; height = 0f;
-            if (Disabled || modelPath == null) return false;
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
-            if (model == null) return false;
+            if (Disabled || model == null || parent == null) return false;
             var holder = new GameObject("Pack");
             holder.transform.SetParent(parent, false);
             var body = Object.Instantiate(model, holder.transform);
             body.transform.localPosition = Vector3.zero;
-            Recolor(body, materialPath);
+            Recolor(body, material);
             var bounds = Measure(body);
             float measured = bySpan ? Mathf.Max(bounds.size.x, bounds.size.z) : bounds.size.y;
             if (measured <= 0.0001f) { Discard(holder); return false; }
@@ -418,18 +509,16 @@ namespace Rts.Presentation
         }
 
         /// <summary>Like TryCreate, but stretches the body to an exact footprint width and height; the holder stays at scale 1.</summary>
-        private static bool TryCreateStretched(string modelPath, string materialPath, Transform parent, float width, float height,
+        private static bool TryCreateStretched(GameObject model, Material material, Transform parent, float width, float height,
             out GameObject instance)
         {
             instance = null;
-            if (Disabled || modelPath == null) return false;
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
-            if (model == null) return false;
+            if (Disabled || model == null || parent == null) return false;
             var holder = new GameObject("Pack");
             holder.transform.SetParent(parent, false);
             var body = Object.Instantiate(model, holder.transform);
             body.transform.localPosition = Vector3.zero;
-            Recolor(body, materialPath);
+            Recolor(body, material);
             var bounds = Measure(body);
             float span = Mathf.Max(bounds.size.x, bounds.size.z);
             if (span <= 0.0001f || bounds.size.y <= 0.0001f) { Discard(holder); return false; }
@@ -454,27 +543,11 @@ namespace Rts.Presentation
 
         private static void Discard(Object target)
         {
+#if UNITY_EDITOR
             if (UnityEngine.Application.isPlaying) Object.Destroy(target); else Object.DestroyImmediate(target);
-        }
 #else
-        // A player build cannot load the pack by path, so it always uses the placeholder models.
-        private static bool Exists(string path) { return false; }
-
-        private static void Recolor(GameObject instance, string materialPath) { }
-
-        private static bool TryCreate(string modelPath, string materialPath, Transform parent, float size, bool bySpan,
-            out GameObject instance, out float height)
-        {
-            instance = null; height = 0f;
-            return false;
-        }
-
-        private static bool TryCreateStretched(string modelPath, string materialPath, Transform parent, float width, float height,
-            out GameObject instance)
-        {
-            instance = null;
-            return false;
-        }
+            Object.Destroy(target);
 #endif
+        }
     }
 }

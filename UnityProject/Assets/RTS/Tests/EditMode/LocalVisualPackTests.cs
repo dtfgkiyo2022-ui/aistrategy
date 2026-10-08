@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using Rts.Contracts;
 using Rts.Presentation;
+using UnityEngine;
 
 namespace Rts.Tests.EditMode
 {
@@ -86,6 +87,38 @@ namespace Rts.Tests.EditMode
             finally
             {
                 LocalVisualPack.Disabled = false;
+            }
+        }
+
+        [Test]
+        public void MissingManifestFallsBackWithoutThrowing()
+        {
+            if (Resources.Load<LocalVisualPackManifest>(LocalVisualPack.ManifestResourceName) != null)
+                Assert.Ignore("生成済みの素材パック一覧がある環境では、素材ありの経路を確認します。");
+            // In the editor the pack is read straight from Assets/ThirdParty, so a PC that has it never falls back.
+            if (System.IO.Directory.Exists(System.IO.Path.Combine(UnityEngine.Application.dataPath, "ThirdParty", "ToonyTinyPeople")))
+                Assert.Ignore("素材パックがある PC では、仮の形に戻る経路は確かめられません。");
+
+            var parent = new GameObject("LocalVisualPackTests");
+            try
+            {
+                GameObject instance;
+                float height;
+                Assert.DoesNotThrow(() =>
+                {
+                    Assert.IsFalse(LocalVisualPack.TryCreateUnit(UnitKind.Infantry, true, parent.transform, out instance));
+                    Assert.IsFalse(LocalVisualPack.TryCreateBuilding(BuildingKind.Barracks, 1u, parent.transform, 4f, out instance));
+                    Assert.IsFalse(LocalVisualPack.TryCreateCore(true, parent.transform, out instance, out height));
+                    Assert.IsFalse(LocalVisualPack.TryCreateOutpost(parent.transform, out instance, out height));
+                    Assert.IsFalse(LocalVisualPack.HasUnit(UnitKind.Infantry));
+                    Assert.IsFalse(LocalVisualPack.HasBuilding(BuildingKind.Barracks));
+                    Assert.IsFalse(LocalVisualPack.HasCore());
+                    Assert.IsFalse(LocalVisualPack.HasOutpost());
+                });
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(parent);
             }
         }
     }
