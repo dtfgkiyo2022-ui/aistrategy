@@ -35,6 +35,7 @@ namespace Rts.Presentation
         private readonly List<string> log = new List<string>();
 
         public bool IsAwaitingGround { get { return awaitingGround; } }
+        public bool IsSetupOpen { get { return setupOpen; } }
 
         private void Update()
         {
@@ -211,7 +212,7 @@ namespace Rts.Presentation
                     CancelGroundPick();
             }
 
-            if (!setupOpen)
+            if (!setupOpen && !HudToolkit.IsEnabled)
             {
                 DrawSupply();
                 UiHitAreas.Shared.Register(SupplyRect());
@@ -289,21 +290,40 @@ namespace Rts.Presentation
             return kind == GoalKind.Core ? UiText.T("Core", "コア") : kind == GoalKind.Outpost ? UiText.T("Outpost", "拠点") : kind.ToString();
         }
 
+        /// <summary>Shared with the UI Toolkit supply panel so the two screens use the same wording.</summary>
+        public string SupplyUnitsText()
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            return frame == null ? "" : UiText.T("Units ", "兵 ") + frame.AliveCount + " / " + frame.FactionCap;
+        }
+
+        /// <summary>There are at most two reinforcement rows in the compact HUD box.</summary>
+        public int SupplyLineCount
+        {
+            get
+            {
+                var frame = view == null ? null : view.LatestFrame;
+                return frame == null ? 0 : Mathf.Min(2, frame.Reinforcements.Count);
+            }
+        }
+
+        /// <summary>Shared with the UI Toolkit supply panel so reinforcement names and times stay in one place.</summary>
+        public string SupplyLineText(int index)
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || index < 0 || index >= SupplyLineCount) return "";
+            var reinforcement = frame.Reinforcements[index];
+            return ReinforcementSite(reinforcement.Kind) + " " + reinforcement.Id
+                + UiText.T(": next reinforcement in ", "：次の増援まで ") + Seconds(reinforcement.TicksRemaining);
+        }
+
         private void DrawSupply()
         {
-            var frame = view.LatestFrame;
             var rect = SupplyRect();
             UiStyles.Box(rect, UiText.T("Supply / reinforcements", "兵站・増援"));
-            if (frame == null) return;
-            GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), UiText.T("Units ", "兵 ") + frame.AliveCount + " / " + frame.FactionCap);
-            int row = 1;
-            foreach (var r in frame.Reinforcements)
-            {
-                if (row > 2) break;
-                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f + row * 22f, rect.width - 12f, 20f),
-                    ReinforcementSite(r.Kind) + " " + r.Id + UiText.T(": next reinforcement in ", "：次の増援まで ") + Seconds(r.TicksRemaining));
-                row++;
-            }
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 22f, rect.width - 12f, 20f), SupplyUnitsText());
+            for (int i = 0; i < SupplyLineCount; i++)
+                GUI.Label(new Rect(rect.x + 6f, rect.y + 22f + (i + 1) * 22f, rect.width - 12f, 20f), SupplyLineText(i));
         }
 
         private Vector2 setupScroll;
