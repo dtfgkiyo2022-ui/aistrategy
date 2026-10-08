@@ -873,7 +873,7 @@ namespace Rts.UnityHost
                 // Always present: it stays hidden and builds nothing until the setup panel's switch turns it on.
                 if (hudToolkit == null) hudToolkit = GetComponent<HudToolkit>();
                 if (hudToolkit == null) hudToolkit = gameObject.AddComponent<HudToolkit>();
-                hudToolkit.Bind(view, this, panel);
+                hudToolkit.Bind(view, economyPanel, this, panel);
                 if (panel != null)
                 {
                     panel.MapChoice = this;
