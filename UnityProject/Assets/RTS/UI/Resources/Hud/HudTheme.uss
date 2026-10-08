@@ -113,8 +113,9 @@
     width: var(--hud-icon-size);
     height: var(--hud-icon-size);
     margin-right: var(--hud-gap);
-    background-color: var(--hud-accent);
+    flex-shrink: 0;
     -unity-background-image-tint-color: var(--hud-accent);
+    -unity-background-scale-mode: scale-to-fit;
     border-radius: var(--hud-icon-radius);
 }
 
@@ -124,12 +125,16 @@
 }
 
 .hud-resource-name {
+    margin: 0;
+    padding: 0;
     color: var(--hud-muted-text);
     font-size: var(--hud-small-font-size);
     white-space: nowrap;
 }
 
 .hud-resource-value {
+    margin: 0;
+    padding: 0;
     color: var(--hud-text);
     font-size: var(--hud-font-size);
     width: var(--hud-number-width);
@@ -351,8 +356,8 @@
 }
 
 .staff-input {
-    flex-grow: 1;
-    min-height: 28px;
+    flex-grow: 0;
+    height: 32px;
     margin-top: 4px;
     margin-bottom: 4px;
     background-color: var(--hud-staff-input);
@@ -459,18 +464,18 @@
 }
 
 .commands-content {
-    flex-direction: row;
+    flex-direction: column;
     flex-grow: 1;
     min-height: 0;
     margin-top: 4px;
 }
 
 .commands-selection {
-    width: 38%;
     flex-shrink: 0;
-    padding-right: var(--hud-gap);
-    border-right-width: 1px;
-    border-right-color: var(--hud-divider);
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    border-bottom-width: 1px;
+    border-bottom-color: var(--hud-divider);
     flex-direction: column;
 }
 
@@ -496,12 +501,11 @@
     flex-direction: row;
     flex-wrap: wrap;
     align-content: flex-start;
-    padding-left: var(--hud-gap);
 }
 
 .command-cell {
     flex-direction: row;
-    width: 25%;
+    width: 50%;
     min-height: 36px;
     padding-right: 2px;
     padding-bottom: 4px;
@@ -517,8 +521,9 @@
     border-width: var(--hud-border-width);
     border-color: var(--hud-panel-border);
     border-radius: var(--hud-radius);
-    font-size: var(--hud-small-font-size);
+    font-size: var(--hud-font-size);
     white-space: normal;
+    -unity-text-align: middle-center;
 }
 
 .command-button:hover {
@@ -532,7 +537,7 @@
 }
 
 .command-key-hint {
-    width: 6px;
+    width: 0;
     flex-shrink: 0;
     color: var(--hud-muted-text);
     font-size: var(--hud-small-font-size);
