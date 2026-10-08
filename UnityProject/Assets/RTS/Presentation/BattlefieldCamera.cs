@@ -9,6 +9,7 @@ namespace Rts.Presentation
         [SerializeField] private float mapHeight = 128f;
         [SerializeField] private float panSpeed = 1.1f;
         [SerializeField] private float zoomStep = 12f;
+        private float nextBlockedLog;
         [SerializeField] private float minDistance = 25f;
         [SerializeField] private float maxDistance = 170f;
 
@@ -35,9 +36,18 @@ namespace Rts.Presentation
             focus.z = Mathf.Clamp(focus.z, 0f, mapHeight);
 
             float wheel = Input.mouseScrollDelta.y;
-            if (!UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)
-                && Mathf.Abs(wheel) > 0.01f)
+            bool overPanel = UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height);
+            if (!overPanel && Mathf.Abs(wheel) > 0.01f)
                 distance = Mathf.Clamp(distance - wheel * zoomStep, minDistance, maxDistance);
+            else if (overPanel && Mathf.Abs(wheel) > 0.01f && Time.unscaledTime >= nextBlockedLog)
+            {
+                // The wheel over a panel scrolls the panel, not the map. Logged (at most once a second) so a panel
+                // that covers more than it shows can be found from Editor.log (zoom stopped working once, 10-08).
+                nextBlockedLog = Time.unscaledTime + 1f;
+                var point = new Vector2(Input.mousePosition.x, Screen.height - Input.mousePosition.y);
+                UiHitAreas.Shared.TryFindGui(point, out var area);
+                Debug.Log("RTS zoom blocked by a panel: mouse=" + point + " area=" + area + " screen=" + Screen.width + "x" + Screen.height);
+            }
 
             transform.position = focus - transform.forward * distance;
         }
