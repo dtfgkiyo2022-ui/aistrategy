@@ -131,6 +131,7 @@ namespace Rts.Presentation
             switch (source)
             {
                 case CommandSource.Human: return UiText.T("Your", "あなた");
+                case CommandSource.Doctrine: return UiText.T("Entrusted policy", "お任せの方針");
                 case CommandSource.Ai: return UiText.T("Staff officer's", "参謀");
                 default: return UiText.T("Auto", "お任せ");
             }

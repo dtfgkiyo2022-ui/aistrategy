@@ -80,6 +80,7 @@ function onTick(view) {
   var commands = [{ type: "global", policy: attacking ? "concentrate" : "maintain" }];
   for (var i = 0; i < view.ownArmies.length; i++) {
     var army = view.ownArmies[i];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     commands.push(attacking ? {
       type: "policy", kind: "Focus", target: { kind: "Army", id: army.id }, goal: { kind: "Point", point: targetPosition }, priority: PICK_PRIORITY, allowedLossPermille: 500, reservePermille: 0
     } : {

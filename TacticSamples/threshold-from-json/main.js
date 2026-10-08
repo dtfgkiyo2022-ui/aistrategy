@@ -7,6 +7,7 @@ function onTick(view) {
   var commands = [];
   for (var j = 0; j < view.ownArmies.length; j++) {
     var army = view.ownArmies[j];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     commands.push({
       type: "policy",
       kind: attacking ? "Focus" : "Defend",

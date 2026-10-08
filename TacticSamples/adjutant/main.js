@@ -35,6 +35,7 @@ function onTick(view) {
   var commands = [{ type: "global", policy: "maintain" }];
   for (var i = 0; i < view.ownArmies.length; i++) {
     var army = view.ownArmies[i];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     if (army.controlledBy === "Human") continue;
     commands.push({
       type: "policy",

@@ -139,10 +139,12 @@
     <Compile Include="TacticSignalTests.cs" />
     <Compile Include="HumanOrderReplayTests.cs" />
     <Compile Include="SayCommandTests.cs" />
+    <Compile Include="MatchTimelineTests.cs" />
     <Compile Include="TacticReloadTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/LiveAiCommandPort.cs" Link="UnityHost/LiveAiCommandPort.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SmokeOptions.cs" Link="UnityHost/SmokeOptions.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchTimeline.cs" Link="Presentation/MatchTimeline.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
   </ItemGroup>
 </Project>

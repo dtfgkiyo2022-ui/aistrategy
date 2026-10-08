@@ -35,6 +35,7 @@ function onTick(view) {
   var enemyCore = view.factionId === 1 ? 2 : 1;
   for (var j = 0; j < view.ownArmies.length; j++) {
     var army = view.ownArmies[j];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     if (army.controlledBy === "Human") continue;
     var kind = "Defend";
     var goal = { kind: "Core", id: view.factionId };

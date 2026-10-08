@@ -132,6 +132,22 @@ namespace Rts.Application
             foreach (var objective in frame.Objectives.Where(v => v.Kind == GoalKind.Outpost && v.IsOwnerKnown).OrderBy(v => v.Id))
             {
                 if (objective.OwnerFactionId != faction) { defendCommands.Remove(objective.Id); defendStaleRetries.Remove(objective.Id); continue; }
+                // A Defend order for an outpost affects the army whose home is that outpost.  Do not
+                // select an outpost while every such observed army is empty.  This is also the
+                // deterministic retry gate after EmptyArmy: the command id is retained while the
+                // army is empty, then released when an observed reinforcement makes it usable again.
+                bool hasLivingArmy = frame.Observation.OwnArmies.Any(army => army.AliveCount > 0 &&
+                    army.HomeObjective.Kind == GoalKind.Outpost && army.HomeObjective.Id == objective.Id);
+                if (!hasLivingArmy) continue;
+                if (defendCommands.TryGetValue(objective.Id, out var commandId) && commandId != 0)
+                {
+                    var previous = frame.Commands.FirstOrDefault(command => command.CommandId == commandId);
+                    if (previous.CommandId != 0 && previous.Status == CommandStatus.Impossible && previous.Reason == ReasonCode.EmptyArmy)
+                    {
+                        defendCommands.Remove(objective.Id);
+                        defendStaleRetries.Remove(objective.Id);
+                    }
+                }
                 // A proposal is not visible in the frame until the gateway has applied it.  Keep
                 // the zero entry during that interval (and after a rejection/terminal result):
                 // maintain renews Defend on ownership reacquisition, not on every tick that an
