@@ -20,6 +20,9 @@ namespace Rts.Presentation
         private const string StaffUxmlResourcePath = "Hud/Staff";
         private const string CommandsUxmlResourcePath = "Hud/Commands";
         private const string EconomyUxmlResourcePath = "Hud/Economy";
+        private const string SupplyUxmlResourcePath = "Hud/Supply";
+        private const string TimelineUxmlResourcePath = "Hud/Timeline";
+        private const string ClockUxmlResourcePath = "Hud/Clock";
         private const string BaseUssResourcePath = "Hud/HudTheme";
         private const string RegularFontResourcePath = "Hud/Fonts/NotoSansJP-Regular";
         private const string BoldFontResourcePath = "Hud/Fonts/NotoSansJP-Bold";
@@ -91,12 +94,31 @@ namespace Rts.Presentation
         private Button economyTabMake;
         private Button economyTabResearch;
         private Button economyTabPolicy;
+        private CommandPanel supplySource;
+        private VisualElement supplyFrame;
+        private Label supplyTitle;
+        private Label supplyUnits;
+        private Label supplyLine0;
+        private Label supplyLine1;
+        private TimelinePanel timelineSource;
+        private VisualElement timelineFrame;
+        private Label timelineTitle;
+        private ScrollView timelineScroll;
+        private VisualElement clockFrame;
+        private Label clockInfo;
+        private Button clockPause;
+        private Button clockStep;
+        private Button clockSpeed1;
+        private Button clockSpeed2;
+        private Button clockSpeed4;
+        private Button clockFaction;
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
         private int renderedStaffLineCount;
         private readonly List<StaffLineSlot> staffLineSlots = new List<StaffLineSlot>();
         private readonly List<EconomyActionSlot> economyActionSlots = new List<EconomyActionSlot>();
+        private readonly List<TimelineLineSlot> timelineLineSlots = new List<TimelineLineSlot>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> resources =
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<ResourceSlot> slots = new List<ResourceSlot>();
@@ -115,6 +137,9 @@ namespace Rts.Presentation
         private int activeThemeIndex = -1;
         private bool warnedMissingFont;
         private string economyActionSignature = "";
+        private int renderedTimelineLineCount;
+        private long renderedTimelineLastTick = long.MinValue;
+        private string renderedTimelineLastText = "";
 
         private sealed class ThemeFontSet
         {
@@ -144,6 +169,11 @@ namespace Rts.Presentation
             public VisualElement Row;
             public Button Button;
             public Label Reason;
+        }
+
+        private sealed class TimelineLineSlot
+        {
+            public Label Label;
         }
 
         private static bool? commandLineFlag;
@@ -196,15 +226,23 @@ namespace Rts.Presentation
 
         public void Bind(BattlefieldView battlefield, IStaffControl staffControl, CommandPanel commandControl)
         {
-            Bind(battlefield, null, staffControl, commandControl);
+            Bind(battlefield, null, staffControl, commandControl, null, null);
         }
 
         public void Bind(BattlefieldView battlefield, EconomyPanel economyControl, IStaffControl staffControl, CommandPanel commandControl)
+        {
+            Bind(battlefield, economyControl, staffControl, commandControl, commandControl, null);
+        }
+
+        public void Bind(BattlefieldView battlefield, EconomyPanel economyControl, IStaffControl staffControl,
+            CommandPanel commandControl, CommandPanel supplyControl, TimelinePanel timelineControl)
         {
             view = battlefield;
             economyPanel = economyControl;
             staff = staffControl;
             commandPanel = commandControl;
+            supplySource = supplyControl;
+            timelineSource = timelineControl;
             enabled = true;
             if (IsEnabled) EnsureDocument();
         }
@@ -222,6 +260,9 @@ namespace Rts.Presentation
                 if (economyFrame != null) economyFrame.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
                 if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
+                if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
+                if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
+                if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
                 return;
             }
@@ -237,6 +278,9 @@ namespace Rts.Presentation
                 if (economyFrame != null) economyFrame.style.display = DisplayStyle.None;
                 if (staffFrame != null) staffFrame.style.display = DisplayStyle.None;
                 if (commandsFrame != null) commandsFrame.style.display = DisplayStyle.None;
+                if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
+                if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
+                if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
                 SetStaffInputFocus(false);
                 return;
             }
@@ -249,6 +293,9 @@ namespace Rts.Presentation
             RefreshEconomy(economy);
             RefreshStaff();
             RefreshCommands();
+            RefreshSupply();
+            RefreshTimeline();
+            RefreshClock();
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
             // treats this Toolkit panel as occupied and does not let map selection or orders leak underneath it.
@@ -260,6 +307,12 @@ namespace Rts.Presentation
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Commands);
             if (economyFrame != null && economyFrame.resolvedStyle.display != DisplayStyle.None)
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Economy);
+            if (supplyFrame != null && supplyFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Supply);
+            if (timelineFrame != null && timelineFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Timeline);
+            if (clockFrame != null && clockFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).TopCenter);
         }
 
         private float layoutLogAt = -1f;
@@ -332,6 +385,15 @@ namespace Rts.Presentation
             var economyTree = Resources.Load<VisualTreeAsset>(EconomyUxmlResourcePath);
             if (economyTree != null) economyTree.CloneTree(root);
             else Debug.LogWarning("UI Toolkit economy UXML not found at Resources/" + EconomyUxmlResourcePath + ".");
+            var supplyTree = Resources.Load<VisualTreeAsset>(SupplyUxmlResourcePath);
+            if (supplyTree != null) supplyTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit supply UXML not found at Resources/" + SupplyUxmlResourcePath + ".");
+            var timelineTree = Resources.Load<VisualTreeAsset>(TimelineUxmlResourcePath);
+            if (timelineTree != null) timelineTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit timeline UXML not found at Resources/" + TimelineUxmlResourcePath + ".");
+            var clockTree = Resources.Load<VisualTreeAsset>(ClockUxmlResourcePath);
+            if (clockTree != null) clockTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit clock UXML not found at Resources/" + ClockUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
             topFrame = root.Q<VisualElement>("top-frame");
@@ -380,6 +442,22 @@ namespace Rts.Presentation
             economyTabMake = root.Q<Button>("economy-tab-make");
             economyTabResearch = root.Q<Button>("economy-tab-research");
             economyTabPolicy = root.Q<Button>("economy-tab-policy");
+            supplyFrame = root.Q<VisualElement>("supply-frame");
+            supplyTitle = root.Q<Label>("supply-title");
+            supplyUnits = root.Q<Label>("supply-units");
+            supplyLine0 = root.Q<Label>("supply-line-0");
+            supplyLine1 = root.Q<Label>("supply-line-1");
+            timelineFrame = root.Q<VisualElement>("timeline-frame");
+            timelineTitle = root.Q<Label>("timeline-title");
+            timelineScroll = root.Q<ScrollView>("timeline-scroll");
+            clockFrame = root.Q<VisualElement>("clock-frame");
+            clockInfo = root.Q<Label>("clock-info");
+            clockPause = root.Q<Button>("clock-pause");
+            clockStep = root.Q<Button>("clock-step");
+            clockSpeed1 = root.Q<Button>("clock-speed-1");
+            clockSpeed2 = root.Q<Button>("clock-speed-2");
+            clockSpeed4 = root.Q<Button>("clock-speed-4");
+            clockFaction = root.Q<Button>("clock-faction");
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
@@ -393,9 +471,13 @@ namespace Rts.Presentation
             if (commandsFrame != null) commandsFrame.pickingMode = PickingMode.Position;
             if (commandsPanel != null) commandsPanel.pickingMode = PickingMode.Position;
             if (economyFrame != null) economyFrame.pickingMode = PickingMode.Position;
+            if (supplyFrame != null) supplyFrame.pickingMode = PickingMode.Position;
+            if (timelineFrame != null) timelineFrame.pickingMode = PickingMode.Position;
+            if (clockFrame != null) clockFrame.pickingMode = PickingMode.Position;
             BindStaffEvents();
             BindCommandEvents();
             BindEconomyEvents();
+            BindClockEvents();
             ApplySelectedTheme();
         }
 
@@ -495,6 +577,16 @@ namespace Rts.Presentation
             economyTabPolicy.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Policy);
         }
 
+        private void BindClockEvents()
+        {
+            if (clockPause != null) clockPause.clicked += () => { if (timelineSource != null) timelineSource.TogglePause(); };
+            if (clockStep != null) clockStep.clicked += () => { if (timelineSource != null) timelineSource.StepOneTick(); };
+            if (clockSpeed1 != null) clockSpeed1.clicked += () => { if (timelineSource != null) timelineSource.SetSpeed(1); };
+            if (clockSpeed2 != null) clockSpeed2.clicked += () => { if (timelineSource != null) timelineSource.SetSpeed(2); };
+            if (clockSpeed4 != null) clockSpeed4.clicked += () => { if (timelineSource != null) timelineSource.SetSpeed(4); };
+            if (clockFaction != null) clockFaction.clicked += () => { if (timelineSource != null) timelineSource.ToggleViewFaction(); };
+        }
+
         private void SelectEconomyTab(EconomyPanel.Tab tab)
         {
             if (economyPanel != null) economyPanel.SelectToolkitTab(tab);
@@ -507,6 +599,107 @@ namespace Rts.Presentation
             frame.style.top = Length.Percent(height <= 0f ? 0f : rect.y / height * 100f);
             frame.style.width = Length.Percent(width <= 0f ? 0f : rect.width / width * 100f);
             frame.style.height = Length.Percent(height <= 0f ? 0f : rect.height / height * 100f);
+        }
+
+        private void RefreshSupply()
+        {
+            if (supplyFrame == null) return;
+            if (supplySource == null || supplySource.IsSetupOpen)
+            {
+                supplyFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            SetFrameRect(supplyFrame, UiLayout.Calculate(Screen.width, Screen.height).Supply, Screen.width, Screen.height);
+            supplyFrame.style.display = DisplayStyle.Flex;
+            if (supplyTitle != null) supplyTitle.text = UiText.T("Supply / reinforcements", "兵站・増援");
+            if (supplyUnits != null) supplyUnits.text = supplySource.SupplyUnitsText();
+            if (supplyLine0 != null) supplyLine0.text = supplySource.SupplyLineCount > 0 ? supplySource.SupplyLineText(0) : "";
+            if (supplyLine1 != null) supplyLine1.text = supplySource.SupplyLineCount > 1 ? supplySource.SupplyLineText(1) : "";
+        }
+
+        private void RefreshTimeline()
+        {
+            if (timelineFrame == null) return;
+            if (timelineSource == null || timelineScroll == null)
+            {
+                timelineFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            SetFrameRect(timelineFrame, UiLayout.Calculate(Screen.width, Screen.height).Timeline, Screen.width, Screen.height);
+            timelineFrame.style.display = DisplayStyle.Flex;
+            if (timelineTitle != null) timelineTitle.text = UiText.T("Timeline", "時系列");
+            timelineSource.Timeline.Ingest(view.LatestFrame);
+            var entries = timelineSource.Timeline.Entries;
+            bool grew = entries.Count > renderedTimelineLineCount;
+            if (entries.Count < renderedTimelineLineCount)
+            {
+                timelineScroll.Clear();
+                timelineLineSlots.Clear();
+                renderedTimelineLineCount = 0;
+                renderedTimelineLastTick = long.MinValue;
+                renderedTimelineLastText = "";
+                grew = entries.Count != 0;
+            }
+
+            for (int i = renderedTimelineLineCount; i < entries.Count; i++)
+            {
+                var label = new Label();
+                label.AddToClassList("timeline-line-text");
+                timelineScroll.Add(label);
+                timelineLineSlots.Add(new TimelineLineSlot { Label = label });
+            }
+            renderedTimelineLineCount = entries.Count;
+            for (int i = 0; i < entries.Count; i++)
+                timelineLineSlots[i].Label.text = timelineSource.TimelineEntryText(entries[i]);
+
+            bool newestChanged = entries.Count > 0 && (entries[entries.Count - 1].Tick != renderedTimelineLastTick
+                || entries[entries.Count - 1].Text != renderedTimelineLastText);
+            if (entries.Count > 0)
+            {
+                renderedTimelineLastTick = entries[entries.Count - 1].Tick;
+                renderedTimelineLastText = entries[entries.Count - 1].Text;
+            }
+            if (grew || newestChanged)
+                timelineScroll.schedule.Execute(() => timelineScroll.scrollOffset = new Vector2(0f, float.MaxValue));
+        }
+
+        private void RefreshClock()
+        {
+            if (clockFrame == null) return;
+            if (timelineSource == null)
+            {
+                clockFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            SetFrameRect(clockFrame, UiLayout.Calculate(Screen.width, Screen.height).TopCenter, Screen.width, Screen.height);
+            clockFrame.style.display = DisplayStyle.Flex;
+            var current = timelineSource.MatchClock;
+            if (clockInfo != null) clockInfo.text = timelineSource.ClockDisplayText();
+            if (clockPause != null)
+            {
+                clockPause.text = current == null ? UiText.T("Pause", "停止") : (current.Paused ? UiText.T("Play", "再生") : UiText.T("Pause", "停止"));
+                clockPause.SetEnabled(current != null);
+            }
+            if (clockStep != null) { clockStep.text = "+1"; clockStep.SetEnabled(current != null); }
+            ConfigureClockSpeedButton(clockSpeed1, 1, current);
+            ConfigureClockSpeedButton(clockSpeed2, 2, current);
+            ConfigureClockSpeedButton(clockSpeed4, 4, current);
+            if (clockFaction != null)
+            {
+                clockFaction.text = current == null ? UiText.T("View", "陣営") : UiText.T("View ", "陣営 ") + (3 - current.ViewFactionId);
+                clockFaction.SetEnabled(current != null);
+            }
+        }
+
+        private static void ConfigureClockSpeedButton(Button button, int speed, IMatchClock current)
+        {
+            if (button == null) return;
+            button.text = "x" + speed;
+            button.SetEnabled(current != null);
+            button.EnableInClassList("is-selected", current != null && current.SpeedMultiplier == speed);
         }
 
         private void RefreshEconomy(EconomyView economy)

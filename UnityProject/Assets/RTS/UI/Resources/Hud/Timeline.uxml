@@ -1,0 +1,10 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="timeline-frame" class="hud-timeline-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="timeline-panel" class="hud-timeline-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="timeline-title" class="hud-heading timeline-title" text="時系列" />
+            <ui:ScrollView name="timeline-scroll" class="timeline-scroll" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

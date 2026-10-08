@@ -1,0 +1,17 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="clock-frame" class="hud-clock-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="clock-panel" class="hud-clock-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="clock-info" class="clock-info" />
+            <ui:VisualElement class="clock-controls">
+                <ui:Button name="clock-pause" class="clock-button" />
+                <ui:Button name="clock-step" class="clock-button" text="+1" />
+                <ui:Button name="clock-speed-1" class="clock-button clock-speed" text="x1" />
+                <ui:Button name="clock-speed-2" class="clock-button clock-speed" text="x2" />
+                <ui:Button name="clock-speed-4" class="clock-button clock-speed" text="x4" />
+                <ui:Button name="clock-faction" class="clock-faction" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

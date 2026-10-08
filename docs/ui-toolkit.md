@@ -15,7 +15,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - `Themes/ThemeTable.uss`：B 作戦卓。半透明の青黒い板、青緑の枠、広い字間と BIZ UDGothic 系の文字。
 - `Themes/ThemeParchment.uss`：C 羊皮紙の軍図。`#efe3c8` の板、濃い 2px 枠、右下へずらした濃い板を影の代わりに使用。
 
-3案の名前・USS の Resources パス・見出し/本文フォントの候補順と、同梱フォントを使うかどうかは、UnityEngine に依存しない `Rts.Presentation.HudThemeCatalog` にまとめています。A 石と真鍮だけは見出しをOSの明朝候補から作り、失敗したときに同梱 Boldへ戻します。本文は同梱 Regularを使います。B/Cは見出し・本文とも同梱フォントを優先し、読めないときだけ各テーマのOS候補へ戻します。
+4案の名前・USS の Resources パス・見出し/本文フォントの候補順と、同梱フォントを使うかどうかは、UnityEngine に依存しない `Rts.Presentation.HudThemeCatalog` にまとめています。A 石と真鍮だけは見出しをOSの明朝候補から作り、失敗したときに同梱 Boldへ戻します。本文は同梱 Regularを使います。B/C/Dは見出し・本文とも同梱フォントを優先し、読めないときだけ各テーマのOS候補へ戻します。
 
 - `--hud-panel`：帯の背景色
 - `--hud-panel-border`：帯の枠色
@@ -59,6 +59,14 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - 一時的な確認は起動引数 `-hud-toolkit` で有効にできます。
 
 今回の実装では `TopBarResourceVisibility` と `TopBarDisplayText` が資源の出し分け・数の書式・時代表示を共有し、IMGUI と UI Toolkit の内容を揃えています。
+
+## 兵站・試合の時間・時系列
+
+新しい画面では `Resources/Hud/Supply.uxml`、`Clock.uxml`、`Timeline.uxml` が、それぞれ従来の `UiLayout.Supply`、`UiLayout.TopCenter`、`UiLayout.Timeline` に配置されます。4案のテーマ USS が共通の `--hud-*` 変数を使うため、板・枠・文字・ボタンは他の欄と同じ見た目の案に切り替わります。
+
+兵站の数値とコア・拠点の次の増援までの文は `CommandPanel` の共有表示メソッドを使います。時系列の行は `MatchTimeline` が作った内容を使い、新しい行が増えたときだけ VisualElement を追加して一番下へスクロールします。時計の停止、1 tick、速度、見ている陣営の切り替えは `TimelinePanel` の共有操作メソッドを通り、従来どおり `IMatchClock` だけを操作します。
+
+新しい画面が有効な間は、`CommandPanel` の兵站欄と `TimelinePanel` の時計・時系列欄を IMGUI で描きません。3つの Toolkit の矩形は `UiHitAreas.Shared.Register` に登録されるため、欄の下へ地図クリックが抜けません。Toolkit 側から Contracts やシミュレーション状態を直接変更することはありません。
 
 ## 参謀の欄
 

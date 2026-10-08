@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="supply-frame" class="hud-supply-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement name="supply-panel" class="hud-supply-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="supply-title" class="hud-heading supply-title" text="兵站・増援" />
+            <ui:Label name="supply-units" class="supply-units" />
+            <ui:Label name="supply-line-0" class="supply-line" />
+            <ui:Label name="supply-line-1" class="supply-line" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
