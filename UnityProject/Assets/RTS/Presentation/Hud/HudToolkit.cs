@@ -16,6 +16,7 @@ namespace Rts.Presentation
     {
         public const string SettingKey = "rts.hud.toolkit";
         private const string UxmlResourcePath = "Hud/TopBar";
+        private const string RuntimeThemeResourcePath = "Hud/HudRuntimeTheme";
         private const string StaffUxmlResourcePath = "Hud/Staff";
         private const string CommandsUxmlResourcePath = "Hud/Commands";
         private const string BaseUssResourcePath = "Hud/HudTheme";
@@ -212,6 +213,7 @@ namespace Rts.Presentation
             }
 
             hudRoot.style.display = DisplayStyle.Flex;
+            LogLayoutOnce();
             ApplySelectedTheme();
             if (topFrame != null) topFrame.style.display = economy == null ? DisplayStyle.None : DisplayStyle.Flex;
             if (economy != null) Refresh(economy);
@@ -228,6 +230,31 @@ namespace Rts.Presentation
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Commands);
         }
 
+        private float layoutLogAt = -1f;
+
+        /// <summary>
+        /// Writes the laid-out size of the root and the three panels once, a second after the HUD first shows, so a
+        /// collapsed layout can be read from Editor.log without a screenshot (the panels collapsed once, 10-08).
+        /// </summary>
+        private void LogLayoutOnce()
+        {
+            if (layoutLogAt == float.MaxValue) return;
+            if (layoutLogAt < 0f) { layoutLogAt = Time.unscaledTime + 1f; return; }
+            if (Time.unscaledTime < layoutLogAt) return;
+            layoutLogAt = float.MaxValue;
+            var root = document.rootVisualElement;
+            Debug.Log("RTS HUD layout: root=" + root.worldBound
+                + " top=" + Bound(root.Q<VisualElement>("top-bar"))
+                + " staff=" + Bound(root.Q<VisualElement>(className: "hud-staff-frame"))
+                + " commands=" + Bound(root.Q<VisualElement>(className: "hud-commands-frame"))
+                + " font=" + (root.resolvedStyle.unityFontDefinition.fontAsset != null ? root.resolvedStyle.unityFontDefinition.fontAsset.name : "none"));
+        }
+
+        private static string Bound(VisualElement element)
+        {
+            return element == null ? "missing" : element.worldBound.ToString();
+        }
+
         private void EnsureDocument()
         {
             if (document != null) return;
@@ -238,6 +265,11 @@ namespace Rts.Presentation
             panelSettings.name = "Runtime HUD PanelSettings";
             panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panelSettings.referenceResolution = new Vector2Int(1920, 1080);
+            // Without a theme the document root gets no size, so percentage widths and the bars collapse to thin lines
+            // (seen 10-08: "No Theme Style Sheet set to PanelSettings"). The .tss only imports Unity's default theme.
+            var runtimeTheme = Resources.Load<ThemeStyleSheet>(RuntimeThemeResourcePath);
+            if (runtimeTheme != null) panelSettings.themeStyleSheet = runtimeTheme;
+            else Debug.LogWarning("UI Toolkit HUD theme not found at Resources/" + RuntimeThemeResourcePath + ".");
 
             LoadHudAssets();
 
@@ -253,6 +285,7 @@ namespace Rts.Presentation
             var root = document.rootVisualElement;
             // The theme sheets define their variables on this class, not :root (see Themes/*.uss).
             root.AddToClassList("hud-document");
+            root.style.flexGrow = 1f;
             baseTheme = Resources.Load<StyleSheet>(BaseUssResourcePath);
             if (baseTheme != null) root.styleSheets.Add(baseTheme);
             else Debug.LogWarning("UI Toolkit HUD USS not found at Resources/" + BaseUssResourcePath + ".");

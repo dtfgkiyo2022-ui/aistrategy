@@ -415,10 +415,6 @@
     white-space: normal;
 }
 
-.staff-ai-option:last-child {
-    margin-bottom: 0;
-}
-
 .hud-commands-frame {
     position: absolute;
 }
