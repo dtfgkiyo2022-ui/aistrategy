@@ -46,6 +46,11 @@ namespace Rts.Simulation
         public Facing Facing;
         /// <summary>0 for an empty belt.</summary>
         public ResourceKind Item;
+        /// <summary>V3-20 component metadata. All values are ignored while BeltComponents is false.</summary>
+        public BeltComponentKind Component;
+        public ResourceKind SorterKind;
+        public int PairCell;
+        public BeltSpeed Speed;
     }
 
     public struct VillagerDefinition
@@ -98,6 +103,11 @@ namespace Rts.Simulation
         public bool Industry;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
+        /// <summary>V3-20: opt-in belt components. False preserves the original belt state and hashes.</summary>
+        public bool BeltComponents;
+        public int SplitterWoodCost = 5, SorterWoodCost = 7, UndergroundBeltWoodCost = 3, UndergroundBeltMaxLength = 4;
+        public int FastBeltWoodCost = 2, FastBeltTicksPerCell = 4, FastBeltAge = 2;
+        public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
         /// <summary>Smelter (12.2): footprint, wood, work, HP, ticks per metal, and ore per metal.</summary>

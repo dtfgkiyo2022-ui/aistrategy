@@ -71,7 +71,9 @@ namespace Rts.Simulation
                 if (b.FactionId == 0) continue;
                 bool own = b.FactionId == faction;
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
-                belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held));
+                belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held,
+                    own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
+                    own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal));
             }
             var cavalryMission = CavalryMissionFor(faction);
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
@@ -105,7 +107,9 @@ namespace Rts.Simulation
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
                 ForestryOn ? rules.SkirmishArcherBowGearCost : 0, ForestryOn ? rules.SkirmishArcherTrainTicks : 0, cavalryMission,
                 AgesOn ? economy.ReservedCiv : CivKind.Primitive,
-                AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0);
+                AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0,
+                rules.BeltComponents, rules.FastBeltWoodCost, rules.FastBeltTicksPerCell, rules.SplitterWoodCost, rules.SorterWoodCost,
+                rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

@@ -101,25 +101,31 @@ namespace Rts.Simulation
                     }
                     if (b.Timer > 0 && --b.Timer == 0) b.Output++;
                 }
+                else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
+                {
+                    // Storage is passive: it accepts any one resource kind and releases one item per tick
+                    // whenever its outward belt has room. The kind is retained until the last item leaves.
+                }
             }
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.Output == 0) continue;
+                if (!b.Alive || !b.Complete || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
                 int port = OutputCell(b);
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
                 if (belt.FactionId != b.FactionId || belt.Item != 0) continue;
-                belt.Item = OutputKind(b.Kind);
+                belt.Item = b.Kind == BuildingKind.Storage ? b.StorageKind : OutputKind(b.Kind);
                 belt.Progress = 0;
-                b.Output--;
+                if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
+                else b.Output--;
             }
         }
 
         private static ResourceKind OutputKind(BuildingKind kind)
             => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Quarry ? ResourceKind.Stone : kind == BuildingKind.Farm ? ResourceKind.Food
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
-                : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : ResourceKind.Metal;
+            : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -164,6 +170,11 @@ namespace Rts.Simulation
                 {
                     if (item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Food && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
+                if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
+                    && (b.StorageCount == 0 || b.StorageKind == item))
+                {
+                    b.StorageKind = item; b.StorageCount++; b.Input = b.StorageCount; b.Output = b.StorageCount; return true;
                 }
                 return false;
             }
@@ -219,10 +230,12 @@ namespace Rts.Simulation
             if (v.Task == VillagerTask.ToPickup)
             {
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
-                var kind = OutputKind(source.Kind);
+                var kind = source.Kind == BuildingKind.Storage ? source.StorageKind : OutputKind(source.Kind);
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
-                int take = Math.Min(source.Output, CarryFor(v.FactionId) - v.Carry);
-                source.Output -= take;
+                int available = source.Kind == BuildingKind.Storage ? source.StorageCount : source.Output;
+                int take = Math.Min(available, CarryFor(v.FactionId) - v.Carry);
+                if (source.Kind == BuildingKind.Storage) { source.StorageCount -= take; source.Input = source.StorageCount; source.Output = source.StorageCount; if (source.StorageCount == 0) source.StorageKind = 0; }
+                else source.Output -= take;
                 v.Carry += take;
                 v.CarryKind = kind;
                 if (v.Carry == 0 || (v.Carry < CarryFor(v.FactionId) && source.Output > 0)) return;
@@ -262,11 +275,19 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
+                && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
+            {
+                int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
+                target.StorageKind = kind; target.StorageCount += put; target.Input = target.StorageCount; target.Output = target.StorageCount; return put;
+            }
             return 0;
         }
 
         private bool CanHaulTo(BuildingKind source, BuildingKind destination, ResourceKind kind)
-            => (ProcessingOn && destination == BuildingKind.Steelworks
+            => (world.Config.Economy.BeltComponents && destination == BuildingKind.Storage
+                && kind != 0)
+               || (ProcessingOn && destination == BuildingKind.Steelworks
                && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood);

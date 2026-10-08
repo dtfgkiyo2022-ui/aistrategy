@@ -159,6 +159,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.MineShaft, e.MountainWoodCost, 0, e.MountainWork); Add(rows, BuildingKind.Tollgate, e.TollgateWoodCost, e.TollgateStoneCost, e.TollgateWork);
             Add(rows, BuildingKind.GrandHouse, e.GrandHouseWoodCost, 0, e.GrandHouseWork); Add(rows, BuildingKind.Shrine, e.ShrineWoodCost, e.ShrineStoneCost, e.ShrineWork);
             Add(rows, BuildingKind.Town, e.TownWoodCost, e.TownStoneCost, e.TownWork);
+            Add(rows, BuildingKind.Storage, e.StorageWoodCost, 0, e.StorageWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

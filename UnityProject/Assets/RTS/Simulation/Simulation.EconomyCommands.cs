@@ -25,6 +25,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
+                case EconomyCommandKind.PlaceBeltComponent:
+                    PlaceBeltComponent(faction, c, IndustryOn);
+                    return;
                 case EconomyCommandKind.ReturnLineToAuto:
                     if (ProcessingOn || ForestryOn) ReturnLineToAuto(faction, c.LineId);
                     return;
@@ -64,6 +67,7 @@ namespace Rts.Simulation
                     PlaceWalls(faction, c);
                     return;
                 case EconomyCommandKind.RemoveBelt:
+                case EconomyCommandKind.RemoveBeltComponent:
                     RemoveBelt(faction, c.Cell);
                     return;
                 case EconomyCommandKind.RotateBuilding:
@@ -118,7 +122,9 @@ namespace Rts.Simulation
                         // V3-5 (32 #17): the castle belongs to the third age.
                          && !(kind == BuildingKind.Castle && AgesOn && world.Economies[faction - 1].Age >= 3)
                          && !(kind == BuildingKind.Caravanserai && CaravanAllowed(faction))
-                         && !(kind == BuildingKind.Town && TownsAllowed(faction))) return;
+                         && !(kind == BuildingKind.Town && TownsAllowed(faction))
+                         && !(kind == BuildingKind.Storage && rules.BeltComponents)) return;
+                    if (kind == BuildingKind.Storage && !world.Config.Economy.BeltComponents) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if (kind == BuildingKind.Town && TownCount(faction) >= rules.TownMaxBuildings) return;
@@ -230,7 +236,8 @@ namespace Rts.Simulation
                         MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
                         haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm
-                            || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln));
+                            || (ProcessingAvailable(faction) && target.Kind == BuildingKind.CharcoalKiln)
+                            || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));
                         if (target.Complete && !haul) return;
                     }
                     else return;

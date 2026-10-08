@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -36,6 +36,7 @@ namespace Rts.Presentation
         private ulong sequence;
         private Mode mode;
         private Facing facing = Facing.East;
+        private ResourceKind sorterKind = ResourceKind.Ore;
         private int dragStart = -1;
         private readonly List<string> notes = new List<string>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
@@ -91,11 +92,16 @@ namespace Rts.Presentation
             switch (mode)
             {
                 case Mode.Belt:
+                case Mode.FastBelt:
                 case Mode.Wall:
                 case Mode.RemoveArea:
                 case Mode.BlueprintSave:
                     dragStart = cell; // the run is sent when the button comes up (Update)
                     return true;
+                case Mode.Underground:
+                    if (dragStart < 0) { dragStart = cell; Note(UiText.T("Click the underground exit.", "地下ベルトの出口をクリックしてください。")); return true; }
+                    port.SubmitEconomy(EconomyCommand.PlaceUnderground(faction, ++sequence, dragStart, cell, facing));
+                    Note(UiText.T("Underground belt requested.", "地下ベルトを依頼しました。")); SetMode(Mode.None); return true;
                 case Mode.RemoveBelt:
                     port.SubmitEconomy(EconomyCommand.RemoveBelt(faction, ++sequence, cell));
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
@@ -105,6 +111,9 @@ namespace Rts.Presentation
                     return true;
             }
             var kind = KindOf(mode);
+            if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
+            if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.FastBelt) return true;
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
             Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (the simulation checks the ground).", "（置けるかはシミュレーションが判断します）"));
@@ -139,7 +148,7 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 3;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
-                : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower ? 2
+                : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
 
@@ -152,7 +161,7 @@ namespace Rts.Presentation
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
@@ -171,7 +180,7 @@ namespace Rts.Presentation
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
                 : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
                 : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable
-                : m == Mode.Castle ? BuildingKind.Castle : BuildingKind.Barracks;
+                : m == Mode.Castle ? BuildingKind.Castle : m == Mode.Storage ? BuildingKind.Storage : BuildingKind.Barracks;
 
         private static string CivName(CivKind c)
         {
@@ -258,6 +267,20 @@ namespace Rts.Presentation
         private static string FacingName(Facing f)
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
 
+        private static string SorterKindName(ResourceKind kind)
+            => kind == ResourceKind.Food ? UiText.T("food", "食料") : kind == ResourceKind.Wood ? UiText.T("wood", "木材")
+                : kind == ResourceKind.Ore ? UiText.T("ore", "鉱石") : kind == ResourceKind.Metal ? UiText.T("metal", "金属")
+                : kind == ResourceKind.Stone ? UiText.T("stone", "石") : kind == ResourceKind.Charcoal ? UiText.T("charcoal", "木炭")
+                : kind == ResourceKind.Steel ? UiText.T("steel", "鋼") : kind.ToString();
+
+        private static ResourceKind NextSorterKind(ResourceKind kind)
+        {
+            var values = new[] { ResourceKind.Ore, ResourceKind.Metal, ResourceKind.Wood, ResourceKind.Food, ResourceKind.Stone,
+                ResourceKind.Charcoal, ResourceKind.Steel };
+            for (int i = 0; i < values.Length; i++) if (values[i] == kind) return values[(i + 1) % values.Length];
+            return values[0];
+        }
+
         /// <summary>Builds an L path. Shift chooses vertical-then-horizontal; otherwise horizontal-then-vertical.</summary>
         private List<int> BeltRun(int from, int to, List<Facing> facings)
         {
@@ -279,12 +302,14 @@ namespace Rts.Presentation
             return cells;
         }
 
-        private void SubmitBeltPath(List<int> cells, List<Facing> facings)
+        private void SubmitBeltPath(List<int> cells, List<Facing> facings, bool fast = false)
         {
             for (int offset = 0; offset < cells.Count; offset += EconomyCommand.MaxBeltRun)
             {
                 int count = Math.Min(EconomyCommand.MaxBeltRun, cells.Count - offset);
-                port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells.GetRange(offset, count), facings.GetRange(offset, count)));
+                port.SubmitEconomy(fast
+                    ? EconomyCommand.PlaceFastBelt(faction, ++sequence, cells.GetRange(offset, count), facings.GetRange(offset, count))
+                    : EconomyCommand.PlaceBelt(faction, ++sequence, cells.GetRange(offset, count), facings.GetRange(offset, count)));
             }
         }
 
@@ -299,6 +324,7 @@ namespace Rts.Presentation
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
+            if (mode == Mode.Sorter && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
@@ -320,12 +346,12 @@ namespace Rts.Presentation
                 UpdateBlueprintPreview(onMap ? cell : -1);
                 return;
             }
-            if (mode == Mode.Belt || mode == Mode.Wall)
+            if (mode == Mode.Belt || mode == Mode.FastBelt || mode == Mode.Wall)
             {
                 bool wall = mode == Mode.Wall;
                 var facings = new List<Facing>();
                 var run = dragStart >= 0 && onMap ? BeltRun(dragStart, cell, facings) : onMap ? new List<int> { cell } : null;
-                bool affordable = run != null && (wall ? economy.Stone >= run.Count * economy.WallStoneCost : economy.Wood >= run.Count * economy.BeltWoodCost);
+                bool affordable = run != null && (wall ? economy.Stone >= run.Count * economy.WallStoneCost : economy.Wood >= run.Count * (mode == Mode.FastBelt ? economy.FastBeltWoodCost : economy.BeltWoodCost));
                 layer.ShowBeltPreview(run, affordable);
                 if (dragStart >= 0 && Input.GetMouseButtonUp(0))
                 {
@@ -339,7 +365,7 @@ namespace Rts.Presentation
                         }
                         else
                         {
-                            SubmitBeltPath(run, facings);
+                            SubmitBeltPath(run, facings, mode == Mode.FastBelt);
                             Note(run.Count + UiText.T(" belt cell(s) requested.", " マスのベルトを依頼しました。"));
                         }
                     }
@@ -388,7 +414,8 @@ namespace Rts.Presentation
 
             float notesY = rect.yMax - 24f;
             string hint = mode == Mode.None ? null : mode == Mode.Wall ? UiText.T("Drag near your base; a wall never shuts the way to the enemy.", "自陣の近くをドラッグ。敵への道を完全には塞げない")
-                : mode == Mode.Belt ? UiText.T("Belts carry toward the stripe. R sets a single cell's direction.", "ベルトは白い線の向きに運ぶ。1マスだけなら R で向き")
+                : mode == Mode.Belt || mode == Mode.FastBelt ? UiText.T("Belts carry toward the stripe. R sets a single cell's direction.", "ベルトは白い線の向きに運ぶ。1マスだけなら R で向き")
+                : mode == Mode.Sorter ? UiText.T("T changes the resource sent left; click to place.", "Tで左へ送る資源を変更。クリックで配置")
                 : mode == Mode.RemoveBelt ? UiText.T("Click a belt of yours.", "外す自分のベルトをクリック")
                 : UiText.T("Click the ground (Esc cancels). R turns the output: ", "地面をクリック（Escで取消）。R で出口の向き：") + FacingName(facing);
             if (hint != null) GUI.Label(new Rect(x, notesY, w, 22f), hint);
@@ -491,6 +518,17 @@ namespace Rts.Presentation
             y += 26f;
             ModeButton(new Rect(x, y, half, 22f), Mode.Belt, mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ")
                 : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）"));
+            if (economy.BeltComponents)
+            {
+                ModeButton(new Rect(right, y, half, 22f), Mode.FastBelt, UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）"));
+                y += 26f;
+                ModeButton(new Rect(x, y, half, 22f), Mode.Splitter, UiText.T("Splitter", "分岐"));
+                ModeButton(new Rect(right, y, half, 22f), Mode.Sorter, UiText.T("Sorter: ", "仕分け：") + SorterKindName(sorterKind));
+                y += 26f;
+                ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト"));
+                ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
+                y += 26f;
+            }
             ModeButton(new Rect(right, y, half - 70f, 22f), Mode.RemoveBelt, UiText.T("Remove", "ベルトを外す"));
             GUI.Label(new Rect(right + half - 66f, y, 66f, 22f), UiText.T("R: ", "R：") + FacingName(facing));
         }

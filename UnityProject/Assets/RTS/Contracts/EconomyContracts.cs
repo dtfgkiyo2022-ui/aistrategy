@@ -36,7 +36,11 @@ namespace Rts.Contracts
         /// <summary>V3-9 #1: sends living own villagers between a fixed market and caravanserai.</summary>
         CaravanRoute = 18,
         /// <summary>S-5: changes the human/AI owner of one geographic region.</summary>
-        SetRegionControl = 19
+        SetRegionControl = 19,
+        /// <summary>V3-20: places a splitter, sorter, or paired underground belt.</summary>
+        PlaceBeltComponent = 20,
+        /// <summary>V3-20: removes any own belt cell, including a component.</summary>
+        RemoveBeltComponent = 21
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -67,8 +71,14 @@ namespace Rts.Contracts
         public IReadOnlyList<uint> VillagerIds { get; }
         public EconomyTargetKind TargetKind { get; }
         public uint TargetId { get; }
+        /// <summary>V3-20: the paired exit cell for an underground entrance.</summary>
+        public int PairCell => unchecked((int)ProducerId);
+        /// <summary>V3-20: the resource selected by a sorter.</summary>
+        public ResourceKind SorterKind => (ResourceKind)TargetId;
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
+        /// <summary>V3-20: true on a fast-belt placement command.</summary>
+        public bool FastBelt => Enabled && (Kind == EconomyCommandKind.PlaceBelt || Kind == EconomyCommandKind.PlaceBeltComponent);
         /// <summary>S-5: the region targeted by SetRegionControl or a regional economy policy.</summary>
         public uint RegionId => TargetId;
         /// <summary>S-5: the requested owner of RegionId.</summary>
@@ -182,6 +192,30 @@ namespace Rts.Contracts
 
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
+
+        /// <summary>V3-20: places a normal or fast belt run.</summary>
+        public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, BeltSpeed speed)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0,
+                speed == BeltSpeed.Fast, cells, facings);
+
+        public static EconomyCommand PlaceFastBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
+            => PlaceBelt(faction, sequence, cells, facings, BeltSpeed.Fast);
+
+        public static EconomyCommand PlaceSplitter(uint faction, ulong sequence, int cell, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0, false, null, null, facing);
+
+        public static EconomyCommand PlaceSorter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, (uint)kind, false, null, null, facing);
+
+        /// <summary>Places an entrance and its exit together. The simulation validates the ray and range.</summary>
+        public static EconomyCommand PlaceUnderground(uint faction, ulong sequence, int entrance, int exit, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, entrance, unchecked((uint)exit), 0, null,
+                EconomyTargetKind.None, 0, false, new[] { entrance, exit }, new[] { facing, facing }, facing);
+
+        public static EconomyCommand PlaceStorage(uint faction, ulong sequence, int origin)
+            => Place(faction, sequence, BuildingKind.Storage, origin, Facing.North);
 
         public static EconomyCommand SetPolicy(uint faction, ulong sequence, EconomyPolicy policy)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetEconomyPolicy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, policy);
@@ -409,6 +443,10 @@ namespace Rts.Contracts
         public int Progress { get; }
         /// <summary>V3-3: an own belt the player laid; the automatic line goes around it.</summary>
         public bool PlayerHeld { get; }
+        public BeltComponentKind Component { get; }
+        public ResourceKind SorterKind { get; }
+        public int PairCell { get; }
+        public BeltSpeed Speed { get; }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress)
             : this(cell, factionId, facing, item, progress, false)
@@ -416,8 +454,15 @@ namespace Rts.Contracts
         }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld)
+            : this(cell, factionId, facing, item, progress, playerHeld, BeltComponentKind.None, 0, -1, BeltSpeed.Normal)
+        {
+        }
+
+        public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
+            BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed)
         {
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
+            Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed;
         }
     }
 
@@ -507,6 +552,16 @@ namespace Rts.Contracts
         public int BeltWoodCost { get; }
         public int BeltTicksPerCell { get; }
         public IReadOnlyList<BeltView> Belts { get; }
+        public bool BeltComponents { get; }
+        public int FastBeltWoodCost { get; }
+        public int FastBeltTicksPerCell { get; }
+        public int SplitterWoodCost { get; }
+        public int SorterWoodCost { get; }
+        public int UndergroundBeltWoodCost { get; }
+        public int UndergroundBeltMaxLength { get; }
+        public int StorageWoodCost { get; }
+        public int StorageSizeCells { get; }
+        public int StorageCapacity { get; }
         /// <summary>V3-2 costs and footprints for the placement buttons.</summary>
         public int InfantryMetalCost { get; }
         public int MineWoodCost { get; }
@@ -634,9 +689,16 @@ namespace Rts.Contracts
             int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
             int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0,
             CavalryMissionView cavalryMission = default(CavalryMissionView),
-            CivKind reservedCiv = CivKind.Primitive, int nextAgeGoldCost = 0)
+            CivKind reservedCiv = CivKind.Primitive, int nextAgeGoldCost = 0,
+            bool beltComponents = false, int fastBeltWoodCost = 0, int fastBeltTicksPerCell = 0,
+            int splitterWoodCost = 0, int sorterWoodCost = 0, int undergroundBeltWoodCost = 0,
+            int undergroundBeltMaxLength = 0, int storageWoodCost = 0, int storageSizeCells = 0, int storageCapacity = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost;
+            BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
+            SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
+            UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
+            StorageCapacity = storageCapacity;
             MarketWoodCost = marketWoodCost; WorkshopWoodCost = workshopWoodCost; TradeLot = tradeLot; TradeReturn = tradeReturn;
             GemsTradeReturn = gemsTradeReturn; GemArmorHp = gemArmorHp;
             MercenaryGemsCost = mercenaryGemsCost; MercenaryTrainTicks = mercenaryTrainTicks;

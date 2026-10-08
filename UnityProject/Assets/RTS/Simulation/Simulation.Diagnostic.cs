@@ -157,6 +157,10 @@ namespace Rts.Simulation
                     }
                     if (world.Config.Economy.Mountain && b.Kind == BuildingKind.MineShaft)
                         w.Value(n + "MountainOreNext", b.MountainOreNext);
+                    if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
+                    {
+                        w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
+                    }
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
                 {
@@ -218,6 +222,11 @@ namespace Rts.Simulation
                 string n = "Belts[" + cell.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
+                if (world.Config.Economy.BeltComponents)
+                {
+                    w.Value(n + "Component", (byte)b.Component); w.Value(n + "SorterKind", (byte)b.SorterKind);
+                    w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
+                }
             }
             if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {

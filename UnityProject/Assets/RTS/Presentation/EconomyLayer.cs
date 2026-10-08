@@ -552,6 +552,7 @@ namespace Rts.Presentation
                 case BuildingKind.Tollgate: return UiText.T("Tollgate", "関所");
                 case BuildingKind.GrandHouse: return UiText.T("Grand house", "大住居");
                 case BuildingKind.Shrine: return UiText.T("Shrine", "祠");
+                case BuildingKind.Storage: return UiText.T("Storage", "倉庫");
                 default: return kind.ToString();
             }
         }
@@ -562,12 +563,12 @@ namespace Rts.Presentation
             var carrying = new HashSet<int>();
             var ownCells = new HashSet<int>();
             var endCells = new HashSet<int>();
-            int ticks = Mathf.Max(1, economy.BeltTicksPerCell);
             uint ownFaction = view.LatestFrame.FactionId;
             foreach (var belt in economy.Belts) if (belt.FactionId == ownFaction) ownCells.Add(belt.Cell);
             foreach (var b in economy.Belts)
             {
                 seen.Add(b.Cell);
+                int ticks = b.Speed == BeltSpeed.Fast && economy.FastBeltTicksPerCell > 0 ? economy.FastBeltTicksPerCell : Mathf.Max(1, economy.BeltTicksPerCell);
                 if (b.FactionId == ownFaction && !ownCells.Contains(NextCell(b.Cell, b.Facing))) endCells.Add(b.Cell);
                 var centre = CellCenter(b.Cell);
                 var dir = Direction(b.Facing);
@@ -588,7 +589,11 @@ namespace Rts.Presentation
                     belts.Add(b.Cell, plate);
                 }
                 bool stalled = b.FactionId == ownFaction && b.Item != 0 && b.Progress >= ticks * 2;
-                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(stalled ? BeltStallColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor);
+                Color baseColor = b.Component == BeltComponentKind.Splitter ? new Color(0.95f, 0.75f, 0.2f)
+                    : b.Component == BeltComponentKind.Sorter ? new Color(0.75f, 0.35f, 0.95f)
+                    : b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit ? new Color(0.3f, 0.35f, 0.45f)
+                    : BeltColor;
+                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(stalled ? BeltStallColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : baseColor);
                 plate.transform.position = new Vector3(centre.x, 0.05f, centre.z);
                 plate.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 if (b.Item == 0) continue;

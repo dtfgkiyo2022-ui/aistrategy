@@ -192,6 +192,9 @@ namespace Rts.Simulation
         internal int CaravanWoodReward;
         /// <summary>V3-18 #1: the shrine's fixed outpost link; losing the outpost stops the effect without removing it.</summary>
         internal uint SanctuaryOutpostId;
+        /// <summary>V3-20: a storage keeps one resource kind at a time so mixed items never lose their type.</summary>
+        internal ResourceKind StorageKind;
+        internal int StorageCount;
     }
 
     internal struct ResourceNodeState
@@ -213,6 +216,10 @@ namespace Rts.Simulation
         internal int Progress;
         /// <summary>V3-3 (19): laid by the player; the automatic line routes around it.</summary>
         internal bool Held;
+        internal BeltComponentKind Component;
+        internal ResourceKind SorterKind;
+        internal int PairCell;
+        internal bool SplitterRightNext, Fast;
     }
 
     /// <summary>V3-6: one automatic processing chain. The belt arrays are the canonical route chosen for this line.</summary>
@@ -386,7 +393,11 @@ namespace Rts.Simulation
             {
                 Belts = new BeltState[checked(Config.Map.WidthCells * Config.Map.HeightCells)];
                 foreach (var b in Config.Belts)
-                    Belts[b.Cell] = new BeltState { FactionId = b.FactionId, Facing = b.Facing, Hp = e.BeltHp, Item = b.Item };
+                    Belts[b.Cell] = new BeltState { FactionId = b.FactionId, Facing = b.Facing, Hp = e.BeltHp, Item = b.Item,
+                        Component = e.BeltComponents ? b.Component : BeltComponentKind.None,
+                        SorterKind = e.BeltComponents ? b.SorterKind : (ResourceKind)0,
+                        PairCell = e.BeltComponents && b.Component != BeltComponentKind.None ? b.PairCell : -1,
+                        Fast = e.BeltComponents && b.Speed == BeltSpeed.Fast };
             }
         }
 
@@ -461,6 +472,38 @@ namespace Rts.Simulation
                     && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0,
                     "Invalid industry rules.");
             else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0 && !e.ProcessingChain, "Belts and metal costs need industry.");
+            if (e.BeltComponents)
+            {
+                Require(e.Industry && e.SplitterWoodCost >= 0 && e.SorterWoodCost >= 0 && e.UndergroundBeltWoodCost >= 0
+                    && e.UndergroundBeltMaxLength > 0 && e.UndergroundBeltMaxLength <= 64
+                    && e.FastBeltWoodCost >= 0 && e.FastBeltTicksPerCell > 0
+                    && e.FastBeltAge >= 1 && e.StorageSizeCells == 2 && e.StorageWoodCost >= 0 && e.StorageWork > 0
+                    && e.StorageHp > 0 && e.StorageCapacity > 0, "Invalid belt-component rules.");
+                foreach (var b in c.Belts)
+                {
+                    Require((byte)b.Component <= (byte)BeltComponentKind.UndergroundExit && (byte)b.Speed <= (byte)BeltSpeed.Fast,
+                        "Invalid belt component.");
+                    if (b.Component == BeltComponentKind.Sorter)
+                        Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)ResourceKind.BowGear, "A sorter needs a resource kind.");
+                    if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
+                    {
+                        Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
+                            "An underground belt needs an in-map pair.");
+                        bool paired = false;
+                        foreach (var other in c.Belts)
+                            if (other.Cell == b.PairCell)
+                            {
+                                paired = other.FactionId == b.FactionId
+                                    && other.PairCell == b.Cell
+                                    && (b.Component == BeltComponentKind.UndergroundEntrance
+                                        ? other.Component == BeltComponentKind.UndergroundExit
+                                        : other.Component == BeltComponentKind.UndergroundEntrance);
+                                break;
+                            }
+                        Require(paired, "An underground belt needs a reciprocal pair.");
+                    }
+                }
+            }
             if (e.ProcessingChain)
                 Require(e.Industry && e.CharcoalKilnSizeCells > 0 && e.CharcoalKilnSizeCells <= 8 && e.CharcoalKilnWoodCost >= 0
                     && e.CharcoalKilnWork > 0 && e.CharcoalKilnHp > 0 && e.CharcoalTicks > 0
@@ -772,6 +815,11 @@ namespace Rts.Simulation
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
                 InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
                  Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                 BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,
+                 UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
+                 FastBeltWoodCost = e.FastBeltWoodCost, FastBeltTicksPerCell = e.FastBeltTicksPerCell, FastBeltAge = e.FastBeltAge,
+                 StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
+                 StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
                  SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
                  SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
