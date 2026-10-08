@@ -21,6 +21,7 @@ function onTick(view) {
   var commands = [{ type: "global", policy: striking ? "concentrate" : "maintain" }];
   for (var i = 0; i < view.ownArmies.length; i++) {
     var army = view.ownArmies[i];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     commands.push({ type: "policy", kind: striking ? "Focus" : "Defend", target: { kind: "Army", id: army.id }, goal: { kind: striking ? "Core" : "Core", id: striking ? enemyCore : view.factionId }, priority: striking ? STRIKE_PRIORITY : GROWTH_PRIORITY, allowedLossPermille: striking ? 1000 : 250, reservePermille: 0 });
   }
   if (view.economy !== null && view.tick % 100 === 0) {

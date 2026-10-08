@@ -26,5 +26,5 @@ def on_tick(view):
         'goal': {'kind': 'Core', 'id': target_core},
         'priority': 100, 'allowedLossPermille': 1000 if attack else 300,
         'reservePermille': 0,
-    } for army in view['ownArmies']]
+    } for army in view['ownArmies'] if army['count'] > 0]  # an empty army only collects EmptyArmy rejections (#343)
     return {'commands': commands}

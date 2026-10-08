@@ -24,8 +24,14 @@ namespace Rts.Tests.EditMode
         private static readonly ScopeKey All = new ScopeKey(1, ScopeKind.All, 0);
         private static FactionFrame Frame(long tick, uint owner, params CommandView[] commands)
         {
+            var armies = new[] { new OwnArmyView(1, 1, UnitKind.Infantry, default, 1,
+                new PolicyGoal(GoalKind.Outpost, 1, default)) };
+            return FrameWithArmies(tick, owner, armies, commands);
+        }
+        private static FactionFrame FrameWithArmies(long tick, uint owner, IReadOnlyList<OwnArmyView> armies, params CommandView[] commands)
+        {
             var objectives = new[] { new KnownObjective(GoalKind.Outpost, 1, default, true, owner, false, 0, tick), new KnownObjective(GoalKind.Outpost, 2, default, true, 0, false, 0, tick) };
-            return new FactionFrame(tick, 1, Array.Empty<RenderUnit>(), new FactionObservation(1, tick, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives), commands, Array.Empty<GameEvent>(), new FogView(Array.Empty<bool>(), Array.Empty<bool>()), default);
+            return new FactionFrame(tick, 1, Array.Empty<RenderUnit>(), new FactionObservation(1, tick, armies, Array.Empty<VisibleEnemy>(), Array.Empty<EnemyContact>(), objectives), commands, Array.Empty<GameEvent>(), new FogView(Array.Empty<bool>(), Array.Empty<bool>()), default);
         }
         [Test]
         [TestCase("maintain")]
@@ -88,6 +94,37 @@ namespace Rts.Tests.EditMode
             controller.Step(Frame(6, 0, exhausted));
             controller.Step(Frame(7, 1));
             Assert.That(port.Batches.Count, Is.EqualTo(6), "Ownership loss resets the per-outpost retry budget.");
+        }
+
+        [Test]
+        public void MaintainDoesNotTargetAnEmptyArmyUntilReinforcementIsObserved()
+        {
+            var port = new Port(); var controller = new PresetController("maintain", 1, port); controller.Initialize();
+            var empty = new OwnArmyView(1, 1, UnitKind.Infantry, default, 0,
+                new PolicyGoal(GoalKind.Outpost, 1, default));
+            for (int tick = 1; tick <= 600; tick++) controller.Step(FrameWithArmies(tick, 1, new[] { empty }));
+            Assert.That(port.Batches.SelectMany(batch => batch).Count(order => order.Kind == PolicyKind.Defend), Is.Zero);
+
+            var reinforced = new OwnArmyView(1, 1, UnitKind.Infantry, default, 1,
+                new PolicyGoal(GoalKind.Outpost, 1, default));
+            controller.Step(FrameWithArmies(601, 1, new[] { reinforced }));
+            Assert.That(port.Batches.SelectMany(batch => batch).Count(order => order.Kind == PolicyKind.Defend), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MaintainDoesNotRepeatEmptyArmyRejectionWhileTheArmyStaysEmpty()
+        {
+            var port = new Port(); var controller = new PresetController("maintain", 1, port); controller.Initialize();
+            var alive = new OwnArmyView(1, 1, UnitKind.Infantry, default, 1,
+                new PolicyGoal(GoalKind.Outpost, 1, default));
+            controller.Step(FrameWithArmies(1, 1, new[] { alive }));
+            var empty = new OwnArmyView(1, 1, UnitKind.Infantry, default, 0,
+                new PolicyGoal(GoalKind.Outpost, 1, default));
+            var rejected = new CommandView(7, new ScopeKey(1, ScopeKind.Outpost, 1), PolicyKind.Defend,
+                new PolicyGoal(GoalKind.Outpost, 1, default), CommandStatus.Impossible, 0, 1,
+                ReasonCode.EmptyArmy, CommandSource.Doctrine);
+            for (int tick = 2; tick <= 601; tick++) controller.Step(FrameWithArmies(tick, 1, new[] { empty }, rejected));
+            Assert.That(port.Batches.SelectMany(batch => batch).Count(order => order.Kind == PolicyKind.Defend), Is.EqualTo(1));
         }
         [Test]
         public void ConcentrateRetriesInitialSouthAbandonAtMostThreeTimes()

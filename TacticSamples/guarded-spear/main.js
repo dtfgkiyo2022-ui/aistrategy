@@ -8,6 +8,7 @@ function onTick(view) {
   var hold = view.signals.filter(function (signal) { return signal.name === "holdHere"; })[0];
   for (var i = 0; i < view.ownArmies.length; i++) {
     var army = view.ownArmies[i];
+    if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
     var spearhead = allIn || army.count >= view.params.spearheadMinimum;
     if (hold && hold.point) {
       commands.push({
