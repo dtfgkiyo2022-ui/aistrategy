@@ -20,6 +20,14 @@ namespace Rts.Presentation
             return Clamp(actualSpeed / Math.Max(0.0001f, baseSpeed) * variation, minimumRate, maximumRate);
         }
 
+        public static void Interpolate(float fromX, float fromZ, float toX, float toZ, float alpha,
+            out float x, out float z)
+        {
+            float t = Clamp(alpha, 0f, 1f);
+            x = fromX + (toX - fromX) * t;
+            z = fromZ + (toZ - fromZ) * t;
+        }
+
         public static float SpeedVariation(ulong id, float maximumVariation)
         {
             float normalized = (Mix(id ^ 0xD1B54A32D192ED03UL) & 0xFFFF) / 65535f;

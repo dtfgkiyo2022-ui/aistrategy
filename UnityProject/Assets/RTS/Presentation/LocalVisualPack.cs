@@ -47,7 +47,9 @@ namespace Rts.Presentation
         {
             Idle,
             Walk,
-            Attack
+            Attack,
+            Work,
+            Death
         }
 
         private sealed class AnimationSpec
@@ -55,12 +57,18 @@ namespace Rts.Presentation
             public readonly string Idle;
             public readonly string Walk;
             public readonly string Attack;
+            public readonly string Work;
+            public readonly string Death;
 
             public AnimationSpec(string idle, string walk, string attack)
             {
                 Idle = AnimationRoot + idle;
                 Walk = AnimationRoot + walk;
                 Attack = AnimationRoot + attack;
+                // The pack keeps the same numbered motion names in each family. Ram has no separate
+                // work swing, so its normal attack remains the harmless fallback for that unused case.
+                Work = AnimationRoot + attack.Replace("_attack_A.", "_attack_B.");
+                Death = AnimationRoot + idle.Replace("_01_idle.", "_06_death_A.");
             }
 
             public string Path(UnitMotion motion)
@@ -69,6 +77,8 @@ namespace Rts.Presentation
                 {
                     case UnitMotion.Walk: return Walk;
                     case UnitMotion.Attack: return Attack;
+                    case UnitMotion.Work: return Work;
+                    case UnitMotion.Death: return Death;
                     default: return Idle;
                 }
             }
@@ -163,24 +173,35 @@ namespace Rts.Presentation
             private readonly AnimationClipPlayable walk;
             // The attack clips are imported without looping; it is wrapped by hand so a long fight keeps swinging.
             private readonly AnimationClipPlayable attack;
+            private readonly AnimationClipPlayable work;
+            private readonly AnimationClipPlayable death;
             private readonly double attackLength;
+            private readonly double workLength;
+            private readonly bool hasWork;
+            private readonly bool hasDeath;
             private int desired;
             private bool disposed;
 
             internal AnimationHandle(PlayableGraph graph, AnimationMixerPlayable mixer, AnimationClipPlayable idle,
-                AnimationClipPlayable walk, AnimationClipPlayable attack, double attackLength)
+                AnimationClipPlayable walk, AnimationClipPlayable attack, AnimationClipPlayable work,
+                AnimationClipPlayable death, double attackLength, double workLength, bool hasWork, bool hasDeath)
             {
                 this.graph = graph;
                 this.mixer = mixer;
                 this.idle = idle;
                 this.walk = walk;
                 this.attack = attack;
+                this.work = work;
+                this.death = death;
                 this.attackLength = attackLength;
+                this.workLength = workLength;
+                this.hasWork = hasWork;
+                this.hasDeath = hasDeath;
             }
 
-            public void SetDesired(bool moving, bool attacking, bool retreating)
+            public void SetDesired(bool moving, bool attacking, bool working, bool dying)
             {
-                desired = attacking ? 2 : (moving || retreating ? 1 : 0);
+                desired = dying && hasDeath ? 4 : working && hasWork ? 3 : attacking ? 2 : moving ? 1 : 0;
             }
 
             /// <summary>Scales clip playback without changing simulation time or state.</summary>
@@ -190,6 +211,23 @@ namespace Rts.Presentation
                 idle.SetSpeed(matchRate);
                 walk.SetSpeed(walkRate * matchRate);
                 attack.SetSpeed(matchRate);
+                if (hasWork) work.SetSpeed(matchRate);
+                if (hasDeath) death.SetSpeed(matchRate);
+            }
+
+            public void RestartAttack()
+            {
+                if (!disposed) attack.SetTime(0d);
+            }
+
+            public void RestartWork()
+            {
+                if (!disposed && hasWork) work.SetTime(0d);
+            }
+
+            public void StartDeath()
+            {
+                if (!disposed && hasDeath) death.SetTime(0d);
             }
 
             public void Tick(float deltaTime, float matchRate = 1f)
@@ -197,8 +235,9 @@ namespace Rts.Presentation
                 if (disposed) return;
                 if (matchRate <= 0f) return;
                 if (attackLength > 0.0001 && attack.GetTime() > attackLength) attack.SetTime(attack.GetTime() % attackLength);
+                if (hasWork && workLength > 0.0001 && work.GetTime() > workLength) work.SetTime(work.GetTime() % workLength);
                 float step = BlendSeconds <= 0f ? 1f : deltaTime * matchRate / BlendSeconds;
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < 5; i++)
                 {
                     float target = i == desired ? 1f : 0f;
                     mixer.SetInputWeight(i, Mathf.MoveTowards(mixer.GetInputWeight(i), target, step));
@@ -223,16 +262,24 @@ namespace Rts.Presentation
             var walk = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Walk));
             var attack = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Attack));
             if (idle == null || walk == null || attack == null) return null;
+            var work = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Work));
+            var death = LoadAnimationClip(AnimationAssetPath(kind, UnitMotion.Death));
             // Off-screen soldiers are not animated at all; a crowd of 200 only pays for the ones in view.
             animator.cullingMode = AnimatorCullingMode.CullCompletely;
             var graph = PlayableGraph.Create("RTS Unit Animation");
-            var mixer = AnimationMixerPlayable.Create(graph, 3);
+            var mixer = AnimationMixerPlayable.Create(graph, 5);
             var idlePlayable = AnimationClipPlayable.Create(graph, idle);
             var walkPlayable = AnimationClipPlayable.Create(graph, walk);
             var attackPlayable = AnimationClipPlayable.Create(graph, attack);
             graph.Connect(idlePlayable, 0, mixer, 0);
             graph.Connect(walkPlayable, 0, mixer, 1);
             graph.Connect(attackPlayable, 0, mixer, 2);
+            bool hasWork = work != null;
+            bool hasDeath = death != null;
+            var workPlayable = hasWork ? AnimationClipPlayable.Create(graph, work) : default(AnimationClipPlayable);
+            var deathPlayable = hasDeath ? AnimationClipPlayable.Create(graph, death) : default(AnimationClipPlayable);
+            if (hasWork) graph.Connect(workPlayable, 0, mixer, 3);
+            if (hasDeath) graph.Connect(deathPlayable, 0, mixer, 4);
             mixer.SetInputWeight(0, 1f);
             var output = AnimationPlayableOutput.Create(graph, "Animation", animator);
             output.SetSourcePlayable(mixer);
@@ -241,8 +288,11 @@ namespace Rts.Presentation
             idlePlayable.SetTime(offset * idle.length);
             walkPlayable.SetTime(offset * walk.length);
             attackPlayable.SetTime(offset * attack.length);
+            if (hasWork) workPlayable.SetTime(offset * work.length);
+            if (hasDeath) deathPlayable.SetTime(0d);
             graph.Play();
-            return new AnimationHandle(graph, mixer, idlePlayable, walkPlayable, attackPlayable, attack.length);
+            return new AnimationHandle(graph, mixer, idlePlayable, walkPlayable, attackPlayable, workPlayable,
+                deathPlayable, attack.length, hasWork ? work.length : 0d, hasWork, hasDeath);
 #else
             return null;
 #endif
@@ -404,7 +454,7 @@ namespace Rts.Presentation
 
         private static void Discard(Object target)
         {
-            if (Application.isPlaying) Object.Destroy(target); else Object.DestroyImmediate(target);
+            if (UnityEngine.Application.isPlaying) Object.Destroy(target); else Object.DestroyImmediate(target);
         }
 #else
         // A player build cannot load the pack by path, so it always uses the placeholder models.

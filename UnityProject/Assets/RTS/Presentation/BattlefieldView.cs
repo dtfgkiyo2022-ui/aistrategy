@@ -14,10 +14,6 @@ namespace Rts.Presentation
         private const int MaxContactLabels = 8;
         // 360 degrees/s turns a few dozen degrees per frame while remaining visibly smooth at normal frame rates.
         private const float UnitRotationDegreesPerSecond = 360f;
-        private const float UnitWalkBaseSpeed = 1.25f;
-        private const float UnitWalkSpeedVariation = 0.08f;
-        private const float UnitWalkPlaybackMinimum = 0.5f;
-        private const float UnitWalkPlaybackMaximum = 2f;
         private const float UnitFormationJitterRadius = 0.25f;
         private const float UnitIdleDelaySeconds = 0.2f;
 
@@ -38,6 +34,10 @@ namespace Rts.Presentation
             public bool WantsWalk;
             public bool IsWalking;
             public bool IsAttacking;
+            public float CombatSeconds;
+            public bool IsDying;
+            public float DeathSeconds;
+            public float DeathElapsed;
             public float StillSeconds;
             public float WalkPlaybackRate = 1f;
             public float FacingY;
@@ -81,6 +81,14 @@ namespace Rts.Presentation
         private FactionFrame latestFrame;
         private sealed class Arrow { public LineRenderer Line; public uint ArmyId; public Vector3 Goal; }
         private readonly Dictionary<ulong, Arrow> arrows = new Dictionary<ulong, Arrow>();
+        private sealed class ProjectileArrow
+        {
+            public LineRenderer Line;
+            public Vector3 Start;
+            public Vector3 Goal;
+            public float Remaining;
+        }
+        private readonly Dictionary<ulong, ProjectileArrow> projectileArrows = new Dictionary<ulong, ProjectileArrow>();
 
         public FactionFrame LatestFrame { get { return latestFrame; } }
         private GameObject terrainObject;
@@ -92,6 +100,7 @@ namespace Rts.Presentation
         private float measuredMatchRate = 1f;
 
         public SelectionTarget Selected { get { return selected; } }
+        public float MatchRate { get { return GetMatchRate(); } }
 
         // Box selection: every own army picked by the last drag. Selected is then the first of them, so code that reads
         // one army still works; the army commands go to each army in this list.
@@ -254,6 +263,11 @@ namespace Rts.Presentation
                 if (visual.IsEnemy && !IsVisibleNow(position)) position = visual.To;
                 visual.Object.transform.position = position;
                 UpdateUnitRotation(visual, GetMatchRate());
+                if (visual.IsDying && visual.Animation == null)
+                {
+                    float progress = 1f - Mathf.Clamp01(visual.DeathSeconds / PresentationVisualConstants.DeathSeconds);
+                    visual.Object.transform.rotation = Quaternion.Euler(90f * progress, visual.FacingY, 0f);
+                }
             }
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
@@ -266,6 +280,15 @@ namespace Rts.Presentation
                 var start = army.Object.transform.position;
                 arrow.Line.SetPosition(0, new Vector3(start.x, 1.2f, start.z));
                 arrow.Line.SetPosition(1, arrow.Goal);
+            }
+            foreach (var arrow in projectileArrows.Values)
+            {
+                float progress = 1f - Mathf.Clamp01(arrow.Remaining / PresentationVisualConstants.ArrowSeconds);
+                var position = Vector3.Lerp(arrow.Start, arrow.Goal, progress);
+                var direction = (arrow.Goal - arrow.Start).normalized;
+                arrow.Line.enabled = arrow.Remaining > 0f;
+                arrow.Line.SetPosition(0, position - direction * 0.28f);
+                arrow.Line.SetPosition(1, position);
             }
             PlaceSelectionRing();
             var camera = Camera.main;
@@ -281,14 +304,29 @@ namespace Rts.Presentation
             float matchRate = GetMatchRate();
             foreach (var visual in units.Values)
             {
-                UpdateWalkingState(visual, matchRate);
+                if (visual.IsDying)
+                {
+                    if (matchRate > 0f)
+                    {
+                        visual.DeathSeconds -= Time.deltaTime * matchRate;
+                        visual.DeathElapsed += Time.deltaTime * matchRate;
+                    }
+                }
+                else
+                {
+                    if (matchRate > 0f) visual.CombatSeconds = Mathf.Max(0f, visual.CombatSeconds - Time.deltaTime * matchRate);
+                    visual.IsAttacking = visual.CombatSeconds > 0f;
+                    UpdateWalkingState(visual, matchRate);
+                }
                 if (visual.Animation != null)
                 {
-                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false);
+                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false, visual.IsDying);
                     visual.Animation.SetPlaybackRate(visual.WalkPlaybackRate, matchRate);
                     visual.Animation.Tick(Time.deltaTime, matchRate);
                 }
             }
+            AdvanceProjectileArrows(Time.deltaTime, matchRate);
+            RemoveFinishedDeaths();
             Apply(sinceUpdate / TickSeconds);
         }
 
@@ -316,8 +354,8 @@ namespace Rts.Presentation
                 visual.From.x, visual.From.z, visual.To.x, visual.To.z, visual.FacingY);
             float movementDistance = Vector2.Distance(
                 new Vector2(visual.From.x, visual.From.z), new Vector2(visual.To.x, visual.To.z));
-            float target = movementDistance > 0.001f ? movementTarget
-                : visual.IsAttacking && visual.HasAttackFacing ? visual.AttackFacingY : visual.FacingY;
+            float target = visual.IsAttacking && visual.HasAttackFacing ? visual.AttackFacingY
+                : movementDistance > 0.001f ? movementTarget : visual.FacingY;
             visual.FacingY = Mathf.MoveTowardsAngle(visual.FacingY, target,
                 UnitRotationDegreesPerSecond * Time.deltaTime * matchRate);
             visual.Object.transform.rotation = Quaternion.Euler(0f, visual.FacingY, 0f);
@@ -380,9 +418,19 @@ namespace Rts.Presentation
                     visual.From = visual.Object.transform.position;
                     if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
+                visual.IsDying = false;
+                visual.DeathSeconds = 0f;
+                visual.DeathElapsed = 0f;
                 visual.To = target;
                 visual.WantsWalk = unit.IsMoving || unit.IsRetreating;
-                visual.IsAttacking = unit.IsAttacking;
+                if (unit.IsAttacking)
+                {
+                    visual.CombatSeconds = PresentationVisualConstants.CombatHoldSeconds;
+                    if (visual.Animation != null) visual.Animation.RestartAttack();
+                    if (unit.Kind == UnitKind.Archer || unit.Kind == UnitKind.SkirmishArcher)
+                        TryStartProjectileArrow(frame, key, visual.From, !unit.IsOwn);
+                }
+                visual.IsAttacking = visual.CombatSeconds > 0f;
                 if (visual.WantsWalk)
                 {
                     visual.IsWalking = true;
@@ -390,12 +438,13 @@ namespace Rts.Presentation
                 }
                 visual.WalkPlaybackRate = UnitMotionMath.WalkPlaybackRate(
                     Vector2.Distance(new Vector2(visual.From.x, visual.From.z), new Vector2(visual.To.x, visual.To.z)),
-                    TickSeconds, UnitWalkBaseSpeed, UnitMotionMath.SpeedVariation(key, UnitWalkSpeedVariation),
-                    UnitWalkPlaybackMinimum, UnitWalkPlaybackMaximum);
+                    TickSeconds, PresentationVisualConstants.UnitWalkBaseSpeed,
+                    UnitMotionMath.SpeedVariation(key, PresentationVisualConstants.UnitWalkSpeedVariation),
+                    PresentationVisualConstants.UnitWalkPlaybackMinimum, PresentationVisualConstants.UnitWalkPlaybackMaximum);
                 visual.HasAttackFacing = TryGetAttackFacing(frame, unit, visual.To, out visual.AttackFacingY);
                 if (visual.Animation != null)
                 {
-                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false);
+                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false, false);
                     visual.Animation.SetPlaybackRate(visual.WalkPlaybackRate, GetMatchRate());
                 }
             }
@@ -405,13 +454,84 @@ namespace Rts.Presentation
                 if (!present.Contains(pair.Key)) scratchUnitIds.Add(pair.Key);
             foreach (var id in scratchUnitIds)
             {
-                if (units[id].Animation != null) units[id].Animation.Dispose();
-                Discard(units[id].Object);
-                units.Remove(id);
+                var visual = units[id];
+                // Already falling: it is missing from every later frame, and RemoveFinishedDeaths takes it away.
+                if (visual.IsDying) continue;
+                bool shouldFall = !visual.IsEnemy || IsVisibleNow(visual.Object.transform.position);
+                if (shouldFall)
+                {
+                    visual.IsDying = true;
+                    visual.IsAttacking = false;
+                    visual.IsWalking = false;
+                    visual.WantsWalk = false;
+                    visual.DeathSeconds = PresentationVisualConstants.DeathSeconds;
+                    visual.DeathElapsed = 0f;
+                    if (visual.Animation != null) visual.Animation.StartDeath();
+                }
+                else
+                {
+                    if (visual.Animation != null) visual.Animation.Dispose();
+                    Discard(visual.Object);
+                    units.Remove(id);
+                }
             }
 
             previousUnitPositions.Clear();
             foreach (var pair in units) previousUnitPositions[pair.Key] = pair.Value.To;
+        }
+
+        private void TryStartProjectileArrow(FactionFrame frame, ulong key, Vector3 start, bool shooterIsEnemy)
+        {
+            // An enemy archer shoots at our nearest soldier; ours shoot at the nearest enemy we can see.
+            Vector3 goal;
+            if (shooterIsEnemy ? !TryGetNearestOwnUnit(frame, start, out goal) : !TryGetNearestVisibleEnemy(frame, start, out goal)) return;
+            if (!projectileArrows.TryGetValue(key, out var arrow))
+            {
+                var go = new GameObject("ProjectileArrow_" + key);
+                go.transform.SetParent(transform, false);
+                var line = go.AddComponent<LineRenderer>();
+                line.positionCount = 2;
+                line.useWorldSpace = true;
+                line.widthMultiplier = 0.08f;
+                line.numCapVertices = 2;
+                line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                line.sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.95f, 0.88f, 0.55f));
+                arrow = new ProjectileArrow { Line = line };
+                projectileArrows.Add(key, arrow);
+            }
+            arrow.Start = new Vector3(start.x, 1.2f, start.z);
+            arrow.Goal = goal;
+            arrow.Remaining = PresentationVisualConstants.ArrowSeconds;
+        }
+
+        private void AdvanceProjectileArrows(float deltaTime, float matchRate)
+        {
+            if (matchRate <= 0f) return;
+            scratchIds.Clear();
+            foreach (var pair in projectileArrows)
+            {
+                pair.Value.Remaining -= deltaTime * matchRate;
+                if (pair.Value.Remaining <= 0f) scratchIds.Add(pair.Key);
+            }
+            foreach (var id in scratchIds)
+            {
+                Discard(projectileArrows[id].Line.gameObject);
+                projectileArrows.Remove(id);
+            }
+        }
+
+        private void RemoveFinishedDeaths()
+        {
+            scratchUnitIds.Clear();
+            foreach (var pair in units)
+                if (pair.Value.IsDying && pair.Value.DeathSeconds <= 0f) scratchUnitIds.Add(pair.Key);
+            foreach (var id in scratchUnitIds)
+            {
+                if (units[id].Animation != null) units[id].Animation.Dispose();
+                Discard(units[id].Object);
+                units.Remove(id);
+                previousUnitPositions.Remove(id);
+            }
         }
 
         private Vector3 UnitWorldPosition(RenderUnit unit, ulong key)
@@ -425,18 +545,38 @@ namespace Rts.Presentation
         private bool TryGetAttackFacing(FactionFrame frame, RenderUnit unit, Vector3 unitPosition, out float facing)
         {
             facing = 0f;
-            if (!unit.IsOwn || !unit.IsAttacking || frame.Observation == null) return false;
+            if (!unit.IsOwn || frame.Observation == null) return false;
+            if (!TryGetNearestVisibleEnemy(frame, unitPosition, out var target)) return false;
+            facing = UnitMotionMath.FacingAngleDegrees(unitPosition.x, unitPosition.z, target.x, target.z, 0f);
+            return true;
+        }
+
+        private bool TryGetNearestOwnUnit(FactionFrame frame, Vector3 from, out Vector3 target)
+        {
+            target = default(Vector3);
             float best = float.MaxValue;
-            Vector3 target = default(Vector3);
+            foreach (var unit in frame.Units)
+            {
+                if (!unit.IsOwn) continue;
+                var candidate = ToWorld(unit.Position, 1.0f);
+                float distance = (candidate - from).sqrMagnitude;
+                if (distance < best) { best = distance; target = candidate; }
+            }
+            return best < float.MaxValue;
+        }
+
+        private bool TryGetNearestVisibleEnemy(FactionFrame frame, Vector3 unitPosition, out Vector3 target)
+        {
+            target = default(Vector3);
+            if (frame.Observation == null) return false;
+            float best = float.MaxValue;
             foreach (var enemy in frame.Observation.VisibleEnemies)
             {
-                var candidate = ToWorld(enemy.Position, 0f);
+                var candidate = ToWorld(enemy.Position, 1.2f);
                 float distance = (candidate - unitPosition).sqrMagnitude;
                 if (distance < best) { best = distance; target = candidate; }
             }
-            if (best == float.MaxValue || best <= 0.000001f) return false;
-            facing = UnitMotionMath.FacingAngleDegrees(unitPosition.x, unitPosition.z, target.x, target.z, 0f);
-            return true;
+            return best < float.MaxValue && best > 0.000001f;
         }
 
         private void SyncCores(FactionFrame frame)
@@ -700,7 +840,7 @@ namespace Rts.Presentation
             {
                 int count = 0;
                 foreach (var visual in units.Values)
-                    if (visual.Object.name.StartsWith("Enemy_")) count++;
+                    if (!visual.IsDying && visual.Object.name.StartsWith("Enemy_")) count++;
                 return count;
             }
         }
@@ -710,7 +850,7 @@ namespace Rts.Presentation
         {
             into.Clear();
             foreach (var visual in units.Values)
-                if (visual.Object.name.StartsWith("Enemy_")) into.Add(visual.Object.transform.position);
+                if (!visual.IsDying && visual.Object.name.StartsWith("Enemy_")) into.Add(visual.Object.transform.position);
         }
 
         public List<KeyValuePair<Vector3, string>> BuildContactLabels()
@@ -817,6 +957,8 @@ namespace Rts.Presentation
         {
             foreach (var visual in units.Values)
                 if (visual.Animation != null) visual.Animation.Dispose();
+            foreach (var arrow in projectileArrows.Values)
+                Discard(arrow.Line.gameObject);
         }
 
         /// <summary>Drops every per-faction visual. Frame IDs are faction-local, so a view switch must rebuild them.</summary>
@@ -838,6 +980,8 @@ namespace Rts.Presentation
             ghosts.Clear();
             foreach (var arrow in arrows.Values) Discard(arrow.Line.gameObject);
             arrows.Clear();
+            foreach (var arrow in projectileArrows.Values) Discard(arrow.Line.gameObject);
+            projectileArrows.Clear();
             if (selectionRing != null) { Discard(selectionRing); selectionRing = null; }
             foreach (var ring in extraRings) Discard(ring);
             extraRings.Clear();
@@ -848,7 +992,7 @@ namespace Rts.Presentation
 
         private static void Discard(Object target)
         {
-            if (Application.isPlaying) Destroy(target);
+            if (UnityEngine.Application.isPlaying) Destroy(target);
             else DestroyImmediate(target);
         }
 
