@@ -1500,13 +1500,7 @@ namespace Rts.UnityHost
 
         private string ModelLabel(string model)
         {
-            switch (model)
-            {
-                case "local-llm": return "ローカルLLM（無料）";
-                case "jev": return "Jev（命令1つ）";
-                case "claude-haiku-5-5": return "Claude Haiku 5.5";
-                default: return model ?? "";
-            }
+            return StrategistUiRules.DisplayName(model);
         }
 
         private static string StaffInstructionState(AiInstructionState state)
