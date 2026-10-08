@@ -92,6 +92,7 @@
     <Compile Include="ArmyGrowthTests.cs" />
     <Compile Include="EconomyScaleTests.cs" />
     <Compile Include="EconomyScaleMeasurementTests.cs" />
+    <Compile Include="EconomyPresentationToolsTests.cs" />
     <Compile Include="RegionTests.cs" />
     <Compile Include="LatePushTests.cs" />
     <Compile Include="TacticJsTests.cs" />
@@ -145,6 +146,8 @@
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/LiveAiCommandPort.cs" Link="UnityHost/LiveAiCommandPort.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SmokeOptions.cs" Link="UnityHost/SmokeOptions.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchTimeline.cs" Link="Presentation/MatchTimeline.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/EconomyFlowMetrics.cs" Link="Presentation/EconomyFlowMetrics.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/BlueprintTools.cs" Link="Presentation/BlueprintTools.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
   </ItemGroup>
 </Project>

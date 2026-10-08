@@ -46,9 +46,12 @@ namespace Rts.Presentation
         private GameObject ghost;
         private readonly Dictionary<int, GameObject> belts = new Dictionary<int, GameObject>();
         private readonly Dictionary<int, GameObject> items = new Dictionary<int, GameObject>();
+        private readonly Dictionary<uint, string> buildingWarnings = new Dictionary<uint, string>();
         private readonly List<GameObject> beltPreview = new List<GameObject>();
+        private readonly EconomyFlowMetrics flowMetrics = new EconomyFlowMetrics();
+        private long lastMetricTick = long.MinValue;
         private const float CellMeters = 2f;
-        private const int MapWidthCells = 128;
+        private const int MapWidthCells = 128, MapHeightCells = 64;
 
         private static readonly Color WoodColor = new Color(0.2f, 0.55f, 0.2f);
         private static readonly Color FoodColor = new Color(0.95f, 0.8f, 0.2f);
@@ -69,8 +72,14 @@ namespace Rts.Presentation
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
         private static readonly Color EastColor = new Color(0.85f, 0.25f, 0.25f);
+        private static readonly Color BeltStallColor = new Color(1f, 0.12f, 0.08f);
+        private static readonly Color WarningColor = new Color(1f, 0.55f, 0.2f);
+        private const int DisplayBufferLimit = 10;
 
         public void Bind(BattlefieldView battlefield) { view = battlefield; }
+
+        public float BuildingUtilization(uint buildingId) { return flowMetrics.BuildingUtilization(buildingId); }
+        public int BeltDeliveriesPerMinute(int cell) { return flowMetrics.BeltDeliveriesPerMinute(cell); }
 
         /// <summary>Placement preview: a translucent box over the footprint the next click would ask for, or hidden.</summary>
         public void ShowGhost(bool show, Vector3 center, float size, bool legalLooking)
@@ -120,7 +129,7 @@ namespace Rts.Presentation
             villagerInterpolationSeconds = 0f;
             ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
             packedBuildings.Clear();
-            belts.Clear(); items.Clear();
+            belts.Clear(); items.Clear(); buildingWarnings.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
         }
 
         private void Update()
@@ -386,6 +395,7 @@ namespace Rts.Presentation
         private void SyncBuildings(EconomyView economy)
         {
             var seen = new HashSet<uint>();
+            uint ownFaction = view.LatestFrame.FactionId;
             foreach (var b in economy.Buildings)
             {
                 seen.Add(b.Id);
@@ -441,6 +451,13 @@ namespace Rts.Presentation
                     go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
                 }
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
+                if (b.FactionId == ownFaction)
+                {
+                    string warning = b.Output >= DisplayBufferLimit ? UiText.T("出口が詰まり", "出口が詰まり")
+                        : RequiresInput(b.Kind) && b.Complete && b.Input == 0 ? UiText.T("材料待ち", "材料待ち") : "";
+                    if (string.IsNullOrEmpty(warning)) buildingWarnings.Remove(b.Id); else buildingWarnings[b.Id] = warning;
+                }
+                else buildingWarnings.Remove(b.Id);
                 if (b.PlayerHeld)
                 {
                     if (!buildingFlags.TryGetValue(b.Id, out var flag))
@@ -463,6 +480,9 @@ namespace Rts.Presentation
             foreach (var id in packedGone) packedBuildings.Remove(id);
             Remove(buildingFlags, seen);
             Remove(ports, seen);
+            var warningGone = new List<uint>();
+            foreach (var id in buildingWarnings.Keys) if (!seen.Contains(id)) warningGone.Add(id);
+            foreach (var id in warningGone) buildingWarnings.Remove(id);
             var untagged = new List<uint>();
             foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
             foreach (var id in untagged) buildingTags.Remove(id);
@@ -477,18 +497,29 @@ namespace Rts.Presentation
                 tagStyle = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 11 };
                 tagStyle.normal.textColor = Color.white;
             }
-            foreach (var tag in buildingTags.Values)
+            foreach (var tagPair in buildingTags)
             {
+                var tag = tagPair.Value;
                 var screen = cam.WorldToScreenPoint(tag.Value);
                 if (screen.z <= 0f) continue;
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), BuildingName(tag.Key), tagStyle);
+                string warning;
+                if (buildingWarnings.TryGetValue(tagPair.Key, out warning) && !string.IsNullOrEmpty(warning))
+                    GUI.Label(new Rect(screen.x - 70f, Screen.height - screen.y + 8f, 140f, 18f), warning, WarningStyle());
             }
         }
 
+        private static GUIStyle WarningStyle()
+        {
+            var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10 };
+            style.normal.textColor = WarningColor;
+            return style;
+        }
+
         /// <summary>Short display names for the name tags (display only).</summary>
-        private static string BuildingName(BuildingKind kind)
+        internal static string BuildingName(BuildingKind kind)
         {
             switch (kind)
             {
@@ -529,11 +560,15 @@ namespace Rts.Presentation
         {
             var seen = new HashSet<int>();
             var carrying = new HashSet<int>();
+            var ownCells = new HashSet<int>();
+            var endCells = new HashSet<int>();
             int ticks = Mathf.Max(1, economy.BeltTicksPerCell);
             uint ownFaction = view.LatestFrame.FactionId;
+            foreach (var belt in economy.Belts) if (belt.FactionId == ownFaction) ownCells.Add(belt.Cell);
             foreach (var b in economy.Belts)
             {
                 seen.Add(b.Cell);
+                if (b.FactionId == ownFaction && !ownCells.Contains(NextCell(b.Cell, b.Facing))) endCells.Add(b.Cell);
                 var centre = CellCenter(b.Cell);
                 var dir = Direction(b.Facing);
                 if (!belts.TryGetValue(b.Cell, out var plate))
@@ -552,7 +587,8 @@ namespace Rts.Presentation
                     stripe.transform.localPosition = new Vector3(0f, 0.1f, 0.25f);
                     belts.Add(b.Cell, plate);
                 }
-                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor);
+                bool stalled = b.FactionId == ownFaction && b.Item != 0 && b.Progress >= ticks * 2;
+                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(stalled ? BeltStallColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor);
                 plate.transform.position = new Vector3(centre.x, 0.05f, centre.z);
                 plate.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 if (b.Item == 0) continue;
@@ -577,6 +613,24 @@ namespace Rts.Presentation
             gone.Clear();
             foreach (var cell in items.Keys) if (!carrying.Contains(cell)) gone.Add(cell);
             foreach (var cell in gone) { Destroy(items[cell]); items.Remove(cell); }
+            if (view.LatestFrame.Tick != lastMetricTick)
+            {
+                lastMetricTick = view.LatestFrame.Tick;
+                flowMetrics.ObserveBuildings(lastMetricTick, economy.Buildings, ownFaction);
+                flowMetrics.ObserveBeltEnds(lastMetricTick, economy.Belts, endCells, ownFaction);
+            }
+        }
+
+        private static int NextCell(int cell, Facing facing)
+        {
+            int x = cell % MapWidthCells, z = cell / MapWidthCells;
+            if (facing == Facing.North) z++; else if (facing == Facing.South) z--; else if (facing == Facing.East) x++; else x--;
+            return x < 0 || z < 0 || x >= MapWidthCells || z >= MapHeightCells ? -1 : z * MapWidthCells + x;
+        }
+
+        private static bool RequiresInput(BuildingKind kind)
+        {
+            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>

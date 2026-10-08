@@ -41,8 +41,11 @@ namespace Rts.Presentation
             {
                 return mode == Mode.None ? ""
                     : mode == Mode.Wall ? UiText.T("Drag near your base; a wall never shuts the way to the enemy.", "自陣の近くをドラッグ。敵への道を完全には塞げない")
-                    : mode == Mode.Belt ? UiText.T("Belts carry toward the stripe. R sets a single cell's direction.", "ベルトは白い線の向きに運ぶ。1マスだけなら R で向き")
+                    : mode == Mode.Belt ? UiText.T("Drag an L-shaped belt; Shift changes the bend order.", "ドラッグでL字ベルト。Shiftで曲がる順番を変更")
                     : mode == Mode.RemoveBelt ? UiText.T("Click a belt of yours.", "外す自分のベルトをクリック")
+                    : mode == Mode.RemoveArea ? UiText.T("Drag a rectangle to remove your belts and buildings.", "四角くドラッグして自軍のベルトと建物を撤去")
+                    : mode == Mode.BlueprintSave ? UiText.T("Drag a rectangle to save the blueprint.", "四角くドラッグして設計図を保存")
+                    : mode == Mode.BlueprintPaste ? UiText.T("R rotates the blueprint; click to place it.", "Rで設計図を回転、クリックで配置")
                     : UiText.T("Click the ground (Esc cancels). R turns the output: ", "地面をクリック（Escで取消）。R で出口の向き：") + FacingName(facing);
             }
         }
@@ -69,7 +72,8 @@ namespace Rts.Presentation
                 case Tab.Build: AddBuildActions(result, economy); break;
                 case Tab.Make: AddMakeActions(result, economy); break;
                 case Tab.Research: AddResearchActions(result, economy); break;
-                default: AddPolicyActions(result, economy); break;
+                case Tab.Policy: AddPolicyActions(result, economy); break;
+                default: AddBlueprintActions(result); break;
             }
             return result;
         }
@@ -87,6 +91,7 @@ namespace Rts.Presentation
                 if (buildMode != Mode.None) SetMode(buildMode);
                 return;
             }
+            if (actionId == "blueprint:save") { BeginBlueprintSave(); return; }
             if (actionId == "make:villager") { Send(EconomyCommand.Train(faction, ++sequence, 0, UnitKind.Villager), UiText.T("Villager requested", "村人を依頼しました")); return; }
             if (actionId == "make:infantry") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Infantry, UiText.T("Infantry requested", "歩兵を依頼しました")); return; }
             if (actionId == "make:infantry-cancel") { CancelFromBuilding(economy, BuildingKind.Barracks, UiText.T("Last infantry cancelled", "最後の歩兵を取り消しました")); return; }
@@ -149,8 +154,15 @@ namespace Rts.Presentation
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
                 case "farm": return Mode.Farm; case "belt": return Mode.Belt; case "remove-belt": return Mode.RemoveBelt;
+                case "remove-area": return Mode.RemoveArea;
                 case "blacksmith": return Mode.Blacksmith; default: return Mode.None;
             }
+        }
+
+        private void AddBlueprintActions(List<EconomyAction> rows)
+        {
+            Add(rows, "blueprint:save", UiText.T("Save blueprint: drag rectangle", "設計図を保存：四角くドラッグ"));
+            Add(rows, "blueprint:help", UiText.T("Choose a saved blueprint below to paste or delete it.", "下の一覧から設計図を貼り付け・削除できます。"), false, "", false, true);
         }
 
         private static UnitKind ParseUnit(string value)
@@ -223,7 +235,28 @@ namespace Rts.Presentation
             else Add(rows, "build:industry-info", UiText.T("Mines and farms come with a civilisation", "採掘場・農場は文明に進んでから"), false, "", false, true);
             Add(rows, "build:belt", mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ") : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）"), true, "", mode == Mode.Belt);
             Add(rows, "build:remove-belt", UiText.T("Remove", "ベルトを外す"), true, "", mode == Mode.RemoveBelt);
+            Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);
             Add(rows, "build:facing", UiText.T("R: ", "R：") + FacingName(facing), false, "", false, true);
+            AddFlowActions(rows, economy);
+        }
+
+        private void AddFlowActions(List<EconomyAction> rows, EconomyView economy)
+        {
+            if (layer == null) return;
+            for (int i = 0; i < economy.Buildings.Count; i++)
+            {
+                var building = economy.Buildings[i];
+                if (building.FactionId != faction) continue;
+                int percent = Mathf.RoundToInt(layer.BuildingUtilization(building.Id) * 100f);
+                Add(rows, "flow:building:" + building.Id, EconomyLayer.BuildingName(building.Kind) + UiText.T(" utilization ", " 稼働率 ") + percent + "% / 60s", false, "", false, true);
+            }
+            for (int i = 0; i < economy.Belts.Count; i++)
+            {
+                var belt = economy.Belts[i];
+                if (belt.FactionId != faction) continue;
+                int delivered = layer.BeltDeliveriesPerMinute(belt.Cell);
+                if (delivered > 0) Add(rows, "flow:belt:" + belt.Cell, UiText.T("Belt end ", "ベルト終端 ") + belt.Cell + UiText.T(": ", "：") + delivered + UiText.T("/min", "個/分"), false, "", false, true);
+            }
         }
 
         private void AddMakeActions(List<EconomyAction> rows, EconomyView economy)

@@ -12,8 +12,15 @@
                 <ui:Button name="economy-tab-make" class="economy-tab" text="作る" />
                 <ui:Button name="economy-tab-research" class="economy-tab" text="研究" />
                 <ui:Button name="economy-tab-policy" class="economy-tab" text="方針" />
+                <ui:Button name="economy-tab-blueprints" class="economy-tab" text="設計図" />
             </ui:VisualElement>
             <ui:ScrollView name="economy-actions" class="economy-actions" />
+            <ui:VisualElement name="blueprint-tools" class="economy-blueprint-tools">
+                <ui:TextField name="blueprint-name" label="名前" value="設計図" />
+                <ui:Button name="blueprint-save" text="範囲をドラッグして保存" />
+                <ui:Label text="保存場所：このPCのUnity永続データ/blueprints/*.json" />
+                <ui:ScrollView name="blueprint-list" class="economy-actions" />
+            </ui:VisualElement>
             <ui:Label name="economy-hint" class="economy-hint" />
             <ui:Label name="economy-notice" class="economy-notice" />
         </ui:VisualElement>

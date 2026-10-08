@@ -97,6 +97,11 @@ namespace Rts.Presentation
         private Button economyTabMake;
         private Button economyTabResearch;
         private Button economyTabPolicy;
+        private Button economyTabBlueprints;
+        private VisualElement blueprintTools;
+        private TextField blueprintName;
+        private Button blueprintSave;
+        private ScrollView blueprintList;
         private CommandPanel supplySource;
         private VisualElement supplyFrame;
         private Label supplyTitle;
@@ -496,6 +501,11 @@ namespace Rts.Presentation
             economyTabMake = root.Q<Button>("economy-tab-make");
             economyTabResearch = root.Q<Button>("economy-tab-research");
             economyTabPolicy = root.Q<Button>("economy-tab-policy");
+            economyTabBlueprints = root.Q<Button>("economy-tab-blueprints");
+            blueprintTools = root.Q<VisualElement>("blueprint-tools");
+            blueprintName = root.Q<TextField>("blueprint-name");
+            blueprintSave = root.Q<Button>("blueprint-save");
+            blueprintList = root.Q<ScrollView>("blueprint-list");
             supplyFrame = root.Q<VisualElement>("supply-frame");
             supplyTitle = root.Q<Label>("supply-title");
             supplyUnits = root.Q<Label>("supply-units");
@@ -653,11 +663,20 @@ namespace Rts.Presentation
 
         private void BindEconomyEvents()
         {
-            if (economyTabBuild == null || economyTabMake == null || economyTabResearch == null || economyTabPolicy == null) return;
+            if (economyTabBuild == null || economyTabMake == null || economyTabResearch == null || economyTabPolicy == null || economyTabBlueprints == null) return;
             economyTabBuild.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Build);
             economyTabMake.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Make);
             economyTabResearch.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Research);
             economyTabPolicy.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Policy);
+            economyTabBlueprints.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Blueprints);
+            if (blueprintSave != null) blueprintSave.clicked += () =>
+            {
+                if (economyPanel != null)
+                {
+                    economyPanel.BlueprintNameForSave = blueprintName == null ? "設計図" : blueprintName.value;
+                    economyPanel.BeginBlueprintSave();
+                }
+            };
         }
 
         private void BindClockEvents()
@@ -1263,6 +1282,10 @@ namespace Rts.Presentation
             if (economyTitle != null) economyTitle.text = UiText.T("Economy", "内政");
             if (economyHeaderStatus != null) economyHeaderStatus.text = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
             RefreshEconomyTabs();
+            bool blueprintsSelected = economyPanel.SelectedTab == EconomyPanel.Tab.Blueprints;
+            if (economyActions != null) economyActions.style.display = blueprintsSelected ? DisplayStyle.None : DisplayStyle.Flex;
+            if (blueprintTools != null) blueprintTools.style.display = blueprintsSelected ? DisplayStyle.Flex : DisplayStyle.None;
+            if (blueprintsSelected) RefreshBlueprintControls();
 
             var actions = economyPanel.GetToolkitActions();
             string signature = actions.Count.ToString();
@@ -1314,6 +1337,29 @@ namespace Rts.Presentation
             if (economyTabMake != null) economyTabMake.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Make);
             if (economyTabResearch != null) economyTabResearch.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Research);
             if (economyTabPolicy != null) economyTabPolicy.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Policy);
+            if (economyTabBlueprints != null) economyTabBlueprints.EnableInClassList("is-selected", selected == EconomyPanel.Tab.Blueprints);
+        }
+
+        private void RefreshBlueprintControls()
+        {
+            if (economyPanel == null || blueprintList == null) return;
+            blueprintList.Clear();
+            var files = economyPanel.BlueprintFiles;
+            if (files.Count == 0)
+            {
+                blueprintList.Add(new Label(UiText.T("No saved blueprints.", "保存された設計図はありません。")));
+                return;
+            }
+            for (int i = 0; i < files.Count; i++)
+            {
+                string file = files[i];
+                var row = new VisualElement();
+                row.AddToClassList("economy-action-row");
+                var label = new Label(file);
+                var paste = new Button(() => economyPanel.BeginBlueprintPaste(file)) { text = UiText.T("Paste", "貼り付け") };
+                var delete = new Button(() => economyPanel.DeleteBlueprint(file)) { text = UiText.T("Delete", "削除") };
+                row.Add(label); row.Add(paste); row.Add(delete); blueprintList.Add(row);
+            }
         }
 
         private void RefreshCommands()
