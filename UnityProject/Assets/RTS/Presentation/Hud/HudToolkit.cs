@@ -199,30 +199,31 @@ namespace Rts.Presentation
             public Label Label;
         }
 
-        private static bool? commandLineFlag;
-        private static bool turnedOff;
 
         /// <summary>
-        /// PlayerPrefs is intentionally opt-in; the command-line flag is a convenient temporary override that the
-        /// setup panel's switch can still turn off for this run. The flag is read once, not on every GUI event.
+        /// The new screen is the default (owner, 10-09). The setup panel's switch can still turn it off on this PC, and
+        /// the start argument -hud-legacy starts with the old screen for this run. Arguments are read once.
         /// </summary>
         public static bool IsEnabled
         {
             get
             {
-                if (PlayerPrefs.GetInt(SettingKey, 0) == 1) return true;
-                if (!commandLineFlag.HasValue)
-                    commandLineFlag = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-hud-toolkit") >= 0;
-                return commandLineFlag.Value && !turnedOff;
+                if (!legacyFlag.HasValue)
+                    legacyFlag = System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-hud-legacy") >= 0;
+                if (legacyFlag.Value && !switchedThisRun) return false;
+                return PlayerPrefs.GetInt(SettingKey, 1) == 1;
             }
         }
+
+        private static bool? legacyFlag;
+        private static bool switchedThisRun;
 
         /// <summary>The setup panel's switch: remembered on this PC, and takes effect on the next frame.</summary>
         public static void SetEnabled(bool on)
         {
             PlayerPrefs.SetInt(SettingKey, on ? 1 : 0);
             PlayerPrefs.Save();
-            turnedOff = !on;
+            switchedThisRun = true;
         }
 
         public static int ThemeIndex

@@ -54,8 +54,8 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 ## 切り替え
 
-- 通常は `PlayerPrefs` の `rts.hud.toolkit` が `0`（未設定を含む）なので、従来どおり IMGUI です。
-- `PlayerPrefs.SetInt("rts.hud.toolkit", 1)` を保存すると UI Toolkit の上の帯になります。
+- **既定は新しい画面（UI Toolkit）**（オーナー決定 2026-10-09）。`PlayerPrefs` の `rts.hud.toolkit` が未設定か `1` なら新しい画面、`0`（試合の設定で「使わない」）なら古い画面（IMGUI）。
+- 起動引数 `-hud-legacy` で、その回だけ古い画面で始める。
 - 一時的な確認は起動引数 `-hud-toolkit` で有効にできます。
 
 今回の実装では `TopBarResourceVisibility` と `TopBarDisplayText` が資源の出し分け・数の書式・時代表示を共有し、IMGUI と UI Toolkit の内容を揃えています。
