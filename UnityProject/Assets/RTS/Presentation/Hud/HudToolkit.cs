@@ -19,6 +19,22 @@ namespace Rts.Presentation
         private const string StaffUxmlResourcePath = "Hud/Staff";
         private const string CommandsUxmlResourcePath = "Hud/Commands";
         private const string BaseUssResourcePath = "Hud/HudTheme";
+        private const string RegularFontResourcePath = "Hud/Fonts/NotoSansJP-Regular";
+        private const string BoldFontResourcePath = "Hud/Fonts/NotoSansJP-Bold";
+
+        private static readonly TopBarResourceVisibility.ResourceKind[] IconKinds =
+        {
+            TopBarResourceVisibility.ResourceKind.Food,
+            TopBarResourceVisibility.ResourceKind.Wood,
+            TopBarResourceVisibility.ResourceKind.Ore,
+            TopBarResourceVisibility.ResourceKind.Metal,
+            TopBarResourceVisibility.ResourceKind.Stone,
+            TopBarResourceVisibility.ResourceKind.Gems,
+            TopBarResourceVisibility.ResourceKind.Gold,
+            TopBarResourceVisibility.ResourceKind.Charcoal,
+            TopBarResourceVisibility.ResourceKind.Steel,
+            TopBarResourceVisibility.ResourceKind.BowGear
+        };
 
         private BattlefieldView view;
         private UIDocument document;
@@ -30,6 +46,7 @@ namespace Rts.Presentation
         private Label ageLabel;
         private Label ageStageLabel;
         private VisualElement resourceRow;
+        private VisualElement populationIcon;
         private Label populationLabel;
         private Label idleLabel;
         private VisualElement staffFrame;
@@ -70,6 +87,13 @@ namespace Rts.Presentation
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<ResourceSlot> slots = new List<ResourceSlot>();
         private readonly ThemeFontSet[] themeFonts = new ThemeFontSet[HudThemeCatalog.Count];
+        private readonly Dictionary<TopBarResourceVisibility.ResourceKind, Texture2D> resourceIcons =
+            new Dictionary<TopBarResourceVisibility.ResourceKind, Texture2D>();
+        private readonly List<FontAsset> createdFontAssets = new List<FontAsset>();
+        private FontAsset bundledRegularFont;
+        private FontAsset bundledBoldFont;
+        private Texture2D populationIconTexture;
+        private bool hudAssetsLoaded;
         private string lastAge = "";
         private string lastAgeStage = "";
         private string lastPopulation = "";
@@ -88,6 +112,7 @@ namespace Rts.Presentation
         {
             public TopBarResourceVisibility.ResourceKind Kind;
             public string Label;
+            public VisualElement Icon;
             public Label ValueLabel;
             public int Value;
         }
@@ -214,6 +239,8 @@ namespace Rts.Presentation
             panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
             panelSettings.referenceResolution = new Vector2Int(1920, 1080);
 
+            LoadHudAssets();
+
             document = gameObject.AddComponent<UIDocument>();
             document.panelSettings = panelSettings;
             var tree = Resources.Load<VisualTreeAsset>(UxmlResourcePath);
@@ -242,6 +269,9 @@ namespace Rts.Presentation
             ageLabel = root.Q<Label>("age-label");
             ageStageLabel = root.Q<Label>("age-stage-label");
             resourceRow = root.Q<VisualElement>("resource-row");
+            populationIcon = root.Q<VisualElement>("population-icon");
+            if (populationIcon != null && populationIconTexture != null)
+                populationIcon.style.backgroundImage = new StyleBackground(populationIconTexture);
             populationLabel = root.Q<Label>("population-label");
             idleLabel = root.Q<Label>("idle-label");
             staffFrame = root.Q<VisualElement>("staff-frame");
@@ -315,8 +345,26 @@ namespace Rts.Presentation
             if (!fonts.Attempted)
             {
                 fonts.Attempted = true;
-                fonts.Heading = CreateFont(definition.HeadingFontFamilies);
-                fonts.Body = CreateFont(definition.BodyFontFamilies);
+                if (definition.UseBundledBodyFont)
+                {
+                    fonts.Body = bundledRegularFont;
+                    if (fonts.Body == null) fonts.Body = CreateOsFont(definition.BodyFontFamilies);
+                }
+                else
+                {
+                    fonts.Body = CreateOsFont(definition.BodyFontFamilies);
+                }
+
+                if (definition.UseBundledHeadingFont)
+                {
+                    fonts.Heading = bundledBoldFont;
+                    if (fonts.Heading == null) fonts.Heading = CreateOsFont(definition.HeadingFontFamilies);
+                }
+                else
+                {
+                    fonts.Heading = CreateOsFont(definition.HeadingFontFamilies);
+                    if (fonts.Heading == null) fonts.Heading = bundledBoldFont;
+                }
                 if (fonts.Heading == null) fonts.Heading = fonts.Body;
             }
 
@@ -675,6 +723,9 @@ namespace Rts.Presentation
                 card.AddToClassList("hud-resource");
                 var icon = new VisualElement { name = "icon-slot" };
                 icon.AddToClassList("hud-resource-icon");
+                Texture2D iconTexture;
+                if (resourceIcons.TryGetValue(entry.Kind, out iconTexture) && iconTexture != null)
+                    icon.style.backgroundImage = new StyleBackground(iconTexture);
                 var text = new VisualElement { name = "resource-text" };
                 text.AddToClassList("hud-resource-text");
                 var name = new Label(entry.Label);
@@ -687,7 +738,14 @@ namespace Rts.Presentation
                 card.Add(icon);
                 card.Add(text);
                 resourceRow.Add(card);
-                slots.Add(new ResourceSlot { Kind = entry.Kind, Label = entry.Label, ValueLabel = value, Value = int.MinValue });
+                slots.Add(new ResourceSlot
+                {
+                    Kind = entry.Kind,
+                    Label = entry.Label,
+                    Icon = icon,
+                    ValueLabel = value,
+                    Value = int.MinValue
+                });
             }
         }
 
@@ -699,16 +757,75 @@ namespace Rts.Presentation
             return count;
         }
 
-        private static FontAsset CreateFont(string[] families)
+        private void LoadHudAssets()
+        {
+            if (hudAssetsLoaded) return;
+            hudAssetsLoaded = true;
+
+            bundledRegularFont = CreateBundledFont(Resources.Load<Font>(RegularFontResourcePath));
+            bundledBoldFont = CreateBundledFont(Resources.Load<Font>(BoldFontResourcePath));
+            populationIconTexture = Resources.Load<Texture2D>("Hud/Icons/person");
+            if (populationIconTexture == null)
+                Debug.LogWarning("UI Toolkit HUD icon not found at Resources/Hud/Icons/person.");
+
+            for (int i = 0; i < IconKinds.Length; i++)
+            {
+                var kind = IconKinds[i];
+                var texture = Resources.Load<Texture2D>("Hud/Icons/" + IconFileName(kind));
+                resourceIcons[kind] = texture;
+                if (texture == null)
+                    Debug.LogWarning("UI Toolkit HUD icon not found at Resources/Hud/Icons/" + IconFileName(kind) + ".");
+            }
+
+        }
+
+        private static string IconFileName(TopBarResourceVisibility.ResourceKind kind)
+        {
+            switch (kind)
+            {
+                case TopBarResourceVisibility.ResourceKind.Food: return "wheat";
+                case TopBarResourceVisibility.ResourceKind.Wood: return "wood-pile";
+                case TopBarResourceVisibility.ResourceKind.Ore: return "ore";
+                case TopBarResourceVisibility.ResourceKind.Metal: return "metal-bar";
+                case TopBarResourceVisibility.ResourceKind.Stone: return "stone-pile";
+                case TopBarResourceVisibility.ResourceKind.Gems: return "cut-diamond";
+                case TopBarResourceVisibility.ResourceKind.Gold: return "two-coins";
+                case TopBarResourceVisibility.ResourceKind.Charcoal: return "coal-pile";
+                case TopBarResourceVisibility.ResourceKind.Steel: return "anvil";
+                case TopBarResourceVisibility.ResourceKind.BowGear: return "quiver";
+                default: return "";
+            }
+        }
+
+        private FontAsset CreateBundledFont(Font font)
+        {
+            if (font == null) return null;
+            try
+            {
+                var asset = FontAsset.CreateFontAsset(font);
+                if (asset != null) createdFontAssets.Add(asset);
+                return asset;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        private FontAsset CreateOsFont(string[] families)
         {
             foreach (var family in families)
             {
                 try
                 {
                     var asset = FontAsset.CreateFontAsset(family, "Regular", 32, 4, GlyphRenderMode.SDFAA);
-                    if (asset != null) return asset;
+                    if (asset != null)
+                    {
+                        createdFontAssets.Add(asset);
+                        return asset;
+                    }
                 }
-                catch (System.Exception)
+                catch (Exception)
                 {
                     // The next family is the fallback. Font creation is optional and must not stop the HUD.
                 }
@@ -718,12 +835,9 @@ namespace Rts.Presentation
 
         private void OnDestroy()
         {
-            for (int i = 0; i < themeFonts.Length; i++)
+            for (int i = 0; i < createdFontAssets.Count; i++)
             {
-                var fonts = themeFonts[i];
-                if (fonts == null) continue;
-                if (fonts.Heading != null && fonts.Heading != fonts.Body) Destroy(fonts.Heading);
-                if (fonts.Body != null) Destroy(fonts.Body);
+                if (createdFontAssets[i] != null) Destroy(createdFontAssets[i]);
             }
             if (panelSettings != null) Destroy(panelSettings);
         }

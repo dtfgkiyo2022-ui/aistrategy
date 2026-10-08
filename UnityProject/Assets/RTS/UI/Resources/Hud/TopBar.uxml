@@ -11,7 +11,10 @@
                 </ui:VisualElement>
                 <ui:VisualElement name="resource-row" class="hud-resource-row" />
                 <ui:VisualElement class="hud-status-block">
-                    <ui:Label name="population-label" class="hud-population" />
+                    <ui:VisualElement class="hud-status-line hud-population-line">
+                        <ui:VisualElement name="population-icon" class="hud-population-icon" />
+                        <ui:Label name="population-label" class="hud-population" />
+                    </ui:VisualElement>
                     <ui:Label name="idle-label" class="hud-idle" />
                 </ui:VisualElement>
             </ui:VisualElement>

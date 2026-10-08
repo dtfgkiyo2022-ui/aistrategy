@@ -15,7 +15,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - `Themes/ThemeTable.uss`：B 作戦卓。半透明の青黒い板、青緑の枠、広い字間と BIZ UDGothic 系の文字。
 - `Themes/ThemeParchment.uss`：C 羊皮紙の軍図。`#efe3c8` の板、濃い 2px 枠、右下へずらした濃い板を影の代わりに使用。
 
-3案の名前・USS の Resources パス・見出し/本文フォントの候補順は、UnityEngine に依存しない `Rts.Presentation.HudThemeCatalog` にまとめています。フォントはテーマごとに `FontAsset.CreateFontAsset` で一度だけ試し、切り替え後もキャッシュを使います。
+3案の名前・USS の Resources パス・見出し/本文フォントの候補順と、同梱フォントを使うかどうかは、UnityEngine に依存しない `Rts.Presentation.HudThemeCatalog` にまとめています。A 石と真鍮だけは見出しをOSの明朝候補から作り、失敗したときに同梱 Boldへ戻します。本文は同梱 Regularを使います。B/Cは見出し・本文とも同梱フォントを優先し、読めないときだけ各テーマのOS候補へ戻します。
 
 - `--hud-panel`：帯の背景色
 - `--hud-panel-border`：帯の枠色
@@ -32,7 +32,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 - `--hud-resource-border` / `--hud-input` / `--hud-button` / `--hud-button-text`：資源欄、入力、ボタン用の色
 - `--hud-staff-*`：参謀欄の板、吹き出し（あなた／参謀／詳しく／悪い）、札、入力欄、選択欄、ボタンの地・字・枠・角
 
-資源の小さな四角は `.hud-resource-icon` です。画像を用意した段階で、この要素を背景画像などに差し替えます。
+資源の絵は `.hud-resource-icon` に表示します。資源種別ごとの画像、色付け、読み込み方法は「資源と人口の絵」にまとめています。
 
 ## 別の欄を移す手順
 
@@ -44,7 +44,13 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 ## フォント
 
-フォントファイルは同梱しません。`HudThemeCatalog` の案ごとの候補を `HudToolkit` が Unity 6 の `UnityEngine.TextCore.Text.FontAsset.CreateFontAsset` に渡し、`Regular` で試します。見出し用が失敗した場合は本文用、本文用も失敗した場合は UI Toolkit の既定フォントに戻します。見出しは UXML の `.hud-heading` 要素にだけ見出し用 FontAsset を付けます。
+`Resources/Hud/Fonts/` の `NotoSansJP-Regular.otf` と `NotoSansJP-Bold.otf` を、`HudToolkit` が起動時にそれぞれ一度だけ `Resources.Load<Font>("Hud/Fonts/NotoSansJP-Regular")`／`Bold` で読みます。その `Font` を `UnityEngine.TextCore.Text.FontAsset.CreateFontAsset(Font)` に渡して動的な FontAssetを作り、通常の文字には Regular、UXMLの `.hud-heading` 要素には Boldを付けます。作成に失敗した場合だけ、`HudThemeCatalog` のOSフォント候補を試し、それも失敗した場合はUI Toolkitの既定フォントに任せます。テーマ切り替え後も作成済みのFontAssetを使い、毎フレームは読みません。
+
+## 資源と人口の絵
+
+`Resources/Hud/Icons/` のPNGを起動時に資源種別ごとに一度だけ `Resources.Load<Texture2D>` で読みます。`HudToolkit` が資源欄の `.hud-resource-icon` の `style.backgroundImage` に対応するTexture2Dを設定し、人口の前には `person.png` を同じ方法で置きます。`.hud-resource-icon` と人口アイコンは USS の `-unity-background-image-tint-color: var(--hud-accent)` で案の強調色に染め、テーマごとの大きさはおよそ18pxです。絵が読めない場合もHUDを止めず、色付きの空欄を残します。
+
+設定欄の下部には、同梱フォントと game-icons.net の作者・ライセンスを短い出典行で表示します。詳しい対応表は `Assets/RTS/UI/CREDITS.md` にあります。
 
 ## 切り替え
 

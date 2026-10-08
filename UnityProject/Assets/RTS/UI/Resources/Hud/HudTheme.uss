@@ -108,11 +108,13 @@
     align-items: center;
 }
 
-.hud-resource-icon {
+.hud-resource-icon,
+.hud-population-icon {
     width: var(--hud-icon-size);
     height: var(--hud-icon-size);
     margin-right: var(--hud-gap);
     background-color: var(--hud-accent);
+    -unity-background-image-tint-color: var(--hud-accent);
     border-radius: var(--hud-icon-radius);
 }
 
@@ -144,8 +146,19 @@
     padding-right: var(--hud-gap);
 }
 
-.hud-population {
+.hud-status-line {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
     height: var(--hud-status-line-height);
+}
+
+.hud-population-line .hud-population-icon {
+    flex-shrink: 0;
+}
+
+.hud-population {
+    flex-grow: 1;
     color: var(--hud-text);
     -unity-text-align: middle-right;
     white-space: nowrap;

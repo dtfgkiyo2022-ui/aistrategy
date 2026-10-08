@@ -496,16 +496,29 @@ namespace Rts.Presentation
             y += SetupRow;
 
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Outside AI", "外部AI"));
-            if (externalAi == null) return y + SetupRow;
+            if (externalAi == null) return DrawAssetCredits(x, y + SetupRow, rect.width - 16f);
             var line = new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f);
-            if (!externalAi.KeyAvailable) { GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。")); return y + SetupRow; }
+            if (!externalAi.KeyAvailable)
+            {
+                GUI.Label(line, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。"));
+                return DrawAssetCredits(x, y + SetupRow, rect.width - 16f);
+            }
             bool ai = externalAi.Enabled;
             bool aiNow = GUI.Toggle(line, ai, ai ? UiText.T("On - asking an outside AI", "入 - 外部AIに聞いています") : UiText.T("Off - ask an outside AI", "切 - 外部AIに聞く"), GUI.skin.button);
             if (aiNow != ai) externalAi.Enabled = aiNow;
             // The notice stays next to the switch: turning it on sends what the faction can see to an outside service.
             GUI.Label(new Rect(x, y + 26f, rect.width - 16f, 34f), ai ? externalAi.Status.Replace("\n", "   ")
                 : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"));
-            return y + 64f;
+            return DrawAssetCredits(x, y + 64f, rect.width - 16f);
+        }
+
+        private static float DrawAssetCredits(float x, float y, float width)
+        {
+            GUI.Label(new Rect(x, y, width, 20f),
+                UiText.T("Asset credits: Noto Sans JP (OFL); game-icons.net by Lorc, Delapouite, Faithtoken (CC BY 3.0).",
+                    "素材の出典：Noto Sans JP（OFL）、game-icons.net（Lorc・Delapouite・Faithtoken、CC BY 3.0）"),
+                UiStyles.Tiny);
+            return y + 22f;
         }
 
         private static string PresetLabel(string name)
