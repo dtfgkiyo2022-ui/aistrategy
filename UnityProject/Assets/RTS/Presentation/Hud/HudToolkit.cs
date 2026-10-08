@@ -558,6 +558,7 @@ namespace Rts.Presentation
                 slot.Button.SetEnabled(action.Enabled && !action.Message);
                 slot.Button.EnableInClassList("is-selected", action.Selected);
                 slot.Button.EnableInClassList("is-message", action.Message);
+                slot.Row.EnableInClassList("is-message-row", action.Message);
                 slot.Reason.text = action.Reason;
                 slot.Reason.style.display = string.IsNullOrEmpty(action.Reason) ? DisplayStyle.None : DisplayStyle.Flex;
             }

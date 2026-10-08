@@ -1,0 +1,59 @@
+/* D Leather & Vellum: between A (dark brass) and C (white parchment), 10-08 owner request.
+   Variables live on the document root this HUD tags (HudToolkit adds "hud-document"); a sheet attached to
+   rootVisualElement never matches :root, which is the panel above it. */
+.hud-document {
+    --hud-panel: #b9a27a;
+    --hud-panel-border: #5a4426;
+    --hud-panel-inner-border: #d6c39c;
+    --hud-resource-panel: #a68f68;
+    --hud-resource-border: #6e5634;
+    --hud-divider: #8a7350;
+    --hud-input: #e8dcc0;
+    --hud-button: #4a3826;
+    --hud-button-text: #f3e6c8;
+    --hud-staff-panel: #b9a27a;
+    --hud-staff-chat: #cdb990;
+    --hud-staff-you-bg: #4a5d6a;
+    --hud-staff-you-text: #f4f1e8;
+    --hud-staff-bg: #e3d4b2;
+    --hud-staff-text: #2a1d10;
+    --hud-staff-detail-bg: #d4c19b;
+    --hud-staff-detail-text: #5a4630;
+    --hud-staff-bad-bg: #e8c2b0;
+    --hud-staff-bad-text: #6e1f10;
+    --hud-staff-bubble-border: #8a7350;
+    --hud-staff-menu: #d9c8a2;
+    --hud-staff-button: #4a3826;
+    --hud-staff-button-hover: #6b5236;
+    --hud-staff-button-border: #2e2216;
+    --hud-staff-input: #efe5cc;
+    --hud-staff-input-text: #2a1d10;
+    --hud-staff-input-border: #5a4426;
+    --hud-staff-tag-radius: 2px;
+    --hud-shadow: rgba(46, 33, 18, 0.35);
+    --hud-text: #2a1d10;
+    --hud-muted-text: #5a4630;
+    --hud-heading: #3a2412;
+    --hud-accent: #7a3a0a;
+    --hud-good: #3f6b2a;
+    --hud-warning: #9a2e18;
+    --hud-font-size: 15px;
+    --hud-small-font-size: 11px;
+    --hud-heading-size: 20px;
+    --hud-age-stage-size: 10px;
+    --hud-top-height: 68px;
+    --hud-padding: 7px;
+    --hud-gap: 6px;
+    --hud-border-width: 2px;
+    --hud-radius: 3px;
+    --hud-inner-radius: 1px;
+    --hud-icon-radius: 2px;
+    --hud-icon-size: 22px;
+    --hud-resource-width: 74px;
+    --hud-resource-height: 44px;
+    --hud-status-line-height: 17px;
+    --hud-number-width: 48px;
+    --hud-age-width: 170px;
+    --hud-status-width: 132px;
+    --hud-heading-letter-spacing: 0px;
+}

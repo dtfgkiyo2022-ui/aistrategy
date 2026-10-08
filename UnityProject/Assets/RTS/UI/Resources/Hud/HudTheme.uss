@@ -607,8 +607,10 @@
 
 .economy-tab {
     flex-grow: 1;
-    min-height: 25px;
-    margin-right: 4px;
+    height: 26px;
+    margin: 0 4px 0 0;
+    padding-top: 0;
+    padding-bottom: 0;
     padding-left: 2px;
     padding-right: 2px;
     color: var(--hud-button-text);
@@ -635,17 +637,29 @@
     padding: 4px;
 }
 
-.economy-action-row {
+/* Four buttons to a row: the scroll view's content wraps, and a disabled button's reason sits under it. */
+.economy-actions .unity-scroll-view__content-container {
     flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.economy-action-row {
+    flex-direction: column;
+    width: 25%;
+    padding-right: 4px;
+    margin-bottom: 4px;
+}
+
+.economy-action-row.is-message-row {
     width: 100%;
-    min-height: 27px;
-    margin-bottom: 3px;
 }
 
 .economy-action {
-    flex-grow: 1;
     min-width: 0;
-    min-height: 25px;
+    height: 26px;
+    margin: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     padding-left: 4px;
     padding-right: 4px;
     color: var(--hud-button-text);
@@ -681,8 +695,7 @@
 }
 
 .economy-reason {
-    width: 34%;
-    margin-left: 5px;
+    margin-top: 1px;
     color: var(--hud-muted-text);
     font-size: var(--hud-small-font-size);
     white-space: normal;
