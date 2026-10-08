@@ -45,7 +45,7 @@
     --hud-radius: 8px;
     --hud-inner-radius: 5px;
     --hud-icon-radius: 4px;
-    --hud-icon-size: 12px;
+    --hud-icon-size: 18px;
     --hud-resource-width: 66px;
     --hud-resource-height: 38px;
     --hud-status-line-height: 17px;
