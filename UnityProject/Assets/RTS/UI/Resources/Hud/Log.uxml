@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="log-toggle-frame" class="hud-log-toggle-frame">
+        <ui:Button name="log-toggle" class="hud-log-toggle-button" />
+    </ui:VisualElement>
+    <ui:VisualElement name="log-status-frame" class="hud-log-status-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement class="hud-log-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="log-status-title" class="hud-heading log-section-title" />
+            <ui:ScrollView name="log-status-scroll" class="log-scroll" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="log-entries-frame" class="hud-log-entries-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement class="hud-log-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="log-entries-title" class="hud-heading log-section-title" />
+            <ui:ScrollView name="log-entries-scroll" class="log-scroll" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

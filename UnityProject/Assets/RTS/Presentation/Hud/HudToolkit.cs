@@ -23,6 +23,9 @@ namespace Rts.Presentation
         private const string SupplyUxmlResourcePath = "Hud/Supply";
         private const string TimelineUxmlResourcePath = "Hud/Timeline";
         private const string ClockUxmlResourcePath = "Hud/Clock";
+        private const string SetupUxmlResourcePath = "Hud/Setup";
+        private const string LogUxmlResourcePath = "Hud/Log";
+        private const string ResultUxmlResourcePath = "Hud/Result";
         private const string BaseUssResourcePath = "Hud/HudTheme";
         private const string RegularFontResourcePath = "Hud/Fonts/NotoSansJP-Regular";
         private const string BoldFontResourcePath = "Hud/Fonts/NotoSansJP-Bold";
@@ -112,6 +115,26 @@ namespace Rts.Presentation
         private Button clockSpeed2;
         private Button clockSpeed4;
         private Button clockFaction;
+        private VisualElement setupControlsFrame;
+        private Button setupToggle;
+        private Button languageToggle;
+        private VisualElement setupFrame;
+        private Label setupTitle;
+        private ScrollView setupScroll;
+        private VisualElement setupContent;
+        private VisualElement logToggleFrame;
+        private Button logToggle;
+        private VisualElement logStatusFrame;
+        private Label logStatusTitle;
+        private ScrollView logStatusScroll;
+        private VisualElement logEntriesFrame;
+        private Label logEntriesTitle;
+        private ScrollView logEntriesScroll;
+        private VisualElement resultFrame;
+        private Label resultHeadline;
+        private Label resultDetail;
+        private Label resultPack;
+        private Button resultRestart;
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
@@ -263,6 +286,7 @@ namespace Rts.Presentation
                 if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
+                HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
             }
@@ -281,6 +305,7 @@ namespace Rts.Presentation
                 if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
+                HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
             }
@@ -296,6 +321,9 @@ namespace Rts.Presentation
             RefreshSupply();
             RefreshTimeline();
             RefreshClock();
+            RefreshSetup();
+            RefreshLog();
+            RefreshResult();
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
             // treats this Toolkit panel as occupied and does not let map selection or orders leak underneath it.
@@ -313,6 +341,22 @@ namespace Rts.Presentation
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Timeline);
             if (clockFrame != null && clockFrame.resolvedStyle.display != DisplayStyle.None)
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).TopCenter);
+            if (setupControlsFrame != null && setupControlsFrame.resolvedStyle.display != DisplayStyle.None)
+            {
+                var topRight = UiLayout.Calculate(Screen.width, Screen.height).TopRight;
+                UiHitAreas.Shared.Register(new Rect(topRight.x, topRight.y, topRight.width * 0.64f, 28f));
+                UiHitAreas.Shared.Register(new Rect(topRight.x + topRight.width * 0.66f, topRight.y, topRight.width * 0.34f, 28f));
+            }
+            if (setupFrame != null && setupFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Setup);
+            if (logToggleFrame != null && logToggleFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).LogToggle);
+            if (logStatusFrame != null && logStatusFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).LogStatus);
+            if (logEntriesFrame != null && logEntriesFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).LogEntries);
+            if (resultFrame != null && resultFrame.resolvedStyle.display != DisplayStyle.None)
+                UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Result);
         }
 
         private float layoutLogAt = -1f;
@@ -394,6 +438,15 @@ namespace Rts.Presentation
             var clockTree = Resources.Load<VisualTreeAsset>(ClockUxmlResourcePath);
             if (clockTree != null) clockTree.CloneTree(root);
             else Debug.LogWarning("UI Toolkit clock UXML not found at Resources/" + ClockUxmlResourcePath + ".");
+            var setupTree = Resources.Load<VisualTreeAsset>(SetupUxmlResourcePath);
+            if (setupTree != null) setupTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit setup UXML not found at Resources/" + SetupUxmlResourcePath + ".");
+            var logTree = Resources.Load<VisualTreeAsset>(LogUxmlResourcePath);
+            if (logTree != null) logTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit log UXML not found at Resources/" + LogUxmlResourcePath + ".");
+            var resultTree = Resources.Load<VisualTreeAsset>(ResultUxmlResourcePath);
+            if (resultTree != null) resultTree.CloneTree(root);
+            else Debug.LogWarning("UI Toolkit result UXML not found at Resources/" + ResultUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
             topFrame = root.Q<VisualElement>("top-frame");
@@ -458,6 +511,26 @@ namespace Rts.Presentation
             clockSpeed2 = root.Q<Button>("clock-speed-2");
             clockSpeed4 = root.Q<Button>("clock-speed-4");
             clockFaction = root.Q<Button>("clock-faction");
+            setupControlsFrame = root.Q<VisualElement>("setup-controls-frame");
+            setupToggle = root.Q<Button>("setup-toggle");
+            languageToggle = root.Q<Button>("language-toggle");
+            setupFrame = root.Q<VisualElement>("setup-frame");
+            setupTitle = root.Q<Label>("setup-title");
+            setupScroll = root.Q<ScrollView>("setup-scroll");
+            setupContent = root.Q<VisualElement>("setup-content");
+            logToggleFrame = root.Q<VisualElement>("log-toggle-frame");
+            logToggle = root.Q<Button>("log-toggle");
+            logStatusFrame = root.Q<VisualElement>("log-status-frame");
+            logStatusTitle = root.Q<Label>("log-status-title");
+            logStatusScroll = root.Q<ScrollView>("log-status-scroll");
+            logEntriesFrame = root.Q<VisualElement>("log-entries-frame");
+            logEntriesTitle = root.Q<Label>("log-entries-title");
+            logEntriesScroll = root.Q<ScrollView>("log-entries-scroll");
+            resultFrame = root.Q<VisualElement>("result-frame");
+            resultHeadline = root.Q<Label>("result-headline");
+            resultDetail = root.Q<Label>("result-detail");
+            resultPack = root.Q<Label>("result-pack");
+            resultRestart = root.Q<Button>("result-restart");
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
@@ -474,10 +547,19 @@ namespace Rts.Presentation
             if (supplyFrame != null) supplyFrame.pickingMode = PickingMode.Position;
             if (timelineFrame != null) timelineFrame.pickingMode = PickingMode.Position;
             if (clockFrame != null) clockFrame.pickingMode = PickingMode.Position;
+            if (setupControlsFrame != null) setupControlsFrame.pickingMode = PickingMode.Position;
+            if (setupFrame != null) setupFrame.pickingMode = PickingMode.Position;
+            if (logToggleFrame != null) logToggleFrame.pickingMode = PickingMode.Position;
+            if (logStatusFrame != null) logStatusFrame.pickingMode = PickingMode.Position;
+            if (logEntriesFrame != null) logEntriesFrame.pickingMode = PickingMode.Position;
+            if (resultFrame != null) resultFrame.pickingMode = PickingMode.Position;
             BindStaffEvents();
             BindCommandEvents();
             BindEconomyEvents();
             BindClockEvents();
+            BindSetupEvents();
+            BindLogEvents();
+            BindResultEvents();
             ApplySelectedTheme();
         }
 
@@ -599,6 +681,470 @@ namespace Rts.Presentation
             frame.style.top = Length.Percent(height <= 0f ? 0f : rect.y / height * 100f);
             frame.style.width = Length.Percent(width <= 0f ? 0f : rect.width / width * 100f);
             frame.style.height = Length.Percent(height <= 0f ? 0f : rect.height / height * 100f);
+        }
+
+        private void HideCommandOverlays()
+        {
+            if (setupControlsFrame != null) setupControlsFrame.style.display = DisplayStyle.None;
+            if (setupFrame != null) setupFrame.style.display = DisplayStyle.None;
+            if (logToggleFrame != null) logToggleFrame.style.display = DisplayStyle.None;
+            if (logStatusFrame != null) logStatusFrame.style.display = DisplayStyle.None;
+            if (logEntriesFrame != null) logEntriesFrame.style.display = DisplayStyle.None;
+            if (resultFrame != null) resultFrame.style.display = DisplayStyle.None;
+        }
+
+        private void BindSetupEvents()
+        {
+            if (setupToggle != null) setupToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleSetup(); };
+            if (languageToggle != null) languageToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleLanguage(); };
+        }
+
+        private void BindLogEvents()
+        {
+            if (logToggle != null) logToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleLog(); };
+        }
+
+        private void BindResultEvents()
+        {
+            if (resultRestart != null)
+                resultRestart.clicked += () => { if (commandPanel != null && commandPanel.MatchRestart != null) commandPanel.MatchRestart.RestartMatch(); };
+        }
+
+        private void RefreshSetup()
+        {
+            if (setupControlsFrame == null || setupFrame == null || commandPanel == null)
+            {
+                if (setupControlsFrame != null) setupControlsFrame.style.display = DisplayStyle.None;
+                if (setupFrame != null) setupFrame.style.display = DisplayStyle.None;
+                return;
+            }
+
+            var layout = UiLayout.Calculate(Screen.width, Screen.height);
+            SetFrameRect(setupControlsFrame, layout.TopRight, Screen.width, Screen.height);
+            setupControlsFrame.style.display = DisplayStyle.Flex;
+            setupToggle.text = commandPanel.IsSetupOpen
+                ? UiText.T("Match setup ▲", "試合の設定 ▲")
+                : UiText.T("Match setup ▼", "試合の設定 ▼");
+            languageToggle.text = UiText.Japanese ? "English" : "日本語";
+
+            SetFrameRect(setupFrame, layout.Setup, Screen.width, Screen.height);
+            setupFrame.style.display = commandPanel.IsSetupOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            if (!commandPanel.IsSetupOpen || setupContent == null) return;
+            if (setupTitle != null) setupTitle.text = UiText.T("Match setup", "試合の設定");
+
+            // Settings are intentionally rebuilt only while the panel is open. Each control still calls the same
+            // presentation interfaces as the legacy rows, while the scroll view handles the long list.
+            setupContent.Clear();
+            BuildSetupContent();
+        }
+
+        private VisualElement AddSetupRow(string title)
+        {
+            var row = new VisualElement();
+            row.AddToClassList("setup-row");
+            var label = new Label(title);
+            label.AddToClassList("setup-label");
+            row.Add(label);
+            var content = new VisualElement();
+            content.AddToClassList("setup-control");
+            row.Add(content);
+            setupContent.Add(row);
+            return content;
+        }
+
+        private static Button AddSetupButton(VisualElement parent, string text, bool selected, Action action)
+        {
+            var button = new Button(action);
+            button.text = text;
+            button.AddToClassList("setup-button");
+            button.EnableInClassList("is-selected", selected);
+            parent.Add(button);
+            return button;
+        }
+
+        private static void AddSetupText(VisualElement parent, string text, string className)
+        {
+            var label = new Label(text ?? "");
+            label.AddToClassList(className);
+            parent.Add(label);
+        }
+
+        private void BuildSetupContent()
+        {
+            var toolkit = new Toggle();
+            toolkit.text = HudToolkit.IsEnabled
+                ? UiText.T("On (trial)", "使う（試作）")
+                : UiText.T("Off", "使わない");
+            toolkit.value = HudToolkit.IsEnabled;
+            toolkit.AddToClassList("setup-switch");
+            toolkit.RegisterValueChangedCallback(evt =>
+            {
+                if (evt.newValue != HudToolkit.IsEnabled) HudToolkit.SetEnabled(evt.newValue);
+            });
+            AddSetupRowWithControl(UiText.T("New screen", "新しい画面"), toolkit);
+
+            var themes = AddSetupRow(UiText.T("HUD theme", "見た目の案"));
+            for (int i = 0; i < HudThemeCatalog.Count; i++)
+            {
+                int themeIndex = i;
+                var theme = HudThemeCatalog.Get(themeIndex);
+                AddSetupButton(themes, UiText.T(theme.EnglishName, theme.JapaneseName), HudToolkit.ThemeIndex == themeIndex,
+                    () => HudToolkit.SetTheme(themeIndex));
+            }
+
+            var delay = commandPanel.DelayControl;
+            var delayContent = AddSetupRow(UiText.T("Reply delay", "返答の遅延"));
+            int[] delayOptions = { 0, 60, 200, 400 };
+            string[] delayNames = { "0s", "3s", "10s", "20s" };
+            for (int i = 0; i < delayOptions.Length; i++)
+            {
+                int ticks = delayOptions[i];
+                AddSetupButton(delayContent, delayNames[i], delay != null && delay.DelayTicks == ticks,
+                    () => { if (delay != null) delay.DelayTicks = ticks; });
+            }
+
+            AddDoctrineChoices(UiText.T("Opponent", "相手の方針"), commandPanel.Opponent);
+            AddDoctrineChoices(UiText.T("Own side", "自軍の方針"), commandPanel.OwnDoctrine);
+            AddTacticSection(UiText.T("Own tactic", "自軍の戦術"), commandPanel.OwnTactic, true);
+            AddWorkshopSection();
+            AddTacticSection(UiText.T("Opponent tactic", "相手の戦術"), commandPanel.OpponentTactic, false);
+            AddFileSection();
+            AddMapSection();
+            AddRuleSection();
+            AddExternalAiSection();
+
+            AddSetupText(setupContent,
+                UiText.T("Asset credits: Noto Sans JP (OFL); game-icons.net by Lorc, Delapouite, Faithtoken (CC BY 3.0).",
+                    "素材の出典：Noto Sans JP（OFL）、game-icons.net（Lorc・Delapouite・Faithtoken、CC BY 3.0）"),
+                "setup-credits");
+        }
+
+        private void AddSetupRowWithControl(string title, VisualElement control)
+        {
+            var content = AddSetupRow(title);
+            content.Add(control);
+        }
+
+        private void AddDoctrineChoices(string title, IOpponentControl control)
+        {
+            if (control == null) return;
+            var content = AddSetupRow(title);
+            var choices = control.Choices ?? Array.Empty<string>();
+            for (int i = 0; i < choices.Length; i++)
+            {
+                string choice = choices[i];
+                AddSetupButton(content, CommandPanel.PresetLabel(choice), control.Current == choice,
+                    () => control.Current = choice);
+            }
+        }
+
+        private void AddTacticSection(string title, ITacticControl control, bool editable)
+        {
+            if (control == null) return;
+            var content = AddSetupRow(title);
+            AddTacticChoices(content, control);
+            string hint = CommandPanel.TacticHintText(control);
+            if (!string.IsNullOrEmpty(hint)) AddSetupText(content, hint, "setup-hint");
+            string status = CommandPanel.TacticStatusText(control,
+                editable ? UiText.T("Own tactic status", "自軍の戦術の状態") : UiText.T("Opponent tactic status", "相手の戦術の状態"));
+            if (!string.IsNullOrEmpty(status))
+            {
+                AddSetupText(content, status, "setup-status");
+                AddSetupText(content, CommandPanel.TacticConsoleText(control), "setup-console");
+                var reloadRow = new VisualElement();
+                reloadRow.AddToClassList("setup-inline-row");
+                var auto = new Toggle();
+                auto.text = control.AutoReload
+                    ? UiText.T("Auto reload: on", "自動で読み直す：入")
+                    : UiText.T("Auto reload: off", "自動で読み直す：切");
+                auto.value = control.AutoReload;
+                auto.AddToClassList("setup-switch");
+                auto.RegisterValueChangedCallback(evt =>
+                {
+                    control.AutoReload = evt.newValue;
+                });
+                reloadRow.Add(auto);
+                AddSetupButton(reloadRow, UiText.T("Reload", "読み直す"), false, () => control.Reload());
+                content.Add(reloadRow);
+                if (!string.IsNullOrEmpty(control.ReloadMessage)) AddSetupText(content, control.ReloadMessage, "setup-status");
+            }
+            AddTacticParameters(content, control, editable);
+            AddTacticSignals(content, control, editable);
+        }
+
+        private static void AddTacticChoices(VisualElement parent, ITacticControl control)
+        {
+            var grid = new VisualElement();
+            grid.AddToClassList("setup-choice-grid");
+            var views = control.ChoiceViews;
+            if (views != null && views.Count != 0)
+            {
+                for (int i = 0; i < views.Count; i++)
+                {
+                    var choice = views[i];
+                    AddSetupButton(grid, CommandPanel.TacticLabel(choice), control.Current == choice.Selection,
+                        () => control.Current = choice.Selection);
+                }
+            }
+            else
+            {
+                var choices = control.Choices ?? Array.Empty<string>();
+                for (int i = 0; i < choices.Length; i++)
+                {
+                    string choice = choices[i];
+                    AddSetupButton(grid, CommandPanel.TacticLabel(choice), control.Current == choice,
+                        () => control.Current = choice);
+                }
+            }
+            parent.Add(grid);
+        }
+
+        private void AddTacticParameters(VisualElement parent, ITacticControl control, bool editable)
+        {
+            var parameters = control.Parameters;
+            if (parameters == null || parameters.Count == 0) return;
+            AddSetupText(parent, UiText.T("Tactic knobs", "戦術のつまみ"), "setup-subtitle");
+            for (int i = 0; i < parameters.Count; i++) AddTacticParameter(parent, control, parameters[i], editable);
+        }
+
+        private void AddTacticParameter(VisualElement parent, ITacticControl control, TacticParamView parameter, bool editable)
+        {
+            object raw = CommandPanel.TacticParameterValue(control, parameter);
+            string label = CommandPanel.TacticParameterLabel(parameter);
+            if (parameter.Type == "bool")
+            {
+                var toggle = new Toggle();
+                bool value = raw is bool && (bool)raw;
+                toggle.text = label + ": " + (value ? "on" : "off");
+                toggle.value = value;
+                toggle.SetEnabled(editable);
+                toggle.AddToClassList("setup-switch");
+                toggle.RegisterValueChangedCallback(evt =>
+                {
+                    if (editable) control.SetParam(parameter.Name, evt.newValue);
+                });
+                parent.Add(toggle);
+                return;
+            }
+
+            if (parameter.Type == "choice")
+            {
+                AddSetupText(parent, label + ": " + (raw ?? ""), "setup-param-label");
+                var choices = parameter.Choices ?? Array.Empty<string>();
+                var grid = new VisualElement();
+                grid.AddToClassList("setup-choice-grid");
+                for (int i = 0; i < choices.Count; i++)
+                {
+                    string choice = choices[i];
+                    AddSetupButton(grid, choice, Equals(raw, choice),
+                        () => { if (editable) control.SetParam(parameter.Name, choice); });
+                }
+                grid.SetEnabled(editable);
+                parent.Add(grid);
+                return;
+            }
+
+            decimal current = raw is decimal ? (decimal)raw : Convert.ToDecimal(raw, System.Globalization.CultureInfo.InvariantCulture);
+            AddSetupText(parent, label + ": " + current.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture), "setup-param-label");
+            if (!editable || !parameter.Min.HasValue || !parameter.Max.HasValue) return;
+            decimal minValue = parameter.Min.Value;
+            decimal maxValue = parameter.Max.Value;
+            if (parameter.Type == "int")
+            {
+                var slider = new SliderInt((int)minValue, (int)maxValue);
+                slider.value = (int)Math.Round(current, 0, MidpointRounding.AwayFromZero);
+                slider.AddToClassList("setup-slider");
+                slider.RegisterValueChangedCallback(evt => commandPanel.SetTacticParameter(control, parameter, evt.newValue));
+                parent.Add(slider);
+            }
+            else
+            {
+                var slider = new Slider((float)minValue, (float)maxValue);
+                slider.value = (float)current;
+                slider.AddToClassList("setup-slider");
+                slider.RegisterValueChangedCallback(evt => commandPanel.SetTacticParameter(control, parameter, (decimal)evt.newValue));
+                parent.Add(slider);
+            }
+            var step = parameter.Step ?? (parameter.Type == "int" ? 1m : (maxValue - minValue) / 20m);
+            var nudge = new VisualElement();
+            nudge.AddToClassList("setup-nudge-row");
+            AddSetupButton(nudge, "−", false, () => commandPanel.SetTacticParameter(control, parameter, current - step));
+            AddSetupButton(nudge, "+", false, () => commandPanel.SetTacticParameter(control, parameter, current + step));
+            parent.Add(nudge);
+        }
+
+        private void AddTacticSignals(VisualElement parent, ITacticControl control, bool editable)
+        {
+            var signals = control.Signals;
+            if (!editable || signals == null || signals.Count == 0) return;
+            AddSetupText(parent, UiText.T("Tactic signals", "戦術の合図"), "setup-subtitle");
+            var grid = new VisualElement();
+            grid.AddToClassList("setup-choice-grid");
+            for (int i = 0; i < signals.Count; i++)
+            {
+                var signal = signals[i];
+                string text = signal.Label + (signal.NeedsPoint ? UiText.T(" (pick point)", "（地点を選ぶ）") : "");
+                AddSetupButton(grid, text, false, () => commandPanel.BeginTacticSignal(control, signal));
+            }
+            parent.Add(grid);
+        }
+
+        private void AddWorkshopSection()
+        {
+            var workshop = commandPanel.Workshop;
+            var ownTactic = commandPanel.OwnTactic;
+            if (workshop == null) return;
+            var content = AddSetupRow(UiText.T("Workshop", "Workshop"));
+            bool canPublish = ownTactic != null && workshop.CanPublishTactic(ownTactic.Current);
+            var row = new VisualElement();
+            row.AddToClassList("setup-inline-row");
+            var publish = AddSetupButton(row, UiText.T("Publish tactic", "戦術を公開"), false,
+                () => { if (ownTactic != null) workshop.PublishTactic(ownTactic.Current); });
+            publish.SetEnabled(canPublish && workshop.SteamAvailable);
+            var visibility = workshop.VisibilityChoices ?? Array.Empty<string>();
+            for (int i = 0; i < visibility.Length; i++)
+            {
+                string choice = visibility[i];
+                AddSetupButton(row, choice, workshop.Visibility == choice, () => workshop.Visibility = choice);
+            }
+            content.Add(row);
+            AddSetupButton(content, UiText.T("Refresh Workshop", "Workshopを読み直す"), false, workshop.RefreshWorkshopTactics);
+            AddSetupText(content, workshop.WorkshopStatus ?? "", "setup-status");
+        }
+
+        private void AddFileSection()
+        {
+            var files = commandPanel.PlayerFiles;
+            if (files == null) return;
+            var content = AddSetupRow(UiText.T("Folders", "フォルダ"));
+            AddSetupButton(content, UiText.T("Open tactics folder", "戦術のフォルダを開く"), false, files.OpenTacticsFolder);
+            AddSetupButton(content, UiText.T("Open packs folder", "記録パックのフォルダを開く"), false, files.OpenPacksFolder);
+            AddSetupButton(content, UiText.T("Refresh list", "一覧を更新"), false, files.RefreshTacticList);
+            AddSetupButton(content, UiText.T("Export rulebook", "ルールブックを書き出す"), false, files.ExportRulebook);
+            AddSetupText(content, files.RulebookStatus ?? "", "setup-status");
+        }
+
+        private void AddMapSection()
+        {
+            var map = commandPanel.MapChoice;
+            if (map == null) return;
+            var content = AddSetupRow(UiText.T("Map", "マップ"));
+            bool economy = map.EconomyMap;
+            AddSetupButton(content, economy
+                ? UiText.T("Random #", "ランダム #") + map.Seed + UiText.T(" (economy, lines, terrain)", "（内政・ライン・地形）")
+                : UiText.T("Classic two roads", "旧来の二本道"), economy, () => map.EconomyMap = true);
+            var newMap = AddSetupButton(content, UiText.T("New random map", "新しいランダムマップ"), false, map.NewMap);
+            newMap.SetEnabled(economy);
+            AddSetupButton(content, UiText.T("Classic two roads", "旧来の二本道"), !economy, () => map.EconomyMap = false);
+        }
+
+        private void AddRuleSection()
+        {
+            var rules = commandPanel.MatchRuleChoice;
+            if (rules == null) return;
+            bool economy = commandPanel.MapChoice != null && commandPanel.MapChoice.EconomyMap;
+            var extra = AddSetupRow(UiText.T("Extra rules", "追加ルール"));
+            var monks = AddSetupButton(extra, rules.Monks ? UiText.T("Monks: on", "僧侶：入") : UiText.T("Monks: off", "僧侶：切"), rules.Monks, () => rules.Monks = !rules.Monks);
+            monks.SetEnabled(economy);
+            var ageVictory = AddSetupButton(extra, rules.AgeVictory ? UiText.T("Age victory: on", "時代到達勝利：入") : UiText.T("Age victory: off", "時代到達勝利：切"), rules.AgeVictory, () => rules.AgeVictory = !rules.AgeVictory);
+            ageVictory.SetEnabled(economy);
+            var civ = AddSetupRow(UiText.T("Civilisations", "文明"));
+            var civilisations = AddSetupButton(civ, rules.AllCivilisations
+                ? UiText.T("All 14 (12 more civilisations; gold, monks and fish on)", "14個全部（森林〜聖地の12文明を追加、金・僧侶・漁あり）")
+                : UiText.T("First 2 only (agrarian, metallurgy)", "最初の2つだけ（農耕・冶金）"), rules.AllCivilisations,
+                () => rules.AllCivilisations = !rules.AllCivilisations);
+            civilisations.SetEnabled(economy);
+        }
+
+        private void AddExternalAiSection()
+        {
+            var ai = commandPanel.ExternalAi;
+            var content = AddSetupRow(UiText.T("Outside AI", "外部AI"));
+            if (ai == null || !ai.KeyAvailable)
+            {
+                AddSetupText(content, UiText.T("Off. No key is set on this PC.", "切。このPCにはキーが設定されていません。"), "setup-status");
+                return;
+            }
+            var toggle = new Toggle();
+            toggle.text = ai.Enabled ? UiText.T("On - asking an outside AI", "入 - 外部AIに聞いています") : UiText.T("Off - ask an outside AI", "切 - 外部AIに聞く");
+            toggle.value = ai.Enabled;
+            toggle.AddToClassList("setup-switch");
+            toggle.RegisterValueChangedCallback(evt => ai.Enabled = evt.newValue);
+            content.Add(toggle);
+            AddSetupText(content, ai.Enabled ? ai.Status.Replace("\n", "   ")
+                : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"), "setup-status");
+        }
+
+        private void RefreshLog()
+        {
+            if (logToggleFrame == null || commandPanel == null) return;
+            var layout = UiLayout.Calculate(Screen.width, Screen.height);
+            SetFrameRect(logToggleFrame, layout.LogToggle, Screen.width, Screen.height);
+            logToggleFrame.style.display = DisplayStyle.Flex;
+            logToggle.text = commandPanel.IsLogOpen
+                ? UiText.T("Fold the command log ^", "命令の記録と状態を畳む ▲")
+                : UiText.T("Command log and status v", "命令の記録と状態を開く ▼");
+
+            bool open = commandPanel.IsLogOpen;
+            if (logStatusFrame != null)
+            {
+                SetFrameRect(logStatusFrame, layout.LogStatus, Screen.width, Screen.height);
+                logStatusFrame.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (logEntriesFrame != null)
+            {
+                SetFrameRect(logEntriesFrame, layout.LogEntries, Screen.width, Screen.height);
+                logEntriesFrame.style.display = open ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+            if (!open) return;
+            if (logStatusTitle != null) logStatusTitle.text = UiText.T("Command status (7 states)", "命令の状態（7段階）");
+            if (logEntriesTitle != null) logEntriesTitle.text = UiText.T("Command log", "命令の記録");
+            if (logStatusScroll != null)
+            {
+                logStatusScroll.Clear();
+                for (int i = 0; i < commandPanel.CommandStatusCount; i++)
+                {
+                    var line = new Label(commandPanel.CommandStatusText(i));
+                    line.AddToClassList("log-line");
+                    logStatusScroll.Add(line);
+                }
+            }
+            if (logEntriesScroll != null)
+            {
+                logEntriesScroll.Clear();
+                var entries = commandPanel.LogEntries;
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    var line = new Label(entries[i]);
+                    line.AddToClassList("log-line");
+                    logEntriesScroll.Add(line);
+                }
+            }
+        }
+
+        private void RefreshResult()
+        {
+            if (resultFrame == null || commandPanel == null) return;
+            var outcome = commandPanel.CurrentOutcome;
+            if (!outcome.HasValue)
+            {
+                resultFrame.style.display = DisplayStyle.None;
+                return;
+            }
+            SetFrameRect(resultFrame, UiLayout.Calculate(Screen.width, Screen.height).Result, Screen.width, Screen.height);
+            resultFrame.style.display = DisplayStyle.Flex;
+            if (resultHeadline != null) resultHeadline.text = outcome.Value.Headline;
+            if (resultDetail != null) resultDetail.text = outcome.Value.Detail;
+            if (resultPack != null)
+            {
+                resultPack.text = commandPanel.MatchPackText();
+                resultPack.style.display = string.IsNullOrEmpty(resultPack.text) ? DisplayStyle.None : DisplayStyle.Flex;
+            }
+            if (resultRestart != null)
+            {
+                resultRestart.text = UiText.T("Play again", "もう一度");
+                resultRestart.style.display = commandPanel.MatchRestart == null ? DisplayStyle.None : DisplayStyle.Flex;
+            }
         }
 
         private void RefreshSupply()

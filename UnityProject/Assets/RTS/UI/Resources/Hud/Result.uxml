@@ -1,0 +1,12 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="result-frame" class="hud-result-frame">
+        <ui:VisualElement class="hud-panel-shadow" />
+        <ui:VisualElement class="hud-result-panel">
+            <ui:VisualElement class="hud-panel-inner-border" />
+            <ui:Label name="result-headline" class="hud-heading result-headline" />
+            <ui:Label name="result-detail" class="result-detail" />
+            <ui:Label name="result-pack" class="result-pack" />
+            <ui:Button name="result-restart" class="result-restart" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
