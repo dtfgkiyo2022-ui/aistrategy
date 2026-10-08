@@ -1,4 +1,6 @@
-:root {
+/* Variables live on the document root this HUD tags (HudToolkit adds "hud-document"); a sheet attached to
+   rootVisualElement never matches :root, which is the panel above it. */
+.hud-document {
     --hud-panel: rgba(12, 22, 30, 0.78);
     --hud-panel-border: rgba(95, 208, 198, 0.28);
     --hud-panel-inner-border: rgba(127, 151, 166, 0.22);
