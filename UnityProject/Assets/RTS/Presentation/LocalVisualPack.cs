@@ -159,16 +159,21 @@ namespace Rts.Presentation
             private const float BlendSeconds = 0.15f;
             private readonly PlayableGraph graph;
             private readonly AnimationMixerPlayable mixer;
+            private readonly AnimationClipPlayable idle;
+            private readonly AnimationClipPlayable walk;
             // The attack clips are imported without looping; it is wrapped by hand so a long fight keeps swinging.
             private readonly AnimationClipPlayable attack;
             private readonly double attackLength;
             private int desired;
             private bool disposed;
 
-            internal AnimationHandle(PlayableGraph graph, AnimationMixerPlayable mixer, AnimationClipPlayable attack, double attackLength)
+            internal AnimationHandle(PlayableGraph graph, AnimationMixerPlayable mixer, AnimationClipPlayable idle,
+                AnimationClipPlayable walk, AnimationClipPlayable attack, double attackLength)
             {
                 this.graph = graph;
                 this.mixer = mixer;
+                this.idle = idle;
+                this.walk = walk;
                 this.attack = attack;
                 this.attackLength = attackLength;
             }
@@ -178,11 +183,21 @@ namespace Rts.Presentation
                 desired = attacking ? 2 : (moving || retreating ? 1 : 0);
             }
 
-            public void Tick(float deltaTime)
+            /// <summary>Scales clip playback without changing simulation time or state.</summary>
+            public void SetPlaybackRate(float walkRate, float matchRate)
             {
                 if (disposed) return;
+                idle.SetSpeed(matchRate);
+                walk.SetSpeed(walkRate * matchRate);
+                attack.SetSpeed(matchRate);
+            }
+
+            public void Tick(float deltaTime, float matchRate = 1f)
+            {
+                if (disposed) return;
+                if (matchRate <= 0f) return;
                 if (attackLength > 0.0001 && attack.GetTime() > attackLength) attack.SetTime(attack.GetTime() % attackLength);
-                float step = BlendSeconds <= 0f ? 1f : deltaTime / BlendSeconds;
+                float step = BlendSeconds <= 0f ? 1f : deltaTime * matchRate / BlendSeconds;
                 for (int i = 0; i < 3; i++)
                 {
                     float target = i == desired ? 1f : 0f;
@@ -227,7 +242,7 @@ namespace Rts.Presentation
             walkPlayable.SetTime(offset * walk.length);
             attackPlayable.SetTime(offset * attack.length);
             graph.Play();
-            return new AnimationHandle(graph, mixer, attackPlayable, attack.length);
+            return new AnimationHandle(graph, mixer, idlePlayable, walkPlayable, attackPlayable, attack.length);
 #else
             return null;
 #endif

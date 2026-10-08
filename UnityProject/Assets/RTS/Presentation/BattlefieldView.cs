@@ -12,6 +12,14 @@ namespace Rts.Presentation
         private const float UnitModelScale = 2.2f;
         private const float CoreModelScale = 1.2f;
         private const int MaxContactLabels = 8;
+        // 360 degrees/s turns a few dozen degrees per frame while remaining visibly smooth at normal frame rates.
+        private const float UnitRotationDegreesPerSecond = 360f;
+        private const float UnitWalkBaseSpeed = 1.25f;
+        private const float UnitWalkSpeedVariation = 0.08f;
+        private const float UnitWalkPlaybackMinimum = 0.5f;
+        private const float UnitWalkPlaybackMaximum = 2f;
+        private const float UnitFormationJitterRadius = 0.25f;
+        private const float UnitIdleDelaySeconds = 0.2f;
 
         [SerializeField] private int coreMaxHp = 3000;
         [SerializeField] private GameObject infantryModel;
@@ -27,6 +35,14 @@ namespace Rts.Presentation
             public int Hp;
             public bool IsEnemy;
             public LocalVisualPack.AnimationHandle Animation;
+            public bool WantsWalk;
+            public bool IsWalking;
+            public bool IsAttacking;
+            public float StillSeconds;
+            public float WalkPlaybackRate = 1f;
+            public float FacingY;
+            public bool HasAttackFacing;
+            public float AttackFacingY;
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
@@ -70,6 +86,10 @@ namespace Rts.Presentation
         private GameObject terrainObject;
         private SelectionTarget selected = SelectionTarget.None;
         private float sinceUpdate;
+        [SerializeField] private MonoBehaviour clockSource;
+        private IMatchClock matchClock;
+        private bool matchClockSearched;
+        private float measuredMatchRate = 1f;
 
         public SelectionTarget Selected { get { return selected; } }
 
@@ -210,6 +230,8 @@ namespace Rts.Presentation
 
         public void Push(FactionFrame frame)
         {
+            if (sinceUpdate > 0.001f)
+                measuredMatchRate = Mathf.Clamp(TickSeconds / sinceUpdate, 0.25f, 8f);
             sinceUpdate = 0f;
             SyncUnits(frame);
             SyncCores(frame);
@@ -231,6 +253,7 @@ namespace Rts.Presentation
                 // Chapter 12: never interpolate an enemy through a cell this faction cannot see now.
                 if (visual.IsEnemy && !IsVisibleNow(position)) position = visual.To;
                 visual.Object.transform.position = position;
+                UpdateUnitRotation(visual, GetMatchRate());
             }
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
@@ -255,9 +278,75 @@ namespace Rts.Presentation
         private void Update()
         {
             sinceUpdate += Time.deltaTime;
-            Apply(sinceUpdate / TickSeconds);
+            float matchRate = GetMatchRate();
             foreach (var visual in units.Values)
-                if (visual.Animation != null) visual.Animation.Tick(Time.deltaTime);
+            {
+                UpdateWalkingState(visual, matchRate);
+                if (visual.Animation != null)
+                {
+                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false);
+                    visual.Animation.SetPlaybackRate(visual.WalkPlaybackRate, matchRate);
+                    visual.Animation.Tick(Time.deltaTime, matchRate);
+                }
+            }
+            Apply(sinceUpdate / TickSeconds);
+        }
+
+        private void UpdateWalkingState(Visual visual, float matchRate)
+        {
+            if (visual.WantsWalk)
+            {
+                visual.IsWalking = true;
+                visual.StillSeconds = 0f;
+                return;
+            }
+            if (!visual.IsWalking || matchRate <= 0f) return;
+            visual.StillSeconds += Time.deltaTime * matchRate;
+            if (visual.StillSeconds >= UnitIdleDelaySeconds)
+            {
+                visual.IsWalking = false;
+                visual.StillSeconds = 0f;
+            }
+        }
+
+        private void UpdateUnitRotation(Visual visual, float matchRate)
+        {
+            if (matchRate <= 0f) return;
+            float movementTarget = UnitMotionMath.FacingAngleDegrees(
+                visual.From.x, visual.From.z, visual.To.x, visual.To.z, visual.FacingY);
+            float movementDistance = Vector2.Distance(
+                new Vector2(visual.From.x, visual.From.z), new Vector2(visual.To.x, visual.To.z));
+            float target = movementDistance > 0.001f ? movementTarget
+                : visual.IsAttacking && visual.HasAttackFacing ? visual.AttackFacingY : visual.FacingY;
+            visual.FacingY = Mathf.MoveTowardsAngle(visual.FacingY, target,
+                UnitRotationDegreesPerSecond * Time.deltaTime * matchRate);
+            visual.Object.transform.rotation = Quaternion.Euler(0f, visual.FacingY, 0f);
+        }
+
+        private float GetMatchRate()
+        {
+            var clock = MatchClock;
+            if (clock != null) return clock.Paused ? 0f : Mathf.Max(0f, clock.SpeedMultiplier);
+            // Without a host clock, a long interval means no simulation update (including pause).
+            return sinceUpdate > TickSeconds * 1.5f ? 0f : measuredMatchRate;
+        }
+
+        private IMatchClock MatchClock
+        {
+            get
+            {
+                if (matchClock != null || matchClockSearched) return matchClock;
+                // Searched once: scanning every object each frame would cost far more than the animation it serves.
+                matchClockSearched = true;
+                matchClock = clockSource as IMatchClock;
+                if (matchClock != null) return matchClock;
+                foreach (var candidate in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+                {
+                    matchClock = candidate as IMatchClock;
+                    if (matchClock != null) break;
+                }
+                return matchClock;
+            }
         }
 
         private static ulong UnitKey(RenderUnit unit)
@@ -272,7 +361,7 @@ namespace Rts.Presentation
             {
                 ulong key = UnitKey(unit);
                 present.Add(key);
-                var target = ToWorld(unit.Position, ModelFor(unit.Kind) != null || LocalVisualPack.HasUnit(unit.Kind) ? 0f : 1.1f);
+                var target = UnitWorldPosition(unit, key);
                 if (!units.TryGetValue(key, out var visual))
                 {
                     var objectToAnimate = CreateUnitObject(unit);
@@ -281,7 +370,8 @@ namespace Rts.Presentation
                         Object = objectToAnimate,
                         Animation = LocalVisualPack.TryCreateAnimation(objectToAnimate, unit.Kind, key),
                         From = target,
-                        IsEnemy = !unit.IsOwn
+                        IsEnemy = !unit.IsOwn,
+                        FacingY = 0f
                     };
                     units.Add(key, visual);
                 }
@@ -291,8 +381,23 @@ namespace Rts.Presentation
                     if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
                 visual.To = target;
+                visual.WantsWalk = unit.IsMoving || unit.IsRetreating;
+                visual.IsAttacking = unit.IsAttacking;
+                if (visual.WantsWalk)
+                {
+                    visual.IsWalking = true;
+                    visual.StillSeconds = 0f;
+                }
+                visual.WalkPlaybackRate = UnitMotionMath.WalkPlaybackRate(
+                    Vector2.Distance(new Vector2(visual.From.x, visual.From.z), new Vector2(visual.To.x, visual.To.z)),
+                    TickSeconds, UnitWalkBaseSpeed, UnitMotionMath.SpeedVariation(key, UnitWalkSpeedVariation),
+                    UnitWalkPlaybackMinimum, UnitWalkPlaybackMaximum);
+                visual.HasAttackFacing = TryGetAttackFacing(frame, unit, visual.To, out visual.AttackFacingY);
                 if (visual.Animation != null)
-                    visual.Animation.SetDesired(unit.IsMoving, unit.IsAttacking, unit.IsRetreating);
+                {
+                    visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false);
+                    visual.Animation.SetPlaybackRate(visual.WalkPlaybackRate, GetMatchRate());
+                }
             }
 
             scratchUnitIds.Clear();
@@ -307,6 +412,31 @@ namespace Rts.Presentation
 
             previousUnitPositions.Clear();
             foreach (var pair in units) previousUnitPositions[pair.Key] = pair.Value.To;
+        }
+
+        private Vector3 UnitWorldPosition(RenderUnit unit, ulong key)
+        {
+            float height = ModelFor(unit.Kind) != null || LocalVisualPack.HasUnit(unit.Kind) ? 0f : 1.1f;
+            var position = ToWorld(unit.Position, height);
+            UnitMotionMath.FormationOffset(key, UnitFormationJitterRadius, out var x, out var z);
+            return new Vector3(position.x + x, position.y, position.z + z);
+        }
+
+        private bool TryGetAttackFacing(FactionFrame frame, RenderUnit unit, Vector3 unitPosition, out float facing)
+        {
+            facing = 0f;
+            if (!unit.IsOwn || !unit.IsAttacking || frame.Observation == null) return false;
+            float best = float.MaxValue;
+            Vector3 target = default(Vector3);
+            foreach (var enemy in frame.Observation.VisibleEnemies)
+            {
+                var candidate = ToWorld(enemy.Position, 0f);
+                float distance = (candidate - unitPosition).sqrMagnitude;
+                if (distance < best) { best = distance; target = candidate; }
+            }
+            if (best == float.MaxValue || best <= 0.000001f) return false;
+            facing = UnitMotionMath.FacingAngleDegrees(unitPosition.x, unitPosition.z, target.x, target.z, 0f);
+            return true;
         }
 
         private void SyncCores(FactionFrame frame)
