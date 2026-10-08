@@ -55,7 +55,8 @@ namespace Rts.Presentation
 
             float commandHeight = 300f;
             float supplyHeight = 104f;
-            float economyHeight = Mathf.Min(358f, Mathf.Max(250f, screenHeight - topHeight - 2f * pad));
+            // The buttons sit four to a row (UI Toolkit), so the panel needs far less height than one button per row did.
+            float economyHeight = Mathf.Min(260f, Mathf.Max(200f, screenHeight - topHeight - 2f * pad));
             float timelineHeight = Mathf.Clamp(screenHeight - 520f, 150f, 250f);
             float timelineY = bottom - timelineHeight;
 

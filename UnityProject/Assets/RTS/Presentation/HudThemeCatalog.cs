@@ -42,7 +42,12 @@ namespace Rts.Presentation
             new Definition("C Parchment War Map", "C 羊皮紙の軍図", "Hud/Themes/ThemeParchment",
                 new[] { "Yu Mincho", "MS Mincho" },
                 new[] { "Meiryo", "Yu Gothic UI", "MS Gothic" },
-                true, true)
+                true, true),
+            // Between A and C (owner, 10-08): darker than parchment, lighter than stone, with A's leather buttons.
+            new Definition("D Leather & Vellum", "D 革と羊皮紙", "Hud/Themes/ThemeLeather",
+                new[] { "Yu Mincho", "MS Mincho" },
+                new[] { "Yu Gothic UI", "Meiryo", "MS Gothic" },
+                false, true)
         };
 
         public static int Count { get { return definitions.Length; } }
