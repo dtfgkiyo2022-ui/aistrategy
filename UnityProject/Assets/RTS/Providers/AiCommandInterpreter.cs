@@ -1553,6 +1553,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
     public sealed class AiModelPrice
     {
         public string Model { get; set; } public decimal InputUsdPerMillion { get; set; } public decimal OutputUsdPerMillion { get; set; }
+        public decimal LongContextInputUsdPerMillion { get; set; } public decimal LongContextOutputUsdPerMillion { get; set; }
         public int DeadlineTicks { get; set; } public int MaxCommands { get; set; } public bool AllowsOperations { get; set; }
         public int MaxOutputTokens { get; set; } public bool DisableThinking { get; set; }
         public bool SupportsComplexInstructions => MaxCommands > 1 || AllowsOperations;
@@ -1561,7 +1562,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
     {
         private static readonly Dictionary<string, AiModelPrice> fallbackPrices = new Dictionary<string, AiModelPrice>(StringComparer.OrdinalIgnoreCase)
         {
-            ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, 5, true, 2048, false), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, 5, true, 2048, false), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, 5, true, 2048, false), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, 5, true, 2048, false),
+            ["claude-haiku-4-5"] = P("claude-haiku-4-5", 1, 5, 240, 5, true, 2048, false), ["claude-haiku-5-5"] = LongContext(P("claude-haiku-5-5", .10m, .50m, 240, 5, true, 2048, false), .50m, 2.50m), ["claude-sonnet-5-5"] = P("claude-sonnet-5-5", 2, 10, 240, 5, true, 2048, false), ["claude-opus-5-5"] = P("claude-opus-5-5", 4, 20, 1200, 5, true, 2048, false), ["claude-fable-5-1"] = P("claude-fable-5-1", 10, 50, 1200, 5, true, 2048, false),
             ["gpt-6-luna"] = P("gpt-6-luna", .10m, .50m, 240, 5, true, 2048, false), ["gpt-6.1-sol"] = P("gpt-6.1-sol", 2, 10, 240, 5, true, 2048, false), ["gpt-6-astra"] = P("gpt-6-astra", 10, 50, 1200, 5, true, 2048, false),
             ["jev"] = P("jev", .042m, 0, 240, 1, false, 256, true), ["local-llm"] = P("local-llm", 0, 0, 600, 1, false, 2048, true)
         };
@@ -1570,7 +1571,9 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public static decimal UsdToYen => usdToYen;
         internal static AiModelPrice DefaultComplexLimits => P("default", 0, 0, 240, 5, true, 2048, false);
         private static AiModelPrice P(string model, decimal input, decimal output, int deadline, int maxCommands, bool operations, int maxOutputTokens, bool disableThinking)
-            => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, DeadlineTicks = deadline, MaxCommands = maxCommands, AllowsOperations = operations, MaxOutputTokens = maxOutputTokens, DisableThinking = disableThinking };
+            => new AiModelPrice { Model = model, InputUsdPerMillion = input, OutputUsdPerMillion = output, LongContextInputUsdPerMillion = input, LongContextOutputUsdPerMillion = output, DeadlineTicks = deadline, MaxCommands = maxCommands, AllowsOperations = operations, MaxOutputTokens = maxOutputTokens, DisableThinking = disableThinking };
+        private static AiModelPrice LongContext(AiModelPrice price, decimal input, decimal output)
+        { price.LongContextInputUsdPerMillion = input; price.LongContextOutputUsdPerMillion = output; return price; }
         public static AiModelPrice Get(string model)
         {
             if (prices.TryGetValue(model ?? "", out var p)) return p;
@@ -1612,7 +1615,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     bool operations = Bool(o, "allowOperations", !name.Equals("jev", StringComparison.OrdinalIgnoreCase) && !name.Equals("local-llm", StringComparison.OrdinalIgnoreCase));
                     int maxTokens = (int)Decimal(o, "maxTokens", 2048);
                     bool disableThinking = Bool(o, "disableThinking", name.Equals("local-llm", StringComparison.OrdinalIgnoreCase) || name.Equals("jev", StringComparison.OrdinalIgnoreCase));
-                    result[name] = P(name, input, output, deadline, maxCommands, operations, maxTokens, disableThinking);
+                    result[name] = LongContext(P(name, input, output, deadline, maxCommands, operations, maxTokens, disableThinking), Decimal(o, "longContextInputUsdPerMillion", input), Decimal(o, "longContextOutputUsdPerMillion", output));
                 }
             }
             catch (Exception) { yen = 150m; return result; }
@@ -1636,7 +1639,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public static decimal Calculate(string model, int inputTokens, int outputTokens)
             => Calculate(model, new AiTokenUsage(inputTokens, outputTokens));
         public static decimal Calculate(string model, AiTokenUsage usage)
-        { var p = AiModelCatalog.Get(model); return (usage.InputTokens * p.InputUsdPerMillion + usage.OutputTokens * p.OutputUsdPerMillion + usage.CacheReadInputTokens * p.InputUsdPerMillion * .1m + usage.CacheCreationInputTokens * p.InputUsdPerMillion * 1.25m) * AiModelCatalog.UsdToYen / 1000000m; }
+        { var p = AiModelCatalog.Get(model); bool longContext = usage.InputTokens > 100000; decimal inputRate = longContext ? p.LongContextInputUsdPerMillion : p.InputUsdPerMillion; decimal outputRate = longContext ? p.LongContextOutputUsdPerMillion : p.OutputUsdPerMillion; return (usage.InputTokens * inputRate + usage.OutputTokens * outputRate + usage.CacheReadInputTokens * inputRate * .1m + usage.CacheCreationInputTokens * inputRate * 1.25m) * AiModelCatalog.UsdToYen / 1000000m; }
         public static int EstimateTokens(string text) => Math.Max(1, (text ?? "").Length / 4);
         public static decimal EstimateYen(string model, string prompt, int expectedOutputTokens = 200) => Calculate(model, EstimateTokens(prompt), expectedOutputTokens);
     }
