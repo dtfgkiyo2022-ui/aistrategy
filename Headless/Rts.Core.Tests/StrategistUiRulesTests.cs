@@ -29,5 +29,17 @@ namespace Rts.Core.Tests
             Assert.That(StrategistUiRules.RestoreModel("claude-opus-5-5", models), Is.EqualTo("local-llm"));
             Assert.That(StrategistUiRules.RestoreModel(null, models), Is.EqualTo("local-llm"));
         }
+
+        [Test]
+        public void WithoutAUsableSavedModelTheCheapestCapableOneIsChosenNotTheFirstListed()
+        {
+            // A player build with only an Anthropic key once started on Fable 5.1, the first one listed (10-09).
+            var models = new[] { "claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5" };
+            Assert.That(StrategistUiRules.RestoreModel(null, models), Is.EqualTo("claude-haiku-5-5"));
+            Assert.That(StrategistUiRules.RestoreModel("local-llm", models), Is.EqualTo("claude-haiku-5-5"));
+            Assert.That(StrategistUiRules.RestoreModel("claude-opus-5-5", models), Is.EqualTo("claude-opus-5-5"));
+            Assert.That(StrategistUiRules.RestoreModel(null, new[] { "claude-fable-5-1", "gpt-6-astra" }), Is.EqualTo("claude-fable-5-1"));
+            Assert.That(StrategistUiRules.DisplayName("claude-fable-5-1"), Is.EqualTo("Claude Fable 5.1"));
+        }
     }
 }
