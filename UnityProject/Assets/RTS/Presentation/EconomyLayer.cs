@@ -15,7 +15,6 @@ namespace Rts.Presentation
     public sealed class EconomyLayer : MonoBehaviour
     {
         private const float Fix64Scale = 65536f;
-        private const float VillagerSpeed = 8f; // display catch-up only, metres per second
 
         private BattlefieldView view;
         private readonly Dictionary<uint, GameObject> resources = new Dictionary<uint, GameObject>();
@@ -30,6 +29,20 @@ namespace Rts.Presentation
         private GUIStyle tagStyle;
         private readonly Dictionary<uint, GameObject> ports = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> villagerTargets = new Dictionary<uint, Vector3>();
+        private readonly Dictionary<uint, Vector3> villagerFrom = new Dictionary<uint, Vector3>();
+        private readonly Dictionary<uint, float> villagerFacing = new Dictionary<uint, float>();
+        private readonly Dictionary<uint, float> villagerWalkRates = new Dictionary<uint, float>();
+        private readonly Dictionary<uint, VillagerActivity> villagerActivities = new Dictionary<uint, VillagerActivity>();
+        private readonly Dictionary<uint, Vector3> villagerWorkTargets = new Dictionary<uint, Vector3>();
+        private readonly Dictionary<uint, GameObject> carryBoxes = new Dictionary<uint, GameObject>();
+        private readonly List<Vector3> enemyVillagerFrom = new List<Vector3>();
+        private readonly List<Vector3> enemyVillagerTargets = new List<Vector3>();
+        private readonly List<float> enemyVillagerFacing = new List<float>();
+        private readonly List<float> enemyVillagerWalkRates = new List<float>();
+        private readonly List<VillagerActivity> enemyVillagerActivities = new List<VillagerActivity>();
+        private readonly List<Vector3> enemyVillagerWorkTargets = new List<Vector3>();
+        private long lastVillagerFrameTick = long.MinValue;
+        private float villagerInterpolationSeconds;
         private GameObject ghost;
         private readonly Dictionary<int, GameObject> belts = new Dictionary<int, GameObject>();
         private readonly Dictionary<int, GameObject> items = new Dictionary<int, GameObject>();
@@ -95,9 +108,16 @@ namespace Rts.Presentation
             ports.Clear();
             foreach (var go in buildingFlags.Values) Destroy(go);
             buildingFlags.Clear();
+            foreach (var go in carryBoxes.Values) Destroy(go);
+            carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            villagerFrom.Clear(); villagerFacing.Clear(); villagerWalkRates.Clear(); villagerActivities.Clear(); villagerWorkTargets.Clear();
+            enemyVillagerFrom.Clear(); enemyVillagerTargets.Clear(); enemyVillagerFacing.Clear(); enemyVillagerWalkRates.Clear();
+            enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear();
+            lastVillagerFrameTick = long.MinValue;
+            villagerInterpolationSeconds = 0f;
             ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
             packedBuildings.Clear();
             belts.Clear(); items.Clear();
@@ -112,16 +132,14 @@ namespace Rts.Presentation
             SyncVillagers(economy);
             SyncBuildings(economy);
             SyncBelts(economy);
+            float matchRate = view == null ? 0f : view.MatchRate;
+            villagerInterpolationSeconds = Mathf.Min(BattlefieldView.TickSeconds,
+                villagerInterpolationSeconds + Time.deltaTime * matchRate);
+            float alpha = BattlefieldView.TickSeconds <= 0f ? 1f : villagerInterpolationSeconds / BattlefieldView.TickSeconds;
             foreach (var pair in ownVillagers)
-                if (villagerTargets.TryGetValue(pair.Key, out var target))
-                {
-                    var moving = (pair.Value.transform.position - target).sqrMagnitude > 0.0025f;
-                    if (ownVillagerAnimations.TryGetValue(pair.Key, out var animation))
-                        animation.SetDesired(moving, false, false);
-                    pair.Value.transform.position = Vector3.MoveTowards(pair.Value.transform.position, target, VillagerSpeed * Time.deltaTime);
-                }
-            foreach (var animation in ownVillagerAnimations.Values) animation.Tick(Time.deltaTime);
-            foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Tick(Time.deltaTime);
+                ApplyVillager(pair.Key, pair.Value, ownVillagerAnimations, alpha, matchRate);
+            for (int i = 0; i < enemyVillagers.Count; i++)
+                ApplyEnemyVillager(i, alpha, matchRate);
         }
 
         private void SyncResources(EconomyView economy)
@@ -153,6 +171,13 @@ namespace Rts.Presentation
 
         private void SyncVillagers(EconomyView economy)
         {
+            long frameTick = view == null || view.LatestFrame == null ? long.MinValue : view.LatestFrame.Tick;
+            bool newFrame = frameTick != lastVillagerFrameTick;
+            if (newFrame)
+            {
+                lastVillagerFrameTick = frameTick;
+                villagerInterpolationSeconds = 0f;
+            }
             var seen = new HashSet<uint>();
             int enemy = 0;
             bool villagerPacked = LocalVisualPack.HasUnit(UnitKind.Villager);
@@ -170,9 +195,21 @@ namespace Rts.Presentation
                         ownVillagers.Add(v.Id, go);
                         var animation = LocalVisualPack.TryCreateAnimation(go, UnitKind.Villager, v.Id);
                         if (animation != null) ownVillagerAnimations.Add(v.Id, animation);
+                        villagerFrom[v.Id] = p;
+                        villagerFacing[v.Id] = 0f;
                     }
-                    villagerTargets[v.Id] = p;
+                    if (newFrame)
+                    {
+                        villagerFrom[v.Id] = villagerTargets.TryGetValue(v.Id, out var oldTarget) ? oldTarget : p;
+                        villagerTargets[v.Id] = p;
+                        villagerActivities[v.Id] = v.Activity;
+                        villagerWorkTargets[v.Id] = FindVillagerWorkTarget(v, economy);
+                        villagerFacing[v.Id] = VillagerFacing(v, villagerFrom[v.Id], p, villagerFacing[v.Id], villagerWorkTargets[v.Id]);
+                        villagerWalkRates[v.Id] = VillagerWalkRate(v.Id, villagerFrom[v.Id], p);
+                    }
                     SetFlag(go.transform, v.PlayerHeld, new Vector3(0f, 1.4f, 0f), new Vector3(0.18f, 0.7f, 0.18f));
+                    SetCarryBox(v.Id, go.transform, v.Activity == VillagerActivity.Returning || v.Activity == VillagerActivity.Hauling,
+                        v.Carry > 0 ? v.CarryKind : ResourceKind.Food);
                 }
                 else
                 {
@@ -183,13 +220,17 @@ namespace Rts.Presentation
                         enemyVillagerAnimations.Add(LocalVisualPack.TryCreateAnimation(enemyObject, UnitKind.Villager, (ulong)(enemy + 1)));
                     }
                     enemyVillagers[enemy].SetActive(true);
-                    if (enemyVillagerAnimations[enemy] != null)
-                        enemyVillagerAnimations[enemy].SetDesired(false, false, false);
-                    enemyVillagers[enemy].transform.position = p;
+                    EnsureEnemyVillagerState(enemy, p, v, economy, newFrame);
                     enemy++;
                 }
             }
             for (int i = enemy; i < enemyVillagers.Count; i++) enemyVillagers[i].SetActive(false);
+            while (enemyVillagerFrom.Count > enemy) enemyVillagerFrom.RemoveAt(enemyVillagerFrom.Count - 1);
+            while (enemyVillagerTargets.Count > enemy) enemyVillagerTargets.RemoveAt(enemyVillagerTargets.Count - 1);
+            while (enemyVillagerFacing.Count > enemy) enemyVillagerFacing.RemoveAt(enemyVillagerFacing.Count - 1);
+            while (enemyVillagerWalkRates.Count > enemy) enemyVillagerWalkRates.RemoveAt(enemyVillagerWalkRates.Count - 1);
+            while (enemyVillagerActivities.Count > enemy) enemyVillagerActivities.RemoveAt(enemyVillagerActivities.Count - 1);
+            while (enemyVillagerWorkTargets.Count > enemy) enemyVillagerWorkTargets.RemoveAt(enemyVillagerWorkTargets.Count - 1);
             var gone = new List<uint>();
             foreach (var id in ownVillagers.Keys) if (!seen.Contains(id)) gone.Add(id);
             foreach (var id in gone)
@@ -202,7 +243,144 @@ namespace Rts.Presentation
                 Destroy(ownVillagers[id]);
                 ownVillagers.Remove(id);
                 villagerTargets.Remove(id);
+                villagerFrom.Remove(id);
+                villagerFacing.Remove(id);
+                villagerWalkRates.Remove(id);
+                villagerActivities.Remove(id);
+                villagerWorkTargets.Remove(id);
+                if (carryBoxes.TryGetValue(id, out var box)) { Destroy(box); carryBoxes.Remove(id); }
             }
+        }
+
+        private void EnsureEnemyVillagerState(int index, Vector3 position, VillagerView villager, EconomyView economy, bool newFrame)
+        {
+            while (enemyVillagerFrom.Count <= index)
+            {
+                enemyVillagerFrom.Add(position);
+                enemyVillagerTargets.Add(position);
+                enemyVillagerFacing.Add(0f);
+                enemyVillagerWalkRates.Add(1f);
+                enemyVillagerActivities.Add(VillagerActivity.Idle);
+                enemyVillagerWorkTargets.Add(Vector3.zero);
+            }
+            if (!newFrame) return;
+            enemyVillagerFrom[index] = enemyVillagerTargets[index];
+            enemyVillagerTargets[index] = position;
+            enemyVillagerActivities[index] = villager.Activity;
+            enemyVillagerWorkTargets[index] = FindVillagerWorkTarget(villager, economy);
+            enemyVillagerFacing[index] = VillagerFacing(villager, enemyVillagerFrom[index], position,
+                enemyVillagerFacing[index], enemyVillagerWorkTargets[index]);
+            enemyVillagerWalkRates[index] = VillagerWalkRate((ulong)(index + 1), enemyVillagerFrom[index], position);
+        }
+
+        private void ApplyVillager(uint id, GameObject go, Dictionary<uint, LocalVisualPack.AnimationHandle> animations,
+            float alpha, float matchRate)
+        {
+            if (!villagerTargets.TryGetValue(id, out var target) || !villagerFrom.TryGetValue(id, out var from)) return;
+            UnitMotionMath.Interpolate(from.x, from.z, target.x, target.z, alpha, out var x, out var z);
+            go.transform.position = new Vector3(x, target.y, z);
+            if (villagerFacing.TryGetValue(id, out var facing))
+                go.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+            VillagerActivity activity = villagerActivities.TryGetValue(id, out var value) ? value : VillagerActivity.Idle;
+            bool moving = IsWalking(activity) && (target - from).sqrMagnitude > 0.0001f;
+            bool working = IsWorking(activity);
+            if (animations.TryGetValue(id, out var animation))
+            {
+                animation.SetDesired(moving, false, working, false);
+                animation.SetPlaybackRate(villagerWalkRates.TryGetValue(id, out var rate) ? rate : 1f, matchRate);
+                animation.Tick(Time.deltaTime, matchRate);
+            }
+        }
+
+        private void ApplyEnemyVillager(int index, float alpha, float matchRate)
+        {
+            if (index >= enemyVillagers.Count || index >= enemyVillagerTargets.Count) return;
+            var from = enemyVillagerFrom[index];
+            var target = enemyVillagerTargets[index];
+            UnitMotionMath.Interpolate(from.x, from.z, target.x, target.z, alpha, out var x, out var z);
+            enemyVillagers[index].transform.position = new Vector3(x, target.y, z);
+            enemyVillagers[index].transform.rotation = Quaternion.Euler(0f, enemyVillagerFacing[index], 0f);
+            VillagerActivity activity = enemyVillagerActivities[index];
+            bool moving = IsWalking(activity) && (target - from).sqrMagnitude > 0.0001f;
+            bool working = IsWorking(activity);
+            if (index < enemyVillagerAnimations.Count && enemyVillagerAnimations[index] != null)
+            {
+                enemyVillagerAnimations[index].SetDesired(moving, false, working, false);
+                enemyVillagerAnimations[index].SetPlaybackRate(enemyVillagerWalkRates[index], matchRate);
+                enemyVillagerAnimations[index].Tick(Time.deltaTime, matchRate);
+            }
+        }
+
+        private Vector3 FindVillagerWorkTarget(VillagerView villager, EconomyView economy)
+        {
+            bool resource = villager.Activity == VillagerActivity.ToResource || villager.Activity == VillagerActivity.Gathering;
+            bool building = villager.Activity == VillagerActivity.ToBuild || villager.Activity == VillagerActivity.Building;
+            if (!resource && !building) return Vector3.zero;
+            Vector3 origin = ToWorld(villager.Position);
+            float best = float.MaxValue;
+            Vector3 target = Vector3.zero;
+            if (resource)
+            {
+                foreach (var item in economy.Resources)
+                {
+                    Vector3 candidate = ToWorld(item.Position);
+                    float distance = (candidate - origin).sqrMagnitude;
+                    if (distance < best) { best = distance; target = candidate; }
+                }
+            }
+            else
+            {
+                foreach (var site in economy.Buildings)
+                {
+                    Vector3 candidate = ToWorld(site.Center);
+                    float distance = (candidate - origin).sqrMagnitude;
+                    if (distance < best) { best = distance; target = candidate; }
+                }
+            }
+            return target;
+        }
+
+        private static float VillagerFacing(VillagerView villager, Vector3 from, Vector3 to, float fallback, Vector3 workTarget)
+        {
+            if (IsWorking(villager.Activity) && workTarget != Vector3.zero)
+                return UnitMotionMath.FacingAngleDegrees(from.x, from.z, workTarget.x, workTarget.z, fallback);
+            return UnitMotionMath.FacingAngleDegrees(from.x, from.z, to.x, to.z, fallback);
+        }
+
+        private static float VillagerWalkRate(ulong id, Vector3 from, Vector3 to)
+        {
+            return UnitMotionMath.WalkPlaybackRate(Vector2.Distance(new Vector2(from.x, from.z), new Vector2(to.x, to.z)),
+                BattlefieldView.TickSeconds, PresentationVisualConstants.UnitWalkBaseSpeed,
+                UnitMotionMath.SpeedVariation(id, PresentationVisualConstants.UnitWalkSpeedVariation),
+                PresentationVisualConstants.UnitWalkPlaybackMinimum, PresentationVisualConstants.UnitWalkPlaybackMaximum);
+        }
+
+        private static bool IsWalking(VillagerActivity activity)
+        {
+            return activity == VillagerActivity.ToResource || activity == VillagerActivity.ToBuild
+                || activity == VillagerActivity.Returning || activity == VillagerActivity.Hauling;
+        }
+
+        private static bool IsWorking(VillagerActivity activity)
+        {
+            return activity == VillagerActivity.Gathering || activity == VillagerActivity.Building;
+        }
+
+        private void SetCarryBox(uint id, Transform parent, bool shown, ResourceKind kind)
+        {
+            if (!carryBoxes.TryGetValue(id, out var box))
+            {
+                box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                box.name = "CarryBox " + id;
+                Destroy(box.GetComponent<Collider>());
+                box.transform.SetParent(parent, false);
+                box.transform.localScale = Vector3.one * PresentationVisualConstants.CarryBoxSize;
+                carryBoxes.Add(id, box);
+            }
+            box.SetActive(shown);
+            if (!shown) return;
+            box.transform.localPosition = new Vector3(0f, PresentationVisualConstants.CarryBoxHeight, 0f);
+            box.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(PresentationVisualConstants.CarryColor(kind));
         }
 
         private void SyncBuildings(EconomyView economy)
