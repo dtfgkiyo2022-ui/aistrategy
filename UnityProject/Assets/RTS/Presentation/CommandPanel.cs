@@ -212,12 +212,15 @@ namespace Rts.Presentation
                     CancelGroundPick();
             }
 
-            if (!setupOpen && !HudToolkit.IsEnabled)
+            // The setup box blocks the map only while it is open. With the new screen the supply panel is drawn by
+            // UI Toolkit, so nothing is drawn or registered here then (registering the setup box whenever the new
+            // screen was on covered the middle of the map and stopped the wheel zoom, 10-08).
+            if (setupOpen) UiHitAreas.Shared.Register(SetupRect());
+            else if (!HudToolkit.IsEnabled)
             {
                 DrawSupply();
                 UiHitAreas.Shared.Register(SupplyRect());
             }
-            else UiHitAreas.Shared.Register(SetupRect());
             if (GUI.Button(SetupButtonRect(), setupOpen ? UiText.T("Match setup ▲", "試合の設定 ▲") : UiText.T("Match setup ▼", "試合の設定 ▼"))) setupOpen = !setupOpen;
             // Shows the language it switches to, in that language.
             if (GUI.Button(LanguageButtonRect(), UiText.Japanese ? "English" : "日本語"))
