@@ -42,7 +42,15 @@ namespace Rts.Presentation
             public readonly float Height;
             /// <summary>Footprint relative to the building's simulated size, for a model reused at a different size.</summary>
             public readonly float WidthScale;
-            public BuildingSpec(string file, float height, float widthScale = 1f) { File = file; Height = height; WidthScale = widthScale; }
+            /// <summary>Display-only tint, multiplied with the owner's material to distinguish reused models.</summary>
+            public readonly Color Tint;
+            public BuildingSpec(string file, float height, float widthScale = 1f, Color? tint = null)
+            {
+                File = file;
+                Height = height;
+                WidthScale = widthScale;
+                Tint = tint ?? Color.white;
+            }
         }
 
         public enum UnitMotion
@@ -125,8 +133,10 @@ namespace Rts.Presentation
 
         // Building kind -> pack model. The core uses Castle and outposts Tower_A, so the castle building takes Keep and
         // towers take Tower_B to stay distinguishable. Blacksmith stands in for the smelter, kiln and steelworks (told apart
-        // by size and the name tag). No fitting model, so still the placeholder box: Mine, Quarry, Caravanserai,
-        // EngineerCamp, Bridge, Harbor, MineShaft, Tollgate, Wall.
+        // Visual stand-ins: Granary reads as Mine/Quarry by its grey-blue/stone tint, Keep as MineShaft,
+        // Market as the larger Caravanserai, Workshop as the olive EngineerCamp, and BeastLair as Harbor.
+        // Wall_A_1x1 gives each Wall cell a separate wall piece; Wall_A_gate reads as Tollgate.
+        // Bridge intentionally remains the placeholder: its terrain-spanning shape needs a dedicated model.
         private static readonly Dictionary<BuildingKind, BuildingSpec> BuildingTable = new Dictionary<BuildingKind, BuildingSpec>
         {
             { BuildingKind.Barracks, new BuildingSpec("Barracks.FBX", 3.0f) },
@@ -149,7 +159,15 @@ namespace Rts.Presentation
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },
             { BuildingKind.Town, new BuildingSpec("TownHall.FBX", 3.0f) },
-            { BuildingKind.GrandHouse, new BuildingSpec("House.FBX", 3.6f, 1.2f) }
+            { BuildingKind.GrandHouse, new BuildingSpec("House.FBX", 3.6f, 1.2f) },
+            { BuildingKind.Wall, new BuildingSpec("Wall_A_1x1.FBX", 1.8f) },
+            { BuildingKind.Tollgate, new BuildingSpec("Wall_A_gate.FBX", 2.6f) },
+            { BuildingKind.Mine, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.62f, 0.70f, 0.78f, 1f)) },
+            { BuildingKind.MineShaft, new BuildingSpec("Keep.FBX", 3.8f) },
+            { BuildingKind.Quarry, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.76f, 0.72f, 0.64f, 1f)) },
+            { BuildingKind.Caravanserai, new BuildingSpec("Market.FBX", 2.0f, 1.15f) },
+            { BuildingKind.Harbor, new BuildingSpec("BeastLair.FBX", 2.8f) },
+            { BuildingKind.EngineerCamp, new BuildingSpec("Workshop.FBX", 2.6f, 1f, new Color(0.62f, 0.72f, 0.50f, 1f)) }
         };
 
         /// <summary>Hides the pack so the placeholders are used; for measuring one against the other.</summary>
@@ -345,6 +363,11 @@ namespace Rts.Presentation
 
         public static float BuildingWidthScale(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? s.WidthScale : 1f; }
 
+        private static Color BuildingTint(BuildingKind kind)
+        {
+            return BuildingTable.TryGetValue(kind, out var s) ? s.Tint : Color.white;
+        }
+
         public static bool HasUnit(UnitKind kind) { return !Disabled && LoadUnitModel(kind) != null; }
 
         public static bool HasBuilding(BuildingKind kind) { return !Disabled && LoadBuildingModel(kind) != null; }
@@ -385,7 +408,7 @@ namespace Rts.Presentation
             float height = BuildingHeight(kind);
             if (height <= 0f) return false;
             return TryCreateStretched(LoadBuildingModel(kind), LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)),
-                parent, width, height, out instance);
+                parent, width, height, kind, out instance);
         }
 
         /// <summary>Under construction a building rises from the ground: progress 0..1 scales the holder's height only.</summary>
@@ -485,6 +508,25 @@ namespace Rts.Presentation
             }
         }
 
+        private static void ApplyBuildingTint(GameObject instance, Color tint)
+        {
+            if (instance == null || tint == Color.white) return;
+            foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+            {
+                var block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                var materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    var material = materials[i];
+                    if (material == null) continue;
+                    if (material.HasProperty("_BaseColor")) block.SetColor("_BaseColor", material.GetColor("_BaseColor") * tint);
+                    else if (material.HasProperty("_Color")) block.SetColor("_Color", material.GetColor("_Color") * tint);
+                }
+                renderer.SetPropertyBlock(block);
+            }
+        }
+
         private static bool TryCreate(GameObject model, Material material, Transform parent, float size, bool bySpan,
             out GameObject instance, out float height)
         {
@@ -510,6 +552,7 @@ namespace Rts.Presentation
 
         /// <summary>Like TryCreate, but stretches the body to an exact footprint width and height; the holder stays at scale 1.</summary>
         private static bool TryCreateStretched(GameObject model, Material material, Transform parent, float width, float height,
+            BuildingKind kind,
             out GameObject instance)
         {
             instance = null;
@@ -519,6 +562,7 @@ namespace Rts.Presentation
             var body = Object.Instantiate(model, holder.transform);
             body.transform.localPosition = Vector3.zero;
             Recolor(body, material);
+            ApplyBuildingTint(body, BuildingTint(kind));
             var bounds = Measure(body);
             float span = Mathf.Max(bounds.size.x, bounds.size.z);
             if (span <= 0.0001f || bounds.size.y <= 0.0001f) { Discard(holder); return false; }
