@@ -224,6 +224,8 @@ namespace Rts.Presentation
             }
 
             var root = document.rootVisualElement;
+            // The theme sheets define their variables on this class, not :root (see Themes/*.uss).
+            root.AddToClassList("hud-document");
             baseTheme = Resources.Load<StyleSheet>(BaseUssResourcePath);
             if (baseTheme != null) root.styleSheets.Add(baseTheme);
             else Debug.LogWarning("UI Toolkit HUD USS not found at Resources/" + BaseUssResourcePath + ".");
