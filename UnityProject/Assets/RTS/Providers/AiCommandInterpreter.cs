@@ -24,9 +24,9 @@ namespace Rts.Providers
       ""required"": [""type"", ""kind"", ""scope"", ""goal"", ""region"", ""building"", ""location"", ""producer"", ""unit"", ""civ"", ""policy"", ""control"", ""sequence"", ""count"", ""reservePermille"", ""allowedLossPermille""],
       ""properties"": {
         ""type"": { ""type"": ""string"", ""enum"": [""policy"", ""economy""] },
-        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain""] },
+        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain"", ""RequestLine""] },
         ""scope"": { ""type"": [""string"", ""null""] }, ""goal"": { ""type"": [""string"", ""null""] },
-        ""region"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] },
+        ""region"": { ""type"": [""string"", ""null""] }, ""line"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] },
         ""location"": { ""type"": [""string"", ""null""] }, ""producer"": { ""type"": [""string"", ""null""] },
         ""unit"": { ""type"": [""string"", ""null""] }, ""civ"": { ""type"": [""string"", ""null""] },
         ""policy"": { ""type"": [""string"", ""null""] }, ""control"": { ""anyOf"": [ { ""type"": ""string"", ""enum"": [""Human"", ""Ai""] }, { ""type"": ""null"" } ] },
@@ -99,10 +99,12 @@ namespace Rts.Providers
             var regions = names.Where(n => n.HasScope && n.Scope.Kind == ScopeKind.Region && n.IsOwn).Select(n => n.Name);
             var properties = new Dictionary<string, object>
             {
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", "unknown"),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "RequestLine", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", "unknown"),
                 ["scope"] = NullableEnum(scopes),
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
+                ["location"] = NullableEnum(goals),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear" }),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }),
                 ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["tacticParam"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name)),
@@ -128,8 +130,9 @@ namespace Rts.Providers
             var props = new Dictionary<string, object>
             {
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear" }),
                 ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
                 ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
@@ -209,9 +212,10 @@ namespace Rts.Providers
 項目の使い分け
 - policy型のkindはFocus（攻撃・向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、MaintainReserve（予備を残す）、Scout（偵察）、ReturnToAuto（自動方針に戻す）です。
 - Focus/Defend/Scoutには通常goalが必要です。Retreat、AllowAbandon、MaintainReserve、ReturnToAutoではgoalはnullです。
-- economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、PlaceBuilding、Train、CancelTrainです。区域担当を変えるときはregionとcontrolを使います。
+- economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、PlaceBuilding、Train、CancelTrain、RequestLineです。区域担当を変えるときはregionとcontrolを使います。
 - 全体の内政方針はregion=null、区域ごとの内政方針はregionに区域名を入れます。policyはMilitary（軍事）、Growth（経済・内政重視）、Balanced（均衡）です。入力の「兵の生産を優先」「軍事重視」はMilitary、「村人を増やす」「稼ぎを伸ばす」「内政を優先」はGrowthにします。
- - PlaceBuildingではbuildingとlocationを使います。場所を指定しない「もう一つ建てる」はlocation=お任せです。名前表の場所の近くならその場所名をlocationにします。
+- PlaceBuildingではbuildingとlocationを使います。場所を指定しない「もう一つ建てる」はlocation=お任せです。名前表の場所の近くならその場所名をlocationにします。
+- RequestLineではlineにCoreMetal、Steel、CoreWood、BowGearのいずれか、regionに名前表の自軍区域を入れます。「北の鉱山から鋼のラインを作って」のように資源地点が指定された場合も、その資源地点を含む区域をregionにします。区域が名前表にない場合だけ、名前表の地点をlocationに入れます。RequestLineは自動内政を止めず、指定区域または地点の資源に近い順で自動配置を依頼します。
 - Trainではunitとcountを使います。producerが指定されたときだけ名前表の建物名を使い、指定がない村人の訓練などではproducer=nullにします。CancelTrainはproducerを使います。
 - AdvanceAgeではcivを使います。文明が指定されない「次の時代へ」は、現在の文明やルールを確認できないためunknown=trueにします。
 
@@ -284,7 +288,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 
         public const string StableInstructionsShort = @"
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
-kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。不要な項目は空文字にしてください。
+kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、RequestLine（ラインを頼む）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。RequestLineではline=CoreMetal/Steel/CoreWood/BowGear、region=区域名またはlocation=地点名を使います。不要な項目は空文字にしてください。
 全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
 戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。定義された合図を送る命令はkind=SendTacticSignal、tacticSignalと、必要ならtacticSignalX/tacticSignalZを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
 戦術に合図があり、指示がその合図の表示名や意味に当たるとき（例：合図「allIn（総攻撃）」に「総攻撃して」）は、目標が書かれていなくても必ずkind=SendTacticSignalにします。
@@ -1000,7 +1004,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     ["reason"] = reason, ["unknown"] = true
                 };
 
-            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal" };
+            var allowed = new[] { "Focus", "Defend", "AllowAbandon", "Retreat", "ReturnToAuto", "SetRegionControl", "RequestLine", "SetDoctrine", "SetTacticParam", "SwitchTactic", "SendTacticSignal" };
             if (!allowed.Contains(kind, StringComparer.Ordinal))
                 return new Dictionary<string, object>
                 {
@@ -1009,12 +1013,14 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 };
 
             var command = new Dictionary<string, object>();
-            if (kind == "SetRegionControl")
+            if (kind == "SetRegionControl" || kind == "RequestLine")
             {
                 command["type"] = "economy";
                 command["kind"] = kind;
                 command["region"] = AiJson.String(small, "region") ?? "";
                 command["control"] = AiJson.String(small, "control") ?? "";
+                command["line"] = AiJson.String(small, "line") ?? "";
+                command["location"] = AiJson.String(small, "location") ?? "";
             }
             else if (kind == "SetDoctrine")
             {
@@ -1298,6 +1304,36 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             {
                 output.Add(EconomyCommand.ReturnToAuto(c.Frame.FactionId, seq)); return;
             }
+            if (kind == EconomyCommandKind.RequestLine)
+            {
+                var requestedLine = ParseEnum<ProcessingLineKind>(command, "line");
+                if (!string.IsNullOrEmpty(targetName))
+                {
+                    if (!c.Summary.TryGet(targetName, out var requestedRegion) || !requestedRegion.HasScope || requestedRegion.Scope.Kind != ScopeKind.Region)
+                        throw new AiCommandException("区域が名前表にない", kindText);
+                    output.Add(EconomyCommand.RequestLine(c.Frame.FactionId, seq, requestedLine, requestedRegion.Scope.Id));
+                    return;
+                }
+                string location = AiJson.String(command, "location");
+                if (c.Summary.TryGet(location, out var pointEntry) && pointEntry.HasGoal)
+                {
+                    RegionView nearest = default(RegionView); long best = 0;
+                    foreach (var candidate in c.Frame.Regions ?? Array.Empty<RegionView>())
+                    {
+                        long dx = candidate.Center.X.Raw - pointEntry.Goal.Point.X.Raw;
+                        long dz = candidate.Center.Z.Raw - pointEntry.Goal.Point.Z.Raw;
+                        long distance = dx * dx + dz * dz;
+                        if (nearest.Id == 0 || distance < best || distance == best && candidate.Id < nearest.Id) { nearest = candidate; best = distance; }
+                    }
+                    if (nearest.Id != 0) { output.Add(EconomyCommand.RequestLine(c.Frame.FactionId, seq, requestedLine, nearest.Id)); return; }
+                }
+                if (int.TryParse(location, NumberStyles.Integer, CultureInfo.InvariantCulture, out int requestedCell))
+                {
+                    output.Add(EconomyCommand.RequestLineAt(c.Frame.FactionId, seq, requestedLine, requestedCell));
+                    return;
+                }
+                throw new AiCommandException("RequestLineには区域または地点が必要", kindText);
+            }
             if (c.Frame.Economy.AutoEconomy && kind != EconomyCommandKind.SetEconomyPolicy)
                 throw new AiCommandException("内政の手動操作がオフ", kindText);
             switch (kind)
@@ -1414,6 +1450,16 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "漁業": mapped = CivKind.Fishing; break; case "山岳": mapped = CivKind.Mountain; break;
                     case "関所": mapped = CivKind.Tollgate; break; case "都市": mapped = CivKind.Metropolis; break;
                     case "聖域": mapped = CivKind.Sanctuary; break;
+                }
+            }
+            else if (typeof(T) == typeof(ProcessingLineKind))
+            {
+                switch (value)
+                {
+                    case "コア金属": case "金属": mapped = ProcessingLineKind.CoreMetal; break;
+                    case "鋼": case "スチール": mapped = ProcessingLineKind.Steel; break;
+                    case "コア木材": case "木材": mapped = ProcessingLineKind.CoreWood; break;
+                    case "弓具": case "弓": mapped = ProcessingLineKind.BowGear; break;
                 }
             }
             if (mapped == null) return false;

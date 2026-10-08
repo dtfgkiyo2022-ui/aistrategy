@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -37,6 +37,7 @@ namespace Rts.Presentation
         private Mode mode;
         private Facing facing = Facing.East;
         private ResourceKind sorterKind = ResourceKind.Ore;
+        private ProcessingLineKind requestedLine = ProcessingLineKind.CoreMetal;
         private int dragStart = -1;
         private readonly List<string> notes = new List<string>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
@@ -91,6 +92,14 @@ namespace Rts.Presentation
             if (!GroundCell(camera, screenPoint, out int cell)) { Note(UiText.T("Click was outside the map.", "マップの外をクリックしました。")); return true; }
             switch (mode)
             {
+                case Mode.RequestLine:
+                    var latest = view == null ? null : view.LatestFrame;
+                    uint region = latest != null && latest.CellRegions.Count == MapWidthCells * MapHeightCells ? latest.CellRegions[cell] : 0;
+                    if (region != 0) port.SubmitEconomy(EconomyCommand.RequestLine(faction, ++sequence, requestedLine, region));
+                    else port.SubmitEconomy(EconomyCommand.RequestLineAt(faction, ++sequence, requestedLine, cell));
+                    Note(UiText.T("Processing line requested.", "ラインを依頼しました。"));
+                    SetMode(Mode.None);
+                    return true;
                 case Mode.Belt:
                 case Mode.FastBelt:
                 case Mode.Wall:

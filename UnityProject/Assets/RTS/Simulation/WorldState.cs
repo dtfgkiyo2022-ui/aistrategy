@@ -228,12 +228,13 @@ namespace Rts.Simulation
         internal uint Id, FactionId;
         internal ProcessingLineKind Kind;
         internal LineManager Manager;
+        internal bool RequestPending;
+        internal int RequestedCell;
+        internal uint RequestedRegionId;
         internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
-
-    internal enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4 }
 
     internal struct FactionEconomy
     {

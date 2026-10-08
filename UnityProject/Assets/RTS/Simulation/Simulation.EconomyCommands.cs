@@ -31,6 +31,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.ReturnLineToAuto:
                     if (ProcessingOn || ForestryOn) ReturnLineToAuto(faction, c.LineId);
                     return;
+                case EconomyCommandKind.RequestLine:
+                    RequestProcessingLine(faction, c);
+                    return;
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     ReturnToAuto(faction);
                     return;

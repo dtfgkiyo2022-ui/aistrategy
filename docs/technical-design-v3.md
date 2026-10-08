@@ -1153,3 +1153,27 @@ mapgen-1 の矩形の障害物の代わりに、地形を置く（**新しい版
 #### 検証
 
 部品の交替・詰まり時の分岐、資源別仕分け、地下の接続長、倉庫の容量、速度差、旗オフ時の互換性、シナリオ/リプレイのラウンドトリップを `Belt`、`Economy`、`Processing`、`Determinism`、`Replay`、`Scenario` のフィルターで検証する。ビルドとテストには `-p:NuGetAudit=false -p:UseSharedCompilation=false -nodeReuse:false` を付ける。
+
+### 32.31 内政のライン依頼（V3-6 follow-up）
+
+#### 命令の形
+
+`EconomyCommandKind.RequestLine=22` は、`ProcessingLineKind` の `CoreMetal`、`Steel`、`CoreWood`、`BowGear` の1本を依頼する命令である。場所は `EconomyTargetKind.Region` と `RegionId`、または地図クリックのセル `Cell` で指定する。戦術 JSON は次の形とし、`region` は数値の区域 IDである。
+
+```json
+{"type":"economy","kind":"RequestLine","line":"Steel","region":3}
+```
+
+参謀の大・小モデルは同じ `line` 語彙を使い、名前表の自軍区域を `region` に変換する。「北の鉱山から鋼のラインを作って」のように地点名が来た場合は、名前表でその資源地点を含む区域が一意に決まるときだけ変換する。決まらなければ命令を作らない。
+
+#### 自動配置と却下
+
+シミュレーションは命令を受けた時点で文明・時代・対応する資源地点・初期木材を固定順に確認する。通れば既存の自動管理ラインへ依頼地点を記録し、次の内政周期から指定地点に近い資源を優先して、鉱山または木材所、精錬所、炭焼き小屋、製鋼所、弓具所とベルトを既存の自動配置規則で段階的に建てる。ラインの `LineManager` は `Automatic` のままであり、依頼だけでは手動ラインにならない。
+
+失敗時は資源・建物・木材を変更せず、`EconomyLineRejected` をタイムラインへ記録する。理由は `LineUnavailable`（文明・時代・機能または既存ラインの都合）、`LineResourceMissing`（資源地点なし）、`LineWoodShortfall`（木材不足）、`LinePlacementUnavailable`（合法な建設地点なし）である。依頼の位置とライン種別もイベントの位置・値に含める。
+
+#### 人向け画面・検証
+
+EconomyPanel の Toolkit の Build タブに「ラインを頼む」項目を置く。ライン種別を選んでから地図をクリックすると、区域表があれば区域依頼、区域表がなければセル依頼を既存の Economy command port へ送る。設計図の保存・貼り付けとは別の操作である。
+
+評価用の fake staff response と `eval-interpreter` は `RequestLine` と `line` を通常の EconomyCommand と同じように採点する。テストでは、命令なしの診断ハッシュ不変、指定位置に近いライン、却下理由、記録・再生ハッシュ、fake staff response、戦術 JSON の読み取りを確認する。シミュレーション層は UnityEngine に依存せず、場所選択・並び順・イベント順は固定順である。

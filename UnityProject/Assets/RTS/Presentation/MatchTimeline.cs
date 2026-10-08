@@ -115,6 +115,10 @@ namespace Rts.Presentation
                         var outcome = MatchOutcome.Describe(frame.Result, frame.FactionId, e.Tick);
                         Add(e.Tick, outcome.HasValue ? UiText.T("match ended: ", "試合終了：") + outcome.Value.Headline : UiText.T("match ended", "試合終了"));
                         break;
+                    case EventKind.EconomyLineRejected:
+                        Add(e.Tick, UiText.T("Line request declined: ", "ライン依頼を却下：") + LineKind(e.Value)
+                            + UiText.T(" (", "（") + Reason(e.Reason) + UiText.T(")", "）"));
+                        break;
                 }
             }
         }
@@ -188,7 +192,23 @@ namespace Rts.Presentation
                 case ReasonCode.EmptyArmy: return UiText.T("army is empty", "軍団に兵がいない");
                 case ReasonCode.LossLimit: return UiText.T("loss limit reached", "損害の上限");
                 case ReasonCode.ReserveShortfall: return UiText.T("not enough reserve", "予備が足りない");
+                case ReasonCode.LineUnavailable: return UiText.T("line is unavailable", "そのラインは利用できない");
+                case ReasonCode.LineResourceMissing: return UiText.T("no resource point", "資源地点がない");
+                case ReasonCode.LineWoodShortfall: return UiText.T("not enough wood", "木材が足りない");
+                case ReasonCode.LinePlacementUnavailable: return UiText.T("no legal building site", "建設可能地点がない");
                 default: return reason.ToString();
+            }
+        }
+
+        private static string LineKind(int value)
+        {
+            switch ((ProcessingLineKind)value)
+            {
+                case ProcessingLineKind.CoreMetal: return UiText.T("core metal", "コア金属");
+                case ProcessingLineKind.Steel: return UiText.T("steel", "鋼");
+                case ProcessingLineKind.CoreWood: return UiText.T("core wood", "コア木材");
+                case ProcessingLineKind.BowGear: return UiText.T("bow gear", "弓具");
+                default: return value.ToString();
             }
         }
 

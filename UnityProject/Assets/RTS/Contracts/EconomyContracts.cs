@@ -40,13 +40,18 @@ namespace Rts.Contracts
         /// <summary>V3-20: places a splitter, sorter, or paired underground belt.</summary>
         PlaceBeltComponent = 20,
         /// <summary>V3-20: removes any own belt cell, including a component.</summary>
-        RemoveBeltComponent = 21
+        RemoveBeltComponent = 21,
+        /// <summary>V3-6 follow-up: asks the automatic economy to build one processing line near a region or cell.</summary>
+        RequestLine = 22
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
     public enum LineManager : byte { Automatic = 0, Manual = 1 }
 
-    public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2 }
+    public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
+
+    /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
+    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -98,6 +103,8 @@ namespace Rts.Contracts
         /// <summary>Trade: what is given and what is taken.</summary>
         public ResourceKind Give { get; }
         public ResourceKind Take { get; }
+        /// <summary>RequestLine: the line to build. Zero for other economy commands.</summary>
+        public ProcessingLineKind Line { get; }
 
         public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled)
@@ -144,8 +151,18 @@ namespace Rts.Contracts
             uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
             IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
             ResourceKind give, ResourceKind take)
+            : this(factionId, issuerSequence, kind, building, cell, producerId, unit, villagerIds, targetKind, targetId, enabled,
+                cells, facings, facing, policy, civ, tech, give, take, (ProcessingLineKind)0)
+        {
+        }
+
+        public EconomyCommand(uint factionId, ulong issuerSequence, EconomyCommandKind kind, BuildingKind building, int cell,
+            uint producerId, UnitKind unit, IReadOnlyList<uint> villagerIds, EconomyTargetKind targetKind, uint targetId, bool enabled,
+            IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, Facing facing, EconomyPolicy policy, CivKind civ, TechKind tech,
+            ResourceKind give, ResourceKind take, ProcessingLineKind line)
         {
             Give = give; Take = take;
+            Line = line;
             Tech = tech;
             Civ = civ;
             Policy = policy;
@@ -259,6 +276,18 @@ namespace Rts.Contracts
         /// <summary>V3-9 #1: sends villagers to the fixed market/Outpost pair stored by caravanseraiId.</summary>
         public static EconomyCommand CaravanRoute(uint faction, ulong sequence, uint caravanseraiId, IReadOnlyList<uint> villagers)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.CaravanRoute, 0, 0, caravanseraiId, 0, villagers, EconomyTargetKind.None, 0, false);
+
+        /// <summary>Requests an automatic line near a region. The region is resolved by the simulation's deterministic map table.</summary>
+        public static EconomyCommand RequestLine(uint faction, ulong sequence, ProcessingLineKind line, uint regionId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RequestLine, 0, 0, 0, 0, null,
+                EconomyTargetKind.Region, regionId, false, null, null, Facing.North, EconomyPolicy.Balanced,
+                CivKind.Primitive, 0, 0, 0, line);
+
+        /// <summary>Requests an automatic line near a map cell selected by the person.</summary>
+        public static EconomyCommand RequestLineAt(uint faction, ulong sequence, ProcessingLineKind line, int cell)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.RequestLine, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced,
+                CivKind.Primitive, 0, 0, 0, line);
 
         public static EconomyCommand PlaceWall(uint faction, ulong sequence, IReadOnlyList<int> cells)
         {

@@ -240,7 +240,17 @@ internal static class EvalInterpreterCommand
         if (e.TryGetProperty("unit", out var unit) && (!Enum.TryParse(unit.GetString(), false, out UnitKind u) || c.Unit != u)) return false;
         if (e.TryGetProperty("civ", out var civ) && !civ.GetString().StartsWith("(", StringComparison.Ordinal) && (!Enum.TryParse(civ.GetString(), false, out CivKind civKind) || c.Civ != civKind)) return false;
         if (e.TryGetProperty("policy", out var policy) && !(policy.GetString() == "Economy" ? c.Policy == EconomyPolicy.Growth : Enum.TryParse(policy.GetString(), false, out EconomyPolicy p) && c.Policy == p)) return false;
-        string regionName = e.TryGetProperty("region", out var region) ? region.GetString() : e.TryGetProperty("scope", out var scope) && scope.GetString().StartsWith("Region:", StringComparison.Ordinal) ? scope.GetString().Substring("Region:".Length) : null;
+        if (e.TryGetProperty("line", out var line) && line.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(line.GetString())
+            && (!Enum.TryParse(line.GetString(), false, out ProcessingLineKind requestedLine) || c.Line != requestedLine)) return false;
+        string regionName = null;
+        uint? numericRegion = null;
+        if (e.TryGetProperty("region", out var region))
+        {
+            if (region.ValueKind == JsonValueKind.Number) numericRegion = region.GetUInt32();
+            else regionName = region.GetString();
+        }
+        else if (e.TryGetProperty("scope", out var scope) && scope.GetString().StartsWith("Region:", StringComparison.Ordinal)) regionName = scope.GetString().Substring("Region:".Length);
+        if (numericRegion.HasValue && c.RegionId != numericRegion.Value) return false;
         if (!string.IsNullOrEmpty(regionName) && (!summary.TryGet(regionName, out var r) || c.RegionId != r.Scope.Id)) return false;
         if (e.TryGetProperty("control", out var control) && c.Enabled != (control.GetString() == "Human")) return false;
         if (e.TryGetProperty("producer", out var producer) && summary.TryGet(producer.GetString(), out var producerEntry) && c.ProducerId != producerEntry.Id) return false;
@@ -273,10 +283,13 @@ internal static class EvalInterpreterCommand
         foreach (var e in item.Expect.EnumerateArray())
         {
             string kind = e.GetProperty("kind").GetString(); var command = new Dictionary<string, object>();
-            if (kind == "SetRegionControl" || kind == "SetEconomyPolicy" || kind == "AdvanceAge" || kind == "PlaceBuilding" || kind == "Train" || kind == "CancelTraining")
+            if (kind == "SetRegionControl" || kind == "SetEconomyPolicy" || kind == "AdvanceAge" || kind == "PlaceBuilding" || kind == "Train" || kind == "CancelTraining" || kind == "RequestLine")
             {
                 command["type"] = "economy"; command["kind"] = kind == "CancelTraining" ? "CancelTrain" : kind;
                 Copy(command, e, "region");
+                if (kind == "RequestLine" && e.TryGetProperty("region", out var numericRegion) && numericRegion.ValueKind == JsonValueKind.Number)
+                    command["region"] = "区域" + numericRegion.GetUInt32().ToString(CultureInfo.InvariantCulture);
+                Copy(command, e, "line");
                 if (kind == "SetEconomyPolicy" && !command.ContainsKey("region") && e.TryGetProperty("scope", out var regionScope) && regionScope.GetString().StartsWith("Region:", StringComparison.Ordinal)) command["region"] = regionScope.GetString().Substring("Region:".Length);
                 Copy(command, e, "control"); Copy(command, e, "policy");
                 if (kind == "SetEconomyPolicy" && e.TryGetProperty("policy", out var policyValue) && policyValue.GetString() == "Economy") command["policy"] = "Economy";
@@ -296,7 +309,7 @@ internal static class EvalInterpreterCommand
         return JsonSerializer.Serialize(new Dictionary<string, object> { ["commands"] = commands, ["operations"] = Array.Empty<object>(), ["say"] = "", ["reason"] = null, ["unknown"] = false });
     }
     private static Dictionary<string, object> Command(string type, string kind, string scope, string goal, string region = null, string control = null)
-        => new Dictionary<string, object> { ["type"] = type, ["kind"] = kind, ["scope"] = scope, ["goal"] = goal, ["region"] = region, ["building"] = null, ["location"] = null, ["producer"] = null, ["unit"] = null, ["civ"] = null, ["policy"] = null, ["control"] = control, ["sequence"] = null, ["count"] = null, ["reservePermille"] = null, ["allowedLossPermille"] = null, ["enabled"] = null };
+        => new Dictionary<string, object> { ["type"] = type, ["kind"] = kind, ["scope"] = scope, ["goal"] = goal, ["region"] = region, ["line"] = null, ["building"] = null, ["location"] = null, ["producer"] = null, ["unit"] = null, ["civ"] = null, ["policy"] = null, ["control"] = control, ["sequence"] = null, ["count"] = null, ["reservePermille"] = null, ["allowedLossPermille"] = null, ["enabled"] = null };
     private static Dictionary<string, object> Conditional(string kind, string objective, int? count, int? permille, int? minutes, string statement, IEnumerable<Dictionary<string, object>> then, bool once)
         => new Dictionary<string, object> { ["when"] = new Dictionary<string, object> { ["kind"] = kind, ["objective"] = objective, ["count"] = count, ["permille"] = permille, ["minutes"] = minutes, ["statement"] = statement, ["all"] = null }, ["then"] = then.ToArray(), ["once"] = once };
     private static void Copy(Dictionary<string, object> target, JsonElement source, string name) { if (source.TryGetProperty(name, out var value)) target[name] = value.ValueKind == JsonValueKind.Number ? value.GetInt32() : value.GetString(); }
