@@ -39,6 +39,20 @@ namespace Rts.Simulation
         private readonly List<GameEvent> commandEvents = new List<GameEvent>();
         private ulong nextCommandId = 1, nextRequestId = 1, nextBatchId = 1;
 
+        // Tactic is a separate provenance value, but it has the same simulation authority as Ai.
+        // Keep this mapping explicit instead of relying on enum declaration order.
+        private static int SourcePriority(CommandSource source)
+        {
+            switch (source)
+            {
+                case CommandSource.Human: return 1;
+                case CommandSource.Doctrine: return 2;
+                case CommandSource.Ai:
+                case CommandSource.Tactic: return 3;
+                default: return (int)source;
+            }
+        }
+
         public ulong ExecutionRevision(ulong commandId) => commandStates.First(c => c.Order.CommandId == commandId).ExecutionRevision;
 
         public ulong Revision(ScopeKey scope)
@@ -140,7 +154,8 @@ namespace Rts.Simulation
                     o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId != o.Target.FactionId) ||
                 o.Kind == PolicyKind.Scout && (o.Target.Kind != ScopeKind.Army && o.Target.Kind != ScopeKind.Region || o.Target.Kind == ScopeKind.Army && world.Armies[o.Target.Id - 1].Definition.Role != "scout" ||
                     o.Goal.Kind != GoalKind.Point && o.Goal.Kind != GoalKind.Outpost)) return ReasonCode.InvalidPayload;
-            if (o.Source == CommandSource.Ai && ((o.Expiration.Flags & ExpireFlags.ObservationTooOld) == 0 || o.Expiration.MaxObservationAgeTicks < 0)) return ReasonCode.InvalidPayload;
+            if ((o.Source == CommandSource.Ai || o.Source == CommandSource.Tactic) &&
+                ((o.Expiration.Flags & ExpireFlags.ObservationTooOld) == 0 || o.Expiration.MaxObservationAgeTicks < 0)) return ReasonCode.InvalidPayload;
             if (o.Parents.Any(p => !ValidScope(p.Scope) || p.Scope.FactionId != o.Target.FactionId) ||
                 o.Parents.Select(p => p.Scope).Distinct().Count() != o.Parents.Count) return ReasonCode.InvalidPayload;
             return ReasonCode.None;
@@ -165,7 +180,8 @@ namespace Rts.Simulation
                 if (c == self || Terminal(c) || !Overlap(c, order)) continue;
                 if (order.Kind != PolicyKind.ReturnToAuto && order.Source != CommandSource.Human && c.Order.Source == CommandSource.Human &&
                     (c.Status != CommandStatus.Executing || Field(c.Order.Kind) == Field(order.Kind))) return ReasonCode.Superseded;
-                if (order.Source == CommandSource.Ai && c.Order.Source == CommandSource.Doctrine && Field(c.Order.Kind) == Field(order.Kind)) return ReasonCode.Superseded;
+                if ((order.Source == CommandSource.Ai || order.Source == CommandSource.Tactic) &&
+                    c.Order.Source == CommandSource.Doctrine && Field(c.Order.Kind) == Field(order.Kind)) return ReasonCode.Superseded;
             }
             return ReasonCode.None;
         }
@@ -373,7 +389,8 @@ namespace Rts.Simulation
                 // Only the new Doctrine form is limited to resetting Doctrine commands, so it never touches Ai ones.
                 bool replace = !(o.Kind == PolicyKind.ReturnToAuto && o.Source == CommandSource.Doctrine) &&
                     Field(old.Order.Kind) == Field(o.Kind) &&
-                    (o.Source < old.Order.Source || o.Source == old.Order.Source && c.LogIndex > old.LogIndex);
+                    (SourcePriority(o.Source) < SourcePriority(old.Order.Source) ||
+                     SourcePriority(o.Source) == SourcePriority(old.Order.Source) && c.LogIndex > old.LogIndex);
                 if (!reset && !replace) continue;
                 if (old.Status == CommandStatus.Executing && o.Target.Kind != ScopeKind.All && !old.Order.Target.Equals(o.Target))
                 {
@@ -404,7 +421,7 @@ namespace Rts.Simulation
                 uint armyId = world.Armies[index].Definition.Id;
                 var selected = commandStates.Where(c => c.Status == CommandStatus.Executing &&
                     Combat(c.Order) && c.Armies.Any(e => e.ArmyId == armyId && e.Active && !e.Finished))
-                    .OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).FirstOrDefault();
+                    .OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 ref var a = ref world.Armies[index];
                 if (selected != null && RegionBlocksAiArmy(a) && selected.Order.Source != CommandSource.Human) selected = null;
                 var policy = selected == null ? (lossReturns.Contains(armyId) ? PolicyKind.Retreat : (PolicyKind)0) : selected.Order.Kind;

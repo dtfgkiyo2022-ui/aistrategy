@@ -48,7 +48,7 @@ namespace Rts.Tactics
             foreach (var row in ViewRows()) markdown.AppendLine("|`" + row.Item1 + "`|" + row.Item2 + "|");
             markdown.AppendLine();
             markdown.AppendLine("`orders` は自陣営の命令のうち、`Interpreting`・`Pending`・`Executing` のものだけを含みます。`Completed`・`Cancelled`・`Expired`・`Impossible` は終了済みなので除外します。各要素は `id`、`source`、`kind`、`target`、`goal`、`status`、`acceptedTick`、`applyTick` を持ち、`id` の昇順です。`target` は `kind`/`id`、`goal` は `kind`/`id`/`point` です。敵陣営の命令は戦況に含まれません。");
-            markdown.AppendLine("`ownArmies[].controlledBy` は、その部隊に現在効いている戦闘命令（`Focus`/`Retreat`/`Defend`/`Scout`）の `source` です。`All` は全軍、`Army` は同じID、`Outpost` は同じホーム前哨、`Region` は戦況の地域中心から決まる地域の部隊に適用します。複数が重なるときは Simulation と同じく `Human`、`Doctrine`、`Ai` の順で人を優先し、同じ出どころでは後の命令（大きいID）を採用します。該当する命令がなければ `None` です。");
+            markdown.AppendLine("`ownArmies[].controlledBy` は、その部隊に現在効いている戦闘命令（`Focus`/`Retreat`/`Defend`/`Scout`）の `source` です。`All` は全軍、`Army` は同じID、`Outpost` は同じホーム前哨、`Region` は戦況の地域中心から決まる地域の部隊に適用します。複数が重なるときは Simulation と同じく `Human`、`Doctrine`、`Ai`／`Tactic` の順で人を優先し、`Ai` と `Tactic` は同じ優先順位、同じ出どころでは後の命令（大きいID）を採用します。該当する命令がなければ `None` です。");
             markdown.AppendLine();
             markdown.AppendLine("## 命令");
             markdown.AppendLine();
@@ -98,7 +98,7 @@ namespace Rts.Tactics
         {
             return new[] {
                 ("version", "戦況の版番号"), ("tick", "現在の試合 tick"), ("factionId", "自陣営のID"),
-                ("ownArmies[]", "自軍部隊の id/kind/count/controlledBy/composition/position/homeObjective"), ("ownArmies[].controlledBy", "現在効いている戦闘命令の出どころ。Human / Doctrine / Ai / None"), ("ownArmies[].composition", "兵種名ごとの自軍兵数。兵種名の昇順"), ("ownArmies[].position", "x/z。メートル"), ("ownArmies[].homeObjective", "kind/id/point"),
+                ("ownArmies[]", "自軍部隊の id/kind/count/controlledBy/composition/position/homeObjective"), ("ownArmies[].controlledBy", "現在効いている戦闘命令の出どころ。Human / Doctrine / Ai / Tactic / None"), ("ownArmies[].composition", "兵種名ごとの自軍兵数。兵種名の昇順"), ("ownArmies[].position", "x/z。メートル"), ("ownArmies[].homeObjective", "kind/id/point"),
                 ("visibleEnemies[]", "現在見えている敵の id/kind/kindName/position"), ("visibleEnemies[].position", "x/z。メートル"),
                 ("contacts[]", "id/position/lastSeenTick/min/max/visible/uncertain/strengthUnknown/absent/visibleComposition/covered"), ("contacts[].visibleComposition", "現在見えている敵のうち接触に属する兵種別内訳"), ("contacts[].covered", "この接触に含まれる観測済み接触ID"),
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),

@@ -104,7 +104,7 @@ namespace Rts.UnityHost
                 if (frame == null || frame.Commands == null) return;
                 foreach (var command in frame.Commands)
                 {
-                    if (command.Source != CommandSource.Ai) continue;
+                    if (command.Source != CommandSource.Ai && command.Source != CommandSource.Tactic) continue;
                     accepted.Add(command.CommandId);
                     if (command.Status == CommandStatus.Executing || command.Status == CommandStatus.Completed)
                         executed.Add(command.CommandId);

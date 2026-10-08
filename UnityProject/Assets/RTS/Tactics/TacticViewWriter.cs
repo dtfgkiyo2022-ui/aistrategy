@@ -109,14 +109,26 @@ namespace Rts.Tactics
             foreach (var command in frame.Commands ?? Array.Empty<CommandView>())
             {
                 if (!IsEffective(command) || command.Target.FactionId != frame.FactionId || !IsCombat(command.Kind) || !AffectsArmy(frame, command, army)) continue;
-                if (!selected.HasValue || (byte)command.Source < (byte)selected.Value.Source ||
-                    (command.Source == selected.Value.Source && command.CommandId > selected.Value.CommandId)) selected = command;
+                if (!selected.HasValue || SourcePriority(command.Source) < SourcePriority(selected.Value.Source) ||
+                    (SourcePriority(command.Source) == SourcePriority(selected.Value.Source) && command.CommandId > selected.Value.CommandId)) selected = command;
             }
             return selected.HasValue ? selected.Value.Source.ToString() : "None";
         }
 
         private static bool IsCombat(PolicyKind kind)
             => kind == PolicyKind.Focus || kind == PolicyKind.Retreat || kind == PolicyKind.Defend || kind == PolicyKind.Scout;
+
+        private static int SourcePriority(CommandSource source)
+        {
+            switch (source)
+            {
+                case CommandSource.Human: return 1;
+                case CommandSource.Doctrine: return 2;
+                case CommandSource.Ai:
+                case CommandSource.Tactic: return 3;
+                default: return (int)source;
+            }
+        }
 
         private static bool AffectsArmy(FactionFrame frame, CommandView command, OwnArmyView army)
         {

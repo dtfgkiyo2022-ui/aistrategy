@@ -56,7 +56,7 @@
 - 内政：`EconomyCommand`（建てる・訓練・村人の割り当て・ライン・研究・交易・時代を進める・お任せへ戻す など）
 - 区域の担当、全体方針（maintain／concentrate／none、`ReturnToAuto`）
 - `judge(question)`：Jev／ローカル LLM への問い合わせ（非同期。答えは次の回の `view.answers` に届く）。費用は予算のメーターに数える
-- 命令はすべて `CommandSource.Ai`（戦術を表す新しい値を足すかは未決）として、観測した tick と失効の条件を付ける。**人の命令が優先**
+- 命令は `CommandSource.Tactic` として、観測した tick と失効の条件を付ける。`CommandSource.Ai`（参謀の返答）と同じシミュレーション規則で扱い、**人の命令が優先**する
 
 ## 3. 決定論とリプレイ
 
@@ -146,4 +146,4 @@ my-tactic/
 - 企画書を書き換える（1・4・5・8・12章）
 
 未決：
-- 戦術の命令に、新しい `CommandSource` の値を足すか（Contracts の変更＝Issue #135 に告知）。T-1 の結果を見て決める
+- なし（戦術の命令は `CommandSource.Tactic = 4`。既存の値は変更しない）
