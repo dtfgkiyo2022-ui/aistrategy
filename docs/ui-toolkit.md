@@ -9,7 +9,7 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 ## USS の変数
 
-`HudTheme.uss` は並び・位置・共通の大きさだけを持つ土台です。色、枠、角、文字の大きさ、帯の高さと余白は、選択中の次のテーマ USS の `:root` 変数で決まります。`HudToolkit` は `Resources/Hud/HudTheme` を常に読み、`Resources/Hud/Themes/` のテーマを一つだけ追加します。設定欄の「見た目の案」は `rts.hud.theme` に保存し、次のフレームに選択中のファイルを付け替えます。
+`HudTheme.uss` は並び・位置・共通の大きさだけを持つ土台です。色、枠、角、文字の大きさ、帯の高さと余白は、選択中の次のテーマ USS の `.hud-document` 変数で決まります。`HudToolkit` は `Resources/Hud/HudTheme` を常に読み、`Resources/Hud/Themes/` のテーマを一つだけ追加します。設定欄の「見た目の案」は `rts.hud.theme` に保存し、次のフレームに選択中のファイルを付け替えます。
 
 - `Themes/ThemeStone.uss`：A 石と真鍮。`#241f19` の不透明な板、真鍮色の枠、明朝の見出し。
 - `Themes/ThemeTable.uss`：B 作戦卓。半透明の青黒い板、青緑の枠、広い字間と BIZ UDGothic 系の文字。
@@ -60,6 +60,14 @@ UXML と USS は `Assets/RTS/UI/Resources/Hud/` にあり、`Resources.Load<Visu
 
 今回の実装では `TopBarResourceVisibility` と `TopBarDisplayText` が資源の出し分け・数の書式・時代表示を共有し、IMGUI と UI Toolkit の内容を揃えています。
 
+## 試合の設定・言語・命令の記録・結果
+
+`Resources/Hud/Setup.uxml` は上部右側の「試合の設定」と言語切り替え、中央の設定欄を持ちます。設定欄は `ScrollView` の中に作り、返答の遅延、相手・自軍の方針、両側の戦術、戦術の状態・読み直し・つまみ・合図、Workshop、フォルダ、マップ、追加ルール、文明、外部AI、素材の出典を表示します。戦術の選択は2列、数値のつまみは `Slider`／`SliderInt` と −／＋ボタンです。`Resources/Hud/Log.uxml` は折りたたみボタン、命令の7状態、命令の記録を持ち、`Resources/Hud/Result.uxml` は試合結果と再試合を持ちます。
+
+これらの値の読み取り・文面・操作は `CommandPanel` の公開ヘルパーと、既存の `ICommandDelayControl`、`IOpponentControl`、`ITacticControl`、`IMapChoice`、`IMatchRuleChoice`、`IPlayerFilesControl`、`IWorkshopControl` などを共用します。命令と戦術の合図は従来どおり `ICommandPort`／戦術の既存口を通り、UI Toolkit からシミュレーション状態を直接変更しません。
+
+`HudToolkit` が有効な間は `CommandPanel.OnGUI` が何も描かず、何も `UiHitAreas.Shared.Register` しません。設定欄が閉じている間は `Setup` の矩形を登録せず、ログが閉じている間は状態・記録の矩形を登録しません。表示中の上部ボタン、設定、ログ、結果だけを `UiHitAreas.Shared.Register` に登録するため、閉じた欄の範囲が地図入力を遮断しません。無効時は従来の IMGUI がこれらを描きます。
+
 ## 兵站・試合の時間・時系列
 
 新しい画面では `Resources/Hud/Supply.uxml`、`Clock.uxml`、`Timeline.uxml` が、それぞれ従来の `UiLayout.Supply`、`UiLayout.TopCenter`、`UiLayout.Timeline` に配置されます。4案のテーマ USS が共通の `--hud-*` 変数を使うため、板・枠・文字・ボタンは他の欄と同じ見た目の案に切り替わります。
@@ -86,7 +94,7 @@ AI の一覧は押すと開く自前の選択欄です。利用できない AI �
 
 `HudToolkit` は `CommandPanel` を受け取り、`CommandPanel.BeginAttackPick`、`IssueRetreat`、`IssueDefendOwnCore`、`IssueAllowAbandon`、`IssueMaintainReserve`、`IssueReturnToAuto`、`CancelGroundPick` をボタンから呼びます。従来の IMGUI も同じメソッドを呼ぶため、命令の組み立てと送信は一重です。最終的な送信は従来どおり `ICommandPort` 経由だけで、UI Toolkit はシミュレーション状態を直接変更しません。
 
-新しい画面が有効な間は `CommandPanel.OnGUI` の命令の箱だけを描かず、試合の設定・言語・命令の記録・補給は従来の IMGUI のまま残ります。命令の矩形は `UiHitAreas.Shared.Register` に登録するため、ボタンの外側を含めて地図の選択へクリックが抜けません。攻撃の地点待ちは既存の `TryConsumeGroundClick` を使い、地面のクリック処理も変えていません。
+新しい画面が有効な間は `CommandPanel.OnGUI` が命令だけでなく、試合の設定・言語・命令の記録・補給も描きません。命令の矩形は `UiHitAreas.Shared.Register` に登録するため、ボタンの外側を含めて地図の選択へクリックが抜けません。攻撃の地点待ちは既存の `TryConsumeGroundClick` を使い、地面のクリック処理も変えていません。
 
 ## 内政の欄
 
