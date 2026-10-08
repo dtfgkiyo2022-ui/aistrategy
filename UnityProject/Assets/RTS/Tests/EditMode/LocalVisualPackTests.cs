@@ -44,6 +44,18 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void EveryBuildingExceptBridgeHasAPackMapping()
+        {
+            foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind)))
+            {
+                if (kind == BuildingKind.Bridge) continue;
+                Assert.IsNotNull(LocalVisualPack.BuildingAssetPath(kind), kind + " must have a model mapping");
+                Assert.Greater(LocalVisualPack.BuildingHeight(kind), 0f);
+            }
+            Assert.IsNull(LocalVisualPack.BuildingAssetPath(BuildingKind.Bridge));
+        }
+
+        [Test]
         public void MissingPackReportsFalseAndLeavesFallbackToCaller()
         {
             LocalVisualPack.Disabled = true;
