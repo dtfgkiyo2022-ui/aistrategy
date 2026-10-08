@@ -37,6 +37,15 @@ namespace Rts.Presentation
             return false;
         }
 
+        /// <summary>The registered area that holds this GUI point, for diagnosing blocked input; false if none.</summary>
+        public bool TryFindGui(Vector2 point, out Rect area)
+        {
+            for (int i = 0; i < previous.Count; i++)
+                if (previous[i].Contains(point)) { area = previous[i]; return true; }
+            area = default(Rect);
+            return false;
+        }
+
         public bool ContainsScreen(Vector2 screenPoint, float screenHeight)
         {
             return ContainsGui(new Vector2(screenPoint.x, screenHeight - screenPoint.y));
