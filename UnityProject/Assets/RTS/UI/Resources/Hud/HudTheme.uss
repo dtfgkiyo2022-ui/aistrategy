@@ -70,11 +70,15 @@
     padding-right: var(--hud-gap);
 }
 
+/* Civilisation and age names run up to about fifteen characters, so the name wraps to two lines at a
+   slightly smaller size instead of being cut off (10-08). */
 .hud-age {
+    margin: 0;
+    padding: 0;
     color: var(--hud-heading);
-    font-size: var(--hud-heading-size);
+    font-size: 16px;
     overflow: hidden;
-    white-space: nowrap;
+    white-space: normal;
     -unity-text-align: middle-left;
 }
 

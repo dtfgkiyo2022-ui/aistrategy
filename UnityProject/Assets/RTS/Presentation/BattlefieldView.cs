@@ -886,6 +886,8 @@ namespace Rts.Presentation
                 if (drawnLabels.Count >= MaxContactLabels) break;
                 var screen = camera.WorldToScreenPoint(label.Key);
                 if (screen.z <= 0f) continue;
+                // Drawn after the HUD panels; a label under a panel would cover it.
+                if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 var rect = new Rect(screen.x - 70f, Screen.height - screen.y - 10f, 180f, 20f);
                 // Contacts cluster together, so a label that would sit on top of another one is dropped.
                 bool overlaps = false;

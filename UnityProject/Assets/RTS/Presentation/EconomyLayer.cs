@@ -481,6 +481,8 @@ namespace Rts.Presentation
             {
                 var screen = cam.WorldToScreenPoint(tag.Value);
                 if (screen.z <= 0f) continue;
+                // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
+                if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), BuildingName(tag.Key), tagStyle);
             }
         }
