@@ -69,6 +69,22 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void ClaudeHaiku55UsesLowEffortStructuredOutputWithoutThinkingBudgetOrForcedTools()
+        {
+            var handler = new Handler { Reply = "{\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\",\\\"reason\\\":null,\\\"unknown\\\":false}\"}]}" };
+            using (var interpreter = new ClaudeCommandInterpreter(() => Key, handler))
+            {
+                interpreter.Request(Request("claude-haiku-5-5")); Poll(interpreter);
+                Assert.That(handler.Body, Does.Contain("\"effort\":\"low\""));
+                Assert.That(handler.Body, Does.Contain("\"output_config\""));
+                Assert.That(handler.Body, Does.Contain("\"type\":\"json_schema\""));
+                Assert.That(handler.Body, Does.Not.Contain("budget_tokens"));
+                Assert.That(handler.Body, Does.Not.Contain("\"thinking\""));
+                Assert.That(handler.Body, Does.Not.Contain("\"tool_choice\""));
+            }
+        }
+
+        [Test]
         public void FixedTargetIsIncludedByItsDisplayName()
         {
             var handler = new Handler { Reply = "{\"stop_reason\":\"end_turn\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"commands\\\":[],\\\"say\\\":\\\"ok\\\",\\\"reason\\\":null,\\\"unknown\\\":false}\"}]}" };
@@ -197,6 +213,14 @@ namespace Rts.Tests.Headless
         {
             Assert.Throws<ArgumentException>(() => AiModelCatalog.Get("not-a-model"));
             Assert.That(AiCostCalculator.Calculate("claude-haiku-4-5", new AiTokenUsage(100, 20, 80, 0)), Is.EqualTo(0.0312m));
+        }
+
+        [Test]
+        public void ClaudeHaiku55UsesLowAndLongContextPrices()
+        {
+            Assert.That(AiModelCatalog.Get("claude-haiku-5-5").Model, Is.EqualTo("claude-haiku-5-5"));
+            Assert.That(AiCostCalculator.Calculate("claude-haiku-5-5", 100000, 1000), Is.EqualTo(1.575m));
+            Assert.That(AiCostCalculator.Calculate("claude-haiku-5-5", 100001, 1000), Is.EqualTo(7.875075m));
         }
     }
 }

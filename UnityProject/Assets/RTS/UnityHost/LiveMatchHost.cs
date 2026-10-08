@@ -1504,6 +1504,7 @@ namespace Rts.UnityHost
             {
                 case "local-llm": return "ローカルLLM（無料）";
                 case "jev": return "Jev（命令1つ）";
+                case "claude-haiku-5-5": return "Claude Haiku 5.5";
                 default: return model ?? "";
             }
         }

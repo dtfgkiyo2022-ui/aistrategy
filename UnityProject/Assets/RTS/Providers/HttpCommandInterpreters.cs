@@ -290,8 +290,14 @@ namespace Rts.Providers
                 },
                 ["messages"] = new List<object> { new Dictionary<string, object> { ["role"] = "user", ["content"] = request.Summary.DynamicPrompt(request.Instruction,
                     request.HasFixedTarget && string.IsNullOrEmpty(request.FixedTargetName) ? (ScopeKey?)request.FixedTarget : null, request.FixedTargetName) } },
-                ["output_config"] = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(schema) } }
+                ["output_config"] = ClaudeOutputConfig(request.Model, schema)
             });
+        }
+        private static Dictionary<string, object> ClaudeOutputConfig(string model, string schema)
+        {
+            var config = new Dictionary<string, object> { ["format"] = new Dictionary<string, object> { ["type"] = "json_schema", ["schema"] = MiniJson.Parse(schema) } };
+            if (model.Equals("claude-haiku-5-5", StringComparison.OrdinalIgnoreCase)) config["effort"] = "low";
+            return config;
         }
     }
 
