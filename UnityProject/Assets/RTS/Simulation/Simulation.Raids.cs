@@ -24,6 +24,11 @@ namespace Rts.Simulation
             if (!EconomyOn || s.TargetKind != 0 || s.IsRetreating) return;
             uint faction = s.Initial.FactionId;
             int best = -1; BigInteger bestDistance = 0;
+            if (world.Config.Economy.RaidLinePriority > 0 && TryPickRaidLineTarget(faction, s.Position, s.Parameters.Range,
+                out byte lineTargetKind, out uint lineTargetId))
+            {
+                s.TargetKind = lineTargetKind; s.TargetId = lineTargetId; return;
+            }
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var v = world.Villagers[i];
@@ -44,6 +49,43 @@ namespace Rts.Simulation
             if (!AgesOn) return;
             int cellBest = NearestEnemyBelt(faction, s.Position, s.Parameters.Range);
             if (cellBest >= 0) { s.TargetKind = TargetBelt; s.TargetId = (uint)cellBest + 1; }
+        }
+
+        private bool TryPickRaidLineTarget(uint faction, SimPoint from, Fix64 range, out byte targetKind, out uint targetId)
+        {
+            targetKind = 0; targetId = 0;
+            int bestType = int.MaxValue; uint bestId = 0; BigInteger bestDistance = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
+                    || !BuildingVisibleTo(faction, b)) continue;
+                var point = NearestFootprintPoint(b, from);
+                if (!InRange(from, point, range)) continue;
+                BigInteger distance = DistanceSquared(from, point);
+                if (bestType > TargetBuilding || bestType == TargetBuilding && (distance < bestDistance
+                    || distance == bestDistance && b.Id < bestId))
+                {
+                    bestType = TargetBuilding; bestId = b.Id; bestDistance = distance;
+                }
+            }
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                var belt = world.Belts[cell];
+                if (belt.FactionId == 0 || belt.FactionId == faction || LineForBelt(belt.FactionId, cell) < 0
+                    || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                var point = world.Map.Center(cell);
+                if (!InRange(from, point, range)) continue;
+                BigInteger distance = DistanceSquared(from, point);
+                uint id = checked((uint)cell + 1);
+                if (bestType > TargetBelt || bestType == TargetBelt && (distance < bestDistance
+                    || distance == bestDistance && id < bestId))
+                {
+                    bestType = TargetBelt; bestId = id; bestDistance = distance;
+                }
+            }
+            if (bestType == int.MaxValue) return false;
+            targetKind = (byte)bestType; targetId = bestId; return true;
         }
 
         /// <summary>The visible enemy belt cell nearest <paramref name="from"/> within <paramref name="range"/> (then the lower cell), or -1.</summary>
@@ -144,6 +186,7 @@ namespace Rts.Simulation
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, false);
                 }
                 else foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
+                DelayLineAfterRaid(b.FactionId, b.Id, FootprintCenter(b.OriginCell, SizeOf(b.Kind)));
                 opened = true;
             }
             if (opened) TerrainChanged();
@@ -151,6 +194,8 @@ namespace Rts.Simulation
             for (int cell = 0; cell < world.Belts.Length; cell++)
             {
                 if (world.Belts[cell].FactionId == 0 || world.Belts[cell].Hp != 0) continue;
+                uint faction = world.Belts[cell].FactionId;
+                DelayLineAfterRaid(faction, cell);
                 world.Belts[cell] = default;
                 world.BeltOrder = null;
             }

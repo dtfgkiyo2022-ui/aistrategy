@@ -111,12 +111,18 @@ namespace Rts.Simulation
                 int interval = b.Kind == BuildingKind.Castle ? rules.CastleIntervalTicks : rules.TowerIntervalTicks;
                 var centre = FootprintCenter(b.OriginCell, SizeOf(b.Kind));
                 int best = -1; BigInteger bestDistance = 0;
-                foreach (int s in world.SoldierTraversal)
+                int passes = rules.RaidLinePriority > 0 ? 2 : 1;
+                for (int pass = 0; pass < passes && best < 0; pass++)
                 {
-                    var enemy = world.Soldiers[s];
-                    if (!enemy.Alive || enemy.Initial.FactionId == b.FactionId || !IsVisibleTo(b.FactionId, enemy.Position) || !InRange(centre, enemy.Position, range)) continue;
-                    var d = DistanceSquared(centre, enemy.Position);
-                    if (best < 0 || d < bestDistance) { best = s; bestDistance = d; }
+                    bool lineOnly = rules.RaidLinePriority > 0 && pass == 0;
+                    foreach (int s in world.SoldierTraversal)
+                    {
+                        var enemy = world.Soldiers[s];
+                        if (!enemy.Alive || enemy.Initial.FactionId == b.FactionId || !IsVisibleTo(b.FactionId, enemy.Position)
+                            || !InRange(centre, enemy.Position, range) || lineOnly && !SoldierIsRaidingLine(b.FactionId, enemy)) continue;
+                        var d = DistanceSquared(centre, enemy.Position);
+                        if (best < 0 || d < bestDistance) { best = s; bestDistance = d; }
+                    }
                 }
                 if (best >= 0)
                 {
@@ -138,6 +144,23 @@ namespace Rts.Simulation
                 b.Timer = interval - 1;
                 b.Shots++;
             }
+        }
+
+        private bool SoldierIsRaidingLine(uint defendedFaction, SoldierState soldier)
+        {
+            if (soldier.TargetKind == TargetBelt)
+            {
+                int cell = (int)soldier.TargetId - 1;
+                return cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == defendedFaction
+                    && LineForBelt(defendedFaction, cell) >= 0;
+            }
+            if (soldier.TargetKind == TargetBuilding)
+            {
+                uint id = soldier.TargetId;
+                return id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == defendedFaction
+                    && LineForBuilding(defendedFaction, id) >= 0;
+            }
+            return false;
         }
 
         /// <summary>

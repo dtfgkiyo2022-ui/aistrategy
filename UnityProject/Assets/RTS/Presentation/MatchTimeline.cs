@@ -116,8 +116,16 @@ namespace Rts.Presentation
                         Add(e.Tick, outcome.HasValue ? UiText.T("match ended: ", "試合終了：") + outcome.Value.Headline : UiText.T("match ended", "試合終了"));
                         break;
                     case EventKind.EconomyLineRejected:
-                        Add(e.Tick, UiText.T("Line request declined: ", "ライン依頼を却下：") + LineKind(e.Value)
-                            + UiText.T(" (", "（") + Reason(e.Reason) + UiText.T(")", "）"));
+                        if (e.CommandId == ulong.MaxValue)
+                        {
+                            int seconds = (e.Value + 19) / 20;
+                            Add(e.Tick, UiText.T("Line ", "ライン ") + e.SubjectId
+                                + UiText.T(" was cut (rebuild in ", "が切断された（作り直しまで ") + seconds
+                                + UiText.T(" seconds)", " 秒）"));
+                        }
+                        else
+                            Add(e.Tick, UiText.T("Line request declined: ", "ライン依頼を却下：") + LineKind(e.Value)
+                                + UiText.T(" (", "（") + Reason(e.Reason) + UiText.T(")", "）"));
                         break;
                 }
             }

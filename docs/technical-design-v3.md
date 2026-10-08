@@ -1177,3 +1177,26 @@ mapgen-1 の矩形の障害物の代わりに、地形を置く（**新しい版
 EconomyPanel の Toolkit の Build タブに「ラインを頼む」項目を置く。ライン種別を選んでから地図をクリックすると、区域表があれば区域依頼、区域表がなければセル依頼を既存の Economy command port へ送る。設計図の保存・貼り付けとは別の操作である。
 
 評価用の fake staff response と `eval-interpreter` は `RequestLine` と `line` を通常の EconomyCommand と同じように採点する。テストでは、命令なしの診断ハッシュ不変、指定位置に近いライン、却下理由、記録・再生ハッシュ、fake staff response、戦術 JSON の読み取りを確認する。シミュレーション層は UnityEngine に依存せず、場所選択・並び順・イベント順は固定順である。
+
+### 32.32 ラインを守る・断つ（V3-6 follow-up）
+
+#### 決めたこと
+
+お任せのラインを敵が壊したときも `LineManager` は `Automatic` のままにする。ただし、建物またはベルトが壊れた tick を起点に、同じラインの再構築を `LineRebuildDelayTicks` tick 遅らせる。待ち時間中は不足したベルトを置かず、手運びも止めるため、ラインの流れは止まる。再構築可能時刻はラインごとに持ち、同じ tick の複数の破壊は一つの待ち時間へまとめる。既定値は 0 で、従来どおり次の AI 周期に直せる。
+
+| 値 | 既定値 | Terrain マップ | 意味 |
+|---|---:|---:|---|
+| `EconomyRules.LineRebuildDelayTicks` | 0 | 200 | 敵に壊されてからお任せが直し始めるまでの tick 数（20 tick/秒） |
+| `EconomyRules.RaidLinePriority` | 0 | 1 | 0 は従来の村人→建物→ベルト、1 以上はラインの建物・ベルトを先に選ぶ |
+
+`RaidLinePriority` が有効な地形では、襲撃兵は射程内のライン建物・ベルトを通常の村人・建物より先に選ぶ。見張り塔と城も、ラインを攻撃目標にしている敵兵を、同じ射程内の他の敵兵より先に撃つ。値が 0 のマップでは襲撃と塔の既存の選択順を変えない。距離、建物／ベルトの種類、ID の比較は固定順で行い、Dictionary 列挙や壁時計は使わない。
+
+Contracts の enum・view・イベント型は増やさない。ライン切断は既存の `EconomyLineRejected` に `CommandId = ulong.MaxValue` を持つ内部イベントとして記録し、表示側で「ライン N が切断された（作り直しまで X 秒）」と表示する。これは既存のライン依頼却下と区別でき、リプレイにも同じイベントが現れる。
+
+#### 決定論と互換性
+
+`LineRebuildDelayTicks` と `RaidLinePriority` は Simulation 側の `EconomyRules` に置く。値が 0 の場合、新しいクールダウン状態は正規状態へ書かないため、既存マップの状態ハッシュは変わらない。Terrain マップだけ値を有効にし、その設定は `ScenarioBinary` の末尾の長さを持つ任意 tail に保存して記録・再生で一致させる。新しい値を有効にした Terrain マップでは、設定ハッシュと破壊後の状態ハッシュが変わる。
+
+#### 検証
+
+待ち時間 0 の既存ライン、待ち時間 200 の Terrain ライン、20 tick 間隔の襲撃、ライン切断イベント、塔のライン防衛、記録・再生の全 tick ハッシュを `Processing`、`Raid`、`Belt`、`Industry`、`Determinism` のフィルターで確認する。UnityEngine を Simulation 系へ参照させず、シーン・Prefab・`.meta` は変更しない。
