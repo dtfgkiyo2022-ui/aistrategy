@@ -292,6 +292,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("Hud", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             if (!IsEnabled || view == null)
             {
                 if (hudRoot != null) hudRoot.style.display = DisplayStyle.None;
@@ -400,6 +407,14 @@ namespace Rts.Presentation
             return element == null ? "missing" : element.worldBound.ToString();
         }
 
+        private static int CountElements(VisualElement element)
+        {
+            if (element == null) return 0;
+            int count = 1;
+            for (int i = 0; i < element.childCount; i++) count += CountElements(element[i]);
+            return count;
+        }
+
         private void EnsureDocument()
         {
             if (document != null) return;
@@ -464,6 +479,7 @@ namespace Rts.Presentation
             else Debug.LogWarning("UI Toolkit result UXML not found at Resources/" + ResultUxmlResourcePath + ".");
 
             hudRoot = root.Q<VisualElement>("hud-root");
+            PerfProbe.Counter("uiElements", () => CountElements(root));
             topFrame = root.Q<VisualElement>("top-frame");
             ageLabel = root.Q<Label>("age-label");
             ageStageLabel = root.Q<Label>("age-stage-label");

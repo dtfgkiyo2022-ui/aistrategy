@@ -300,6 +300,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("Battlefield", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             sinceUpdate += Time.deltaTime;
             float matchRate = GetMatchRate();
             foreach (var visual in units.Values)

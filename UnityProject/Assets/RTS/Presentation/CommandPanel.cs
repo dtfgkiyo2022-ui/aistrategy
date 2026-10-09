@@ -42,6 +42,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("CommandPanel", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
             {
                 awaitingGround = false;

@@ -68,6 +68,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("TimelinePanel", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             timeline.Ingest(view.LatestFrame);
         }
 

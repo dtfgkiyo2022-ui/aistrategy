@@ -1132,6 +1132,13 @@ namespace Rts.UnityHost
 
         public void StepOnce()
         {
+            long probe = PerfProbe.Start();
+            StepOnceMeasured();
+            PerfProbe.Stop("StepAll", probe);
+        }
+
+        private void StepOnceMeasured()
+        {
             if (simulation == null || HasEnded) return;
             // Tactic calls are deliberately before the gateway step, matching tactic-match in the CLI.
             TacticHostTickResult ownTacticResult = null;
@@ -1151,7 +1158,9 @@ namespace Rts.UnityHost
                 matchPack.RecordTactic(ownTacticResult, ownFactionId, ownTactic);
                 matchPack.RecordTactic(enemyTacticResult, enemyFactionId, enemyTactic);
             }
+            long simProbe = PerfProbe.Start();
             gateway.Step();
+            PerfProbe.Stop("Sim", simProbe);
             var frame = simulation.Capture(viewFactionId);
             if (smokeRunner)
             {
@@ -1230,6 +1239,13 @@ namespace Rts.UnityHost
         }
 
         private void Update()
+        {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("Host", probe);
+        }
+
+        private void UpdateMeasured()
         {
             if (simulation == null) return;
             if (smokeRunner)
@@ -1384,6 +1400,36 @@ namespace Rts.UnityHost
         private void LateUpdate()
         {
             if (aiFieldFocused) Input.compositionCursorPos = ImeCandidatePosition(aiFieldRect);
+            WritePerfLine();
+        }
+
+        // One line every PerfSeconds in the log ("RTS perf"), to find what makes a long play slow (10-09). Per part:
+        // average/worst milliseconds per frame. Display only; the simulation never reads it.
+        private const float PerfSeconds = 20f;
+        private float perfStartedAt = -1f;
+        private int perfFrames;
+        private float perfWorstFrame;
+
+        private void WritePerfLine()
+        {
+            if (smokeRunner || simulation == null) return;
+            float now = Time.unscaledTime;
+            if (perfStartedAt < 0f)
+            {
+                perfStartedAt = now;
+                PerfProbe.Counter("objects", () => FindObjectsByType<Transform>(FindObjectsSortMode.None).Length);
+                PerfProbe.Counter("monoMB", () => (int)(GC.GetTotalMemory(false) / (1024 * 1024)));
+                return;
+            }
+            perfFrames++;
+            perfWorstFrame = Math.Max(perfWorstFrame, Time.unscaledDeltaTime);
+            if (now - perfStartedAt < PerfSeconds) return;
+            float frameMs = (now - perfStartedAt) * 1000f / Math.Max(1, perfFrames);
+            Debug.Log("RTS perf: tick=" + Tick + " speed=" + SpeedMultiplier + " frame=" + frameMs.ToString("0.0") + "/"
+                + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames));
+            perfStartedAt = now;
+            perfFrames = 0;
+            perfWorstFrame = 0f;
         }
 
         /// <summary>

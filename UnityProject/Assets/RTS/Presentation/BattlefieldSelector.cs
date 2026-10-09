@@ -20,6 +20,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("Selector", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var camera = Camera.main;
             if (camera == null) return;

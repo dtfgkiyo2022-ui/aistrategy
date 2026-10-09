@@ -134,6 +134,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("EconomyLayer", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             var frame = view == null ? null : view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
             if (economy == null) { if (resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear(); return; }
