@@ -127,6 +127,14 @@ namespace Rts.Presentation
         private Label setupTitle;
         private ScrollView setupScroll;
         private VisualElement setupContent;
+        // The settings are rebuilt when something may have changed, never while a pointer is pressed on them: a button
+        // rebuilt between press and release never sees its click (every-frame rebuilding lost all clicks, 10-09).
+        private bool setupDirty = true;
+        private bool setupWasOpen;
+        private bool setupPointerDown;
+        private float setupPointerDownAt;
+        private float setupRebuiltAt;
+        private const float SetupRefreshSeconds = 1f;
         private VisualElement logToggleFrame;
         private Button logToggle;
         private VisualElement logStatusFrame;
@@ -143,6 +151,7 @@ namespace Rts.Presentation
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
+        private string blueprintSignature;
         private int renderedStaffLineCount;
         private readonly List<StaffLineSlot> staffLineSlots = new List<StaffLineSlot>();
         private readonly List<EconomyActionSlot> economyActionSlots = new List<EconomyActionSlot>();
@@ -716,7 +725,14 @@ namespace Rts.Presentation
         private void BindSetupEvents()
         {
             if (setupToggle != null) setupToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleSetup(); };
-            if (languageToggle != null) languageToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleLanguage(); };
+            if (languageToggle != null) languageToggle.clicked += () => { if (commandPanel != null) commandPanel.ToggleLanguage(); setupDirty = true; };
+            if (setupFrame != null)
+            {
+                setupFrame.RegisterCallback<PointerDownEvent>(_ => { setupPointerDown = true; setupPointerDownAt = Time.unscaledTime; },
+                    TrickleDown.TrickleDown);
+                // The click runs on the same release; the rebuild waits for the next refresh, so it shows the new choice.
+                setupFrame.RegisterCallback<PointerUpEvent>(_ => { setupPointerDown = false; setupDirty = true; }, TrickleDown.TrickleDown);
+            }
         }
 
         private void BindLogEvents()
@@ -749,13 +765,27 @@ namespace Rts.Presentation
 
             SetFrameRect(setupFrame, layout.Setup, Screen.width, Screen.height);
             setupFrame.style.display = commandPanel.IsSetupOpen ? DisplayStyle.Flex : DisplayStyle.None;
-            if (!commandPanel.IsSetupOpen || setupContent == null) return;
+            if (!commandPanel.IsSetupOpen || setupContent == null)
+            {
+                setupWasOpen = false;
+                return;
+            }
             if (setupTitle != null) setupTitle.text = UiText.T("Match setup", "試合の設定");
 
-            // Settings are intentionally rebuilt only while the panel is open. Each control still calls the same
-            // presentation interfaces as the legacy rows, while the scroll view handles the long list.
+            // Settings are rebuilt only while the panel is open: on opening, after a release on the panel, and once a
+            // second for changes made elsewhere (Workshop status, the match restarting). A press that never saw its
+            // release (dragged off the window) stops holding the rebuild back after a few seconds.
+            float now = Time.unscaledTime;
+            if (setupPointerDown && now - setupPointerDownAt > 5f) setupPointerDown = false;
+            bool due = !setupWasOpen || setupDirty || now - setupRebuiltAt >= SetupRefreshSeconds;
+            if (!due || setupPointerDown) return;
+            // Each control still calls the same presentation interfaces as the legacy rows, while the scroll view
+            // handles the long list.
             setupContent.Clear();
             BuildSetupContent();
+            setupWasOpen = true;
+            setupDirty = false;
+            setupRebuiltAt = now;
         }
 
         private VisualElement AddSetupRow(string title)
@@ -1343,8 +1373,12 @@ namespace Rts.Presentation
         private void RefreshBlueprintControls()
         {
             if (economyPanel == null || blueprintList == null) return;
-            blueprintList.Clear();
             var files = economyPanel.BlueprintFiles;
+            // Rebuilt only when the list changes: a button rebuilt every frame never receives its click.
+            string signature = (UiText.Japanese ? "ja" : "en") + "|" + string.Join("|", files);
+            if (signature == blueprintSignature) return;
+            blueprintSignature = signature;
+            blueprintList.Clear();
             if (files.Count == 0)
             {
                 blueprintList.Add(new Label(UiText.T("No saved blueprints.", "保存された設計図はありません。")));
