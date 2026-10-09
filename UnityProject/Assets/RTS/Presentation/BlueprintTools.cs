@@ -9,7 +9,7 @@ namespace Rts.Presentation
 {
     public sealed class BlueprintDocument
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
         public int Version = CurrentVersion;
         public string Name = "設計図";
         public int Width = 1;
@@ -38,8 +38,15 @@ namespace Rts.Presentation
         public int X;
         public int Z;
         public Facing Facing;
+        public BeltComponentKind Component;
+        public ResourceKind SorterKind;
+        public int PairCell;
+        public BeltSpeed Speed;
 
-        public BlueprintBelt(int x, int z, Facing facing) { X = x; Z = z; Facing = facing; }
+        public BlueprintBelt(int x, int z, Facing facing) : this(x, z, facing, BeltComponentKind.None, 0, -1, BeltSpeed.Normal) { }
+
+        public BlueprintBelt(int x, int z, Facing facing, BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed)
+        { X = x; Z = z; Facing = facing; Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; }
     }
 
     /// <summary>Versioned blueprint data and geometry. File access stays in the Unity presentation layer.</summary>
@@ -66,7 +73,9 @@ namespace Rts.Presentation
             {
                 if (i != 0) json.Append(',');
                 var b = blueprint.Belts[i];
-                json.Append("{\"x\":").Append(b.X).Append(",\"z\":").Append(b.Z).Append(",\"facing\":").Append((int)b.Facing).Append('}');
+                json.Append("{\"x\":").Append(b.X).Append(",\"z\":").Append(b.Z).Append(",\"facing\":").Append((int)b.Facing)
+                    .Append(",\"component\":").Append((int)b.Component).Append(",\"sorterKind\":").Append((int)b.SorterKind)
+                    .Append(",\"pairCell\":").Append(b.PairCell).Append(",\"speed\":").Append((int)b.Speed).Append('}');
             }
             return json.Append("]}").ToString();
         }
@@ -81,14 +90,17 @@ namespace Rts.Presentation
                 Width = Number(json, "width", 1),
                 Height = Number(json, "height", 1)
             };
-            if (result.Version != BlueprintDocument.CurrentVersion) throw new FormatException("未対応の設計図版です。");
+            if (result.Version != 1 && result.Version != BlueprintDocument.CurrentVersion) throw new FormatException("未対応の設計図版です。");
+            if (result.Version == 1) result.Version = BlueprintDocument.CurrentVersion;
             foreach (Match match in Objects(json, "buildings"))
             {
                 result.Buildings.Add(new BlueprintBuilding((BuildingKind)Number(match.Value, "kind", 0), Number(match.Value, "x", 0), Number(match.Value, "z", 0),
                     Number(match.Value, "width", 1), Number(match.Value, "height", 1), (Facing)Number(match.Value, "facing", 0)));
             }
             foreach (Match match in Objects(json, "belts"))
-                result.Belts.Add(new BlueprintBelt(Number(match.Value, "x", 0), Number(match.Value, "z", 0), (Facing)Number(match.Value, "facing", 0)));
+                result.Belts.Add(new BlueprintBelt(Number(match.Value, "x", 0), Number(match.Value, "z", 0), (Facing)Number(match.Value, "facing", 0),
+                    (BeltComponentKind)Number(match.Value, "component", 0), (ResourceKind)Number(match.Value, "sorterKind", 0),
+                    Number(match.Value, "pairCell", -1), (BeltSpeed)Number(match.Value, "speed", 0)));
             return result;
         }
 
@@ -109,7 +121,10 @@ namespace Rts.Presentation
                 for (int i = 0; i < result.Belts.Count; i++)
                 {
                     var b = result.Belts[i];
-                    result.Belts[i] = new BlueprintBelt(oldHeight - 1 - b.Z, b.X, Turn(b.Facing));
+                    int pairX = b.PairCell < 0 ? -1 : b.PairCell % oldWidth;
+                    int pairZ = b.PairCell < 0 ? -1 : b.PairCell / oldWidth;
+                    int pair = b.PairCell < 0 ? -1 : (oldHeight - 1 - pairZ) + pairX * oldHeight;
+                    result.Belts[i] = new BlueprintBelt(oldHeight - 1 - b.Z, b.X, Turn(b.Facing), b.Component, b.SorterKind, pair, b.Speed);
                 }
                 result.Width = oldHeight;
                 result.Height = oldWidth;

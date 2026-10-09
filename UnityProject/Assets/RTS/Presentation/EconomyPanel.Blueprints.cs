@@ -64,7 +64,10 @@ namespace Rts.Presentation
                 if (belt.FactionId != faction) continue;
                 int x = belt.Cell % MapWidthCells, z = belt.Cell / MapWidthCells;
                 if (x >= minX && x <= maxX && z >= minZ && z <= maxZ)
-                    blueprint.Belts.Add(new BlueprintBelt(x - minX, z - minZ, belt.Facing));
+                {
+                    int pair = belt.PairCell < 0 ? -1 : (belt.PairCell % MapWidthCells - minX) + (belt.PairCell / MapWidthCells - minZ) * blueprint.Width;
+                    blueprint.Belts.Add(new BlueprintBelt(x - minX, z - minZ, belt.Facing, belt.Component, belt.SorterKind, pair, belt.Speed));
+                }
             }
             string safe = SafeFileName(name);
             Directory.CreateDirectory(BlueprintDirectory());
@@ -123,18 +126,41 @@ namespace Rts.Presentation
                 port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, building.Kind, origin, building.Facing));
             }
             var placed = new List<BlueprintBelt>();
-            for (int i = 0; i < activeBlueprint.Belts.Count; i++) placed.Add(activeBlueprint.Belts[i]);
+            for (int i = 0; i < activeBlueprint.Belts.Count; i++)
+            {
+                var belt = activeBlueprint.Belts[i];
+                int absolute = cell + belt.X + belt.Z * MapWidthCells;
+                if (belt.Component == BeltComponentKind.Splitter)
+                    port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, absolute, belt.Facing));
+                else if (belt.Component == BeltComponentKind.Sorter)
+                    port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, absolute, belt.Facing, belt.SorterKind));
+                else if (belt.Component == BeltComponentKind.UndergroundEntrance && belt.PairCell >= 0)
+                    port.SubmitEconomy(EconomyCommand.PlaceUnderground(faction, ++sequence, absolute,
+                        cell + belt.PairCell % activeBlueprint.Width + (belt.PairCell / activeBlueprint.Width) * MapWidthCells, belt.Facing));
+                else if (belt.Component == BeltComponentKind.None)
+                    placed.Add(belt);
+            }
             var runs = BlueprintTools.SplitBeltRuns(placed, EconomyCommand.MaxBeltRun);
             for (int i = 0; i < runs.Count; i++)
             {
-                var cells = new List<int>();
-                var facings = new List<Facing>();
-                for (int j = 0; j < runs[i].Count; j++)
+                for (int start = 0; start < runs[i].Count; )
                 {
-                    cells.Add(cell + runs[i][j].X + runs[i][j].Z * MapWidthCells);
-                    facings.Add(runs[i][j].Facing);
+                    BeltSpeed speed = runs[i][start].Speed;
+                    var cells = new List<int>();
+                    var facings = new List<Facing>();
+                    int end = start;
+                    while (end < runs[i].Count && runs[i][end].Speed == speed)
+                    {
+                        cells.Add(cell + runs[i][end].X + runs[i][end].Z * MapWidthCells);
+                        facings.Add(runs[i][end].Facing);
+                        end++;
+                    }
+                    if (speed == BeltSpeed.Fast)
+                        port.SubmitEconomy(EconomyCommand.PlaceFastBelt(faction, ++sequence, cells, facings));
+                    else
+                        port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells, facings));
+                    start = end;
                 }
-                port.SubmitEconomy(EconomyCommand.PlaceBelt(faction, ++sequence, cells, facings));
             }
             Note(UiText.T("Blueprint placement requested.", "設計図の配置を依頼しました。"));
             SetMode(Mode.None);

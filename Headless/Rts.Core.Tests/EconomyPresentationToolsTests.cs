@@ -27,6 +27,21 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void Blueprint_V1LoadsAsV2AndNewBeltFieldsKeepTheirValues()
+        {
+            var old = BlueprintTools.Deserialize("{\"version\":1,\"name\":\"old\",\"width\":2,\"height\":1,\"buildings\":[],\"belts\":[{\"x\":0,\"z\":0,\"facing\":1}]}");
+            Assert.That(old.Version, Is.EqualTo(BlueprintDocument.CurrentVersion));
+            Assert.That(old.Belts[0].Component, Is.EqualTo(BeltComponentKind.None));
+
+            var source = new BlueprintDocument { Width = 4, Height = 2 };
+            source.Belts.Add(new BlueprintBelt(1, 0, Facing.East, BeltComponentKind.Sorter, ResourceKind.Ore, -1, BeltSpeed.Fast));
+            var loaded = BlueprintTools.Deserialize(BlueprintTools.Serialize(source));
+            Assert.That(loaded.Belts[0].Component, Is.EqualTo(BeltComponentKind.Sorter));
+            Assert.That(loaded.Belts[0].SorterKind, Is.EqualTo(ResourceKind.Ore));
+            Assert.That(loaded.Belts[0].Speed, Is.EqualTo(BeltSpeed.Fast));
+        }
+
+        [Test]
         public void Blueprint_FourRotationsReturnToOriginal()
         {
             var source = new BlueprintDocument { Name = "L", Width = 4, Height = 2 };

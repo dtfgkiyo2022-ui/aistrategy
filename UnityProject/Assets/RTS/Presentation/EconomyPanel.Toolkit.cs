@@ -41,7 +41,8 @@ namespace Rts.Presentation
             {
                 return mode == Mode.None ? ""
                     : mode == Mode.Wall ? UiText.T("Drag near your base; a wall never shuts the way to the enemy.", "自陣の近くをドラッグ。敵への道を完全には塞げない")
-                    : mode == Mode.Belt ? UiText.T("Drag an L-shaped belt; Shift changes the bend order.", "ドラッグでL字ベルト。Shiftで曲がる順番を変更")
+                    : mode == Mode.Belt || mode == Mode.FastBelt ? UiText.T("Drag an L-shaped belt; Shift changes the bend order.", "ドラッグでL字ベルト。Shiftで曲がる順番を変更")
+                    : mode == Mode.Sorter ? UiText.T("T changes the resource sent left.", "Tで左へ送る資源を変更")
                     : mode == Mode.RemoveBelt ? UiText.T("Click a belt of yours.", "外す自分のベルトをクリック")
                     : mode == Mode.RemoveArea ? UiText.T("Drag a rectangle to remove your belts and buildings.", "四角くドラッグして自軍のベルトと建物を撤去")
                     : mode == Mode.BlueprintSave ? UiText.T("Drag a rectangle to save the blueprint.", "四角くドラッグして設計図を保存")
@@ -153,7 +154,9 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "belt": return Mode.Belt; case "remove-belt": return Mode.RemoveBelt;
+                case "farm": return Mode.Farm; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
+                case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
                 case "blacksmith": return Mode.Blacksmith; default: return Mode.None;
             }
@@ -234,6 +237,14 @@ namespace Rts.Presentation
             }
             else Add(rows, "build:industry-info", UiText.T("Mines and farms come with a civilisation", "採掘場・農場は文明に進んでから"), false, "", false, true);
             Add(rows, "build:belt", mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ") : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）"), true, "", mode == Mode.Belt);
+            if (economy.BeltComponents)
+            {
+                Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）"), true, "", mode == Mode.FastBelt);
+                Add(rows, "build:splitter", UiText.T("Splitter", "分岐"), true, "", mode == Mode.Splitter);
+                Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石"), true, "", mode == Mode.Sorter);
+                Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト"), true, "", mode == Mode.Underground);
+                Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
+            }
             Add(rows, "build:remove-belt", UiText.T("Remove", "ベルトを外す"), true, "", mode == Mode.RemoveBelt);
             Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);
             Add(rows, "build:facing", UiText.T("R: ", "R：") + FacingName(facing), false, "", false, true);

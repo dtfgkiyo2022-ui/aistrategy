@@ -15,6 +15,7 @@ namespace Rts.Simulation
         private const int CaravanTailMarker = 0x4352564E; // "CRVN", after forestry/masonry tails when present.
         private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the caravan tail when present.
         private const int BridgeTailMarker = 0x42524447; // "BRDG", after the masonry tail (always written with it) and the cavalry tail.
+        private const int BeltComponentsTailMarker = 0x424C5432; // "BLT2", after the optional economy tails.
         private const int ExtensionMarker = 0x4E545845; // "EXTN", after every existing civilisation tail.
         private const int ExtensionSchemaVersion = 1;
 
@@ -198,6 +199,7 @@ namespace Rts.Simulation
                 // The optional tails nest in order - monk, Age2SaveArmyFloor, fishing, gold, processing chain: each later
                 // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
             bool processingRules = c.Economy.ProcessingChain;
+            bool beltComponentsRules = c.Economy.BeltComponents;
             bool forestryRules = c.Economy.Forestry;
             bool bridgeRules = c.Economy.Bridge;
             // The bridge civilisation carries the shared market reserves through the masonry tail, as it did on its own branch.
@@ -209,7 +211,7 @@ namespace Rts.Simulation
             // the civilisation tails do - otherwise a monk-only record would read the EXTN marker as its floor value.
             bool extensionRules = ExtensionsForEncode(c).Length > 0;
             bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules
-                || extensionRules;
+                || extensionRules || beltComponentsRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -294,6 +296,19 @@ namespace Rts.Simulation
                         w.Write(c.Economy.SiegeDeploymentFoodCost); w.Write(c.Economy.SiegeDeploymentWoodCost); w.Write(c.Economy.SiegeDeploymentTicks);
                         w.Write(c.Economy.SiegeDeploymentRamTicksReduction); w.Write(c.Economy.SiegeDeploymentRamCapacityBonus);
                     }
+                    if (beltComponentsRules)
+                    {
+                        w.Write(BeltComponentsTailMarker);
+                        var e = c.Economy;
+                        w.Write(e.BeltComponents); w.Write(e.SplitterWoodCost); w.Write(e.SorterWoodCost); w.Write(e.UndergroundBeltWoodCost);
+                        w.Write(e.UndergroundBeltMaxLength); w.Write(e.FastBeltWoodCost); w.Write(e.FastBeltTicksPerCell); w.Write(e.FastBeltAge);
+                        w.Write(e.StorageSizeCells); w.Write(e.StorageWoodCost); w.Write(e.StorageWork); w.Write(e.StorageHp); w.Write(e.StorageCapacity);
+                        w.Write((uint)c.Belts.Length);
+                        foreach (var b in c.Belts)
+                        {
+                            w.Write(b.Cell); w.Write((byte)b.Component); w.Write((byte)b.SorterKind); w.Write(b.PairCell); w.Write((byte)b.Speed);
+                        }
+                    }
                 }
                 WriteExtensionSection(w, ExtensionsForEncode(c));
                 return s.ToArray();
@@ -342,7 +357,7 @@ namespace Rts.Simulation
                     e.MineSizeCells=r.ReadInt32(); e.MineWoodCost=r.ReadInt32(); e.MineWork=r.ReadInt32(); e.MineHp=r.ReadInt32(); e.MineIntervalTicks=r.ReadInt32();
                     e.SmelterSizeCells=r.ReadInt32(); e.SmelterWoodCost=r.ReadInt32(); e.SmelterWork=r.ReadInt32(); e.SmelterHp=r.ReadInt32(); e.SmeltTicks=r.ReadInt32(); e.OrePerMetal=r.ReadInt32();
                     e.BufferLimit=r.ReadInt32(); e.InfantryMetalCost=r.ReadInt32();
-                    c.Belts=new BeltDefinition[Count(r)]; for(int i=0;i<c.Belts.Length;i++) c.Belts[i]=new BeltDefinition { Cell=r.ReadInt32(), FactionId=r.ReadUInt32(), Facing=(Facing)r.ReadByte(), Item=(ResourceKind)r.ReadByte() };
+                    c.Belts=new BeltDefinition[Count(r)]; for(int i=0;i<c.Belts.Length;i++) c.Belts[i]=new BeltDefinition { Cell=r.ReadInt32(), FactionId=r.ReadUInt32(), Facing=(Facing)r.ReadByte(), Item=(ResourceKind)r.ReadByte(), PairCell=-1 };
                 }
                 if (schema >= 5)
                 {
@@ -413,7 +428,7 @@ namespace Rts.Simulation
                                     long tailStart = s.Position;
                                     int marker = r.ReadInt32();
                                     if (marker == ExtensionMarker) s.Position = tailStart;
-                                    else if (IsTailMarker(marker)) { ReadMarkedTail(r, e, marker); ReadMarkedTails(r, e); }
+                                    else if (IsTailMarker(marker)) { ReadMarkedTail(r, e, c, marker); ReadMarkedTails(r, e, c); }
                                     else
                                     {
                                         s.Position = tailStart;
@@ -425,7 +440,7 @@ namespace Rts.Simulation
                                         e.HeavyInfantryFoodCost = r.ReadInt32(); e.HeavyInfantryWoodCost = r.ReadInt32(); e.HeavyInfantrySteelCost = r.ReadInt32();
                                         e.HeavyInfantryTrainTicks = r.ReadInt32(); e.HeavyInfantryHp = r.ReadInt32(); e.HeavyInfantryDamage = r.ReadInt32();
                                         e.HeavyInfantryAttackIntervalTicks = r.ReadInt32(); e.HeavyInfantrySpeed = Fix(r); e.HeavyInfantryVision = Fix(r); e.HeavyInfantryRange = Fix(r);
-                                        ReadMarkedTails(r, e);
+                                        ReadMarkedTails(r, e, c);
                                     }
                                 }
                         }
@@ -487,28 +502,51 @@ namespace Rts.Simulation
             e.SiegeDeploymentRamTicksReduction = r.ReadInt32(); e.SiegeDeploymentRamCapacityBonus = r.ReadInt32();
         }
         /// <summary>Every marked civilisation tail, in any order the encoder wrote them, until the end of the record.</summary>
-        private static void ReadMarkedTails(BinaryReader r, EconomyRules e)
+        private static void ReadMarkedTails(BinaryReader r, EconomyRules e, ScenarioDefinition c)
         {
             while (r.BaseStream.Position < r.BaseStream.Length)
             {
                 long markerPosition = r.BaseStream.Position;
                 int marker = r.ReadInt32();
                 if (marker == ExtensionMarker) { r.BaseStream.Position = markerPosition; return; }
-                ReadMarkedTail(r, e, marker);
+                ReadMarkedTail(r, e, c, marker);
             }
         }
-        private static void ReadMarkedTail(BinaryReader r, EconomyRules e, int marker)
+        private static void ReadMarkedTail(BinaryReader r, EconomyRules e, ScenarioDefinition c, int marker)
         {
             if (marker == ForestryTailMarker) ReadForestryTail(r, e);
             else if (marker == MasonryTailMarker) ReadMasonryTail(r, e);
             else if (marker == CaravanTailMarker) ReadCaravanTail(r, e);
             else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
             else if (marker == BridgeTailMarker) ReadBridgeTail(r, e);
+            else if (marker == BeltComponentsTailMarker) ReadBeltComponentsTail(r, e, c);
             else throw new InvalidDataException("Invalid optional tail marker.");
         }
         private static bool IsTailMarker(int value)
             => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker
-                || value == BridgeTailMarker;
+                || value == BridgeTailMarker || value == BeltComponentsTailMarker;
+
+        private static void ReadBeltComponentsTail(BinaryReader r, EconomyRules e, ScenarioDefinition c)
+        {
+            e.BeltComponents = Bool(r);
+            e.SplitterWoodCost = r.ReadInt32(); e.SorterWoodCost = r.ReadInt32(); e.UndergroundBeltWoodCost = r.ReadInt32();
+            e.UndergroundBeltMaxLength = r.ReadInt32(); e.FastBeltWoodCost = r.ReadInt32(); e.FastBeltTicksPerCell = r.ReadInt32(); e.FastBeltAge = r.ReadInt32();
+            e.StorageSizeCells = r.ReadInt32(); e.StorageWoodCost = r.ReadInt32(); e.StorageWork = r.ReadInt32(); e.StorageHp = r.ReadInt32(); e.StorageCapacity = r.ReadInt32();
+            // The base belt record already carries the stable cell/faction/facing/item tuple. This tail only adds new fields.
+            int count = Count(r);
+            var records = new BeltDefinition[count];
+            for (int i = 0; i < records.Length; i++)
+                records[i] = new BeltDefinition { Cell = r.ReadInt32(), Component = (BeltComponentKind)r.ReadByte(),
+                    SorterKind = (ResourceKind)r.ReadByte(), PairCell = r.ReadInt32(), Speed = (BeltSpeed)r.ReadByte() };
+            e.BeltComponents = true;
+            for (int i = 0; i < records.Length; i++)
+                for (int j = 0; j < c.Belts.Length; j++)
+                    if (c.Belts[j].Cell == records[i].Cell)
+                    {
+                        var belt = c.Belts[j]; belt.Component = records[i].Component; belt.SorterKind = records[i].SorterKind;
+                        belt.PairCell = records[i].PairCell; belt.Speed = records[i].Speed; c.Belts[j] = belt; break;
+                    }
+        }
 
         private static void WriteExtensionSection(BinaryWriter w, ScenarioExtensionData[] extensions)
         {

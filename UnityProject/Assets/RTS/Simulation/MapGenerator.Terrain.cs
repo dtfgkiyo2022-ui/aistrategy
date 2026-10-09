@@ -139,7 +139,9 @@ namespace Rts.Simulation
 
             // 7. Soldiers and villagers as on the economy maps; the rules of mapgen-2.
             PlaceStartingUnits(s, wx, wz, ex, ez);
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain, Bridge = bridge };
+            // The current playable terrain map opts into the V3-20 belt set. Hand-authored and legacy mapgen
+            // scenarios keep the flag off, so their canonical bytes and hashes remain unchanged.
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, BeltComponents = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain, Bridge = bridge };
             // Match pacing (technical-design-v3 32.25, 32.27): the combination closest to the 15-25 minute target.
             s.Economy.AutoVillagerTarget = 20;
             s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;

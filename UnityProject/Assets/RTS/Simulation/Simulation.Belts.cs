@@ -18,15 +18,20 @@ namespace Rts.Simulation
         {
             if (!IndustryOn) return;
             if (world.BeltOrder == null) world.BeltOrder = BeltProcessingOrder();
-            int ticksPerCell = world.Config.Economy.BeltTicksPerCell;
             foreach (int cell in world.BeltOrder)
             {
                 ref var belt = ref world.Belts[cell];
                 if (belt.Item == 0) continue;
+                int ticksPerCell = BeltTicksFor(belt);
                 if (belt.Progress < ticksPerCell) belt.Progress++;
                 if (belt.Progress < ticksPerCell) continue;
-                int next = BeltNext(cell, belt.Facing);
+                int next = BeltOutputCell(cell, ref belt);
                 if (next < 0) continue;
+                // An underground entrance transfers to its paired exit without inspecting the cells between them.
+                if (belt.Component == BeltComponentKind.UndergroundEntrance)
+                {
+                    if (next >= world.Belts.Length || world.Belts[next].FactionId != belt.FactionId) continue;
+                }
                 ref var target = ref world.Belts[next];
                 if (target.FactionId == belt.FactionId)
                 {
@@ -35,21 +40,56 @@ namespace Rts.Simulation
                     target.Progress = 0;
                     belt.Item = 0;
                     belt.Progress = 0;
+                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && FeedsOwnCore(next, belt.FactionId))
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
                     belt.Item = 0;
                     belt.Progress = 0;
+                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
                 {
                     belt.Item = 0;
                     belt.Progress = 0;
+                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 // Anything else - bare ground, an enemy belt, a building that does not take it - holds the item where it is.
             }
         }
+
+        // A fast belt is never slower than a normal one, even where a scenario speeds normal belts up (test fixtures do).
+        private int BeltTicksFor(BeltState belt)
+            => belt.Fast && world.Config.Economy.BeltComponents
+                ? Math.Min(world.Config.Economy.FastBeltTicksPerCell, world.Config.Economy.BeltTicksPerCell)
+                : world.Config.Economy.BeltTicksPerCell;
+
+        private int BeltOutputCell(int cell, ref BeltState belt)
+        {
+            if (!world.Config.Economy.BeltComponents || belt.Component == BeltComponentKind.None)
+                return BeltNext(cell, belt.Facing);
+            if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
+            Facing direction = belt.Facing;
+            if (belt.Component == BeltComponentKind.Splitter)
+            {
+                // The forward exit is the first choice; the left exit is the deterministic fallback.
+                if (belt.SplitterRightNext) direction = TurnLeft(belt.Facing);
+                int preferred = BeltNext(cell, direction);
+                if (BeltCanReceive(preferred, belt.FactionId)) return preferred;
+                int alternate = BeltNext(cell, direction == belt.Facing ? TurnLeft(belt.Facing) : belt.Facing);
+                return BeltCanReceive(alternate, belt.FactionId) ? alternate : preferred;
+            }
+            if (belt.Component == BeltComponentKind.Sorter && belt.Item == belt.SorterKind)
+                direction = TurnLeft(belt.Facing);
+            return BeltNext(cell, direction);
+        }
+
+        private bool BeltCanReceive(int cell, uint faction)
+            => cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == faction && world.Belts[cell].Item == 0;
+
+        private static Facing TurnLeft(Facing facing)
+            => (Facing)(((int)facing + 3) % 4);
 
         /// <summary>
         /// Belts by distance to the end of their line, then cell id (11.3). A line that runs into a loop has no end and
@@ -71,8 +111,8 @@ namespace Rts.Simulation
                     if (state[cell] == 2) { end = distance[cell]; break; }               // joined a known line
                     state[cell] = 1;
                     walk[length++] = cell;
-                    int next = BeltNext(cell, world.Belts[cell].Facing);
-                    if (next < 0 || world.Belts[next].FactionId != world.Belts[cell].FactionId) { end = -1; break; } // this cell is the end
+                    int next = BeltPrimaryNext(cell, world.Belts[cell]);
+                    if (next < 0 || next >= cells || world.Belts[next].FactionId != world.Belts[cell].FactionId) { end = -1; break; } // this cell is the end
                     cell = next;
                 }
                 for (int i = length - 1; i >= 0; i--)
@@ -88,6 +128,12 @@ namespace Rts.Simulation
             for (int i = 0; i < cells; i++) if (world.Belts[i].FactionId != 0) order[count++] = i;
             Array.Sort(order, (a, b) => { int c = distance[a].CompareTo(distance[b]); return c != 0 ? c : a.CompareTo(b); });
             return order;
+        }
+
+        private int BeltPrimaryNext(int cell, BeltState belt)
+        {
+            if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
+            return BeltNext(cell, belt.Facing);
         }
 
         /// <summary>The cell a belt on <paramref name="cell"/> hands to, or -1 off the map.</summary>
@@ -143,6 +189,7 @@ namespace Rts.Simulation
         {
             if (!IndustryOn) return;
             var rules = world.Config.Economy;
+            bool fast = rules.BeltComponents && c.FastBelt && world.Economies[faction - 1].Age >= rules.FastBeltAge;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
@@ -150,15 +197,69 @@ namespace Rts.Simulation
             {
                 int cell = c.Cells[i];
                 var facing = c.Facings[i];
-                if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) return;
+                int cost = fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
+                if (owned >= rules.BeltLimit || economy.Wood < cost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
-                economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
-                world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held };
+                economy.Wood = checked(economy.Wood - cost);
+                world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
                 world.BeltOrder = null;
             }
+        }
+
+        /// <summary>V3-20 placement. Components are one-cell belt endpoints; underground pairs are placed atomically.</summary>
+        private void PlaceBeltComponent(uint faction, EconomyCommand c, bool held)
+        {
+            var rules = world.Config.Economy;
+            if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
+            if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
+            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)ResourceKind.BowGear) return;
+            ref var economy = ref world.Economies[faction - 1];
+            int owned = 0;
+            for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            if (c.Cells.Count == 2)
+            {
+                int entrance = c.Cells[0], exit = c.Cells[1];
+                if (owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing) || economy.Wood < rules.UndergroundBeltWoodCost) return;
+                world.Belts[entrance] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
+                    Component = BeltComponentKind.UndergroundEntrance, PairCell = exit };
+                world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
+                    Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
+                economy.Wood = checked(economy.Wood - rules.UndergroundBeltWoodCost);
+                world.BeltOrder = null;
+                return;
+            }
+            int cell = c.Cell;
+            if (owned >= rules.BeltLimit) return;
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell)
+                || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
+            BeltComponentKind component = c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
+            int cost = component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
+            if (economy.Wood < cost) return;
+            world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
+                Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
+            economy.Wood = checked(economy.Wood - cost);
+            world.BeltOrder = null;
+        }
+
+        private bool UndergroundPairIsValid(int entrance, int exit, Facing facing)
+        {
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            if (entrance < 0 || exit < 0 || entrance >= cells || exit >= cells || entrance == exit
+                || world.Belts[entrance].FactionId != 0 || world.Belts[exit].FactionId != 0
+                || !world.Map.IsPassable(entrance) || !world.Map.IsPassable(exit)
+                || IsRiverCell(entrance) || IsRiverCell(exit) || IsNodeCell(entrance) || IsNodeCell(exit)
+                || InsideAnyCore(entrance) || InsideAnyCore(exit)) return false;
+            int width = world.Config.Map.WidthCells, ex = entrance % width, ez = entrance / width;
+            int xx = exit % width, xz = exit / width, distance;
+            if (facing == Facing.North && xx == ex && xz > ez) distance = xz - ez;
+            else if (facing == Facing.East && xz == ez && xx > ex) distance = xx - ex;
+            else if (facing == Facing.South && xx == ex && xz < ez) distance = ez - xz;
+            else if (facing == Facing.West && xz == ez && xx < ex) distance = ex - xx;
+            else return false;
+            return distance <= world.Config.Economy.UndergroundBeltMaxLength;
         }
 
         /// <summary>RemoveBelt: only the own belt; the item on it is lost and the wood is not returned.</summary>

@@ -319,5 +319,51 @@ namespace Rts.Core.Tests
             }
             new Battle(two); // valid as a scenario
         }
+
+        [Test]
+        public void CurrentTerrainMapEnablesComponentsButLegacyIndustryDoesNot()
+        {
+            Assert.That(MapGenerator.GenerateTerrain(1).Economy.BeltComponents, Is.True);
+            Assert.That(MapGenerator.Generate(1, true, true).Economy.BeltComponents, Is.False);
+        }
+
+        [Test]
+        public void ComponentCommandsRoundTripIncludingPairsAndFastSpeed()
+        {
+            var sim = new Battle(Industry(12));
+            var gateway = new CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.PlaceFastBelt(1, 1, new[] { 10, 11 }, new[] { Facing.East, Facing.East }));
+            gateway.SubmitEconomy(EconomyCommand.PlaceSplitter(1, 2, 12, Facing.North));
+            gateway.SubmitEconomy(EconomyCommand.PlaceSorter(1, 3, 13, Facing.South, ResourceKind.Ore));
+            gateway.SubmitEconomy(EconomyCommand.PlaceUnderground(1, 4, 14, 17, Facing.East));
+            foreach (var input in gateway.Inputs.Where(i => i.Kind == InputKind.Economy))
+            {
+                var copy = InputBinary.Decode(InputBinary.Encode(input));
+                Assert.That(InputBinary.Encode(copy), Is.EqualTo(InputBinary.Encode(input)));
+                Assert.That(copy.Economy.Kind, Is.EqualTo(input.Economy.Kind));
+                Assert.That(copy.Economy.Cells, Is.EqualTo(input.Economy.Cells));
+                Assert.That(copy.Economy.Facings, Is.EqualTo(input.Economy.Facings));
+                Assert.That(copy.Economy.FastBelt, Is.EqualTo(input.Economy.FastBelt));
+            }
+        }
+
+        [Test]
+        public void ComponentScenarioAndDiagnosticMetadataRoundTrip()
+        {
+            var s = MapGenerator.GenerateTerrain(19);
+            var (cells, toward) = LineFromWestCore(s, 2);
+            s.Belts = new[]
+            {
+                new BeltDefinition { Cell = cells[0], FactionId = 1, Facing = toward, Component = BeltComponentKind.Splitter, Item = ResourceKind.Ore },
+                new BeltDefinition { Cell = cells[1], FactionId = 1, Facing = toward, Component = BeltComponentKind.None, Speed = BeltSpeed.Fast, Item = ResourceKind.Metal }
+            };
+            var bytes = ScenarioBinary.Encode(s);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.BeltComponents, Is.True);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+            var fields = Fields(new Battle(decoded));
+            Assert.That(fields["Belts[" + cells[0] + "].Component"], Is.EqualTo(((byte)BeltComponentKind.Splitter).ToString(CultureInfo.InvariantCulture)));
+            Assert.That(fields["Belts[" + cells[1] + "].Fast"], Is.EqualTo("1"));
+        }
     }
 }

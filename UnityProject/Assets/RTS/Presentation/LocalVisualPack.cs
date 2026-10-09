@@ -167,7 +167,9 @@ namespace Rts.Presentation
             { BuildingKind.Quarry, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.76f, 0.72f, 0.64f, 1f)) },
             { BuildingKind.Caravanserai, new BuildingSpec("Market.FBX", 2.0f, 1.15f) },
             { BuildingKind.Harbor, new BuildingSpec("BeastLair.FBX", 2.8f) },
-            { BuildingKind.EngineerCamp, new BuildingSpec("Workshop.FBX", 2.6f, 1f, new Color(0.62f, 0.72f, 0.50f, 1f)) }
+            { BuildingKind.EngineerCamp, new BuildingSpec("Workshop.FBX", 2.6f, 1f, new Color(0.62f, 0.72f, 0.50f, 1f)) },
+            // V3-20 storage: a granary in wood brown, told apart from the mine and quarry granaries by colour.
+            { BuildingKind.Storage, new BuildingSpec("Granary.FBX", 2.2f, 1f, new Color(0.78f, 0.62f, 0.44f, 1f)) }
         };
 
         /// <summary>Hides the pack so the placeholders are used; for measuring one against the other.</summary>
