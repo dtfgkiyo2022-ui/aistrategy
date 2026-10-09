@@ -324,6 +324,13 @@ namespace Rts.Presentation
 
         private void Update()
         {
+            long probe = PerfProbe.Start();
+            UpdateMeasured();
+            PerfProbe.Stop("EconomyPanel", probe);
+        }
+
+        private void UpdateMeasured()
+        {
             if (mode == Mode.None || layer == null) return;
             var camera = Camera.main;
             if (camera == null) return;

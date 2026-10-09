@@ -17,11 +17,13 @@ internal static class BenchmarkCommand
         int warmup = int.Parse(options.GetValueOrDefault("--warmup") ?? "200", CultureInfo.InvariantCulture);
         if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed"))
             throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
+        // --live: the played game's rules (LiveGameRules, all civilisations), for the cost of the match a player sees.
         var scenario = options.TryGetValue("--map-seed", out var mapSeed)
-            ? (options.ContainsKey("--large") ? MapGenerator.GenerateLarge(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), options.ContainsKey("--all-civs"))
+            ? options.ContainsKey("--live") ? LiveGameRules.Create(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), options.ContainsKey("--large"), true, false, false)
+            : (options.ContainsKey("--large") ? MapGenerator.GenerateLarge(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), options.ContainsKey("--all-civs"))
                 : MapGenerator.GenerateTerrain(ulong.Parse(mapSeed, CultureInfo.InvariantCulture), gold: options.ContainsKey("--all-civs")))
             : JsonInput.Scenario(Required("--scenario"));
-        if (options.ContainsKey("--all-civs"))
+        if (options.ContainsKey("--all-civs") && !options.ContainsKey("--live"))
         {
             scenario.Economy.Forestry = true; scenario.Economy.Masonry = true; scenario.Economy.Caravan = true;
             scenario.Economy.Cavalry = true; scenario.Economy.Bridge = true; scenario.Economy.Academy = true;
