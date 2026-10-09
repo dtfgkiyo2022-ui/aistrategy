@@ -141,7 +141,8 @@ namespace Rts.Simulation
             PlaceStartingUnits(s, wx, wz, ex, ez);
             // The current playable terrain map opts into the V3-20 belt set. Hand-authored and legacy mapgen
             // scenarios keep the flag off, so their canonical bytes and hashes remain unchanged.
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, BeltComponents = true, InfantryMetalCost = InfantryMetal, Ages = true, ProcessingChain = processingChain, Bridge = bridge };
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, BeltComponents = true, InfantryMetalCost = InfantryMetal, Ages = true,
+                ProcessingChain = processingChain, Bridge = bridge, LineRebuildDelayTicks = 200, RaidLinePriority = 1 };
             // Match pacing (technical-design-v3 32.25, 32.27): the combination closest to the 15-25 minute target.
             s.Economy.AutoVillagerTarget = 20;
             s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;

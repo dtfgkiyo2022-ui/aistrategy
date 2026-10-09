@@ -16,6 +16,7 @@ namespace Rts.Simulation
         private const int CavalryTailMarker = 0x43564C59; // "CVLY", after the caravan tail when present.
         private const int BridgeTailMarker = 0x42524447; // "BRDG", after the masonry tail (always written with it) and the cavalry tail.
         private const int BeltComponentsTailMarker = 0x424C5432; // "BLT2", after the optional economy tails.
+        private const int LineRebuildTailMarker = 0x4C524244; // "LRBD", after the optional economy tails.
         private const int ExtensionMarker = 0x4E545845; // "EXTN", after every existing civilisation tail.
         private const int ExtensionSchemaVersion = 1;
 
@@ -200,6 +201,7 @@ namespace Rts.Simulation
                 // one writes the earlier ones (with their defaults) as its envelope, so a decoder can tell them apart by length alone.
             bool processingRules = c.Economy.ProcessingChain;
             bool beltComponentsRules = c.Economy.BeltComponents;
+            bool lineRebuildRules = c.Economy.LineRebuildDelayTicks != 0 || c.Economy.RaidLinePriority != 0;
             bool forestryRules = c.Economy.Forestry;
             bool bridgeRules = c.Economy.Bridge;
             // The bridge civilisation carries the shared market reserves through the masonry tail, as it did on its own branch.
@@ -211,7 +213,7 @@ namespace Rts.Simulation
             // the civilisation tails do - otherwise a monk-only record would read the EXTN marker as its floor value.
             bool extensionRules = ExtensionsForEncode(c).Length > 0;
             bool goldRules = c.Economy.GoldEnabled || processingRules || forestryRules || masonryRules || caravanRules || cavalryRules
-                || extensionRules || beltComponentsRules;
+                || extensionRules || beltComponentsRules || lineRebuildRules;
                 bool fishingRules = c.Economy.FishingEnabled || c.Economy.FishRegrowTicks != 100
                     || c.Economy.FishAgrarianBonusPermille != 300 || c.Economy.FishReach != 6 || goldRules;
                 bool floorRules = c.Economy.Age2SaveArmyFloor != 0 || fishingRules;
@@ -308,6 +310,11 @@ namespace Rts.Simulation
                         {
                             w.Write(b.Cell); w.Write((byte)b.Component); w.Write((byte)b.SorterKind); w.Write(b.PairCell); w.Write((byte)b.Speed);
                         }
+                    }
+                    if (lineRebuildRules)
+                    {
+                        w.Write(LineRebuildTailMarker);
+                        w.Write(c.Economy.LineRebuildDelayTicks); w.Write(c.Economy.RaidLinePriority);
                     }
                 }
                 WriteExtensionSection(w, ExtensionsForEncode(c));
@@ -520,11 +527,12 @@ namespace Rts.Simulation
             else if (marker == CavalryTailMarker) ReadCavalryTail(r, e);
             else if (marker == BridgeTailMarker) ReadBridgeTail(r, e);
             else if (marker == BeltComponentsTailMarker) ReadBeltComponentsTail(r, e, c);
+            else if (marker == LineRebuildTailMarker) { e.LineRebuildDelayTicks = r.ReadInt32(); e.RaidLinePriority = r.ReadInt32(); }
             else throw new InvalidDataException("Invalid optional tail marker.");
         }
         private static bool IsTailMarker(int value)
             => value == ForestryTailMarker || value == MasonryTailMarker || value == CaravanTailMarker || value == CavalryTailMarker
-                || value == BridgeTailMarker || value == BeltComponentsTailMarker;
+                || value == BridgeTailMarker || value == BeltComponentsTailMarker || value == LineRebuildTailMarker;
 
         private static void ReadBeltComponentsTail(BinaryReader r, EconomyRules e, ScenarioDefinition c)
         {

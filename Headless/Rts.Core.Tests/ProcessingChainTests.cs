@@ -691,8 +691,9 @@ namespace Rts.Core.Tests
             Assert.That(Number(state, soldierPrefix + ".Parameters.Damage"), Is.GreaterThanOrEqualTo(match.Scenario.Economy.HeavyInfantryDamage));
         }
 
-        [Test]
-        public void EnemyDestructionDoesNotHandAnAutomaticLineToThePlayer()
+        [TestCase(0)]
+        [TestCase(20)]
+        public void EnemyDestructionDoesNotHandAnAutomaticLineToThePlayer(int rebuildDelayTicks)
         {
             int recordedCell = -1, recordedTick = -1;
             // Both runs share this setup so the line takes the same route: soldiers barely move, and faction 1 has none,
@@ -720,6 +721,7 @@ namespace Rts.Core.Tests
                 scenario.Economy.AutoInfantryQueue = 0;
                 scenario.Economy.InfantryFoodCost = 1000000; scenario.Economy.ScoutFoodCost = 1000000;
                 scenario.Economy.BeltHp = 1;
+                scenario.Economy.LineRebuildDelayTicks = rebuildDelayTicks;
             };
             var firstRun = StartAutomaticProcessing(97531UL, quiet);
             for (int tick = 1; tick <= 20000 && recordedCell < 0; tick++)
@@ -796,6 +798,17 @@ namespace Rts.Core.Tests
             var state = match.State;
             Assert.That(state["ProcessingLines[0].Manager"], Is.EqualTo("0"), "enemy damage changed the core line to manual management");
             Assert.That(state["ProcessingLines[1].Manager"], Is.EqualTo("0"), "enemy damage changed the steel line to manual management");
+            if (rebuildDelayTicks > 0)
+            {
+                long availableTick = Number(state, "ProcessingLines[1].RebuildAvailableTick");
+                Assert.That(availableTick, Is.GreaterThan(match.Simulation.Capture(1).Tick), "line rebuild cooldown was not recorded");
+                for (int i = 1; i < rebuildDelayTicks; i++)
+                {
+                    match.Steps(1);
+                    Assert.That(match.State.ContainsKey("Belts[" + destroyedCell + "].FactionId"), Is.False,
+                        "line rebuilt before its configured cooldown elapsed at offset " + i);
+                }
+            }
             // The enemy stays and may break it again, so one reappearance of the belt is the rebuild.
             bool beltWasRebuilt = false;
             for (int i = 0; i < 3000 && !beltWasRebuilt; i++)

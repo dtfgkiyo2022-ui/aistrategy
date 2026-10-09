@@ -103,6 +103,10 @@ namespace Rts.Simulation
         public bool Industry;
         /// <summary>Belt: wood per cell, ticks an item spends on a cell before it moves on, HP, and cells per faction.</summary>
         public int BeltWoodCost = 1, BeltTicksPerCell = 8, BeltHp = 50, BeltLimit = 200;
+        /// <summary>V3-32.32: ticks before the automatic economy may rebuild a line damaged by an enemy raid. 0 keeps the old immediate rebuild.</summary>
+        public int LineRebuildDelayTicks;
+        /// <summary>V3-32.32: 0 keeps the historical raid and tower target order; positive values put line targets first.</summary>
+        public int RaidLinePriority;
         /// <summary>V3-20: opt-in belt components. False preserves the original belt state and hashes.</summary>
         public bool BeltComponents;
         public int SplitterWoodCost = 5, SorterWoodCost = 7, UndergroundBeltWoodCost = 3, UndergroundBeltMaxLength = 4;

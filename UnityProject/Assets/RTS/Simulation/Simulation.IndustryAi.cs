@@ -47,6 +47,7 @@ namespace Rts.Simulation
             int coreIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
             ref var coreLine = ref world.ProcessingLines[coreIndex];
             if (!IsAutoLine(coreIndex)) return;
+            if (LineRebuildBlocked(coreIndex)) { StopLineHaulers(coreIndex); return; }
             if (!BuildingReady(coreLine.MineId))
             {
                 if (BuildingPending(coreLine.MineId)) return;
@@ -71,6 +72,7 @@ namespace Rts.Simulation
             int steelIndex = GetOrCreateLine(faction, ProcessingLineKind.Steel);
             ref var steelLine = ref world.ProcessingLines[steelIndex];
             if (!IsAutoLine(steelIndex)) return;
+            if (LineRebuildBlocked(steelIndex)) { StopLineHaulers(steelIndex); return; }
             // One AI cycle advances exactly one stage of the steel line. A lack of wood leaves that stage pending.
             if (!BuildingReady(steelLine.MineId))
             {
@@ -524,6 +526,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int coreIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreWood);
             ref var coreLine = ref world.ProcessingLines[coreIndex];
+            if (LineRebuildBlocked(coreIndex)) { StopLineHaulers(coreIndex); return; }
             if (!BindForestryCamp(faction, coreIndex, ref coreLine, 0)) return;
             if (IsAutoLine(coreIndex))
             {
@@ -533,6 +536,8 @@ namespace Rts.Simulation
                 SetLineHaulers(faction, coreLine, coreWhole ? 0 : 1);
             }
 
+            int bowIndex = LineIndex(faction, ProcessingLineKind.BowGear);
+            if (LineRebuildBlocked(bowIndex)) { StopLineHaulers(bowIndex); return; }
             uint bowCampId = FindCamp(faction, coreLine.LumberCampId);
             if (bowCampId == 0)
             {
@@ -541,7 +546,7 @@ namespace Rts.Simulation
                 PlaceLumberCamp(faction);
                 return;
             }
-            int bowIndex = GetOrCreateLine(faction, ProcessingLineKind.BowGear);
+            bowIndex = bowIndex >= 0 ? bowIndex : GetOrCreateLine(faction, ProcessingLineKind.BowGear);
             ref var bowLine = ref world.ProcessingLines[bowIndex];
             if (bowLine.LumberCampId == 0 || !BuildingAlive(bowLine.LumberCampId)) SetLineBuilding(bowIndex, BuildingKind.LumberCamp, bowCampId);
             if (bowLine.Manager == LineManager.Automatic && world.Buildings[bowLine.LumberCampId - 1].Held) bowLine.Manager = LineManager.Manual;

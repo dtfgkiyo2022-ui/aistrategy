@@ -150,6 +150,7 @@ namespace Rts.Simulation
             {
                 if (world.ProcessingLines[i].FactionId != faction || !world.ProcessingLines[i].RequestPending) continue;
                 if (!IsAutoLine(i)) { world.ProcessingLines[i].RequestPending = false; return true; }
+                if (LineRebuildBlocked(i)) { StopLineHaulers(i); return true; }
                 if (DecideRequestedLine(faction, i)) return true;
             }
             return false;
@@ -259,6 +260,58 @@ namespace Rts.Simulation
                     || line.LumberCampId == buildingId || line.FletcherId == buildingId) return i;
             }
             return -1;
+        }
+
+        private int LineForBelt(uint faction, int cell)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction) continue;
+                for (int j = 0; j < line.BeltCells.Length; j++)
+                    if (line.BeltCells[j] == cell) return i;
+            }
+            return -1;
+        }
+
+        private bool LineRebuildBlocked(int index)
+            => world.Config.Economy.LineRebuildDelayTicks > 0 && IsAutoLine(index)
+                && world.Tick < world.ProcessingLines[index].RebuildAvailableTick;
+
+        private void StopLineHaulers(int index)
+        {
+            if (index < 0 || index >= world.ProcessingLines.Length) return;
+            var line = world.ProcessingLines[index];
+            if (line.Manager == LineManager.Automatic) SetLineHaulers(line.FactionId, line, 0);
+        }
+
+        /// <summary>Enemy damage pauses an automatic line without changing its manager to Manual.</summary>
+        private void DelayLineAfterRaid(uint faction, uint buildingId, SimPoint position)
+        {
+            int index = LineForBuilding(faction, buildingId);
+            if (index >= 0) DelayLineAfterRaid(index, position);
+        }
+
+        /// <summary>Enemy damage pauses an automatic line without changing its manager to Manual.</summary>
+        private void DelayLineAfterRaid(uint faction, int cell)
+        {
+            int index = LineForBelt(faction, cell);
+            if (index >= 0) DelayLineAfterRaid(index, world.Map.Center(cell));
+        }
+
+        private void DelayLineAfterRaid(int index, SimPoint position)
+        {
+            int delay = world.Config.Economy.LineRebuildDelayTicks;
+            if (delay <= 0 || !IsAutoLine(index)) return;
+            long available = checked(world.Tick + delay);
+            ref var line = ref world.ProcessingLines[index];
+            if (available <= line.RebuildAvailableTick) return;
+            line.RebuildAvailableTick = available;
+            StopLineHaulers(index);
+            // Reuse the existing line event contract. CommandId == ulong.MaxValue distinguishes this automatic cut
+            // from a rejected line request without adding a Contract enum value.
+            commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.EconomyLineRejected,
+                (byte)(1 << (int)(line.FactionId - 1)), line.Id, ulong.MaxValue, position, delay, ReasonCode.None));
         }
 
         private void MarkLinesForBuilding(uint faction, uint buildingId)

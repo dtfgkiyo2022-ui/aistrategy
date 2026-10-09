@@ -229,6 +229,8 @@ namespace Rts.Simulation
         internal ProcessingLineKind Kind;
         internal LineManager Manager;
         internal bool RequestPending;
+        /// <summary>Tick at or after which an enemy-damaged automatic line may be rebuilt. 0 means no wait.</summary>
+        internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
         internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId;
@@ -456,14 +458,15 @@ namespace Rts.Simulation
                     Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
+            Require(e.LineRebuildDelayTicks >= 0 && e.RaidLinePriority >= 0, "Invalid line-raid rules.");
             if (e.Enabled)
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
                     && e.VillagerSpeed.Raw > 0 && e.VillagerSpeed <= Fix64.FromInt(16) && e.CarryCapacity > 0 && e.GatherIntervalTicks > 0
                     && e.VillagerFoodCost >= 0 && e.VillagerTrainTicks > 0 && e.QueueLimit > 0 && e.AutoVillagerTarget >= 0
                     && e.DropOffMargin.Raw >= 0 && e.DropOffMargin <= Fix64.FromInt(1024)
                     && e.BarracksSizeCells > 0 && e.BarracksSizeCells <= 8 && e.BarracksWoodCost >= 0 && e.BarracksWork > 0 && e.BarracksHp > 0
-                    && e.Builders > 0 && e.InfantryFoodCost >= 0 && e.InfantryWoodCost >= 0 && e.InfantryTrainTicks > 0 && e.AutoInfantryQueue >= 0,
-                    "Invalid economy rules.");
+                     && e.Builders > 0 && e.InfantryFoodCost >= 0 && e.InfantryWoodCost >= 0 && e.InfantryTrainTicks > 0 && e.AutoInfantryQueue >= 0,
+                     "Invalid economy rules.");
             else Require(c.Villagers.Length == 0 && !e.Industry, "Villagers and industry need an enabled economy.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
@@ -815,7 +818,8 @@ namespace Rts.Simulation
                 DropOffMargin = e.DropOffMargin, BarracksSizeCells = e.BarracksSizeCells, BarracksWoodCost = e.BarracksWoodCost,
                 BarracksWork = e.BarracksWork, BarracksHp = e.BarracksHp, Builders = e.Builders, InfantryFoodCost = e.InfantryFoodCost,
                 InfantryWoodCost = e.InfantryWoodCost, InfantryTrainTicks = e.InfantryTrainTicks, AutoInfantryQueue = e.AutoInfantryQueue,
-                 Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                  Industry = e.Industry, BeltWoodCost = e.BeltWoodCost, BeltTicksPerCell = e.BeltTicksPerCell, BeltHp = e.BeltHp, BeltLimit = e.BeltLimit,
+                  LineRebuildDelayTicks = e.LineRebuildDelayTicks, RaidLinePriority = e.RaidLinePriority,
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,
                  UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
                  FastBeltWoodCost = e.FastBeltWoodCost, FastBeltTicksPerCell = e.FastBeltTicksPerCell, FastBeltAge = e.FastBeltAge,
