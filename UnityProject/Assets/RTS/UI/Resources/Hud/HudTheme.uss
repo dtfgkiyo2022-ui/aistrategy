@@ -146,6 +146,44 @@
     -unity-text-align: middle-right;
 }
 
+/* Five or more resources (metal, stone and the later civilisations' goods, up to ten) did not fit one row and the
+   last one was cut off (10-10). They become small two-row chips: icon, the one- or two-character name and the value. */
+.hud-resource-row.is-dense {
+    flex-wrap: wrap;
+    align-content: center;
+}
+
+.hud-resource-row.is-dense .hud-resource {
+    min-width: 0;
+    height: 21px;
+    margin-top: 1px;
+    margin-bottom: 1px;
+    margin-right: 4px;
+    padding-left: 3px;
+    padding-right: 3px;
+    border-width: 1px;
+}
+
+.hud-resource-row.is-dense .hud-resource-icon {
+    width: 15px;
+    height: 15px;
+    margin-right: 3px;
+}
+
+.hud-resource-row.is-dense .hud-resource-text {
+    flex-direction: row;
+    align-items: center;
+}
+
+.hud-resource-row.is-dense .hud-resource-name {
+    margin-right: 3px;
+}
+
+.hud-resource-row.is-dense .hud-resource-value {
+    width: 30px;
+    font-size: 13px;
+}
+
 .hud-status-block {
     flex-direction: column;
     justify-content: center;

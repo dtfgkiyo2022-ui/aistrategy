@@ -1724,6 +1724,8 @@ namespace Rts.Presentation
         {
             resourceRow.Clear();
             slots.Clear();
+            // Five or more resources do not fit one row of full cards; they become two rows of small chips (10-10).
+            resourceRow.EnableInClassList("is-dense", resources.Count >= 5);
             foreach (var entry in resources)
             {
                 var card = new VisualElement { name = "resource-" + entry.Kind };
