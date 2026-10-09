@@ -548,12 +548,22 @@ namespace Rts.UnityHost
         }
 
         // Off by default so the usual match keeps the first two civilisations; on opens all fourteen for trying them.
-        [SerializeField] private bool allCivilisations = false;
+        // All thirteen civilisations are on by default (owner, 10-09: chosen every match otherwise). The choice is
+        // remembered on this PC; the field is read from PlayerPrefs when the match starts (ReadRememberedMatchOptions).
+        [SerializeField] private bool allCivilisations = true;
+        private const string AllCivilisationsKey = "rts.match.allCivilisations";
 
         public bool AllCivilisations
         {
             get { return allCivilisations; }
-            set { if (value == allCivilisations) return; allCivilisations = value; matchRestartRequested = true; }
+            set
+            {
+                if (value == allCivilisations) return;
+                allCivilisations = value;
+                PlayerPrefs.SetInt(AllCivilisationsKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+                matchRestartRequested = true;
+            }
         }
 
         private static ulong FreshSeed() { return (ulong)(DateTime.UtcNow.Ticks % 1000000L) + 1UL; }
@@ -738,36 +748,11 @@ namespace Rts.UnityHost
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
             // The academy needs gold on the map, so the all-civilisations match asks the generator for the gold placement too.
-            var scenario = economyMap && ScenarioMultiplier == 1 ? (largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations)
-                : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations))
+            // The rules of the played game (LiveGameRules): everything implemented is on so a test play can try it (10-09).
+            var scenario = economyMap && ScenarioMultiplier == 1
+                ? LiveGameRules.Create(mapSeed, largeMap, allCivilisations, monks, ageVictory)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             currentScenario = scenario;
-            if (economyMap && ScenarioMultiplier == 1)
-            {
-                scenario.Economy.MonksEnabled = monks;
-                scenario.Economy.AgeVictoryEnabled = ageVictory;
-                if (allCivilisations)
-                {
-                    scenario.Economy.Forestry = true;
-                    scenario.Economy.Masonry = true;
-                    scenario.Economy.Caravan = true;
-                    scenario.Economy.Cavalry = true;
-                    scenario.Economy.Bridge = true;
-                    scenario.Economy.Academy = true;
-                    scenario.Economy.Cult = true;
-                    scenario.Economy.MonksEnabled = true; // the cult trains monks, so the monk rules come with it
-                    scenario.Economy.Mountain = true;
-                    scenario.Economy.FishingCiv = true;
-                    scenario.Economy.FishingEnabled = true; // the fishing civilisation needs the river fish
-                    scenario.Economy.Tollgate = true;
-                    scenario.Economy.Metropolis = true;
-                    scenario.Economy.Sanctuary = true;
-                    scenario.Economy.CoreDefence = true;
-                    scenario.Economy.ArmyGrowth = true;
-                    scenario.Economy.EconomyScale = true;
-                    scenario.Economy.LatePush = true;
-                }
-            }
             tickSeconds = 1f / scenario.TickRateHz;
             simulation = new Battle(scenario);
             matchPack = null;
@@ -1233,6 +1218,7 @@ namespace Rts.UnityHost
             }
             // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
             UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
+            if (!smokeRunner) allCivilisations = PlayerPrefs.GetInt(AllCivilisationsKey, allCivilisations ? 1 : 0) == 1;
             if (!smokeRunner)
             {
                 workshop = GetComponent<SteamWorkshopService>();

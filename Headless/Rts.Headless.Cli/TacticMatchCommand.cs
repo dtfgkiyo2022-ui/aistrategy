@@ -35,7 +35,8 @@ internal static class TacticMatchCommand
         var scenario = hasScenario
             ? JsonInput.Scenario(scenarioPath)
             : options.ContainsKey("--terrain")
-                ? MapGenerator.GenerateTerrain(ulong.Parse(seedText, CultureInfo.InvariantCulture))
+                // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), false, true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
