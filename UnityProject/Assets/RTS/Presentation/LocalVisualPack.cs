@@ -142,7 +142,7 @@ namespace Rts.Presentation
             { BuildingKind.Barracks, new BuildingSpec("Barracks.FBX", 3.0f) },
             { BuildingKind.Farm, new BuildingSpec("Farm.FBX", 1.6f) },
             { BuildingKind.House, new BuildingSpec("House.FBX", 1.4f) },
-            { BuildingKind.DropSite, new BuildingSpec("Granary.FBX", 1.0f) },
+            { BuildingKind.DropSite, new BuildingSpec("Granary.FBX", 2.2f) }, // 1.0 squashed the tall granary flat (10-10)
             { BuildingKind.Tower, new BuildingSpec("Tower_B.FBX", 4.5f) },
             { BuildingKind.Blacksmith, new BuildingSpec("Blacksmith.FBX", 2.0f) },
             { BuildingKind.Market, new BuildingSpec("Market.FBX", 1.8f) },

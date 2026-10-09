@@ -630,8 +630,12 @@ namespace Rts.Simulation
         // Each faction's command views in commandStates order. An ended command's view never changes again, so only the
         // views not yet final are rebuilt; the frames list exactly what rebuilding every view every tick did (10-09: that
         // grew with every command of a long match and slowed it down).
-        private readonly List<CommandView>[] commandViews = { new List<CommandView>(), new List<CommandView>() };
+        // The shared arrays only grow by reallocation; an ended command's slot is written once, after which frames read it
+        // from the array, so earlier frames keep seeing what they saw (SharedPrefixList).
+        private readonly CommandView[][] commandViews = { new CommandView[64], new CommandView[64] };
+        private readonly int[] commandViewCounts = new int[2];
         private readonly List<CommandState> unsettledViews = new List<CommandState>();
+        private readonly SharedPrefixList<CommandView>[] frameCommandViews = new SharedPrefixList<CommandView>[2];
         private int viewedCommandCount;
 
         private void RefreshCommandViews()
@@ -641,15 +645,30 @@ namespace Rts.Simulation
                 var c = commandStates[viewedCommandCount];
                 uint faction = c.Order.Target.FactionId;
                 if (faction < 1 || faction > 2) continue;
-                c.ViewIndex = commandViews[faction - 1].Count;
-                commandViews[faction - 1].Add(default);
+                int slot = commandViewCounts[faction - 1]++;
+                if (slot == commandViews[faction - 1].Length)
+                {
+                    var grown = new CommandView[slot * 2];
+                    Array.Copy(commandViews[faction - 1], grown, slot);
+                    commandViews[faction - 1] = grown;
+                }
+                c.ViewIndex = slot;
                 unsettledViews.Add(c);
             }
+            var indices = new[] { new List<int>(), new List<int>() };
+            var items = new[] { new List<CommandView>(), new List<CommandView>() };
             foreach (var command in unsettledViews)
-                commandViews[command.Order.Target.FactionId - 1][command.ViewIndex] = new CommandView(command.Order.CommandId,
-                    command.Order.Target, command.Order.Kind, command.Order.Goal, command.Status, command.AcceptedTick,
-                    command.ApplyTick, command.Reason, command.Order.Source);
+            {
+                int side = (int)command.Order.Target.FactionId - 1;
+                var view = new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind, command.Order.Goal,
+                    command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Order.Source);
+                // An ended command's view is final: written once into the shared array. A live one rides with the frame.
+                if (Terminal(command)) commandViews[side][command.ViewIndex] = view;
+                else { indices[side].Add(command.ViewIndex); items[side].Add(view); }
+            }
             unsettledViews.RemoveAll(Terminal);
+            for (int side = 0; side < 2; side++)
+                frameCommandViews[side] = new SharedPrefixList<CommandView>(commandViews[side], commandViewCounts[side], indices[side], items[side]);
         }
 
         private void PublishFrames()
@@ -721,7 +740,7 @@ namespace Rts.Simulation
                             e.CommandId, e.Position, e.Value, e.Reason));
                 foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
-                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commandViews[f - 1], visibleEvents,
+                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
                     new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f),
                     RegionViewsFor(f), CellRegionsForFrame());
