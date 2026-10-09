@@ -147,5 +147,33 @@ namespace Rts.Core.Tests
             // An economy input must carry its operation.
             Assert.Throws<ArgumentException>(() => new ScheduledInput(5, InputKind.Economy, 1, 2, 0, 0, Array.Empty<PolicyOrder>(), long.MaxValue, ReasonCode.None));
         }
+
+        [Test]
+        public void RequestLineInputRoundTripsAndReplayKeepsTheHash()
+        {
+            var scenario = MapGenerator.GenerateTerrain(17UL, gold: false, processingChain: true);
+            scenario.Economy.StartFood = 10000; scenario.Economy.StartWood = 10000;
+            var command = EconomyCommand.RequestLineAt(1, 7, ProcessingLineKind.Steel, 100);
+            var input = new ScheduledInput(11, 0, 1, command);
+            var copy = InputBinary.Decode(InputBinary.Encode(input));
+            Assert.That(InputBinary.Encode(copy), Is.EqualTo(InputBinary.Encode(input)));
+            Assert.That(copy.Economy.Kind, Is.EqualTo(EconomyCommandKind.RequestLine));
+            Assert.That(copy.Economy.Line, Is.EqualTo(ProcessingLineKind.Steel));
+            Assert.That(copy.Economy.Cell, Is.EqualTo(100));
+
+            var left = new Battle(scenario); var right = new Battle(ScenarioCopy(scenario));
+            for (long tick = 1; tick <= 80; tick++)
+            {
+                var inputs = tick == 1 ? new[] { input } : Array.Empty<ScheduledInput>();
+                var replayInputs = tick == 1 ? new[] { copy } : Array.Empty<ScheduledInput>();
+                left.Step(tick, inputs); right.Step(tick, replayInputs);
+                Assert.That(left.CaptureDiagnostic().CanonicalState, Is.EqualTo(right.CaptureDiagnostic().CanonicalState), "tick " + tick);
+            }
+        }
+
+        private static ScenarioDefinition ScenarioCopy(ScenarioDefinition source)
+        {
+            return ScenarioBinary.Decode(ScenarioBinary.Encode(source));
+        }
     }
 }

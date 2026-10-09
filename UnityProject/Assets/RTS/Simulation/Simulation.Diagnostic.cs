@@ -239,6 +239,11 @@ namespace Rts.Simulation
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
                     w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
+                    if (line.RequestPending)
+                    {
+                        w.Value(n + "RequestPending", true); w.Value(n + "RequestedCell", line.RequestedCell);
+                        w.Value(n + "RequestedRegionId", line.RequestedRegionId);
+                    }
                     w.Value(n + "BeltCount", (uint)line.BeltCells.Length);
                     for (int j = 0; j < line.BeltCells.Length; j++)
                     {

@@ -161,14 +161,17 @@ namespace Rts.Contracts
     public enum EventKind : byte
     {
         CommandChanged = 1, MoveStarted = 2, Attack = 3, Death = 4,
-        Capture = 5, Reinforcement = 6, ContactChanged = 7, MatchEnded = 8, Fault = 9, AiReport = 10
+        Capture = 5, Reinforcement = 6, ContactChanged = 7, MatchEnded = 8, Fault = 9, AiReport = 10,
+        /// <summary>A requested processing line was declined by the automatic economy.</summary>
+        EconomyLineRejected = 11
     }
 
     public enum ReasonCode : byte
     {
         None = 0, Superseded = 1, UserCancelled = 2, Deadline = 3,
         StaleVersion = 4, InvalidPayload = 5, SubjectGone = 6, OwnershipChanged = 7,
-        NoPath = 8, EmptyArmy = 9, ObservationTooOld = 10, LossLimit = 11, ReserveShortfall = 12
+        NoPath = 8, EmptyArmy = 9, ObservationTooOld = 10, LossLimit = 11, ReserveShortfall = 12,
+        LineUnavailable = 13, LineResourceMissing = 14, LineWoodShortfall = 15, LinePlacementUnavailable = 16
     }
 
 }

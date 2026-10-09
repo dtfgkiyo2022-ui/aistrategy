@@ -44,6 +44,30 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void StaffResponseReadsRequestLineForLargeAndSmallShapes()
+        {
+            var frame = Frame(true, false);
+            var large = Interpret("{\"commands\":[{\"type\":\"economy\",\"kind\":\"RequestLine\",\"line\":\"Steel\",\"region\":\"区域3\"}],\"say\":\"\"}", frame);
+            Assert.That(large.EconomyCommands, Has.Count.EqualTo(1));
+            Assert.That(large.EconomyCommands[0].Kind, Is.EqualTo(EconomyCommandKind.RequestLine));
+            Assert.That(large.EconomyCommands[0].Line, Is.EqualTo(ProcessingLineKind.Steel));
+            Assert.That(large.EconomyCommands[0].RegionId, Is.EqualTo(3u));
+
+            var small = Interpret("{\"kind\":\"RequestLine\",\"line\":\"Steel\",\"region\":\"区域3\",\"scope\":\"\",\"goal\":\"\",\"control\":\"\",\"reason\":\"\"}", frame);
+            Assert.That(small.EconomyCommands, Has.Count.EqualTo(1));
+            Assert.That(small.EconomyCommands[0].Line, Is.EqualTo(ProcessingLineKind.Steel));
+        }
+
+        [Test]
+        public void StaffPromptsDocumentRequestLineForBothModelSchemas()
+        {
+            var summary = AiSituationSummary.From(Frame(true, false));
+            Assert.That(AiCommandSchema.Build(summary, AiModelCatalog.DefaultComplexLimits), Does.Contain("RequestLine"));
+            Assert.That(AiCommandSchema.BuildSmall(summary), Does.Contain("RequestLine"));
+            Assert.That(AiCommandSchema.StableInstructions, Does.Contain("北の鉱山から鋼のライン"));
+        }
+
+        [Test]
         public void DoctrineCommandIsReadAndValidatedAlongsideConcreteCommands()
         {
             var result = Interpret("{\"commands\":[{\"type\":\"doctrine\",\"kind\":\"\",\"preset\":\"concentrate\"},{\"type\":\"policy\",\"kind\":\"Defend\",\"scope\":\"全部隊\",\"goal\":\"北の拠点\"}],\"say\":\"\"}");

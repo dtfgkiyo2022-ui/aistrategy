@@ -34,6 +34,217 @@ namespace Rts.Simulation
             return index >= 0 ? index : CreateLine(faction, kind);
         }
 
+        private void RequestProcessingLine(uint faction, EconomyCommand command)
+        {
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.BowGear)
+            {
+                RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
+                return;
+            }
+            if (!LineRequestAllowed(faction, command.Line))
+            {
+                RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
+                return;
+            }
+            int requestedCell;
+            uint requestedRegion = 0;
+            if (command.TargetKind == EconomyTargetKind.Region)
+            {
+                if (!ValidRegion(command.RegionId) || !world.Regions[command.RegionId - 1].HasCenter)
+                {
+                    RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
+                    return;
+                }
+                requestedRegion = command.RegionId;
+                requestedCell = world.Map.Cell(world.Regions[command.RegionId - 1].Center);
+            }
+            else
+            {
+                requestedCell = command.Cell;
+                if (requestedCell < 0 || requestedCell >= world.Config.Map.WidthCells * world.Config.Map.HeightCells)
+                {
+                    RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
+                    return;
+                }
+            }
+            if (FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            {
+                RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
+                return;
+            }
+            int existing = LineIndex(faction, command.Line);
+            if (existing >= 0)
+            {
+                var current = world.ProcessingLines[existing];
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0)
+                {
+                    RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
+                    return;
+                }
+            }
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < InitialLineWoodCost(faction, command.Line))
+            {
+                RejectLineRequest(faction, command, ReasonCode.LineWoodShortfall, requestedCell);
+                return;
+            }
+            int index = existing >= 0 ? existing : CreateLine(faction, command.Line);
+            ref var line = ref world.ProcessingLines[index];
+            line.RequestPending = true;
+            line.RequestedCell = requestedCell;
+            line.RequestedRegionId = requestedRegion;
+        }
+
+        private bool LineRequestAllowed(uint faction, ProcessingLineKind kind)
+        {
+            if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear)
+                return ForestryAllowed(faction) && (kind != ProcessingLineKind.BowGear || world.Economies[faction - 1].Age >= 2);
+            if (!IndustryOn || !ProcessingOn || !MetalworkAllowed(faction)) return false;
+            return kind != ProcessingLineKind.Steel || ProcessingAvailable(faction);
+        }
+
+        private int InitialLineWoodCost(uint faction, ProcessingLineKind kind)
+        {
+            return kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
+                ? world.Config.Economy.LumberCampWoodCost
+                : world.Config.Economy.MineWoodCost;
+        }
+
+        private int FindRequestedResourceNode(ProcessingLineKind kind, int requestedCell)
+        {
+            ResourceKind resource = kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
+                ? ResourceKind.Wood : ResourceKind.Ore;
+            var point = world.Map.Center(requestedCell);
+            int best = -1;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (node.Definition.Kind != resource || node.Remaining <= 0) continue;
+                var distance = DistanceSquared(node.Definition.Position, point);
+                if (best < 0 || distance < DistanceSquared(world.Nodes[best].Definition.Position, point)
+                    || distance == DistanceSquared(world.Nodes[best].Definition.Position, point)
+                    && node.Definition.Id < world.Nodes[best].Definition.Id) best = i;
+            }
+            return best;
+        }
+
+        private void RejectLineRequest(uint faction, EconomyCommand command, ReasonCode reason, int cell)
+        {
+            SimPoint position = cell >= 0 && cell < world.Config.Map.WidthCells * world.Config.Map.HeightCells ? world.Map.Center(cell) : OwnCore(faction).Definition.Position;
+            commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.EconomyLineRejected,
+                (byte)(1 << (int)(faction - 1)), 0, command.IssuerSequence, position, (int)command.Line, reason));
+        }
+
+        private void RejectPendingLine(uint faction, ref ProcessingLineState line, ReasonCode reason)
+        {
+            line.RequestPending = false;
+            var request = line.RequestedRegionId == 0
+                ? EconomyCommand.RequestLineAt(faction, 0, line.Kind, line.RequestedCell)
+                : EconomyCommand.RequestLine(faction, 0, line.Kind, line.RequestedRegionId);
+            RejectLineRequest(faction, request, reason, line.RequestedCell);
+        }
+
+        private bool TryDecideRequestedLine(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (world.ProcessingLines[i].FactionId != faction || !world.ProcessingLines[i].RequestPending) continue;
+                if (!IsAutoLine(i)) { world.ProcessingLines[i].RequestPending = false; return true; }
+                if (DecideRequestedLine(faction, i)) return true;
+            }
+            return false;
+        }
+
+        private bool DecideRequestedLine(uint faction, int index)
+        {
+            ref var line = ref world.ProcessingLines[index];
+            ref var economy = ref world.Economies[faction - 1];
+            if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
+            {
+                if (!BuildingReady(line.MineId))
+                {
+                    if (BuildingPending(line.MineId)) return true;
+                    if (economy.Wood < world.Config.Economy.MineWoodCost)
+                    {
+                        line.RequestPending = false;
+                        var request = line.RequestedRegionId == 0
+                            ? EconomyCommand.RequestLineAt(faction, 0, line.Kind, line.RequestedCell)
+                            : EconomyCommand.RequestLine(faction, 0, line.Kind, line.RequestedRegionId);
+                        RejectLineRequest(faction, request, ReasonCode.LineWoodShortfall, line.RequestedCell);
+                        return true;
+                    }
+                    uint id = PlaceMine(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.MineId = id; return true;
+                }
+                if (!BuildingReady(line.SmelterId))
+                {
+                    if (BuildingPending(line.SmelterId)) return true;
+                    if (economy.Wood < world.Config.Economy.SmelterWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.SmelterId = id; return true;
+                }
+                if (line.Kind == ProcessingLineKind.Steel)
+                {
+                    if (!BuildingReady(line.KilnId))
+                    {
+                        if (BuildingPending(line.KilnId)) return true;
+                        if (economy.Wood < world.Config.Economy.CharcoalKilnWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                        uint id = PlaceKiln(faction, line.RequestedCell);
+                        if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                        line.KilnId = id; return true;
+                    }
+                    if (!BuildingReady(line.SteelworksId))
+                    {
+                        if (BuildingPending(line.SteelworksId)) return true;
+                        if (economy.Wood < world.Config.Economy.SteelworksWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                        uint id = PlaceSteelworks(faction, line);
+                        if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                        line.SteelworksId = id; return true;
+                    }
+                    var steelMine = world.Buildings[line.MineId - 1];
+                    var steelSmelter = world.Buildings[line.SmelterId - 1];
+                    var kiln = world.Buildings[line.KilnId - 1];
+                    var steelworks = world.Buildings[line.SteelworksId - 1];
+                    LaySteelLine(faction, index, steelMine, steelSmelter, kiln, steelworks);
+                }
+                else
+                {
+                    var mine = world.Buildings[line.MineId - 1];
+                    var smelter = world.Buildings[line.SmelterId - 1];
+                    LayCoreLine(faction, index, mine, smelter);
+                }
+            }
+            else
+            {
+                if (!BuildingReady(line.LumberCampId))
+                {
+                    if (BuildingPending(line.LumberCampId)) return true;
+                    if (economy.Wood < world.Config.Economy.LumberCampWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceLumberCamp(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.LumberCampId = id; return true;
+                }
+                var camp = world.Buildings[line.LumberCampId - 1];
+                if (line.Kind == ProcessingLineKind.BowGear)
+                {
+                    if (!BuildingReady(line.FletcherId))
+                    {
+                        if (BuildingPending(line.FletcherId)) return true;
+                        if (economy.Wood < world.Config.Economy.FletcherWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                        uint id = PlaceFletcher(faction, camp);
+                        if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                        line.FletcherId = id; return true;
+                    }
+                    LayBowLine(faction, index, camp, world.Buildings[line.FletcherId - 1]);
+                }
+                else LayForestryCoreLine(faction, index, camp);
+            }
+            line.RequestPending = false;
+            return true;
+        }
+
         private bool IsAutoLine(int index)
             => index >= 0 && index < world.ProcessingLines.Length && world.ProcessingLines[index].Manager == LineManager.Automatic;
 

@@ -27,6 +27,23 @@ public sealed class TacticTests
     }
 
     [Test]
+    public void TacticJsonReadsRequestLineByLineAndRegion()
+    {
+        var scenario = MapGenerator.GenerateTerrain(3, gold: false, processingChain: true);
+        scenario.Economy.Regions = true;
+        var simulation = new Battle(scenario);
+        var frame = simulation.Capture(1);
+        uint region = frame.Regions.First().Id;
+        string json = "{\"version\":1,\"commands\":[{\"type\":\"economy\",\"kind\":\"RequestLine\",\"line\":\"Steel\",\"region\":" + region + "}]}";
+        var result = TacticCommandReader.Read(json, frame);
+        Assert.That(result.Rejected, Is.Empty);
+        Assert.That(result.EconomyCommands, Has.Count.EqualTo(1));
+        Assert.That(result.EconomyCommands[0].Kind, Is.EqualTo(EconomyCommandKind.RequestLine));
+        Assert.That(result.EconomyCommands[0].Line, Is.EqualTo(ProcessingLineKind.Steel));
+        Assert.That(result.EconomyCommands[0].RegionId, Is.EqualTo(region));
+    }
+
+    [Test]
     public void ViewAddsKindNamesCompositionsSummaryAndKeepsThemDeterministic()
     {
         var armies = new[]

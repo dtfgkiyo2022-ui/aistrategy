@@ -394,6 +394,50 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void NoRequestKeepsTheDeterministicDiagnosticHash()
+        {
+            var left = StartProcessing(7001UL);
+            var right = StartProcessing(7001UL);
+            for (int tick = 0; tick < 40; tick++)
+            {
+                left.Steps(1); right.Steps(1);
+                Assert.That(left.Simulation.CaptureDiagnostic().CanonicalState,
+                    Is.EqualTo(right.Simulation.CaptureDiagnostic().CanonicalState), "tick " + tick);
+                Assert.That(left.State.Keys.Any(k => k.Contains("RequestPending", StringComparison.Ordinal)), Is.False);
+            }
+        }
+
+        [Test]
+        public void RequestedLocationChoosesTheNearestResourceForTheLine()
+        {
+            var match = StartProcessing(7002UL);
+            var ore = match.Scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Ore);
+            int requestedCell = CellOf(ore.Position);
+            match.Send(EconomyCommand.RequestLineAt(1, ++match.Sequence, ProcessingLineKind.Steel, requestedCell));
+            match.Send(EconomyCommand.Auto(1, ++match.Sequence, true));
+            match.Steps(35);
+            var state = match.State;
+            Assert.That(Number(state, "ProcessingLines.Count"), Is.GreaterThanOrEqualTo(1));
+            uint mineId = (uint)Number(state, "ProcessingLines[0].MineId");
+            Assert.That(mineId, Is.Not.EqualTo(0u));
+            int mineCell = (int)Number(state, "Buildings[" + mineId + "].OriginCell");
+            int distance = Math.Abs(mineCell % Width - requestedCell % Width) + Math.Abs(mineCell / Width - requestedCell / Width);
+            Assert.That(distance, Is.LessThanOrEqualTo(3), "the requested line's mine stays near the requested resource");
+        }
+
+        [Test]
+        public void RequestLineReportsWoodShortfallInTheTimeline()
+        {
+            var match = StartProcessing(7003UL, beforeSimulation: scenario => scenario.Economy.StartWood = 0);
+            int requestedCell = CellOf(match.Scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Ore).Position);
+            match.Send(EconomyCommand.RequestLineAt(1, ++match.Sequence, ProcessingLineKind.CoreMetal, requestedCell));
+            match.Steps(1);
+            var rejection = match.Simulation.Capture(1).Events.Single(e => e.Kind == EventKind.EconomyLineRejected);
+            Assert.That(rejection.Reason, Is.EqualTo(ReasonCode.LineWoodShortfall));
+            Assert.That(rejection.Value, Is.EqualTo((int)ProcessingLineKind.CoreMetal));
+        }
+
+        [Test]
         public void MiningAndHandHaulingFeedSteelworksAndSteelReachesTheCore()
         {
             var match = StartProcessing(2468UL);

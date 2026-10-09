@@ -130,6 +130,11 @@ namespace Rts.Tactics
                     return EconomyCommand.Advance(frame.FactionId, sequence, civ);
                 case EconomyCommandKind.SetEconomyPolicy:
                     EconomyPolicy policy = EnumRequired<EconomyPolicy>(TacticJson.String(c, "policy", true), "内政方針"); return EconomyCommand.SetPolicy(frame.FactionId, sequence, policy);
+                case EconomyCommandKind.RequestLine:
+                    ProcessingLineKind line = EnumRequired<ProcessingLineKind>(TacticJson.String(c, "line", true), "ライン");
+                    uint region = UInt(c, "region", 0);
+                    if (region == 0 || !frame.Regions.Any(x => x.Id == region)) throw new InvalidOperationException("存在しない区域です。");
+                    return EconomyCommand.RequestLine(frame.FactionId, sequence, line, region);
                 case EconomyCommandKind.ReturnEconomyToAuto:
                     return EconomyCommand.ReturnToAuto(frame.FactionId, sequence);
                 default: throw new InvalidOperationException("T-1では受け付けない内政命令です。");

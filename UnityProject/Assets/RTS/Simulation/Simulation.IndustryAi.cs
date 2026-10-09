@@ -27,6 +27,7 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            if (TryDecideRequestedLine(faction)) return;
             if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
             if (FishingAllowed(faction)) { DecideFishingHarbor(faction); return; }
             if (ForestryAllowed(faction))
@@ -624,9 +625,9 @@ namespace Rts.Simulation
         }
 
         /// <summary>Places the camp over the nearest remaining wood point, with deterministic footprint and port order.</summary>
-        private uint PlaceLumberCamp(uint faction)
+        private uint PlaceLumberCamp(uint faction, int preferredCell = -1)
         {
-            var core = OwnCore(faction).Definition.Position;
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.LumberCampSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             var order = new int[world.Nodes.Length];
             for (int i = 0; i < order.Length; i++) order[i] = i;
@@ -704,9 +705,9 @@ namespace Rts.Simulation
         }
 
         /// <summary>Ore points by distance to the core, then id; on each, the four footprints and the sides toward the core first.</summary>
-        private uint PlaceMine(uint faction)
+        private uint PlaceMine(uint faction, int preferredCell = -1)
         {
-            var core = OwnCore(faction).Definition.Position;
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.MineSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             var order = new int[world.Nodes.Length];
             for (int i = 0; i < order.Length; i++) order[i] = i;
@@ -766,9 +767,9 @@ namespace Rts.Simulation
         }
 
         /// <summary>Places the charcoal kiln in the same deterministic rings as a barracks, around the nearest wood point.</summary>
-        private uint PlaceKiln(uint faction)
+        private uint PlaceKiln(uint faction, int preferredCell = -1)
         {
-            var core = OwnCore(faction).Definition.Position;
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int bestNode = -1;
             for (int i = 0; i < world.Nodes.Length; i++)
             {

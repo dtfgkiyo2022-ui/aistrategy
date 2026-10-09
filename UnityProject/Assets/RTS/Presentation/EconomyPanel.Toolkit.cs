@@ -47,6 +47,7 @@ namespace Rts.Presentation
                     : mode == Mode.RemoveArea ? UiText.T("Drag a rectangle to remove your belts and buildings.", "四角くドラッグして自軍のベルトと建物を撤去")
                     : mode == Mode.BlueprintSave ? UiText.T("Drag a rectangle to save the blueprint.", "四角くドラッグして設計図を保存")
                     : mode == Mode.BlueprintPaste ? UiText.T("R rotates the blueprint; click to place it.", "Rで設計図を回転、クリックで配置")
+                    : mode == Mode.RequestLine ? UiText.T("Click a region or resource point for the line.", "ラインを頼む区域または資源地点をクリック")
                     : UiText.T("Click the ground (Esc cancels). R turns the output: ", "地面をクリック（Escで取消）。R で出口の向き：") + FacingName(facing);
             }
         }
@@ -90,6 +91,15 @@ namespace Rts.Presentation
             {
                 var buildMode = ParseMode(actionId.Substring(6));
                 if (buildMode != Mode.None) SetMode(buildMode);
+                return;
+            }
+            if (actionId.StartsWith("line:", StringComparison.Ordinal))
+            {
+                if (Enum.TryParse(actionId.Substring(5), true, out ProcessingLineKind line))
+                {
+                    requestedLine = line;
+                    SetMode(Mode.RequestLine);
+                }
                 return;
             }
             if (actionId == "blueprint:save") { BeginBlueprintSave(); return; }
@@ -162,6 +172,12 @@ namespace Rts.Presentation
             }
         }
 
+        private static ProcessingLineKind ParseLine(string value)
+        {
+            ProcessingLineKind line;
+            return Enum.TryParse(value, true, out line) ? line : ProcessingLineKind.CoreMetal;
+        }
+
         private void AddBlueprintActions(List<EconomyAction> rows)
         {
             Add(rows, "blueprint:save", UiText.T("Save blueprint: drag rectangle", "設計図を保存：四角くドラッグ"));
@@ -225,6 +241,16 @@ namespace Rts.Presentation
                 }
             }
             if (!economy.Industry) return;
+            if (economy.ProcessingChain)
+            {
+                Add(rows, "line:CoreMetal", UiText.T("Ask for core metal line", "コア金属ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CoreMetal);
+                Add(rows, "line:Steel", UiText.T("Ask for steel line", "鋼のラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Steel);
+            }
+            if (economy.Ages && economy.Civ == CivKind.Forestry)
+            {
+                Add(rows, "line:CoreWood", UiText.T("Ask for core wood line", "コア木材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CoreWood);
+                if (economy.Age >= 2) Add(rows, "line:BowGear", UiText.T("Ask for bow gear line", "弓具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.BowGear);
+            }
             if (!economy.Ages || economy.Civ == CivKind.Metallurgy)
             {
                 Add(rows, "build:mine", UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Mine);
