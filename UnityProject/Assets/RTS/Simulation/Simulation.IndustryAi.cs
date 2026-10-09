@@ -22,6 +22,9 @@ namespace Rts.Simulation
         private const int BridgeScoreTier2Cells = 8, BridgeScoreTier3Cells = 16;
         private const int BridgeDangerMeters = 16;
         private const long BridgeRebuildWaitTicks = 200;
+        // A requested-region value cannot legally be uint.MaxValue. It is used only after a shared steel route
+        // was tried and rejected, so the same line falls back to the dedicated mine/smelter path deterministically.
+        private const uint SharedMetalFallbackMarker = uint.MaxValue;
         private static readonly Facing[] Sides = { Facing.North, Facing.East, Facing.South, Facing.West };
 
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
@@ -66,13 +69,16 @@ namespace Rts.Simulation
             }
             var coreMine = world.Buildings[coreLine.MineId - 1];
             var coreSmelter = world.Buildings[coreLine.SmelterId - 1];
-            if (!LayCoreLine(faction, coreIndex, coreMine, coreSmelter)) SetLineHaulers(faction, coreLine, Haulers);
+            int existingSteelIndex = LineIndex(faction, ProcessingLineKind.Steel);
+            bool preserveSharedCoreRoute = IsSharedMetalLine(coreIndex, existingSteelIndex);
+            if (!preserveSharedCoreRoute && !LayCoreLine(faction, coreIndex, coreMine, coreSmelter)) SetLineHaulers(faction, coreLine, Haulers);
 
             if (!ProcessingAvailable(faction) || !LineBeltsWhole(coreIndex) || !LineBuildingsReady(coreLine)) return;
             int steelIndex = GetOrCreateLine(faction, ProcessingLineKind.Steel);
             ref var steelLine = ref world.ProcessingLines[steelIndex];
             if (!IsAutoLine(steelIndex)) return;
             if (LineRebuildBlocked(steelIndex)) { StopLineHaulers(steelIndex); return; }
+            TryBindSharedMetalLine(coreIndex, steelIndex);
             // One AI cycle advances exactly one stage of the steel line. A lack of wood leaves that stage pending.
             if (!BuildingReady(steelLine.MineId))
             {
@@ -877,6 +883,17 @@ namespace Rts.Simulation
 
         private bool LaySteelLine(uint faction, int lineIndex, BuildingState mine, BuildingState smelter, BuildingState kiln, BuildingState steelworks)
         {
+            int coreIndex = LineIndex(faction, ProcessingLineKind.CoreMetal);
+            if (IsSharedMetalLine(coreIndex, lineIndex))
+            {
+                if (LineBeltsWhole(lineIndex)) return true;
+                if (LaySharedSteelLine(faction, coreIndex, lineIndex, mine, smelter, kiln, steelworks)) return true;
+                // The shared plan is all-or-nothing. Remember a terrain/wood failure on this line, then let the
+                // existing dedicated-line stage build its own mine and smelter on the next AI cycle.
+                ref var failed = ref world.ProcessingLines[lineIndex];
+                failed.MineId = 0; failed.SmelterId = 0; failed.RequestedRegionId = SharedMetalFallbackMarker;
+                return false;
+            }
             var taken = TakenForOtherLines(faction, lineIndex);
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
@@ -895,12 +912,158 @@ namespace Rts.Simulation
             return LayRoutes(faction, toSmelter, metal, charcoal, steel);
         }
 
+        /// <summary>
+        /// V3-20 automatic economy policy: when the component flag is on, reuse the completed core metal line for
+        /// steel. The splitter is put on the smelter output itself; its forward branch remains the core route and
+        /// its left branch is the deterministic metal input route to the steelworks.
+        /// </summary>
+        private void TryBindSharedMetalLine(int coreIndex, int steelIndex)
+        {
+            if (!world.Config.Economy.BeltComponents || coreIndex < 0 || steelIndex < 0
+                || coreIndex >= world.ProcessingLines.Length || steelIndex >= world.ProcessingLines.Length || coreIndex == steelIndex) return;
+            ref var core = ref world.ProcessingLines[coreIndex];
+            ref var steel = ref world.ProcessingLines[steelIndex];
+            if (core.Kind != ProcessingLineKind.CoreMetal || steel.Kind != ProcessingLineKind.Steel
+                || core.Manager != LineManager.Automatic || steel.Manager != LineManager.Automatic
+                || steel.RequestedRegionId == SharedMetalFallbackMarker || steel.MineId != 0 || steel.SmelterId != 0) return;
+            // The caller of the autonomous path already gates on a whole core route. The request path may reach this
+            // helper one decision earlier, so a recorded route plus ready buildings is the stable shared-plan input.
+            if (!LineBuildingsReady(core) || core.BeltCells.Length == 0) return;
+            steel.MineId = core.MineId;
+            steel.SmelterId = core.SmelterId;
+        }
+
+        private bool IsSharedMetalLine(int coreIndex, int steelIndex)
+        {
+            if (coreIndex < 0 || steelIndex < 0 || coreIndex >= world.ProcessingLines.Length || steelIndex >= world.ProcessingLines.Length)
+                return false;
+            var core = world.ProcessingLines[coreIndex];
+            var steel = world.ProcessingLines[steelIndex];
+            return core.Kind == ProcessingLineKind.CoreMetal && steel.Kind == ProcessingLineKind.Steel
+                && core.MineId != 0 && core.MineId == steel.MineId && core.SmelterId != 0 && core.SmelterId == steel.SmelterId;
+        }
+
+        private bool LaySharedSteelLine(uint faction, int coreIndex, int steelIndex, BuildingState mine, BuildingState smelter,
+            BuildingState kiln, BuildingState steelworks)
+        {
+            int smelterOutput = OutputCell(smelter);
+            if (smelterOutput < 0 || smelterOutput >= world.Belts.Length) return false;
+            var taken = TakenForOtherLines(faction, coreIndex);
+            var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
+            if (toSmelter.cells == null) return false;
+            foreach (int cell in toSmelter.cells) taken[cell] = true;
+
+            var recordedCore = world.ProcessingLines[coreIndex];
+            int outputIndex = Array.IndexOf(recordedCore.BeltCells, smelterOutput);
+            if (outputIndex < 0 || outputIndex >= recordedCore.BeltFacings.Length)
+            { return false; }
+            for (int splitterIndex = outputIndex; splitterIndex < recordedCore.BeltCells.Length; splitterIndex++)
+            {
+                int splitter = recordedCore.BeltCells[splitterIndex];
+                Facing facing = recordedCore.BeltFacings[splitterIndex];
+                if (!SplitterPlacementAllowed(faction, splitter)) continue;
+                int forward = BeltNext(splitter, facing), left = BeltNext(splitter, TurnLeft(facing));
+                int suffixLength = recordedCore.BeltCells.Length - splitterIndex - 1;
+                var coreCells = new int[suffixLength]; var coreFacings = new Facing[suffixLength];
+                for (int i = 0; i < suffixLength; i++)
+                {
+                    coreCells[i] = recordedCore.BeltCells[splitterIndex + 1 + i];
+                    coreFacings[i] = recordedCore.BeltFacings[splitterIndex + 1 + i];
+                }
+                if (suffixLength > 0 && coreCells[0] != forward) continue;
+                var branchTaken = (bool[])taken.Clone(); branchTaken[splitter] = true;
+                var coreRoute = (coreCells, coreFacings);
+                foreach (int cell in coreRoute.coreCells) branchTaken[cell] = true;
+                var metalRoute = SplitterExitRoute(faction, left, branchTaken, next => InFootprint(steelworks, next));
+                if (metalRoute.cells == null) continue;
+                foreach (int cell in metalRoute.cells) branchTaken[cell] = true;
+                Facing metalSide = metalRoute.cells.Length == 0 ? FacingFrom(splitter, left)
+                    : metalRoute.facings[metalRoute.facings.Length - 1];
+                var charcoal = BeltRoute(faction, OutputCell(kiln), branchTaken,
+                    (from, next) => InFootprint(steelworks, next) && FacingFrom(from, next) != metalSide);
+                if (charcoal.cells == null) continue;
+                foreach (int cell in charcoal.cells) branchTaken[cell] = true;
+                var steel = BeltRoute(faction, OutputCell(steelworks), branchTaken, next => FeedsOwnCore(next, faction));
+                if (steel.cells == null) continue;
+
+                var splitterRoute = (new[] { splitter }, new[] { facing });
+                if (!CanLaySharedRoutes(faction, splitter, facing, toSmelter, coreRoute, metalRoute, charcoal, steel)) continue;
+                if (!LayAutomaticSplitter(faction, splitter, facing)) continue;
+                SetLineBelts(coreIndex, toSmelter, splitterRoute, coreRoute);
+                SetLineBelts(steelIndex, toSmelter, splitterRoute, metalRoute, charcoal, steel);
+                LayRoutes(faction, toSmelter, coreRoute, metalRoute, charcoal, steel);
+                return true;
+            }
+            return false;
+        }
+
+        private (int[] cells, Facing[] facings) SplitterExitRoute(uint faction, int start, bool[] taken, Func<int, bool> into)
+        {
+            if (start < 0 || start >= world.Belts.Length) return (null, null);
+            if (into(start)) return (Array.Empty<int>(), Array.Empty<Facing>());
+            return BeltRoute(faction, start, taken, into);
+        }
+
+        private bool SplitterPlacementAllowed(uint faction, int cell)
+        {
+            if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || IsRiverCell(cell)
+                || IsNodeCell(cell) || InsideAnyCore(cell)) return false;
+            var belt = world.Belts[cell];
+            if (belt.FactionId == 0) return true;
+            return belt.FactionId == faction && !belt.Held
+                && (belt.Component == BeltComponentKind.None || belt.Component == BeltComponentKind.Splitter);
+        }
+
+        private bool CanLaySharedRoutes(uint faction, int splitter, Facing facing,
+            params (int[] cells, Facing[] facings)[] routes)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int owned = 0, added = 0, wood = 0;
+            var seen = new bool[world.Belts.Length];
+            for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            var splitBelt = world.Belts[splitter];
+            if (splitBelt.FactionId == 0 || splitBelt.Component == BeltComponentKind.None) wood = checked(wood + world.Config.Economy.SplitterWoodCost);
+            else if (splitBelt.FactionId != faction || splitBelt.Held || splitBelt.Component != BeltComponentKind.Splitter || splitBelt.Facing != facing) return false;
+            foreach (var route in routes)
+                for (int i = 0; i < route.cells.Length; i++)
+                {
+                    int cell = route.cells[i];
+                    if (cell < 0 || cell >= world.Belts.Length || seen[cell]) continue;
+                    seen[cell] = true;
+                    var belt = world.Belts[cell];
+                    if (belt.FactionId == faction)
+                    {
+                        if (belt.Held || belt.Facing != route.facings[i]) return false;
+                        continue;
+                    }
+                    if (belt.FactionId != 0) return false;
+                    added++; wood = checked(wood + world.Config.Economy.BeltWoodCost);
+                }
+            return owned + added <= world.Config.Economy.BeltLimit && economy.Wood >= wood;
+        }
+
+        private bool LayAutomaticSplitter(uint faction, int cell, Facing facing)
+        {
+            ref var belt = ref world.Belts[cell];
+            if (belt.FactionId == faction && belt.Component == BeltComponentKind.Splitter)
+                return !belt.Held && belt.Facing == facing;
+            if (!SplitterPlacementAllowed(faction, cell)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < world.Config.Economy.SplitterWoodCost) return false;
+            economy.Wood = checked(economy.Wood - world.Config.Economy.SplitterWoodCost);
+            belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
+            belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
+            world.BeltOrder = null;
+            return true;
+        }
+
         private bool[] TakenForOtherLines(uint faction, int currentLine)
         {
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 if (i == currentLine || world.ProcessingLines[i].FactionId != faction) continue;
+                if (LinesShareAutomaticMetalRoute(currentLine, i)) continue;
                 foreach (int cell in world.ProcessingLines[i].BeltCells)
                     if (cell >= 0 && cell < taken.Length && world.Belts[cell].FactionId == faction) taken[cell] = true;
             }

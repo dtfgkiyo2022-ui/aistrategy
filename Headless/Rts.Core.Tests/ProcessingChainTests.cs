@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
@@ -117,9 +118,10 @@ namespace Rts.Core.Tests
             return (null, null);
         }
 
-        private static ProcessingMatch StartProcessing(ulong seed, int advances = 2, CivKind civ = CivKind.Metallurgy, Action<ScenarioDefinition> beforeSimulation = null)
+        private static ProcessingMatch StartProcessing(ulong seed, int advances = 2, CivKind civ = CivKind.Metallurgy,
+            Action<ScenarioDefinition> beforeSimulation = null, bool components = false)
         {
-            var scenario = MapGenerator.Generate(seed, true, true);
+            var scenario = components ? MapGenerator.GenerateTerrain(seed, false, true) : MapGenerator.Generate(seed, true, true);
             scenario.Map.Terrain = new byte[scenario.Map.WidthCells * scenario.Map.HeightCells];
             scenario.Economy.Ages = true; scenario.Economy.ProcessingChain = true;
             scenario.Economy.StartFood = 10000; scenario.Economy.StartWood = 10000;
@@ -146,9 +148,9 @@ namespace Rts.Core.Tests
             return match;
         }
 
-        private static ProcessingMatch StartAutomaticProcessing(ulong seed, Action<ScenarioDefinition> beforeSimulation = null)
+        private static ProcessingMatch StartAutomaticProcessing(ulong seed, Action<ScenarioDefinition> beforeSimulation = null, bool components = false)
         {
-            var match = StartProcessing(seed, beforeSimulation: beforeSimulation);
+            var match = StartProcessing(seed, beforeSimulation: beforeSimulation, components: components);
             match.Send(EconomyCommand.Auto(1, ++match.Sequence, true));
             return match;
         }
@@ -533,6 +535,48 @@ namespace Rts.Core.Tests
             Assert.That(match.State["ProcessingLines[1].Manager"], Is.EqualTo("0"), "line return did not apply: " + string.Join(", ", match.State.Where(p => p.Key.StartsWith("ProcessingLines[1]", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
             for (int i = 0; i < 1000; i++) match.Steps(1);
             Assert.That(match.State.ContainsKey("Belts[" + cell + "].FactionId"), Is.True, "returning a line to auto fills its missing belt");
+        }
+
+        [Test]
+        public void BeltComponentsAutomaticSteelSharesCoreMetalWithSplitterAndReplays()
+        {
+            var match = StartAutomaticProcessing(97531UL, scenario =>
+            {
+                scenario.Map.BlockedCellIds = Array.Empty<int>();
+                scenario.Economy.BeltLimit = 1000;
+                scenario.Economy.MineWork = 1; scenario.Economy.SmelterWork = 1;
+                scenario.Economy.CharcoalKilnWork = 1; scenario.Economy.SteelworksWork = 1;
+            }, components: true);
+            for (int i = 0; i < 3500; i++) match.Steps(1);
+            var state = match.State;
+            Assert.That(Number(state, "ProcessingLines.Count"), Is.GreaterThanOrEqualTo(2), "旗オンの鋼ラインが作られていない: "
+                + string.Join(", ", state.Where(p => p.Key.StartsWith("Economy[1]", StringComparison.Ordinal)
+                    || p.Key.StartsWith("ProcessingLines", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
+            Assert.That(Number(state, "ProcessingLines[1].MineId"), Is.EqualTo(Number(state, "ProcessingLines[0].MineId")), "鋼ラインが鉱山を共有していない: "
+                + string.Join(", ", state.Where(p => p.Key.StartsWith("ProcessingLines[", StringComparison.Ordinal)).Select(p => p.Key + "=" + p.Value)));
+            Assert.That(Number(state, "ProcessingLines[1].SmelterId"), Is.EqualTo(Number(state, "ProcessingLines[0].SmelterId")), "鋼ラインが精錬所を共有していない");
+            int factionMines = Enumerable.Range(1, (int)Number(state, "Buildings.Count"))
+                .Count(id => state["Buildings[" + id + "].FactionId"] == "1"
+                    && state["Buildings[" + id + "].Kind"] == ((byte)BuildingKind.Mine).ToString(CultureInfo.InvariantCulture));
+            Assert.That(factionMines, Is.EqualTo(1), "旗オンでは専用の鋼鉱山を増設しない");
+            int coreBelts = (int)Number(state, "ProcessingLines[0].BeltCount");
+            Assert.That(Enumerable.Range(0, coreBelts).Any(i =>
+            {
+                int cell = (int)Number(state, "ProcessingLines[0].Belts[" + i + "].Cell");
+                return state.ContainsKey("Belts[" + cell + "].Component")
+                    && state["Belts[" + cell + "].Component"] == ((byte)BeltComponentKind.Splitter).ToString(CultureInfo.InvariantCulture);
+            }), Is.True, "コア金属ラインの精錬所出口に分岐器がない");
+            Assert.That(Number(state, "Economy[1].Steel"), Is.GreaterThan(0), "分岐先の製鋼所から鋼が届いていない");
+
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, match.Scenario, match.Gateway.Inputs, match.Simulation.Capture(1).Tick, identity);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, identity);
+                Assert.That(replay.FirstMismatchTick, Is.Null, "分岐を使う自動内政の記録・再生ハッシュが一致しない");
+                Assert.That(replay.IsFault, Is.False);
+            }
         }
 
         [Test]

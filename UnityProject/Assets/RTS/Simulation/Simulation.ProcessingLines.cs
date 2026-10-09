@@ -162,6 +162,8 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
+                if (line.Kind == ProcessingLineKind.Steel)
+                    TryBindSharedMetalLine(LineIndex(faction, ProcessingLineKind.CoreMetal), index);
                 if (!BuildingReady(line.MineId))
                 {
                     if (BuildingPending(line.MineId)) return true;
@@ -334,22 +336,50 @@ namespace Rts.Simulation
         private void MarkLineManual(int index)
         {
             if (index < 0 || index >= world.ProcessingLines.Length) return;
-            ref var line = ref world.ProcessingLines[index];
-            if (line.Manager == LineManager.Manual) return;
-            line.Manager = LineManager.Manual;
-            SetLineHaulers(line.FactionId, line, 0);
+            uint faction = world.ProcessingLines[index].FactionId;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (i != index && !LinesShareAutomaticMetalRoute(index, i)) continue;
+                ref var line = ref world.ProcessingLines[i];
+                if (line.FactionId != faction) continue;
+                if (line.Manager == LineManager.Manual) continue;
+                line.Manager = LineManager.Manual;
+                SetLineHaulers(faction, line, 0);
+            }
         }
 
         private void ReturnLineToAuto(uint faction, uint lineId)
         {
+            int target = -1;
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
+                if (world.ProcessingLines[i].FactionId == faction && world.ProcessingLines[i].Id == lineId) { target = i; break; }
+            }
+            if (target < 0) return;
+            // A splitter-coupled core/steel pair is one human-owned unit. Returning either side returns both;
+            // otherwise a player could unknowingly leave half of the shared route under automatic control.
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                if (i != target && !LinesShareAutomaticMetalRoute(target, i)) continue;
                 ref var line = ref world.ProcessingLines[i];
-                if (line.FactionId != faction || line.Id != lineId) continue;
+                if (line.FactionId != faction) continue;
                 line.Manager = LineManager.Automatic;
                 ClearLineHeld(faction, line);
-                return;
             }
+        }
+
+        private bool LinesShareAutomaticMetalRoute(int first, int second)
+        {
+            if (first < 0 || second < 0 || first >= world.ProcessingLines.Length || second >= world.ProcessingLines.Length) return false;
+            var a = world.ProcessingLines[first];
+            var b = world.ProcessingLines[second];
+            if (a.FactionId != b.FactionId || a.Kind != ProcessingLineKind.CoreMetal && a.Kind != ProcessingLineKind.Steel
+                || b.Kind != ProcessingLineKind.CoreMetal && b.Kind != ProcessingLineKind.Steel) return false;
+            if (a.MineId != 0 && a.MineId == b.MineId || a.SmelterId != 0 && a.SmelterId == b.SmelterId) return true;
+            for (int i = 0; i < a.BeltCells.Length; i++)
+                for (int j = 0; j < b.BeltCells.Length; j++)
+                    if (a.BeltCells[i] == b.BeltCells[j]) return true;
+            return false;
         }
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
