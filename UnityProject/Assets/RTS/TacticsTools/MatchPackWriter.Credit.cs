@@ -12,7 +12,7 @@ namespace Rts.Tactics
     public sealed partial class MatchPackWriter
     {
         private static readonly CommandSource[] CreditSources =
-            { CommandSource.Human, CommandSource.Doctrine, CommandSource.Ai };
+            { CommandSource.Human, CommandSource.Doctrine, CommandSource.Ai, CommandSource.Tactic };
         private readonly CreditFaction[] creditFactions = { new CreditFaction(1), new CreditFaction(2) };
         private readonly List<CreditHighlight> creditHighlights = new List<CreditHighlight>();
         private bool creditStarted;
@@ -361,7 +361,12 @@ namespace Rts.Tactics
         }
 
         private static string ObjectiveKey(GoalKind kind, uint id) => ((byte)kind).ToString(CultureInfo.InvariantCulture) + ":" + id.ToString(CultureInfo.InvariantCulture);
-        private static string SourceLabel(CommandSource source) => source == CommandSource.Human ? "人（Human）" : source == CommandSource.Ai ? "お任せ（Ai）" : "戦術（Doctrine）";
+        private static string SourceLabel(CommandSource source)
+            => source == CommandSource.Human ? "人（Human）"
+                : source == CommandSource.Doctrine ? "お任せの方針（Doctrine）"
+                : source == CommandSource.Ai ? "参謀（Ai）"
+                : source == CommandSource.Tactic ? "戦術（Tactic）"
+                : source.ToString();
         private static string Fraction(long numerator, long denominator) => FractionValue(numerator, denominator).ToString("0.####", CultureInfo.InvariantCulture);
         private static decimal FractionValue(long numerator, long denominator) => denominator == 0 ? 0m : numerator / (decimal)denominator;
 

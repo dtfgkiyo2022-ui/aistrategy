@@ -173,7 +173,7 @@ public enum PolicyKind : byte {
     Focus = 1, AllowAbandon = 2, Retreat = 3, MaintainReserve = 4,
     Defend = 5, Scout = 6, ReturnToAuto = 7
 }
-public enum CommandSource : byte { Human = 1, Doctrine = 2, Ai = 3 }
+public enum CommandSource : byte { Human = 1, Doctrine = 2, Ai = 3, Tactic = 4 }
 public enum CommandStatus : byte {
     Interpreting = 1, Pending = 2, Executing = 3, Completed = 4,
     Cancelled = 5, Expired = 6, Impossible = 7
@@ -244,7 +244,7 @@ EndのArrivedは対象軍団の全生存兵が目標半径4 m以内、ObjectiveO
 
 全軍は自軍の全軍団、軍団は当該軍団、拠点はHomeObjectiveまたは現在の任務先がその拠点の軍団に影響する。予約時と適用時の両方でこの重なりを評価し、実行開始時に対象軍団リストを固定する。配属が変わった軍団に古い提案を適用しないよう、その軍団の任務版も依存に含める。
 
-優先はゲームルール＞有効な人間明示＞既定教範＞AI。Priorityの数字で権限を越えられない。人間同士で矛盾する同一フィールドは受理順の新しい指示が優先（全軍と軍団でも同じ）。Focusの目標とMaintainReserveの比率など独立フィールドは併存する。従って新しい全軍指示は古い局所指示の矛盾部分を置換し、新しい局所指示は全軍指示への例外となる。置換された古い指示を取消後に復活させない。残る非矛盾制約と既定方針を再合成する。
+優先はゲームルール＞有効な人間明示＞既定教範＞AI／戦術。Priorityの数字で権限を越えられない。人間同士で矛盾する同一フィールドは受理順の新しい指示が優先（全軍と軍団でも同じ）。Focusの目標とMaintainReserveの比率など独立フィールドは併存する。従って新しい全軍指示は古い局所指示の矛盾部分を置換し、新しい局所指示は全軍指示への例外となる。置換された古い指示を取消後に復活させない。残る非矛盾制約と既定方針を再合成する。`CommandSource.Tactic` はプレイヤーが実行する戦術プログラムの命令を表し、`Ai`（参謀の返答）と同じ権限・観測の古さ・置換規則で扱う。
 
 人間の対象確定時、次の入力tickでReserveを適用し、その対象Revisionを増やして予約する。現在実行中の方針と部隊行動は続くが、重なる古いAI提案は受付・適用の両段階で拒否する。解釈成功Resolveは同じ予約Revisionを使う。取消・失効・完了・実行不能・ReturnToAutoでも対象Revisionを増やし、過去の返答を復活させない。AI/既定教範の受理もその対象Revisionを1増やすが、事前に依存の完全一致を必要とする。
 

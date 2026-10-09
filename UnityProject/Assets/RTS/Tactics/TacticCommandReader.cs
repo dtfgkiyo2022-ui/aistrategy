@@ -91,7 +91,7 @@ namespace Rts.Tactics
             string flagText = TacticJson.String(c, "expire", false); if (!string.IsNullOrEmpty(flagText) && !EnumValue(flagText, out flags)) throw new InvalidOperationException("失効条件が不明です。");
             // An AI order must be able to expire when the view it was based on gets too old (Simulation.Payload).
             flags |= ExpireFlags.ObservationTooOld;
-            return new PolicyOrder(0, 0, CommandSource.Ai, targetScope, kind, goal, (byte)priority, new LossBudget((ushort)loss), end, (ushort)reserve, 0, Array.Empty<PolicyVersion>(), frame.Tick, new Expiration(validUntil, maxAge, flags));
+            return new PolicyOrder(0, 0, CommandSource.Tactic, targetScope, kind, goal, (byte)priority, new LossBudget((ushort)loss), end, (ushort)reserve, 0, Array.Empty<PolicyVersion>(), frame.Tick, new Expiration(validUntil, maxAge, flags));
         }
 
         private static EconomyCommand ParseEconomy(Dictionary<string, object> c, FactionFrame frame, int index)

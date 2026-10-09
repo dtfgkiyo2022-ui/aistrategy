@@ -118,7 +118,7 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic
 
 ## 人の操作と組み合わせる
 
-`view.orders` には、いま効いている自分の命令が並びます。`source` と `kind` を見ると、人が攻めているのか、戦術や定型方針が動いているのかを判断できます。`view.ownArmies[i].controlledBy` は、その部隊をいま誰の命令が動かしているか（`Human` / `Doctrine` / `Ai` / `None`）です。
+`view.orders` には、いま効いている自分の命令が並びます。`source` と `kind` を見ると、人が攻めているのか、戦術や定型方針が動いているのかを判断できます。`view.ownArmies[i].controlledBy` は、その部隊をいま誰の命令が動かしているか（`Human`＝人 / `Doctrine`＝お任せの方針 / `Tactic`＝戦術（あなたの戦術を含む） / `Ai`＝参謀（言葉で話しかけた AI） / `None`）です。`Tactic` は 2026-10-09 に足しました（それまで戦術の命令も `Ai` でした）。
 
 人が動かしている部隊には命令を出さず、残りの部隊で守りや別の仕事を考えてみてください。人が攻めているときは、コアや拠点をどの部隊で守るかを見直すのも手です。人が何もしていないときは、全軍を同じ仕事に固定せず、守備と内政の組み合わせを試してみましょう。
 

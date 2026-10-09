@@ -21,7 +21,9 @@ namespace Rts.Core.Tests
                     new CommandView(1, target, PolicyKind.Defend, new PolicyGoal(GoalKind.Outpost, 1, default),
                         CommandStatus.Pending, 1, 2, ReasonCode.None, CommandSource.Doctrine),
                     new CommandView(2, target, PolicyKind.Retreat, default, CommandStatus.Pending, 1, 2,
-                        ReasonCode.None, CommandSource.Ai)
+                        ReasonCode.None, CommandSource.Ai),
+                    new CommandView(3, target, PolicyKind.Focus, default, CommandStatus.Pending, 1, 2,
+                        ReasonCode.None, CommandSource.Tactic)
                 };
                 var frame = new FactionFrame(1, 1, Array.Empty<RenderUnit>(),
                     new FactionObservation(1, 1, Array.Empty<OwnArmyView>(), Array.Empty<VisibleEnemy>(),
@@ -33,6 +35,7 @@ namespace Rts.Core.Tests
                 var text = timeline.Entries.Select(entry => entry.Text).ToArray();
                 Assert.That(text.Any(value => value.Contains("お任せの方針の命令 #1")), Is.True);
                 Assert.That(text.Any(value => value.Contains("参謀の命令 #2")), Is.True);
+                Assert.That(text.Any(value => value.Contains("戦術の命令 #3")), Is.True);
             }
             finally
             {

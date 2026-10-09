@@ -95,7 +95,7 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void MatchPackCreditSeparatesHumanAndDoctrineDeterministicallyAndStaysFogLocal()
+        public void MatchPackCreditSeparatesHumanDoctrineStaffAndTacticDeterministicallyAndStaysFogLocal()
         {
             string first = WriteMixedCreditPack("credit-first");
             string second = WriteMixedCreditPack("credit-second");
@@ -106,13 +106,15 @@ namespace Rts.Core.Tests
                 Assert.That(factions.GetArrayLength(), Is.EqualTo(2));
                 foreach (var faction in factions.EnumerateArray())
                 {
-                    Assert.That(faction.GetProperty("sources").EnumerateArray().Count(), Is.EqualTo(3));
+                    Assert.That(faction.GetProperty("sources").EnumerateArray().Count(), Is.EqualTo(4));
                     Assert.That(faction.GetProperty("commands").GetProperty("Human").GetProperty("issued").GetInt32(), Is.GreaterThan(0));
                 }
                 var westSources = factions[0].GetProperty("sources").EnumerateArray()
                     .ToDictionary(s => s.GetProperty("source").GetString(), s => s.GetProperty("timeTicks").GetInt64());
                 Assert.That(westSources["Human"], Is.GreaterThan(0));
                 Assert.That(westSources["Doctrine"], Is.GreaterThan(0));
+                Assert.That(westSources.ContainsKey("Tactic"), Is.True);
+                Assert.That(factions[0].GetProperty("commands").GetProperty("Tactic").GetProperty("issued").GetInt32(), Is.GreaterThan(0));
                 Assert.That(credit.RootElement.GetProperty("limitations")[0].GetString(), Does.Contain("霧"));
                 Assert.That(first, Does.Not.Contain("CanonicalState"));
             }
@@ -141,7 +143,14 @@ namespace Rts.Core.Tests
                 new EndCondition(EndKind.UntilReplaced, 0), 0, simulation.Revision(doctrineScope),
                 simulation.Versions(doctrineScope).Where(v => !v.Scope.Equals(doctrineScope)).ToArray(), 0,
                 new Expiration(1000, 0, ExpireFlags.None));
+            var tacticScope = new ScopeKey(1, ScopeKind.Army, 3);
+            var tactic = new PolicyOrder(901, 0, CommandSource.Tactic, tacticScope, PolicyKind.Defend,
+                new PolicyGoal(GoalKind.Outpost, ownOutpost.Id, default), 10, new LossBudget(1000),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, simulation.Revision(tacticScope),
+                simulation.Versions(tacticScope).Where(v => !v.Scope.Equals(tacticScope)).ToArray(), 0,
+                new Expiration(1000, 20, ExpireFlags.ObservationTooOld));
             gateway.Propose(1, 2, new[] { doctrine }, 1);
+            gateway.Propose(1, 3, new[] { tactic }, 1);
             string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, name);
             var pack = new MatchPackWriter(path, scenario, "mixed", "auto");
             pack.RecordInitial(simulation);

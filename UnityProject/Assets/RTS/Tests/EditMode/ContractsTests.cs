@@ -12,7 +12,7 @@ namespace Rts.Tests.EditMode
     {
         [TestCase(typeof(ScopeKind), "All=1,Army=2,Outpost=3,Region=4")]
         [TestCase(typeof(PolicyKind), "Focus=1,AllowAbandon=2,Retreat=3,MaintainReserve=4,Defend=5,Scout=6,ReturnToAuto=7")]
-        [TestCase(typeof(CommandSource), "Human=1,Doctrine=2,Ai=3")]
+        [TestCase(typeof(CommandSource), "Human=1,Doctrine=2,Ai=3,Tactic=4")]
         [TestCase(typeof(CommandStatus), "Interpreting=1,Pending=2,Executing=3,Completed=4,Cancelled=5,Expired=6,Impossible=7")]
         [TestCase(typeof(GoalKind), "None=0,Point=1,Outpost=2,Core=3")]
         [TestCase(typeof(EndKind), "UntilReplaced=1,Arrived=2,ObjectiveOwned=3,AtTick=4,LossReached=5")]

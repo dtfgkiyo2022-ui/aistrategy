@@ -208,7 +208,7 @@ namespace Rts.Simulation
                 var region = world.Regions[i];
                 var military = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == faction
                     && c.Order.Target.Kind == ScopeKind.Region && c.Order.Target.Id == region.Id && Combat(c.Order))
-                    .OrderBy(c => c.Order.Source).ThenByDescending(c => c.LogIndex).FirstOrDefault();
+                    .OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 result[i] = new RegionView(region.Id, region.HasCenter ? region.CenterKind : RegionCenterKind.None,
                     region.HasCenter ? region.CenterId : 0, region.Center, world.Factions[faction - 1].RegionHuman[i] ? RegionControl.Human : RegionControl.Ai,
                     military == null ? (PolicyKind)0 : military.Order.Kind, world.Factions[faction - 1].RegionEconomyPolicies[i]);

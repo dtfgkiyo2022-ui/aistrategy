@@ -22,7 +22,7 @@ namespace Rts.Contracts
 
     public enum CommandSource : byte
     {
-        Human = 1, Doctrine = 2, Ai = 3
+        Human = 1, Doctrine = 2, Ai = 3, Tactic = 4
     }
 
     public enum CommandStatus : byte
