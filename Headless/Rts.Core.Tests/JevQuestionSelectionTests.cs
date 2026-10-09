@@ -84,6 +84,72 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void LineQuestionsUseOnlyAvailableLinesAndRegions()
+        {
+            var questions = JevQuestions.Build(new JevQuestionContext
+            {
+                InstructionTranslationNeeded = true,
+                IncludeComprehension = false,
+                AvailableLineNames = new[] { "Steel", "CoreWood" },
+                RegionNames = new[] { "区域3", "区域7" }
+            });
+            Assert.That(questions, Does.Contain("\"line\":\"加工のラインを作る\""));
+            Assert.That(questions, Does.Contain("\"instruction_line\""));
+            Assert.That(questions, Does.Contain("\"Steel\":\"鋼\""));
+            Assert.That(questions, Does.Contain("\"区域3\":\"区域3\""));
+            Assert.That(questions, Does.Contain("\"instruction_region\""));
+        }
+
+        [Test]
+        public void NoAvailableLineLeavesInstructionQuestionsUnchanged()
+        {
+            var withoutLines = JevQuestions.Build(new JevQuestionContext { InstructionTranslationNeeded = true, IncludeComprehension = false });
+            Assert.That(withoutLines, Does.Not.Contain("instruction_line"));
+            Assert.That(withoutLines, Does.Not.Contain("instruction_region"));
+            Assert.That(withoutLines, Does.Not.Contain("\"line\":\"加工のラインを作る\""));
+        }
+
+        [Test]
+        public void ConfidentSteelLineAnswerBecomesRequestLine()
+        {
+            var summary = new AiSituationSummary
+            {
+                AvailableLineNames = new[] { "Steel" }
+            };
+            var answers = new JevAnswers();
+            answers.Choices["instruction_kind"] = "line";
+            answers.ChoiceConfidences["instruction_kind"] = 0.9;
+            answers.Choices["instruction_line"] = "Steel";
+            answers.ChoiceConfidences["instruction_line"] = 0.9;
+            string json = JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, answers);
+            Assert.That(json, Does.Contain("\"kind\":\"RequestLine\""));
+            Assert.That(json, Does.Contain("\"line\":\"Steel\""));
+            Assert.That(json, Does.Contain("\"location\":\"お任せ\""));
+        }
+
+        [Test]
+        public void LowConfidenceLineAnswerBecomesUnknown()
+        {
+            var summary = new AiSituationSummary { AvailableLineNames = new[] { "Steel" } };
+            var answers = new JevAnswers();
+            answers.Choices["instruction_kind"] = "line";
+            answers.ChoiceConfidences["instruction_kind"] = 0.9;
+            answers.Choices["instruction_line"] = "Steel";
+            answers.ChoiceConfidences["instruction_line"] = 0.5;
+            Assert.That(JevCommandInterpreter.ToCommandJson(new InterpreterRequest { Summary = summary }, answers), Does.Contain("\"unknown\":true"));
+        }
+
+        [Test]
+        public void RealShapedAnswerReadsLineChoice()
+        {
+            var transport = new HttpJevTransport(() => "k");
+            var answers = transport.Read("{\"answers\":{\"instruction_kind\":{\"type\":\"choice\",\"choice\":\"line\",\"confidence\":0.9},\"instruction_line\":{\"type\":\"choice\",\"choice\":\"Steel\",\"confidence\":0.95}}}");
+            Assert.That(answers.Choices["instruction_kind"], Is.EqualTo("line"));
+            Assert.That(answers.Choices["instruction_line"], Is.EqualTo("Steel"));
+            Assert.That(answers.ChoiceConfidences["instruction_line"], Is.EqualTo(0.95).Within(1e-9));
+        }
+
+        [Test]
         public void ConfidentSignalAnswerBecomesSendTacticSignal()
         {
             var summary = new AiSituationSummary();

@@ -69,7 +69,7 @@ namespace Rts.Tests.Headless
             var questions = (Dictionary<string, object>)body["questions"];
             Assert.That(questions.Keys, Is.EquivalentTo(new[] { "decisive_point", "dangerous_outpost", "retreat_north",
                 "operation_north_broken", "instruction_kind", "instruction_target", "instruction_goal", "instruction_doctrine" }.Concat(JevFacts.All).ToArray()));
-            Assert.That(JevQuestions.Version, Is.EqualTo("q10"), "the per-call question set and signal-aware wording are a new behaviour version");
+            Assert.That(JevQuestions.Version, Is.EqualTo("q11"), "the per-call question set and line-aware wording are a new behaviour version");
         }
 
         [Test]

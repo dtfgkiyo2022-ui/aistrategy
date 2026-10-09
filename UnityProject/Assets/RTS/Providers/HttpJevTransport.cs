@@ -94,7 +94,7 @@ namespace Rts.Providers
                 if (!(pair.Value is Dictionary<string, object> answer)) continue;
                 if (answer.TryGetValue("choice", out var choiceValue) && choiceValue is string rawChoice)
                 {
-                    string choice = pair.Key == "instruction_signal" ? rawChoice : Game(rawChoice);
+                    string choice = RawChoiceQuestions.Contains(pair.Key) ? rawChoice : Game(rawChoice);
                     if (choice != null) result.Choices[pair.Key] = choice;
                     // A missing confidence stays 0, so an answer without one never clears the threshold.
                     if (answer.TryGetValue("confidence", out var confidence) && confidence is double c
@@ -119,6 +119,13 @@ namespace Rts.Providers
         private static long Number(Dictionary<string, object> values, string name) =>
             values.TryGetValue(name, out var value) && value is double number ? (long)number : 0;
 
+        /// <summary>
+        /// Questions whose choices are game names built per request (signals, lines, regions); their answers pass through
+        /// unchanged. Game() knows only the fixed choices, so it would drop these (a real "区域2" was lost once, 10-09).
+        /// </summary>
+        private static readonly HashSet<string> RawChoiceQuestions = new HashSet<string>(StringComparer.Ordinal)
+            { "instruction_signal", "instruction_line", "instruction_region" };
+
         private static string Game(string choice)
         {
             switch (choice)
@@ -131,6 +138,11 @@ namespace Rts.Providers
                 case "defend": return JevChoice.Defend;
                 case "retreat": return JevChoice.Retreat;
                 case "economy": return JevChoice.Economy;
+                case "line": return "line";
+                case "CoreMetal": return "CoreMetal";
+                case "Steel": return "Steel";
+                case "CoreWood": return "CoreWood";
+                case "BowGear": return "BowGear";
                 case "unknown": return JevChoice.Unknown;
                 case "hold": return "hold";
                 case "capture": return "capture";
