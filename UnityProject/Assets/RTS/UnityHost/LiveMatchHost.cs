@@ -496,7 +496,7 @@ namespace Rts.UnityHost
             liveAi = null;
         }
 
-        private void OnDestroy() { StopTactics(); StopLiveAi(); StopExternal(); }
+        private void OnDestroy() { StopTactics(); StopLiveAi(); StopExternal(); perfGcTime.Dispose(); perfAlloc.Dispose(); }
 
         private void OnDisable() { StopTactics(); }
 
@@ -1409,6 +1409,9 @@ namespace Rts.UnityHost
         private float perfStartedAt = -1f;
         private int perfFrames;
         private float perfWorstFrame;
+        private int perfGcCount;
+        private long perfGcNs, perfAllocBytes;
+        private Unity.Profiling.ProfilerRecorder perfGcTime, perfAlloc;
 
         private void WritePerfLine()
         {
@@ -1419,14 +1422,26 @@ namespace Rts.UnityHost
                 perfStartedAt = now;
                 PerfProbe.Counter("objects", () => FindObjectsByType<Transform>(FindObjectsSortMode.None).Length);
                 PerfProbe.Counter("monoMB", () => (int)(GC.GetTotalMemory(false) / (1024 * 1024)));
+                perfGcCount = GC.CollectionCount(0);
+                // Unity's own counters: time spent collecting garbage, and bytes newly allocated, per frame.
+                perfGcTime = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Internal, "GC.Collect");
+                perfAlloc = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Memory, "GC Allocated In Frame");
                 return;
             }
             perfFrames++;
             perfWorstFrame = Math.Max(perfWorstFrame, Time.unscaledDeltaTime);
+            if (perfGcTime.Valid) perfGcNs += perfGcTime.LastValue;
+            if (perfAlloc.Valid) perfAllocBytes += perfAlloc.LastValue;
             if (now - perfStartedAt < PerfSeconds) return;
             float frameMs = (now - perfStartedAt) * 1000f / Math.Max(1, perfFrames);
             Debug.Log("RTS perf: tick=" + Tick + " speed=" + SpeedMultiplier + " frame=" + frameMs.ToString("0.0") + "/"
-                + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames));
+                + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames)
+                + " gc#" + (GC.CollectionCount(0) - perfGcCount)
+                + " gcMs=" + (perfGcTime.Valid ? (perfGcNs / 1e6 / Math.Max(1, perfFrames)).ToString("0.00") : "?")
+                + " allocKB=" + (perfAlloc.Valid ? (perfAllocBytes / 1024.0 / Math.Max(1, perfFrames)).ToString("0") : "?"));
+            perfGcCount = GC.CollectionCount(0);
+            perfGcNs = 0;
+            perfAllocBytes = 0;
             perfStartedAt = now;
             perfFrames = 0;
             perfWorstFrame = 0f;

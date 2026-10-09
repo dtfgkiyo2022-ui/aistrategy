@@ -37,6 +37,7 @@
     <Compile Include="EconomyTests.cs" />
     <Compile Include="BeltTests.cs" />
     <Compile Include="LiveGameRulesTests.cs" />
+    <Compile Include="SharedPrefixListTests.cs" />
     <Compile Include="IndustryTests.cs" />
     <Compile Include="HumanHoldTests.cs" />
     <Compile Include="EconomyPolicyTests.cs" />

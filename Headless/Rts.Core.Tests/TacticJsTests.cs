@@ -246,6 +246,32 @@ namespace Rts.Core.Tests
             }
         }
 
+        [Test]
+        public void EarlierFramesKeepTheirCommandsWhileTheMatchGoesOn()
+        {
+            // Frames share one growing array of command views (10-10). A frame must keep listing what it listed when it
+            // was made, however many commands start or end afterwards.
+            var loaded = TacticFolder.Load(SamplePath("guarded-spear"));
+            Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
+            var scenario = LiveGameRules.Create(11, false, true, false, false);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            var host = new TacticHost(1, new SimulationFrames(simulation), gateway, gateway, loaded.Runtime,
+                versions: scope => gateway.FactionVersions(1).Versions(scope));
+            host.Start("{\"matchSeed\":" + scenario.Seed + ",\"factionId\":1}");
+            var kept = new List<(FactionFrame Frame, CommandView[] Commands)>();
+            for (int i = 1; i <= 3000 && !simulation.Capture(1).Result.HasEnded; i++)
+            {
+                host.Tick();
+                gateway.Step();
+                if (i % 7 == 0) kept.Add((simulation.Capture(1), simulation.Capture(1).Commands.ToArray()));
+            }
+            Assert.That(kept.Last().Commands.Count(c => c.Status >= CommandStatus.Completed), Is.GreaterThan(0), "no ended command to check");
+            Assert.That(kept.Any(k => k.Commands.Any(c => c.Status < CommandStatus.Completed)), Is.True, "no live command to check");
+            foreach (var (frame, commands) in kept)
+                Assert.That(frame.Commands.ToArray(), Is.EqualTo(commands), "frame of tick " + frame.Tick + " changed afterwards");
+        }
+
         private static string SamplePath(string name) => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "TacticSamples", name);
 
         private sealed class SimulationFrames : IFrameSource
