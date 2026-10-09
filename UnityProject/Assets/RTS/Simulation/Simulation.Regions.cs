@@ -127,7 +127,7 @@ namespace Rts.Simulation
         {
             if (!RegionsOn) return false;
             if (!HumanRegion(army.Definition.FactionId, RegionForArmy(army))) return false;
-            return !commandStates.Any(c => c.Status == CommandStatus.Executing && c.Order.Source == CommandSource.Human
+            return !liveCommands.Any(c => c.Status == CommandStatus.Executing && c.Order.Source == CommandSource.Human
                 && Combat(c.Order) && c.Armies.Any(e => e.ArmyId == army.Definition.Id && e.Active && !e.Finished));
         }
 
@@ -206,7 +206,7 @@ namespace Rts.Simulation
             for (int i = 0; i < result.Length; i++)
             {
                 var region = world.Regions[i];
-                var military = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == faction
+                var military = liveCommands.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == faction
                     && c.Order.Target.Kind == ScopeKind.Region && c.Order.Target.Id == region.Id && Combat(c.Order))
                     .OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 result[i] = new RegionView(region.Id, region.HasCenter ? region.CenterKind : RegionCenterKind.None,
