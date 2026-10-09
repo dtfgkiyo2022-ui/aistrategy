@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Rts.Contracts;
 
 namespace Rts.Providers
 {
@@ -18,6 +19,12 @@ namespace Rts.Providers
 
         /// <summary>Own tactic signals to expose to an instruction translation request.</summary>
         public IReadOnlyList<AiTacticSignalInfo> SignalDefinitions;
+
+        /// <summary>Processing lines that are currently legal for this faction.</summary>
+        public IReadOnlyList<string> AvailableLineNames;
+
+        /// <summary>Region names currently present in the state name table.</summary>
+        public IReadOnlyList<string> RegionNames;
     }
 
     /// <summary>
@@ -31,7 +38,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q10";
+        public const string Version = "q11";
 
         private const string DecisivePoint =
             "\"decisive_point\":{\"type\":\"choice\",\"instructions\":\"次の1分間に勝敗を左右する場所はどこであるか。stateの観測だけで判断する。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\",\"my_core\":\"自分のコア\",\"enemy_core\":\"敵のコア\"}}";
@@ -56,6 +63,9 @@ namespace Rts.Providers
 
         private const string InstructionGoal =
             "\"instruction_goal\":{\"type\":\"choice\",\"instructions\":\"指示文の目標は次の1つである。複雑な目標はunknownである。\",\"criteria\":{\"hold\":\"保持\",\"capture\":\"占領\",\"retreat\":\"撤退\",\"unknown\":\"わからない\"}}";
+
+        private const string InstructionLineKind =
+            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"line\":\"加工のラインを作る\",\"doctrine\":\"全体方針を変える\",\"unknown\":\"わからない\"}}";
 
         private const string Outnumbering =
             "\"outnumbering\":{\"type\":\"noul\",\"instructions\":\"myTotalSoldiersがenemy.knownSoldiersAtMostより多い状態である。\"}";
@@ -83,11 +93,18 @@ namespace Rts.Providers
             if (context.InstructionTranslationNeeded)
             {
                 bool hasSignals = context.SignalDefinitions != null && context.SignalDefinitions.Count != 0;
-                parts.Add(hasSignals ? InstructionKindWithSignal : InstructionKind);
+                bool hasLines = context.AvailableLineNames != null && context.AvailableLineNames.Count != 0;
+                parts.Add(hasLines ? (hasSignals ? InstructionKindWithSignalAndLine : InstructionLineKind) : (hasSignals ? InstructionKindWithSignal : InstructionKind));
                 if (hasSignals) parts.Add(BuildInstructionSignal(context.SignalDefinitions));
                 parts.Add(InstructionTarget);
                 parts.Add(InstructionGoal);
                 parts.Add(InstructionDoctrine);
+                if (hasLines)
+                {
+                    parts.Add(BuildInstructionLine(context.AvailableLineNames));
+                    if (context.RegionNames != null && context.RegionNames.Count != 0)
+                        parts.Add(BuildInstructionRegion(context.RegionNames));
+                }
             }
             if (context.IncludeComprehension == true)
             {
@@ -100,6 +117,34 @@ namespace Rts.Providers
 
         private const string InstructionKindWithSignal =
             "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"doctrine\":\"全体方針を変える\",\"signal\":\"戦術の合図を送る\",\"unknown\":\"わからない\"}}";
+
+        private const string InstructionKindWithSignalAndLine =
+            "\"instruction_kind\":{\"type\":\"choice\",\"instructions\":\"指示文の種類は次の1つである。複雑な指示はunknownである。\",\"criteria\":{\"focus\":\"攻める\",\"defend\":\"守る\",\"retreat\":\"引く\",\"economy\":\"内政\",\"line\":\"加工のラインを作る\",\"doctrine\":\"全体方針を変える\",\"signal\":\"戦術の合図を送る\",\"unknown\":\"わからない\"}}";
+
+        private static string BuildInstructionLine(IReadOnlyList<string> lines)
+        {
+            var criteria = new List<string>();
+            foreach (string line in lines ?? Array.Empty<string>())
+            {
+                if (string.IsNullOrEmpty(line)) continue;
+                string label = line == nameof(ProcessingLineKind.CoreMetal) ? "金属" :
+                    line == nameof(ProcessingLineKind.Steel) ? "鋼" :
+                    line == nameof(ProcessingLineKind.CoreWood) ? "木材" :
+                    line == nameof(ProcessingLineKind.BowGear) ? "弓具" : line;
+                criteria.Add(JsonString(line) + ":" + JsonString(label));
+            }
+            criteria.Add("\"unknown\":\"わからない\"");
+            return "\"instruction_line\":{\"type\":\"choice\",\"instructions\":\"作る加工のラインは次の1つである。\",\"criteria\":{" + string.Join(",", criteria) + "}}";
+        }
+
+        private static string BuildInstructionRegion(IReadOnlyList<string> regions)
+        {
+            var criteria = new List<string>();
+            foreach (string region in regions ?? Array.Empty<string>())
+                if (!string.IsNullOrEmpty(region)) criteria.Add(JsonString(region) + ":" + JsonString(region));
+            criteria.Add("\"unknown\":\"わからない\"");
+            return "\"instruction_region\":{\"type\":\"choice\",\"instructions\":\"ラインを置く区域はstateの名前表にある区域の1つである。区域がなければ場所はお任せである。\",\"criteria\":{" + string.Join(",", criteria) + "}}";
+        }
 
         private static string BuildInstructionSignal(IReadOnlyList<AiTacticSignalInfo> signals)
         {

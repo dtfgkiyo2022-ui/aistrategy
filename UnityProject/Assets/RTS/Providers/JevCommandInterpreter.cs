@@ -46,11 +46,16 @@ namespace Rts.Providers
             }
             if (transport == null) transport = new HttpJevTransport(readKey);
             var signals = request.Summary?.TacticInfo?.Signals ?? Array.Empty<AiTacticSignalInfo>();
+            var regions = (request.Summary?.NameTable ?? Array.Empty<AiNameTableEntry>())
+                .Where(e => e != null && e.HasScope && e.Scope.Kind == Rts.Contracts.ScopeKind.Region)
+                .Select(e => e.Name).Distinct(StringComparer.Ordinal).ToArray();
             string questions = JevQuestions.Build(new JevQuestionContext
             {
                 InstructionTranslationNeeded = true,
                 IncludeComprehension = false,
-                SignalDefinitions = signals
+                SignalDefinitions = signals,
+                AvailableLineNames = request.Summary?.AvailableLineNames,
+                RegionNames = regions
             });
             string state = JsonValueWriter.Write(new Dictionary<string, object>
             {
@@ -106,6 +111,9 @@ namespace Rts.Providers
         {
             if (answers == null) return "{\"unknown\":true,\"reason\":\"Jevの答えがありません。\",\"commands\":[]}";
             string kind = Choice(answers, "instruction_kind");
+            string requestedLine = Choice(answers, "instruction_line");
+            bool confidentLine = requestedLine != null && requestedLine != JevChoice.Unknown &&
+                Confidence(answers, "instruction_line") >= 0.6;
             // The real Jev hardly ever answers "signal" for the kind: "総攻撃して" comes back as focus and "いったん下がって"
             // as retreat, each with the target unknown, while the signal question is answered at 0.99-1.0 (10-08,
             // signalprompt set). So an attack, defence or retreat with no target is a signal too when one is picked
@@ -165,6 +173,29 @@ namespace Rts.Providers
                 {
                     ["kind"] = "SetDoctrine", ["scope"] = "", ["goal"] = "", ["region"] = "", ["control"] = "",
                     ["doctrine"] = doctrine, ["reason"] = ""
+                });
+            }
+
+            // "内政" is the older broad category. If Jev also selected a line with confidence,
+            // preserve the specific request instead of falling back to Growth.
+            if ((kind == "line" || kind == JevChoice.Economy && confidentLine) && confidentLine)
+            {
+                var available = request.Summary?.AvailableLineNames ?? Array.Empty<string>();
+                if (!available.Contains(requestedLine, StringComparer.Ordinal))
+                    return "{\"unknown\":true,\"reason\":\"作れるラインを確定できません。\",\"commands\":[]}";
+                string region = Choice(answers, "instruction_region");
+                bool hasRegions = (request.Summary?.NameTable ?? Array.Empty<AiNameTableEntry>())
+                    .Any(e => e != null && e.HasScope && e.Scope.Kind == Rts.Contracts.ScopeKind.Region);
+                if (hasRegions && (region == null || region == JevChoice.Unknown || Confidence(answers, "instruction_region") < 0.6))
+                    return "{\"unknown\":true,\"reason\":\"ラインを置く区域を確定できません。\",\"commands\":[]}";
+                var lineCommand = new Dictionary<string, object>
+                {
+                    ["type"] = "economy", ["kind"] = "RequestLine", ["line"] = requestedLine,
+                    ["region"] = hasRegions ? region : "", ["location"] = hasRegions ? "" : "お任せ"
+                };
+                return JsonValueWriter.Write(new Dictionary<string, object>
+                {
+                    ["say"] = "加工のラインを作ります。", ["commands"] = new List<object> { lineCommand }
                 });
             }
 

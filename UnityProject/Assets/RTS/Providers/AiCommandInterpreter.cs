@@ -462,6 +462,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public long Tick { get; private set; }
         public string Text { get; private set; }
         public IReadOnlyList<AiNameTableEntry> NameTable { get; private set; }
+        /// <summary>Processing lines allowed by the current economy rules.</summary>
+        public IReadOnlyList<string> AvailableLineNames { get; set; } = Array.Empty<string>();
         public AiTacticInfo TacticInfo { get; private set; } = new AiTacticInfo();
 
         public void SetTacticInfo(string currentName, IEnumerable<string> availableNames, IEnumerable<AiTacticParameterInfo> parameters)
@@ -757,6 +759,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 }
             }
             summary.NameTable = list.AsReadOnly();
+            summary.AvailableLineNames = AvailableLines(frame.Economy);
             if (armies.Length > 1)
             {
                 OwnArmyView north = armies.OrderByDescending(a => a.Position.Z.Raw).ThenBy(a => a.Id).First();
@@ -768,6 +771,25 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 summary.AddAlias("斥候", ArmyName(armies, army.Id));
             summary.Text = BuildText(frame, armies, objectives);
             return summary;
+        }
+
+        private static IReadOnlyList<string> AvailableLines(EconomyView economy)
+        {
+            if (economy == null) return Array.Empty<string>();
+            var lines = new List<string>();
+            bool metalwork = !economy.Ages || economy.Civ == CivKind.Metallurgy;
+            if (economy.Industry && economy.ProcessingChain && metalwork)
+            {
+                lines.Add(nameof(ProcessingLineKind.CoreMetal));
+                if (!economy.Ages || economy.Age >= 2) lines.Add(nameof(ProcessingLineKind.Steel));
+            }
+            bool forestry = economy.Civ == CivKind.Forestry && economy.Age >= 1;
+            if (forestry)
+            {
+                lines.Add(nameof(ProcessingLineKind.CoreWood));
+                if (economy.Age >= 2) lines.Add(nameof(ProcessingLineKind.BowGear));
+            }
+            return lines.AsReadOnly();
         }
 
         private static string OutpostName(KnownObjective objective, IReadOnlyList<KnownObjective> all, int ordinal)
