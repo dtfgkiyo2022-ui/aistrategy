@@ -46,7 +46,7 @@ namespace Rts.Simulation
             {
                 var command = army.CommandId == 0
                     ? null
-                    : commandStates.FirstOrDefault(c => c.Order.CommandId == army.CommandId);
+                    : CommandById(army.CommandId);
                 result.Add(new MatchPackArmyPolicy(
                     army.Definition.FactionId,
                     army.Definition.Id,

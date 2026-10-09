@@ -32,8 +32,15 @@ namespace Rts.Simulation
             internal uint[] ReservedArmies = Array.Empty<uint>();
             internal PolicyVersion[] Dependencies = Array.Empty<PolicyVersion>();
             internal List<ArmyExecution> Armies = new List<ArmyExecution>();
+            internal int ViewIndex; // position in its faction's commandViews; display data only, never hashed
         }
         private readonly List<CommandState> commandStates = new List<CommandState>();
+        // The commands not yet ended, in commandStates order, and every command by id. An ended command never comes back
+        // (EndCommand is the only way into Terminal and ignores ended ones), so scans that skip ended commands read
+        // liveCommands; it is pruned once per tick, and a command that ends during a tick is still filtered by each scan.
+        // A long match collects thousands of ended commands, and scanning them every tick made it slow down (10-09).
+        private readonly List<CommandState> liveCommands = new List<CommandState>();
+        private readonly Dictionary<ulong, CommandState> commandsById = new Dictionary<ulong, CommandState>();
         private readonly List<PolicyVersion> revisions = new List<PolicyVersion>();
         private readonly List<uint> lossReturns = new List<uint>();
         private readonly List<GameEvent> commandEvents = new List<GameEvent>();
@@ -53,7 +60,8 @@ namespace Rts.Simulation
             }
         }
 
-        public ulong ExecutionRevision(ulong commandId) => commandStates.First(c => c.Order.CommandId == commandId).ExecutionRevision;
+        public ulong ExecutionRevision(ulong commandId) => CommandById(commandId)?.ExecutionRevision
+            ?? commandStates.First(c => c.Order.CommandId == commandId).ExecutionRevision;
 
         public ulong Revision(ScopeKey scope)
         {
@@ -74,6 +82,15 @@ namespace Rts.Simulation
                 change.Revision > version.Revision && change.Field == Field(c.Order.Kind));
 
         private static bool Terminal(CommandState c) => c.Status >= CommandStatus.Completed;
+        private void AddCommandState(CommandState c)
+        {
+            commandStates.Add(c);
+            liveCommands.Add(c);
+            // The first command with an id wins, as the First() lookups it replaces did.
+            if (!commandsById.ContainsKey(c.Order.CommandId)) commandsById.Add(c.Order.CommandId, c);
+        }
+        private void PruneLiveCommands() => liveCommands.RemoveAll(Terminal);
+        private CommandState CommandById(ulong commandId) => commandsById.TryGetValue(commandId, out var c) ? c : null;
         private static int Field(PolicyKind kind) => kind == PolicyKind.MaintainReserve ? 2 : kind == PolicyKind.AllowAbandon ? 3 : 1;
         private bool ValidScope(ScopeKey s) => s.FactionId >= 1 && s.FactionId <= 2 &&
             (s.Kind == ScopeKind.All ? s.Id == 0 : s.Kind == ScopeKind.Army ? s.Id > 0 && s.Id <= world.Armies.Length && world.Armies[s.Id - 1].Definition.FactionId == s.FactionId
@@ -112,7 +129,7 @@ namespace Rts.Simulation
                     var missionScope = new ScopeKey(scope.FactionId, ScopeKind.Outpost, mission.Id);
                     if (!scopes.Contains(missionScope)) scopes.Add(missionScope);
                 }
-                foreach (var c in commandStates)
+                foreach (var c in liveCommands)
                     if (!Terminal(c) && c.Status == CommandStatus.Executing && c.Order.Target.Kind == ScopeKind.Outpost &&
                         c.Armies.Any(a => a.ArmyId == id && a.Active) && !scopes.Contains(c.Order.Target)) scopes.Add(c.Order.Target);
             }
@@ -175,7 +192,7 @@ namespace Rts.Simulation
         }
         private ReasonCode Authority(PolicyOrder order, CommandState self)
         {
-            foreach (var c in commandStates)
+            foreach (var c in liveCommands)
             {
                 if (c == self || Terminal(c) || !Overlap(c, order)) continue;
                 if (order.Kind != PolicyKind.ReturnToAuto && order.Source != CommandSource.Human && c.Order.Source == CommandSource.Human &&
@@ -209,7 +226,7 @@ namespace Rts.Simulation
             }
             Notice(c, reason);
             if (waiting && c.Order.BatchId != 0)
-                foreach (var other in commandStates)
+                foreach (var other in liveCommands)
                     if (other != c && !Terminal(other) && other.Status != CommandStatus.Executing && other.Order.BatchId == c.Order.BatchId)
                         EndCommand(other, status, reason);
         }
@@ -218,7 +235,7 @@ namespace Rts.Simulation
             var c = new CommandState { Order = o, RequestId = input.RequestId, LogIndex = input.LogIndex,
                 AcceptedTick = input.AcceptedTick, ApplyTick = input.ApplyTick, DeadlineTick = input.DeadlineTick,
                 Status = CommandStatus.Interpreting, ReservedArmies = Affected(o.Target) };
-            commandStates.Add(c);
+            AddCommandState(c);
             return c;
         }
         private void ApplyInputs(IReadOnlyList<ScheduledInput> inputs)
@@ -249,7 +266,7 @@ namespace Rts.Simulation
                 ReasonCode failure = ReasonCode.None;
                 foreach (var o in input.Orders)
                 {
-                    var c = commandStates.Find(v => v.Order.CommandId == o.CommandId);
+                    var c = CommandById(o.CommandId);
                     if (c != null && (Terminal(c) || input.Kind != InputKind.Resolve || c.Status != CommandStatus.Interpreting || c.RequestId != input.RequestId))
                     { Notice(c, ReasonCode.StaleVersion); failure = CombineFailure(failure, ReasonCode.StaleVersion); continue; }
                     if (c == null)
@@ -308,7 +325,7 @@ namespace Rts.Simulation
                 if (input.Kind == InputKind.Reserve)
                 {
                     foreach (var replacement in group)
-                    foreach (var old in commandStates)
+                    foreach (var old in liveCommands)
                         if (!group.Contains(old) && !Terminal(old) && old.Status != CommandStatus.Executing &&
                             old.Order.Source == CommandSource.Human && old.LogIndex < replacement.LogIndex &&
                             Field(old.Order.Kind) == Field(replacement.Order.Kind) && Overlap(old, replacement.Order))
@@ -347,7 +364,7 @@ namespace Rts.Simulation
         }
         private void ApplyPendingCommands()
         {
-            var due = commandStates.Where(c => c.Status == CommandStatus.Pending && c.ApplyTick <= world.Tick)
+            var due = liveCommands.Where(c => c.Status == CommandStatus.Pending && c.ApplyTick <= world.Tick)
                 .OrderBy(c => c.ApplyTick).ThenBy(c => c.LogIndex).ThenBy(c => c.Order.CommandId).ToArray();
             var done = new List<CommandState>();
             foreach (var first in due)
@@ -377,7 +394,7 @@ namespace Rts.Simulation
         {
             var o = c.Order;
             var affected = Affected(o.Target);
-            foreach (var old in commandStates.ToArray())
+            foreach (var old in liveCommands.ToArray())
             {
                 if (old == c || Terminal(old) || !Overlap(old, o)) continue;
                 // Doctrine ReturnToAuto is a new input form.
@@ -419,7 +436,7 @@ namespace Rts.Simulation
             foreach (int index in world.ArmyTraversal)
             {
                 uint armyId = world.Armies[index].Definition.Id;
-                var selected = commandStates.Where(c => c.Status == CommandStatus.Executing &&
+                var selected = liveCommands.Where(c => c.Status == CommandStatus.Executing &&
                     Combat(c.Order) && c.Armies.Any(e => e.ArmyId == armyId && e.Active && !e.Finished))
                     .OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).FirstOrDefault();
                 ref var a = ref world.Armies[index];
@@ -448,7 +465,7 @@ namespace Rts.Simulation
                 if (arrived) HoldArmy(id);
                 return arrived;
             });
-            foreach (var c in commandStates)
+            foreach (var c in liveCommands)
             {
                 if (Terminal(c)) continue;
                 if (c.Status == CommandStatus.Interpreting && world.Tick > c.DeadlineTick)

@@ -20,7 +20,7 @@ namespace Rts.Simulation
         private PolicyView ArmyPolicy(uint id)
         {
             var a = world.Armies[id - 1];
-            var c = commandStates.FirstOrDefault(v => v.Order.CommandId == a.CommandId);
+            var c = CommandById(a.CommandId);
             return c == null ? default : new PolicyView(c.Order.CommandId, c.Order.Source, a.Policy, a.Goal, c.Order.AllowedLoss, c.Order.ReservePermille);
         }
         private bool HomeArrived(ArmyState a)
@@ -101,7 +101,7 @@ namespace Rts.Simulation
                         }
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }
-                var policies = commandStates.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).ToArray();
+                var policies = liveCommands.Where(c => c.Status == CommandStatus.Executing && c.Order.Target.FactionId == f).OrderBy(c => SourcePriority(c.Order.Source)).ThenByDescending(c => c.LogIndex).ToArray();
                 var decisionPolicies = PolicyOrdersForDecision(f, policies);
                 ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty(world.Config.Rules.DefaultReservePermille).First();
                 var abandoned = decisionPolicies.Where(o => o.Kind == PolicyKind.AllowAbandon && o.Target.Kind == ScopeKind.Outpost).Select(o => o.Target.Id).OrderBy(id => id).ToArray();

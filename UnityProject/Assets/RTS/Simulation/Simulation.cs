@@ -55,6 +55,7 @@ namespace Rts.Simulation
                 world.Tick = tick;
                 phaseOrdinal = 0;
                 commandEvents.Clear();
+                PruneLiveCommands();
                 Phase("Commands", () => { ApplyInputs(inputs); GenerateLatePushCommands(); ApplyPendingCommands(); ComposePolicies(); });
                 Phase("AI", () => { DecideArmies(); DecideEconomy(); });
                 Phase("Commands", ComposePolicies);
@@ -626,15 +627,40 @@ namespace Rts.Simulation
             return CavalryOn ? result : first;
         }
 
+        // Each faction's command views in commandStates order. An ended command's view never changes again, so only the
+        // views not yet final are rebuilt; the frames list exactly what rebuilding every view every tick did (10-09: that
+        // grew with every command of a long match and slowed it down).
+        private readonly List<CommandView>[] commandViews = { new List<CommandView>(), new List<CommandView>() };
+        private readonly List<CommandState> unsettledViews = new List<CommandState>();
+        private int viewedCommandCount;
+
+        private void RefreshCommandViews()
+        {
+            for (; viewedCommandCount < commandStates.Count; viewedCommandCount++)
+            {
+                var c = commandStates[viewedCommandCount];
+                uint faction = c.Order.Target.FactionId;
+                if (faction < 1 || faction > 2) continue;
+                c.ViewIndex = commandViews[faction - 1].Count;
+                commandViews[faction - 1].Add(default);
+                unsettledViews.Add(c);
+            }
+            foreach (var command in unsettledViews)
+                commandViews[command.Order.Target.FactionId - 1][command.ViewIndex] = new CommandView(command.Order.CommandId,
+                    command.Order.Target, command.Order.Kind, command.Order.Goal, command.Status, command.AcceptedTick,
+                    command.ApplyTick, command.Reason, command.Order.Source);
+            unsettledViews.RemoveAll(Terminal);
+        }
+
         private void PublishFrames()
         {
+            RefreshCommandViews();
             for (uint f = 1; f <= 2; f++)
             {
                 var units = new List<RenderUnit>();
                 var enemies = new List<VisibleEnemy>();
                 var contacts = new List<EnemyContact>();
                 var armies = new List<OwnArmyView>();
-                var commands = new List<CommandView>();
                 var objectives = new List<KnownObjective>();
                 foreach (int i in world.SoldierTraversal)
                 {
@@ -680,10 +706,6 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.SoldierCount; i++)
                     if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
                 AddArmyContacts(f, contacts);
-                foreach (var command in commandStates)
-                    if (command.Order.Target.FactionId == f)
-                        commands.Add(new CommandView(command.Order.CommandId, command.Order.Target, command.Order.Kind, command.Order.Goal,
-                            command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Order.Source));
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
@@ -699,7 +721,7 @@ namespace Rts.Simulation
                             e.CommandId, e.Position, e.Value, e.Reason));
                 foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
-                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commands, visibleEvents,
+                frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, commandViews[f - 1], visibleEvents,
                     new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
                     world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f),
                     RegionViewsFor(f), CellRegionsForFrame());

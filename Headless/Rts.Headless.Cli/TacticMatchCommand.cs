@@ -45,7 +45,17 @@ internal static class TacticMatchCommand
         string eastName = options.GetValueOrDefault("--east-tactic") ?? "auto";
         ValidateTactic(westName); ValidateTactic(eastName);
 
-        var simulation = new Battle(scenario);
+        // Inclusive milliseconds per simulation phase, for --timing-out.
+        var phaseMs = new SortedDictionary<string, double>(StringComparer.Ordinal);
+        var phaseStart = new Dictionary<string, long>(StringComparer.Ordinal);
+        Action<string, bool> measure = !options.ContainsKey("--timing-out") ? null : (name, start) =>
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (start) { phaseStart[name] = now; return; }
+            if (!phaseStart.TryGetValue(name, out var began)) return;
+            phaseMs[name] = (phaseMs.TryGetValue(name, out var sum) ? sum : 0) + (now - began) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+        };
+        var simulation = new Battle(scenario, measure);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
@@ -66,6 +76,9 @@ internal static class TacticMatchCommand
             pack = new MatchPackWriter(packPath, scenario, westName, eastName);
             pack.RecordInitial(simulation);
         }
+        // --timing-out: average milliseconds of one gateway step per 1000 ticks (tick,ms), to see a match slow down.
+        var timing = options.ContainsKey("--timing-out") ? new List<string> { "tick,stepMs" } : null;
+        double stepMs = 0;
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
             long tick = simulation.Capture(1).Tick;
@@ -83,7 +96,16 @@ internal static class TacticMatchCommand
             WriteHostLog(lines, eastResult, 2, eastName);
             pack?.RecordTactic(westResult, 1, westName);
             pack?.RecordTactic(eastResult, 2, eastName);
+            long stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
+            stepMs += (System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            if (timing != null && (i + 1) % 1000 == 0)
+            {
+                timing.Add(string.Format(CultureInfo.InvariantCulture, "{0},{1:0.000}", simulation.Capture(1).Tick, stepMs / 1000)
+                    + string.Concat(phaseMs.Select(p => string.Format(CultureInfo.InvariantCulture, ",{0}={1:0.000}", p.Key, p.Value / 1000))));
+                phaseMs.Clear();
+                stepMs = 0;
+            }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
@@ -92,6 +114,7 @@ internal static class TacticMatchCommand
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
+        if (timing != null) File.WriteAllLines(options["--timing-out"], timing, new UTF8Encoding(false));
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))
         {

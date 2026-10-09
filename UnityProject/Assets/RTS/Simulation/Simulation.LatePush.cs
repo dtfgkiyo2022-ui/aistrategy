@@ -26,11 +26,11 @@ namespace Rts.Simulation
 
                 // A human combat policy is authoritative. Leave it in place and try again after it ends; the latch
                 // is the condition itself, so a faction never returns to the ordinary objective contest.
-                if (commandStates.Any(c => !Terminal(c) && c.Order.Target.FactionId == faction
+                if (liveCommands.Any(c => !Terminal(c) && c.Order.Target.FactionId == faction
                     && c.Order.Source == CommandSource.Human && Combat(c.Order))) continue;
 
                 var scope = new ScopeKey(faction, ScopeKind.All, 0);
-                if (commandStates.Any(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
+                if (liveCommands.Any(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
                     && c.Order.Goal.Kind == GoalKind.Core)) continue;
 
@@ -48,7 +48,7 @@ namespace Rts.Simulation
                 Advance(scope, Field(order.Kind));
                 state.ExecutionRevision = Revision(scope);
                 state.Dependencies = Versions(scope).ToArray();
-                commandStates.Add(state);
+                AddCommandState(state);
                 Notice(state, ReasonCode.None);
             }
         }
