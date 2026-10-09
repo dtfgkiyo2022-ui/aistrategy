@@ -19,7 +19,7 @@ namespace Rts.Core.Tests
         [Test]
         public void SamplesLoadAndReturnCommands()
         {
-            foreach (string name in new[] { "rush", "defend-then-push", "adjutant" })
+            foreach (string name in new[] { "rush", "defend-then-push", "adjutant", "steel-economy" })
             {
                 var loaded = TacticFolder.Load(Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "TacticSamples", name));
                 Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
@@ -210,6 +210,40 @@ namespace Rts.Core.Tests
             File.WriteAllText(Path.Combine(path, "tactic.json"), metadata);
             File.WriteAllText(Path.Combine(path, "main.js"), source);
             return path;
+        }
+
+        [Test]
+        public void SteelEconomySampleAsksForALineInThePlayedGame()
+        {
+            // Seed 11 of the played game's rules gives the west metallurgy; the sample asks for its metal line in a region.
+            var loaded = TacticFolder.Load(SamplePath("steel-economy"));
+            Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
+            var scenario = LiveGameRules.Create(11, false, true, false, false);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            var host = new TacticHost(1, new SimulationFrames(simulation), gateway, gateway, loaded.Runtime);
+            host.Start("{\"matchSeed\":" + scenario.Seed + ",\"factionId\":1}");
+            ScheduledInput request = null;
+            for (int i = 0; i < 12000 && request == null && !simulation.Capture(1).Result.HasEnded; i++)
+            {
+                var result = host.Tick();
+                if (result.Called) Assert.That(result.Failure, Is.Null, result.Failure == null ? "" : result.Failure.Reason);
+                gateway.Step();
+                request = gateway.Inputs.FirstOrDefault(input => input.Economy != null && input.Economy.Kind == EconomyCommandKind.RequestLine);
+            }
+            Assert.That(request, Is.Not.Null, "the sample never asked for a line");
+            Assert.That(request.Economy.Line, Is.EqualTo(ProcessingLineKind.CoreMetal));
+            Assert.That(request.Economy.RegionId, Is.GreaterThan(0u));
+            for (int i = 0; i < 400; i++) { host.Tick(); gateway.Step(); }
+            using (var stream = new MemoryStream())
+            {
+                var build = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, simulation.Capture(1).Tick, build);
+                stream.Position = 0;
+                var outcome = ReplayRunner.Replay(stream, build);
+                Assert.That(outcome.FirstMismatchTick, Is.Null);
+                Assert.That(outcome.IsFault, Is.False);
+            }
         }
 
         private static string SamplePath(string name) => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "TacticSamples", name);

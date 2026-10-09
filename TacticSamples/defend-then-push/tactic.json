@@ -6,6 +6,9 @@
   "entry": "main.js",
   "apiVersion": 1,
   "description": "兵力が設定した人数を超えるまで自陣コアを守り、その後に全軍で敵コアへ進む戦術。",
+  "signals": [
+    { "name": "buildSteel", "label": "鋼のラインを作れ", "needsPoint": false }
+  ],
   "params": [
     { "name": "attackThreshold", "label": "攻めに切り替える兵の数", "type": "int", "default": 30, "min": 5, "max": 100, "step": 5 }
   ]

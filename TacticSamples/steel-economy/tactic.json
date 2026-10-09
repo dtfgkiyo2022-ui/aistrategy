@@ -1,0 +1,15 @@
+{
+  "name": "steel-economy",
+  "author": "RTS sample",
+  "version": "1.0.0",
+  "language": "js",
+  "entry": "main.js",
+  "apiVersion": 1,
+  "description": "冶金の文明で金属ライン、第2時代で鋼ラインを一度ずつ頼み、戦闘はお任せにする内政見本。",
+  "style": "auto",
+  "params": [
+    { "name": "metalDelaySeconds", "label": "冶金入りから金属ラインを頼むまで（秒）", "type": "int", "default": 0, "min": 0, "max": 60, "step": 1 },
+    { "name": "steelDelaySeconds", "label": "第2時代入りから鋼ラインを頼むまで（秒）", "type": "int", "default": 0, "min": 0, "max": 60, "step": 1 },
+    { "name": "regionChoice", "label": "ラインを頼む区域の選び方", "type": "choice", "default": "nearCore", "choices": ["nearCore", "resourceRich"] }
+  ]
+}

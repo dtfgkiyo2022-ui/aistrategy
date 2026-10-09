@@ -132,6 +132,8 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic
 
 戦術の JSON では `region` は数値です。対象文明・時代・資源・木材が不足している場合は、シミュレーションが命令を変えずに却下し、理由をタイムラインへ記録します。ラインは一度頼んだ後も自動管理のままで、人が建物・ベルト・運び手を直接変更したときだけ手動管理へ移ります。
 
+内政を見本から試すなら `TacticSamples/steel-economy` が使えます。冶金に入った後の金属ラインと、第2時代に入った後の鋼ラインを一度ずつ頼みます。`metalDelaySeconds`／`steelDelaySeconds` で頼む時期を、`regionChoice` で自コアに近い区域か資源の多い区域かを変えられます。
+
 ## 戦術の合図
 
 `tactic.json` の任意の `signals` に、人が戦術へ送る合図を宣言できます。`name` は英数字、`label` は画面に出す名前、`needsPoint` は地図上の地点が必要かどうかです。合図は8個までで、同じ名前は使えません。
