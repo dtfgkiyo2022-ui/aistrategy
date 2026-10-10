@@ -390,8 +390,8 @@ namespace Rts.Presentation
             long remaining = Math.Max(0, economy.NextAgeClockTick - view.LatestFrame.Tick);
             long seconds = (remaining + 19) / 20;
             string time = (seconds / 60).ToString(CultureInfo.InvariantCulture) + ":" + (seconds % 60).ToString("00", CultureInfo.InvariantCulture);
-            return UiText.T(" (auto in ", "（あと ") + time + UiText.T(" / now food ", " で自動／今なら 食料") + food
-                + UiText.T(" wood ", " 木材") + wood + ")";
+            // The price before this label is already what it costs now; the label adds when it becomes free.
+            return UiText.T(" (free in ", "（あと ") + time + UiText.T(")", " で自動）");
         }
 
         private void AddIdleActions(List<EconomyAction> rows, EconomyView economy)
