@@ -19,6 +19,10 @@ namespace Rts.Presentation
         public const string BuildingBlueMaterialKey = "BuildingBlue";
         public const string BuildingRedMaterialKey = "BuildingRed";
         public const string BuildingWhiteMaterialKey = "BuildingWhite";
+        public const string SmallFireEffectKey = "Effect:FX_Building_burning_small.prefab";
+        public const string LargeFireEffectKey = "Effect:FX_Building_burning.prefab";
+        public const string BuildingDestroyedEffectKey = "Effect:FX_Building_Destroyed_mid.prefab";
+        public const string MachineDestroyedEffectKey = "Effect:FX_machine_destroyed.prefab";
 
         [Serializable]
         public sealed class ModelEntry

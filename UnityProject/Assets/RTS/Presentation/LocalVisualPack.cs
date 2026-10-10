@@ -1,8 +1,10 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
+using Object = UnityEngine.Object;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -23,6 +25,8 @@ namespace Rts.Presentation
         private const string Units = Root + "prefabs/";
         private const string Banners = Units + "banners/";
         private const string Buildings = Root + "models/buildings/";
+        private const string ConstructionBuildings = Root + "models/buildings/construction/";
+        private const string Effects = Root + "FX/FX_prefabs/";
         private const string AnimationRoot = Root + "animation/";
         private const string UnitMaterialRoot = Root + "models/materials/color/Units/TT_RTS_Units_";
         private const string BuildingMaterialRoot = Root + "models/materials/color/Buildings/TT_RTS_buildings_";
@@ -82,6 +86,13 @@ namespace Rts.Presentation
             Attack,
             Work,
             Death
+        }
+
+        public enum BuildingConstructionStage
+        {
+            Base,
+            Frame,
+            Finished
         }
 
         private sealed class AnimationSpec
@@ -276,6 +287,20 @@ namespace Rts.Presentation
 
         public static string BuildingAssetPath(BuildingKind kind) { return BuildingTable.TryGetValue(kind, out var s) ? Buildings + s.File : null; }
 
+        public static string BuildingConstructionAssetPath(BuildingKind kind, int stage)
+        {
+            if (stage < 0 || stage > 1 || !BuildingTable.TryGetValue(kind, out var spec)) return null;
+            if (spec.File == null || !spec.File.EndsWith(".FBX", StringComparison.Ordinal)) return null;
+            return ConstructionBuildings + spec.File.Substring(0, spec.File.Length - 4) + "_" + stage + ".FBX";
+        }
+
+        public static BuildingConstructionStage GetBuildingConstructionStage(bool complete, int progress, int work)
+        {
+            if (complete || (work > 0 && progress >= work)) return BuildingConstructionStage.Finished;
+            if (work <= 0 || progress < work / 2f) return BuildingConstructionStage.Base;
+            return BuildingConstructionStage.Frame;
+        }
+
         public static float UnitHeight(UnitKind kind) { return UnitTable.TryGetValue(kind, out var s) ? s.Height : 2.4f; }
 
         public static string AnimationAssetPath(UnitKind kind, UnitMotion motion)
@@ -350,6 +375,22 @@ namespace Rts.Presentation
             foreach (var row in InfantryTable.Values) AddStaged(row, models, clips);
             foreach (var row in TieredUnitTable.Values) AddStaged(row, models, clips);
             for (int i = 0; i < BannerFiles.Length; i++) models.Add(BannerAssetPath(i));
+            foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind)))
+            {
+                for (int stage = 0; stage < 2; stage++)
+                {
+                    string path = BuildingConstructionAssetPath(kind, stage);
+                    if (path != null && !models.Contains(path)) models.Add(path);
+                }
+            }
+            string[] effects =
+            {
+                "FX_Building_burning_small.prefab",
+                "FX_Building_burning.prefab",
+                "FX_Building_Destroyed_mid.prefab",
+                "FX_machine_destroyed.prefab"
+            };
+            foreach (var effect in effects) models.Add(EffectAssetPath(effect));
         }
 
         private static void AddStaged(TieredUnitSpec[] row, List<string> models, List<string> clips)
@@ -394,6 +435,25 @@ namespace Rts.Presentation
         public static string BuildingMaterialAssetPath(uint owner)
         {
             return BuildingMaterialRoot + (owner == 1 ? "blue" : owner == 2 ? "red" : "white") + ".mat";
+        }
+
+        public static string EffectAssetPath(string file)
+        {
+            return string.IsNullOrEmpty(file) ? null : Effects + file;
+        }
+
+        public static bool HasEffect(string file)
+        {
+            return !Disabled && LoadEffect(file) != null;
+        }
+
+        public static bool TryCreateEffect(string file, Transform parent, out GameObject instance)
+        {
+            instance = null;
+            var prefab = LoadEffect(file);
+            if (prefab == null) return false;
+            instance = UnityEngine.Object.Instantiate(prefab, parent);
+            return true;
         }
 
         public static string AnimationKey(UnitKind kind, UnitMotion motion)
@@ -676,6 +736,17 @@ namespace Rts.Presentation
                 parent, width, height, kind, out instance);
         }
 
+        public static bool TryCreateBuildingConstruction(BuildingKind kind, int stage, uint owner, Transform parent,
+            float width, out GameObject instance)
+        {
+            instance = null;
+            float height = BuildingHeight(kind);
+            string path = BuildingConstructionAssetPath(kind, stage);
+            if (height <= 0f || path == null) return false;
+            return TryCreateStretched(LoadModelByPath(path), LoadMaterial(BuildingMaterialKey(owner), BuildingMaterialAssetPath(owner)),
+                parent, width, height, kind, out instance);
+        }
+
         /// <summary>Under construction a building rises from the ground: progress 0..1 scales the holder's height only.</summary>
         public static void SetBuildingProgress(GameObject instance, float progress)
         {
@@ -763,6 +834,23 @@ namespace Rts.Presentation
             var manifest = LoadManifest();
             return manifest == null ? null : manifest.GetBuilding(kind);
 #endif
+        }
+
+        private static GameObject LoadModelByPath(string path)
+        {
+            if (path == null || Disabled) return null;
+#if UNITY_EDITOR
+            return LoadModelAtPath(path);
+#else
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetModelByFile(path);
+#endif
+        }
+
+        private static GameObject LoadEffect(string file)
+        {
+            string path = EffectAssetPath(file);
+            return LoadModelByPath(path);
         }
 
         private static GameObject LoadCoreModel()
@@ -887,7 +975,7 @@ namespace Rts.Presentation
             return bounds;
         }
 
-        private static void Discard(Object target)
+        private static void Discard(UnityEngine.Object target)
         {
 #if UNITY_EDITOR
             if (UnityEngine.Application.isPlaying) Object.Destroy(target); else Object.DestroyImmediate(target);

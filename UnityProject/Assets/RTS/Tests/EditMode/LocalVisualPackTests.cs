@@ -209,5 +209,47 @@ namespace Rts.Tests.EditMode
                 UnityEngine.Object.DestroyImmediate(parent);
             }
         }
+
+        [Test]
+        public void BuildingConstructionPathsFollowFinishedModelNames()
+        {
+            foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind)))
+            {
+                var finished = LocalVisualPack.BuildingAssetPath(kind);
+                if (finished == null) continue;
+                for (int stage = 0; stage < 2; stage++)
+                {
+                    var path = LocalVisualPack.BuildingConstructionAssetPath(kind, stage);
+                    Assert.IsNotNull(path);
+                    Assert.IsTrue(path.Contains("/models/buildings/construction/", StringComparison.Ordinal));
+                    Assert.IsTrue(path.EndsWith("_" + stage + ".FBX", StringComparison.Ordinal));
+                }
+            }
+        }
+
+        [Test]
+        public void BuildingConstructionStageUsesHalfwayBoundaries()
+        {
+            Assert.AreEqual(LocalVisualPack.BuildingConstructionStage.Base,
+                LocalVisualPack.GetBuildingConstructionStage(false, 49, 100));
+            Assert.AreEqual(LocalVisualPack.BuildingConstructionStage.Frame,
+                LocalVisualPack.GetBuildingConstructionStage(false, 50, 100));
+            Assert.AreEqual(LocalVisualPack.BuildingConstructionStage.Finished,
+                LocalVisualPack.GetBuildingConstructionStage(true, 100, 100));
+        }
+
+        [Test]
+        public void MissingPackReportsFalseForEffects()
+        {
+            LocalVisualPack.Disabled = true;
+            try
+            {
+                Assert.IsFalse(LocalVisualPack.HasEffect("FX_Building_burning_small.prefab"));
+            }
+            finally
+            {
+                LocalVisualPack.Disabled = false;
+            }
+        }
     }
 }
