@@ -30,6 +30,11 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
+            {
+                DecideFarms(faction);
+                return;
+            }
             if (TryDecideRequestedLine(faction)) return;
             if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
             if (FishingAllowed(faction)) { DecideFishingHarbor(faction); return; }
@@ -120,6 +125,16 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private bool EarlyFoodFarmNeeded(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            int farms = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+            int target = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + 1;
+            return farms < target && economy.Food < world.Config.Economy.EarlyAge2FoodCost + VillagerFoodCostFor(faction);
         }
 
         private void DecideFishingHarbor(uint faction)
@@ -1159,7 +1174,7 @@ namespace Rts.Simulation
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
-            int farmTarget = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget);
+            int farmTarget = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
             if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)

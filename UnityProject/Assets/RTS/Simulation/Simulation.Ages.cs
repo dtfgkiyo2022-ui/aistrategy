@@ -18,6 +18,8 @@ namespace Rts.Simulation
 
         private bool AgesOn => world.Config.Economy.Enabled && world.Config.Economy.Ages;
 
+        private bool EarlyArmsOn => AgesOn && world.Config.Economy.EarlyArms;
+
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
@@ -196,7 +198,11 @@ namespace Rts.Simulation
         private (int food, int wood, int gold, int ticks) AdvancePrice(uint faction, FactionEconomy e)
         {
             var rules = world.Config.Economy;
-            if (e.Civ == CivKind.Primitive) return (rules.AdvanceFoodCost, rules.AdvanceWoodCost, 0, rules.AdvanceTicks);
+            if (e.Civ == CivKind.Primitive)
+                return EarlyArmsOn ? (rules.EarlyAdvanceFoodCost, rules.EarlyAdvanceWoodCost, 0, rules.EarlyAdvanceTicks)
+                    : (rules.AdvanceFoodCost, rules.AdvanceWoodCost, 0, rules.AdvanceTicks);
+            if (e.Age == 1 && EarlyArmsOn)
+                return (rules.EarlyAge2FoodCost, rules.EarlyAge2WoodCost, 0, rules.EarlyAge2Ticks);
             return e.Age == 1 ? (rules.Age2FoodCost, rules.Age2WoodCost, 0, rules.Age2Ticks)
                 : (rules.Age3FoodCost, rules.Age3WoodCost, AcademyAge3GoldCost(faction, e, rules), rules.Age3Ticks);
         }
@@ -297,7 +303,10 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) { barracks = true; break; }
             }
-            return barracks && LivingVillagers(faction) >= (e.Civ == CivKind.Primitive ? AdvanceVillagers : Age2Villagers);
+            int requiredVillagers = e.Civ == CivKind.Primitive
+                ? (EarlyArmsOn ? world.Config.Economy.EarlyAdvanceVillagers : AdvanceVillagers)
+                : (EarlyArmsOn ? world.Config.Economy.EarlyAge2Villagers : Age2Villagers);
+            return barracks && LivingVillagers(faction) >= requiredVillagers;
         }
 
         /// <summary>

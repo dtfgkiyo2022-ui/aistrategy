@@ -87,7 +87,13 @@ namespace Rts.Simulation
             var counts = new Dictionary<UnitKind, int>();
             foreach (UnitKind kind in Enum.GetValues(typeof(UnitKind))) counts[kind] = 0;
             for (int i = 0; i < world.SoldierCount; i++)
-                if (world.Soldiers[i].Alive && world.Soldiers[i].Initial.FactionId == factionId) counts[world.Soldiers[i].Initial.Kind]++;
+            {
+                if (!world.Soldiers[i].Alive || world.Soldiers[i].Initial.FactionId != factionId) continue;
+                // What the soldier was trained as (archer, cavalry...), as the frame shows it; the initial kind alone
+                // counted every trained archer and rider as infantry.
+                var kind = world.Soldiers[i].Class != 0 ? world.Soldiers[i].Class : world.Soldiers[i].Initial.Kind;
+                counts[kind]++;
+            }
             var result = new MatchPackCount[counts.Count];
             int index = 0;
             foreach (var pair in counts)

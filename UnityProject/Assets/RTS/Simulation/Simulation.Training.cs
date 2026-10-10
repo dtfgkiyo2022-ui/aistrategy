@@ -47,10 +47,14 @@ namespace Rts.Simulation
             // V3-5 (32 #9): the siege workshop trains rams, and only rams.
             if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
             // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
-            if (b.Kind == BuildingKind.ArcheryRange) return kind == UnitKind.Archer && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            if (b.Kind == BuildingKind.ArcheryRange)
+                return kind == UnitKind.Archer && AgesOn
+                    && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Archer);
             if (b.Kind == BuildingKind.Stable)
-                return (kind == UnitKind.Cavalry && AgesOn && world.Economies[b.FactionId - 1].Age >= 2)
-                    || (kind == UnitKind.LightCavalry && CavalryAllowed(b.FactionId) && world.Economies[b.FactionId - 1].Age >= 1);
+                return (kind == UnitKind.Cavalry && AgesOn
+                        && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Cavalry))
+                    || (kind == UnitKind.LightCavalry && world.Economies[b.FactionId - 1].Age >= 1
+                        && (CavalryAllowed(b.FactionId) || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.LightCavalry));
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
@@ -74,6 +78,37 @@ namespace Rts.Simulation
             if (!AgesOn || e.Age < 2) return 0;
             return e.Civ == CivKind.Agrarian ? UnitKind.Archer : e.Civ == CivKind.Metallurgy ? UnitKind.Cavalry : 0;
         }
+
+        /// <summary>
+        /// One cross-building unit for each civilisation in the first civilisation age: archers or light cavalry, about
+        /// half each. The riders are light cavalry, not cavalry: cavalry costs metal, which most civilisations cannot make
+        /// in their first age (measured 10-10: a stable stood idle all match). Cavalry proper still comes with the second age.
+        /// </summary>
+        private UnitKind EarlyArmsUnit(uint faction)
+        {
+            if (!EarlyArmsOn) return 0;
+            switch (world.Economies[faction - 1].Civ)
+            {
+                case CivKind.Agrarian: return UnitKind.LightCavalry;
+                case CivKind.Metallurgy: return UnitKind.Archer;
+                case CivKind.Forestry: return UnitKind.Archer;
+                case CivKind.Masonry: return UnitKind.LightCavalry;
+                case CivKind.Caravan: return UnitKind.LightCavalry;
+                case CivKind.Cavalry: return UnitKind.LightCavalry;
+                case CivKind.Bridge: return UnitKind.Archer;
+                case CivKind.Academy: return UnitKind.LightCavalry;
+                case CivKind.Cult: return UnitKind.Archer;
+                case CivKind.Fishing: return UnitKind.LightCavalry;
+                case CivKind.Mountain: return UnitKind.Archer;
+                case CivKind.Tollgate: return UnitKind.LightCavalry;
+                case CivKind.Metropolis: return UnitKind.Archer;
+                case CivKind.Sanctuary: return UnitKind.LightCavalry;
+                default: return 0;
+            }
+        }
+
+        private bool EarlyArmsAllowed(uint faction)
+            => EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyArmsUnit(faction) != 0;
 
         /// <summary>Archers and cavalry fight as infantry with their own numbers (32 #8); it is what they were trained as.</summary>
         private void ApplyClass(int index, UnitKind unit)

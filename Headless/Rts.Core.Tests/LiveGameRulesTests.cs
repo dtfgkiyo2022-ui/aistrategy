@@ -22,7 +22,7 @@ namespace Rts.Core.Tests
             Assert.That(e.LineRebuildDelayTicks, Is.EqualTo(200));
             Assert.That(e.Masonry, Is.False, "the thirteen civilisations come only with allCivilisations");
             var all = LiveGameRules.Create(3, true, true, false, false).Economy;
-            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns, Is.True);
+            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms, Is.True);
         }
 
         [TestCase(3UL, false)]
@@ -49,6 +49,24 @@ namespace Rts.Core.Tests
             TestContext.WriteLine($"seed {seed} large {largeMap}: ticks {tick - 1}, ages {left.Capture(1).Economy.Age}/"
                 + $"{left.Capture(2).Economy.Age}, steelworks {buildings.Count(b => b.Kind == BuildingKind.Steelworks)}, "
                 + $"towns {buildings.Count(b => b.Kind == BuildingKind.Town)}, buildings {buildings.Length}");
+        }
+
+        /// <summary>
+        /// Early arms (10-10): from its first civilisation age a side fields its civilisation's second unit (archers or
+        /// light cavalry), so a ten-minute army is no longer infantry alone. Seed 4 puts both sides in the cavalry
+        /// civilisation by 5.5 minutes (measured).
+        /// </summary>
+        [Test]
+        public void AutomaticSidesFieldMoreThanInfantryByTenMinutes()
+        {
+            var sim = new Battle(LiveGameRules.Create(4, false, true, false, false));
+            for (long tick = 1; tick <= 12000 && !sim.Capture(1).Result.HasEnded; tick++)
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+            int others = 0;
+            for (uint faction = 1; faction <= 2; faction++)
+                others += sim.Capture(faction).Units.Count(u => u.IsOwn
+                    && (u.Kind == UnitKind.Archer || u.Kind == UnitKind.LightCavalry || u.Kind == UnitKind.Cavalry));
+            Assert.That(others, Is.GreaterThan(0), "archers or riders after ten minutes");
         }
 
         private static string Hash(Battle sim) => Convert.ToHexString(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState));
