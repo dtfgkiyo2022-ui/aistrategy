@@ -115,6 +115,8 @@ namespace Rts.Contracts
         public int Hp { get; }
         public CivKind Civ { get; }
         public byte EquipmentLevel { get; }
+        /// <summary>The own army this soldier belongs to, so a selected army can list what it is made of. 0 for an enemy.</summary>
+        public uint ArmyId { get; }
 
         public RenderUnit(
             uint id,
@@ -127,7 +129,8 @@ namespace Rts.Contracts
             bool hasHp,
             int hp,
             CivKind civ = CivKind.Primitive,
-            byte equipmentLevel = 0)
+            byte equipmentLevel = 0,
+            uint armyId = 0)
         {
             Id = id;
             IsOwn = isOwn;
@@ -140,6 +143,7 @@ namespace Rts.Contracts
             Hp = hp;
             Civ = civ;
             EquipmentLevel = equipmentLevel;
+            ArmyId = armyId;
         }
     }
     public readonly struct CommandView

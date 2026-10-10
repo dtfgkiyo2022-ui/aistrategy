@@ -710,7 +710,7 @@ namespace Rts.Simulation
                         equipmentLevel = (byte)EquipmentTechCount(ownerEconomy.Techs);
                     }
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
-                        own && s.IsRetreating, own, own ? s.Hp : 0, civ, equipmentLevel));
+                        own && s.IsRetreating, own, own ? s.Hp : 0, civ, equipmentLevel, own ? s.Initial.ArmyId : 0));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is
