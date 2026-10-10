@@ -1,6 +1,6 @@
 # オーナー側（A）作業の引き継ぎメモ
 
-最終更新：2026-10-06 午後（戦術＝プログラムの T-1〜T-7 ができ、戦術の命令が効いていなかった不具合を直した。T-8 を Codex が作業中）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
+最終更新：2026-10-10 朝（今のゲームで全機能をオン・長い試合の重さを解消・大きい地図の内政の詰まりを修正中）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
 
 このメモは「今どこまで進んでいて、次に何をするか」と「このリポジトリで作業するときの落とし穴」をまとめたものです。恒常的なルールは `CLAUDE.md`、仕様は `docs/technical-design.md`、進め方は `ROADMAP.md` と GitHub Issues が正です。このメモと矛盾したら、そちらを優先してください。
 
@@ -10,7 +10,29 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-06 午後。これが最新）
+### 今どこにいるか（2026-10-10 朝。これが最新）
+
+**最初にやること：作業中の枝 `a/large-map`（push 済み、PR 未作成）の全体テストの結果を見て、通れば PR を作ってマージし、`../aistrategy-wt-standard` を main に合わせる。**
+
+- 全体テストは `D:/rts-verify/fulltest_liveflags.ps1`（作業フォルダ `../aistrategy-wt-liveflags`）で実行中だった。結果は `D:/rts-verify/fulltest_liveflags.done`（`EXIT=0` なら成功）と `.log` の末尾。Unity EditMode は `liveflags_editmode.done`／`.xml`（今 458 合格・1 スキップが正常。スキップは製品版のビルドでその作業フォルダに素材の一覧ができたため）
+- `a/large-map` の中身：お任せが時代のために貯めている間も、余った木材で集積所を建てる（`Simulation.DropSites.cs`）／大きい地図で金があるとき、各コアの 40〜70m の輪に食料 8 つ（`MapGenerator.Large.cs`）／`LiveGameRulesTests` に「10分後に両陣営とも時代が上がる」。**お任せの動きが変わるので、試合の結果を固定した古いテストが落ちる可能性がある**。落ちたら理由を確かめて基準を更新してよい
+- Unity の Library は `../aistrategy-wt-liveflags` にある。オーナーがテストプレイに使う Unity は `../aistrategy-wt-standard`（開いたまま。`git merge --ff-only origin/main` で最新にすると Unity が読み込み直す）
+- テストプレイ用の製品版：`D:/rts-verify/build1010/起動.bat`（#370 時点、IL2CPP・素材入り）。作り方は liveflags で `Rts.Editor.SmokeBuild.Build`（`D:/rts-verify/build1010.ps1`）。ビルドしたら `UnityProject/Assets` の URP 設定などが書き換わるので `git checkout` で戻す
+
+10-08〜10-10 にマージしたもの（オーナーの依頼順）：
+- UI を UI Toolkit に移し、新しい画面を既定に（見た目の案 A・C・D、`HudThemeCatalog`）。Steam Workshop（Steamworks.NET、仮の App ID 480）。Claude Haiku 5.5 を参謀に。時系列で戦術と参謀の命令を分ける
+- 物づくり案 1・3・4・5（ベルトの部品・見える化と設計図・ラインを頼む・ラインの守り）、お任せが分岐を使う（#365）、Jev でもラインを頼む（#364）、見本の戦術 `steel-economy`（#367）。**案2（文明ごとの加工の連鎖）は冶金 #193 のオーナー確認待ち**
+- #366：**今のゲームで実装済みの機能を全部オン**（加工の連鎖・ベルトの部品とラインの守り・区域・支城、13文明を既定でオン）。設定は `Simulation/LiveGameRules.cs` にまとめた（`tactic-match --terrain` も同じ）。新しい画面の「試合の設定」が毎フレーム作り直されてクリックが届かなかったのも直した
+- #368・#369・#370：**長い試合で重くなる不具合**。原因は終わった命令の記録を毎 tick なめていたこと・フレームに全命令を毎 tick 写していたこと。22分で 1 tick 7.1ms→0.67ms、全記録は直す前と一致。Contracts に `SharedPrefixList<T>` を追加（#135 に告知済み）。重さの記録は Unity のログの「RTS perf」行（20秒ごと）、手元の再現は `tactic-match ... --timing-out x.csv`（メモリ `long-match-slowdown-measurement.md`）
+- #371：上の帯の資源が5つ以上で切れる→小さな2段の札。エディタの Game 画面がホイールで拡大されて端が切れる→遊んでいる間は自動で戻す（`Editor/GameViewScaleLock.cs`）。集積所の模型の高さ 1.0→2.2
+
+次の候補（オーナーに出した一覧。オーナーは「次へ」と言えば Claude に選ばせる）：
+1. 物づくり案2：冶金が2つ目の時代に届くか測る（加工の連鎖をオンにした今の設定で）→ #193 をオーナーに報告
+2. 見本の戦術を強くする（多くがお任せより弱い）
+3. 兵が撤退のまま固まる不具合の疑い（#110）
+- オーナーは寝る前に「進めれるところは進めて」と言うことが多い。止めたいときは朝に言う方針
+
+### 今どこにいるか（2026-10-06 午後）
 
 - **main に入ったもの**：T-1（#306）、T-2 Jint の実行環境（#308）、T-3・T-4 試し遊びで戦術を選ぶ・ルールブックと記録パック（#309）
 - **重大な不具合を直した（main にはまだ入っていない）**：戦術の命令がシミュレーションで全部捨てられ、**どの戦術も何もしないのと同じだった**。原因は命令の中身（拠点・コアの目標に位置、AI の命令に必須の `ObservationTooOld` の失効なし、`reservePermille` を MaintainReserve 以外で使用）と、方針の版（`TargetRevision`・`Parents`）を付けずに出していたこと。`TacticCommandReader` を `Simulation.Payload` と同じ決まりにし、`TacticOrderVersions` で版を付ける。テストが「送った数」しか見ていなかったので、「シミュレーションが受け付けて実行した」ことを確かめるテストを足した（メモリ `tests-must-span-state-machine-timers.md` に「送った≠効いた」）。**main の試し遊びで戦術を選んでも、この修正が入るまで効かない**
