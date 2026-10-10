@@ -336,12 +336,12 @@ namespace Rts.Presentation
 
         public static CivKind UnitVisualCiv(FactionFrame frame, RenderUnit unit)
         {
-            return unit.IsOwn && frame != null && frame.Economy != null ? frame.Economy.Civ : CivKind.Primitive;
+            return unit.Civ;
         }
 
         public static int UnitVisualStage(FactionFrame frame, RenderUnit unit)
         {
-            return unit.IsOwn && frame != null && frame.Economy != null ? EquipmentStage(frame.Economy) : 1;
+            return unit.EquipmentLevel == 0 ? 1 : unit.EquipmentLevel == 1 ? 2 : 3;
         }
 
         /// <summary>Every pack file the staged looks and banners use: models first, then clips. For the build manifest.</summary>

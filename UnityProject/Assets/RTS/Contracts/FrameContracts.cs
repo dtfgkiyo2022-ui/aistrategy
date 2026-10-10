@@ -113,6 +113,8 @@ namespace Rts.Contracts
         public bool IsRetreating { get; }
         public bool HasHp { get; }
         public int Hp { get; }
+        public CivKind Civ { get; }
+        public byte EquipmentLevel { get; }
 
         public RenderUnit(
             uint id,
@@ -123,7 +125,9 @@ namespace Rts.Contracts
             bool isAttacking,
             bool isRetreating,
             bool hasHp,
-            int hp)
+            int hp,
+            CivKind civ = CivKind.Primitive,
+            byte equipmentLevel = 0)
         {
             Id = id;
             IsOwn = isOwn;
@@ -134,6 +138,8 @@ namespace Rts.Contracts
             IsRetreating = isRetreating;
             HasHp = hasHp;
             Hp = hp;
+            Civ = civ;
+            EquipmentLevel = equipmentLevel;
         }
     }
     public readonly struct CommandView
