@@ -43,6 +43,9 @@ namespace Rts.Presentation
             public float FacingY;
             public bool HasAttackFacing;
             public float AttackFacingY;
+            public CivKind AppearanceCiv;
+            public int AppearanceStage;
+            public bool UsesTieredAppearance;
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
@@ -55,6 +58,7 @@ namespace Rts.Presentation
         private readonly Dictionary<ulong, Vector3> previousUnitPositions = new Dictionary<ulong, Vector3>();
         private readonly Dictionary<uint, Vector3> previousCorePositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, Visual> armies = new Dictionary<uint, Visual>();
+        private readonly Dictionary<uint, GameObject> armyFlags = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
@@ -273,6 +277,12 @@ namespace Rts.Presentation
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
             foreach (var visual in armies.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
+            foreach (var pair in armyFlags)
+            {
+                if (!armies.TryGetValue(pair.Key, out var marker)) continue;
+                var at = marker.Object.transform.position;
+                pair.Value.transform.position = new Vector3(at.x, 0f, at.z);
+            }
             foreach (var arrow in arrows.Values)
             {
                 if (!armies.TryGetValue(arrow.ArmyId, out var army)) { arrow.Line.enabled = false; continue; }
@@ -407,21 +417,44 @@ namespace Rts.Presentation
                 ulong key = UnitKey(unit);
                 present.Add(key);
                 var target = UnitWorldPosition(unit, key);
+                CivKind appearanceCiv = LocalVisualPack.UnitVisualCiv(frame, unit);
+                int appearanceStage = LocalVisualPack.UnitVisualStage(frame, unit);
                 if (!units.TryGetValue(key, out var visual))
                 {
-                    var objectToAnimate = CreateUnitObject(unit);
+                    bool tiered;
+                    var objectToAnimate = CreateUnitObject(unit, appearanceCiv, appearanceStage, out tiered);
                     visual = new Visual
                     {
                         Object = objectToAnimate,
-                        Animation = LocalVisualPack.TryCreateAnimation(objectToAnimate, unit.Kind, key),
+                        Animation = LocalVisualPack.TryCreateDisplayAnimation(objectToAnimate, unit.Kind, appearanceCiv,
+                            appearanceStage, key, tiered),
                         From = target,
                         IsEnemy = !unit.IsOwn,
-                        FacingY = 0f
+                        FacingY = 0f,
+                        AppearanceCiv = appearanceCiv,
+                        AppearanceStage = appearanceStage,
+                        UsesTieredAppearance = tiered
                     };
                     units.Add(key, visual);
                 }
                 else
                 {
+                    bool appearanceChanged = visual.AppearanceCiv != appearanceCiv
+                        || visual.AppearanceStage != appearanceStage;
+                    if (appearanceChanged)
+                    {
+                        Vector3 current = visual.Object.transform.position;
+                        if (visual.Animation != null) visual.Animation.Dispose();
+                        Discard(visual.Object);
+                        bool tiered;
+                        visual.Object = CreateUnitObject(unit, appearanceCiv, appearanceStage, out tiered);
+                        visual.Object.transform.position = current;
+                        visual.Animation = LocalVisualPack.TryCreateDisplayAnimation(visual.Object, unit.Kind,
+                            appearanceCiv, appearanceStage, key, tiered);
+                        visual.AppearanceCiv = appearanceCiv;
+                        visual.AppearanceStage = appearanceStage;
+                        visual.UsesTieredAppearance = tiered;
+                    }
                     visual.From = visual.Object.transform.position;
                     if (previousUnitPositions.TryGetValue(key, out var previous)) visual.From = previous;
                 }
@@ -631,6 +664,14 @@ namespace Rts.Presentation
                     marker.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(ArmyPalette[(int)((army.Id + 3) % 4)]);
                     visual = new Visual { Object = marker, From = target };
                     armies.Add(army.Id, visual);
+                    // The banner stands upright on the ground under the marker. It is not a child of the marker: the marker
+                    // is a tilted diamond floating 6 m up, and a child would inherit the tilt and the height.
+                    if (LocalVisualPack.TryCreateBanner((int)(army.Id % 12u), transform, out var banner))
+                    {
+                        banner.name = "ArmyBanner_" + army.Id;
+                        banner.transform.position = new Vector3(target.x, 0f, target.z);
+                        armyFlags.Add(army.Id, banner);
+                    }
                 }
                 else
                 {
@@ -645,6 +686,11 @@ namespace Rts.Presentation
                 if (!present.Contains(pair.Key)) scratch.Add(pair.Key);
             foreach (var id in scratch)
             {
+                if (armyFlags.TryGetValue(id, out var flag))
+                {
+                    Discard(flag);
+                    armyFlags.Remove(id);
+                }
                 Discard(armies[id].Object);
                 armies.Remove(id);
                 armyAlive.Remove(id);
@@ -966,6 +1012,8 @@ namespace Rts.Presentation
         {
             foreach (var visual in units.Values)
                 if (visual.Animation != null) visual.Animation.Dispose();
+            foreach (var flag in armyFlags.Values)
+                Discard(flag);
             foreach (var arrow in projectileArrows.Values)
                 Discard(arrow.Line.gameObject);
         }
@@ -979,8 +1027,9 @@ namespace Rts.Presentation
                 Discard(visual.Object);
             }
             units.Clear(); previousUnitPositions.Clear();
+            foreach (var flag in armyFlags.Values) Discard(flag);
             foreach (var visual in armies.Values) Discard(visual.Object);
-            armies.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();
+            armies.Clear(); armyFlags.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();
             foreach (var visual in cores.Values) Discard(visual.Object);
             cores.Clear(); previousCorePositions.Clear(); coreHp.Clear();
             foreach (var visual in outposts.Values) Discard(visual.Object);
@@ -1015,14 +1064,15 @@ namespace Rts.Presentation
             return kind == UnitKind.Scout ? scoutModel : infantryModel;
         }
 
-        private GameObject CreateUnitObject(RenderUnit unit)
+        private GameObject CreateUnitObject(RenderUnit unit, CivKind civ, int stage, out bool tiered)
         {
             // A purchased pack, when this machine has it, replaces the placeholders; everyone else keeps them.
-            if (LocalVisualPack.TryCreateUnit(unit.Kind, unit.IsOwn, transform, out var packed))
+            if (LocalVisualPack.TryCreateDisplayUnit(unit.Kind, civ, stage, unit.IsOwn, transform, out var packed, out tiered))
             {
                 packed.name = (unit.IsOwn ? "Own_" : "Enemy_") + unit.Id;
                 return packed;
             }
+            tiered = false;
             var color = PresentationMaterials.Get(unit.IsOwn ? new Color(0.2f, 0.5f, 1f) : new Color(1f, 0.3f, 0.25f));
             var model = ModelFor(unit.Kind);
             GameObject go;

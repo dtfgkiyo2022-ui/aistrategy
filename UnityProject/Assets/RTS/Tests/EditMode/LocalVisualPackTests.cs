@@ -89,6 +89,82 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void EveryCivilisationHasThreeInfantryStagesAndAnimations()
+        {
+            foreach (CivKind civ in Enum.GetValues(typeof(CivKind)))
+            {
+                for (int stage = 1; stage <= 3; stage++)
+                {
+                    var model = LocalVisualPack.InfantryAssetPath(civ, stage);
+                    Assert.IsNotNull(model, civ + " stage " + stage + " must have an infantry model");
+                    Assert.IsTrue(model.StartsWith("Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/prefabs/", StringComparison.Ordinal));
+                    Assert.IsTrue(model.EndsWith(".prefab", StringComparison.Ordinal));
+                    foreach (LocalVisualPack.UnitMotion motion in Enum.GetValues(typeof(LocalVisualPack.UnitMotion)))
+                    {
+                        var animation = LocalVisualPack.InfantryAnimationAssetPath(civ, stage, motion);
+                        Assert.IsNotNull(animation, civ + " stage " + stage + " must have motion " + motion);
+                        Assert.IsTrue(animation.StartsWith("Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/animation/", StringComparison.Ordinal));
+                        Assert.IsTrue(animation.EndsWith(".FBX", StringComparison.Ordinal));
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public void EquipmentStageUsesResearchBoundaries()
+        {
+            Assert.AreEqual(1, LocalVisualPack.EquipmentStage(0UL));
+            Assert.AreEqual(2, LocalVisualPack.EquipmentStage(1UL << ((int)TechKind.Weapons - 1)));
+            Assert.AreEqual(2, LocalVisualPack.EquipmentStage(1UL << ((int)TechKind.Armour - 1)));
+            Assert.AreEqual(3, LocalVisualPack.EquipmentStage(
+                (1UL << ((int)TechKind.Weapons - 1)) | (1UL << ((int)TechKind.Armour - 1))));
+            Assert.AreEqual(1, LocalVisualPack.EquipmentStage(
+                (1UL << ((int)TechKind.Tools - 1)) | (1UL << ((int)TechKind.Carts - 1))));
+        }
+
+        [Test]
+        public void BannerPathsHaveTwelveColours()
+        {
+            for (int index = 0; index < 12; index++)
+            {
+                var path = LocalVisualPack.BannerAssetPath(index);
+                Assert.IsNotNull(path);
+                Assert.IsTrue(path.StartsWith("Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/prefabs/banners/", StringComparison.Ordinal));
+                Assert.IsTrue(path.EndsWith(".prefab", StringComparison.Ordinal));
+            }
+            Assert.IsNull(LocalVisualPack.BannerAssetPath(-1));
+            Assert.IsNull(LocalVisualPack.BannerAssetPath(12));
+        }
+
+        [Test]
+        public void MissingPackReportsFalseForTieredModelsAndBanners()
+        {
+            LocalVisualPack.Disabled = true;
+            try
+            {
+                Assert.IsFalse(LocalVisualPack.HasBanner(0));
+                Assert.IsFalse(LocalVisualPack.HasBanner(11));
+                var parent = new GameObject("TieredVisualPackTests");
+                try
+                {
+                    GameObject instance;
+                    bool tiered;
+                    Assert.IsFalse(LocalVisualPack.TryCreateDisplayUnit(UnitKind.Infantry, CivKind.Agrarian, 2,
+                        true, parent.transform, out instance, out tiered));
+                    Assert.IsFalse(LocalVisualPack.TryCreateBanner(0, parent.transform, out instance));
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(parent);
+                }
+            }
+            finally
+            {
+                LocalVisualPack.Disabled = false;
+            }
+        }
+
+        [Test]
         public void MissingPackDoesNotCreateAnimationHandle()
         {
             LocalVisualPack.Disabled = true;

@@ -106,6 +106,26 @@ namespace Rts.Presentation
             return kind + ":" + motion;
         }
 
+        /// <summary>Key of a model listed by its pack file (the staged looks and the banners), not by unit kind.</summary>
+        public static string FileKey(string packPath)
+        {
+            return "file:" + packPath;
+        }
+
+        public GameObject GetModelByFile(string packPath)
+        {
+            return packPath == null ? null : GetModel(FileKey(packPath));
+        }
+
+        public AnimationClip GetAnimationByFile(string packPath)
+        {
+            if (animations == null || packPath == null) return null;
+            string wanted = FileKey(packPath);
+            for (int i = 0; i < animations.Length; i++)
+                if (animations[i] != null && animations[i].key == wanted) return animations[i].clip;
+            return null;
+        }
+
         private GameObject GetModel(string key)
         {
             if (key == null) return null;
