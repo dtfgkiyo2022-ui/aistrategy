@@ -80,10 +80,13 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideDropSite(uint faction)
         {
-            // Not while saving to advance, and not while the civilisation's own line is still waiting for its wood.
-            if (!AgesOn || SavingToAdvance(faction) || (world.Economies[faction - 1].Civ != CivKind.Primitive && !CivLineStarted(faction))) return;
+            // Not while the civilisation's own line is still waiting for its wood. While saving to advance, only from the
+            // wood beyond the advance price: the drop-off used to wait for the whole saving, and when food was what was
+            // missing, villagers walked to far food with a thousand wood in store and the age never came (10-10).
+            if (!AgesOn || (world.Economies[faction - 1].Civ != CivKind.Primitive && !CivLineStarted(faction))) return;
             var rules = world.Config.Economy;
-            if (world.Economies[faction - 1].Wood < rules.DropSiteWoodCost) return;
+            int reserved = SavingToAdvance(faction) ? AdvancePrice(faction, world.Economies[faction - 1]).wood : 0;
+            if (world.Economies[faction - 1].Wood - reserved < rules.DropSiteWoodCost) return;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];

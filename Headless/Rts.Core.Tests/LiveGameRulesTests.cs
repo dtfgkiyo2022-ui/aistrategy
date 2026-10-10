@@ -27,6 +27,7 @@ namespace Rts.Core.Tests
 
         [TestCase(3UL, false)]
         [TestCase(11UL, false)]
+        [TestCase(5UL, false)]
         [TestCase(5UL, true)]
         public void AutomaticSidesPlayThePlayedRulesTheSameWayTwice(ulong seed, bool largeMap)
         {
@@ -42,6 +43,9 @@ namespace Rts.Core.Tests
             }
             Assert.That(Hash(left), Is.EqualTo(Hash(right)), "last tick");
             var buildings = left.Capture(1).Economy.Buildings.Concat(left.Capture(2).Economy.Buildings).ToArray();
+            // Ten minutes is enough for both sides to choose a civilisation. Food ran out before that on the large map (no
+            // remote food once gold took its cluster) and drop-offs waited for the whole age saving (10-10).
+            Assert.That(Math.Min(left.Capture(1).Economy.Age, left.Capture(2).Economy.Age), Is.GreaterThanOrEqualTo(1), "an age after ten minutes");
             TestContext.WriteLine($"seed {seed} large {largeMap}: ticks {tick - 1}, ages {left.Capture(1).Economy.Age}/"
                 + $"{left.Capture(2).Economy.Age}, steelworks {buildings.Count(b => b.Kind == BuildingKind.Steelworks)}, "
                 + $"towns {buildings.Count(b => b.Kind == BuildingKind.Town)}, buildings {buildings.Length}");
