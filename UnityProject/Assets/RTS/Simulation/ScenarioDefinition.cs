@@ -164,6 +164,11 @@ namespace Rts.Simulation
         public int QuarrySizeCells = 2, QuarryWoodCost = 80, QuarryWork = 200, QuarryHp = 400, QuarryIntervalTicks = 20;
         /// <summary>Advancing: food and wood paid at the start, and the ticks it takes at the core.</summary>
         public int AdvanceFoodCost = 400, AdvanceWoodCost = 300, AdvanceTicks = 1200;
+        /// <summary>Early arms economy: faster gathering and lower age prices are opt-in and never affect old scenarios.</summary>
+        public int EarlyGatherIntervalTicks = 10;
+        public int EarlyAdvanceFoodCost = 200, EarlyAdvanceWoodCost = 120, EarlyAdvanceTicks = 600;
+        public int EarlyAge2FoodCost = 300, EarlyAge2WoodCost = 200, EarlyAge2Ticks = 600;
+        public int EarlyAdvanceVillagers = 5, EarlyAge2Villagers = 6;
         /// <summary>V3-4 agrarian (27, 26.2): infantry is cheaper and quicker to train.</summary>
         public int AgrarianInfantryFood = 35, AgrarianInfantryWood = 10, AgrarianInfantryTicks = 200;
         /// <summary>V3-4 metallurgy (27): trained infantry is born with these HP and damage.</summary>
@@ -207,6 +212,8 @@ namespace Rts.Simulation
         public bool Metropolis;
         /// <summary>V3-18 #1: enables the sanctuary civilisation. Its rules are kept in extension ID 8.</summary>
         public bool Sanctuary;
+        /// <summary>Early arms and the accelerated automatic economy. False preserves the historical age-map decisions.</summary>
+        public bool EarlyArms;
         /// <summary>S-3: enables outpost towns. Its rules are kept in extension ID 11.</summary>
         public bool Towns;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>

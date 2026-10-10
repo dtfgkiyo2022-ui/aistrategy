@@ -39,7 +39,8 @@ namespace Rts.Simulation
         private int GatherTicksFor(uint faction, uint nodeId)
         {
             var rules = world.Config.Economy;
-            int interval = rules.GatherIntervalTicks - (HasTech(faction, TechKind.Tools) ? rules.ToolsGatherTicks : 0);
+            int interval = (EarlyArmsOn ? rules.EarlyGatherIntervalTicks : rules.GatherIntervalTicks)
+                - (HasTech(faction, TechKind.Tools) ? rules.ToolsGatherTicks : 0);
             if (rules.FishingEnabled && nodeId > 0 && world.Nodes[nodeId - 1].Fishing
                 && world.Economies[faction - 1].Civ == CivKind.Agrarian)
                 interval = interval * (1000 - rules.FishAgrarianBonusPermille) / 1000;
@@ -58,7 +59,10 @@ namespace Rts.Simulation
 
         /// <summary>A farm's ticks per food: its ground's pace, quicker with irrigation, never under 10.</summary>
         private int FarmTicksFor(BuildingState farm)
-            => Math.Max(10, farm.Interval - (HasTech(farm.FactionId, TechKind.Irrigation) ? world.Config.Economy.IrrigationTicks : 0));
+        {
+            int ticks = farm.Interval - (HasTech(farm.FactionId, TechKind.Irrigation) ? world.Config.Economy.IrrigationTicks : 0);
+            return EarlyArmsOn ? Math.Max(10, ticks / 2) : Math.Max(10, ticks);
+        }
 
         /// <summary>Whether this faction may research <paramref name="tech"/> at all (the civilisation techs are for their own civilisation).</summary>
         private bool TechOpen(uint faction, TechKind tech)

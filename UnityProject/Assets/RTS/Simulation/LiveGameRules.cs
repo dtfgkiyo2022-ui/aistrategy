@@ -46,6 +46,7 @@ namespace Rts.Simulation
             e.Tollgate = true;
             e.Metropolis = true;
             e.Sanctuary = true;
+            e.EarlyArms = true;
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;

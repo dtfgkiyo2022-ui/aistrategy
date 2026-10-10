@@ -73,6 +73,9 @@ namespace Rts.Simulation
         private const int LatePushExtensionId = 14;
         private const int LatePushExtensionVersion = 1;
         private const int LatePushExtensionDataLength = 4 * sizeof(int);
+        private const int EarlyArmsExtensionId = 15;
+        private const int EarlyArmsExtensionVersion = 1;
+        private const int EarlyArmsExtensionDataLength = 10 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -94,7 +97,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(TownExtensionId, TownExtensionVersion, TownExtensionDataLength),
             new ExtensionRegistration(EconomyScaleExtensionId, EconomyScaleExtensionVersion, EconomyScaleExtensionDataLength),
             new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength),
-            new ExtensionRegistration(LatePushExtensionId, LatePushExtensionVersion, LatePushExtensionDataLength)
+            new ExtensionRegistration(LatePushExtensionId, LatePushExtensionVersion, LatePushExtensionDataLength),
+            new ExtensionRegistration(EarlyArmsExtensionId, EarlyArmsExtensionVersion, EarlyArmsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -648,9 +652,10 @@ namespace Rts.Simulation
                 else if (id == ArmyGrowthExtensionId) ReadArmyGrowthExtension(extension, c.Economy);
                 else if (id == TownExtensionId) ReadTownExtension(extension, c.Economy);
                 else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
-                else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
-                else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
-                extensions.Add(extension);
+                 else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
+                 else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
+                 else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
+                 extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -693,6 +698,7 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == EconomyScaleExtensionId && !c.Economy.EconomyScale);
             extensions.RemoveAll(extension => extension != null && extension.Id == RegionExtensionId && !c.Economy.Regions);
             extensions.RemoveAll(extension => extension != null && extension.Id == LatePushExtensionId && !c.Economy.LatePush);
+            extensions.RemoveAll(extension => extension != null && extension.Id == EarlyArmsExtensionId && !c.Economy.EarlyArms);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -804,7 +810,45 @@ namespace Rts.Simulation
                     extensions[i] = CreateLatePushExtension(c.Economy);
                 }
             if (c.Economy.LatePush && !hasLatePush) extensions.Add(CreateLatePushExtension(c.Economy));
+            bool hasEarlyArms = false;
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (extensions[i] == null || extensions[i].Id != EarlyArmsExtensionId) continue;
+                hasEarlyArms = true;
+                extensions[i] = CreateEarlyArmsExtension(c.Economy);
+            }
+            if (c.Economy.EarlyArms && !hasEarlyArms) extensions.Add(CreateEarlyArmsExtension(c.Economy));
             return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateEarlyArmsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.EarlyArms ? 1 : 0);
+                writer.Write(e.EarlyGatherIntervalTicks);
+                writer.Write(e.EarlyAdvanceFoodCost); writer.Write(e.EarlyAdvanceWoodCost); writer.Write(e.EarlyAdvanceTicks);
+                writer.Write(e.EarlyAge2FoodCost); writer.Write(e.EarlyAge2WoodCost); writer.Write(e.EarlyAge2Ticks);
+                writer.Write(e.EarlyAdvanceVillagers); writer.Write(e.EarlyAge2Villagers);
+                return new ScenarioExtensionData { Id = EarlyArmsExtensionId, Version = EarlyArmsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadEarlyArmsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid early-arms flag.");
+                e.EarlyArms = enabled != 0;
+                e.EarlyGatherIntervalTicks = reader.ReadInt32();
+                e.EarlyAdvanceFoodCost = reader.ReadInt32(); e.EarlyAdvanceWoodCost = reader.ReadInt32(); e.EarlyAdvanceTicks = reader.ReadInt32();
+                e.EarlyAge2FoodCost = reader.ReadInt32(); e.EarlyAge2WoodCost = reader.ReadInt32(); e.EarlyAge2Ticks = reader.ReadInt32();
+                e.EarlyAdvanceVillagers = reader.ReadInt32(); e.EarlyAge2Villagers = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing early-arms extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateTownExtension(EconomyRules e)

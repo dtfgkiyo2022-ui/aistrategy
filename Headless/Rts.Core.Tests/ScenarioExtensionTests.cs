@@ -90,6 +90,38 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void EarlyArmsRoundTripsItsOptInEconomyWithoutChangingTheDefault()
+        {
+            var normal = MapGenerator.GenerateTerrain(1);
+            Assert.That(normal.Economy.EarlyArms, Is.False);
+            Assert.That(ScenarioBinary.Decode(ScenarioBinary.Encode(normal)).Economy.EarlyArms, Is.False);
+
+            var scenario = MapGenerator.GenerateTerrain(1);
+            var e = scenario.Economy;
+            e.EarlyArms = true;
+            e.EarlyGatherIntervalTicks = 11;
+            e.EarlyAdvanceFoodCost = 251;
+            e.EarlyAdvanceWoodCost = 199;
+            e.EarlyAdvanceTicks = 801;
+            e.EarlyAge2FoodCost = 501;
+            e.EarlyAge2WoodCost = 301;
+            e.EarlyAge2Ticks = 1201;
+            e.EarlyAdvanceVillagers = 7;
+            e.EarlyAge2Villagers = 9;
+            var decoded = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario));
+            Assert.That(decoded.Economy.EarlyArms, Is.True);
+            Assert.That(decoded.Economy.EarlyGatherIntervalTicks, Is.EqualTo(11));
+            Assert.That(decoded.Economy.EarlyAdvanceFoodCost, Is.EqualTo(251));
+            Assert.That(decoded.Economy.EarlyAdvanceWoodCost, Is.EqualTo(199));
+            Assert.That(decoded.Economy.EarlyAdvanceTicks, Is.EqualTo(801));
+            Assert.That(decoded.Economy.EarlyAge2FoodCost, Is.EqualTo(501));
+            Assert.That(decoded.Economy.EarlyAge2WoodCost, Is.EqualTo(301));
+            Assert.That(decoded.Economy.EarlyAge2Ticks, Is.EqualTo(1201));
+            Assert.That(decoded.Economy.EarlyAdvanceVillagers, Is.EqualTo(7));
+            Assert.That(decoded.Economy.EarlyAge2Villagers, Is.EqualTo(9));
+        }
+
+        [Test]
         public void InvalidExtensionRecordsAreRejected()
         {
             var valid = ScenarioBinary.Encode(WithTestExtension(7));

@@ -20,7 +20,8 @@ namespace Rts.Simulation
             return civ == CivKind.Agrarian ? UnitKind.Cavalry : civ == CivKind.Metallurgy ? UnitKind.Archer : 0;
         }
 
-        private static BuildingKind HouseOf(UnitKind unit) => unit == UnitKind.Cavalry ? BuildingKind.Stable : BuildingKind.ArcheryRange;
+        private static BuildingKind HouseOf(UnitKind unit)
+            => unit == UnitKind.Cavalry || unit == UnitKind.LightCavalry ? BuildingKind.Stable : BuildingKind.ArcheryRange;
 
         /// <summary>
         /// AI phase, in the second age and not saving: the building for the unit the civilisation lacks, then one of that
@@ -28,8 +29,10 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideCrossUnit(uint faction)
         {
-            if (!AgesOn || world.Economies[faction - 1].Age < 2 || SavingToAdvance(faction)) return;
-            var unit = CrossUnit(faction);
+            if (!AgesOn || SavingToAdvance(faction)) return;
+            bool early = world.Economies[faction - 1].Age == 1 && EarlyArmsAllowed(faction);
+            if (!early && world.Economies[faction - 1].Age < 2) return;
+            var unit = early ? EarlyArmsUnit(faction) : CrossUnit(faction);
             if (unit == 0) return;
             var kind = HouseOf(unit);
             var rules = world.Config.Economy;
@@ -43,7 +46,8 @@ namespace Rts.Simulation
             }
             ref var b = ref world.Buildings[index];
             if (!b.Complete || b.Held || b.Queued > 0) return;
-            if (AutoPerCross * CountClass(faction, unit) >= CountClass(faction, UnitKind.Infantry)) return;
+            int infantryPerCross = early ? 3 : AutoPerCross;
+            if (infantryPerCross * CountClass(faction, unit) >= CountClass(faction, UnitKind.Infantry)) return;
             if (HasRoomFor(faction, unit) && CanPay(faction, unit)) Enqueue(faction, ref b, unit);
         }
 
