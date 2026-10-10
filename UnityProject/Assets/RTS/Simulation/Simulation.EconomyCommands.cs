@@ -38,6 +38,12 @@ namespace Rts.Simulation
                     ReturnToAuto(faction);
                     return;
                 case EconomyCommandKind.AdvanceAge:
+                    if (AgeClockOn && economy.AdvanceRemaining == 0 && economy.Age < 3
+                        && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
+                    {
+                        CompleteAdvance(ref economy, c.Civ);
+                        return;
+                    }
                     if (CanAdvance(faction, c.Civ)) StartAdvance(faction, c.Civ);
                     // Not yet possible out of the primitive age: the choice is kept (the latest one wins) and taken on
                     // the first tick advancing can start (AdvanceReserved).

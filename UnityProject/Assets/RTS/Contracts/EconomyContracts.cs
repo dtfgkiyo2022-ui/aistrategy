@@ -687,6 +687,8 @@ namespace Rts.Contracts
         public CivKind ReservedCiv { get; }
         /// <summary>The gold the next advance costs (only the third age can cost gold); 0 otherwise.</summary>
         public int NextAgeGoldCost { get; }
+        /// <summary>Age clock: the next scheduled age tick, or 0 when the clock is off or the last age is reached.</summary>
+        public long NextAgeClockTick { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -717,13 +719,14 @@ namespace Rts.Contracts
             int charcoal = 0, int steel = 0, IReadOnlyList<LineView> lines = null,
             int gold = 0, int bowGear = 0, int fletcherWoodCost = 0, int fletcherSizeCells = 0, int fletcherTicks = 0,
             int skirmishArcherFoodCost = 0, int skirmishArcherBowGearCost = 0, int skirmishArcherTrainTicks = 0,
-            CavalryMissionView cavalryMission = default(CavalryMissionView),
-            CivKind reservedCiv = CivKind.Primitive, int nextAgeGoldCost = 0,
-            bool beltComponents = false, int fastBeltWoodCost = 0, int fastBeltTicksPerCell = 0,
-            int splitterWoodCost = 0, int sorterWoodCost = 0, int undergroundBeltWoodCost = 0,
-            int undergroundBeltMaxLength = 0, int storageWoodCost = 0, int storageSizeCells = 0, int storageCapacity = 0)
+             CavalryMissionView cavalryMission = default(CavalryMissionView),
+             CivKind reservedCiv = CivKind.Primitive, int nextAgeGoldCost = 0,
+             bool beltComponents = false, int fastBeltWoodCost = 0, int fastBeltTicksPerCell = 0,
+             int splitterWoodCost = 0, int sorterWoodCost = 0, int undergroundBeltWoodCost = 0,
+             int undergroundBeltMaxLength = 0, int storageWoodCost = 0, int storageSizeCells = 0, int storageCapacity = 0,
+             long nextAgeClockTick = 0)
         {
-            ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost;
+            ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

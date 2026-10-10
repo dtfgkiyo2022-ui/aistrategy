@@ -22,7 +22,7 @@ namespace Rts.Core.Tests
             Assert.That(e.LineRebuildDelayTicks, Is.EqualTo(200));
             Assert.That(e.Masonry, Is.False, "the thirteen civilisations come only with allCivilisations");
             var all = LiveGameRules.Create(3, true, true, false, false).Economy;
-            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms, Is.True);
+            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock, Is.True);
         }
 
         [TestCase(3UL, false)]

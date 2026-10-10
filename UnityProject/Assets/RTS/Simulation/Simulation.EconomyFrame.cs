@@ -76,20 +76,27 @@ namespace Rts.Simulation
                     own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal));
             }
             var cavalryMission = CavalryMissionFor(faction);
+            var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);
+            int advanceFood = AgeClockOn ? advancePrice.food : rules.AdvanceFoodCost;
+            int advanceWood = AgeClockOn ? advancePrice.wood : rules.AdvanceWoodCost;
+            int age2Food = AgeClockOn && economy.Age == 1 ? advancePrice.food : rules.Age2FoodCost;
+            int age2Wood = AgeClockOn && economy.Age == 1 ? advancePrice.wood : rules.Age2WoodCost;
+            int age3Food = AgeClockOn && economy.Age == 2 ? advancePrice.food : rules.Age3FoodCost;
+            int age3Wood = AgeClockOn && economy.Age == 2 ? advancePrice.wood : rules.Age3WoodCost;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction), InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
-                rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, rules.AdvanceFoodCost, rules.AdvanceWoodCost,
+                rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, advanceFood, advanceWood,
                 rules.FarmWoodCost, rules.FarmSizeCells, rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
                  economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? WoodOf(BuildingKind.Tower, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
                 rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
-                economy.Age, rules.Ages ? rules.Age2FoodCost : 0, rules.Ages ? rules.Age2WoodCost : 0, rules.Ages ? rules.ArcherFood : 0, rules.Ages ? rules.ArcherWood : 0,
+                economy.Age, rules.Ages ? age2Food : 0, rules.Ages ? age2Wood : 0, rules.Ages ? rules.ArcherFood : 0, rules.Ages ? rules.ArcherWood : 0,
                 rules.Ages ? rules.CavalryFood : 0, rules.Ages ? rules.CavalryWood : 0, rules.Ages ? rules.CavalryMetal : 0,
                 rules.Ages ? rules.MarketWoodCost : 0, rules.Ages ? rules.WorkshopWoodCost : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
                 rules.Ages ? rules.RamFood : 0, rules.Ages ? rules.RamWood : 0,
-                rules.Ages ? rules.Age3FoodCost : 0, rules.Ages ? rules.Age3WoodCost : 0,
+                rules.Ages ? age3Food : 0, rules.Ages ? age3Wood : 0,
                 rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0,
                  rules.Ages ? WoodOf(BuildingKind.Castle, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,
                 rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
@@ -109,7 +116,8 @@ namespace Rts.Simulation
                 AgesOn ? economy.ReservedCiv : CivKind.Primitive,
                 AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0,
                 rules.BeltComponents, rules.FastBeltWoodCost, rules.FastBeltTicksPerCell, rules.SplitterWoodCost, rules.SorterWoodCost,
-                rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity);
+                rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity,
+                nextAgeClockTick: NextAgeClockTick(faction));
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

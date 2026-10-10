@@ -83,6 +83,7 @@ namespace Rts.Tactics
             foreach (var row in BuildingRows(scenario.Economy)) markdown.AppendLine("|`" + row.Name + "`|" + row.Cost + "|" + row.Work + "|");
             markdown.AppendLine();
             markdown.AppendLine("時代進行: `Age2` は food=" + scenario.Economy.Age2FoodCost + ", wood=" + scenario.Economy.Age2WoodCost + ", ticks=" + scenario.Economy.Age2Ticks + "。`Age3` は food=" + scenario.Economy.Age3FoodCost + ", wood=" + scenario.Economy.Age3WoodCost + ", ticks=" + scenario.Economy.Age3Ticks + "。");
+            markdown.AppendLine("時代時計が有効なとき、`economy.nextAgeAutoTick` が次の自動進行tick、`economy.nextAgeCost` が今払う費用です。時計が無効または最後の時代なら自動tickは0です。");
             markdown.AppendLine();
             markdown.AppendLine("## 見本 `TacticSamples/defend-then-push/main.js`");
             markdown.AppendLine();
@@ -103,7 +104,7 @@ namespace Rts.Tactics
                 ("contacts[]", "id/position/lastSeenTick/min/max/visible/uncertain/strengthUnknown/absent/visibleComposition/covered"), ("contacts[].visibleComposition", "現在見えている敵のうち接触に属する兵種別内訳"), ("contacts[].covered", "この接触に含まれる観測済み接触ID"),
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
-                ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
+                ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeAutoTick/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("orders[]", "自陣営の有効な命令。id/source/kind/target/goal/status/acceptedTick/applyTick。idの昇順"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };

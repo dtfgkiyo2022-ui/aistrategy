@@ -673,7 +673,8 @@ namespace Rts.Presentation
             if (economy.Ages && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
             {
                 // V3-4: advancing out of the primitive age, into one civilisation.
-                string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）");
+                string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）")
+                    + AgeClockLabel(economy, economy.AdvanceFoodCost, economy.AdvanceWoodCost);
                 // A button can always be pressed: when advancing is not possible yet, the choice is kept as a reservation.
                 string reserved = economy.ReservedCiv != CivKind.Primitive
                     ? UiText.T("  Reserved: ", "  予約中：") + CivName(economy.ReservedCiv) : "";
@@ -715,7 +716,8 @@ namespace Rts.Presentation
                 int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
                 int gold = economy.NextAgeGoldCost;
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood
-                    + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"));
+                    + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
+                    + AgeClockLabel(economy, food, wood);
                 // Only a guide: the simulation decides. The button is shut, with the reason, while advancing cannot start.
                 string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない")
                     : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない")
