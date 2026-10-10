@@ -70,6 +70,19 @@ namespace Rts.Editor
                 }
             }
 
+            // The staged looks (civilisation x equipment stage) and the army banners are listed by pack file.
+            var stagedModels = new List<string>();
+            var stagedClips = new List<string>();
+            LocalVisualPack.StagedAssetPaths(stagedModels, stagedClips);
+            foreach (var path in stagedModels)
+                AddModel(models, LocalVisualPackManifest.FileKey(path), path);
+            foreach (var path in stagedClips)
+            {
+                var clip = LoadAnimationClip(path);
+                if (clip != null)
+                    animations.Add(new LocalVisualPackManifest.AnimationEntry { key = LocalVisualPackManifest.FileKey(path), clip = clip });
+            }
+
             AddMaterial(materials, LocalVisualPackManifest.UnitBlueMaterialKey, LocalVisualPack.UnitMaterialAssetPath(true));
             AddMaterial(materials, LocalVisualPackManifest.UnitRedMaterialKey, LocalVisualPack.UnitMaterialAssetPath(false));
             AddMaterial(materials, LocalVisualPackManifest.BuildingBlueMaterialKey, LocalVisualPack.BuildingMaterialAssetPath(1));

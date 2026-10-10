@@ -21,18 +21,40 @@ namespace Rts.Presentation
         public const string ManifestResourceName = "LocalVisualPackManifest";
         private const string Root = "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/";
         private const string Units = Root + "prefabs/";
+        private const string Banners = Units + "banners/";
         private const string Buildings = Root + "models/buildings/";
         private const string AnimationRoot = Root + "animation/";
         private const string UnitMaterialRoot = Root + "models/materials/color/Units/TT_RTS_Units_";
         private const string BuildingMaterialRoot = Root + "models/materials/color/Buildings/TT_RTS_buildings_";
         private const float CoreWidth = 9f, OutpostWidth = 6f;
         private const string OutpostModel = "Tower_A.FBX";
+        private static readonly string[] BannerFiles =
+        {
+            "TT_Banner_Black.prefab", "TT_Banner_Blue_A.prefab", "TT_Banner_Blue_B.prefab",
+            "TT_Banner_Brown.prefab", "TT_Banner_Green_A.prefab", "TT_Banner_Green_B.prefab",
+            "TT_Banner_Orange.prefab", "TT_Banner_Pink.prefab", "TT_Banner_Purple.prefab",
+            "TT_Banner_Red.prefab", "TT_Banner_White.prefab", "TT_Banner_Yellow.prefab"
+        };
 
         private sealed class UnitSpec
         {
             public readonly string File;
             public readonly float Height;
             public UnitSpec(string file, float height) { File = file; Height = height; }
+        }
+
+        private sealed class TieredUnitSpec
+        {
+            public readonly string File;
+            public readonly float Height;
+            public readonly AnimationSpec Animation;
+
+            public TieredUnitSpec(string file, float height, AnimationSpec animation)
+            {
+                File = file;
+                Height = height;
+                Animation = animation;
+            }
         }
 
         private sealed class BuildingSpec
@@ -94,6 +116,80 @@ namespace Rts.Presentation
             }
         }
 
+        private static AnimationSpec InfantryAnimation(string family, string name)
+        {
+            string lower = name.ToLowerInvariant();
+            return new AnimationSpec(
+                "animation_infantry/" + family + "/" + lower + "_01_idle.FBX",
+                "animation_infantry/" + family + "/" + lower + "_02_walk.FBX",
+                "animation_infantry/" + family + "/" + lower + "_04_attack_A.FBX");
+        }
+
+        private static TieredUnitSpec Infantry(string file, string family, string animationName, float height)
+        {
+            return new TieredUnitSpec(file, height, InfantryAnimation(family, animationName));
+        }
+
+        // Each civilisation keeps one weapon family across its three equipment stages; the comments explain the visual choice.
+        private static readonly Dictionary<CivKind, TieredUnitSpec[]> InfantryTable = new Dictionary<CivKind, TieredUnitSpec[]>
+        {
+            // Primitive stays as the light infantry silhouette because it has no specialised military tradition.
+            { CivKind.Primitive, new[] { Infantry("TT_Light_Infantry.prefab", "Infantry", "infantry", 2.4f), Infantry("TT_Light_Infantry.prefab", "Infantry", "infantry", 2.4f), Infantry("TT_Light_Infantry.prefab", "Infantry", "infantry", 2.4f) } },
+            // Agrarian uses spear and polearm forms that read as tools turned into field weapons.
+            { CivKind.Agrarian, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Metallurgy advances from a shielded sword line into the commander's heavier two-handed armour.
+            { CivKind.Metallurgy, new[] { Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Forestry favours long reach, so its late stages move from spears to halberds.
+            { CivKind.Forestry, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f) } },
+            // Masonry is defensive and disciplined, making the broad halberdier silhouette its signature.
+            { CivKind.Masonry, new[] { Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Caravan guards mix a practical sword with a polearm escort and a veteran commander.
+            { CivKind.Caravan, new[] { Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Cavalry civilisation keeps a compact sword guard before adopting paladin-grade protection.
+            { CivKind.Cavalry, new[] { Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } },
+            // Bridge relies on polearms to protect construction crews and crossings.
+            { CivKind.Bridge, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Academy trains a shielded officer corps, ending in the heavily armed paladin.
+            { CivKind.Academy, new[] { Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } },
+            // Cult favours spear-bearing devotees before its chosen champions take commander's arms.
+            { CivKind.Cult, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } },
+            // Fishing starts with spears and adopts polearms as coastal defence becomes organised.
+            { CivKind.Fishing, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f) } },
+            // Mountain uses the most recognisable reach weapon, then hardens it with commander and paladin armour.
+            { CivKind.Mountain, new[] { Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } },
+            // Tollgate's guards are halberdiers at every gate, with a commander at the final stage.
+            { CivKind.Tollgate, new[] { Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Halberdier.prefab", "Polearm", "polearm", 2.5f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f) } },
+            // Metropolis fields professional sword guards and promotes them to elite paladins.
+            { CivKind.Metropolis, new[] { Infantry("TT_Swordman.prefab", "Shield", "shield", 2.4f), Infantry("TT_Commander.prefab", "TwoHanded", "twohanded", 2.6f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } },
+            // Sanctuary follows the spear-bearing pilgrim with a visibly sacred paladin silhouette.
+            { CivKind.Sanctuary, new[] { Infantry("TT_Spearman.prefab", "Spear", "spear", 2.4f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f), Infantry("TT_Paladin.prefab", "Shield", "shield", 2.7f) } }
+        };
+
+        private static readonly Dictionary<UnitKind, TieredUnitSpec[]> TieredUnitTable = new Dictionary<UnitKind, TieredUnitSpec[]>
+        {
+            { UnitKind.Cavalry, new[]
+                {
+                    new TieredUnitSpec("TT_Heavy_Cavalry.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX")),
+                    new TieredUnitSpec("TT_Mounted_Knight.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX")),
+                    new TieredUnitSpec("TT_Mounted_Paladin.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX"))
+                }
+            },
+            { UnitKind.Ram, new[]
+                {
+                    new TieredUnitSpec("machines/TT_Ram_lvl1.prefab", 3.4f, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX")),
+                    new TieredUnitSpec("machines/TT_Ram_lvl2.prefab", 3.4f, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX")),
+                    new TieredUnitSpec("machines/TT_Ram_lvl3.prefab", 3.4f, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX"))
+                }
+            },
+            { UnitKind.Monk, new[]
+                {
+                    new TieredUnitSpec("TT_Priest.prefab", 2.4f, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX")),
+                    new TieredUnitSpec("TT_HighPriest.prefab", 2.4f, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX")),
+                    new TieredUnitSpec("TT_HighPriest.prefab", 2.4f, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX"))
+                }
+            }
+        };
+
         // Unit kind -> pack prefab. Every kind has its own model, so the placeholder class marks are not needed with the pack.
         // Cavalry and light cavalry, and archers and skirmish archers, use different models so the pairs stay apart.
         private static readonly Dictionary<UnitKind, UnitSpec> UnitTable = new Dictionary<UnitKind, UnitSpec>
@@ -130,6 +226,7 @@ namespace Rts.Presentation
         };
 
         private static readonly Dictionary<string, AnimationClip> animationClips = new Dictionary<string, AnimationClip>();
+        private static readonly Dictionary<string, GameObject> modelAssets = new Dictionary<string, GameObject>();
 
         // Building kind -> pack model. The core uses Castle and outposts Tower_A, so the castle building takes Keep and
         // towers take Tower_B to stay distinguishable. Blacksmith stands in for the smelter, kiln and steelworks (told apart
@@ -184,6 +281,105 @@ namespace Rts.Presentation
         public static string AnimationAssetPath(UnitKind kind, UnitMotion motion)
         {
             return AnimationTable.TryGetValue(kind, out var spec) ? spec.Path(motion) : null;
+        }
+
+        public static string InfantryAssetPath(CivKind civ, int stage)
+        {
+            var spec = GetInfantrySpec(civ, stage);
+            return spec == null ? null : Units + spec.File;
+        }
+
+        public static string InfantryAnimationAssetPath(CivKind civ, int stage, UnitMotion motion)
+        {
+            var spec = GetInfantrySpec(civ, stage);
+            return spec == null ? null : spec.Animation.Path(motion);
+        }
+
+        public static string TieredUnitAssetPath(UnitKind kind, int stage)
+        {
+            var spec = GetTieredUnitSpec(kind, stage);
+            return spec == null ? null : Units + spec.File;
+        }
+
+        public static string TieredUnitAnimationAssetPath(UnitKind kind, int stage, UnitMotion motion)
+        {
+            var spec = GetTieredUnitSpec(kind, stage);
+            return spec == null ? null : spec.Animation.Path(motion);
+        }
+
+        public static string BannerAssetPath(int index)
+        {
+            return index < 0 || index >= BannerFiles.Length ? null : Banners + BannerFiles[index];
+        }
+
+        public static int EquipmentTechCount(ulong techs)
+        {
+            int count = 0;
+            if ((techs & (1UL << ((int)TechKind.Weapons - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.Armour - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.SteelWeapons - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.SteelArmour - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.GemArmor - 1))) != 0) count++;
+            return count;
+        }
+
+        public static int EquipmentStage(ulong techs)
+        {
+            int count = EquipmentTechCount(techs);
+            return count == 0 ? 1 : count == 1 ? 2 : 3;
+        }
+
+        public static int EquipmentStage(EconomyView economy)
+        {
+            return economy == null ? 1 : EquipmentStage(economy.Techs);
+        }
+
+        public static CivKind UnitVisualCiv(FactionFrame frame, RenderUnit unit)
+        {
+            return unit.IsOwn && frame != null && frame.Economy != null ? frame.Economy.Civ : CivKind.Primitive;
+        }
+
+        public static int UnitVisualStage(FactionFrame frame, RenderUnit unit)
+        {
+            return unit.IsOwn && frame != null && frame.Economy != null ? EquipmentStage(frame.Economy) : 1;
+        }
+
+        /// <summary>Every pack file the staged looks and banners use: models first, then clips. For the build manifest.</summary>
+        public static void StagedAssetPaths(List<string> models, List<string> clips)
+        {
+            foreach (var row in InfantryTable.Values) AddStaged(row, models, clips);
+            foreach (var row in TieredUnitTable.Values) AddStaged(row, models, clips);
+            for (int i = 0; i < BannerFiles.Length; i++) models.Add(BannerAssetPath(i));
+        }
+
+        private static void AddStaged(TieredUnitSpec[] row, List<string> models, List<string> clips)
+        {
+            foreach (var spec in row)
+            {
+                if (!models.Contains(Units + spec.File)) models.Add(Units + spec.File);
+                foreach (UnitMotion motion in System.Enum.GetValues(typeof(UnitMotion)))
+                {
+                    string path = spec.Animation.Path(motion);
+                    if (path != null && !clips.Contains(path)) clips.Add(path);
+                }
+            }
+        }
+
+        public static bool IsTieredUnit(UnitKind kind)
+        {
+            return kind == UnitKind.Infantry || TieredUnitTable.ContainsKey(kind);
+        }
+
+        private static TieredUnitSpec GetInfantrySpec(CivKind civ, int stage)
+        {
+            if (stage < 1 || stage > 3) return null;
+            return InfantryTable.TryGetValue(civ, out var row) ? row[stage - 1] : null;
+        }
+
+        private static TieredUnitSpec GetTieredUnitSpec(UnitKind kind, int stage)
+        {
+            if (stage < 1 || stage > 3) return null;
+            return TieredUnitTable.TryGetValue(kind, out var row) ? row[stage - 1] : null;
         }
 
         public static string CoreAssetPath() { return Buildings + "Castle.FBX"; }
@@ -295,15 +491,20 @@ namespace Rts.Presentation
 
         public static AnimationHandle TryCreateAnimation(GameObject instance, UnitKind kind, ulong id)
         {
-            if (Disabled || instance == null || !AnimationTable.ContainsKey(kind)) return null;
+            return TryCreateAnimation(instance, AnimationTable.TryGetValue(kind, out var spec) ? spec : null, kind, id);
+        }
+
+        private static AnimationHandle TryCreateAnimation(GameObject instance, AnimationSpec spec, UnitKind? manifestKind, ulong id)
+        {
+            if (Disabled || instance == null || spec == null) return null;
             var animator = instance.GetComponentInChildren<Animator>();
             if (animator == null) return null;
-            var idle = LoadAnimationClip(kind, UnitMotion.Idle);
-            var walk = LoadAnimationClip(kind, UnitMotion.Walk);
-            var attack = LoadAnimationClip(kind, UnitMotion.Attack);
+            var idle = manifestKind.HasValue ? LoadAnimationClip(manifestKind.Value, UnitMotion.Idle) : LoadAnimationClip(spec, UnitMotion.Idle);
+            var walk = manifestKind.HasValue ? LoadAnimationClip(manifestKind.Value, UnitMotion.Walk) : LoadAnimationClip(spec, UnitMotion.Walk);
+            var attack = manifestKind.HasValue ? LoadAnimationClip(manifestKind.Value, UnitMotion.Attack) : LoadAnimationClip(spec, UnitMotion.Attack);
             if (idle == null || walk == null || attack == null) return null;
-            var work = LoadAnimationClip(kind, UnitMotion.Work);
-            var death = LoadAnimationClip(kind, UnitMotion.Death);
+            var work = manifestKind.HasValue ? LoadAnimationClip(manifestKind.Value, UnitMotion.Work) : LoadAnimationClip(spec, UnitMotion.Work);
+            var death = manifestKind.HasValue ? LoadAnimationClip(manifestKind.Value, UnitMotion.Death) : LoadAnimationClip(spec, UnitMotion.Death);
             // Off-screen soldiers are not animated at all; a crowd of 200 only pays for the ones in view.
             animator.cullingMode = AnimatorCullingMode.CullCompletely;
             var graph = PlayableGraph.Create("RTS Unit Animation");
@@ -349,6 +550,17 @@ namespace Rts.Presentation
             return clip;
         }
 #endif
+
+        private static AnimationClip LoadAnimationClip(AnimationSpec spec, UnitMotion motion)
+        {
+#if UNITY_EDITOR
+            return spec == null ? null : LoadAnimationClip(spec.Path(motion));
+#else
+            // A player build finds the staged looks' clips in the manifest, listed by pack file.
+            var manifest = LoadManifest();
+            return manifest == null || spec == null ? null : manifest.GetAnimationByFile(spec.Path(motion));
+#endif
+        }
 
         private static AnimationClip LoadAnimationClip(UnitKind kind, UnitMotion motion)
         {
@@ -399,6 +611,57 @@ namespace Rts.Presentation
                 parent, UnitHeight(kind), false, out instance, out _);
         }
 
+        public static bool TryCreateDisplayUnit(UnitKind kind, CivKind civ, int stage, bool own, Transform parent,
+            out GameObject instance, out bool tiered)
+        {
+            tiered = false;
+            if (kind == UnitKind.Infantry)
+            {
+                if (TryCreateTieredUnit(GetInfantrySpec(civ, stage), own, parent, out instance))
+                {
+                    tiered = true;
+                    return true;
+                }
+            }
+            else if (TryCreateTieredUnit(GetTieredUnitSpec(kind, stage), own, parent, out instance))
+            {
+                tiered = true;
+                return true;
+            }
+            return TryCreateUnit(kind, own, parent, out instance);
+        }
+
+        public static AnimationHandle TryCreateDisplayAnimation(GameObject instance, UnitKind kind, CivKind civ,
+            int stage, ulong id, bool tiered)
+        {
+            if (tiered)
+            {
+                TieredUnitSpec spec = kind == UnitKind.Infantry ? GetInfantrySpec(civ, stage) : GetTieredUnitSpec(kind, stage);
+                var animation = TryCreateAnimation(instance, spec == null ? null : spec.Animation, null, id);
+                if (animation != null) return animation;
+            }
+            return TryCreateAnimation(instance, kind, id);
+        }
+
+        private static bool TryCreateTieredUnit(TieredUnitSpec spec, bool own, Transform parent, out GameObject instance)
+        {
+            instance = null;
+            if (spec == null) return false;
+            return TryCreate(LoadTieredModel(spec.File), LoadMaterial(own ? LocalVisualPackManifest.UnitBlueMaterialKey : LocalVisualPackManifest.UnitRedMaterialKey,
+                UnitMaterialAssetPath(own)), parent, spec.Height, false, out instance, out _);
+        }
+
+        public static bool HasBanner(int index)
+        {
+            return !Disabled && LoadBannerModel(index) != null;
+        }
+
+        public static bool TryCreateBanner(int index, Transform parent, out GameObject instance)
+        {
+            // Taller than a soldier (2.4 m), so the banner shows above the ranks.
+            return TryCreate(LoadBannerModel(index), null, parent, 4.5f, false, out instance, out _);
+        }
+
         /// <summary>
         /// Creates a building of the pack under parent: footprint width x width, the table's finished height, owner's
         /// color, feet on the parent's y. The holder's local y scale is 1 for the finished height, so
@@ -443,11 +706,48 @@ namespace Rts.Presentation
 #endif
         }
 
+        private static GameObject LoadModelAtPath(string path)
+        {
+            if (Disabled || path == null) return null;
+            if (modelAssets.ContainsKey(path)) return modelAssets[path];
+            GameObject model = null;
+#if UNITY_EDITOR
+            model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+#endif
+            modelAssets.Add(path, model);
+            return model;
+        }
+
+        private static GameObject LoadTieredModel(string file)
+        {
+            if (file == null) return null;
+#if UNITY_EDITOR
+            return LoadModelAtPath(Units + file);
+#else
+            if (Disabled) return null;
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetModelByFile(Units + file);
+#endif
+        }
+
+        private static GameObject LoadBannerModel(int index)
+        {
+            string path = BannerAssetPath(index);
+            if (path == null) return null;
+#if UNITY_EDITOR
+            return LoadModelAtPath(path);
+#else
+            if (Disabled) return null;
+            var manifest = LoadManifest();
+            return manifest == null ? null : manifest.GetModelByFile(path);
+#endif
+        }
+
         private static GameObject LoadUnitModel(UnitKind kind)
         {
             if (Disabled) return null;
 #if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath<GameObject>(UnitAssetPath(kind));
+            return LoadModelAtPath(UnitAssetPath(kind));
 #else
             var manifest = LoadManifest();
             return manifest == null ? null : manifest.GetUnit(kind);
@@ -458,7 +758,7 @@ namespace Rts.Presentation
         {
             if (Disabled) return null;
 #if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath<GameObject>(BuildingAssetPath(kind));
+            return LoadModelAtPath(BuildingAssetPath(kind));
 #else
             var manifest = LoadManifest();
             return manifest == null ? null : manifest.GetBuilding(kind);
@@ -469,7 +769,7 @@ namespace Rts.Presentation
         {
             if (Disabled) return null;
 #if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath<GameObject>(CoreAssetPath());
+            return LoadModelAtPath(CoreAssetPath());
 #else
             var manifest = LoadManifest();
             return manifest == null ? null : manifest.GetCore();
@@ -480,7 +780,7 @@ namespace Rts.Presentation
         {
             if (Disabled) return null;
 #if UNITY_EDITOR
-            return AssetDatabase.LoadAssetAtPath<GameObject>(OutpostAssetPath());
+            return LoadModelAtPath(OutpostAssetPath());
 #else
             var manifest = LoadManifest();
             return manifest == null ? null : manifest.GetOutpost();
