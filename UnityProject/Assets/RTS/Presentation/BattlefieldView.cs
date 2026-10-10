@@ -170,12 +170,13 @@ namespace Rts.Presentation
             {
                 int alive = 0;
                 foreach (uint id in selectedArmies) if (armyAlive.TryGetValue(id, out var count)) alive += count;
-                return UiText.T("Selected: Armies ", "選択中：軍団 ") + string.Join(", ", selectedArmies) + UiText.T(" (alive ", "（生存 ") + alive + ")";
+                return UiText.T("Selected: Armies ", "選択中：軍団 ") + string.Join(", ", selectedArmies) + UiText.T(" (alive ", "（生存 ") + alive + ")" + DescribeMakeUp(selectedArmies);
             }
             switch (selected.Kind)
             {
                 case SelectionKind.Army:
-                    return UiText.T("Selected: Army ", "選択中：軍団 ") + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? UiText.T(" (alive ", "（生存 ") + alive + ")" : "");
+                    return UiText.T("Selected: Army ", "選択中：軍団 ") + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? UiText.T(" (alive ", "（生存 ") + alive + ")" : "")
+                        + DescribeMakeUp(new[] { selected.Id });
                 case SelectionKind.Outpost:
                     return UiText.T("Selected: Outpost ", "選択中：拠点 ") + selected.Id;
                 case SelectionKind.Core:
@@ -185,6 +186,75 @@ namespace Rts.Presentation
             }
         }
 
+        // Kinds in the order a commander reads an army: the line, the shooters, the riders, then the rest.
+        private static readonly UnitKind[] MakeUpOrder =
+        {
+            UnitKind.Infantry, UnitKind.HeavyInfantry, UnitKind.Mercenary, UnitKind.Archer, UnitKind.SkirmishArcher,
+            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.Ram, UnitKind.Monk, UnitKind.Scout
+        };
+
+        /// <summary>
+        /// What the given own armies are made of, from the latest frame: "\n歩兵 12・弓兵 4・軽騎兵 3". Empty when the
+        /// frame has no soldier of those armies (the selection text then stays as it was).
+        /// </summary>
+        private string DescribeMakeUp(IList<uint> armyIds)
+        {
+            if (latestFrame == null || armyIds == null || armyIds.Count == 0) return "";
+            var counts = new Dictionary<UnitKind, int>();
+            foreach (var unit in latestFrame.Units)
+            {
+                if (!unit.IsOwn || unit.ArmyId == 0 || !armyIds.Contains(unit.ArmyId)) continue;
+                counts.TryGetValue(unit.Kind, out var n);
+                counts[unit.Kind] = n + 1;
+            }
+            if (counts.Count == 0) return "";
+            var parts = new List<string>();
+            foreach (var kind in MakeUpOrder)
+                if (counts.TryGetValue(kind, out var n)) parts.Add(UnitName(kind) + " " + n);
+            return "\n" + string.Join(UiText.T(", ", "・"), parts);
+        }
+
+        private long makeUpTick = -1;
+        private int makeUpSelectionCount = -1;
+        private uint makeUpFirstArmy;
+        private string makeUpText = "";
+
+        /// <summary>
+        /// The make-up of the selected armies for the panel, on its own line. Worked out once per frame tick and
+        /// selection, not on every repaint.
+        /// </summary>
+        public string SelectedMakeUp()
+        {
+            if (latestFrame == null || selectedArmies.Count == 0) return "";
+            if (makeUpTick != latestFrame.Tick || makeUpSelectionCount != selectedArmies.Count || makeUpFirstArmy != selectedArmies[0])
+            {
+                makeUpTick = latestFrame.Tick;
+                makeUpSelectionCount = selectedArmies.Count;
+                makeUpFirstArmy = selectedArmies[0];
+                makeUpText = DescribeMakeUp(selectedArmies);
+            }
+            return makeUpText;
+        }
+
+        /// <summary>The player-facing name of a unit kind.</summary>
+        public static string UnitName(UnitKind kind)
+        {
+            switch (kind)
+            {
+                case UnitKind.Infantry: return UiText.T("Infantry", "歩兵");
+                case UnitKind.Scout: return UiText.T("Scouts", "斥候");
+                case UnitKind.Villager: return UiText.T("Villagers", "村人");
+                case UnitKind.Archer: return UiText.T("Archers", "弓兵");
+                case UnitKind.Cavalry: return UiText.T("Cavalry", "騎兵");
+                case UnitKind.Ram: return UiText.T("Rams", "破城槌");
+                case UnitKind.Mercenary: return UiText.T("Mercenaries", "傭兵");
+                case UnitKind.Monk: return UiText.T("Monks", "僧侶");
+                case UnitKind.HeavyInfantry: return UiText.T("Heavy infantry", "重装歩兵");
+                case UnitKind.SkirmishArcher: return UiText.T("Skirmishers", "遊撃弓兵");
+                case UnitKind.LightCavalry: return UiText.T("Light cavalry", "軽騎兵");
+                default: return kind.ToString();
+            }
+        }
         private static void Consider(Camera camera, Vector2 screenPoint, Visual visual, SelectionKind kind, uint id, ref float best, ref SelectionTarget target)
         {
             var projected = camera.WorldToScreenPoint(visual.Object.transform.position);

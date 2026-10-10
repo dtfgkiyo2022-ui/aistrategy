@@ -627,6 +627,17 @@ namespace Rts.Simulation
             return CavalryOn ? result : first;
         }
 
+        private static int EquipmentTechCount(ulong techs)
+        {
+            int count = 0;
+            if ((techs & (1UL << ((int)TechKind.Weapons - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.Armour - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.SteelWeapons - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.SteelArmour - 1))) != 0) count++;
+            if ((techs & (1UL << ((int)TechKind.GemArmor - 1))) != 0) count++;
+            return count;
+        }
+
         // Each faction's command views in commandStates order. An ended command's view never changes again, so only the
         // views not yet final are rebuilt; the frames list exactly what rebuilding every view every tick did (10-09: that
         // grew with every command of a long match and slowed it down).
@@ -688,8 +699,18 @@ namespace Rts.Simulation
                     bool own = s.Initial.FactionId == f;
                     if (!own && !IsVisibleTo(f, s.Position)) continue;
                     uint id = own ? s.Initial.Id : world.Factions[f - 1].ContactIds[i];
+                    // What a look at the soldier tells: its side's civilisation and how many arms and armour researches it
+                    // carries. Nothing else of the enemy's economy is shown (owner, 10-10).
+                    CivKind civ = CivKind.Primitive;
+                    byte equipmentLevel = 0;
+                    if (EconomyOn)
+                    {
+                        var ownerEconomy = world.Economies[s.Initial.FactionId - 1];
+                        civ = ownerEconomy.Civ;
+                        equipmentLevel = (byte)EquipmentTechCount(ownerEconomy.Techs);
+                    }
                     units.Add(new RenderUnit(id, own, s.Class != 0 ? s.Class : s.Initial.Kind, s.Position, s.IsMoving, s.IsAttacking,
-                        own && s.IsRetreating, own, own ? s.Hp : 0));
+                        own && s.IsRetreating, own, own ? s.Hp : 0, civ, equipmentLevel, own ? s.Initial.ArmyId : 0));
                     if (!own)
                     {
                         // Cult's observation may use the trained class (for example HeavyInfantry) because that is
