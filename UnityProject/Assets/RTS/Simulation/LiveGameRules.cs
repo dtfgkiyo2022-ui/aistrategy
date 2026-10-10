@@ -52,6 +52,7 @@ namespace Rts.Simulation
             e.ArmyGrowth = true;
             e.EconomyScale = true;
             e.LatePush = true;
+            e.SiegeByAge = true;
         }
     }
 }

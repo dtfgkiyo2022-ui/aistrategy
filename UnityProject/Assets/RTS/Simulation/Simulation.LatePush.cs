@@ -20,7 +20,8 @@ namespace Rts.Simulation
             {
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
-                if (!latePushLatched[faction - 1] && LatePushCondition(observation, world.Config.Economy))
+                bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= 3;
+                if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, world.Config.Economy)))
                     latePushLatched[faction - 1] = true;
                 if (!latePushLatched[faction - 1]) continue;
 

@@ -79,6 +79,9 @@ namespace Rts.Simulation
         private const int AgeClockExtensionId = 16;
         private const int AgeClockExtensionVersion = 1;
         private const int AgeClockExtensionDataLength = 4 * sizeof(int);
+        private const int SiegeByAgeExtensionId = 17;
+        private const int SiegeByAgeExtensionVersion = 1;
+        private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -102,7 +105,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(RegionExtensionId, RegionExtensionVersion, RegionExtensionDataLength),
             new ExtensionRegistration(LatePushExtensionId, LatePushExtensionVersion, LatePushExtensionDataLength),
             new ExtensionRegistration(EarlyArmsExtensionId, EarlyArmsExtensionVersion, EarlyArmsExtensionDataLength),
-            new ExtensionRegistration(AgeClockExtensionId, AgeClockExtensionVersion, AgeClockExtensionDataLength)
+            new ExtensionRegistration(AgeClockExtensionId, AgeClockExtensionVersion, AgeClockExtensionDataLength),
+            new ExtensionRegistration(SiegeByAgeExtensionId, SiegeByAgeExtensionVersion, SiegeByAgeExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -658,9 +662,10 @@ namespace Rts.Simulation
                 else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
                  else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
                   else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
-                  else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
-                  else if (id == AgeClockExtensionId) ReadAgeClockExtension(extension, c.Economy);
-                  extensions.Add(extension);
+                   else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
+                   else if (id == AgeClockExtensionId) ReadAgeClockExtension(extension, c.Economy);
+                   else if (id == SiegeByAgeExtensionId) ReadSiegeByAgeExtension(extension, c.Economy);
+                   extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -703,8 +708,9 @@ namespace Rts.Simulation
             extensions.RemoveAll(extension => extension != null && extension.Id == EconomyScaleExtensionId && !c.Economy.EconomyScale);
             extensions.RemoveAll(extension => extension != null && extension.Id == RegionExtensionId && !c.Economy.Regions);
             extensions.RemoveAll(extension => extension != null && extension.Id == LatePushExtensionId && !c.Economy.LatePush);
-            extensions.RemoveAll(extension => extension != null && extension.Id == EarlyArmsExtensionId && !c.Economy.EarlyArms);
-            extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockExtensionId && !c.Economy.AgeClock);
+             extensions.RemoveAll(extension => extension != null && extension.Id == EarlyArmsExtensionId && !c.Economy.EarlyArms);
+             extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockExtensionId && !c.Economy.AgeClock);
+             extensions.RemoveAll(extension => extension != null && extension.Id == SiegeByAgeExtensionId && !c.Economy.SiegeByAge);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -831,8 +837,16 @@ namespace Rts.Simulation
                 hasAgeClock = true;
                 extensions[i] = CreateAgeClockExtension(c.Economy);
             }
-            if (c.Economy.AgeClock && !hasAgeClock) extensions.Add(CreateAgeClockExtension(c.Economy));
-            return extensions.ToArray();
+             if (c.Economy.AgeClock && !hasAgeClock) extensions.Add(CreateAgeClockExtension(c.Economy));
+             bool hasSiegeByAge = false;
+             for (int i = 0; i < extensions.Count; i++)
+             {
+                 if (extensions[i] == null || extensions[i].Id != SiegeByAgeExtensionId) continue;
+                 hasSiegeByAge = true;
+                 extensions[i] = CreateSiegeByAgeExtension(c.Economy);
+             }
+             if (c.Economy.SiegeByAge && !hasSiegeByAge) extensions.Add(CreateSiegeByAgeExtension(c.Economy));
+             return extensions.ToArray();
         }
 
         private static ScenarioExtensionData CreateEarlyArmsExtension(EconomyRules e)
@@ -886,6 +900,32 @@ namespace Rts.Simulation
                 e.AgeClock = enabled != 0;
                 e.AgeClockTicks1 = reader.ReadInt32(); e.AgeClockTicks2 = reader.ReadInt32(); e.AgeClockTicks3 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateSiegeByAgeExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.SiegeByAge ? 1 : 0);
+                writer.Write(e.SiegeAge0Permille); writer.Write(e.SiegeAge1Permille);
+                writer.Write(e.SiegeAge2Permille); writer.Write(e.SiegeAge3Permille);
+                return new ScenarioExtensionData { Id = SiegeByAgeExtensionId, Version = SiegeByAgeExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadSiegeByAgeExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid siege-by-age flag.");
+                e.SiegeByAge = enabled != 0;
+                e.SiegeAge0Permille = reader.ReadInt32(); e.SiegeAge1Permille = reader.ReadInt32();
+                e.SiegeAge2Permille = reader.ReadInt32(); e.SiegeAge3Permille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing siege-by-age extension data.");
             }
         }
 

@@ -22,7 +22,8 @@ namespace Rts.Core.Tests
             Assert.That(e.LineRebuildDelayTicks, Is.EqualTo(200));
             Assert.That(e.Masonry, Is.False, "the thirteen civilisations come only with allCivilisations");
             var all = LiveGameRules.Create(3, true, true, false, false).Economy;
-            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock, Is.True);
+            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock
+                && all.SiegeByAge, Is.True);
         }
 
         [TestCase(3UL, false)]
@@ -67,6 +68,15 @@ namespace Rts.Core.Tests
                 others += sim.Capture(faction).Units.Count(u => u.IsOwn
                     && (u.Kind == UnitKind.Archer || u.Kind == UnitKind.LightCavalry || u.Kind == UnitKind.Cavalry));
             Assert.That(others, Is.GreaterThan(0), "archers or riders after ten minutes");
+        }
+
+        [Test]
+        public void SiegeByAgeReferenceSeedDoesNotEndBeforeNineMinutes()
+        {
+            var sim = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            for (long tick = 1; tick < 10800 && !sim.Capture(1).Result.HasEnded; tick++)
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+            Assert.That(sim.Capture(1).Result.HasEnded, Is.False, "the reference match must survive the first nine minutes");
         }
 
         private static string Hash(Battle sim) => Convert.ToHexString(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState));
