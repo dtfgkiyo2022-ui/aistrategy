@@ -12,6 +12,9 @@ namespace Rts.Simulation
         /// <summary>The automatic economy places a drop-off by a point this far from the core (m) with this many on it.</summary>
         private const int FarGatherMeters = 24, DropSiteGatherers = 2, DropSiteCoverMeters = 14;
 
+        /// <summary>Early arms: at most this many own drop-offs, and none by a point with less than this left.</summary>
+        private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
+
         /// <summary>Where <paramref name="v"/> unloads now, and how close it must come.</summary>
         private (SimPoint point, Fix64 reach) DropOff(VillagerState v)
         {
@@ -87,11 +90,17 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int reserved = SavingToAdvance(faction) ? AdvancePrice(faction, world.Economies[faction - 1]).wood : 0;
             if (world.Economies[faction - 1].Wood - reserved < rules.DropSiteWoodCost) return;
+            int ownDropSites = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && !b.Complete && b.FactionId == faction && b.Kind == BuildingKind.DropSite) return;
+                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.DropSite) continue;
+                if (!b.Complete) return;
+                ownDropSites++;
             }
+            // Early arms: with gathering twice as fast the points empty quickly, and a drop-off for every next point
+            // reached 21 in fifteen minutes and took the wood the houses and soldiers needed (10-10).
+            if (EarlyArmsOn && ownDropSites >= EarlyDropSiteLimit) return;
             var core = OwnCore(faction).Definition.Position;
             var gatherers = new int[world.Nodes.Length];
             for (int i = 0; i < world.VillagerCount; i++)
@@ -104,6 +113,8 @@ namespace Rts.Simulation
             for (int n = 0; n < world.Nodes.Length; n++)
             {
                 if (gatherers[n] < DropSiteGatherers || (bestNode >= 0 && gatherers[n] <= gatherers[bestNode])) continue;
+                // Early arms: not by a point that is nearly gathered out.
+                if (EarlyArmsOn && world.Nodes[n].Remaining < EarlyDropSiteMinRemaining) continue;
                 var at = world.Nodes[n].Definition.Position;
                 if (InRange(at, core, Fix64.FromInt(FarGatherMeters))) continue;
                 bool covered = false;
