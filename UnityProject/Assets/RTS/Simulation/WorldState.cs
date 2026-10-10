@@ -519,7 +519,9 @@ namespace Rts.Simulation
                     && e.HeavyInfantryRange.Raw >= 0 && e.HeavyInfantryRange <= Fix64.FromInt(64)
                     && e.HeavyInfantryVision.Raw >= 0, "Invalid processing-chain rules.");
             // V3-4: ages come with the terrain map.
+            Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
+                && (!e.AgeClock || (e.AgeClockTicks1 > 0 && e.AgeClockTicks2 > e.AgeClockTicks1 && e.AgeClockTicks3 > e.AgeClockTicks2))
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                 && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
@@ -838,6 +840,7 @@ namespace Rts.Simulation
                  HeavyInfantryAttackIntervalTicks = e.HeavyInfantryAttackIntervalTicks, HeavyInfantrySpeed = e.HeavyInfantrySpeed,
                  HeavyInfantryVision = e.HeavyInfantryVision, HeavyInfantryRange = e.HeavyInfantryRange,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
+                 AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
                 EarlyAdvanceFoodCost = e.EarlyAdvanceFoodCost, EarlyAdvanceWoodCost = e.EarlyAdvanceWoodCost, EarlyAdvanceTicks = e.EarlyAdvanceTicks,
                 EarlyAge2FoodCost = e.EarlyAge2FoodCost, EarlyAge2WoodCost = e.EarlyAge2WoodCost, EarlyAge2Ticks = e.EarlyAge2Ticks,

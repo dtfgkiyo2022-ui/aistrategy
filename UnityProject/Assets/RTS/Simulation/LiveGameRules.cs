@@ -47,6 +47,7 @@ namespace Rts.Simulation
             e.Metropolis = true;
             e.Sanctuary = true;
             e.EarlyArms = true;
+            e.AgeClock = true;
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;

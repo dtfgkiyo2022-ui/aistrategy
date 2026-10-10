@@ -43,6 +43,7 @@
     <Compile Include="EconomyPolicyTests.cs" />
     <Compile Include="TerrainTests.cs" />
     <Compile Include="AgeTests.cs" />
+    <Compile Include="AgeClockTests.cs" />
     <Compile Include="CivTests.cs" />
     <Compile Include="TrainingTests.cs" />
     <Compile Include="DefenceTests.cs" />

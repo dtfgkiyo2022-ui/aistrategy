@@ -134,7 +134,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             int target = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + 1;
-            return farms < target && economy.Food < world.Config.Economy.EarlyAge2FoodCost + VillagerFoodCostFor(faction);
+            int ageFood = AgeClockOn ? world.Config.Economy.Age2FoodCost : world.Config.Economy.EarlyAge2FoodCost;
+            return farms < target && economy.Food < ageFood + VillagerFoodCostFor(faction);
         }
 
         private void DecideFishingHarbor(uint faction)

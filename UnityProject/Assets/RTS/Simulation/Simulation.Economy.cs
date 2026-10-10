@@ -127,6 +127,7 @@ namespace Rts.Simulation
             AdvanceBelts();
             AdvanceIndustry();
             AdvanceMountain();
+            AdvanceByAgeClock();
             AdvanceAges();
             AdvanceResearch();
             AdvanceTollgateFees();

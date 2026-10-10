@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Rts.Contracts;
 using UnityEngine;
 
@@ -352,7 +353,8 @@ namespace Rts.Presentation
             if (!economy.Ages) return;
             if (economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0)
             {
-                string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）");
+                string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）")
+                    + AgeClockLabel(economy, economy.AdvanceFoodCost, economy.AdvanceWoodCost);
                 if (economy.ReservedCiv != CivKind.Primitive) Add(rows, "make:reserved", UiText.T("Reserved: ", "予約中：") + CivName(economy.ReservedCiv), false, "", false, true);
                 if (!ExtraCivilisations)
                 {
@@ -375,10 +377,21 @@ namespace Rts.Presentation
                 int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
                 int gold = economy.NextAgeGoldCost;
                 string next = UiText.T("Advance: ", "時代を進める：") + AgeName(economy.Civ, economy.Age + 1);
-                string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"));
+                string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
+                    + AgeClockLabel(economy, food, wood);
                 string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない") : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない") : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない") : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : "";
                 Add(rows, "make:advance-age", next + price, string.IsNullOrEmpty(why), why);
             }
+        }
+
+        private string AgeClockLabel(EconomyView economy, int food, int wood)
+        {
+            if (economy.NextAgeClockTick <= 0 || view == null || view.LatestFrame == null) return "";
+            long remaining = Math.Max(0, economy.NextAgeClockTick - view.LatestFrame.Tick);
+            long seconds = (remaining + 19) / 20;
+            string time = (seconds / 60).ToString(CultureInfo.InvariantCulture) + ":" + (seconds % 60).ToString("00", CultureInfo.InvariantCulture);
+            return UiText.T(" (auto in ", "（あと ") + time + UiText.T(" / now food ", " で自動／今なら 食料") + food
+                + UiText.T(" wood ", " 木材") + wood + ")";
         }
 
         private void AddIdleActions(List<EconomyAction> rows, EconomyView economy)
