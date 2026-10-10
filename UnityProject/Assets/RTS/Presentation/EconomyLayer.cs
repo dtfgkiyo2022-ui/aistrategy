@@ -18,6 +18,7 @@ namespace Rts.Presentation
 
         private BattlefieldView view;
         private readonly Dictionary<uint, GameObject> resources = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, int> resourceLevels = new Dictionary<uint, int>();
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, LocalVisualPack.AnimationHandle> ownVillagerAnimations = new Dictionary<uint, LocalVisualPack.AnimationHandle>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
@@ -53,10 +54,6 @@ namespace Rts.Presentation
         private const float CellMeters = 2f;
         private const int MapWidthCells = 128, MapHeightCells = 64;
 
-        private static readonly Color WoodColor = new Color(0.2f, 0.55f, 0.2f);
-        private static readonly Color FoodColor = new Color(0.95f, 0.8f, 0.2f);
-        private static readonly Color OreColor = new Color(0.45f, 0.42f, 0.48f);
-        private static readonly Color StoneColor = new Color(0.78f, 0.78f, 0.74f);
         private static readonly Color OreItemColor = new Color(0.55f, 0.35f, 0.2f);
         private static readonly Color MetalItemColor = new Color(0.85f, 0.88f, 0.95f);
         private static readonly Color BeltColor = new Color(0.18f, 0.18f, 0.2f);
@@ -107,7 +104,7 @@ namespace Rts.Presentation
 
         public void Clear()
         {
-            foreach (var go in resources.Values) Destroy(go);
+            foreach (var go in resources.Values) { ResourceModels.Release(go); Destroy(go); }
             foreach (var go in ownVillagers.Values) Destroy(go);
             foreach (var go in enemyVillagers) Destroy(go);
             foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
@@ -121,7 +118,7 @@ namespace Rts.Presentation
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
-            resources.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
             villagerFrom.Clear(); villagerFacing.Clear(); villagerWalkRates.Clear(); villagerActivities.Clear(); villagerWorkTargets.Clear();
             enemyVillagerFrom.Clear(); enemyVillagerTargets.Clear(); enemyVillagerFacing.Clear(); enemyVillagerWalkRates.Clear();
             enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear();
@@ -166,23 +163,30 @@ namespace Rts.Presentation
                 seen.Add(r.Id);
                 if (!resources.TryGetValue(r.Id, out var go))
                 {
-                    bool ore = r.Kind == ResourceKind.Ore, stone = r.Kind == ResourceKind.Stone;
-                    go = GameObject.CreatePrimitive(r.Kind == ResourceKind.Wood ? PrimitiveType.Cylinder : ore || stone ? PrimitiveType.Cube : PrimitiveType.Sphere);
-                    go.name = (r.Kind == ResourceKind.Wood ? "Wood " : ore ? "Ore " : stone ? "Stone " : "Food ") + r.Id;
-                    Destroy(go.GetComponent<Collider>());
+                    go = new GameObject(r.Kind + " " + r.Id);
                     go.transform.SetParent(transform, false);
-                    go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(r.Kind == ResourceKind.Wood ? WoodColor : ore ? OreColor : stone ? StoneColor : FoodColor);
-                    if (ore) go.transform.rotation = Quaternion.Euler(0f, 30f, 0f);
+                    var p = ToWorld(r.Position);
+                    go.transform.position = new Vector3(p.x, 0f, p.z);
                     resources.Add(r.Id, go);
                 }
-                // Shrinks as it is gathered, never below a third so a nearly empty point is still visible.
-                float fill = Mathf.Clamp01(r.Remaining / (r.Kind == ResourceKind.Ore ? 400f : 300f)) * 0.66f + 0.34f;
-                var p = ToWorld(r.Position);
-                if (r.Kind == ResourceKind.Wood) { go.transform.position = new Vector3(p.x, 1.5f * fill, p.z); go.transform.localScale = new Vector3(1.2f, 1.5f * fill, 1.2f); }
-                else if (r.Kind == ResourceKind.Ore || r.Kind == ResourceKind.Stone) { go.transform.position = new Vector3(p.x, 0.5f * fill, p.z); go.transform.localScale = new Vector3(1.5f, 1f, 1.5f) * fill; }
-                else { go.transform.position = new Vector3(p.x, 0.6f * fill, p.z); go.transform.localScale = Vector3.one * 1.3f * fill; }
+                // The model loses trees, boulders or bushes as the point is gathered; it is rebuilt only when the step
+                // changes, and a nearly empty point still shows one piece.
+                int level = ResourceModels.Level(r.Kind, r.Remaining);
+                if (!resourceLevels.TryGetValue(r.Id, out var shown) || shown != level)
+                {
+                    ResourceModels.Build(go, r.Kind, r.Id, level);
+                    resourceLevels[r.Id] = level;
+                }
             }
-            Remove(resources, seen);
+            var spent = new List<uint>();
+            foreach (var id in resources.Keys) if (!seen.Contains(id)) spent.Add(id);
+            foreach (var id in spent)
+            {
+                ResourceModels.Release(resources[id]);
+                Destroy(resources[id]);
+                resources.Remove(id);
+                resourceLevels.Remove(id);
+            }
         }
 
         private void SyncVillagers(EconomyView economy)
