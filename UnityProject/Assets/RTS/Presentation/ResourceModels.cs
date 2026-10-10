@@ -19,8 +19,8 @@ namespace Rts.Presentation
         private static readonly Color LeafDark = new Color(0.13f, 0.40f, 0.17f);
         private static readonly Color LeafLight = new Color(0.25f, 0.55f, 0.22f);
         private static readonly Color LeafWarm = new Color(0.42f, 0.58f, 0.20f);
-        private static readonly Color RockLight = new Color(0.72f, 0.72f, 0.69f);
-        private static readonly Color RockMid = new Color(0.56f, 0.56f, 0.55f);
+        private static readonly Color RockLight = new Color(0.60f, 0.60f, 0.57f);
+        private static readonly Color RockMid = new Color(0.46f, 0.46f, 0.45f);
         private static readonly Color RockDark = new Color(0.30f, 0.29f, 0.32f);
         private static readonly Color Rust = new Color(0.62f, 0.33f, 0.18f);
         private static readonly Color GoldColor = new Color(0.95f, 0.76f, 0.18f);
@@ -93,16 +93,16 @@ namespace Rts.Presentation
                 var leaf = Next(ref seed) < 0.5f ? LeafDark : Next(ref seed) < 0.6f ? LeafLight : LeafWarm;
                 if (i >= count) continue;
                 var at = new Vector3(Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-                Add(parts, Trunk, Cylinder, at, turn, new Vector3(0.22f, height * 0.38f, 0.22f));
+                Add(parts, Trunk, Cylinder, at, turn, new Vector3(0.32f, height * 0.32f, 0.32f));
                 if (conifer)
                 {
-                    Add(parts, leaf, Cone, at + Vector3.up * height * 0.28f, turn, new Vector3(1.15f, height * 0.5f, 1.15f));
-                    Add(parts, leaf, Cone, at + Vector3.up * height * 0.55f, turn + 30f, new Vector3(0.85f, height * 0.45f, 0.85f));
+                    Add(parts, leaf, Cone, at + Vector3.up * height * 0.22f, turn, new Vector3(1.45f, height * 0.5f, 1.45f));
+                    Add(parts, leaf, Cone, at + Vector3.up * height * 0.5f, turn + 30f, new Vector3(1.05f, height * 0.5f, 1.05f));
                 }
                 else
                 {
-                    Add(parts, leaf, Blob, at + Vector3.up * height * 0.62f, turn, new Vector3(1.25f, height * 0.36f, 1.25f));
-                    Add(parts, leaf == LeafDark ? LeafLight : LeafDark, Blob, at + new Vector3(0.35f, height * 0.5f, 0.2f), turn + 50f, new Vector3(0.8f, height * 0.24f, 0.8f));
+                    Add(parts, leaf, Blob, at + Vector3.up * height * 0.58f, turn, new Vector3(1.6f, height * 0.42f, 1.6f));
+                    Add(parts, leaf == LeafDark ? LeafLight : LeafDark, Blob, at + new Vector3(0.45f, height * 0.44f, 0.25f), turn + 50f, new Vector3(1.0f, height * 0.28f, 1.0f));
                 }
             }
         }
@@ -114,8 +114,8 @@ namespace Rts.Presentation
             for (int i = 0; i < 5; i++)
             {
                 float angle = (i * 72f + Range(ref seed, -30f, 30f)) * Mathf.Deg2Rad;
-                float radius = i == 0 ? 0f : Range(ref seed, 0.7f, 1.2f);
-                float size = i == 0 ? Range(ref seed, 1.0f, 1.3f) : Range(ref seed, 0.5f, 0.9f);
+                float radius = i == 0 ? 0f : Range(ref seed, 1.0f, 1.7f);
+                float size = i == 0 ? Range(ref seed, 1.6f, 2.0f) : Range(ref seed, 0.8f, 1.3f);
                 float squash = Range(ref seed, 0.55f, 0.85f);
                 float turn = Range(ref seed, 0f, 360f);
                 float lumpTurn = Range(ref seed, 0f, 360f);
@@ -139,8 +139,8 @@ namespace Rts.Presentation
             for (int i = 0; i < 5; i++)
             {
                 float angle = (i * 72f + Range(ref seed, -30f, 30f)) * Mathf.Deg2Rad;
-                float radius = i == 0 ? 0f : Range(ref seed, 0.55f, 0.95f);
-                float size = i == 0 ? Range(ref seed, 1.0f, 1.25f) : Range(ref seed, 0.6f, 0.9f);
+                float radius = i == 0 ? 0f : Range(ref seed, 0.8f, 1.3f);
+                float size = i == 0 ? Range(ref seed, 1.4f, 1.8f) : Range(ref seed, 0.9f, 1.3f);
                 float turn = Range(ref seed, 0f, 360f);
                 if (i >= count) continue;
                 var at = new Vector3(Mathf.Cos(angle) * radius, size * 0.3f, Mathf.Sin(angle) * radius);
@@ -149,7 +149,7 @@ namespace Rts.Presentation
                 {
                     float a = (turn + k * 90f) * Mathf.Deg2Rad;
                     var on = at + new Vector3(Mathf.Cos(a) * size * 0.36f, size * (0.12f + 0.12f * (k % 2)), Mathf.Sin(a) * size * 0.36f);
-                    Add(parts, Berry, Blob, on, 0f, Vector3.one * 0.2f);
+                    Add(parts, Berry, Blob, on, 0f, Vector3.one * 0.28f);
                 }
             }
         }
