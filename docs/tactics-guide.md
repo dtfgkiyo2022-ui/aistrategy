@@ -16,7 +16,8 @@
 8. [戦術のつまみ](#戦術のつまみ)
 9. [人の操作と組み合わせる](#人の操作と組み合わせる)
 10. [戦術の合図](#戦術の合図)
-11. [決まりごと](#決まりごと)
+11. [時代の時計に合わせる](#時代の時計に合わせる)
+12. [決まりごと](#決まりごと)
 
 ## 戦術とは何か
 
@@ -199,6 +200,41 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll tactic
 
 Python の練習場では `RtsEnv(human_orders="...")` として渡せます。自分の操作を入れた試合と入れない試合で、戦術の成績がどう変わるか比べてみてください。記録した操作は相手が変わると対象の部隊・拠点が無くなり、合わなくなることがあります。記録パックの内政命令は入力に出どころが残らないため、この変換では対象外です。
 
+## 時代の時計に合わせる
+
+時代は、決まった時刻に自動で進みます（2026-10-10 から）。今のゲームでは、時代1が4分、時代2が9分、時代3が13分です。資源を払えば、その前に進められます。費用は自動の時刻に近づくほど下がり、その時刻に0になります。
+
+戦況では次の項目を見ます。
+
+- `economy.age`：今の時代（0＝原始）
+- `economy.nextAgeAutoTick`：次の時代が自動で進む tick（20 tick＝1秒。最後の時代なら 0）
+- `economy.nextAgeCost`：今払って進めるときの費用（`food`・`wood`・`gold`）
+- `economy.canAdvanceNow`：今払って進められるか
+
+払って早めるか、その資源で兵を作るかは、戦術が決めることです。たとえば「費用が食料200を切ったら払う」「相手より兵が多いうちは払わずに攻める」のように書けます。
+
+```js
+var economySequence = 1;
+
+function onTick(view) {
+  var commands = [];
+  var e = view.economy;
+  var cost = e.nextAgeCost;
+  var secondsLeft = (e.nextAgeAutoTick - view.tick) / 20;
+  // 自動まで1分以上あり、払っても歩兵数体ぶんが残るなら、払って早める
+  if (e.agesEnabled && e.canAdvanceNow && e.advancingTo === "Primitive" && secondsLeft > 60
+      && e.food >= cost.food + 150 && e.wood >= cost.wood + 100) {
+    // 原始時代から進むときは、進む文明を選ぶ。文明に入った後は、今の文明のまま
+    var civ = e.civilisation === "Primitive" ? "Agrarian" : e.civilisation;
+    commands.push({ type: "economy", kind: "AdvanceAge", sequence: economySequence++, civ: civ });
+  }
+  return { version: 1, commands: commands };
+}
+```
+
+文明に入った時代（時代1）から、その文明の「もう1つの兵」を訓練できます。弓兵は冶金・森林・工兵・教団・山岳・都市、軽騎兵は農耕・石工・隊商・騎馬・学府・漁労・関所・聖地です。射撃場か厩舎を建てて訓練します。重い騎兵や破城槌は、今まで通り時代2からです。兵の相性（弓は歩兵に強い、など）はルールブックの表を見てください。
+
+時刻と費用の数字は、試合の釣り合いの調整で変わることがあります。数字をコードに直接書かず、戦況の値を読むようにしておくと、調整のあとも動きます。
 ## 決まりごと
 
 - 戦術の判断は1回50ms以内を目安にします。返事が間に合わない回は命令なしで、今の方針が続きます。
