@@ -118,6 +118,21 @@ namespace Rts.Simulation
                     nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], cell));
                     nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], mirror));
                 }
+            // The gold cluster takes the place of the only remote food, and the three food points by each core run out in
+            // about five minutes, before any age that allows farms, so no side ever advanced (10-10). With gold, eight
+            // more food points lie in a ring 40-70 m around each core. Without gold the map is unchanged.
+            if (gold)
+                for (int i = 0; i < LargeClusterNodes; i++)
+                {
+                    int cell = FindLargeCell(rng, reachable, used, c => InLargeRing(c, westX, westZ, 40, 70)
+                        && c % LargeColumns < LargeColumns / 2 - 8
+                        && reachable[LargeMirror(c)] && !used.Contains(LargeMirror(c)));
+                    int mirror = LargeMirror(cell);
+                    used.Add(cell);
+                    used.Add(mirror);
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, cell));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, mirror));
+                }
             s.ResourceNodes = nodes.ToArray();
 
             PlaceLargeStartingUnits(s, westX, westZ, eastX, eastZ);
