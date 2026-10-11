@@ -14,11 +14,10 @@
 
 **最初にやること：`D:/rts-verify/state_0928.md` の末尾（10-10 昼以降）を読み、動いている作業の結果を見る。**
 
-- 動いている作業（10-11 未明の時点）：
-  - `a/enemy-looks`（見えた敵の兵の文明と装備の進み具合を渡す。`RenderUnit.Civ`・`EquipmentLevel`）：全体テスト `D:/rts-verify/fulltest_enemylooks.done`。通ったら Unity EditMode → PR → #135 に告知
-  - `a/auto-econ`（お任せの内政の使い方。Codex、`request_autoecon1_luna.md`、`autoecon1.done`）：木材・食料が常に0、集積所の建てすぎ（15分で最大21個）を直す。旗 `EarlyArms` の下
-  - 次に出すもの：`request_siegeage1_luna.md`（時代でコア・建物への攻撃が強くなる。旗 `SiegeByAge`、原始0.5・時代1 1・時代2 2・時代3 4倍）。**auto-econ をマージしてから発注**（軍の大きさが変わるので、倍率はその後に測る）
-- Unity の Library は作業フォルダの間を移している（今は `../aistrategy-wt-ageclock`）。素材パックの写しも一緒に移す。オーナーのテストプレイは `../aistrategy-wt-standard`（マージのたびに `git merge --ff-only origin/main`）
+- 10-11 昼の時点：#381（建設中の模型・炎・崩壊）、#382（見えた敵の文明の姿・選択中の兵の内訳・時代の欄の見切れ）、#383（お任せの内政。原因は人口の枠）をマージ済み
+- **決着（旗 `SiegeByAge`、ID 17、ブランチ `a/siege-age`）**：30分でも決着しなかった原因は「後半に誰もコアを攻撃していなかった」こと（4つの原因と直し、倍率の測定の表は `technical-design-v3.md` 32.33）。採用した倍率は 0.1／0.25／0.6／4、コアの守りは射程9・ダメージ15。お任せどうし8試合で 14.2〜20.8分、中央値 16.6分
+- 残り：人が操作した場合の決着の時間、払って時代を早めた場合の速さは未測定。見本の戦術（`TacticSamples/`）は時代の時計・時代1からの兵に合わせていない
+- Unity の Library は作業フォルダの間を移している（今は `../aistrategy-wt-siegeage`）。素材パックの写しも一緒に移す。オーナーのテストプレイは `../aistrategy-wt-standard`（マージのたびに `git merge --ff-only origin/main`）
 
 10-10〜10-11 にマージしたもの（オーナーの依頼順）：
 - #373 大きい地図でお任せが時代を上げられない件
