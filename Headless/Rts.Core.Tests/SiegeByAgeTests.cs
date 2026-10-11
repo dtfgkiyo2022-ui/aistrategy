@@ -45,7 +45,8 @@ namespace Rts.Core.Tests
             Assert.That(method, Is.Not.Null);
 
             int baseDamage = scenario.UnitParameters.First(p => p.Kind == UnitKind.Infantry).Damage;
-            int[] expected = { 5, 10, 20, 40 };
+            // Base damage 10 with the played multipliers 100, 250, 600 and 4000 permille (rounded down, never under 1).
+            int[] expected = { 1, 2, 6, 40 };
             for (byte age = 0; age <= 3; age++)
             {
                 var sim = new Battle(scenario);

@@ -284,7 +284,7 @@ namespace Rts.Simulation
         public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;
         /// <summary>Siege by age: soldiers and rams deal age-scaled damage to cores and buildings.</summary>
         public bool SiegeByAge;
-        public int SiegeAge0Permille = 500, SiegeAge1Permille = 1000, SiegeAge2Permille = 2000, SiegeAge3Permille = 4000;
+        public int SiegeAge0Permille = 100, SiegeAge1Permille = 250, SiegeAge2Permille = 600, SiegeAge3Permille = 4000;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>
