@@ -33,6 +33,9 @@ function onTick(view) {
 
   var commands = [{ type: "global", policy: mode === "push" ? "concentrate" : "maintain" }];
   var enemyCore = view.factionId === 1 ? 2 : 1;
+  var pushGoal = humanGoal;
+  if (!pushGoal && view.economy && (view.economy.age === "Age3" || view.economy.age === 3)) pushGoal = { kind: "Core", id: enemyCore };
+  if (!pushGoal) for (var p = 0; p < (view.visibleEnemies || []).length; p++) if (view.visibleEnemies[p].position) { pushGoal = { kind: "Point", id: 0, point: view.visibleEnemies[p].position }; break; }
   for (var j = 0; j < view.ownArmies.length; j++) {
     var army = view.ownArmies[j];
     if (army.count === 0) continue; // an empty army only collects EmptyArmy rejections (#343)
@@ -44,8 +47,8 @@ function onTick(view) {
     var loss = 1000 - view.params.reservePermille;
     if (mode === "rally" && rallyPoint) {
       kind = "Focus"; goal = { kind: "Point", id: 0, point: rallyPoint }; priority = view.params.signalPriority; loss = 1000;
-    } else if (mode === "push") {
-      kind = "Focus"; goal = humanGoal || { kind: "Core", id: enemyCore }; priority = view.params.signalPriority; loss = 1000;
+    } else if (mode === "push" && pushGoal) {
+      kind = "Focus"; goal = pushGoal; priority = view.params.signalPriority; loss = 1000;
     } else if (mode === "fallback") {
       loss = 0;
     }

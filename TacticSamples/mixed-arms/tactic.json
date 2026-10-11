@@ -5,7 +5,7 @@
   "language": "js",
   "entry": "main.js",
   "apiVersion": 1,
-  "description": "内政と時代進行を優先し、Age2から弓兵と騎兵を混ぜて守ってから反攻する戦術。",
+  "description": "時代1から文明固有の弓兵または軽騎兵を作り、守ってから時代3に反攻する戦術。",
   "params": [
     { "name": "archerPermille", "label": "弓兵の目標割合（‰）", "type": "int", "default": 550, "min": 200, "max": 800, "step": 50 },
     { "name": "attackThreshold", "label": "反攻に出る兵の数", "type": "int", "default": 28, "min": 10, "max": 80, "step": 2 },

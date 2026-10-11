@@ -3,7 +3,11 @@ function onTick(view) {
   var enemyCore = view.factionId === 1 ? 2 : 1;
   var soldiers = 0;
   for (var i = 0; i < view.ownArmies.length; i++) soldiers += view.ownArmies[i].count;
-  var pushing = soldiers > view.params.attackThreshold;
+  var age = view.economy && (view.economy.age === "Age3" || view.economy.age === 3 ? 3 : view.economy.age === "Age2" || view.economy.age === 2 ? 2 : view.economy.age === "Age1" || view.economy.age === 1 ? 1 : 0);
+  var attackGoal = null;
+  if (age >= 3) attackGoal = { kind: "Core", id: enemyCore };
+  else for (var k = 0; k < (view.visibleEnemies || []).length; k++) if (view.visibleEnemies[k].position) { attackGoal = { kind: "Point", id: 0, point: view.visibleEnemies[k].position }; break; }
+  var pushing = soldiers > view.params.attackThreshold && attackGoal !== null;
   var commands = [];
   if ((view.signals || []).some(function (signal) { return signal.name === "buildSteel"; }) && !onTick.steelRequested) {
     var core = (view.objectives || []).filter(function (objective) {
@@ -32,7 +36,7 @@ function onTick(view) {
       type: "policy",
       kind: pushing ? "Focus" : "Defend",
       target: { kind: "Army", id: army.id },
-      goal: { kind: "Core", id: pushing ? enemyCore : ownCore },
+      goal: pushing ? attackGoal : { kind: "Core", id: ownCore },
       priority: pushing ? 100 : 80,
       allowedLossPermille: 1000,
       reservePermille: 0

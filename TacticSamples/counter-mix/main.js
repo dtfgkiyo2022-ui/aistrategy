@@ -2,7 +2,6 @@
 // Scout は三すくみの外なので、見えない間は Infantry を標準にする。
 var economySequence = 1;
 var lastDecision = "";
-
 function totalByKind(byKind) {
   var total = 0;
   for (var kind in byKind) total += byKind[kind] || 0;
@@ -30,14 +29,11 @@ function counterFor(enemyKind) {
   return "Infantry";
 }
 
-function ageAtLeastTwo(economy) {
-  return economy && (economy.age === "Age2" || economy.age === "Age3" || economy.age === 2 || economy.age === 3);
-}
-
 function ageNumber(economy) {
   if (!economy) return 0;
-  if (economy.age === "Age3" || economy.age === 3) return 2;
-  if (economy.age === "Age2" || economy.age === 2) return 1;
+  if (economy.age === "Age3" || economy.age === 3) return 3;
+  if (economy.age === "Age2" || economy.age === 2) return 2;
+  if (economy.age === "Age1" || economy.age === 1) return 1;
   return 0;
 }
 
@@ -57,8 +53,13 @@ function productionPlan(view) {
   var dominant = dominantKind(byKind, total, view.params.counterRatioPermille);
   var desired = dominant === "" ? "Infantry" : counterFor(dominant);
 
-  // 専用兵は2つ目の時代から。到達前に出せる標準兵へ戻す。
-  if ((desired === "Archer" || desired === "Cavalry") && !ageAtLeastTwo(view.economy)) desired = "Infantry";
+  // 時代2からは弓兵も騎兵も作れる。時代1は文明ごとに弓兵か軽騎兵のどちらか1種類だけ。
+  var age = ageNumber(view.economy);
+  var civ = view.economy && view.economy.civilisation;
+  var earlyArcher = EARLY_ARCHER_CIVS.indexOf(civ) >= 0;
+  if (age < 1) desired = "Infantry";
+  else if (age === 1 && desired === "Archer" && !earlyArcher) desired = "Infantry";
+  else if (age === 1 && desired === "Cavalry") desired = earlyArcher ? "Infantry" : "LightCavalry";
   // 相性兵が自軍の目標割合に達したら、歩兵を挟んで過度な単一兵種化を避ける。
   var ownCount = 0;
   for (var i = 0; i < view.ownArmies.length; i++) ownCount += view.ownArmies[i].count;
@@ -68,9 +69,12 @@ function productionPlan(view) {
   return { desired: desired, observed: dominant === "" ? "未確認/混成" : dominant };
 }
 
+// 時代1に弓兵を作れる文明。ほかの文明は時代1に軽騎兵を作れる。
+var EARLY_ARCHER_CIVS = ["Metallurgy", "Forestry", "Bridge", "Cult", "Mountain", "Metropolis"];
+
 function buildingFor(unit) {
   if (unit === "Archer") return "ArcheryRange";
-  if (unit === "Cavalry") return "Stable";
+  if (unit === "Cavalry" || unit === "LightCavalry") return "Stable";
   return "Barracks";
 }
 
@@ -127,7 +131,10 @@ function onTick(view) {
   if (economy !== null && economy !== undefined && view.tick % 100 === 0) {
     var age = ageNumber(economy);
     commands.push({ type: "economy", kind: "SetEconomyPolicy", sequence: economySequence++, policy: "Military" });
-    if (economy.agesEnabled && economy.canAdvanceNow && economy.advancingTo === "Primitive" && age < 1) {
+    var secondsLeft = economy.nextAgeAutoTick ? (economy.nextAgeAutoTick - view.tick) / 20 : 0;
+    var cost = economy.nextAgeCost || {};
+    if (economy.agesEnabled && economy.canAdvanceNow && economy.advancingTo === "Primitive" && age < 1 && secondsLeft > 60 &&
+        (economy.food || 0) >= (cost.food || 0) + 150 && (economy.wood || 0) >= (cost.wood || 0) + 100) {
       commands.push({ type: "economy", kind: "AdvanceAge", sequence: economySequence++, civ: economy.civilisation === "Primitive" ? "Agrarian" : economy.civilisation });
       console.log("時代進行を開始");
     }
