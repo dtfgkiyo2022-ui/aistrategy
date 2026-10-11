@@ -773,9 +773,21 @@ namespace Rts.Presentation
 #if UNITY_EDITOR
             return AssetDatabase.LoadAssetAtPath<LocalVisualPackManifest>(ManifestAssetPath);
 #else
-            return Resources.Load<LocalVisualPackManifest>(ManifestResourceName);
+            // Loaded once. Looking the list up again on every call cost several milliseconds per frame in a player
+            // build (HasUnit is asked every frame), which made a long match at x4 stop responding.
+            if (!playerManifestLoaded)
+            {
+                playerManifest = Resources.Load<LocalVisualPackManifest>(ManifestResourceName);
+                playerManifestLoaded = true;
+            }
+            return playerManifest;
 #endif
         }
+
+#if !UNITY_EDITOR
+        private static LocalVisualPackManifest playerManifest;
+        private static bool playerManifestLoaded;
+#endif
 
         private static GameObject LoadModelAtPath(string path)
         {

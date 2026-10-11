@@ -326,15 +326,25 @@ namespace Rts.Presentation
             if (sinceUpdate > 0.001f)
                 measuredMatchRate = Mathf.Clamp(TickSeconds / sinceUpdate, 0.25f, 8f);
             sinceUpdate = 0f;
+            long part = PerfProbe.Start();
             SyncUnits(frame);
+            PerfProbe.Stop("PushUnits", part);
+            part = PerfProbe.Start();
             SyncCores(frame);
             SyncArmies(frame);
             SyncOutposts(frame);
+            PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            part = PerfProbe.Start();
             SyncFog(frame);
+            PerfProbe.Stop("PushFog", part);
+            part = PerfProbe.Start();
             SyncGhosts(frame);
             SyncArrows(frame);
+            PerfProbe.Stop("PushGhostArrow", part);
+            part = PerfProbe.Start();
             Apply(0f);
+            PerfProbe.Stop("PushApply", part);
         }
 
         public void Apply(float alpha)
