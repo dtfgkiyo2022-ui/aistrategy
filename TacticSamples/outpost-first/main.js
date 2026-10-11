@@ -12,6 +12,24 @@ function ownSoldiers(view) {
   return total;
 }
 
+function ageNumber(economy) {
+  if (!economy) return 0;
+  if (economy.age === "Age3" || economy.age === 3) return 3;
+  if (economy.age === "Age2" || economy.age === 2) return 2;
+  if (economy.age === "Age1" || economy.age === 1) return 1;
+  return 0;
+}
+
+function attackGoal(view, enemyCore) {
+  if (ageNumber(view.economy) >= 3) return { kind: "Core", id: enemyCore };
+  for (var i = 0; i < (view.visibleEnemies || []).length; i++) if (view.visibleEnemies[i].position) return { kind: "Point", id: 0, point: view.visibleEnemies[i].position };
+  for (var j = 0; j < (view.objectives || []).length; j++) {
+    var objective = view.objectives[j];
+    if (objective.kind === "Outpost" && objective.ownerKnown && objective.ownerFactionId !== view.factionId) return { kind: "Outpost", id: objective.id };
+  }
+  return null;
+}
+
 function findOwnedOutpost(view) {
   for (var i = 0; i < view.objectives.length; i++) {
     var o = view.objectives[i];
@@ -23,7 +41,8 @@ function findOwnedOutpost(view) {
 function onTick(view) {
   var enemyCore = view.factionId === 1 ? 2 : 1;
   var outpost = findOwnedOutpost(view);
-  var attacking = view.tick >= OUTPOST_ATTACK_TICK && ownSoldiers(view) >= ATTACK_SOLDIERS;
+  var enemyGoal = attackGoal(view, enemyCore);
+  var attacking = view.tick >= OUTPOST_ATTACK_TICK && ownSoldiers(view) >= ATTACK_SOLDIERS && enemyGoal !== null;
   var phase = attacking ? "attack" : (outpost ? "outpost" : "core");
   if (phase !== lastPhase) {
     console.log("方針切替: " + phase + (outpost ? "（前哨を基準）" : "（守る前哨なし）"));
@@ -37,7 +56,7 @@ function onTick(view) {
       type: "policy",
       kind: attacking ? "Focus" : "Defend",
       target: { kind: "Army", id: army.id },
-      goal: { kind: attacking ? "Core" : (outpost ? "Outpost" : "Core"), id: attacking ? enemyCore : (outpost ? outpost.id : view.factionId) },
+      goal: attacking ? enemyGoal : { kind: outpost ? "Outpost" : "Core", id: outpost ? outpost.id : view.factionId },
       priority: attacking ? ATTACK_PRIORITY : DEFEND_PRIORITY,
       allowedLossPermille: attacking ? 800 : 350,
       reservePermille: 0

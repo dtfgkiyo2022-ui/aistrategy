@@ -19,11 +19,20 @@ def on_tick(view):
     hidden = np.maximum(features(view) @ weights['w1'] + weights['b1'], 0)
     scores = hidden @ weights['w2'] + weights['b2']
     attack = scores[1] >= scores[0] + view['params']['confidenceThreshold']
-    target_core = 3 - view['factionId'] if attack else view['factionId']
+    enemy_core = 3 - view['factionId']
+    target = {'kind': 'Core', 'id': enemy_core} if attack and view.get('economy') and view['economy'].get('age') in ('Age3', 3) else None
+    if attack and target is None:
+        for enemy in view.get('visibleEnemies', []):
+            if enemy.get('position'):
+                target = {'kind': 'Point', 'id': 0, 'point': enemy['position']}
+                break
+    if target is None:
+        attack = False
+        target = {'kind': 'Core', 'id': view['factionId']}
     commands = [{
         'type': 'policy', 'kind': 'Focus' if attack else 'Defend',
         'target': {'kind': 'Army', 'id': army['id']},
-        'goal': {'kind': 'Core', 'id': target_core},
+        'goal': target,
         'priority': 100, 'allowedLossPermille': 1000 if attack else 300,
         'reservePermille': 0,
     } for army in view['ownArmies'] if army['count'] > 0]  # an empty army only collects EmptyArmy rejections (#343)
