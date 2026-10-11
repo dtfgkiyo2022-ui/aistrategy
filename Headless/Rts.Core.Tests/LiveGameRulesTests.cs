@@ -79,6 +79,16 @@ namespace Rts.Core.Tests
             Assert.That(sim.Capture(1).Result.HasEnded, Is.False, "the reference match must survive the first nine minutes");
         }
 
+        [Test, Explicit("long measurement")]
+        public void SiegeByAgeReferenceSeedEndsByTwentyFiveMinutes()
+        {
+            var sim = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            for (long tick = 1; tick <= 30000 && !sim.Capture(1).Result.HasEnded; tick++)
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+            Assert.That(sim.Capture(1).Result.HasEnded, Is.True, "the reference match must end by 25 minutes");
+            Assert.That(sim.Capture(1).Tick, Is.GreaterThanOrEqualTo(10800), "the match must not end before 9 minutes");
+        }
+
         private static string Hash(Battle sim) => Convert.ToHexString(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState));
     }
 }

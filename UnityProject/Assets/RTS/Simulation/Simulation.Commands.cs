@@ -349,7 +349,8 @@ namespace Rts.Simulation
             foreach (uint id in Affected(o.Target))
             {
                 var soldiers = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).ToArray();
-                if (soldiers.Length == 0) return ReasonCode.EmptyArmy;
+                if (soldiers.Length == 0 && !IsLatePushCoreFocus(o)) return ReasonCode.EmptyArmy;
+                if (soldiers.Length == 0) continue;
                 any = true;
                 var goal = Destination(o);
                 var radius = o.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius :
@@ -420,6 +421,7 @@ namespace Rts.Simulation
             foreach (uint id in affected)
             {
                 uint[] ids = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).OrderBy(s => s).ToArray();
+                if (ids.Length == 0 && IsLatePushCoreFocus(o)) continue;
                 
                 if (Combat(o))
                 {
@@ -431,6 +433,10 @@ namespace Rts.Simulation
             Notice(c, ReasonCode.None);
             if (o.Kind == PolicyKind.ReturnToAuto) EndCommand(c, CommandStatus.Completed, ReasonCode.None);
         }
+
+        private bool IsLatePushCoreFocus(PolicyOrder order) => world.Config.Economy.SiegeByAge
+            && order.Source == CommandSource.Doctrine && order.Kind == PolicyKind.Focus
+            && order.Target.Kind == ScopeKind.All && order.Goal.Kind == GoalKind.Core;
         private void ComposePolicies()
         {
             foreach (int index in world.ArmyTraversal)
@@ -482,7 +488,8 @@ namespace Rts.Simulation
                     if (Combat(c.Order) && live.Length == 0)
                     {
                         a.Failed = true; a.Active = false;
-                        if (c.Reason != ReasonCode.EmptyArmy) { c.Reason = ReasonCode.EmptyArmy; Notice(c, c.Reason); }
+                        if (!IsLatePushCoreFocus(c.Order) && c.Reason != ReasonCode.EmptyArmy)
+                        { c.Reason = ReasonCode.EmptyArmy; Notice(c, c.Reason); }
                         continue;
                     }
                     bool reached = a.N0 > 0 && 1000L * a.Deaths >= (long)c.Order.AllowedLoss.Permille * a.N0;

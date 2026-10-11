@@ -142,6 +142,18 @@ namespace Rts.Simulation
                     }
                 }
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                // A SiegeByAge late push has an authoritative core target. Once a soldier is inside its attack
+                // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
+                if (IsLatePushAttack(a.Definition.Id) && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core)
+                {
+                    bool inCoreRange = InRange(s.Position, world.Cores[a.Goal.Id - 1].Definition.Position,
+                        s.Parameters.Range + world.Config.Rules.CoreRadius);
+                    // Do not let a visible soldier pull a committed core assault off its route. The normal Tactics
+                    // priority is preserved everywhere else; here the mission remains the core, and the core becomes
+                    // the actual target only once the ordinary attack envelope is reached.
+                    intent = new ArmyIntent(a.Definition.Id, world.Cores[a.Goal.Id - 1].Definition.Position,
+                        0, inCoreRange ? a.Goal : default, false);
+                }
                 // A human-owned region suppresses only autonomous movement.  Tactics still runs so an enemy already
                 // in range (or an enemy core in range) gets a target and can be attacked while the soldier stays put.
                 s.MoveGoal = regionBlocksMovement ? s.Position : intent.MoveGoal;

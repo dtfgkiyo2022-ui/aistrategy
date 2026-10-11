@@ -126,6 +126,17 @@ namespace Rts.Simulation
                 var waitGoal = OffenseDecision.WaitGoal(targets, offenseRoutes);
                 OffenseDecision.Update(targets, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);
+                // SiegeByAge's late push is a committed core assault. The ordinary allocator may reserve or guard
+                // every army when the home core is threatened, which makes a visible enemy core unreachable to Tactics
+                // even though the authoritative policy says Focus/Core. Keep this exception inside the feature flag;
+                // all other policies retain the normal reserve and defence allocation.
+                if (world.Config.Economy.SiegeByAge)
+                    for (int i = 0; i < inputs.Count; i++)
+                        if (IsLatePushAttack(inputs[i].Army.Id) && !allocations[i].Returning)
+                        {
+                            allocations[i].Assignment = AssignmentKind.Advance;
+                            allocations[i].Goal = inputs[i].Policy.Goal;
+                        }
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,
                         (byte)(1 << ((int)f - 1)), f, 0, default, reserveShortfall[f - 1], ReasonCode.ReserveShortfall));
@@ -141,6 +152,10 @@ namespace Rts.Simulation
             }
             if (world.Tick % 20 == 0) lastAllocationTick = world.Tick;
         }
+
+        private bool IsLatePushAttack(uint armyId) => liveCommands.Any(c => c.Status == CommandStatus.Executing
+            && IsLatePushCoreFocus(c.Order)
+            && c.Armies.Any(a => a.ArmyId == armyId && a.Active && !a.Failed && !a.Finished));
 
         // Simulation measures navigation; Decision selects the rally and evaluates all choices.
         private OffenseRouteInput[] OffenseRoutes(FactionObservation observation, IReadOnlyList<ArmyDecisionInput> inputs)

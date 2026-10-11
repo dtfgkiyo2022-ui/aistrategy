@@ -50,6 +50,7 @@ namespace Rts.Simulation
                     a.PathImpossible = a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius);
                 }
                 bool arrived = true, participants = false;
+                bool directAssault = IsLatePushAttack(a.Definition.Id);
                 for (int i = 0; i < a.SoldierIds.Length; i++)
                 {
                     ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
@@ -94,7 +95,7 @@ namespace Rts.Simulation
                     // Collapse at bends; keep slots only when the next center is reachable from the slot.
                     // Returning armies use the route centre instead of a one-metre formation offset, which can press
                     // a late scout against an obstacle while the rest of the army waits for its slot.
-                    var target = returning ? center : new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
+                    var target = returning || directAssault ? center : new SimPoint(center.X + Fix64.FromInt((a.Definition.FactionId == 1 ? 1 : -1) * (i % 4)), center.Z + Fix64.FromInt(i / 4));
                     if (!Clear(center, target, a.Definition.FactionId) || !Clear(soldier.Position, target, a.Definition.FactionId)
                         || a.PathCursor + 1 < a.Path.Length && !Clear(target, world.Map.Center(a.Path[a.PathCursor + 1]), a.Definition.FactionId)) target = center;
                     if (a.PathCursor == a.Path.Length - 1) target = Clear(soldier.Position, goal, a.Definition.FactionId) ? goal : center;
@@ -107,7 +108,7 @@ namespace Rts.Simulation
                     {
                         if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= FormationWaitTicks)
                             soldier.SlotWaitTimedOut = true;
-                        if (!soldier.SlotWaitTimedOut) arrived = false;
+                        if (!directAssault && !soldier.SlotWaitTimedOut) arrived = false;
                     }
                     else { soldier.SlotWaitSinceTick = 0; soldier.SlotWaitTimedOut = false; }
                 }
