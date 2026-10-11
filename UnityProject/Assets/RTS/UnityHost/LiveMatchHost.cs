@@ -1159,7 +1159,10 @@ namespace Rts.UnityHost
                 matchPack.RecordTactic(enemyTacticResult, enemyFactionId, enemyTactic);
             }
             long simProbe = PerfProbe.Start();
+            long simStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
+            perfSimStopwatchTicks += System.Diagnostics.Stopwatch.GetTimestamp() - simStarted;
+            perfSimSteps++;
             PerfProbe.Stop("Sim", simProbe);
             var frame = simulation.Capture(viewFactionId);
             if (smokeRunner)
@@ -1253,6 +1256,7 @@ namespace Rts.UnityHost
 
         private void UpdateMeasured()
         {
+            if (!smokeRunner) PaceGarbageCollection();
             if (simulation == null) return;
             if (smokeRunner)
             {
@@ -1287,6 +1291,39 @@ namespace Rts.UnityHost
                     break;
                 }
             }
+        }
+
+        // A player build (IL2CPP) collects garbage every time its small heap fills: about five collections per
+        // simulation step, which was most of a step's cost (2026-10-12). The host collects on its own clock instead,
+        // a slice per frame. Memory handling only; nothing the simulation computes depends on it.
+        private const float GcPaceSeconds = 0.5f;
+        private const ulong GcSliceNanoseconds = 2000000UL;
+        private const long GcHardLimitBytes = 768L * 1024L * 1024L;
+        private bool gcPaceChecked, gcPaceOn, gcSliceInProgress;
+        private float nextGcAt;
+        private long perfSimStopwatchTicks;
+        private int perfSimSteps;
+
+        private void PaceGarbageCollection()
+        {
+            if (!gcPaceChecked)
+            {
+                gcPaceChecked = true;
+                gcPaceOn = !UnityEngine.Application.isEditor && UnityEngine.Scripting.GarbageCollector.isIncremental
+                    && !Environment.GetCommandLineArgs().Contains("-rtsNoGcPace");
+                if (gcPaceOn) UnityEngine.Scripting.GarbageCollector.GCMode = UnityEngine.Scripting.GarbageCollector.Mode.Manual;
+            }
+            if (!gcPaceOn) return;
+            if (GC.GetTotalMemory(false) > GcHardLimitBytes)
+            {
+                GC.Collect();
+                gcSliceInProgress = false;
+                nextGcAt = Time.unscaledTime + GcPaceSeconds;
+                return;
+            }
+            if (!gcSliceInProgress && Time.unscaledTime < nextGcAt) return;
+            gcSliceInProgress = UnityEngine.Scripting.GarbageCollector.CollectIncremental(GcSliceNanoseconds);
+            if (!gcSliceInProgress) nextGcAt = Time.unscaledTime + GcPaceSeconds;
         }
 
         /// <summary>Wall-clock time one frame may spend stepping the match (display pacing only, never simulated).</summary>
@@ -1440,6 +1477,15 @@ namespace Rts.UnityHost
                 perfStartedAt = now;
                 PerfProbe.Counter("objects", () => FindObjectsByType<Transform>(FindObjectsSortMode.None).Length);
                 PerfProbe.Counter("monoMB", () => (int)(GC.GetTotalMemory(false) / (1024 * 1024)));
+                // Microseconds one simulation step took on average since the last line (per tick, not per frame).
+                PerfProbe.Counter("simUsPerTick", () =>
+                {
+                    int value = perfSimSteps == 0 ? 0
+                        : (int)(perfSimStopwatchTicks * 1000000L / System.Diagnostics.Stopwatch.Frequency / perfSimSteps);
+                    perfSimStopwatchTicks = 0;
+                    perfSimSteps = 0;
+                    return value;
+                });
                 perfGcCount = GC.CollectionCount(0);
                 // Unity's own counters: time spent collecting garbage, and bytes newly allocated, per frame.
                 perfGcTime = Unity.Profiling.ProfilerRecorder.StartNew(Unity.Profiling.ProfilerCategory.Internal, "GC.Collect");

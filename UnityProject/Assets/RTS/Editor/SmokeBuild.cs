@@ -22,6 +22,9 @@ namespace Rts.Editor
             if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
 
             PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, ScriptingImplementation.IL2CPP);
+            // The simulation is plain integer code in tight loops; the most optimising C++ configuration is worth the
+            // longer build (measured 2026-10-12, see docs/handoff.md).
+            PlayerSettings.SetIl2CppCompilerConfiguration(UnityEditor.Build.NamedBuildTarget.Standalone, Il2CppCompilerConfiguration.Master);
             var options = new BuildPlayerOptions
             {
                 scenes = new[] { "Assets/RTS/Scenes/LiveBattlefield.unity" },
