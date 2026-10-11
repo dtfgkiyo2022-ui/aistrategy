@@ -68,6 +68,11 @@ namespace Rts.Core.Tests
                 others += sim.Capture(faction).Units.Count(u => u.IsOwn
                     && (u.Kind == UnitKind.Archer || u.Kind == UnitKind.LightCavalry || u.Kind == UnitKind.Cavalry));
             Assert.That(others, Is.GreaterThan(0), "archers or riders after ten minutes");
+            // A look at a soldier shows its side's civilisation (for its model), own and enemy alike.
+            var frame = sim.Capture(1);
+            Assert.That(frame.Units.Where(u => u.IsOwn).All(u => u.Civ == frame.Economy.Civ && u.Civ != CivKind.Primitive), Is.True, "own soldiers carry their civilisation");
+            var enemyCiv = sim.Capture(2).Economy.Civ;
+            Assert.That(frame.Units.Where(u => !u.IsOwn).All(u => u.Civ == enemyCiv), Is.True, "visible enemies carry theirs");
         }
 
         [Test]

@@ -15,6 +15,8 @@ namespace Rts.Simulation
         // still staying inside the initial observation supplied by the starting soldiers.
         private const int CivOreReach = 44, CivFoodReach = 30, CivForestReach = 44, CivStoneReach = 44, CivCavalryCoreExclusion = 8,
             GuaranteedFoodPoints = 3, AdvanceVillagers = 8, Age2Villagers = 10;
+        // Early arms: the automatic economy's villager targets in the first and later civilisation ages.
+        private const int EarlyVillagerTargetAge1 = 30, EarlyVillagerTargetAge2 = 40;
         // The automatic economy may spend on an early advance only while it can still field three infantry.
         private const int AgeClockInfantryReserveCount = 3, AgeClockEarlyAdvanceMaxPermille = 500;
 
@@ -123,8 +125,15 @@ namespace Rts.Simulation
         private int AutoVillagerTargetFor(uint faction)
         {
             var rules = world.Config.Economy;
-            return EconomyDecision.VillagerTarget(EconomyScaleOn, world.Economies[faction - 1].Age, rules.AutoVillagerTarget,
+            int target = EconomyDecision.VillagerTarget(EconomyScaleOn, world.Economies[faction - 1].Age, rules.AutoVillagerTarget,
                 MetropolisAllowed(faction));
+            if (!EarlyArmsOn) return target;
+            // Early arms: gathering is twice as fast, so fewer villagers earn the same. The scaled targets (40, then 60)
+            // filled the population cap with villagers and left room for some 25 soldiers at fifteen minutes (10-11).
+            int age = world.Economies[faction - 1].Age;
+            int early = age >= 2 ? EarlyVillagerTargetAge2 : age == 1 ? EarlyVillagerTargetAge1 : target;
+            if (MetropolisAllowed(faction)) early = checked(early * 3 / 2);
+            return target < early ? target : early;
         }
 
         /// <summary>V3-17 #2: a researched metropolis villager answers a nearby raid with a small deterministic blow.</summary>

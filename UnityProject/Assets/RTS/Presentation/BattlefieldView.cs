@@ -46,6 +46,7 @@ namespace Rts.Presentation
             public CivKind AppearanceCiv;
             public int AppearanceStage;
             public bool UsesTieredAppearance;
+            public bool IsRam;
             // Outposts drawn with a purchased pack: the tower and the owner it is currently colored for.
             public GameObject PackTower;
             public uint PackOwner;
@@ -62,6 +63,15 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
+        private readonly Dictionary<uint, GameObject> coreFire = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, string> coreFireFiles = new Dictionary<uint, string>();
+        private readonly List<TimedBattlefieldEffect> battlefieldEffects = new List<TimedBattlefieldEffect>();
+        private const int MaxBattlefieldEffects = 6;
+        private sealed class TimedBattlefieldEffect
+        {
+            public GameObject Object;
+            public float Remaining;
+        }
         private readonly Dictionary<uint, Visual> outposts = new Dictionary<uint, Visual>();
         private GameObject selectionRing;
         private Texture2D fogTexture;
@@ -160,12 +170,13 @@ namespace Rts.Presentation
             {
                 int alive = 0;
                 foreach (uint id in selectedArmies) if (armyAlive.TryGetValue(id, out var count)) alive += count;
-                return UiText.T("Selected: Armies ", "選択中：軍団 ") + string.Join(", ", selectedArmies) + UiText.T(" (alive ", "（生存 ") + alive + ")";
+                return UiText.T("Selected: Armies ", "選択中：軍団 ") + string.Join(", ", selectedArmies) + UiText.T(" (alive ", "（生存 ") + alive + ")" + DescribeMakeUp(selectedArmies);
             }
             switch (selected.Kind)
             {
                 case SelectionKind.Army:
-                    return UiText.T("Selected: Army ", "選択中：軍団 ") + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? UiText.T(" (alive ", "（生存 ") + alive + ")" : "");
+                    return UiText.T("Selected: Army ", "選択中：軍団 ") + selected.Id + (armyAlive.TryGetValue(selected.Id, out var alive) ? UiText.T(" (alive ", "（生存 ") + alive + ")" : "")
+                        + DescribeMakeUp(new[] { selected.Id });
                 case SelectionKind.Outpost:
                     return UiText.T("Selected: Outpost ", "選択中：拠点 ") + selected.Id;
                 case SelectionKind.Core:
@@ -175,6 +186,75 @@ namespace Rts.Presentation
             }
         }
 
+        // Kinds in the order a commander reads an army: the line, the shooters, the riders, then the rest.
+        private static readonly UnitKind[] MakeUpOrder =
+        {
+            UnitKind.Infantry, UnitKind.HeavyInfantry, UnitKind.Mercenary, UnitKind.Archer, UnitKind.SkirmishArcher,
+            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.Ram, UnitKind.Monk, UnitKind.Scout
+        };
+
+        /// <summary>
+        /// What the given own armies are made of, from the latest frame: "\n歩兵 12・弓兵 4・軽騎兵 3". Empty when the
+        /// frame has no soldier of those armies (the selection text then stays as it was).
+        /// </summary>
+        private string DescribeMakeUp(IList<uint> armyIds)
+        {
+            if (latestFrame == null || armyIds == null || armyIds.Count == 0) return "";
+            var counts = new Dictionary<UnitKind, int>();
+            foreach (var unit in latestFrame.Units)
+            {
+                if (!unit.IsOwn || unit.ArmyId == 0 || !armyIds.Contains(unit.ArmyId)) continue;
+                counts.TryGetValue(unit.Kind, out var n);
+                counts[unit.Kind] = n + 1;
+            }
+            if (counts.Count == 0) return "";
+            var parts = new List<string>();
+            foreach (var kind in MakeUpOrder)
+                if (counts.TryGetValue(kind, out var n)) parts.Add(UnitName(kind) + " " + n);
+            return "\n" + string.Join(UiText.T(", ", "・"), parts);
+        }
+
+        private long makeUpTick = -1;
+        private int makeUpSelectionCount = -1;
+        private uint makeUpFirstArmy;
+        private string makeUpText = "";
+
+        /// <summary>
+        /// The make-up of the selected armies for the panel, on its own line. Worked out once per frame tick and
+        /// selection, not on every repaint.
+        /// </summary>
+        public string SelectedMakeUp()
+        {
+            if (latestFrame == null || selectedArmies.Count == 0) return "";
+            if (makeUpTick != latestFrame.Tick || makeUpSelectionCount != selectedArmies.Count || makeUpFirstArmy != selectedArmies[0])
+            {
+                makeUpTick = latestFrame.Tick;
+                makeUpSelectionCount = selectedArmies.Count;
+                makeUpFirstArmy = selectedArmies[0];
+                makeUpText = DescribeMakeUp(selectedArmies);
+            }
+            return makeUpText;
+        }
+
+        /// <summary>The player-facing name of a unit kind.</summary>
+        public static string UnitName(UnitKind kind)
+        {
+            switch (kind)
+            {
+                case UnitKind.Infantry: return UiText.T("Infantry", "歩兵");
+                case UnitKind.Scout: return UiText.T("Scouts", "斥候");
+                case UnitKind.Villager: return UiText.T("Villagers", "村人");
+                case UnitKind.Archer: return UiText.T("Archers", "弓兵");
+                case UnitKind.Cavalry: return UiText.T("Cavalry", "騎兵");
+                case UnitKind.Ram: return UiText.T("Rams", "破城槌");
+                case UnitKind.Mercenary: return UiText.T("Mercenaries", "傭兵");
+                case UnitKind.Monk: return UiText.T("Monks", "僧侶");
+                case UnitKind.HeavyInfantry: return UiText.T("Heavy infantry", "重装歩兵");
+                case UnitKind.SkirmishArcher: return UiText.T("Skirmishers", "遊撃弓兵");
+                case UnitKind.LightCavalry: return UiText.T("Light cavalry", "軽騎兵");
+                default: return kind.ToString();
+            }
+        }
         private static void Consider(Camera camera, Vector2 screenPoint, Visual visual, SelectionKind kind, uint id, ref float best, ref SelectionTarget target)
         {
             var projected = camera.WorldToScreenPoint(visual.Object.transform.position);
@@ -343,6 +423,7 @@ namespace Rts.Presentation
                 }
             }
             AdvanceProjectileArrows(Time.deltaTime, matchRate);
+            UpdateBattlefieldEffects(Time.deltaTime);
             RemoveFinishedDeaths();
             Apply(sinceUpdate / TickSeconds);
         }
@@ -433,7 +514,8 @@ namespace Rts.Presentation
                         FacingY = 0f,
                         AppearanceCiv = appearanceCiv,
                         AppearanceStage = appearanceStage,
-                        UsesTieredAppearance = tiered
+                        UsesTieredAppearance = tiered,
+                        IsRam = unit.Kind == UnitKind.Ram
                     };
                     units.Add(key, visual);
                 }
@@ -500,6 +582,7 @@ namespace Rts.Presentation
                 bool shouldFall = !visual.IsEnemy || IsVisibleNow(visual.Object.transform.position);
                 if (shouldFall)
                 {
+                    if (visual.IsRam) SpawnBattlefieldEffect("FX_machine_destroyed.prefab", visual.Object.transform.position);
                     visual.IsDying = true;
                     visual.IsAttacking = false;
                     visual.IsWalking = false;
@@ -621,9 +704,11 @@ namespace Rts.Presentation
 
         private void SyncCores(FactionFrame frame)
         {
+            var present = new HashSet<uint>();
             foreach (var objective in frame.Objectives)
             {
                 if (objective.Kind != GoalKind.Core) continue;
+                present.Add(objective.Id);
                 var target = ToWorld(objective.Position, coreModel != null || LocalVisualPack.HasCore() ? 0f : 2f);
                 if (!cores.TryGetValue(objective.Id, out var visual))
                 {
@@ -640,10 +725,69 @@ namespace Rts.Presentation
                 coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
                 visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
                 if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp);
+                SyncCoreFire(objective.Id, objective.IsHpKnown, objective.Hp, new Vector3(target.x, target.y + 8f, target.z));
+            }
+
+            var missing = new List<uint>();
+            foreach (var pair in coreHp)
+                if (!present.Contains(pair.Key)) missing.Add(pair.Key);
+            foreach (var id in missing)
+            {
+                if (coreHp[id] >= 0 && coreHp[id] <= coreMaxHp * 0.5f && cores.TryGetValue(id, out var old))
+                    SpawnBattlefieldEffect("FX_Building_Destroyed_mid.prefab", old.Object.transform.position);
+                RemoveCoreFire(id);
+                coreHp.Remove(id);
             }
 
             previousCorePositions.Clear();
             foreach (var pair in cores) previousCorePositions[pair.Key] = pair.Value.To;
+        }
+
+        private void SyncCoreFire(uint id, bool known, int hp, Vector3 position)
+        {
+            string file = !known ? null : hp <= coreMaxHp * 0.25f ? "FX_Building_burning.prefab" : hp <= coreMaxHp * 0.5f ? "FX_Building_burning_small.prefab" : null;
+            if (file == null) { RemoveCoreFire(id); return; }
+            if (coreFire.TryGetValue(id, out var current) && current != null)
+            {
+                if (coreFireFiles.TryGetValue(id, out var currentFile) && currentFile == file)
+                {
+                    current.transform.position = position;
+                    return;
+                }
+                RemoveCoreFire(id);
+            }
+            if (coreFire.Count + battlefieldEffects.Count >= MaxBattlefieldEffects) return;
+            if (!LocalVisualPack.TryCreateEffect(file, transform, out var effect)) return;
+            effect.transform.position = position;
+            coreFire[id] = effect;
+            coreFireFiles[id] = file;
+        }
+
+        private void RemoveCoreFire(uint id)
+        {
+            if (!coreFire.TryGetValue(id, out var effect)) return;
+            Discard(effect);
+            coreFire.Remove(id);
+            coreFireFiles.Remove(id);
+        }
+
+        private void SpawnBattlefieldEffect(string file, Vector3 position)
+        {
+            if (coreFire.Count + battlefieldEffects.Count >= MaxBattlefieldEffects) return;
+            if (!LocalVisualPack.TryCreateEffect(file, transform, out var effect)) return;
+            effect.transform.position = position;
+            battlefieldEffects.Add(new TimedBattlefieldEffect { Object = effect, Remaining = 3f });
+        }
+
+        private void UpdateBattlefieldEffects(float deltaTime)
+        {
+            for (int i = battlefieldEffects.Count - 1; i >= 0; i--)
+            {
+                battlefieldEffects[i].Remaining -= deltaTime;
+                if (battlefieldEffects[i].Remaining > 0f) continue;
+                Discard(battlefieldEffects[i].Object);
+                battlefieldEffects.RemoveAt(i);
+            }
         }
 
         private void SyncArmies(FactionFrame frame)
@@ -1040,6 +1184,11 @@ namespace Rts.Presentation
             arrows.Clear();
             foreach (var arrow in projectileArrows.Values) Discard(arrow.Line.gameObject);
             projectileArrows.Clear();
+            foreach (var effect in coreFire.Values) Discard(effect);
+            coreFire.Clear();
+            coreFireFiles.Clear();
+            foreach (var effect in battlefieldEffects) Discard(effect.Object);
+            battlefieldEffects.Clear();
             if (selectionRing != null) { Discard(selectionRing); selectionRing = null; }
             foreach (var ring in extraRings) Discard(ring);
             extraRings.Clear();

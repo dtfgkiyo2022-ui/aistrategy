@@ -109,6 +109,7 @@ namespace Rts.Editor
 
             if (HasAsset(LocalVisualPack.CoreAssetPath())) return true;
             if (HasAsset(LocalVisualPack.OutpostAssetPath())) return true;
+            if (HasAsset(LocalVisualPack.EffectAssetPath("FX_Building_burning_small.prefab"))) return true;
             if (HasAsset(LocalVisualPack.UnitMaterialAssetPath(true))) return true;
             if (HasAsset(LocalVisualPack.UnitMaterialAssetPath(false))) return true;
             return false;

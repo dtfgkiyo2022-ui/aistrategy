@@ -25,6 +25,24 @@ namespace Rts.Presentation
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
         private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
+        private readonly Dictionary<uint, int> packedBuildingStages = new Dictionary<uint, int>();
+        private sealed class BuildingFxState
+        {
+            public Vector3 Position;
+            public float Height;
+            public int Hp;
+            public int MaxHp;
+        }
+        private sealed class TimedEffect
+        {
+            public GameObject Object;
+            public float Remaining;
+            public string File;
+        }
+        private readonly Dictionary<uint, BuildingFxState> buildingFxStates = new Dictionary<uint, BuildingFxState>();
+        private readonly Dictionary<uint, TimedEffect> buildingFire = new Dictionary<uint, TimedEffect>();
+        private readonly List<TimedEffect> buildingEffects = new List<TimedEffect>();
+        private const int MaxBuildingEffects = 6;
         // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
         private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
         private GUIStyle tagStyle;
@@ -119,6 +137,9 @@ namespace Rts.Presentation
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
+            foreach (var fx in buildingEffects) Destroy(fx.Object);
+            buildingEffects.Clear(); buildingFire.Clear();
             villagerFrom.Clear(); villagerFacing.Clear(); villagerWalkRates.Clear(); villagerActivities.Clear(); villagerWorkTargets.Clear();
             enemyVillagerFrom.Clear(); enemyVillagerTargets.Clear(); enemyVillagerFacing.Clear(); enemyVillagerWalkRates.Clear();
             enemyVillagerActivities.Clear(); enemyVillagerWorkTargets.Clear();
@@ -144,6 +165,7 @@ namespace Rts.Presentation
             SyncResources(economy);
             SyncVillagers(economy);
             SyncBuildings(economy);
+            UpdateBuildingEffects(Time.deltaTime);
             SyncBelts(economy);
             float matchRate = view == null ? 0f : view.MatchRate;
             villagerInterpolationSeconds = Mathf.Min(BattlefieldView.TickSeconds,
@@ -410,13 +432,24 @@ namespace Rts.Presentation
             foreach (var b in economy.Buildings)
             {
                 seen.Add(b.Id);
+                bool finished = b.Complete || b.MaxHp == 0;
+                bool own = b.FactionId == ownFaction;
+                int constructionStage = (int)LocalVisualPack.GetBuildingConstructionStage(b.Complete, b.Progress, b.Work);
                 if (!buildings.TryGetValue(b.Id, out var go))
                 {
-                    if (LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
-                        b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go))
+                    bool created = false;
+                    if (own && !finished && constructionStage < 2)
+                        created = LocalVisualPack.TryCreateBuildingConstruction(b.Kind, constructionStage, b.FactionId, transform,
+                            b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go);
+                    if (!created)
+                        created = LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
+                            b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go);
+                    if (created)
                         packedBuildings.Add(b.Id);
                     else
                         go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    if (created && own && !finished && constructionStage < 2)
+                        packedBuildingStages[b.Id] = constructionStage;
                     go.name = b.Kind + " " + b.Id;
                     if (go.GetComponent<Collider>() != null) Destroy(go.GetComponent<Collider>());
                     go.transform.SetParent(transform, false);
@@ -435,8 +468,31 @@ namespace Rts.Presentation
                     }
                     buildings.Add(b.Id, go);
                 }
-                // An enemy building's progress is not shown (0), so it is drawn as finished.
-                bool finished = b.Complete || b.MaxHp == 0;
+                int desiredPackedStage = finished ? 2 : constructionStage;
+                if (packedBuildings.Contains(b.Id) && own &&
+                    ((desiredPackedStage == 2 && packedBuildingStages.ContainsKey(b.Id)) ||
+                    (desiredPackedStage < 2 && (!packedBuildingStages.TryGetValue(b.Id, out var previousStage) || previousStage != desiredPackedStage))))
+                {
+                    Destroy(go);
+                    packedBuildings.Remove(b.Id);
+                    packedBuildingStages.Remove(b.Id);
+                    bool recreated = desiredPackedStage == 2
+                        ? LocalVisualPack.TryCreateBuilding(b.Kind, b.FactionId, transform,
+                            b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go)
+                        : LocalVisualPack.TryCreateBuildingConstruction(b.Kind, desiredPackedStage, b.FactionId, transform,
+                            b.SizeMeters * LocalVisualPack.BuildingWidthScale(b.Kind), out go);
+                    if (recreated)
+                    {
+                        go.name = b.Kind + " " + b.Id;
+                        buildings[b.Id] = go;
+                        packedBuildings.Add(b.Id);
+                        if (desiredPackedStage < 2) packedBuildingStages[b.Id] = desiredPackedStage;
+                    }
+                    else
+                    {
+                        packedBuildings.Add(b.Id);
+                    }
+                }
                 float full = b.Kind == BuildingKind.Mine ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
                     : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f
                     : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : b.Kind == BuildingKind.Blacksmith ? 2.0f
@@ -449,11 +505,24 @@ namespace Rts.Presentation
                 var p = ToWorld(b.Center);
                 if (packedBuildings.Contains(b.Id))
                 {
-                    // The model is built at its finished height; under construction it rises with the progress.
-                    float rise = finished ? 1f : height / full;
-                    LocalVisualPack.SetBuildingProgress(go, rise);
                     go.transform.position = new Vector3(p.x, 0f, p.z);
-                    height = LocalVisualPack.BuildingHeight(b.Kind) * rise;
+                    if (finished)
+                    {
+                        LocalVisualPack.SetBuildingProgress(go, 1f);
+                        height = LocalVisualPack.BuildingHeight(b.Kind);
+                    }
+                    else if (packedBuildingStages.ContainsKey(b.Id))
+                    {
+                        // A construction-stage model (foundation or frame) is shown at its own size, not squashed.
+                        LocalVisualPack.SetBuildingProgress(go, 1f);
+                        height = LocalVisualPack.BuildingHeight(b.Kind) * (height / full);
+                    }
+                    else
+                    {
+                        float rise = height / full;
+                        LocalVisualPack.SetBuildingProgress(go, rise);
+                        height = LocalVisualPack.BuildingHeight(b.Kind) * rise;
+                    }
                 }
                 else
                 {
@@ -461,6 +530,9 @@ namespace Rts.Presentation
                     go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
                     go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
                 }
+                if (own && b.MaxHp > 0)
+                    SyncBuildingFire(b.Id, b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
+                buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.FactionId == ownFaction)
                 {
@@ -489,6 +561,16 @@ namespace Rts.Presentation
             var packedGone = new List<uint>();
             foreach (var id in packedBuildings) if (!seen.Contains(id)) packedGone.Add(id);
             foreach (var id in packedGone) packedBuildings.Remove(id);
+            foreach (var id in packedGone) packedBuildingStages.Remove(id);
+            var fxGone = new List<uint>();
+            foreach (var pair in buildingFxStates)
+            {
+                if (seen.Contains(pair.Key)) continue;
+                if (pair.Value.MaxHp > 0 && pair.Value.Hp <= pair.Value.MaxHp * 0.5f)
+                    SpawnBuildingEffect("FX_Building_Destroyed_mid.prefab", pair.Value.Position + Vector3.up * pair.Value.Height);
+                fxGone.Add(pair.Key);
+            }
+            foreach (var id in fxGone) { buildingFxStates.Remove(id); RemoveBuildingFire(id); }
             Remove(buildingFlags, seen);
             Remove(ports, seen);
             var warningGone = new List<uint>();
@@ -497,6 +579,56 @@ namespace Rts.Presentation
             var untagged = new List<uint>();
             foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
             foreach (var id in untagged) buildingTags.Remove(id);
+        }
+
+        private void SyncBuildingFire(uint id, int hp, int maxHp, Vector3 position)
+        {
+            string file = hp <= maxHp * 0.25f ? "FX_Building_burning.prefab" : hp <= maxHp * 0.5f ? "FX_Building_burning_small.prefab" : null;
+            if (file == null) { RemoveBuildingFire(id); return; }
+            if (buildingFire.TryGetValue(id, out var current) && current.Object != null)
+            {
+                if (current.File == file)
+                {
+                    current.Object.transform.position = position;
+                    return;
+                }
+                RemoveBuildingFire(id);
+            }
+            if (buildingFire.Count + buildingEffects.Count >= MaxBuildingEffects) return;
+            if (!LocalVisualPack.TryCreateEffect(file, transform, out var effect)) return;
+            effect.transform.position = position;
+            var fx = new TimedEffect { Object = effect, Remaining = float.PositiveInfinity, File = file };
+            buildingFire[id] = fx;
+            buildingEffects.Add(fx);
+        }
+
+        private void RemoveBuildingFire(uint id)
+        {
+            if (!buildingFire.TryGetValue(id, out var fx)) return;
+            Destroy(fx.Object);
+            buildingEffects.Remove(fx);
+            buildingFire.Remove(id);
+        }
+
+        private void SpawnBuildingEffect(string file, Vector3 position)
+        {
+            if (buildingEffects.Count >= MaxBuildingEffects) return;
+            if (!LocalVisualPack.TryCreateEffect(file, transform, out var effect)) return;
+            effect.transform.position = position;
+            buildingEffects.Add(new TimedEffect { Object = effect, Remaining = 3f });
+        }
+
+        private void UpdateBuildingEffects(float deltaTime)
+        {
+            for (int i = buildingEffects.Count - 1; i >= 0; i--)
+            {
+                var fx = buildingEffects[i];
+                if (float.IsPositiveInfinity(fx.Remaining)) continue;
+                fx.Remaining -= deltaTime;
+                if (fx.Remaining > 0f) continue;
+                Destroy(fx.Object);
+                buildingEffects.RemoveAt(i);
+            }
         }
 
         private void OnGUI()

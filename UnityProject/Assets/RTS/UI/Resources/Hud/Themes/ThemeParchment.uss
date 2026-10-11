@@ -52,7 +52,7 @@
     --hud-resource-height: 44px;
     --hud-status-line-height: 17px;
     --hud-number-width: 48px;
-    --hud-age-width: 200px;
+    --hud-age-width: 250px;
     --hud-status-width: 134px;
     --hud-heading-letter-spacing: 0px;
 }

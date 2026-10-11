@@ -1438,7 +1438,7 @@ namespace Rts.Presentation
                 if (commandsSelectionTitle != null)
                     commandsSelectionTitle.text = UiText.T("Army " + selection.Id, "軍団 " + selection.Id);
                 if (commandsSelectionDetail != null)
-                    commandsSelectionDetail.text = UiText.T("Alive " + alive, "生存 " + alive);
+                    commandsSelectionDetail.text = UiText.T("Alive " + alive, "生存 " + alive) + view.SelectedMakeUp();
                 if (commandsSelectionHint != null)
                     commandsSelectionHint.text = view.SelectedArmies.Count > 1
                         ? UiText.T("Selected armies: " + view.SelectedArmies.Count, "選択中の軍団数：" + view.SelectedArmies.Count)

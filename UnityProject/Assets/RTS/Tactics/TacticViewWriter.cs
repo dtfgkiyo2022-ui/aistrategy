@@ -43,7 +43,11 @@ namespace Rts.Tactics
             for (int i = 0; i < enemies.Length; i++)
             {
                 if (i != 0) b.Append(','); var e = enemies[i];
-                b.Append("{\"id\":").Append(e.ContactId).Append(",\"kind\":").Append(e.Kind).Append(",\"kindName\":").Append(TacticJson.Quote(((UnitKind)e.Kind).ToString())).Append(",\"position\":"); Point(b, e.Position); b.Append('}');
+                var unit = (frame.Units ?? Array.Empty<RenderUnit>()).FirstOrDefault(x => !x.IsOwn && x.Id == e.ContactId);
+                b.Append("{\"id\":").Append(e.ContactId).Append(",\"kind\":").Append(e.Kind).Append(",\"kindName\":").Append(TacticJson.Quote(((UnitKind)e.Kind).ToString()));
+                b.Append(",\"civ\":").Append(TacticJson.Quote(unit.Civ.ToString()));
+                b.Append(",\"equipmentLevel\":").Append(unit.EquipmentLevel);
+                b.Append(",\"position\":"); Point(b, e.Position); b.Append('}');
             }
             b.Append("],\"contacts\":[");
             var contacts = (frame.Observation?.Contacts ?? Array.Empty<EnemyContact>()).OrderBy(x => x.ContactId).ToArray();

@@ -100,7 +100,7 @@ namespace Rts.Tactics
             return new[] {
                 ("version", "戦況の版番号"), ("tick", "現在の試合 tick"), ("factionId", "自陣営のID"),
                 ("ownArmies[]", "自軍部隊の id/kind/count/controlledBy/composition/position/homeObjective"), ("ownArmies[].controlledBy", "現在効いている戦闘命令の出どころ。Human / Doctrine / Ai / Tactic / None"), ("ownArmies[].composition", "兵種名ごとの自軍兵数。兵種名の昇順"), ("ownArmies[].position", "x/z。メートル"), ("ownArmies[].homeObjective", "kind/id/point"),
-                ("visibleEnemies[]", "現在見えている敵の id/kind/kindName/position"), ("visibleEnemies[].position", "x/z。メートル"),
+                ("visibleEnemies[]", "現在見えている敵の id/kind/kindName/civ/equipmentLevel/position。civ は文明、equipmentLevel は装備研究数（0..5）"), ("visibleEnemies[].position", "x/z。メートル"),
                 ("contacts[]", "id/position/lastSeenTick/min/max/visible/uncertain/strengthUnknown/absent/visibleComposition/covered"), ("contacts[].visibleComposition", "現在見えている敵のうち接触に属する兵種別内訳"), ("contacts[].covered", "この接触に含まれる観測済み接触ID"),
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
