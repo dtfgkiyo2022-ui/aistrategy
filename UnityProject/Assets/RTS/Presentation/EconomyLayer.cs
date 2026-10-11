@@ -162,11 +162,19 @@ namespace Rts.Presentation
             var frame = view == null ? null : view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
             if (economy == null) { if (resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear(); return; }
+            long part = PerfProbe.Start();
             SyncResources(economy);
+            PerfProbe.Stop("EcoRes", part);
+            part = PerfProbe.Start();
             SyncVillagers(economy);
+            PerfProbe.Stop("EcoVil", part);
+            part = PerfProbe.Start();
             SyncBuildings(economy);
             UpdateBuildingEffects(Time.deltaTime);
+            PerfProbe.Stop("EcoBld", part);
+            part = PerfProbe.Start();
             SyncBelts(economy);
+            PerfProbe.Stop("EcoBelt", part);
             float matchRate = view == null ? 0f : view.MatchRate;
             villagerInterpolationSeconds = Mathf.Min(BattlefieldView.TickSeconds,
                 villagerInterpolationSeconds + Time.deltaTime * matchRate);

@@ -1167,16 +1167,22 @@ namespace Rts.UnityHost
                 if (smokeWest != null) smokeWest.Record(ownFactionId == 1 ? ownTacticResult : enemyTacticResult, simulation.Capture(1));
                 if (smokeEast != null) smokeEast.Record(ownFactionId == 2 ? ownTacticResult : enemyTacticResult, simulation.Capture(2));
             }
+            long pushProbe = PerfProbe.Start();
             if (view != null) view.Push(frame);
+            PerfProbe.Stop("ViewPush", pushProbe);
             if (liveAi != null) liveAi.Poll(frame.Tick);
+            long packProbe = PerfProbe.Start();
             matchPack?.RecordAfterStep(simulation);
+            PerfProbe.Stop("Pack", packProbe);
             if (frame.Result.HasEnded)
             {
                 FinishMatchPack();
                 return;
             }
+            long sidesProbe = PerfProbe.Start();
             enemy.Step(simulation.Capture(enemyFactionId));
             own.Step(simulation.Capture(ownFactionId));
+            PerfProbe.Stop("Sides", sidesProbe);
             if (HasEnded) FinishMatchPack();
         }
 
@@ -1267,12 +1273,24 @@ namespace Rts.UnityHost
             }
             if (paused) return;
             accumulated += Time.deltaTime * speedMultiplier;
+            // One rendered frame may spend only a bounded wall-clock time on simulation steps. Without this a heavy
+            // match at x4 asks for more ticks every frame than it can compute, and the window stops responding.
+            // Dropping the backlog only makes the match run slower than the chosen speed; ticks themselves are unchanged.
+            float stepStarted = Time.realtimeSinceStartup;
             while (accumulated >= tickSeconds)
             {
                 accumulated -= tickSeconds;
                 StepOnce();
+                if (Time.realtimeSinceStartup - stepStarted >= StepBudgetSeconds)
+                {
+                    accumulated = Mathf.Min(accumulated, tickSeconds);
+                    break;
+                }
             }
         }
+
+        /// <summary>Wall-clock time one frame may spend stepping the match (display pacing only, never simulated).</summary>
+        private const float StepBudgetSeconds = 0.04f;
 
         private void RunSmokeBatch()
         {
