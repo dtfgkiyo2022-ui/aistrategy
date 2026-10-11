@@ -583,6 +583,10 @@ namespace Rts.Simulation
                 && e.CoreDefenceMaxTargets > 0 && e.CoreDefenceMaxTargets <= 16), "Invalid core defence rules.");
             Require(!e.LatePush || (e.Enabled && e.LatePushAfterTicks > 0 && e.LatePushAdvantageAfterTicks > 0
                 && e.LatePushEnemyMultiplierPermille > 0 && e.LatePushEnemyMultiplierPermille <= 10000), "Invalid late-push rules.");
+            Require(!e.SiegeByAge || (e.Enabled && e.Ages && e.SiegeAge0Permille > 0 && e.SiegeAge0Permille <= 10000
+                && e.SiegeAge1Permille > 0 && e.SiegeAge1Permille <= 10000
+                && e.SiegeAge2Permille > 0 && e.SiegeAge2Permille <= 10000
+                && e.SiegeAge3Permille > 0 && e.SiegeAge3Permille <= 10000), "Invalid siege-by-age rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
                 && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
                 && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
@@ -814,6 +818,8 @@ namespace Rts.Simulation
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                 LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
+                SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,
+                SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,

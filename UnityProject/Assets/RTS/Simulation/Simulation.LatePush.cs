@@ -20,7 +20,8 @@ namespace Rts.Simulation
             {
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
-                if (!latePushLatched[faction - 1] && LatePushCondition(observation, world.Config.Economy))
+                bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= 3;
+                if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, world.Config.Economy)))
                     latePushLatched[faction - 1] = true;
                 if (!latePushLatched[faction - 1]) continue;
 
@@ -30,15 +31,22 @@ namespace Rts.Simulation
                     && c.Order.Source == CommandSource.Human && Combat(c.Order))) continue;
 
                 var scope = new ScopeKey(faction, ScopeKind.All, 0);
-                if (liveCommands.Any(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
+                if (world.Config.Economy.SiegeByAge && !Affected(scope).Any(id => world.Armies[id - 1].SoldierIds.Any(s => world.Soldiers[s - 1].Alive)))
+                    continue;
+                var current = liveCommands.FirstOrDefault(c => !Terminal(c) && c.Order.Source == CommandSource.Doctrine
                     && c.Order.Target.Equals(scope) && c.Order.Kind == PolicyKind.Focus
-                    && c.Order.Goal.Kind == GoalKind.Core)) continue;
+                    && c.Order.Goal.Kind == GoalKind.Core);
+                if (current != null)
+                {
+                    AttachLatePushArmies(current);
+                    continue;
+                }
 
                 uint enemyFaction = faction == 1 ? 2U : 1U;
                 uint enemyCore = world.Factions[enemyFaction - 1].CoreId;
                 ulong commandId = nextCommandId++;
                 var order = new PolicyOrder(commandId, nextBatchId++, CommandSource.Doctrine, scope, PolicyKind.Focus,
-                    new PolicyGoal(GoalKind.Core, enemyCore, default), 50, new LossBudget(300),
+                    new PolicyGoal(GoalKind.Core, enemyCore, default), 50, new LossBudget((ushort)LatePushLossPermille(world.Config.Economy)),
                     new EndCondition(EndKind.UntilReplaced, 0), 0, Revision(scope),
                     Versions(scope).Where(v => !v.Scope.Equals(scope)).ToArray(), observation.Tick,
                     new Expiration(long.MaxValue, 0, ExpireFlags.None));
@@ -50,6 +58,34 @@ namespace Rts.Simulation
                 state.Dependencies = Versions(scope).ToArray();
                 AddCommandState(state);
                 Notice(state, ReasonCode.None);
+            }
+        }
+
+        private static int LatePushLossPermille(EconomyRules rules) => rules != null && rules.SiegeByAge ? 1000 : 300;
+
+        private void AttachLatePushArmies(CommandState command)
+        {
+            if (!world.Config.Economy.SiegeByAge || command.Status != CommandStatus.Executing) return;
+            foreach (uint id in Affected(command.Order.Target))
+            {
+                uint[] soldiers = world.Armies[id - 1].SoldierIds.Where(s => world.Soldiers[s - 1].Alive).OrderBy(s => s).ToArray();
+                if (soldiers.Length == 0) continue;
+                var active = command.Armies.FirstOrDefault(a => a.ArmyId == id && a.Active && !a.Failed && !a.Finished);
+                if (active != null)
+                {
+                    // A 100% late-push loss budget is about replacing a spent assault group, not about
+                    // permanently putting the army into Retreat. Rebase the execution on newly trained soldiers.
+                    if (active.Returning)
+                    {
+                        active.Returning = false;
+                        active.StartIds = soldiers;
+                        active.N0 = soldiers.Length;
+                        active.Deaths = 0;
+                    }
+                    continue;
+                }
+                command.Armies.RemoveAll(a => a.ArmyId == id && (!a.Active || a.Failed || a.Finished));
+                command.Armies.Add(new ArmyExecution { ArmyId = id, StartIds = soldiers, N0 = soldiers.Length });
             }
         }
 

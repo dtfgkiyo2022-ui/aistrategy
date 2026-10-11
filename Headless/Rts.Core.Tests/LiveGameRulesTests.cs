@@ -22,7 +22,8 @@ namespace Rts.Core.Tests
             Assert.That(e.LineRebuildDelayTicks, Is.EqualTo(200));
             Assert.That(e.Masonry, Is.False, "the thirteen civilisations come only with allCivilisations");
             var all = LiveGameRules.Create(3, true, true, false, false).Economy;
-            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock, Is.True);
+            Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock
+                && all.SiegeByAge, Is.True);
         }
 
         [TestCase(3UL, false)]
@@ -72,6 +73,25 @@ namespace Rts.Core.Tests
             Assert.That(frame.Units.Where(u => u.IsOwn).All(u => u.Civ == frame.Economy.Civ && u.Civ != CivKind.Primitive), Is.True, "own soldiers carry their civilisation");
             var enemyCiv = sim.Capture(2).Economy.Civ;
             Assert.That(frame.Units.Where(u => !u.IsOwn).All(u => u.Civ == enemyCiv), Is.True, "visible enemies carry theirs");
+        }
+
+        [Test]
+        public void SiegeByAgeReferenceSeedDoesNotEndBeforeNineMinutes()
+        {
+            var sim = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            for (long tick = 1; tick < 10800 && !sim.Capture(1).Result.HasEnded; tick++)
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+            Assert.That(sim.Capture(1).Result.HasEnded, Is.False, "the reference match must survive the first nine minutes");
+        }
+
+        [Test, Explicit("long measurement")]
+        public void SiegeByAgeReferenceSeedEndsByTwentyFiveMinutes()
+        {
+            var sim = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            for (long tick = 1; tick <= 30000 && !sim.Capture(1).Result.HasEnded; tick++)
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+            Assert.That(sim.Capture(1).Result.HasEnded, Is.True, "the reference match must end by 25 minutes");
+            Assert.That(sim.Capture(1).Tick, Is.GreaterThanOrEqualTo(10800), "the match must not end before 9 minutes");
         }
 
         private static string Hash(Battle sim) => Convert.ToHexString(ReplayBinary.Hash(sim.CaptureDiagnostic().CanonicalState));
