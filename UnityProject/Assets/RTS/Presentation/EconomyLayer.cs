@@ -20,6 +20,8 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, GameObject> resources = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, int> resourceLevels = new Dictionary<uint, int>();
         private readonly Dictionary<uint, GameObject> ownVillagers = new Dictionary<uint, GameObject>();
+        private readonly List<uint> selectedVillagers = new List<uint>();
+        private readonly Dictionary<uint, GameObject> villagerSelectionRings = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, LocalVisualPack.AnimationHandle> ownVillagerAnimations = new Dictionary<uint, LocalVisualPack.AnimationHandle>();
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
@@ -89,9 +91,114 @@ namespace Rts.Presentation
         private static readonly Color EastColor = new Color(0.85f, 0.25f, 0.25f);
         private static readonly Color BeltStallColor = new Color(1f, 0.12f, 0.08f);
         private static readonly Color WarningColor = new Color(1f, 0.55f, 0.2f);
+        private static readonly Color VillagerSelectionColor = new Color(0.35f, 1f, 0.85f);
         private const int DisplayBufferLimit = 10;
 
         public void Bind(BattlefieldView battlefield) { view = battlefield; }
+
+        public IReadOnlyList<uint> SelectedVillagers { get { return selectedVillagers; } }
+        public bool HasVillagerSelection { get { return selectedVillagers.Count > 0; } }
+
+        public void ClearVillagerSelection()
+        {
+            selectedVillagers.Clear();
+            ClearVillagerSelectionRings();
+        }
+
+        public void SelectVillager(uint id, bool additive)
+        {
+            var next = VillagerControlRules.ApplyClick(selectedVillagers, id, additive);
+            selectedVillagers.Clear();
+            selectedVillagers.AddRange(next);
+        }
+
+        public void SelectVillagers(IReadOnlyList<uint> ids, bool additive)
+        {
+            if (!additive) selectedVillagers.Clear();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                uint id = ids[i];
+                if (id != 0 && !selectedVillagers.Contains(id)) selectedVillagers.Add(id);
+            }
+            selectedVillagers.Sort();
+        }
+
+        public void SelectIdleVillagers()
+        {
+            var economy = view == null || view.LatestFrame == null ? null : view.LatestFrame.Economy;
+            if (economy == null) return;
+            selectedVillagers.Clear();
+            foreach (var villager in economy.Villagers)
+                if (villager.IsOwn && villager.Activity == VillagerActivity.Idle) selectedVillagers.Add(villager.Id);
+            selectedVillagers.Sort();
+        }
+
+        public bool TryPickOwnVillager(Camera camera, Vector2 screenPoint, float radiusPixels, out uint id)
+        {
+            id = 0;
+            float best = radiusPixels * radiusPixels;
+            foreach (var pair in ownVillagers)
+            {
+                var projected = camera.WorldToScreenPoint(pair.Value.transform.position);
+                if (projected.z <= 0f) continue;
+                float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
+                if (distance > best) continue;
+                best = distance;
+                id = pair.Key;
+            }
+            return id != 0;
+        }
+
+        public List<uint> VillagersInScreenRect(Camera camera, Rect screenRect)
+        {
+            var found = new List<uint>();
+            foreach (var pair in ownVillagers)
+            {
+                var projected = camera.WorldToScreenPoint(pair.Value.transform.position);
+                if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) found.Add(pair.Key);
+            }
+            found.Sort();
+            return found;
+        }
+
+        public bool TryPickResource(Camera camera, Vector2 screenPoint, float radiusPixels, out ResourceView resource)
+        {
+            resource = default(ResourceView);
+            float best = radiusPixels * radiusPixels;
+            var economy = view == null || view.LatestFrame == null ? null : view.LatestFrame.Economy;
+            if (economy == null) return false;
+            foreach (var candidate in economy.Resources)
+            {
+                if (!resources.TryGetValue(candidate.Id, out var visual)) continue;
+                var projected = camera.WorldToScreenPoint(visual.transform.position);
+                if (projected.z <= 0f) continue;
+                float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
+                if (distance > best) continue;
+                best = distance;
+                resource = candidate;
+            }
+            return resource.Id != 0;
+        }
+
+        public bool TryPickOwnBuilding(Camera camera, Vector2 screenPoint, float radiusPixels, out BuildingView building)
+        {
+            building = default(BuildingView);
+            float best = radiusPixels * radiusPixels;
+            var economy = view == null || view.LatestFrame == null ? null : view.LatestFrame.Economy;
+            if (economy == null) return false;
+            uint ownFaction = view.LatestFrame.FactionId;
+            foreach (var candidate in economy.Buildings)
+            {
+                if (candidate.FactionId != ownFaction || !buildings.TryGetValue(candidate.Id, out var visual)) continue;
+                var projected = camera.WorldToScreenPoint(visual.transform.position);
+                if (projected.z <= 0f) continue;
+                float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
+                if (distance > best) continue;
+                best = distance;
+                building = candidate;
+            }
+            return building.Id != 0;
+        }
 
         public float BuildingUtilization(uint buildingId) { return flowMetrics.BuildingUtilization(buildingId); }
         public int BeltDeliveriesPerMinute(int cell) { return flowMetrics.BeltDeliveriesPerMinute(cell); }
@@ -118,12 +225,14 @@ namespace Rts.Presentation
         {
             foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
             foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
+            ClearVillagerSelectionRings();
         }
 
         public void Clear()
         {
             foreach (var go in resources.Values) { ResourceModels.Release(go); Destroy(go); }
             foreach (var go in ownVillagers.Values) Destroy(go);
+            ClearVillagerSelectionRings();
             foreach (var go in enemyVillagers) Destroy(go);
             foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
             foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
@@ -137,6 +246,7 @@ namespace Rts.Presentation
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
             resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
             foreach (var fx in buildingEffects) Destroy(fx.Object);
             buildingEffects.Clear(); buildingFire.Clear();
@@ -183,6 +293,51 @@ namespace Rts.Presentation
                 ApplyVillager(pair.Key, pair.Value, ownVillagerAnimations, alpha, matchRate);
             for (int i = 0; i < enemyVillagers.Count; i++)
                 ApplyEnemyVillager(i, alpha, matchRate);
+            SyncVillagerSelection(economy);
+        }
+
+        private void SyncVillagerSelection(EconomyView economy)
+        {
+            var existing = new HashSet<uint>(ownVillagers.Keys);
+            var present = VillagerControlRules.PruneMissing(selectedVillagers, existing);
+            selectedVillagers.Clear();
+            selectedVillagers.AddRange(present);
+
+            var seen = new HashSet<uint>();
+            for (int i = 0; i < selectedVillagers.Count; i++)
+            {
+                uint id = selectedVillagers[i];
+                if (!ownVillagers.TryGetValue(id, out var villager)) continue;
+                seen.Add(id);
+                if (!villagerSelectionRings.TryGetValue(id, out var ring))
+                {
+                    ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    ring.name = "VillagerSelectionRing " + id;
+                    Destroy(ring.GetComponent<Collider>());
+                    ring.transform.SetParent(transform, false);
+                    ring.transform.localScale = new Vector3(1.25f, 0.035f, 1.25f);
+                    ring.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(VillagerSelectionColor);
+                    villagerSelectionRings.Add(id, ring);
+                }
+                var position = villager.transform.position;
+                ring.transform.position = new Vector3(position.x, 0.06f, position.z);
+                ring.SetActive(true);
+            }
+
+            var gone = new List<uint>();
+            foreach (var pair in villagerSelectionRings)
+                if (!seen.Contains(pair.Key)) gone.Add(pair.Key);
+            foreach (uint id in gone)
+            {
+                Destroy(villagerSelectionRings[id]);
+                villagerSelectionRings.Remove(id);
+            }
+        }
+
+        private void ClearVillagerSelectionRings()
+        {
+            foreach (var ring in villagerSelectionRings.Values) Destroy(ring);
+            villagerSelectionRings.Clear();
         }
 
         private void SyncResources(EconomyView economy)

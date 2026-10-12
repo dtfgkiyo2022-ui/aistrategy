@@ -334,7 +334,14 @@ namespace Rts.Presentation
             if (mode == Mode.None || layer == null) return;
             var camera = Camera.main;
             if (camera == null) return;
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { SetMode(Mode.None); return; }
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            {
+                // Remembered so the same right click is not also read as an order to selected villagers,
+                // whichever of the two components Unity happens to update first.
+                placementCancelledFrame = Time.frameCount;
+                SetMode(Mode.None);
+                return;
+            }
             if (Input.GetKeyDown(KeyCode.R))
             {
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
@@ -552,6 +559,13 @@ namespace Rts.Presentation
         /// <summary>Villagers, infantry, advancing the age, and sending idle villagers to work.</summary>
         private void DrawMake(EconomyView economy, float x, float y, float w, float half, float right)
         {
+            GUI.Label(new Rect(x, y, w, 22f), SelectedVillagerSummary);
+            y += 26f;
+            if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Select all idle villagers (H)", "待機中の村人をすべて選ぶ（H）")))
+                SelectIdleVillagersFromPanel();
+            if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Return selected to auto", "選択中をお任せに戻す（全体）")))
+                ReturnSelectedVillagersToAuto();
+            y += 26f;
             string queue = economy.VillagerQueued == 0 ? "" : " [" + economy.VillagerQueued + ", " + Seconds(economy.VillagerTrainRemaining) + "]";
             if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Villager (", "村人（食料 ") + economy.VillagerFoodCost + UiText.T(" food)", "）") + queue))
                 Send(EconomyCommand.Train(faction, ++sequence, 0, UnitKind.Villager), UiText.T("Villager requested", "村人を依頼しました"));

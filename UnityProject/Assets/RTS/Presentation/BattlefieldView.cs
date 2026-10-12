@@ -141,15 +141,29 @@ namespace Rts.Presentation
             PlaceSelectionRing();
         }
 
-        /// <summary>Own armies whose marker is inside the screen rectangle (screen coordinates, origin bottom left), by id.</summary>
+        /// <summary>Own armies whose soldier or marker is inside the screen rectangle (origin bottom left), by id.</summary>
         public List<uint> ArmiesInScreenRect(Camera camera, Rect screenRect)
         {
-            var found = new List<uint>();
+            var foundSet = new HashSet<uint>();
+            // A box is a soldier selection when any own soldier itself is inside it. The marker can be outside the
+            // box in a spread formation, so use the rendered unit position before falling back to the old marker rule.
+            if (latestFrame != null)
+            {
+                foreach (var unit in latestFrame.Units)
+                {
+                    if (!unit.IsOwn || unit.Kind == UnitKind.Villager || unit.ArmyId == 0) continue;
+                    ulong key = UnitKey(unit);
+                    if (!units.TryGetValue(key, out var visual)) continue;
+                    var projected = camera.WorldToScreenPoint(visual.Object.transform.position);
+                    if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) foundSet.Add(unit.ArmyId);
+                }
+            }
             foreach (var pair in armies)
             {
                 var projected = camera.WorldToScreenPoint(pair.Value.Object.transform.position);
-                if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) found.Add(pair.Key);
+                if (projected.z > 0f && screenRect.Contains(new Vector2(projected.x, projected.y))) foundSet.Add(pair.Key);
             }
+            var found = new List<uint>(foundSet);
             found.Sort();
             return found;
         }
