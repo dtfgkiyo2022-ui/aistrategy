@@ -178,6 +178,7 @@ namespace Rts.Simulation
                 case ResourceKind.Steel: economy.Steel = checked(economy.Steel + amount); break;
                 case ResourceKind.BowGear: economy.BowGear = checked(economy.BowGear + amount); break;
                 case ResourceKind.Rations: economy.Rations = checked(economy.Rations + amount); break;
+                case ResourceKind.Bricks: economy.Bricks = checked(economy.Bricks + amount); break;
                 case ResourceKind.Gold: economy.Gold = checked(economy.Gold + amount); break;
             }
         }

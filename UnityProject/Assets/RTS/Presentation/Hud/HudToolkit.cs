@@ -42,7 +42,8 @@ namespace Rts.Presentation
             TopBarResourceVisibility.ResourceKind.Charcoal,
             TopBarResourceVisibility.ResourceKind.Steel,
             TopBarResourceVisibility.ResourceKind.BowGear,
-            TopBarResourceVisibility.ResourceKind.Rations
+            TopBarResourceVisibility.ResourceKind.Rations,
+            TopBarResourceVisibility.ResourceKind.Bricks
         };
 
         private BattlefieldView view;

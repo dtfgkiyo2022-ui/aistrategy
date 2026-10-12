@@ -163,6 +163,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Town, e.TownWoodCost, e.TownStoneCost, e.TownWork);
             Add(rows, BuildingKind.Storage, e.StorageWoodCost, 0, e.StorageWork);
             Add(rows, BuildingKind.Mill, e.MillWoodCost, 0, e.MillWork);
+            Add(rows, BuildingKind.BrickKiln, e.BrickKilnWoodCost, 0, e.BrickKilnWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

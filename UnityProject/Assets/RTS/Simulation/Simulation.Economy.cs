@@ -126,6 +126,8 @@ namespace Rts.Simulation
             RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();
+            ApplyBrickUpgrades();
+            RepairMasonryCoresWithBricks();
             ApplyRationsHealing();
             AdvanceMountain();
             AdvanceByAgeClock();

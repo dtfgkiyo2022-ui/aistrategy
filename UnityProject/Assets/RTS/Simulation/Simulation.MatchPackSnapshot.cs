@@ -29,6 +29,16 @@ namespace Rts.Simulation
         public int RationsConsumed { get; internal set; }
         public int RationsTrainedSoldiers { get; internal set; }
         public int RationsHealedHp { get; internal set; }
+        public int Bricks { get; internal set; }
+        public int BricksProduced { get; internal set; }
+        public int BricksConsumed { get; internal set; }
+        public int BricksUpgradedWalls { get; internal set; }
+        public int BricksUpgradedTowers { get; internal set; }
+        public int BricksCoreRepairHp { get; internal set; }
+        public int BricksConsumedWalls { get; internal set; }
+        public int BricksConsumedTowers { get; internal set; }
+        public int BricksConsumedCoreRepair { get; internal set; }
+        public int BricksConsumedCastles { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -76,6 +86,16 @@ namespace Rts.Simulation
                     RationsConsumed = economy.RationsConsumed,
                     RationsTrainedSoldiers = economy.RationsTrainedSoldiers,
                     RationsHealedHp = economy.RationsHealedHp,
+                    Bricks = economy.Bricks,
+                    BricksProduced = economy.BricksProduced,
+                    BricksConsumed = economy.BricksConsumed,
+                    BricksUpgradedWalls = economy.BricksUpgradedWalls,
+                    BricksUpgradedTowers = economy.BricksUpgradedTowers,
+                    BricksCoreRepairHp = economy.BricksCoreRepairHp,
+                    BricksConsumedWalls = economy.BricksConsumedWalls,
+                    BricksConsumedTowers = economy.BricksConsumedTowers,
+                    BricksConsumedCoreRepair = economy.BricksConsumedCoreRepair,
+                    BricksConsumedCastles = economy.BricksConsumedCastles,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

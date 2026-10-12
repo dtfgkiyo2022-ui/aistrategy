@@ -62,16 +62,28 @@ namespace Rts.Simulation
                         b.Input -= rules.OrePerMetal;
                         b.Timer = SmeltTicksFor(b.FactionId);
                     }
-                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                    }
                 }
-                else if (ProcessingOn && b.Kind == BuildingKind.CharcoalKiln)
+                else if (CharcoalKilnAllowed(b.FactionId) && b.Kind == BuildingKind.CharcoalKiln)
                 {
+                    if (BricksAllowed(b.FactionId) && b.Input < rules.BufferLimit && world.Economies[b.FactionId - 1].Wood > 0)
+                    {
+                        world.Economies[b.FactionId - 1].Wood--;
+                        b.Input++;
+                    }
                     if (b.Timer == 0 && b.Input >= 2 && b.Output < rules.BufferLimit)
                     {
                         b.Input -= 2;
                         b.Timer = rules.CharcoalTicks;
                     }
-                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        if (BricksAllowed(b.FactionId)) world.Economies[b.FactionId - 1].Charcoal++;
+                    }
                 }
                 else if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
@@ -119,6 +131,40 @@ namespace Rts.Simulation
                         economy.RationsProduced++;
                     }
                 }
+                else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Stone > 0)
+                    {
+                        economy.Stone--;
+                        b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.Charcoal > 0)
+                    {
+                        economy.Charcoal--;
+                        b.InputSecondary++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit)
+                        for (int sourceIndex = 0; sourceIndex < world.BuildingCount; sourceIndex++)
+                        {
+                            ref var source = ref world.Buildings[sourceIndex];
+                            if (!source.Alive || !source.Complete || source.FactionId != b.FactionId || source.Kind != BuildingKind.CharcoalKiln || source.Output <= 0) continue;
+                            source.Output--;
+                            b.InputSecondary++;
+                            break;
+                        }
+                    if (b.Timer == 0 && b.Input >= rules.BrickStoneInput && b.InputSecondary >= rules.BrickCharcoalInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.BrickStoneInput;
+                        b.InputSecondary -= rules.BrickCharcoalInput;
+                        b.Timer = rules.BrickTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.BricksProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -143,7 +189,8 @@ namespace Rts.Simulation
         private static ResourceKind OutputKind(BuildingKind kind)
             => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Quarry ? ResourceKind.Stone : kind == BuildingKind.Farm ? ResourceKind.Food
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
-                : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : kind == BuildingKind.Mill ? ResourceKind.Rations : ResourceKind.Metal;
+                : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : kind == BuildingKind.Mill ? ResourceKind.Rations
+                : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -178,7 +225,7 @@ namespace Rts.Simulation
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.FactionId != faction || !b.Complete) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
-                if (ProcessingOn && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
                     if (item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
@@ -192,6 +239,11 @@ namespace Rts.Simulation
                 if (RationsOn && b.Kind == BuildingKind.Mill && item == ResourceKind.Food && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln)
+                {
+                    if (item == ResourceKind.Stone && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -301,6 +353,17 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (BricksAllowed(target.FactionId) && target.Kind == BuildingKind.BrickKiln)
+            {
+                if (kind == ResourceKind.Stone)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Charcoal)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -317,7 +380,9 @@ namespace Rts.Simulation
                && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
-               || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food);
+               || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
+               || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
+                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)));
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

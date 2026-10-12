@@ -121,6 +121,17 @@ namespace Rts.Simulation
                     w.Value(n + "RationsTrainedSoldiers", e.RationsTrainedSoldiers);
                     w.Value(n + "RationsHealedHp", e.RationsHealedHp);
                 }
+                if (BricksOn)
+                {
+                    w.Value(n + "Bricks", e.Bricks); w.Value(n + "BricksProduced", e.BricksProduced);
+                    w.Value(n + "BricksConsumed", e.BricksConsumed); w.Value(n + "BricksUpgradedWalls", e.BricksUpgradedWalls);
+                    w.Value(n + "BricksUpgradedTowers", e.BricksUpgradedTowers);
+                    w.Value(n + "BricksCoreRepairHp", e.BricksCoreRepairHp);
+                    w.Value(n + "BricksConsumedWalls", e.BricksConsumedWalls);
+                    w.Value(n + "BricksConsumedTowers", e.BricksConsumedTowers);
+                    w.Value(n + "BricksConsumedCoreRepair", e.BricksConsumedCoreRepair);
+                    w.Value(n + "BricksConsumedCastles", e.BricksConsumedCastles);
+                }
             }
             if (RegionsOn)
             {
@@ -181,9 +192,10 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
+                        if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
                         if (world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2) w.Value(n + "QueuedBowGear", b.QueuedBowGear);
                     }
                     if (world.Config.Economy.Mountain && b.Kind == BuildingKind.MineShaft)
@@ -259,7 +271,7 @@ namespace Rts.Simulation
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
                 }
             }
-            if (world.Config.Economy.ProcessingChain || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -271,6 +283,7 @@ namespace Rts.Simulation
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
                     w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
                     if (RationsOn) w.Value(n + "MillId", line.MillId);
+                    if (BricksOn) { w.Value(n + "QuarryId", line.QuarryId); w.Value(n + "BrickKilnId", line.BrickKilnId); }
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

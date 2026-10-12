@@ -217,6 +217,7 @@ namespace Rts.Presentation
                 case ProcessingLineKind.CoreWood: return UiText.T("core wood", "コア木材");
                 case ProcessingLineKind.BowGear: return UiText.T("bow gear", "弓具");
                 case ProcessingLineKind.Rations: return UiText.T("rations", "糧食");
+                case ProcessingLineKind.Bricks: return UiText.T("bricks", "煉瓦");
                 default: return value.ToString();
             }
         }

@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5 }
+    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -711,6 +711,19 @@ namespace Rts.Contracts
         public int RationsHealMaxPerInterval { get; }
         public int RationsFarmMinimum { get; }
         public int RationsFoodReserve { get; }
+        public bool BricksEnabled { get; }
+        public int Bricks { get; }
+        public int BrickKilnWoodCost { get; }
+        public int BrickKilnSizeCells { get; }
+        public int BrickTicks { get; }
+        public int BrickStoneInput { get; }
+        public int BrickCharcoalInput { get; }
+        public int BricksPerWall { get; }
+        public int BricksPerTower { get; }
+        public int BricksPerCastle { get; }
+        public int BrickHpPermille { get; }
+        public int BrickUpgradeIntervalTicks { get; }
+        public int BrickCastleStonePermille { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -750,7 +763,11 @@ namespace Rts.Contracts
              bool rationsEnabled = false, int rations = 0, int millWoodCost = 0, int millSizeCells = 0,
              int millTicks = 0, int millFoodInput = 0, int rationsPerSoldier = 0, int rationsTrainPermille = 0,
              int rationsHealIntervalTicks = 0, int rationsHealQuietTicks = 0, int rationsHealHp = 0,
-             int rationsHealMaxPerInterval = 0, int rationsFarmMinimum = 0, int rationsFoodReserve = 0)
+             int rationsHealMaxPerInterval = 0, int rationsFarmMinimum = 0, int rationsFoodReserve = 0,
+             bool bricksEnabled = false, int bricks = 0, int brickKilnWoodCost = 0, int brickKilnSizeCells = 0,
+             int brickTicks = 0, int brickStoneInput = 0, int brickCharcoalInput = 0, int bricksPerWall = 0,
+             int bricksPerTower = 0, int bricksPerCastle = 0, int brickHpPermille = 0, int brickUpgradeIntervalTicks = 0,
+             int brickCastleStonePermille = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -758,6 +775,10 @@ namespace Rts.Contracts
             MillTicks = millTicks; MillFoodInput = millFoodInput; RationsPerSoldier = rationsPerSoldier; RationsTrainPermille = rationsTrainPermille;
             RationsHealIntervalTicks = rationsHealIntervalTicks; RationsHealQuietTicks = rationsHealQuietTicks; RationsHealHp = rationsHealHp;
             RationsHealMaxPerInterval = rationsHealMaxPerInterval; RationsFarmMinimum = rationsFarmMinimum; RationsFoodReserve = rationsFoodReserve;
+            BricksEnabled = bricksEnabled; Bricks = bricks; BrickKilnWoodCost = brickKilnWoodCost; BrickKilnSizeCells = brickKilnSizeCells;
+            BrickTicks = brickTicks; BrickStoneInput = brickStoneInput; BrickCharcoalInput = brickCharcoalInput;
+            BricksPerWall = bricksPerWall; BricksPerTower = bricksPerTower; BricksPerCastle = bricksPerCastle;
+            BrickHpPermille = brickHpPermille; BrickUpgradeIntervalTicks = brickUpgradeIntervalTicks; BrickCastleStonePermille = brickCastleStonePermille;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
