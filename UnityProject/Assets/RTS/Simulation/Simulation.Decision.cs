@@ -58,7 +58,7 @@ namespace Rts.Simulation
                 foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && observation.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
                 {
                     var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position, f);
-                    int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
+                    int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(world.Map.FindPathCenters(world.Map.Cell(contact.LastPosition), post.Position, f)) / Fix64.FromInt(1).Raw));
                     approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
                 }
                 approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes, world.Config.Rules.OccupationThreatMemoryTicks);
@@ -86,18 +86,20 @@ namespace Rts.Simulation
                     foreach (var o in targets.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
                     {
                         var path = world.Map.FindPath(start, o.Position, f);
-                        int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
+                        var centers = world.Map.FindPathCenters(start, o.Position, f);
+                        int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(centers) / Fix64.FromInt(1).Raw));
                         if (SanctuarySkipsGoal(f, sanctuaryFocus, o.Kind, o.Id)) distance = int.MaxValue;
-                        routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, path.Select(world.Map.Center).ToArray()));
+                        routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, centers));
                     }
                     if (OffenseDecision.IsMobileArmyKind(view.Kind))
                         foreach (var target in observation.RaidTargets.OrderBy(t => t.Kind).ThenBy(t => t.Id))
                         {
                             var path = world.Map.FindPath(start, target.Position, f);
+                            var centers = world.Map.FindPathCenters(start, target.Position, f);
                             int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), target.Position, Fix64.FromInt(4))
-                                ? int.MaxValue : checked((int)(OffenseDecision.Length(path.Select(world.Map.Center).ToArray()) / Fix64.FromInt(1).Raw));
+                                ? int.MaxValue : checked((int)(OffenseDecision.Length(centers) / Fix64.FromInt(1).Raw));
                             routes.Add(new ObjectiveRoute(new PolicyGoal(GoalKind.Point, target.Id, target.Position), distance,
-                                path.Select(world.Map.Center).ToArray()));
+                                centers));
                         }
                     inputs.Add(new ArmyDecisionInput(view, ArmyPolicy(view.Id), a.Definition.Role == "reserve", a.Decision, routes));
                 }

@@ -51,8 +51,10 @@ internal static class TacticMatchCommand
         Action<string, bool> measure = !options.ContainsKey("--timing-out") ? null : (name, start) =>
         {
             long now = System.Diagnostics.Stopwatch.GetTimestamp();
-            if (start) { phaseStart[name] = now; return; }
+            long bytes = GC.GetAllocatedBytesForCurrentThread();
+            if (start) { phaseStart[name] = now; phaseStart["alloc:" + name] = bytes; return; }
             if (!phaseStart.TryGetValue(name, out var began)) return;
+            phaseMs["allocKB:" + name] = (phaseMs.TryGetValue("allocKB:" + name, out var allocated) ? allocated : 0) + (bytes - phaseStart["alloc:" + name]) / 1024.0;
             phaseMs[name] = (phaseMs.TryGetValue(name, out var sum) ? sum : 0) + (now - began) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         };
         var simulation = new Battle(scenario, measure);

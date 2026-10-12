@@ -216,7 +216,8 @@ namespace Rts.Simulation
             return result;
         }
 
-        private uint[] CellRegionsForFrame() => RegionsOn ? (uint[])world.CellRegions.Clone() : Array.Empty<uint>();
+        // FactionFrame copies the table it is given, so a second copy here only cost memory on every tick.
+        private uint[] CellRegionsForFrame() => RegionsOn ? world.CellRegions : Array.Empty<uint>();
 
         private bool CanAiAssign(VillagerState villager) => !HumanRegionAt(villager.FactionId, villager.Position);
     }
