@@ -153,7 +153,7 @@ namespace Rts.Simulation
             if (world.Tick % 20 == 0) lastAllocationTick = world.Tick;
         }
 
-        private bool IsLatePushAttack(uint armyId) => liveCommands.Any(c => c.Status == CommandStatus.Executing
+        private bool IsLatePushAttack(uint armyId) => IsPushWaveAssaultArmy(armyId) || liveCommands.Any(c => c.Status == CommandStatus.Executing
             && IsLatePushCoreFocus(c.Order)
             && c.Armies.Any(a => a.ArmyId == armyId && a.Active && !a.Failed && !a.Finished));
 

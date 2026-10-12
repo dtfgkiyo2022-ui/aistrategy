@@ -89,6 +89,50 @@ namespace Rts.Core.Tests
             }
         }
 
+        [Test]
+        public void PushWavesExtensionId18RoundTripsItsTuningValues()
+        {
+            var scenario = MapGenerator.GenerateTerrain(1);
+            var e = scenario.Economy;
+            e.LatePush = true; e.SiegeByAge = true; e.PushWaves = true;
+            e.WaveStagingDistance = 31; e.WaveSize = 27; e.WaveMaxWaitTicks = 1234;
+            e.WaveMinSize = 8; e.WaveRetreatPermille = 375;
+            var bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.PushWaves, Is.True);
+            Assert.That(decoded.Economy.WaveStagingDistance, Is.EqualTo(31));
+            Assert.That(decoded.Economy.WaveSize, Is.EqualTo(27));
+            Assert.That(decoded.Economy.WaveMaxWaitTicks, Is.EqualTo(1234));
+            Assert.That(decoded.Economy.WaveMinSize, Is.EqualTo(8));
+            Assert.That(decoded.Economy.WaveRetreatPermille, Is.EqualTo(375));
+            Assert.That(decoded.Extensions.Any(x => x.Id == 18), Is.True);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void PushWavesWaitThenReplaceStagingFocusWithCoreFocus()
+        {
+            var scenario = MapGenerator.GenerateTerrain(1);
+            var e = scenario.Economy;
+            e.LatePush = true; e.SiegeByAge = true; e.PushWaves = true; e.AgeClock = true;
+            e.LatePushAfterTicks = 1; e.LatePushAdvantageAfterTicks = 100000;
+            e.WaveSize = 1000; e.WaveMinSize = 6; e.WaveMaxWaitTicks = 20;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 1000000;
+            var sim = new Battle(scenario);
+            bool sawStaging = false, sawAssault = false;
+            for (long tick = 1; tick <= 16000; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                var commands = sim.Capture(1).Commands;
+                sawStaging |= commands.Any(c => c.Source == CommandSource.Doctrine && c.Kind == PolicyKind.Focus
+                    && c.Goal.Kind == GoalKind.Point && c.Status == CommandStatus.Executing);
+                sawAssault |= commands.Any(c => c.Source == CommandSource.Doctrine && c.Kind == PolicyKind.Focus
+                    && c.Goal.Kind == GoalKind.Core && c.Status == CommandStatus.Executing);
+            }
+            Assert.That(sawStaging, Is.True);
+            Assert.That(sawAssault, Is.True);
+        }
+
         private static FactionObservation Observation(long tick, int own, int enemy, int ownedOutposts)
         {
             var armies = Enumerable.Range(0, own == 0 ? 0 : 1)
