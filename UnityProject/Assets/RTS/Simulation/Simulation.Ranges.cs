@@ -68,12 +68,14 @@ namespace Rts.Simulation
             }
             ref var stable = ref world.Buildings[index];
             if (!stable.Complete || stable.Held || stable.Queued >= rules.QueueLimit || SavingToAdvance(faction)) return;
-            int planned = LivingClass(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.LightCavalry);
+            UnitKind plannedKind = TackAllowed(faction) && world.Economies[faction - 1].Tack >= rules.HeavyCavalryTackCost
+                ? UnitKind.HeavyCavalry : UnitKind.LightCavalry;
+            int planned = LivingClass(faction, plannedKind) + QueuedOf(faction, plannedKind);
             int mobileCapacity = world.Factions[faction - 1].ArmyIds.Select(id => world.Armies[id - 1])
                 .Where(a => a.Definition.Role == "reserve").Select(a => a.Definition.Capacity).DefaultIfEmpty(AutoLightCavalryMinimum).Max();
             int target = System.Math.Max(AutoLightCavalryMinimum, mobileCapacity / 2 + 1);
-            if (planned >= target || !HasRoomFor(faction, UnitKind.LightCavalry) || !CanPay(faction, UnitKind.LightCavalry)) return;
-            Enqueue(faction, ref stable, UnitKind.LightCavalry);
+            if (planned >= target || !HasRoomFor(faction, plannedKind) || !CanPay(faction, plannedKind)) return;
+            Enqueue(faction, ref stable, plannedKind);
         }
     }
 }

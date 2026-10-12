@@ -131,6 +131,29 @@ namespace Rts.Simulation
                         economy.RationsProduced++;
                     }
                 }
+                else if (TackAllowed(b.FactionId) && b.Kind == BuildingKind.Saddlery)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Food > 0)
+                    {
+                        economy.Food--; b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
+                    {
+                        economy.Wood--; b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.TackFoodInput && b.InputSecondary >= rules.TackWoodInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.TackFoodInput;
+                        b.InputSecondary -= rules.TackWoodInput;
+                        b.Timer = rules.TackTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.TackProduced++;
+                    }
+                }
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
@@ -190,7 +213,7 @@ namespace Rts.Simulation
             => kind == BuildingKind.Mine ? ResourceKind.Ore : kind == BuildingKind.LumberCamp ? ResourceKind.Wood : kind == BuildingKind.Quarry ? ResourceKind.Stone : kind == BuildingKind.Farm ? ResourceKind.Food
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
                 : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : kind == BuildingKind.Mill ? ResourceKind.Rations
-                : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : ResourceKind.Metal;
+                : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : kind == BuildingKind.Saddlery ? ResourceKind.Tack : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -239,6 +262,11 @@ namespace Rts.Simulation
                 if (RationsOn && b.Kind == BuildingKind.Mill && item == ResourceKind.Food && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (TackAllowed(faction) && b.Kind == BuildingKind.Saddlery)
+                {
+                    if (item == ResourceKind.Food && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Wood && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln)
                 {
@@ -353,6 +381,17 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (TackAllowed(target.FactionId) && target.Kind == BuildingKind.Saddlery)
+            {
+                if (kind == ResourceKind.Food)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Wood)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
             if (BricksAllowed(target.FactionId) && target.Kind == BuildingKind.BrickKiln)
             {
                 if (kind == ResourceKind.Stone)
@@ -381,6 +420,7 @@ namespace Rts.Simulation
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
+               || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)));
 

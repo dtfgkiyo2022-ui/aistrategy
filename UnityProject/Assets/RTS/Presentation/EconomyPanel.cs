@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -156,7 +156,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells
                 : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -165,7 +165,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -176,6 +176,7 @@ namespace Rts.Presentation
         private static string Name(BuildingKind kind)
         {
             if (kind == BuildingKind.BrickKiln) return UiText.T("Brick kiln", "煉瓦窯");
+            if (kind == BuildingKind.Saddlery) return UiText.T("Saddlery", "馬具工房");
             return NameLegacy(kind);
         }
 
@@ -192,6 +193,7 @@ namespace Rts.Presentation
         private static BuildingKind KindOf(Mode m)
         {
             if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
+            if (m == Mode.Saddlery) return BuildingKind.Saddlery;
             return m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
@@ -534,6 +536,11 @@ namespace Rts.Presentation
                     }
                 }
             }
+            if (economy.TackEnabled && economy.Civ == CivKind.Cavalry && economy.Age >= 1)
+            {
+                ModeButton(new Rect(x, y, w, 22f), Mode.Saddlery, UiText.T("Saddlery (", "馬具工房（木材 ") + economy.SaddleryWoodCost + UiText.T(" wood)", "）"));
+                y += 26f;
+            }
             if (!economy.Industry) return;
             // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
             if (!economy.Ages || economy.Civ == CivKind.Metallurgy)
@@ -650,6 +657,12 @@ namespace Rts.Presentation
                             Send(EconomyCommand.Train(faction, ++sequence, stable.Value.Id, UnitKind.Cavalry), UiText.T("Cavalry requested", "騎兵を依頼しました"));
                     }
                     GUI.enabled = true;
+                    y += 26f;
+                }
+                if (economy.TackEnabled && stable.HasValue && stable.Value.Complete)
+                {
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Heavy cavalry (", "重騎兵（馬具 ") + economy.HeavyCavalryTackCost + UiText.T(" tack, food ", "、食料 ") + economy.HeavyCavalryFoodCost + ")"))
+                        Send(EconomyCommand.Train(faction, ++sequence, stable.Value.Id, UnitKind.HeavyCavalry), UiText.T("Heavy cavalry requested", "重騎兵を依頼しました"));
                     y += 26f;
                 }
                 var castle = OwnBuilding(economy, BuildingKind.Castle);

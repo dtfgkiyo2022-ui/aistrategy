@@ -127,6 +127,7 @@ namespace Rts.Simulation
                         && !(CharcoalKilnAllowed(faction) && kind == BuildingKind.CharcoalKiln)
                         && !(ProcessingAvailable(faction) && kind == BuildingKind.Steelworks)
                         && !(BricksAllowed(faction) && kind == BuildingKind.BrickKiln)
+                        && !(TackAllowed(faction) && kind == BuildingKind.Saddlery)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -250,7 +251,7 @@ namespace Rts.Simulation
                         MarkLinesForBuilding(faction, target.Id);
                         MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));

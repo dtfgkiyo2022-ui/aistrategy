@@ -19,7 +19,8 @@ namespace Rts.Presentation
             Steel,
             BowGear,
             Rations,
-            Bricks
+            Bricks,
+            Tack
         }
 
         public readonly struct ResourceEntry
@@ -66,6 +67,11 @@ namespace Rts.Presentation
             return economy != null && economy.BricksEnabled && (economy.Civ == CivKind.Masonry || economy.Bricks > 0);
         }
 
+        public static bool ShowTack(EconomyView economy)
+        {
+            return economy != null && economy.TackEnabled && (economy.Civ == CivKind.Cavalry || economy.Tack > 0);
+        }
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -97,6 +103,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Rations, UiText.T("Rations", "糧食"), economy.Rations));
             if (ShowBricks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Bricks, UiText.T("Bricks", "煉瓦"), economy.Bricks));
+            if (ShowTack(economy))
+                target.Add(new ResourceEntry(ResourceKind.Tack, UiText.T("Tack", "馬具"), economy.Tack));
             if (ShowBowGear(economy))
                 target.Add(new ResourceEntry(ResourceKind.BowGear, UiText.T("Bow gear", "弓具"), economy.BowGear));
         }

@@ -73,6 +73,7 @@
     <Compile Include="ForestryTests.cs" />
     <Compile Include="MasonryTests.cs" />
     <Compile Include="BricksTests.cs" />
+    <Compile Include="TackTests.cs" />
     <Compile Include="CaravanTests.cs" />
     <Compile Include="CavalryTests.cs" />
     <Compile Include="CivTailChainTests.cs" />

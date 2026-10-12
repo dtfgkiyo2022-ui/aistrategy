@@ -18,6 +18,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
             if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, e.CavalryTicks);
             if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, e.LightCavalryTicks);
+            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, 0, 0, 0, 0, e.HeavyCavalryTrainTicks);
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
             if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
@@ -54,7 +55,8 @@ namespace Rts.Simulation
                 return (kind == UnitKind.Cavalry && AgesOn
                         && (world.Economies[b.FactionId - 1].Age >= 2 || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.Cavalry))
                     || (kind == UnitKind.LightCavalry && world.Economies[b.FactionId - 1].Age >= 1
-                        && (CavalryAllowed(b.FactionId) || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.LightCavalry));
+                        && (CavalryAllowed(b.FactionId) || EarlyArmsAllowed(b.FactionId) && EarlyArmsUnit(b.FactionId) == UnitKind.LightCavalry))
+                    || (kind == UnitKind.HeavyCavalry && TackAllowed(b.FactionId));
             // V3-5 (32 #17): a castle trains any of the three line units, whatever the civilisation.
             if (b.Kind == BuildingKind.Castle)
                 return AgesOn && world.Economies[b.FactionId - 1].Age >= 3
@@ -173,6 +175,19 @@ namespace Rts.Simulation
                 light.Hp = light.Parameters.Hp; light.Initial.Hp = light.Parameters.Hp;
                 return;
             }
+            if (unit == UnitKind.HeavyCavalry)
+            {
+                var r = world.Config.Economy;
+                ref var heavy = ref world.Soldiers[index];
+                heavy.Class = unit;
+                heavy.Parameters.Hp = r.HeavyCavalryHp; heavy.Parameters.Damage = r.HeavyCavalryDamage;
+                heavy.Parameters.AttackIntervalTicks = r.HeavyCavalryAttackIntervalTicks;
+                heavy.Parameters.Range = r.HeavyCavalryRange; heavy.Parameters.Speed = r.HeavyCavalrySpeed;
+                heavy.Parameters.Vision = r.HeavyCavalryVision;
+                heavy.StepDistance = Fix64.FromRaw(heavy.Parameters.Speed.Raw / 20);
+                heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
+                return;
+            }
             if (unit != UnitKind.Archer && unit != UnitKind.Cavalry) return;
             var e = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
@@ -207,7 +222,8 @@ namespace Rts.Simulation
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
-            return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold;
+            return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
+                && (kind != UnitKind.HeavyCavalry || TackAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost);
         }
 
         /// <summary>Pays and puts one unit at the back of the queue. The caller checked room, cost and the queue limit.</summary>
@@ -234,6 +250,11 @@ namespace Rts.Simulation
             }
             e.Gems = checked(e.Gems - c.gems);
             e.Gold = checked(e.Gold - c.gold);
+            if (kind == UnitKind.HeavyCavalry)
+            {
+                e.Tack = checked(e.Tack - world.Config.Economy.HeavyCavalryTackCost);
+                e.TackConsumed = checked(e.TackConsumed + world.Config.Economy.HeavyCavalryTackCost);
+            }
             b.QueuedGems = checked(b.QueuedGems + c.gems);
             b.QueuedGold = checked(b.QueuedGold + c.gold);
             bool rationed = UsesRations(faction, kind) && e.Rations >= world.Config.Economy.RationsPerSoldier;
@@ -316,6 +337,11 @@ namespace Rts.Simulation
                 b.QueuedSteel -= steelBack;
                 e.Steel = checked(e.Steel + steelBack);
             }
+            else if (kind == UnitKind.HeavyCavalry)
+            {
+                e.Tack = checked(e.Tack + world.Config.Economy.HeavyCavalryTackCost);
+                e.TackConsumed = checked(e.TackConsumed - world.Config.Economy.HeavyCavalryTackCost);
+            }
             else if (kind == UnitKind.SkirmishArcher)
             {
                 int bowGearBack = Math.Min(c.metal, b.QueuedBowGear);
@@ -391,7 +417,7 @@ namespace Rts.Simulation
             // Archers and cavalry join the infantry armies, so they share the infantry room.
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
-                    + QueuedOf(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
+                    + QueuedOf(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.HeavyCavalry) + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
                     + (CaravanAllowed(faction) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)

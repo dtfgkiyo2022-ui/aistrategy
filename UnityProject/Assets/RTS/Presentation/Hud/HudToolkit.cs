@@ -43,7 +43,8 @@ namespace Rts.Presentation
             TopBarResourceVisibility.ResourceKind.Steel,
             TopBarResourceVisibility.ResourceKind.BowGear,
             TopBarResourceVisibility.ResourceKind.Rations,
-            TopBarResourceVisibility.ResourceKind.Bricks
+            TopBarResourceVisibility.ResourceKind.Bricks,
+            TopBarResourceVisibility.ResourceKind.Tack
         };
 
         private BattlefieldView view;
@@ -1841,6 +1842,7 @@ namespace Rts.Presentation
                 case TopBarResourceVisibility.ResourceKind.Steel: return "anvil";
                 case TopBarResourceVisibility.ResourceKind.BowGear: return "quiver";
                 case TopBarResourceVisibility.ResourceKind.Rations: return "wheat";
+                case TopBarResourceVisibility.ResourceKind.Tack: return "leather";
                 default: return "";
             }
         }

@@ -116,6 +116,7 @@ namespace Rts.Presentation
             if (actionId == "make:ram") { TrainFromBuilding(economy, BuildingKind.SiegeWorkshop, UnitKind.Ram, UiText.T("Ram requested", "破城槌を依頼しました")); return; }
             if (actionId == "make:archer-range") { TrainFromBuilding(economy, BuildingKind.ArcheryRange, UnitKind.Archer, UiText.T("Archer requested", "弓兵を依頼しました")); return; }
             if (actionId == "make:cavalry-stable") { TrainFromBuilding(economy, BuildingKind.Stable, UnitKind.Cavalry, UiText.T("Cavalry requested", "騎兵を依頼しました")); return; }
+            if (actionId == "make:heavy-cavalry") { TrainFromBuilding(economy, BuildingKind.Stable, UnitKind.HeavyCavalry, UiText.T("Heavy cavalry requested", "重騎兵を依頼しました")); return; }
             if (actionId.StartsWith("make:castle:", StringComparison.Ordinal))
             {
                 var castleUnit = ParseUnit(actionId.Substring(12));
@@ -167,7 +168,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -189,11 +190,12 @@ namespace Rts.Presentation
 
         private static UnitKind ParseUnit(string value)
         {
-            switch (value) { case "infantry": return UnitKind.Infantry; case "archer": return UnitKind.Archer; case "cavalry": return UnitKind.Cavalry; default: return UnitKind.Mercenary; }
+            switch (value) { case "infantry": return UnitKind.Infantry; case "archer": return UnitKind.Archer; case "cavalry": return UnitKind.Cavalry; case "heavy-cavalry": return UnitKind.HeavyCavalry; default: return UnitKind.Mercenary; }
         }
 
         private static ResourceKind ParseResource(string value)
         {
+            if (value == "tack" || value == "馬具") return ResourceKind.Tack;
             switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; case "rations": case "糧食": return ResourceKind.Rations; case "bricks": case "煉瓦": return ResourceKind.Bricks; default: return ResourceKind.Wood; }
         }
 
@@ -252,6 +254,11 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:brick-kiln", UiText.T("Brick kiln", "煉瓦窯"), true, "", mode == Mode.BrickKiln);
                 Add(rows, "line:Bricks", UiText.T("Ask for bricks line", "煉瓦ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Bricks);
+            }
+            if (economy.TackEnabled && economy.Civ == CivKind.Cavalry && economy.Age >= 1)
+            {
+                Add(rows, "build:saddlery", UiText.T("Saddlery (", "馬具工房（木材 ") + economy.SaddleryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Saddlery);
+                Add(rows, "line:Tack", UiText.T("Ask for tack line", "馬具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tack);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)
@@ -335,6 +342,12 @@ namespace Rts.Presentation
                 bool stableExists = OwnBuilding(economy, BuildingKind.Stable).HasValue;
                 if (rangeExists) AddProducerRows(rows, economy, BuildingKind.ArcheryRange, "make:archer-range", UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）"), UnitKind.Archer);
                 if (stableExists) AddProducerRows(rows, economy, BuildingKind.Stable, "make:cavalry-stable", UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）"), UnitKind.Cavalry);
+                if (stableExists && economy.TackEnabled)
+                {
+                    AddProducerRows(rows, economy, BuildingKind.Stable, "make:heavy-cavalry", UiText.T("Heavy cavalry", "重騎兵") + " (tack " + economy.HeavyCavalryTackCost + ", food " + economy.HeavyCavalryFoodCost + ")", UnitKind.HeavyCavalry);
+                    if (economy.Tack < economy.HeavyCavalryTackCost)
+                        Add(rows, "make:heavy-cavalry-info", UiText.T("Heavy cavalry unavailable: produce more tack", "重騎兵は馬具不足：馬具を増産してください"), false, "", false, true);
+                }
                 var castle = OwnBuilding(economy, BuildingKind.Castle);
                 if (castle.HasValue)
                 {

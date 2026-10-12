@@ -173,7 +173,7 @@ namespace Rts.Presentation
         {
             return kind == BuildingKind.Mine || kind == BuildingKind.LumberCamp || kind == BuildingKind.Quarry
                 || kind == BuildingKind.Smelter || kind == BuildingKind.Fletcher || kind == BuildingKind.Farm
-                || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.BrickKiln || kind == BuildingKind.Mill || kind == BuildingKind.Storage;
+                || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.BrickKiln || kind == BuildingKind.Mill || kind == BuildingKind.Saddlery || kind == BuildingKind.Storage;
         }
 
         public static bool CanUseCaravanserai(bool complete, uint marketId, uint outpostId)

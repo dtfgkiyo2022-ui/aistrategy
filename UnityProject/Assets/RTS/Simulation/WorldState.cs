@@ -236,7 +236,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -245,11 +245,12 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
         internal int BricksConsumedWalls, BricksConsumedTowers, BricksConsumedCoreRepair, BricksConsumedCastles;
+        internal int TackProduced, TackConsumed, TackTrainedHeavyCavalry;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -397,7 +398,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -538,6 +539,13 @@ namespace Rts.Simulation
                 && e.BrickCoreRepairIntervalTicks > 0 && e.BricksPerCoreRepair > 0 && e.BrickCoreRepairHp > 0
                 && e.BrickExtraTowers >= 0
                 && e.BrickCastleStonePermille <= 1000), "Invalid bricks rules.");
+            Require(!e.Tack || (e.Enabled && e.Industry && e.Ages && e.SaddlerySizeCells > 0 && e.SaddlerySizeCells <= 8
+                && e.SaddleryWoodCost >= 0 && e.SaddleryWork > 0 && e.SaddleryHp > 0 && e.TackTicks > 0
+                && e.TackFoodInput > 0 && e.TackWoodInput > 0 && e.TackFoodInput <= e.BufferLimit && e.TackWoodInput <= e.BufferLimit
+                && e.HeavyCavalryTackCost > 0 && e.HeavyCavalryFoodCost >= 0 && e.HeavyCavalryTrainTicks > 0
+                && e.HeavyCavalryHp > 0 && e.HeavyCavalryDamage >= 0 && e.HeavyCavalryAttackIntervalTicks > 0
+                && e.HeavyCavalryRange.Raw >= 0 && e.HeavyCavalryRange <= Fix64.FromInt(64)
+                && e.HeavyCavalrySpeed.Raw > 0 && e.HeavyCavalrySpeed <= Fix64.FromInt(16) && e.HeavyCavalryVision.Raw >= 0), "Invalid tack rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -886,6 +894,13 @@ namespace Rts.Simulation
                   BrickUpgradeIntervalTicks = e.BrickUpgradeIntervalTicks, BrickCastleStonePermille = e.BrickCastleStonePermille,
                   BrickCoreRepairIntervalTicks = e.BrickCoreRepairIntervalTicks, BricksPerCoreRepair = e.BricksPerCoreRepair,
                   BrickCoreRepairHp = e.BrickCoreRepairHp, BrickExtraTowers = e.BrickExtraTowers,
+                  Tack = e.Tack, SaddlerySizeCells = e.SaddlerySizeCells, SaddleryWoodCost = e.SaddleryWoodCost,
+                  SaddleryWork = e.SaddleryWork, SaddleryHp = e.SaddleryHp, TackTicks = e.TackTicks,
+                  TackFoodInput = e.TackFoodInput, TackWoodInput = e.TackWoodInput,
+                  HeavyCavalryTackCost = e.HeavyCavalryTackCost, HeavyCavalryFoodCost = e.HeavyCavalryFoodCost,
+                  HeavyCavalryTrainTicks = e.HeavyCavalryTrainTicks, HeavyCavalryHp = e.HeavyCavalryHp,
+                  HeavyCavalryDamage = e.HeavyCavalryDamage, HeavyCavalryAttackIntervalTicks = e.HeavyCavalryAttackIntervalTicks,
+                  HeavyCavalryRange = e.HeavyCavalryRange, HeavyCavalrySpeed = e.HeavyCavalrySpeed, HeavyCavalryVision = e.HeavyCavalryVision,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

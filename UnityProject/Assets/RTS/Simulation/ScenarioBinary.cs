@@ -96,6 +96,9 @@ namespace Rts.Simulation
         private const int BricksExtensionDataLength = 18 * sizeof(int);
         private const int BricksExtensionV1 = 1;
         private const int BricksExtensionV1DataLength = 14 * sizeof(int);
+        private const int TackExtensionId = 22;
+        private const int TackExtensionVersion = 1;
+        private const int TackExtensionDataLength = 17 * sizeof(int) + 3 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -125,6 +128,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(ManualControlExtensionId, ManualControlExtensionVersion, ManualControlExtensionDataLength),
             new ExtensionRegistration(RationsExtensionId, RationsExtensionVersion, RationsExtensionDataLength)
             ,new ExtensionRegistration(BricksExtensionId, BricksExtensionVersion, BricksExtensionDataLength)
+            ,new ExtensionRegistration(TackExtensionId, TackExtensionVersion, TackExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -689,6 +693,7 @@ namespace Rts.Simulation
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
+                    else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -739,6 +744,7 @@ namespace Rts.Simulation
                 extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
                 extensions.RemoveAll(extension => extension != null && extension.Id == RationsExtensionId && !c.Economy.Rations);
                 extensions.RemoveAll(extension => extension != null && extension.Id == BricksExtensionId && !c.Economy.Bricks);
+                extensions.RemoveAll(extension => extension != null && extension.Id == TackExtensionId && !c.Economy.Tack);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -906,6 +912,14 @@ namespace Rts.Simulation
                         extensions[i] = CreateBricksExtension(c.Economy);
                     }
                 if (c.Economy.Bricks && !hasBricks) extensions.Add(CreateBricksExtension(c.Economy));
+                bool hasTack = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == TackExtensionId)
+                    {
+                        hasTack = true;
+                        extensions[i] = CreateTackExtension(c.Economy);
+                    }
+                if (c.Economy.Tack && !hasTack) extensions.Add(CreateTackExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -974,6 +988,38 @@ namespace Rts.Simulation
                     e.BrickCoreRepairHp = reader.ReadInt32(); e.BrickExtraTowers = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing bricks extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateTackExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Tack ? 1 : 0);
+                writer.Write(e.SaddlerySizeCells); writer.Write(e.SaddleryWoodCost); writer.Write(e.SaddleryWork); writer.Write(e.SaddleryHp);
+                writer.Write(e.TackTicks); writer.Write(e.TackFoodInput); writer.Write(e.TackWoodInput);
+                writer.Write(e.HeavyCavalryTackCost); writer.Write(e.HeavyCavalryFoodCost); writer.Write(e.HeavyCavalryTrainTicks);
+                writer.Write(e.HeavyCavalryHp); writer.Write(e.HeavyCavalryDamage); writer.Write(e.HeavyCavalryAttackIntervalTicks);
+                writer.Write(e.HeavyCavalryRange.Raw); writer.Write(e.HeavyCavalrySpeed.Raw); writer.Write(e.HeavyCavalryVision.Raw);
+                return new ScenarioExtensionData { Id = TackExtensionId, Version = TackExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadTackExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid tack flag.");
+                e.Tack = enabled != 0;
+                e.SaddlerySizeCells = reader.ReadInt32(); e.SaddleryWoodCost = reader.ReadInt32(); e.SaddleryWork = reader.ReadInt32(); e.SaddleryHp = reader.ReadInt32();
+                e.TackTicks = reader.ReadInt32(); e.TackFoodInput = reader.ReadInt32(); e.TackWoodInput = reader.ReadInt32();
+                e.HeavyCavalryTackCost = reader.ReadInt32(); e.HeavyCavalryFoodCost = reader.ReadInt32(); e.HeavyCavalryTrainTicks = reader.ReadInt32();
+                e.HeavyCavalryHp = reader.ReadInt32(); e.HeavyCavalryDamage = reader.ReadInt32(); e.HeavyCavalryAttackIntervalTicks = reader.ReadInt32();
+                e.HeavyCavalryRange = Fix(reader); e.HeavyCavalrySpeed = Fix(reader); e.HeavyCavalryVision = Fix(reader);
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tack extension data.");
             }
         }
 

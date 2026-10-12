@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -724,6 +724,22 @@ namespace Rts.Contracts
         public int BrickHpPermille { get; }
         public int BrickUpgradeIntervalTicks { get; }
         public int BrickCastleStonePermille { get; }
+        public bool TackEnabled { get; }
+        public int Tack { get; }
+        public int SaddleryWoodCost { get; }
+        public int SaddlerySizeCells { get; }
+        public int TackTicks { get; }
+        public int TackFoodInput { get; }
+        public int TackWoodInput { get; }
+        public int HeavyCavalryTackCost { get; }
+        public int HeavyCavalryFoodCost { get; }
+        public int HeavyCavalryTrainTicks { get; }
+        public int HeavyCavalryHp { get; }
+        public int HeavyCavalryDamage { get; }
+        public int HeavyCavalryAttackIntervalTicks { get; }
+        public Fix64 HeavyCavalryRange { get; }
+        public Fix64 HeavyCavalrySpeed { get; }
+        public Fix64 HeavyCavalryVision { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -767,7 +783,12 @@ namespace Rts.Contracts
              bool bricksEnabled = false, int bricks = 0, int brickKilnWoodCost = 0, int brickKilnSizeCells = 0,
              int brickTicks = 0, int brickStoneInput = 0, int brickCharcoalInput = 0, int bricksPerWall = 0,
              int bricksPerTower = 0, int bricksPerCastle = 0, int brickHpPermille = 0, int brickUpgradeIntervalTicks = 0,
-             int brickCastleStonePermille = 0)
+             int brickCastleStonePermille = 0,
+             bool tackEnabled = false, int tack = 0, int saddleryWoodCost = 0, int saddlerySizeCells = 0,
+             int tackTicks = 0, int tackFoodInput = 0, int tackWoodInput = 0,
+             int heavyCavalryTackCost = 0, int heavyCavalryFoodCost = 0, int heavyCavalryTrainTicks = 0,
+             int heavyCavalryHp = 0, int heavyCavalryDamage = 0, int heavyCavalryAttackIntervalTicks = 0,
+             Fix64 heavyCavalryRange = default(Fix64), Fix64 heavyCavalrySpeed = default(Fix64), Fix64 heavyCavalryVision = default(Fix64))
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -779,6 +800,12 @@ namespace Rts.Contracts
             BrickTicks = brickTicks; BrickStoneInput = brickStoneInput; BrickCharcoalInput = brickCharcoalInput;
             BricksPerWall = bricksPerWall; BricksPerTower = bricksPerTower; BricksPerCastle = bricksPerCastle;
             BrickHpPermille = brickHpPermille; BrickUpgradeIntervalTicks = brickUpgradeIntervalTicks; BrickCastleStonePermille = brickCastleStonePermille;
+            TackEnabled = tackEnabled; Tack = tack; SaddleryWoodCost = saddleryWoodCost; SaddlerySizeCells = saddlerySizeCells;
+            TackTicks = tackTicks; TackFoodInput = tackFoodInput; TackWoodInput = tackWoodInput;
+            HeavyCavalryTackCost = heavyCavalryTackCost; HeavyCavalryFoodCost = heavyCavalryFoodCost;
+            HeavyCavalryTrainTicks = heavyCavalryTrainTicks; HeavyCavalryHp = heavyCavalryHp; HeavyCavalryDamage = heavyCavalryDamage;
+            HeavyCavalryAttackIntervalTicks = heavyCavalryAttackIntervalTicks; HeavyCavalryRange = heavyCavalryRange;
+            HeavyCavalrySpeed = heavyCavalrySpeed; HeavyCavalryVision = heavyCavalryVision;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

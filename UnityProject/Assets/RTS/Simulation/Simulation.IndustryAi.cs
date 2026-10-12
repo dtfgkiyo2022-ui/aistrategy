@@ -50,6 +50,7 @@ namespace Rts.Simulation
                 return;
             }
             if (MasonryAllowed(faction)) { DecideQuarry(faction); if (BricksAllowed(faction)) DecideBricks(faction); return; }
+            if (CavalryAllowed(faction)) { DecideTack(faction); return; }
             if (MountainAllowed(faction)) { DecideMountain(faction); return; }
             if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
@@ -702,6 +703,54 @@ namespace Rts.Simulation
         {
             var taken = TakenForOtherLines(faction, lineIndex);
             var route = BeltRoute(faction, OutputCell(mill), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
+        private void DecideTack(uint faction)
+        {
+            if (!TackAllowed(faction)) return;
+            int stable = OwnBuildingIndex(faction, BuildingKind.Stable);
+            if (stable < 0 || !world.Buildings[stable].Complete || world.Buildings[stable].Held) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (economy.Food < rules.TackFoodInput + rules.HeavyCavalryFoodCost || economy.Wood < rules.TackWoodInput) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Tack);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.SaddleryId))
+            {
+                if (BuildingPending(line.SaddleryId) || economy.Wood < rules.SaddleryWoodCost) return;
+                uint id = PlaceSaddlery(faction);
+                if (id != 0) line.SaddleryId = id;
+                return;
+            }
+            var saddlery = world.Buildings[line.SaddleryId - 1];
+            bool whole = LayTackLine(faction, index, saddlery);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceSaddlery(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.SaddlerySizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Saddlery, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayTackLine(uint faction, int lineIndex, BuildingState saddlery)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(saddlery), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null) return false;
             SetLineBelts(lineIndex, route);
             return LayRoutes(faction, route);
