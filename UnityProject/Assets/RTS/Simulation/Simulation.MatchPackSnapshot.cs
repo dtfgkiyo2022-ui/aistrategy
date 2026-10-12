@@ -43,6 +43,12 @@ namespace Rts.Simulation
         public int TackProduced { get; internal set; }
         public int TackConsumed { get; internal set; }
         public int TackTrainedHeavyCavalry { get; internal set; }
+        public int Planks { get; internal set; }
+        public int PlanksProduced { get; internal set; }
+        public int PlanksConsumed { get; internal set; }
+        public int PlanksConsumedRams { get; internal set; }
+        public int PlanksConsumedBridges { get; internal set; }
+        public int PlanksEnhancedRams { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -104,6 +110,12 @@ namespace Rts.Simulation
                     TackProduced = economy.TackProduced,
                     TackConsumed = economy.TackConsumed,
                     TackTrainedHeavyCavalry = economy.TackTrainedHeavyCavalry,
+                    Planks = economy.Planks,
+                    PlanksProduced = economy.PlanksProduced,
+                    PlanksConsumed = economy.PlanksConsumed,
+                    PlanksConsumedRams = economy.PlanksConsumedRams,
+                    PlanksConsumedBridges = economy.PlanksConsumedBridges,
+                    PlanksEnhancedRams = economy.PlanksEnhancedRams,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

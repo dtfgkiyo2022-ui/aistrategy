@@ -219,6 +219,7 @@ namespace Rts.Presentation
                 case ProcessingLineKind.Rations: return UiText.T("rations", "糧食");
                 case ProcessingLineKind.Bricks: return UiText.T("bricks", "煉瓦");
                 case ProcessingLineKind.Tack: return UiText.T("tack", "馬具");
+                case ProcessingLineKind.Planks: return UiText.T("planks", "板材");
                 default: return value.ToString();
             }
         }

@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -740,6 +740,19 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public Fix64 HeavyCavalryRange { get; }
         public Fix64 HeavyCavalrySpeed { get; }
         public Fix64 HeavyCavalryVision { get; }
+        public bool PlanksEnabled { get; }
+        public int Planks { get; }
+        public int SawmillWoodCost { get; }
+        public int SawmillSizeCells { get; }
+        public int PlankTicks { get; }
+        public int PlankWoodInput { get; }
+        public int PlanksPerRam { get; }
+        public int PlankRamHpPermille { get; }
+        public int PlankRamTrainPermille { get; }
+        public int PlanksPerBridgeCell { get; }
+        public int PlankBridgeWoodPermille { get; }
+        public int PlankExtraRams { get; }
+        public int PlankWoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -788,7 +801,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int tackTicks = 0, int tackFoodInput = 0, int tackWoodInput = 0,
              int heavyCavalryTackCost = 0, int heavyCavalryFoodCost = 0, int heavyCavalryTrainTicks = 0,
              int heavyCavalryHp = 0, int heavyCavalryDamage = 0, int heavyCavalryAttackIntervalTicks = 0,
-             Fix64 heavyCavalryRange = default(Fix64), Fix64 heavyCavalrySpeed = default(Fix64), Fix64 heavyCavalryVision = default(Fix64))
+             Fix64 heavyCavalryRange = default(Fix64), Fix64 heavyCavalrySpeed = default(Fix64), Fix64 heavyCavalryVision = default(Fix64),
+             bool planksEnabled = false, int planks = 0, int sawmillWoodCost = 0, int sawmillSizeCells = 0,
+             int plankTicks = 0, int plankWoodInput = 0, int planksPerRam = 0, int plankRamHpPermille = 0,
+             int plankRamTrainPermille = 0, int planksPerBridgeCell = 0, int plankBridgeWoodPermille = 0,
+             int plankExtraRams = 0, int plankWoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -806,6 +823,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             HeavyCavalryTrainTicks = heavyCavalryTrainTicks; HeavyCavalryHp = heavyCavalryHp; HeavyCavalryDamage = heavyCavalryDamage;
             HeavyCavalryAttackIntervalTicks = heavyCavalryAttackIntervalTicks; HeavyCavalryRange = heavyCavalryRange;
             HeavyCavalrySpeed = heavyCavalrySpeed; HeavyCavalryVision = heavyCavalryVision;
+            PlanksEnabled = planksEnabled; Planks = planks; SawmillWoodCost = sawmillWoodCost; SawmillSizeCells = sawmillSizeCells;
+            PlankTicks = plankTicks; PlankWoodInput = plankWoodInput; PlanksPerRam = planksPerRam;
+            PlankRamHpPermille = plankRamHpPermille; PlankRamTrainPermille = plankRamTrainPermille;
+            PlanksPerBridgeCell = planksPerBridgeCell; PlankBridgeWoodPermille = plankBridgeWoodPermille;
+            PlankExtraRams = plankExtraRams; PlankWoodReserve = plankWoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Tack)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Planks)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -76,7 +76,7 @@ namespace Rts.Simulation
             if (existing >= 0)
             {
                 var current = world.ProcessingLines[existing];
-                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0)
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0)
                 {
                     RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
                     return;
@@ -100,6 +100,7 @@ namespace Rts.Simulation
             if (kind == ProcessingLineKind.Bricks) return BricksAllowed(faction);
             if (kind == ProcessingLineKind.Rations) return RationsAllowed(faction);
             if (kind == ProcessingLineKind.Tack) return TackAllowed(faction);
+            if (kind == ProcessingLineKind.Planks) return PlanksAllowed(faction);
             if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear)
                 return ForestryAllowed(faction) && (kind != ProcessingLineKind.BowGear || world.Economies[faction - 1].Age >= 2);
             if (!IndustryOn || !ProcessingOn || !MetalworkAllowed(faction)) return false;
@@ -110,6 +111,7 @@ namespace Rts.Simulation
         {
             return kind == ProcessingLineKind.Bricks ? world.Config.Economy.BrickKilnWoodCost
                 : kind == ProcessingLineKind.Tack ? world.Config.Economy.SaddleryWoodCost
+                : kind == ProcessingLineKind.Planks ? world.Config.Economy.SawmillWoodCost
                 : kind == ProcessingLineKind.Rations ? world.Config.Economy.MillWoodCost
                 : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
@@ -119,9 +121,9 @@ namespace Rts.Simulation
         private int FindRequestedResourceNode(ProcessingLineKind kind, int requestedCell)
         {
             ResourceKind resource = kind == ProcessingLineKind.Bricks ? ResourceKind.Stone
-                : kind == ProcessingLineKind.Rations || kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
+                : kind == ProcessingLineKind.Rations || kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear || kind == ProcessingLineKind.Planks
                 ? ResourceKind.Food : ResourceKind.Ore;
-            if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear) resource = ResourceKind.Wood;
+            if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear || kind == ProcessingLineKind.Planks) resource = ResourceKind.Wood;
             var point = world.Map.Center(requestedCell);
             int best = -1;
             for (int i = 0; i < world.Nodes.Length; i++)
@@ -219,6 +221,26 @@ namespace Rts.Simulation
                     line.SaddleryId = id; return true;
                 }
                 LayTackLine(faction, index, world.Buildings[line.SaddleryId - 1]);
+            }
+            else if (line.Kind == ProcessingLineKind.Planks)
+            {
+                if (!BuildingReady(line.LumberCampId))
+                {
+                    if (BuildingPending(line.LumberCampId)) return true;
+                    if (economy.Wood < world.Config.Economy.LumberCampWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceLumberCamp(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.LumberCampId = id; return true;
+                }
+                if (!BuildingReady(line.SawmillId))
+                {
+                    if (BuildingPending(line.SawmillId)) return true;
+                    if (economy.Wood < world.Config.Economy.SawmillWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceSawmill(faction, world.Buildings[line.LumberCampId - 1]);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.SawmillId = id; return true;
+                }
+                LayPlanksLine(faction, index, world.Buildings[line.LumberCampId - 1], world.Buildings[line.SawmillId - 1]);
             }
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
@@ -320,7 +342,7 @@ namespace Rts.Simulation
                 if (line.FactionId != faction) continue;
                 if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
                     || line.LumberCampId == buildingId || line.FletcherId == buildingId || line.MillId == buildingId
-                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId) return i;
+                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId) return i;
             }
             return -1;
         }
@@ -445,7 +467,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -466,6 +488,8 @@ namespace Rts.Simulation
                 return BuildingReady(line.QuarryId) && BuildingReady(line.KilnId) && BuildingReady(line.BrickKilnId);
             if (line.Kind == ProcessingLineKind.Tack)
                 return BuildingReady(line.SaddleryId);
+            if (line.Kind == ProcessingLineKind.Planks)
+                return BuildingReady(line.LumberCampId) && BuildingReady(line.SawmillId);
             return BuildingReady(line.MineId) && BuildingReady(line.SmelterId) && BuildingReady(line.KilnId) && BuildingReady(line.SteelworksId);
         }
 
@@ -488,6 +512,7 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.Quarry) line.QuarryId = id;
             else if (kind == BuildingKind.BrickKiln) line.BrickKilnId = id;
             else if (kind == BuildingKind.Saddlery) line.SaddleryId = id;
+            else if (kind == BuildingKind.Sawmill) line.SawmillId = id;
         }
 
         private bool LineContainsBelt(int index, int cell)
@@ -556,6 +581,12 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.Tack)
             {
                 SetSimpleHaulers(faction, line.SaddleryId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.Planks)
+            {
+                SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, wanted);
+                SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
                 return;
             }
             int current = 0;

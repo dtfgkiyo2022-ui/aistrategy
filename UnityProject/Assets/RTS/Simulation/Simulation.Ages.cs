@@ -30,6 +30,7 @@ namespace Rts.Simulation
         private bool RationsOn => AgesOn && world.Config.Economy.Rations;
         private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Bricks;
         private bool TackOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tack;
+        private bool PlanksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Planks;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -73,6 +74,8 @@ namespace Rts.Simulation
 
         private bool TackAllowed(uint faction)
             => TackOn && world.Economies[faction - 1].Civ == CivKind.Cavalry && world.Economies[faction - 1].Age >= 1;
+        private bool PlanksAllowed(uint faction)
+            => PlanksOn && world.Economies[faction - 1].Civ == CivKind.Bridge && world.Economies[faction - 1].Age >= 1;
 
         private bool CharcoalKilnAllowed(uint faction)
             => ProcessingAvailable(faction) || BricksAllowed(faction);

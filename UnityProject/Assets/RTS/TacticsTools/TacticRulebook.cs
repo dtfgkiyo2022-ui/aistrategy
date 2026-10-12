@@ -106,6 +106,7 @@ namespace Rts.Tactics
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeAutoTick/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
                 ("economy.rations", "糧食。農耕の文明だけが製粉所で作り、兵の訓練短縮と静穏時の回復に使う"),
+                ("economy.planks", "板。工兵の文明だけが製材所で作り、破城槌と橋に使う"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("orders[]", "自陣営の有効な命令。id/source/kind/target/goal/status/acceptedTick/applyTick。idの昇順"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
@@ -165,6 +166,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Mill, e.MillWoodCost, 0, e.MillWork);
             Add(rows, BuildingKind.BrickKiln, e.BrickKilnWoodCost, 0, e.BrickKilnWork);
             Add(rows, BuildingKind.Saddlery, e.SaddleryWoodCost, 0, e.SaddleryWork);
+            Add(rows, BuildingKind.Sawmill, e.SawmillWoodCost, 0, e.SawmillWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

@@ -331,7 +331,16 @@ namespace Rts.Simulation
         {
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
-            economy.Wood = checked(economy.Wood - WoodOf(kind, faction));
+            bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
+            int woodCost = plankBridge ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000) : WoodOf(kind, faction);
+            economy.Wood = checked(economy.Wood - woodCost);
+            if (plankBridge)
+            {
+                int planks = checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells.Length);
+                economy.Planks = checked(economy.Planks - planks);
+                economy.PlanksConsumed = checked(economy.PlanksConsumed + planks);
+                economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
+            }
             bool brickCastle = kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction);
             bool brickDefence = BrickDefenceAvailable(faction, kind);
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
@@ -376,7 +385,7 @@ namespace Rts.Simulation
         private bool TryPlaceBridge(uint faction, EconomyCommand command)
         {
             if (!TryValidateBridge(faction, command.Cells, command.Facing, out int[] cells, out int workCell)) return false;
-            if (world.Economies[faction - 1].Wood < WoodOf(BuildingKind.Bridge, faction)) return false;
+            if (world.Economies[faction - 1].Wood < BridgeWoodCostFor(faction, cells.Length)) return false;
             PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
             world.Buildings[world.BuildingCount - 1].Held = true;
             return true;
@@ -719,12 +728,20 @@ namespace Rts.Simulation
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
                 var unit = QueueAt(b, 0);
                 bool rationed = RationsOn && QueueRationsAt(b, 0);
+                bool planked = PlanksOn && QueuePlanksAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
                 var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
+                if (planked && unit == UnitKind.Ram)
+                {
+                    ref var ram = ref world.Soldiers[world.SoldierCount - 1];
+                    int hp = checked(ram.Parameters.Hp * world.Config.Economy.PlankRamHpPermille / 1000);
+                    ram.Parameters.Hp = hp; ram.Hp = hp; ram.Initial.Hp = hp;
+                    world.Economies[b.FactionId - 1].PlanksEnhancedRams++;
+                }
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
                 if (rationed) world.Economies[b.FactionId - 1].RationsTrainedSoldiers++;
@@ -764,7 +781,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
                 : kind == BuildingKind.Steelworks ? e.SteelworksSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
-                : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells
+                : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells
                 : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
@@ -787,7 +804,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int hp = kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
-                : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp : kind == BuildingKind.BrickKiln ? e.BrickKilnHp : kind == BuildingKind.Saddlery ? e.SaddleryHp
+                : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp : kind == BuildingKind.BrickKiln ? e.BrickKilnHp : kind == BuildingKind.Saddlery ? e.SaddleryHp : kind == BuildingKind.Sawmill ? e.SawmillHp
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
@@ -817,7 +834,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int work = kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
-                : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork : kind == BuildingKind.BrickKiln ? e.BrickKilnWork : kind == BuildingKind.Saddlery ? e.SaddleryWork
+                : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork : kind == BuildingKind.BrickKiln ? e.BrickKilnWork : kind == BuildingKind.Saddlery ? e.SaddleryWork : kind == BuildingKind.Sawmill ? e.SawmillWork
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
@@ -836,7 +853,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int wood = kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
-                : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost
+                : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -849,6 +866,14 @@ namespace Rts.Simulation
                   : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
+
+        private bool PlankBridgeAvailable(uint faction, int cells)
+            => PlanksAllowed(faction) && cells > 0 && world.Economies[faction - 1].Planks >= checked(world.Config.Economy.PlanksPerBridgeCell * cells);
+
+        private int BridgeWoodCostFor(uint faction, int cells)
+            => PlankBridgeAvailable(faction, cells)
+                ? checked(world.Config.Economy.BridgeWoodCost * world.Config.Economy.PlankBridgeWoodPermille / 1000)
+                : WoodOf(BuildingKind.Bridge, faction);
 
         // Keep the age-tech effect local to bridge buildings. Existing non-bridge building rules,
         // including flag-off maps, continue to use their original values unchanged.

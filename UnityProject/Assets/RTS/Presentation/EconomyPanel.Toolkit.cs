@@ -168,7 +168,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -196,6 +196,7 @@ namespace Rts.Presentation
         private static ResourceKind ParseResource(string value)
         {
             if (value == "tack" || value == "馬具") return ResourceKind.Tack;
+            if (value == "planks" || value == "板") return ResourceKind.Planks;
             switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; case "rations": case "糧食": return ResourceKind.Rations; case "bricks": case "煉瓦": return ResourceKind.Bricks; default: return ResourceKind.Wood; }
         }
 
@@ -259,6 +260,11 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:saddlery", UiText.T("Saddlery (", "馬具工房（木材 ") + economy.SaddleryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Saddlery);
                 Add(rows, "line:Tack", UiText.T("Ask for tack line", "馬具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tack);
+            }
+            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1)
+            {
+                Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
+                Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)
