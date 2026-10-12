@@ -74,6 +74,20 @@ internal static class TacticMatchCommand
         var westHuman = LoadHumanOrders(options.GetValueOrDefault("--west-human"), 1, ticks);
         var eastHuman = LoadHumanOrders(options.GetValueOrDefault("--east-human"), 2, ticks);
         var loggedDiscarded = new HashSet<ulong>();
+        StreamWriter researchTrace = null;
+        Dictionary<uint, TechKind> priorResearch = null;
+        int priorBooks = 0, researchStarts = 0, researchCompletions = 0;
+        long firstBooksThresholdTick = -1;
+        if (options.TryGetValue("--research-trace-out", out var tracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(tracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            researchTrace = new StreamWriter(tracePath, false, new UTF8Encoding(false));
+            priorResearch = new Dictionary<uint, TechKind>();
+            var initial = simulation.Capture(1).Economy;
+            priorBooks = initial?.Books ?? 0;
+            researchTrace.WriteLine("{\"event\":\"header\",\"booksPerResearch\":" + (initial?.BooksPerResearch ?? 0) + "}");
+        }
         MatchPackWriter pack = null;
         if (options.TryGetValue("--pack-out", out var packPath))
         {
@@ -102,6 +116,42 @@ internal static class TacticMatchCommand
             pack?.RecordTactic(eastResult, 2, eastName);
             long stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
+            if (researchTrace != null)
+            {
+                var economy = simulation.Capture(1).Economy;
+                if (economy != null)
+                {
+                    if (firstBooksThresholdTick < 0 && priorBooks < economy.BooksPerResearch && economy.Books >= economy.BooksPerResearch)
+                    {
+                        firstBooksThresholdTick = simulation.Capture(1).Tick;
+                        researchTrace.WriteLine("{\"event\":\"books-threshold\",\"tick\":" + simulation.Capture(1).Tick + ",\"books\":" + economy.Books + "}");
+                    }
+                    var current = new Dictionary<uint, TechKind>();
+                    foreach (var building in economy.Buildings.Where(b => b.FactionId == 1))
+                    {
+                        if (building.Researching != 0)
+                        {
+                            current[building.Id] = building.Researching;
+                            if (!priorResearch.TryGetValue(building.Id, out var prior) || prior == 0)
+                            {
+                                researchStarts++;
+                                researchTrace.WriteLine("{\"event\":\"research-start\",\"tick\":" + simulation.Capture(1).Tick
+                                    + ",\"building\":\"" + building.Kind + "\",\"tech\":\"" + building.Researching
+                                    + "\",\"books\":" + economy.Books + ",\"starts\":" + researchStarts + "}");
+                            }
+                        }
+                        else if (priorResearch.TryGetValue(building.Id, out var priorCompleted) && priorCompleted != 0)
+                        {
+                            researchCompletions++;
+                            researchTrace.WriteLine("{\"event\":\"research-complete\",\"tick\":" + simulation.Capture(1).Tick
+                                + ",\"building\":\"" + building.Kind + "\",\"tech\":\"" + priorCompleted
+                                + "\",\"completions\":" + researchCompletions + "}");
+                        }
+                    }
+                    priorResearch = current;
+                    priorBooks = economy.Books;
+                }
+            }
             stepMs += (System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
             if (timing != null && (i + 1) % 1000 == 0)
             {
@@ -118,6 +168,8 @@ internal static class TacticMatchCommand
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
+        researchTrace?.WriteLine("{\"event\":\"summary\",\"thresholdTick\":" + firstBooksThresholdTick + ",\"researchStarts\":" + researchStarts + ",\"researchCompletions\":" + researchCompletions + ",\"finalBooks\":" + (simulation.Capture(1).Economy?.Books ?? 0) + "}");
+        researchTrace?.Dispose();
         if (timing != null) File.WriteAllLines(options["--timing-out"], timing, new UTF8Encoding(false));
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))

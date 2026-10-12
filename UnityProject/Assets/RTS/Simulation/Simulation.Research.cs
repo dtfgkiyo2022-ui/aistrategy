@@ -329,7 +329,13 @@ namespace Rts.Simulation
             int metal = MountainAllowed(faction) ? 0 : normalMetal;
             int oreForMetal = MountainAllowed(faction) ? normalMetal : 0;
             int gems = academy || mountain || fishing || metropolis ? 0 : TechGemsCost(tech);
-            bool bookResearch = academy && BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
+            // Books belong to the Academy civilisation, not to one particular research building.  Keep the
+            // effect at the common start point so both the player's EconomyCommand.Research route and the
+            // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
+            // Books belong to the Academy civilisation, not to one particular research building.  Keep the
+            // effect at the common start point so both the player's EconomyCommand.Research route and the
+            // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
+            bool bookResearch = BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);

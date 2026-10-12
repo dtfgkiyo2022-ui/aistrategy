@@ -231,6 +231,48 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AutonomousAcademyResearchDoesNotWaitForScriptorium()
+        {
+            var f = new Fixture(Scenario(true), auto: true);
+            Reach(f, CivKind.Academy);
+            uint academy = PlaceAndBuild(f, BuildingKind.Academy);
+            SetBuilding(f.Simulation, academy, "Held", false);
+            SetEconomy(f.Simulation, "Food", 10000); SetEconomy(f.Simulation, "Wood", 10000);
+            SetEconomy(f.Simulation, "Gold", 10000); SetEconomy(f.Simulation, "Books", 3);
+
+            f.Step(25);
+
+            Assert.That(Number(f.Simulation, "Buildings.Count"), Is.GreaterThan(academy), "the book line is started");
+            var fields = Fields(f.Simulation);
+            Assert.That(Number(f.Simulation, "Buildings[" + academy + "].Researching"), Is.Not.EqualTo(0),
+                "DecideResearch starts Academy research while the Scriptorium is pending; civ=" + fields["Economy[1].Civ"]
+                + " age=" + fields["Economy[1].Age"] + " autoOff=" + fields["Economy[1].AutoOff"]
+                + " complete=" + fields["Buildings[" + academy + "].Complete"] + " held=" + fields["Buildings[" + academy + "].Held"]
+                + " gold=" + fields["Economy[1].Gold"] + " food=" + fields["Economy[1].Food"] + " wood=" + fields["Economy[1].Wood"]);
+            Assert.That(Number(f.Simulation, "Economy[1].BooksUsedResearch"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AcademyBooksAlsoApplyToHumanBlacksmithResearch()
+        {
+            var f = new Fixture(Scenario(true));
+            Reach(f, CivKind.Academy);
+            uint smith = PlaceAndBuild(f, BuildingKind.Blacksmith);
+            SetEconomy(f.Simulation, "Food", 1000); SetEconomy(f.Simulation, "Wood", 1000);
+            SetEconomy(f.Simulation, "Gold", 1000); SetEconomy(f.Simulation, "Books", 3);
+            int normalFood = f.Scenario.Economy.TechFood[(int)TechKind.Weapons - 1];
+
+            f.Send(EconomyCommand.Research(1, ++f.Sequence, smith, TechKind.Weapons));
+            f.Step(1);
+
+            Assert.That(Number(f.Simulation, "Economy[1].Food"), Is.EqualTo(1000 - (normalFood * f.Scenario.Economy.BookResearchCostPermille + 999) / 1000));
+            Assert.That(Number(f.Simulation, "Economy[1].Books"), Is.EqualTo(0));
+            Assert.That(Number(f.Simulation, "Economy[1].BooksUsedResearch"), Is.EqualTo(1));
+            Assert.That(Number(f.Simulation, "Buildings[" + smith + "].TrainRemaining"), Is.LessThanOrEqualTo(
+                Math.Max(1, f.Scenario.Economy.TechTicks[(int)TechKind.Weapons - 1] * f.Scenario.Economy.BookResearchPermille / 1000)));
+        }
+
+        [Test]
         public void BooksResearchReplayHashesMatch()
         {
             var left = new Fixture(Scenario(true)); var right = new Fixture(Scenario(true));

@@ -716,13 +716,15 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Books);
             ref var line = ref world.ProcessingLines[index];
-            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return true; }
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return false; }
             if (!BuildingReady(line.ScriptoriumId))
             {
-                if (BuildingPending(line.ScriptoriumId) || economy.Wood < rules.ScriptoriumWoodCost + rules.BookWoodReserve) return true;
+                // Starting the line is a priority after the Academy, but it must not hold research hostage
+                // while the building is pending or the stock is below its construction reserve.
+                if (BuildingPending(line.ScriptoriumId) || economy.Wood < rules.ScriptoriumWoodCost + rules.BookWoodReserve) return false;
                 uint id = PlaceScriptorium(faction);
                 if (id != 0) line.ScriptoriumId = id;
-                return true;
+                return false;
             }
             var scriptorium = world.Buildings[line.ScriptoriumId - 1];
             bool whole = LayBooksLine(faction, index, scriptorium);
