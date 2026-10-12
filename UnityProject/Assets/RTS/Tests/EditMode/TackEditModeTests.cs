@@ -10,6 +10,22 @@ namespace Rts.Tests.EditMode
 {
     public sealed class TackEditModeTests
     {
+        private bool wasJapanese;
+
+        // The names are checked in Japanese; the language is a static display setting, so put it back afterwards.
+        [SetUp]
+        public void UseJapanese()
+        {
+            wasJapanese = UiText.Japanese;
+            UiText.Japanese = true;
+        }
+
+        [TearDown]
+        public void RestoreLanguage()
+        {
+            UiText.Japanese = wasJapanese;
+        }
+
         [Test]
         public void HeavyCavalryUsesNamedModelAnimationsAndSaddleryModel()
         {
