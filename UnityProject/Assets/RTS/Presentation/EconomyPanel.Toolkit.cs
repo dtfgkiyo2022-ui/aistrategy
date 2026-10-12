@@ -167,7 +167,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -194,7 +194,7 @@ namespace Rts.Presentation
 
         private static ResourceKind ParseResource(string value)
         {
-            switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; default: return ResourceKind.Wood; }
+            switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; case "rations": case "糧食": return ResourceKind.Rations; default: return ResourceKind.Wood; }
         }
 
         private void TrainFromBuilding(EconomyView economy, BuildingKind kind, UnitKind unit, string notice)
@@ -242,6 +242,11 @@ namespace Rts.Presentation
                     Add(rows, "build:triangle", UiText.T("Archers beat infantry, cavalry beats archers, infantry beats cavalry", "相性：弓兵は歩兵に強く、騎兵は弓兵に強く、歩兵は騎兵に強い"), false, "", false, true);
                     if (economy.Age >= 3) Add(rows, "build:castle", UiText.T("Castle (", "城（石") + economy.CastleStoneCost + UiText.T("S ", " 木") + economy.CastleWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.Castle);
                 }
+            }
+            if (economy.RationsEnabled && economy.Civ == CivKind.Agrarian && economy.Age >= 1)
+            {
+                Add(rows, "build:mill", UiText.T("Mill (", "製粉所（木材 ") + economy.MillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Mill);
+                Add(rows, "line:Rations", UiText.T("Ask for rations line", "糧食のラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Rations);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)

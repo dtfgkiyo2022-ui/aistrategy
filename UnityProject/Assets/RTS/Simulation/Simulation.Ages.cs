@@ -27,6 +27,7 @@ namespace Rts.Simulation
         private bool AgeClockOn => AgesOn && world.Config.Economy.AgeClock;
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
+        private bool RationsOn => AgesOn && world.Config.Economy.Rations;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -70,6 +71,8 @@ namespace Rts.Simulation
 
         /// <summary>Farms: the agrarian civilisation only.</summary>
         private bool FarmingAllowed(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
+        private bool RationsAllowed(uint faction)
+            => RationsOn && world.Economies[faction - 1].Civ == CivKind.Agrarian && world.Economies[faction - 1].Age >= 1;
 
         private bool ForestryAllowed(uint faction)
             => ForestryOn && world.Economies[faction - 1].Civ == CivKind.Forestry && world.Economies[faction - 1].Age >= 1;
