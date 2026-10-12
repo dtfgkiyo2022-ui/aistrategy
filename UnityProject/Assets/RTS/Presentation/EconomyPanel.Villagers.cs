@@ -9,6 +9,7 @@ namespace Rts.Presentation
     public sealed partial class EconomyPanel
     {
         private const float VillagerOrderPickRadiusPixels = 54f;
+        private int placementCancelledFrame = -1;
 
         public bool HasSelectedVillagers { get { return layer != null && layer.HasVillagerSelection; } }
 
@@ -94,6 +95,8 @@ namespace Rts.Presentation
         public bool TryIssueSelectedVillagerOrder(Camera camera, Vector2 screenPoint)
         {
             if (layer == null || layer.SelectedVillagers.Count == 0) return false;
+            // While a building is being placed, the right button cancels the placement and must not also send an order.
+            if (IsPlacing || placementCancelledFrame == Time.frameCount) return false;
             var economy = Economy();
             if (economy == null || port == null) return true;
 

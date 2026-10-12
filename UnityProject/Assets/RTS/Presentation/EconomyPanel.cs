@@ -334,7 +334,14 @@ namespace Rts.Presentation
             if (mode == Mode.None || layer == null) return;
             var camera = Camera.main;
             if (camera == null) return;
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { SetMode(Mode.None); return; }
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
+            {
+                // Remembered so the same right click is not also read as an order to selected villagers,
+                // whichever of the two components Unity happens to update first.
+                placementCancelledFrame = Time.frameCount;
+                SetMode(Mode.None);
+                return;
+            }
             if (Input.GetKeyDown(KeyCode.R))
             {
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
