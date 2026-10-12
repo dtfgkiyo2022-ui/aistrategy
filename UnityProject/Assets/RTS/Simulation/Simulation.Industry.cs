@@ -206,6 +206,31 @@ namespace Rts.Simulation
                         economy.BricksProduced++;
                     }
                 }
+                else if (BooksAllowed(b.FactionId) && b.Kind == BuildingKind.Scriptorium)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Gold > 0)
+                    {
+                        economy.Gold--;
+                        b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
+                    {
+                        economy.Wood--;
+                        b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.BookGoldInput && b.InputSecondary >= rules.BookWoodInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.BookGoldInput;
+                        b.InputSecondary -= rules.BookWoodInput;
+                        b.Timer = rules.BookTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.BooksProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -232,7 +257,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.CharcoalKiln ? ResourceKind.Charcoal : kind == BuildingKind.Steelworks ? ResourceKind.Steel
                 : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : kind == BuildingKind.Mill ? ResourceKind.Rations
                 : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : kind == BuildingKind.Saddlery ? ResourceKind.Tack
-                : kind == BuildingKind.Sawmill ? ResourceKind.Planks : ResourceKind.Metal;
+                : kind == BuildingKind.Sawmill ? ResourceKind.Planks
+                : kind == BuildingKind.Scriptorium ? ResourceKind.Books : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -295,6 +321,11 @@ namespace Rts.Simulation
                 {
                     if (item == ResourceKind.Stone && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Charcoal && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
+                if (BooksAllowed(faction) && b.Kind == BuildingKind.Scriptorium)
+                {
+                    if (item == ResourceKind.Gold && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Wood && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -430,6 +461,17 @@ namespace Rts.Simulation
                     int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
                 }
             }
+            if (BooksAllowed(target.FactionId) && target.Kind == BuildingKind.Scriptorium)
+            {
+                if (kind == ResourceKind.Gold)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Wood)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -450,7 +492,9 @@ namespace Rts.Simulation
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))
                || (PlanksOn && destination == BuildingKind.Sawmill && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
-                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)));
+                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+               || (BooksOn && destination == BuildingKind.Scriptorium
+                   && (kind == ResourceKind.Gold || kind == ResourceKind.Wood));
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

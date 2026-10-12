@@ -61,6 +61,8 @@ internal static class TacticMatchCommand
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
+        ReserveCivilisation(options.GetValueOrDefault("--west-civ"), 1, gateway);
+        ReserveCivilisation(options.GetValueOrDefault("--east-civ"), 2, gateway);
         using var west = CreateHost(westName, 1, source, gateway, runtimes, options.GetValueOrDefault("--west-param"));
         using var east = CreateHost(eastName, 2, source, gateway, runtimes, options.GetValueOrDefault("--east-param"));
         west?.Start(SetupJson(scenario, 1));
@@ -126,6 +128,14 @@ internal static class TacticMatchCommand
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
         return result.IsFault ? 4 : 0;
+    }
+
+    private static void ReserveCivilisation(string civText, uint faction, CommandGateway gateway)
+    {
+        if (string.IsNullOrWhiteSpace(civText)) return;
+        if (!Enum.TryParse(civText, true, out CivKind civ) || civ == CivKind.Primitive || !Enum.IsDefined(civ))
+            throw new InvalidDataException("--west-civ/--east-civ は有効な文明名を指定してください: " + civText);
+        gateway.SubmitEconomy(EconomyCommand.Advance(faction, faction, civ));
     }
 
     private static TacticHost CreateHost(string name, uint faction, IFrameSource source, CommandGateway gateway, string runtimes, string paramText)

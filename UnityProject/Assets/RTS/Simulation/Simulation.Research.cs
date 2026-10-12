@@ -329,6 +329,14 @@ namespace Rts.Simulation
             int metal = MountainAllowed(faction) ? 0 : normalMetal;
             int oreForMetal = MountainAllowed(faction) ? normalMetal : 0;
             int gems = academy || mountain || fishing || metropolis ? 0 : TechGemsCost(tech);
+            bool bookResearch = academy && BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
+            if (bookResearch)
+            {
+                food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);
+                wood = BookDiscount(wood, world.Config.Economy.BookResearchCostPermille);
+                metal = BookDiscount(metal, world.Config.Economy.BookResearchCostPermille);
+                gems = BookDiscount(gems, world.Config.Economy.BookResearchCostPermille);
+            }
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
             if (cult && !CultBudgetAllows(faction, food, wood)) return false;
@@ -338,8 +346,15 @@ namespace Rts.Simulation
             economy.Metal = checked(economy.Metal - metal);
             economy.Ore = checked(economy.Ore - oreForMetal);
             economy.Gems = checked(economy.Gems - gems);
+            if (bookResearch)
+            {
+                economy.Books = checked(economy.Books - world.Config.Economy.BooksPerResearch);
+                economy.BooksConsumed = checked(economy.BooksConsumed + world.Config.Economy.BooksPerResearch);
+                economy.BooksUsedResearch++;
+            }
             smith.Researching = tech;
-            smith.TrainRemaining = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : fishing ? FishingTicks(tech) : tollgate ? TollgateTicks(tech) : metropolis ? MetropolisTicks(tech) : sanctuary ? SanctuaryTicks(tech) : TechTicks(tech);
+            int ticks = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : fishing ? FishingTicks(tech) : tollgate ? TollgateTicks(tech) : metropolis ? MetropolisTicks(tech) : sanctuary ? SanctuaryTicks(tech) : TechTicks(tech);
+            smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000)) : ticks;
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -589,6 +604,7 @@ namespace Rts.Simulation
             }
             ref var building = ref world.Buildings[academy];
             if (!building.Complete || building.Held || building.Researching != 0) return true;
+            if (BooksAllowed(faction) && DecideBooks(faction)) return true;
             foreach (var tech in AcademyResearchOrderFor(faction))
                 if (AcademyTechOpen(faction, tech))
                 {
@@ -644,10 +660,19 @@ namespace Rts.Simulation
                 foodReserve = checked(foodReserve + InfantryFoodFor(faction));
                 woodReserve = checked(woodReserve + InfantryWoodFor(faction));
             }
-            return e.Food >= checked(AcademyFoodCost(tech) + foodReserve)
-                && e.Wood >= checked(AcademyWoodCost(tech) + woodReserve)
+            int foodCost = AcademyFoodCost(tech), woodCost = AcademyWoodCost(tech);
+            if (e.Books >= rules.BooksPerResearch && BooksAllowed(faction))
+            {
+                foodCost = BookDiscount(foodCost, rules.BookResearchCostPermille);
+                woodCost = BookDiscount(woodCost, rules.BookResearchCostPermille);
+            }
+            return e.Food >= checked(foodCost + foodReserve)
+                && e.Wood >= checked(woodCost + woodReserve)
                 && e.Gold >= checked(AcademyGoldCost(tech) + goldReserve);
         }
+
+        private int BookDiscount(int cost, int permille)
+            => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
 
         private bool AcademyOffenseReady(uint faction)
         {

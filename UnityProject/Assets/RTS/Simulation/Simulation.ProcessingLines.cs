@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Planks)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Books)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -67,7 +67,7 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            if (command.Line != ProcessingLineKind.Tack && FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && FindRequestedResourceNode(command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
                 return;
@@ -76,7 +76,7 @@ namespace Rts.Simulation
             if (existing >= 0)
             {
                 var current = world.ProcessingLines[existing];
-                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0)
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.ScriptoriumId != 0)
                 {
                     RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
                     return;
@@ -101,6 +101,7 @@ namespace Rts.Simulation
             if (kind == ProcessingLineKind.Rations) return RationsAllowed(faction);
             if (kind == ProcessingLineKind.Tack) return TackAllowed(faction);
             if (kind == ProcessingLineKind.Planks) return PlanksAllowed(faction);
+            if (kind == ProcessingLineKind.Books) return BooksAllowed(faction);
             if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear)
                 return ForestryAllowed(faction) && (kind != ProcessingLineKind.BowGear || world.Economies[faction - 1].Age >= 2);
             if (!IndustryOn || !ProcessingOn || !MetalworkAllowed(faction)) return false;
@@ -112,6 +113,7 @@ namespace Rts.Simulation
             return kind == ProcessingLineKind.Bricks ? world.Config.Economy.BrickKilnWoodCost
                 : kind == ProcessingLineKind.Tack ? world.Config.Economy.SaddleryWoodCost
                 : kind == ProcessingLineKind.Planks ? world.Config.Economy.SawmillWoodCost
+                : kind == ProcessingLineKind.Books ? world.Config.Economy.ScriptoriumWoodCost
                 : kind == ProcessingLineKind.Rations ? world.Config.Economy.MillWoodCost
                 : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
@@ -241,6 +243,18 @@ namespace Rts.Simulation
                     line.SawmillId = id; return true;
                 }
                 LayPlanksLine(faction, index, world.Buildings[line.LumberCampId - 1], world.Buildings[line.SawmillId - 1]);
+            }
+            else if (line.Kind == ProcessingLineKind.Books)
+            {
+                if (!BuildingReady(line.ScriptoriumId))
+                {
+                    if (BuildingPending(line.ScriptoriumId)) return true;
+                    if (economy.Wood < world.Config.Economy.ScriptoriumWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceScriptorium(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.ScriptoriumId = id; return true;
+                }
+                LayBooksLine(faction, index, world.Buildings[line.ScriptoriumId - 1]);
             }
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {

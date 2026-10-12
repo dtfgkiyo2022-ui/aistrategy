@@ -709,6 +709,53 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
+        private bool DecideBooks(uint faction)
+        {
+            if (!BooksAllowed(faction)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Books);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return true; }
+            if (!BuildingReady(line.ScriptoriumId))
+            {
+                if (BuildingPending(line.ScriptoriumId) || economy.Wood < rules.ScriptoriumWoodCost + rules.BookWoodReserve) return true;
+                uint id = PlaceScriptorium(faction);
+                if (id != 0) line.ScriptoriumId = id;
+                return true;
+            }
+            var scriptorium = world.Buildings[line.ScriptoriumId - 1];
+            bool whole = LayBooksLine(faction, index, scriptorium);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+            return false;
+        }
+
+        private uint PlaceScriptorium(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.ScriptoriumSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Scriptorium, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayBooksLine(uint faction, int lineIndex, BuildingState scriptorium)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(scriptorium), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
         private void DecidePlanks(uint faction)
         {
             if (!PlanksAllowed(faction)) return;

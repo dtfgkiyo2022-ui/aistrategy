@@ -237,7 +237,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -246,13 +246,14 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
         internal int BricksConsumedWalls, BricksConsumedTowers, BricksConsumedCoreRepair, BricksConsumedCastles;
         internal int TackProduced, TackConsumed, TackTrainedHeavyCavalry;
         internal int PlanksProduced, PlanksConsumed, PlanksConsumedRams, PlanksConsumedBridges, PlanksEnhancedRams;
+        internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -400,7 +401,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -554,6 +555,11 @@ namespace Rts.Simulation
                 && e.PlankRamHpPermille >= 1000 && e.PlankRamTrainPermille > 0 && e.PlankRamTrainPermille <= 1000
                 && e.PlanksPerBridgeCell > 0 && e.PlankBridgeWoodPermille > 0 && e.PlankBridgeWoodPermille <= 1000
                 && e.PlankExtraRams >= 0 && e.PlankWoodReserve >= 0), "Invalid planks rules.");
+            Require(!e.Books || (e.Enabled && e.Industry && e.Ages && e.ScriptoriumSizeCells > 0 && e.ScriptoriumSizeCells <= 8
+                && e.ScriptoriumWoodCost >= 0 && e.ScriptoriumWork > 0 && e.ScriptoriumHp > 0 && e.BookTicks > 0
+                && e.BookGoldInput > 0 && e.BookWoodInput > 0 && e.BookGoldInput <= e.BufferLimit && e.BookWoodInput <= e.BufferLimit
+                && e.BooksPerResearch > 0 && e.BookResearchPermille > 0 && e.BookResearchPermille <= 1000
+                && e.BookResearchCostPermille > 0 && e.BookResearchCostPermille <= 1000 && e.BookWoodReserve >= 0), "Invalid books rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -758,7 +764,8 @@ namespace Rts.Simulation
                     && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3
                     && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
-                        || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks))
+                        || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
+                        || (e.Books && b.Item == ResourceKind.Books))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -914,6 +921,10 @@ namespace Rts.Simulation
                   PlankWoodInput = e.PlankWoodInput, PlanksPerRam = e.PlanksPerRam, PlankRamHpPermille = e.PlankRamHpPermille,
                   PlankRamTrainPermille = e.PlankRamTrainPermille, PlanksPerBridgeCell = e.PlanksPerBridgeCell,
                   PlankBridgeWoodPermille = e.PlankBridgeWoodPermille, PlankExtraRams = e.PlankExtraRams, PlankWoodReserve = e.PlankWoodReserve,
+                  Books = e.Books, ScriptoriumSizeCells = e.ScriptoriumSizeCells, ScriptoriumWoodCost = e.ScriptoriumWoodCost,
+                  ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,
+                  BookGoldInput = e.BookGoldInput, BookWoodInput = e.BookWoodInput, BooksPerResearch = e.BooksPerResearch,
+                  BookResearchPermille = e.BookResearchPermille, BookResearchCostPermille = e.BookResearchCostPermille, BookWoodReserve = e.BookWoodReserve,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

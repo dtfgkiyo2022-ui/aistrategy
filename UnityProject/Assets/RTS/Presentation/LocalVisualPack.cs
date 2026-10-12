@@ -277,6 +277,7 @@ namespace Rts.Presentation
             { BuildingKind.Saddlery, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f) },
             { BuildingKind.Sawmill, new BuildingSpec("LumberMill.FBX", 3.0f) },
             { BuildingKind.Academy, new BuildingSpec("Library.FBX", 3.0f) },
+            { BuildingKind.Scriptorium, new BuildingSpec("MageTower.FBX", 3.0f) },
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },
             { BuildingKind.Town, new BuildingSpec("TownHall.FBX", 3.0f) },
