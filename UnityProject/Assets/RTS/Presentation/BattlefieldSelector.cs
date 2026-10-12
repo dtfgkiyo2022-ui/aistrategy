@@ -12,6 +12,7 @@ namespace Rts.Presentation
         [SerializeField] private CommandPanel panel;
         [SerializeField] private TimelinePanel timelinePanel;
         [SerializeField] private EconomyLayer economyLayer;
+        [SerializeField] private EconomyPanel economyPanel;
         [SerializeField] private float pickRadiusPixels = 36f;
         [SerializeField] private float villagerPickRadiusPixels = 30f;
         /// <summary>A press that moves less than this is a click, not a box.</summary>
@@ -33,6 +34,7 @@ namespace Rts.Presentation
             var camera = Camera.main;
             if (camera == null) return;
             if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
+            if (economyPanel == null) economyPanel = FindFirstObjectByType<EconomyPanel>();
             if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.H) && economyLayer != null)
             {
                 economyLayer.SelectIdleVillagers();
@@ -42,11 +44,9 @@ namespace Rts.Presentation
             if (Input.GetMouseButtonDown(1))
             {
                 if (UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)) return;
-                if (economyLayer != null && economyLayer.HasVillagerSelection && panel != null)
-                {
-                    panel.TryIssueSelectedVillagerOrder(camera, Input.mousePosition);
-                    return;
-                }
+                // The order itself is an economy command, so it goes through the economy panel's port.
+                if (economyLayer != null && economyLayer.HasVillagerSelection && economyPanel != null)
+                    economyPanel.TryIssueSelectedVillagerOrder(camera, Input.mousePosition);
                 return;
             }
             if (Input.GetMouseButtonDown(0))
