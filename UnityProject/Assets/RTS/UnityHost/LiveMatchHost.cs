@@ -754,7 +754,10 @@ namespace Rts.UnityHost
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             currentScenario = scenario;
             tickSeconds = 1f / scenario.TickRateHz;
-            simulation = new Battle(scenario);
+            // Per-phase time of the simulation in the "RTS perf" line (display-side measurement only): the phase names
+            // are the ones the headless --timing-out prints, so a player build can be compared with it phase by phase.
+            perfPhaseStarts.Clear();
+            simulation = smokeRunner ? new Battle(scenario) : new Battle(scenario, MeasureSimulationPhase);
             matchPack = null;
             matchPackPath = "";
             operationTable = new OperationTable(viewFactionId);
@@ -1163,6 +1166,7 @@ namespace Rts.UnityHost
             gateway.Step();
             perfSimStopwatchTicks += System.Diagnostics.Stopwatch.GetTimestamp() - simStarted;
             perfSimSteps++;
+            perfTotalSteps++;
             PerfProbe.Stop("Sim", simProbe);
             var frame = simulation.Capture(viewFactionId);
             if (smokeRunner)
@@ -1303,6 +1307,35 @@ namespace Rts.UnityHost
         private float nextGcAt;
         private long perfSimStopwatchTicks;
         private int perfSimSteps;
+
+        private readonly Dictionary<string, long> perfPhaseStarts = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> perfPhaseSums = new Dictionary<string, long>(StringComparer.Ordinal);
+        private readonly Dictionary<string, long> perfPhaseReadAt = new Dictionary<string, long>(StringComparer.Ordinal);
+        private long perfTotalSteps;
+
+        // Shown as "us<Phase>#n": microseconds of that phase per simulation step since the last line.
+        private void MeasureSimulationPhase(string name, bool start)
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (start) { perfPhaseStarts[name] = now; return; }
+            if (!perfPhaseStarts.TryGetValue(name, out long began)) return;
+            if (!perfPhaseSums.ContainsKey(name))
+            {
+                perfPhaseSums[name] = 0;
+                perfPhaseReadAt[name] = perfTotalSteps;
+                string phase = name;
+                PerfProbe.Counter("us" + phase, () =>
+                {
+                    long steps = perfTotalSteps - perfPhaseReadAt[phase];
+                    int value = steps <= 0 ? 0
+                        : (int)(perfPhaseSums[phase] * 1000000L / System.Diagnostics.Stopwatch.Frequency / steps);
+                    perfPhaseSums[phase] = 0;
+                    perfPhaseReadAt[phase] = perfTotalSteps;
+                    return value;
+                });
+            }
+            perfPhaseSums[name] += now - began;
+        }
 
         private void PaceGarbageCollection()
         {
