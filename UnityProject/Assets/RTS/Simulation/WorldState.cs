@@ -587,6 +587,9 @@ namespace Rts.Simulation
                 && e.SiegeAge1Permille > 0 && e.SiegeAge1Permille <= 10000
                 && e.SiegeAge2Permille > 0 && e.SiegeAge2Permille <= 10000
                 && e.SiegeAge3Permille > 0 && e.SiegeAge3Permille <= 10000), "Invalid siege-by-age rules.");
+            Require(!e.PushWaves || (e.Enabled && e.Ages && e.LatePush && e.SiegeByAge && e.WaveStagingDistance > 0
+                && e.WaveSize > 0 && e.WaveMaxWaitTicks > 0 && e.WaveMinSize > 0 && e.WaveMinSize <= e.WaveSize
+                && e.WaveRetreatPermille > 0 && e.WaveRetreatPermille <= 1000), "Invalid push-wave rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
                 && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
                 && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
@@ -817,9 +820,11 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
-                LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
-                SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,
-                SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille,
+                 LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
+                 SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,
+                 SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille,
+                 PushWaves = e.PushWaves, WaveStagingDistance = e.WaveStagingDistance, WaveSize = e.WaveSize,
+                 WaveMaxWaitTicks = e.WaveMaxWaitTicks, WaveMinSize = e.WaveMinSize, WaveRetreatPermille = e.WaveRetreatPermille,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,

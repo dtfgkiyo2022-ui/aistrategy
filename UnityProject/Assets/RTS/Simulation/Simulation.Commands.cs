@@ -195,6 +195,10 @@ namespace Rts.Simulation
             foreach (var c in liveCommands)
             {
                 if (c == self || Terminal(c) || !Overlap(c, order)) continue;
+                // A tactic is allowed to take an army out of an automatic wave. Keep this exception under the
+                // feature flag; the historical command authority remains unchanged when PushWaves is off.
+                if (PushWavesOn && order.Source == CommandSource.Tactic && c.Order.Source == CommandSource.Doctrine
+                    && IsPushWaveDoctrine(c.Order) && Field(c.Order.Kind) == Field(order.Kind)) continue;
                 if (order.Kind != PolicyKind.ReturnToAuto && order.Source != CommandSource.Human && c.Order.Source == CommandSource.Human &&
                     (c.Status != CommandStatus.Executing || Field(c.Order.Kind) == Field(order.Kind))) return ReasonCode.Superseded;
                 if ((order.Source == CommandSource.Ai || order.Source == CommandSource.Tactic) &&
@@ -408,7 +412,9 @@ namespace Rts.Simulation
                 bool replace = !(o.Kind == PolicyKind.ReturnToAuto && o.Source == CommandSource.Doctrine) &&
                     Field(old.Order.Kind) == Field(o.Kind) &&
                     (SourcePriority(o.Source) < SourcePriority(old.Order.Source) ||
-                     SourcePriority(o.Source) == SourcePriority(old.Order.Source) && c.LogIndex > old.LogIndex);
+                     SourcePriority(o.Source) == SourcePriority(old.Order.Source) && c.LogIndex > old.LogIndex
+                     || PushWavesOn && o.Source == CommandSource.Tactic && old.Order.Source == CommandSource.Doctrine
+                         && IsPushWaveDoctrine(old.Order));
                 if (!reset && !replace) continue;
                 if (old.Status == CommandStatus.Executing && o.Target.Kind != ScopeKind.All && !old.Order.Target.Equals(o.Target))
                 {

@@ -72,6 +72,17 @@ namespace Rts.Simulation
                     w.Value("LatePush.Faction1", latePushLatched[0]);
                     w.Value("LatePush.Faction2", latePushLatched[1]);
                 }
+                if (PushWavesOn)
+                {
+                    for (int f = 0; f < pushWaveStates.Length; f++)
+                    {
+                        var wave = pushWaveStates[f];
+                        string n = "PushWaves.Faction" + (f + 1).ToString(CultureInfo.InvariantCulture) + ".";
+                        w.Value(n + "Phase", (byte)wave.Phase); w.Value(n + "GatheringStartedTick", wave.GatheringStartedTick);
+                        w.Value(n + "AssaultStartCount", wave.AssaultStartCount); w.Value(n + "AssaultNumber", wave.AssaultNumber);
+                        w.Point(n + "StagingPoint", wave.StagingPoint); w.Ids(n + "AssaultSoldierIds", wave.AssaultSoldierIds);
+                    }
+                }
                 // Active policies are keyed by army, ordered by ApplyTick then LogIndex then army ID.
                 var orders=(ArmyState[])world.Armies.Clone();
                 Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });

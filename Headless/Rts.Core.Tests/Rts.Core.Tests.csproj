@@ -100,6 +100,7 @@
     <Compile Include="LatePushTests.cs" />
     <Compile Include="SiegeByAgeTests.cs" />
     <Compile Include="LiveStallMeasurementTests.cs" />
+    <Compile Include="PushWavesMeasurementTests.cs" />
     <Compile Include="TacticJsTests.cs" />
     <Compile Include="TacticPyodideTests.cs" />
     <Compile Include="Win32ChildProcessTests.cs" />
