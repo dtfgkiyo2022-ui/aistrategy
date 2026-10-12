@@ -104,6 +104,8 @@ namespace Rts.Presentation
                 return;
             }
             if (actionId == "blueprint:save") { BeginBlueprintSave(); return; }
+            if (actionId == "villagers:select-idle") { SelectIdleVillagersFromPanel(); return; }
+            if (actionId == "villagers:return-auto") { ReturnSelectedVillagersToAuto(); return; }
             if (actionId == "make:villager") { Send(EconomyCommand.Train(faction, ++sequence, 0, UnitKind.Villager), UiText.T("Villager requested", "村人を依頼しました")); return; }
             if (actionId == "make:infantry") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Infantry, UiText.T("Infantry requested", "歩兵を依頼しました")); return; }
             if (actionId == "make:infantry-cancel") { CancelFromBuilding(economy, BuildingKind.Barracks, UiText.T("Last infantry cancelled", "最後の歩兵を取り消しました")); return; }
@@ -299,6 +301,11 @@ namespace Rts.Presentation
 
         private void AddMakeActions(List<EconomyAction> rows, EconomyView economy)
         {
+            bool hasSelectedVillagers = layer != null && layer.HasVillagerSelection;
+            Add(rows, "villagers:summary", SelectedVillagerSummary, false, "", false, true);
+            Add(rows, "villagers:select-idle", UiText.T("Select all idle villagers (H)", "待機中の村人をすべて選ぶ（H）"));
+            Add(rows, "villagers:return-auto", UiText.T("Return selected to auto (whole economy)", "選択中をお任せに戻す（内政全体）"), hasSelectedVillagers,
+                hasSelectedVillagers ? "" : UiText.T("Select villagers first", "先に村人を選択してください"));
             string queue = economy.VillagerQueued == 0 ? "" : " [" + economy.VillagerQueued + ", " + Seconds(economy.VillagerTrainRemaining) + "]";
             Add(rows, "make:villager", UiText.T("Villager (", "村人（食料 ") + economy.VillagerFoodCost + UiText.T(" food)", "）") + queue);
             var barracks = OwnBuilding(economy, BuildingKind.Barracks);

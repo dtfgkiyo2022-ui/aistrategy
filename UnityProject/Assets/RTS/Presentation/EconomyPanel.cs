@@ -552,6 +552,13 @@ namespace Rts.Presentation
         /// <summary>Villagers, infantry, advancing the age, and sending idle villagers to work.</summary>
         private void DrawMake(EconomyView economy, float x, float y, float w, float half, float right)
         {
+            GUI.Label(new Rect(x, y, w, 22f), SelectedVillagerSummary);
+            y += 26f;
+            if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Select all idle villagers (H)", "待機中の村人をすべて選ぶ（H）")))
+                SelectIdleVillagersFromPanel();
+            if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Return selected to auto", "選択中をお任せに戻す（全体）")))
+                ReturnSelectedVillagersToAuto();
+            y += 26f;
             string queue = economy.VillagerQueued == 0 ? "" : " [" + economy.VillagerQueued + ", " + Seconds(economy.VillagerTrainRemaining) + "]";
             if (GUI.Button(new Rect(x, y, half, 22f), UiText.T("Villager (", "村人（食料 ") + economy.VillagerFoodCost + UiText.T(" food)", "）") + queue))
                 Send(EconomyCommand.Train(faction, ++sequence, 0, UnitKind.Villager), UiText.T("Villager requested", "村人を依頼しました"));

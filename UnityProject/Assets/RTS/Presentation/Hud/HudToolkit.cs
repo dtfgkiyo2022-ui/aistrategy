@@ -1328,7 +1328,12 @@ namespace Rts.Presentation
             SetFrameRect(economyFrame, UiLayout.Calculate(Screen.width, Screen.height).Economy, Screen.width, Screen.height);
             economyFrame.style.display = DisplayStyle.Flex;
             if (economyTitle != null) economyTitle.text = UiText.T("Economy", "内政");
-            if (economyHeaderStatus != null) economyHeaderStatus.text = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
+            if (economyHeaderStatus != null)
+            {
+                string header = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
+                if (economyPanel.HasSelectedVillagers) header += "  /  " + economyPanel.SelectedVillagerSummary;
+                economyHeaderStatus.text = header;
+            }
             RefreshEconomyTabs();
             bool blueprintsSelected = economyPanel.SelectedTab == EconomyPanel.Tab.Blueprints;
             if (economyActions != null) economyActions.style.display = blueprintsSelected ? DisplayStyle.None : DisplayStyle.Flex;

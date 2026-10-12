@@ -3,15 +3,17 @@ using UnityEngine;
 namespace Rts.Presentation
 {
     /// <summary>
-    /// Left click picks the nearest army marker or core on screen and passes its frame ID to the view. Dragging draws a
-    /// box instead, and every own army whose marker ends inside it is selected together.
+    /// Left click picks the nearest army marker, core, or own villager on screen and passes its frame ID to the view.
+    /// Dragging draws a box instead; a box containing an own soldier keeps the existing army selection behavior.
     /// </summary>
     public sealed class BattlefieldSelector : MonoBehaviour
     {
         [SerializeField] private BattlefieldView view;
         [SerializeField] private CommandPanel panel;
         [SerializeField] private TimelinePanel timelinePanel;
+        [SerializeField] private EconomyLayer economyLayer;
         [SerializeField] private float pickRadiusPixels = 36f;
+        [SerializeField] private float villagerPickRadiusPixels = 30f;
         /// <summary>A press that moves less than this is a click, not a box.</summary>
         [SerializeField] private float dragThresholdPixels = 8f;
 
@@ -30,6 +32,23 @@ namespace Rts.Presentation
             UiHitAreas.Shared.BeginFrame(Time.frameCount);
             var camera = Camera.main;
             if (camera == null) return;
+            if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
+            if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.H) && economyLayer != null)
+            {
+                economyLayer.SelectIdleVillagers();
+                if (economyLayer.HasVillagerSelection && view != null) view.Select(SelectionTarget.None);
+                return;
+            }
+            if (Input.GetMouseButtonDown(1))
+            {
+                if (UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)) return;
+                if (economyLayer != null && economyLayer.HasVillagerSelection && panel != null)
+                {
+                    panel.TryIssueSelectedVillagerOrder(camera, Input.mousePosition);
+                    return;
+                }
+                return;
+            }
             if (Input.GetMouseButtonDown(0))
             {
                 pressed = false;
@@ -44,10 +63,40 @@ namespace Rts.Presentation
             Vector2 releaseAt = Input.mousePosition;
             if ((releaseAt - pressAt).magnitude < dragThresholdPixels)
             {
-                view.Select(view.TryPick(camera, pressAt, pickRadiusPixels, out var target) ? target : SelectionTarget.None);
+                bool additive = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                uint villagerId;
+                if (economyLayer != null && economyLayer.TryPickOwnVillager(camera, pressAt, villagerPickRadiusPixels, out villagerId))
+                {
+                    economyLayer.SelectVillager(villagerId, additive);
+                    view.Select(SelectionTarget.None);
+                    return;
+                }
+                if (view.TryPick(camera, pressAt, pickRadiusPixels, out var target))
+                {
+                    if (economyLayer != null) economyLayer.ClearVillagerSelection();
+                    view.Select(target);
+                }
+                else
+                {
+                    if (!additive && economyLayer != null) economyLayer.ClearVillagerSelection();
+                    view.Select(SelectionTarget.None);
+                }
                 return;
             }
-            view.SelectArmies(view.ArmiesInScreenRect(camera, BoxRect(pressAt, releaseAt)));
+            var box = BoxRect(pressAt, releaseAt);
+            var armies = view.ArmiesInScreenRect(camera, box);
+            if (armies.Count > 0)
+            {
+                if (economyLayer != null) economyLayer.ClearVillagerSelection();
+                view.SelectArmies(armies);
+                return;
+            }
+            if (economyLayer != null)
+            {
+                economyLayer.SelectVillagers(economyLayer.VillagersInScreenRect(camera, box),
+                    Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+                view.Select(SelectionTarget.None);
+            }
         }
 
         private static Rect BoxRect(Vector2 a, Vector2 b)
