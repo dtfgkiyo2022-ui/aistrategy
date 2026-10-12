@@ -204,7 +204,7 @@ namespace Rts.Presentation
         private static readonly UnitKind[] MakeUpOrder =
         {
             UnitKind.Infantry, UnitKind.HeavyInfantry, UnitKind.Mercenary, UnitKind.Archer, UnitKind.SkirmishArcher,
-            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.Ram, UnitKind.Monk, UnitKind.Scout
+            UnitKind.LightCavalry, UnitKind.Cavalry, UnitKind.HeavyCavalry, UnitKind.Ram, UnitKind.Monk, UnitKind.Scout
         };
 
         /// <summary>
@@ -266,6 +266,7 @@ namespace Rts.Presentation
                 case UnitKind.HeavyInfantry: return UiText.T("Heavy infantry", "重装歩兵");
                 case UnitKind.SkirmishArcher: return UiText.T("Skirmishers", "遊撃弓兵");
                 case UnitKind.LightCavalry: return UiText.T("Light cavalry", "軽騎兵");
+                case UnitKind.HeavyCavalry: return UiText.T("Heavy cavalry", "重騎兵");
                 default: return kind.ToString();
             }
         }
@@ -1273,7 +1274,7 @@ namespace Rts.Presentation
         /// <summary>V3-5: archers carry a tall thin bow, cavalry stands wider on a low block, and monks carry a staff.</summary>
         private void MarkClass(GameObject go, UnitKind kind)
         {
-            if (kind != UnitKind.Archer && kind != UnitKind.Cavalry && kind != UnitKind.Ram && kind != UnitKind.Monk) return;
+            if (kind != UnitKind.Archer && kind != UnitKind.Cavalry && kind != UnitKind.HeavyCavalry && kind != UnitKind.Ram && kind != UnitKind.Monk) return;
             var mark = GameObject.CreatePrimitive(kind == UnitKind.Archer || kind == UnitKind.Monk ? PrimitiveType.Cylinder : PrimitiveType.Cube);
             mark.name = kind == UnitKind.Archer ? "Bow" : kind == UnitKind.Ram ? "Beam" : kind == UnitKind.Monk ? "Staff" : "Mount";
             Discard(mark.GetComponent<Collider>());

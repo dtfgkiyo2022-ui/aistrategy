@@ -52,6 +52,7 @@ namespace Rts.Simulation
         }
 
         private const int AutoLightCavalryMinimum = 4;
+        private const int AutoHeavyCavalryInfantryRatio = 3;
 
         /// <summary>V3-10 #2: the cavalry civilisation keeps a small, independent mobile reserve in the existing stable.</summary>
         private void DecideCavalryStable(uint faction)
@@ -67,12 +68,21 @@ namespace Rts.Simulation
                 return;
             }
             ref var stable = ref world.Buildings[index];
-            if (!stable.Complete || stable.Held || stable.Queued >= rules.QueueLimit || SavingToAdvance(faction)) return;
-            int planned = LivingClass(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.LightCavalry);
+            if (!stable.Complete || stable.Held || stable.Queued != 0 || SavingToAdvance(faction)) return;
             int mobileCapacity = world.Factions[faction - 1].ArmyIds.Select(id => world.Armies[id - 1])
                 .Where(a => a.Definition.Role == "reserve").Select(a => a.Definition.Capacity).DefaultIfEmpty(AutoLightCavalryMinimum).Max();
             int target = System.Math.Max(AutoLightCavalryMinimum, mobileCapacity / 2 + 1);
-            if (planned >= target || !HasRoomFor(faction, UnitKind.LightCavalry) || !CanPay(faction, UnitKind.LightCavalry)) return;
+            bool tackReady = TackAllowed(faction) && world.Economies[faction - 1].Tack >= rules.HeavyCavalryTackCost;
+            int heavy = LivingClass(faction, UnitKind.HeavyCavalry) + QueuedOf(faction, UnitKind.HeavyCavalry);
+            int infantry = CountClass(faction, UnitKind.Infantry);
+            if (tackReady && heavy * AutoHeavyCavalryInfantryRatio < infantry
+                && HasRoomFor(faction, UnitKind.HeavyCavalry) && CanPay(faction, UnitKind.HeavyCavalry))
+            {
+                Enqueue(faction, ref stable, UnitKind.HeavyCavalry);
+                return;
+            }
+            int light = LivingClass(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.LightCavalry);
+            if (light >= target || !HasRoomFor(faction, UnitKind.LightCavalry) || !CanPay(faction, UnitKind.LightCavalry)) return;
             Enqueue(faction, ref stable, UnitKind.LightCavalry);
         }
     }

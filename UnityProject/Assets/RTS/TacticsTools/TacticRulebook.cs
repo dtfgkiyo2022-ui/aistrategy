@@ -164,6 +164,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Storage, e.StorageWoodCost, 0, e.StorageWork);
             Add(rows, BuildingKind.Mill, e.MillWoodCost, 0, e.MillWork);
             Add(rows, BuildingKind.BrickKiln, e.BrickKilnWoodCost, 0, e.BrickKilnWork);
+            Add(rows, BuildingKind.Saddlery, e.SaddleryWoodCost, 0, e.SaddleryWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 
@@ -215,6 +216,7 @@ namespace Rts.Tactics
                 case UnitKind.Archer: return "food=" + e.ArcherFood + ", wood=" + e.ArcherWood + ", ticks=" + e.ArcherTicks;
                 case UnitKind.Cavalry: return "food=" + e.CavalryFood + ", wood=" + e.CavalryWood + ", metal=" + e.CavalryMetal + ", ticks=" + e.CavalryTicks;
                 case UnitKind.LightCavalry: return "food=" + e.LightCavalryFood + ", wood=" + e.LightCavalryWood + ", ticks=" + e.LightCavalryTicks;
+                case UnitKind.HeavyCavalry: return "tack=" + e.HeavyCavalryTackCost + ", food=" + e.HeavyCavalryFoodCost + ", ticks=" + e.HeavyCavalryTrainTicks;
                 case UnitKind.HeavyInfantry: return "food=" + e.HeavyInfantryFoodCost + ", wood=" + e.HeavyInfantryWoodCost + ", steel=" + e.HeavyInfantrySteelCost + ", ticks=" + e.HeavyInfantryTrainTicks;
                 case UnitKind.SkirmishArcher: return "food=" + e.SkirmishArcherFoodCost + ", bowGear=" + e.SkirmishArcherBowGearCost + ", ticks=" + e.SkirmishArcherTrainTicks;
                 case UnitKind.Ram: return "food=" + e.RamFood + ", wood=" + e.RamWood + ", ticks=" + e.RamTicks;

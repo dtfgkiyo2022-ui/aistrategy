@@ -202,7 +202,7 @@ namespace Rts.Simulation
         }
 
         private static int CultObservedValue(UnitKind kind)
-            => kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry ? 5 : kind == UnitKind.LightCavalry ? 4
+            => kind == UnitKind.HeavyInfantry ? 6 : kind == UnitKind.Cavalry || kind == UnitKind.HeavyCavalry ? 5 : kind == UnitKind.LightCavalry ? 4
                 : kind == UnitKind.Mercenary ? 3 : kind == UnitKind.Archer || kind == UnitKind.SkirmishArcher ? 2 : 0;
 
         // V3-18 #3: an outpost counts for the sanctuary when its route from the core is at most this many metres.

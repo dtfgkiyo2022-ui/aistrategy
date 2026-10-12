@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -139,7 +139,22 @@ namespace Rts.Simulation
                   bricksPerCastle: BricksAllowed(faction) ? rules.BricksPerCastle : 0,
                   brickHpPermille: BricksAllowed(faction) ? rules.BrickHpPermille : 0,
                   brickUpgradeIntervalTicks: BricksAllowed(faction) ? rules.BrickUpgradeIntervalTicks : 0,
-                  brickCastleStonePermille: BricksAllowed(faction) ? rules.BrickCastleStonePermille : 0);
+                brickCastleStonePermille: BricksAllowed(faction) ? rules.BrickCastleStonePermille : 0,
+                tackEnabled: TackAllowed(faction), tack: TackAllowed(faction) ? economy.Tack : 0,
+                saddleryWoodCost: TackAllowed(faction) ? rules.SaddleryWoodCost : 0,
+                saddlerySizeCells: TackAllowed(faction) ? rules.SaddlerySizeCells : 0,
+                tackTicks: TackAllowed(faction) ? rules.TackTicks : 0,
+                tackFoodInput: TackAllowed(faction) ? rules.TackFoodInput : 0,
+                tackWoodInput: TackAllowed(faction) ? rules.TackWoodInput : 0,
+                heavyCavalryTackCost: TackAllowed(faction) ? rules.HeavyCavalryTackCost : 0,
+                heavyCavalryFoodCost: TackAllowed(faction) ? rules.HeavyCavalryFoodCost : 0,
+                heavyCavalryTrainTicks: TackAllowed(faction) ? rules.HeavyCavalryTrainTicks : 0,
+                heavyCavalryHp: TackAllowed(faction) ? rules.HeavyCavalryHp : 0,
+                heavyCavalryDamage: TackAllowed(faction) ? rules.HeavyCavalryDamage : 0,
+                heavyCavalryAttackIntervalTicks: TackAllowed(faction) ? rules.HeavyCavalryAttackIntervalTicks : 0,
+                heavyCavalryRange: TackAllowed(faction) ? rules.HeavyCavalryRange : default(Fix64),
+                heavyCavalrySpeed: TackAllowed(faction) ? rules.HeavyCavalrySpeed : default(Fix64),
+                heavyCavalryVision: TackAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64));
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

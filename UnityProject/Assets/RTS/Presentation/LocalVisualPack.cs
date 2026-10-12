@@ -185,6 +185,13 @@ namespace Rts.Presentation
                     new TieredUnitSpec("TT_Mounted_Paladin.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX"))
                 }
             },
+            { UnitKind.HeavyCavalry, new[]
+                {
+                    new TieredUnitSpec("TT_Heavy_Cavalry.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX")),
+                    new TieredUnitSpec("TT_Mounted_Knight.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX")),
+                    new TieredUnitSpec("TT_Mounted_Paladin.prefab", 3.0f, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX"))
+                }
+            },
             { UnitKind.Ram, new[]
                 {
                     new TieredUnitSpec("machines/TT_Ram_lvl1.prefab", 3.4f, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX")),
@@ -210,6 +217,7 @@ namespace Rts.Presentation
             { UnitKind.Villager, new UnitSpec("TT_Peasant.prefab", 2.2f) },
             { UnitKind.Archer, new UnitSpec("TT_Archer.prefab", 2.4f) },
             { UnitKind.Cavalry, new UnitSpec("TT_Heavy_Cavalry.prefab", 3.0f) },
+            { UnitKind.HeavyCavalry, new UnitSpec("TT_Mounted_Paladin.prefab", 3.0f) },
             { UnitKind.LightCavalry, new UnitSpec("TT_Light_Cavalry.prefab", 2.8f) },
             { UnitKind.Ram, new UnitSpec("machines/TT_Ram_lvl1.prefab", 3.4f) },
             { UnitKind.Mercenary, new UnitSpec("TT_HeavySwordman.prefab", 2.6f) },
@@ -232,6 +240,7 @@ namespace Rts.Presentation
             { UnitKind.Mercenary, new AnimationSpec("animation_infantry/TwoHanded/twohanded_01_idle.FBX", "animation_infantry/TwoHanded/twohanded_02_walk.FBX", "animation_infantry/TwoHanded/twohanded_04_attack_A.FBX") },
             { UnitKind.HeavyInfantry, new AnimationSpec("animation_infantry/Shield/shield_01_idle.FBX", "animation_infantry/Shield/shield_02_walk.FBX", "animation_infantry/Shield/shield_04_attack_A.FBX") },
             { UnitKind.Cavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
+            { UnitKind.HeavyCavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
             { UnitKind.LightCavalry, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
             { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") }
         };
@@ -265,6 +274,7 @@ namespace Rts.Presentation
             { BuildingKind.Fletcher, new BuildingSpec("Archery.FBX", 2.2f, 0.7f) },
             { BuildingKind.Mill, new BuildingSpec("Granary.FBX", 2.2f, 1f, new Color(0.82f, 0.70f, 0.42f, 1f)) },
             { BuildingKind.BrickKiln, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.72f, 0.28f, 0.16f, 1f)) },
+            { BuildingKind.Saddlery, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f) },
             { BuildingKind.Academy, new BuildingSpec("Library.FBX", 3.0f) },
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },
