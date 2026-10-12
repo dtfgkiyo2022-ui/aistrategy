@@ -193,7 +193,7 @@ namespace Rts.Simulation
         public int BrickCoreRepairIntervalTicks = 100, BricksPerCoreRepair = 2, BrickCoreRepairHp = 60, BrickExtraTowers = 2;
         /// <summary>Tack: the cavalry civilisation turns food and wood into tack for heavy cavalry.</summary>
         public bool Tack;
-        public int SaddlerySizeCells = 2, SaddleryWoodCost = 80, SaddleryWork = 200, SaddleryHp = 400;
+        public int SaddlerySizeCells = 2, SaddleryWoodCost = 80, TackWoodReserve = 20, SaddleryWork = 200, SaddleryHp = 400;
         public int TackTicks = 100, TackFoodInput = 2, TackWoodInput = 2;
         public int HeavyCavalryTackCost = 2, HeavyCavalryFoodCost = 70, HeavyCavalryTrainTicks = 300;
         public int HeavyCavalryHp = 128, HeavyCavalryDamage = 10, HeavyCavalryAttackIntervalTicks = 20;

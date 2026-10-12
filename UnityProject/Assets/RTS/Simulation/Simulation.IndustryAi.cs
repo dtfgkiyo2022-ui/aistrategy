@@ -33,6 +33,7 @@ namespace Rts.Simulation
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
+                if (CavalryAllowed(faction)) DecideTack(faction);
                 return;
             }
             if (TryDecideRequestedLine(faction)) return;
@@ -712,16 +713,16 @@ namespace Rts.Simulation
         {
             if (!TackAllowed(faction)) return;
             int stable = OwnBuildingIndex(faction, BuildingKind.Stable);
-            if (stable < 0 || !world.Buildings[stable].Complete || world.Buildings[stable].Held) return;
+            if (stable < 0 || !world.Buildings[stable].Complete || world.Buildings[stable].Held
+                || world.Economies[faction - 1].Age < 1) return;
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
-            if (economy.Food < rules.TackFoodInput + rules.HeavyCavalryFoodCost || economy.Wood < rules.TackWoodInput) return;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Tack);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.SaddleryId))
             {
-                if (BuildingPending(line.SaddleryId) || economy.Wood < rules.SaddleryWoodCost) return;
+                if (BuildingPending(line.SaddleryId) || economy.Wood < rules.SaddleryWoodCost + rules.TackWoodReserve) return;
                 uint id = PlaceSaddlery(faction);
                 if (id != 0) line.SaddleryId = id;
                 return;

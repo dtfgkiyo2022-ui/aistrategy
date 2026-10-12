@@ -97,8 +97,10 @@ namespace Rts.Simulation
         private const int BricksExtensionV1 = 1;
         private const int BricksExtensionV1DataLength = 14 * sizeof(int);
         private const int TackExtensionId = 22;
-        private const int TackExtensionVersion = 1;
-        private const int TackExtensionDataLength = 17 * sizeof(int) + 3 * sizeof(int);
+        private const int TackExtensionVersion = 2;
+        private const int TackExtensionDataLength = 18 * sizeof(int) + 3 * sizeof(int);
+        private const int TackExtensionV1 = 1;
+        private const int TackExtensionV1DataLength = 17 * sizeof(int) + 3 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -664,7 +666,9 @@ namespace Rts.Simulation
                     && dataLength == SanctuaryExtensionV1DataLength;
                 bool oldBricks = id == BricksExtensionId && featureVersion == BricksExtensionV1
                     && dataLength == BricksExtensionV1DataLength;
-                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks;
+                bool oldTack = id == TackExtensionId && featureVersion == TackExtensionV1
+                    && dataLength == TackExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -997,7 +1001,7 @@ namespace Rts.Simulation
             using (var writer = new BinaryWriter(stream))
             {
                 writer.Write(e.Tack ? 1 : 0);
-                writer.Write(e.SaddlerySizeCells); writer.Write(e.SaddleryWoodCost); writer.Write(e.SaddleryWork); writer.Write(e.SaddleryHp);
+                writer.Write(e.SaddlerySizeCells); writer.Write(e.SaddleryWoodCost); writer.Write(e.TackWoodReserve); writer.Write(e.SaddleryWork); writer.Write(e.SaddleryHp);
                 writer.Write(e.TackTicks); writer.Write(e.TackFoodInput); writer.Write(e.TackWoodInput);
                 writer.Write(e.HeavyCavalryTackCost); writer.Write(e.HeavyCavalryFoodCost); writer.Write(e.HeavyCavalryTrainTicks);
                 writer.Write(e.HeavyCavalryHp); writer.Write(e.HeavyCavalryDamage); writer.Write(e.HeavyCavalryAttackIntervalTicks);
@@ -1014,7 +1018,9 @@ namespace Rts.Simulation
                 int enabled = reader.ReadInt32();
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid tack flag.");
                 e.Tack = enabled != 0;
-                e.SaddlerySizeCells = reader.ReadInt32(); e.SaddleryWoodCost = reader.ReadInt32(); e.SaddleryWork = reader.ReadInt32(); e.SaddleryHp = reader.ReadInt32();
+                e.SaddlerySizeCells = reader.ReadInt32(); e.SaddleryWoodCost = reader.ReadInt32();
+                if (extension.Version >= 2) e.TackWoodReserve = reader.ReadInt32();
+                e.SaddleryWork = reader.ReadInt32(); e.SaddleryHp = reader.ReadInt32();
                 e.TackTicks = reader.ReadInt32(); e.TackFoodInput = reader.ReadInt32(); e.TackWoodInput = reader.ReadInt32();
                 e.HeavyCavalryTackCost = reader.ReadInt32(); e.HeavyCavalryFoodCost = reader.ReadInt32(); e.HeavyCavalryTrainTicks = reader.ReadInt32();
                 e.HeavyCavalryHp = reader.ReadInt32(); e.HeavyCavalryDamage = reader.ReadInt32(); e.HeavyCavalryAttackIntervalTicks = reader.ReadInt32();

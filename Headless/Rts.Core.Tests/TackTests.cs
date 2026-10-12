@@ -210,10 +210,11 @@ namespace Rts.Core.Tests
         public void TackExtensionRoundTripsIdTwentyTwoAndChangedValues()
         {
             var s = Scenario(true);
-            s.Economy.SaddleryWoodCost = 97; s.Economy.TackTicks = 111; s.Economy.HeavyCavalrySpeed = Fix64.FromInt(5);
+            s.Economy.SaddleryWoodCost = 97; s.Economy.TackWoodReserve = 13; s.Economy.TackTicks = 111; s.Economy.HeavyCavalrySpeed = Fix64.FromInt(5);
             var decoded = ScenarioBinary.Decode(ScenarioBinary.Encode(s));
             Assert.That(decoded.Economy.Tack, Is.True);
             Assert.That(decoded.Economy.SaddleryWoodCost, Is.EqualTo(97));
+            Assert.That(decoded.Economy.TackWoodReserve, Is.EqualTo(13));
             Assert.That(decoded.Economy.TackTicks, Is.EqualTo(111));
             Assert.That(decoded.Economy.HeavyCavalrySpeed, Is.EqualTo(Fix64.FromInt(5)));
         }
@@ -387,6 +388,25 @@ namespace Rts.Core.Tests
             on.Step(200); off.Step(200);
             Assert.That(Fields(on.Simulation).ContainsKey("Economy[1].TackTrainedHeavyCavalry"), Is.True);
             Assert.That(Fields(off.Simulation).ContainsKey("Economy[1].Tack"), Is.False);
+        }
+
+        [Test]
+        public void AutomaticCavalryBuildsSaddleryWithAStableAndWoodEvenWhenFoodIsEmpty()
+        {
+            var f = new Fixture(Scenario(true));
+            ReachCavalry(f);
+            uint stable = Place(f, BuildingKind.Stable);
+            Build(f, stable);
+            SetBuilding(f.Simulation, stable, "Held", false);
+            SetEconomy(f.Simulation, 1, "Food", 0);
+            SetEconomy(f.Simulation, 1, "Wood", 1000);
+            f.Send(EconomyCommand.Auto(1, ++f.Sequence, true));
+            f.Step(1000);
+            var fields = Fields(f.Simulation);
+            int count = int.Parse(fields["Buildings.Count"], CultureInfo.InvariantCulture);
+            Assert.That(Enumerable.Range(1, count).Any(id => fields["Buildings[" + id + "].Kind"] == ((byte)BuildingKind.Saddlery).ToString(CultureInfo.InvariantCulture)), Is.True,
+                string.Join(", ", fields.Where(p => p.Key.StartsWith("Buildings[", StringComparison.Ordinal) && (p.Key.EndsWith("].Kind", StringComparison.Ordinal) || p.Key.EndsWith("].Complete", StringComparison.Ordinal))).Select(p => p.Key + "=" + p.Value))
+                + " age=" + fields["Economy[1].Age"] + " civ=" + fields["Economy[1].Civ"] + " food=" + fields["Economy[1].Food"] + " wood=" + fields["Economy[1].Wood"]);
         }
 
         [Test, Explicit("騎馬の文明が工房・馬具・重騎兵まで実際に回す長時間テスト")]

@@ -540,7 +540,7 @@ namespace Rts.Simulation
                 && e.BrickExtraTowers >= 0
                 && e.BrickCastleStonePermille <= 1000), "Invalid bricks rules.");
             Require(!e.Tack || (e.Enabled && e.Industry && e.Ages && e.SaddlerySizeCells > 0 && e.SaddlerySizeCells <= 8
-                && e.SaddleryWoodCost >= 0 && e.SaddleryWork > 0 && e.SaddleryHp > 0 && e.TackTicks > 0
+                && e.SaddleryWoodCost >= 0 && e.TackWoodReserve >= 0 && e.SaddleryWork > 0 && e.SaddleryHp > 0 && e.TackTicks > 0
                 && e.TackFoodInput > 0 && e.TackWoodInput > 0 && e.TackFoodInput <= e.BufferLimit && e.TackWoodInput <= e.BufferLimit
                 && e.HeavyCavalryTackCost > 0 && e.HeavyCavalryFoodCost >= 0 && e.HeavyCavalryTrainTicks > 0
                 && e.HeavyCavalryHp > 0 && e.HeavyCavalryDamage >= 0 && e.HeavyCavalryAttackIntervalTicks > 0
@@ -894,7 +894,7 @@ namespace Rts.Simulation
                   BrickUpgradeIntervalTicks = e.BrickUpgradeIntervalTicks, BrickCastleStonePermille = e.BrickCastleStonePermille,
                   BrickCoreRepairIntervalTicks = e.BrickCoreRepairIntervalTicks, BricksPerCoreRepair = e.BricksPerCoreRepair,
                   BrickCoreRepairHp = e.BrickCoreRepairHp, BrickExtraTowers = e.BrickExtraTowers,
-                  Tack = e.Tack, SaddlerySizeCells = e.SaddlerySizeCells, SaddleryWoodCost = e.SaddleryWoodCost,
+                  Tack = e.Tack, SaddlerySizeCells = e.SaddlerySizeCells, SaddleryWoodCost = e.SaddleryWoodCost, TackWoodReserve = e.TackWoodReserve,
                   SaddleryWork = e.SaddleryWork, SaddleryHp = e.SaddleryHp, TackTicks = e.TackTicks,
                   TackFoodInput = e.TackFoodInput, TackWoodInput = e.TackWoodInput,
                   HeavyCavalryTackCost = e.HeavyCavalryTackCost, HeavyCavalryFoodCost = e.HeavyCavalryFoodCost,
