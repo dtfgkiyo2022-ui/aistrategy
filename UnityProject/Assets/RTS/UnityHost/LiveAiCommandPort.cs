@@ -87,6 +87,7 @@ namespace Rts.UnityHost
         private readonly IDisposable ownedInterpreter;
         private readonly Dictionary<ulong, LiveAiInstruction> instructions = new Dictionary<ulong, LiveAiInstruction>();
         private readonly List<LiveAiInstruction> history = new List<LiveAiInstruction>();
+        private const int MaxHistoryItems = 50;
         private readonly AiBudgetMeter budget;
         private OperationTable operationTable;
         private readonly Action<string> changeDoctrine;
@@ -168,8 +169,29 @@ namespace Rts.UnityHost
         private AiSituationSummary Summary(FactionFrame current)
         {
             var summary = AiSituationSummary.From(current);
+            summary.SetConversation(history.Where(i => i.State != AiInstructionState.Interpreting).Select(ToConversationTurn));
             enrichSummary?.Invoke(summary);
             return summary;
+        }
+
+        private static AiConversationTurn ToConversationTurn(LiveAiInstruction item)
+        {
+            string commands = item.Issued == null || item.Issued.Count == 0 ? "なし" : string.Join("・", item.Issued);
+            string reply = string.IsNullOrEmpty(item.Say) ? item.Reason : item.Say;
+            string result;
+            if (item.State == AiInstructionState.Unknown) result = "聞き返し";
+            else if (item.State == AiInstructionState.Expired) result = "却下";
+            else if (item.State == AiInstructionState.Cancelled) result = "取り消し";
+            else if (item.RejectedReasons != null && item.RejectedReasons.Count != 0 && (item.Issued == null || item.Issued.Count == 0)) result = "却下";
+            else if (item.Issued != null && item.Issued.Count != 0) result = "実行";
+            else result = "聞き返し";
+            return new AiConversationTurn(item.Instruction, reply, commands, result);
+        }
+
+        private void TrimHistory()
+        {
+            while (history.Count > MaxHistoryItems)
+                history.RemoveAt(0);
         }
 
         public ulong BeginInterpretation(string instruction, ScopeKey? fixedTarget, string model)
@@ -209,6 +231,7 @@ namespace Rts.UnityHost
                 };
                 instructions.Add(request, item);
                 history.Add(item);
+                TrimHistory();
                 return request;
             }
             catch
@@ -240,6 +263,7 @@ namespace Rts.UnityHost
                 Issued = Array.Empty<string>()
             };
             history.Add(item);
+            TrimHistory();
             if (sendTacticSignal == null)
             {
                 item.Reason = "戦術の合図を送る受け口がありません。";

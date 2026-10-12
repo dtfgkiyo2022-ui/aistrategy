@@ -25,6 +25,9 @@ namespace Rts.Providers
 
         /// <summary>Region names currently present in the state name table.</summary>
         public IReadOnlyList<string> RegionNames;
+
+        /// <summary>True when state contains the immediately preceding conversation turn.</summary>
+        public bool PreviousConversationAvailable;
     }
 
     /// <summary>
@@ -38,7 +41,7 @@ namespace Rts.Providers
     /// </summary>
     public static class JevQuestions
     {
-        public const string Version = "q11";
+        public const string Version = "q12";
 
         private const string DecisivePoint =
             "\"decisive_point\":{\"type\":\"choice\",\"instructions\":\"次の1分間に勝敗を左右する場所はどこであるか。stateの観測だけで判断する。\",\"criteria\":{\"north_outpost\":\"北の拠点\",\"south_outpost\":\"南の拠点\",\"my_core\":\"自分のコア\",\"enemy_core\":\"敵のコア\"}}";
@@ -94,10 +97,11 @@ namespace Rts.Providers
             {
                 bool hasSignals = context.SignalDefinitions != null && context.SignalDefinitions.Count != 0;
                 bool hasLines = context.AvailableLineNames != null && context.AvailableLineNames.Count != 0;
-                parts.Add(hasLines ? (hasSignals ? InstructionKindWithSignalAndLine : InstructionLineKind) : (hasSignals ? InstructionKindWithSignal : InstructionKind));
+                string instructionKind = hasLines ? (hasSignals ? InstructionKindWithSignalAndLine : InstructionLineKind) : (hasSignals ? InstructionKindWithSignal : InstructionKind);
+                parts.Add(WithPreviousInstructionRule(instructionKind, context.PreviousConversationAvailable));
                 if (hasSignals) parts.Add(BuildInstructionSignal(context.SignalDefinitions));
-                parts.Add(InstructionTarget);
-                parts.Add(InstructionGoal);
+                parts.Add(WithPreviousInstructionRule(InstructionTarget, context.PreviousConversationAvailable));
+                parts.Add(WithPreviousInstructionRule(InstructionGoal, context.PreviousConversationAvailable));
                 parts.Add(InstructionDoctrine);
                 if (hasLines)
                 {
@@ -113,6 +117,17 @@ namespace Rts.Providers
                 parts.Add(OutpostHeldByEnemy);
             }
             return "{" + string.Join(",", parts) + "}";
+        }
+
+        private static string WithPreviousInstructionRule(string question, bool available)
+        {
+            if (!available) return question;
+            string result = question.Replace("指示文", "今回の指示文");
+            const string marker = "\",\"criteria\":";
+            int criteria = result.IndexOf(marker, StringComparison.Ordinal);
+            if (criteria < 0) return result;
+            return result.Insert(criteria,
+                "今回の指示に書かれていない項目はstateの「直前の指示」の同じ項目を使う。直前の指示と無関係なら今回の指示だけで決める。");
         }
 
         private const string InstructionKindWithSignal =

@@ -199,7 +199,9 @@ namespace Rts.Presentation
         {
             public VisualElement Row;
             public VisualElement Bubble;
-            public Label Label;
+            public Label Meta;
+            public Label Body;
+            public Label Detail;
         }
 
         private sealed class EconomyActionSlot
@@ -1329,7 +1331,12 @@ namespace Rts.Presentation
             SetFrameRect(economyFrame, UiLayout.Calculate(Screen.width, Screen.height).Economy, Screen.width, Screen.height);
             economyFrame.style.display = DisplayStyle.Flex;
             if (economyTitle != null) economyTitle.text = UiText.T("Economy", "内政");
-            if (economyHeaderStatus != null) economyHeaderStatus.text = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
+            if (economyHeaderStatus != null)
+            {
+                string header = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
+                if (economyPanel.HasSelectedVillagers) header += "  /  " + economyPanel.SelectedVillagerSummary;
+                economyHeaderStatus.text = header;
+            }
             if (manualControlToggle != null)
             {
                 var mode = commandPanel == null ? null : commandPanel.PlayerControlMode;
@@ -1628,6 +1635,7 @@ namespace Rts.Presentation
         {
             if (staffScroll == null) return;
             lines = lines ?? Array.Empty<StaffChatLine>();
+            bool followTail = IsStaffAtBottom();
             bool grew = lines.Count > renderedStaffLineCount;
             if (lines.Count < renderedStaffLineCount)
             {
@@ -1643,26 +1651,41 @@ namespace Rts.Presentation
                 row.AddToClassList("staff-line");
                 var bubble = new VisualElement();
                 bubble.AddToClassList("staff-bubble");
-                var label = new Label();
-                label.AddToClassList("staff-line-text");
-                bubble.Add(label);
+                var meta = new Label();
+                meta.AddToClassList("staff-line-meta");
+                var body = new Label();
+                body.AddToClassList("staff-line-text");
+                var detail = new Label();
+                detail.AddToClassList("staff-line-small");
+                bubble.Add(meta);
+                bubble.Add(body);
+                bubble.Add(detail);
                 row.Add(bubble);
                 staffScroll.Add(row);
-                staffLineSlots.Add(new StaffLineSlot { Row = row, Bubble = bubble, Label = label });
+                staffLineSlots.Add(new StaffLineSlot { Row = row, Bubble = bubble, Meta = meta, Body = body, Detail = detail });
             }
             renderedStaffLineCount = lines.Count;
 
             for (int i = 0; i < lines.Count; i++) ApplyStaffLine(staffLineSlots[i], lines[i]);
             if (staffEmptyLabel != null) staffEmptyLabel.style.display = lines.Count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
-            if (grew)
+            if (grew && followTail)
                 staffScroll.schedule.Execute(() => staffScroll.scrollOffset = new Vector2(0f, float.MaxValue));
+        }
+
+        private bool IsStaffAtBottom()
+        {
+            if (staffScroll == null || staffScroll.verticalScroller == null) return true;
+            return staffScroll.verticalScroller.highValue <= 1f
+                || staffScroll.verticalScroller.value >= staffScroll.verticalScroller.highValue - 4f;
         }
 
         private static void ApplyStaffLine(StaffLineSlot slot, StaffChatLine line)
         {
             if (slot == null || line == null) return;
-            string prefix = string.IsNullOrEmpty(line.Speaker) ? "" : (line.Time + " " + line.Speaker + "：");
-            slot.Label.text = prefix + line.Body;
+            slot.Meta.text = string.IsNullOrEmpty(line.Speaker) ? "" : line.Time + "  " + line.Speaker;
+            slot.Body.text = line.Body;
+            slot.Detail.text = line.Detail;
+            slot.Detail.style.display = string.IsNullOrEmpty(line.Detail) ? DisplayStyle.None : DisplayStyle.Flex;
             slot.Row.EnableInClassList("staff-line-you", line.Tone == StaffChatLine.YouTone);
             slot.Row.EnableInClassList("staff-line-staff", line.Tone == StaffChatLine.StaffTone);
             slot.Row.EnableInClassList("staff-line-detail", line.Tone == StaffChatLine.DetailTone);

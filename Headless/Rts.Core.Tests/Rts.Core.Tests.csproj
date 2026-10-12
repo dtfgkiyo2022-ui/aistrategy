@@ -158,5 +158,8 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/EconomyFlowMetrics.cs" Link="Presentation/EconomyFlowMetrics.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/BlueprintTools.cs" Link="Presentation/BlueprintTools.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
+    <Compile Include="StaffChatTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/IStaffControl.cs" Link="Presentation/IStaffControl.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
   </ItemGroup>
 </Project>

@@ -61,6 +61,27 @@ namespace Rts.Tests.Headless
         }
 
         [Test]
+        public void PreviousConversationAddsExplicitInheritanceOnlyWhenAvailable()
+        {
+            string without = JevQuestions.Build(new JevQuestionContext
+            {
+                InstructionTranslationNeeded = true,
+                IncludeComprehension = false
+            });
+            string with = JevQuestions.Build(new JevQuestionContext
+            {
+                InstructionTranslationNeeded = true,
+                IncludeComprehension = false,
+                PreviousConversationAvailable = true
+            });
+            Assert.That(without, Does.Not.Contain("今回の指示"));
+            Assert.That(with, Does.Contain("今回の指示に書かれていない項目"));
+            Assert.That(with, Does.Contain("stateの「直前の指示」"));
+            Assert.That(with, Does.Contain("直前の指示と無関係なら"));
+            Assert.That(JevQuestions.Names(with), Is.EqualTo(JevQuestions.Names(without)));
+        }
+
+        [Test]
         public void SignalQuestionsAreAddedOnlyWhenOwnTacticHasSignals()
         {
             var without = JevQuestions.Build(new JevQuestionContext { InstructionTranslationNeeded = true, IncludeComprehension = false });

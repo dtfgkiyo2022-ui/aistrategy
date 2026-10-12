@@ -313,6 +313,7 @@
 }
 
 .staff-bubble {
+    flex-direction: column;
     max-width: 88%;
     padding-left: 8px;
     padding-right: 8px;
@@ -344,9 +345,26 @@
 }
 
 .staff-line-text {
+    flex-shrink: 1;
     font-size: var(--hud-small-font-size);
     white-space: normal;
     -unity-text-align: middle-left;
+}
+
+.staff-line-meta {
+    flex-shrink: 0;
+    margin-bottom: 2px;
+    color: var(--hud-muted-text);
+    font-size: var(--hud-small-font-size);
+    white-space: nowrap;
+}
+
+.staff-line-small {
+    flex-shrink: 1;
+    margin-top: 3px;
+    color: var(--hud-muted-text);
+    font-size: 11px;
+    white-space: normal;
 }
 
 .staff-line-status .staff-bubble {
