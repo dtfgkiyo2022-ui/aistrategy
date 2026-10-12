@@ -94,7 +94,8 @@ namespace Rts.Simulation
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 var rules = world.Config.Economy;
-                if (!latePushLatched[faction - 1] && LatePushCondition(observation, rules))
+                bool reachedThirdAge = rules.SiegeByAge && world.Economies[faction - 1].Age >= 3;
+                if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, rules)))
                     latePushLatched[faction - 1] = true;
                 if (!latePushLatched[faction - 1] || !rules.SiegeByAge || world.Economies[faction - 1].Age < 3) continue;
 
@@ -148,7 +149,7 @@ namespace Rts.Simulation
                 ? world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position : wave.StagingPoint;
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
-                if (HasHumanOrTacticCombat(armyId)) continue;
+                if (HasHumanOrTacticOrder(armyId)) continue;
                 var live = world.Armies[armyId - 1].SoldierIds.Where(id => world.Soldiers[id - 1].Alive).OrderBy(id => id).ToArray();
                 if (live.Length == 0) continue;
                 var scope = new ScopeKey(faction, ScopeKind.Army, armyId);
@@ -178,8 +179,8 @@ namespace Rts.Simulation
             }
         }
 
-        private bool HasHumanOrTacticCombat(uint armyId)
-            => liveCommands.Any(c => !Terminal(c) && Combat(c.Order)
+        private bool HasHumanOrTacticOrder(uint armyId)
+            => liveCommands.Any(c => !Terminal(c)
                 && (c.Order.Source == CommandSource.Human || c.Order.Source == CommandSource.Tactic)
                 && Affected(c.Order.Target).Contains(armyId));
 
@@ -191,7 +192,7 @@ namespace Rts.Simulation
             var ids = new List<uint>();
             foreach (uint armyId in world.Factions[faction - 1].ArmyIds.OrderBy(id => id))
             {
-                if (HasHumanOrTacticCombat(armyId)) continue;
+                if (HasHumanOrTacticOrder(armyId)) continue;
                 foreach (uint soldierId in world.Armies[armyId - 1].SoldierIds.OrderBy(id => id))
                 {
                     var soldier = world.Soldiers[soldierId - 1];
@@ -214,7 +215,8 @@ namespace Rts.Simulation
         private bool WaveStagingComplete(uint faction, SimPoint staging)
         {
             foreach (uint soldierId in WaveStandingSoldierIds(faction))
-                if (!InRange(world.Soldiers[soldierId - 1].Position, staging, Fix64.FromInt(4))) return false;
+                // A formation occupies several cells around its point; use the same 8 m slot joining envelope as navigation.
+                if (!InRange(world.Soldiers[soldierId - 1].Position, staging, Fix64.FromInt(8))) return false;
             return true;
         }
 
@@ -224,7 +226,7 @@ namespace Rts.Simulation
             uint faction = world.Soldiers[soldierId - 1].Initial.FactionId;
             var wave = pushWaveStates[faction - 1];
             return wave.Phase == PushWavePhase.Assault && Array.IndexOf(wave.AssaultSoldierIds, soldierId) >= 0
-                && !HasHumanOrTacticCombat(world.Soldiers[soldierId - 1].Initial.ArmyId);
+                && !HasHumanOrTacticOrder(world.Soldiers[soldierId - 1].Initial.ArmyId);
         }
 
         private bool IsPushWaveAssaultArmy(uint armyId)
@@ -232,13 +234,31 @@ namespace Rts.Simulation
             if (!PushWavesOn) return false;
             uint faction = world.Armies[armyId - 1].Definition.FactionId;
             return pushWaveStates[faction - 1].Phase == PushWavePhase.Assault
-                && !HasHumanOrTacticCombat(armyId);
+                && !HasHumanOrTacticOrder(armyId);
+        }
+
+        private bool IsPushWaveStagingArmy(uint armyId)
+        {
+            if (!PushWavesOn) return false;
+            uint faction = world.Armies[armyId - 1].Definition.FactionId;
+            return pushWaveStates[faction - 1].Phase != PushWavePhase.Inactive
+                && !HasHumanOrTacticOrder(armyId);
+        }
+
+        private bool IsPushWaveStagingPathArmy(uint armyId)
+        {
+            if (!IsPushWaveStagingArmy(armyId)) return false;
+            uint faction = world.Armies[armyId - 1].Definition.FactionId;
+            return pushWaveStates[faction - 1].Phase != PushWavePhase.Assault;
         }
 
         private void WaveNotice(uint faction, PushWavePhase phase)
         {
+            // AiReport has no wave-specific payload. Keep the phase in Value and carry the assault start count in the
+            // otherwise unused CommandId field so timeline.jsonl can report every wave without changing Contracts.
+            ulong assaultCount = phase == PushWavePhase.Assault ? (ulong)pushWaveStates[faction - 1].AssaultStartCount : 0;
             commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,
-                (byte)(1 << ((int)faction - 1)), faction, 0, pushWaveStates[faction - 1].StagingPoint,
+                (byte)(1 << ((int)faction - 1)), faction, assaultCount, pushWaveStates[faction - 1].StagingPoint,
                 (int)phase, ReasonCode.None));
         }
 

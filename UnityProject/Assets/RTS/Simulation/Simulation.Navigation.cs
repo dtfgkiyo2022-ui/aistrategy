@@ -16,6 +16,7 @@ namespace Rts.Simulation
         {
             uint faction = a.Definition.FactionId;
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            if (IsPushWaveStagingPathArmy(a.Definition.Id)) return pushWaveStates[faction - 1].StagingPoint;
             if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
             if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
             if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);

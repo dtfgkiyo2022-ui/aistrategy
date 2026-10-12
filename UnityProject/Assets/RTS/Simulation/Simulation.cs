@@ -111,7 +111,7 @@ namespace Rts.Simulation
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
                 bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
                 var mission = IsPushWaveAssaultSoldier(s.Initial.Id) ? ArmyGoal(a)
-                    : PushWavesOn && IsPushWaveAssaultArmy(a.Definition.Id)
+                    : PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
                         ? pushWaveStates[faction - 1].StagingPoint : ArmyGoal(a);
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
                     s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
@@ -144,6 +144,10 @@ namespace Rts.Simulation
                     }
                 }
                 else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                bool waveStaging = PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
+                    && !IsPushWaveAssaultSoldier(s.Initial.Id);
+                if (waveStaging && intent.TargetContactId == 0 && intent.TargetObjective.Kind == GoalKind.None)
+                    intent = new ArmyIntent(a.Definition.Id, pushWaveStates[faction - 1].StagingPoint, 0, default, false);
                 // A SiegeByAge late push has an authoritative core target. Once a soldier is inside its attack
                 // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
                 bool authoritativeAssault = IsLatePushAttack(a.Definition.Id)
