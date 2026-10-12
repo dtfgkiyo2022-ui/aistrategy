@@ -143,6 +143,7 @@ namespace Rts.Providers
                 case "Steel": return "Steel";
                 case "CoreWood": return "CoreWood";
                 case "BowGear": return "BowGear";
+                case "Rations": return "Rations";
                 case "unknown": return JevChoice.Unknown;
                 case "hold": return "hold";
                 case "capture": return "capture";

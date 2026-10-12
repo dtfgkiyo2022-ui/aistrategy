@@ -117,7 +117,17 @@ namespace Rts.Simulation
                 AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0,
                 rules.BeltComponents, rules.FastBeltWoodCost, rules.FastBeltTicksPerCell, rules.SplitterWoodCost, rules.SorterWoodCost,
                 rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity,
-                 nextAgeClockTick: NextAgeClockTick(faction), autoAssaultOff: AutoAssaultOffFor(faction));
+                  nextAgeClockTick: NextAgeClockTick(faction), autoAssaultOff: AutoAssaultOffFor(faction),
+                  rationsEnabled: RationsAllowed(faction), rations: RationsAllowed(faction) ? economy.Rations : 0,
+                  millWoodCost: RationsAllowed(faction) ? rules.MillWoodCost : 0, millSizeCells: RationsAllowed(faction) ? rules.MillSizeCells : 0,
+                  millTicks: RationsAllowed(faction) ? rules.MillTicks : 0, millFoodInput: RationsAllowed(faction) ? rules.MillFoodInput : 0,
+                  rationsPerSoldier: RationsAllowed(faction) ? rules.RationsPerSoldier : 0, rationsTrainPermille: RationsAllowed(faction) ? rules.RationsTrainPermille : 0,
+                  rationsHealIntervalTicks: RationsAllowed(faction) ? rules.RationsHealIntervalTicks : 0,
+                  rationsHealQuietTicks: RationsAllowed(faction) ? rules.RationsHealQuietTicks : 0,
+                  rationsHealHp: RationsAllowed(faction) ? rules.RationsHealHp : 0,
+                  rationsHealMaxPerInterval: RationsAllowed(faction) ? rules.RationsHealMaxPerInterval : 0,
+                  rationsFarmMinimum: RationsAllowed(faction) ? rules.RationsFarmMinimum : 0,
+                  rationsFoodReserve: RationsAllowed(faction) ? rules.RationsFoodReserve : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

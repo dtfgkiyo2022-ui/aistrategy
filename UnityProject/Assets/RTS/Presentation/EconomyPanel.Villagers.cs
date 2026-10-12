@@ -167,6 +167,7 @@ namespace Rts.Presentation
                 case ResourceKind.Stone: return UiText.T("stone", "石");
                 case ResourceKind.Ore: return UiText.T("ore", "鉱石");
                 case ResourceKind.Metal: return UiText.T("metal", "金属");
+                case ResourceKind.Rations: return UiText.T("rations", "糧食");
                 default: return kind.ToString();
             }
         }

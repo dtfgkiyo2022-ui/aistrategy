@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -156,7 +156,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells
                 : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -165,7 +165,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -175,7 +175,7 @@ namespace Rts.Presentation
 
         private static string Name(BuildingKind kind)
             => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
-                : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.House ? UiText.T("House", "住居")
+                : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.Mill ? UiText.T("Mill", "製粉所") : kind == BuildingKind.House ? UiText.T("House", "住居")
                 : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
                 : kind == BuildingKind.Blacksmith ? UiText.T("Blacksmith", "鍛冶場")
                 : kind == BuildingKind.Market ? UiText.T("Market", "市場") : kind == BuildingKind.SiegeWorkshop ? UiText.T("Siege workshop", "攻城工房")
@@ -184,7 +184,7 @@ namespace Rts.Presentation
                 : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
-            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm
+            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
                 : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
@@ -277,7 +277,7 @@ namespace Rts.Presentation
             => f == Facing.North ? UiText.T("north", "北") : f == Facing.East ? UiText.T("east", "東") : f == Facing.South ? UiText.T("south", "南") : UiText.T("west", "西");
 
         private static string SorterKindName(ResourceKind kind)
-            => kind == ResourceKind.Food ? UiText.T("food", "食料") : kind == ResourceKind.Wood ? UiText.T("wood", "木材")
+            => kind == ResourceKind.Rations ? UiText.T("rations", "糧食") : kind == ResourceKind.Food ? UiText.T("food", "食料") : kind == ResourceKind.Wood ? UiText.T("wood", "木材")
                 : kind == ResourceKind.Ore ? UiText.T("ore", "鉱石") : kind == ResourceKind.Metal ? UiText.T("metal", "金属")
                 : kind == ResourceKind.Stone ? UiText.T("stone", "石") : kind == ResourceKind.Charcoal ? UiText.T("charcoal", "木炭")
                 : kind == ResourceKind.Steel ? UiText.T("steel", "鋼") : kind.ToString();
@@ -285,7 +285,7 @@ namespace Rts.Presentation
         private static ResourceKind NextSorterKind(ResourceKind kind)
         {
             var values = new[] { ResourceKind.Ore, ResourceKind.Metal, ResourceKind.Wood, ResourceKind.Food, ResourceKind.Stone,
-                ResourceKind.Charcoal, ResourceKind.Steel };
+                ResourceKind.Charcoal, ResourceKind.Steel, ResourceKind.Rations };
             for (int i = 0; i < values.Length; i++) if (values[i] == kind) return values[(i + 1) % values.Length];
             return values[0];
         }

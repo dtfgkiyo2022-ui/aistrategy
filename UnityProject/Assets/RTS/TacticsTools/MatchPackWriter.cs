@@ -173,7 +173,8 @@ namespace Rts.Tactics
             var b = new StringBuilder(); b.Append('{'); Field(b, "tick", s.Tick.ToString(CultureInfo.InvariantCulture));
             b.Append(",\"factions\":["); for (int i = 0; i < s.Factions.Length; i++) { if (i != 0) b.Append(','); var f = s.Factions[i]; b.Append('{');
                 Field(b, "factionId", f.FactionId.ToString(CultureInfo.InvariantCulture)); Field(b, "soldiers", CountsJson(f.Soldiers)); Field(b, "villagers", f.Villagers.ToString(CultureInfo.InvariantCulture));
-                Field(b, "resources", "{\"Food\":" + f.Food + ",\"Wood\":" + f.Wood + ",\"Ore\":" + f.Ore + ",\"Metal\":" + f.Metal + ",\"Stone\":" + f.Stone + ",\"Gold\":" + f.Gold + ",\"Gems\":" + f.Gems + "}");
+                Field(b, "resources", "{\"Food\":" + f.Food + ",\"Wood\":" + f.Wood + ",\"Ore\":" + f.Ore + ",\"Metal\":" + f.Metal + ",\"Stone\":" + f.Stone + ",\"Gold\":" + f.Gold + ",\"Gems\":" + f.Gems + ",\"Rations\":" + f.Rations + "}");
+                Field(b, "rations", "{\"produced\":" + f.RationsProduced + ",\"consumed\":" + f.RationsConsumed + ",\"trainedSoldiers\":" + f.RationsTrainedSoldiers + ",\"healedHp\":" + f.RationsHealedHp + "}");
                 Field(b, "buildings", CountsJson(f.Buildings)); Field(b, "age", f.Age.ToString(CultureInfo.InvariantCulture)); Field(b, "civ", Quote(f.Civ)); b.Append('}'); } b.Append(']');
             Field(b, "cores", ObjectivesJson(s.Cores)); Field(b, "outposts", ObjectivesJson(s.Outposts)); b.Append('}'); return b.ToString();
         }

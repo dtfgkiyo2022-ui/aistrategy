@@ -88,6 +88,9 @@ namespace Rts.Simulation
         private const int ManualControlExtensionId = 19;
         private const int ManualControlExtensionVersion = 1;
         private const int ManualControlExtensionDataLength = sizeof(int);
+        private const int RationsExtensionId = 20;
+        private const int RationsExtensionVersion = 1;
+        private const int RationsExtensionDataLength = 15 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -114,7 +117,8 @@ namespace Rts.Simulation
             new ExtensionRegistration(AgeClockExtensionId, AgeClockExtensionVersion, AgeClockExtensionDataLength),
             new ExtensionRegistration(SiegeByAgeExtensionId, SiegeByAgeExtensionVersion, SiegeByAgeExtensionDataLength),
             new ExtensionRegistration(PushWavesExtensionId, PushWavesExtensionVersion, PushWavesExtensionDataLength),
-            new ExtensionRegistration(ManualControlExtensionId, ManualControlExtensionVersion, ManualControlExtensionDataLength)
+            new ExtensionRegistration(ManualControlExtensionId, ManualControlExtensionVersion, ManualControlExtensionDataLength),
+            new ExtensionRegistration(RationsExtensionId, RationsExtensionVersion, RationsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -674,8 +678,9 @@ namespace Rts.Simulation
                     else if (id == AgeClockExtensionId) ReadAgeClockExtension(extension, c.Economy);
                     else if (id == SiegeByAgeExtensionId) ReadSiegeByAgeExtension(extension, c.Economy);
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
-                     else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
-                   extensions.Add(extension);
+                      else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
+                    else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
+                    extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -722,7 +727,8 @@ namespace Rts.Simulation
              extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockExtensionId && !c.Economy.AgeClock);
               extensions.RemoveAll(extension => extension != null && extension.Id == SiegeByAgeExtensionId && !c.Economy.SiegeByAge);
                extensions.RemoveAll(extension => extension != null && extension.Id == PushWavesExtensionId && !c.Economy.PushWaves);
-               extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
+                extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
+                extensions.RemoveAll(extension => extension != null && extension.Id == RationsExtensionId && !c.Economy.Rations);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -873,8 +879,48 @@ namespace Rts.Simulation
                        hasManualControl = true;
                        extensions[i] = CreateManualControlExtension(c.Economy);
                    }
-               if (c.Economy.ManualControl && !hasManualControl) extensions.Add(CreateManualControlExtension(c.Economy));
-               return extensions.ToArray();
+                if (c.Economy.ManualControl && !hasManualControl) extensions.Add(CreateManualControlExtension(c.Economy));
+                bool hasRations = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == RationsExtensionId)
+                    {
+                        hasRations = true;
+                        extensions[i] = CreateRationsExtension(c.Economy);
+                    }
+                if (c.Economy.Rations && !hasRations) extensions.Add(CreateRationsExtension(c.Economy));
+                return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateRationsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Rations ? 1 : 0);
+                writer.Write(e.MillSizeCells); writer.Write(e.MillWoodCost); writer.Write(e.MillWork); writer.Write(e.MillHp);
+                writer.Write(e.MillTicks); writer.Write(e.MillFoodInput);
+                writer.Write(e.RationsPerSoldier); writer.Write(e.RationsTrainPermille);
+                writer.Write(e.RationsHealIntervalTicks); writer.Write(e.RationsHealQuietTicks); writer.Write(e.RationsHealHp);
+                writer.Write(e.RationsHealMaxPerInterval); writer.Write(e.RationsFarmMinimum); writer.Write(e.RationsFoodReserve);
+                return new ScenarioExtensionData { Id = RationsExtensionId, Version = RationsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadRationsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid rations flag.");
+                e.Rations = enabled != 0;
+                e.MillSizeCells = reader.ReadInt32(); e.MillWoodCost = reader.ReadInt32(); e.MillWork = reader.ReadInt32(); e.MillHp = reader.ReadInt32();
+                e.MillTicks = reader.ReadInt32(); e.MillFoodInput = reader.ReadInt32();
+                e.RationsPerSoldier = reader.ReadInt32(); e.RationsTrainPermille = reader.ReadInt32();
+                e.RationsHealIntervalTicks = reader.ReadInt32(); e.RationsHealQuietTicks = reader.ReadInt32(); e.RationsHealHp = reader.ReadInt32();
+                e.RationsHealMaxPerInterval = reader.ReadInt32(); e.RationsFarmMinimum = reader.ReadInt32(); e.RationsFoodReserve = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing rations extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateEarlyArmsExtension(EconomyRules e)

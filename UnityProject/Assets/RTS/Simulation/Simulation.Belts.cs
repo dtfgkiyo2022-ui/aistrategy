@@ -177,6 +177,7 @@ namespace Rts.Simulation
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
                 case ResourceKind.Steel: economy.Steel = checked(economy.Steel + amount); break;
                 case ResourceKind.BowGear: economy.BowGear = checked(economy.BowGear + amount); break;
+                case ResourceKind.Rations: economy.Rations = checked(economy.Rations + amount); break;
                 case ResourceKind.Gold: economy.Gold = checked(economy.Gold + amount); break;
             }
         }
@@ -215,7 +216,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
-            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)ResourceKind.BowGear) return;
+            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)(RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;

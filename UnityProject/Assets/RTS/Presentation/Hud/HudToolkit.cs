@@ -41,7 +41,8 @@ namespace Rts.Presentation
             TopBarResourceVisibility.ResourceKind.Gold,
             TopBarResourceVisibility.ResourceKind.Charcoal,
             TopBarResourceVisibility.ResourceKind.Steel,
-            TopBarResourceVisibility.ResourceKind.BowGear
+            TopBarResourceVisibility.ResourceKind.BowGear,
+            TopBarResourceVisibility.ResourceKind.Rations
         };
 
         private BattlefieldView view;
@@ -1838,6 +1839,7 @@ namespace Rts.Presentation
                 case TopBarResourceVisibility.ResourceKind.Charcoal: return "coal-pile";
                 case TopBarResourceVisibility.ResourceKind.Steel: return "anvil";
                 case TopBarResourceVisibility.ResourceKind.BowGear: return "quiver";
+                case TopBarResourceVisibility.ResourceKind.Rations: return "wheat";
                 default: return "";
             }
         }

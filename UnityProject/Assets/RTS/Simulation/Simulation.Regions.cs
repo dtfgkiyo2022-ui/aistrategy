@@ -193,7 +193,7 @@ namespace Rts.Simulation
                 if (line.FactionId != faction) continue;
                 uint building = line.MineId != 0 ? line.MineId : line.SmelterId != 0 ? line.SmelterId
                     : line.KilnId != 0 ? line.KilnId : line.SteelworksId != 0 ? line.SteelworksId
-                    : line.LumberCampId != 0 ? line.LumberCampId : line.FletcherId;
+                    : line.LumberCampId != 0 ? line.LumberCampId : line.FletcherId != 0 ? line.FletcherId : line.MillId;
                 if (building != 0 && building <= world.BuildingCount && RegionForBuilding(world.Buildings[building - 1]) == regionId)
                 { line.Manager = LineManager.Automatic; world.ProcessingLines[i] = line; }
             }

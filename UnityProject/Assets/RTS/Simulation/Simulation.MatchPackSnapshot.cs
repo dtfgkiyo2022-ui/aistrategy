@@ -24,6 +24,11 @@ namespace Rts.Simulation
         public int Stone { get; internal set; }
         public int Gold { get; internal set; }
         public int Gems { get; internal set; }
+        public int Rations { get; internal set; }
+        public int RationsProduced { get; internal set; }
+        public int RationsConsumed { get; internal set; }
+        public int RationsTrainedSoldiers { get; internal set; }
+        public int RationsHealedHp { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -66,6 +71,11 @@ namespace Rts.Simulation
                     Stone = economy.Stone,
                     Gold = economy.Gold,
                     Gems = economy.Gems,
+                    Rations = economy.Rations,
+                    RationsProduced = economy.RationsProduced,
+                    RationsConsumed = economy.RationsConsumed,
+                    RationsTrainedSoldiers = economy.RationsTrainedSoldiers,
+                    RationsHealedHp = economy.RationsHealedHp,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

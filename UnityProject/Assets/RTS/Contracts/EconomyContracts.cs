@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4 }
+    public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -697,6 +697,20 @@ namespace Rts.Contracts
         public long NextAgeClockTick { get; }
         /// <summary>Manual control: true while the faction's built-in late assault is stopped.</summary>
         public bool AutoAssaultOff { get; }
+        public bool RationsEnabled { get; }
+        public int Rations { get; }
+        public int MillWoodCost { get; }
+        public int MillSizeCells { get; }
+        public int MillTicks { get; }
+        public int MillFoodInput { get; }
+        public int RationsPerSoldier { get; }
+        public int RationsTrainPermille { get; }
+        public int RationsHealIntervalTicks { get; }
+        public int RationsHealQuietTicks { get; }
+        public int RationsHealHp { get; }
+        public int RationsHealMaxPerInterval { get; }
+        public int RationsFarmMinimum { get; }
+        public int RationsFoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -732,10 +746,18 @@ namespace Rts.Contracts
              bool beltComponents = false, int fastBeltWoodCost = 0, int fastBeltTicksPerCell = 0,
              int splitterWoodCost = 0, int sorterWoodCost = 0, int undergroundBeltWoodCost = 0,
              int undergroundBeltMaxLength = 0, int storageWoodCost = 0, int storageSizeCells = 0, int storageCapacity = 0,
-             long nextAgeClockTick = 0, bool autoAssaultOff = false)
+             long nextAgeClockTick = 0, bool autoAssaultOff = false,
+             bool rationsEnabled = false, int rations = 0, int millWoodCost = 0, int millSizeCells = 0,
+             int millTicks = 0, int millFoodInput = 0, int rationsPerSoldier = 0, int rationsTrainPermille = 0,
+             int rationsHealIntervalTicks = 0, int rationsHealQuietTicks = 0, int rationsHealHp = 0,
+             int rationsHealMaxPerInterval = 0, int rationsFarmMinimum = 0, int rationsFoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
+            RationsEnabled = rationsEnabled; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
+            MillTicks = millTicks; MillFoodInput = millFoodInput; RationsPerSoldier = rationsPerSoldier; RationsTrainPermille = rationsTrainPermille;
+            RationsHealIntervalTicks = rationsHealIntervalTicks; RationsHealQuietTicks = rationsHealQuietTicks; RationsHealHp = rationsHealHp;
+            RationsHealMaxPerInterval = rationsHealMaxPerInterval; RationsFarmMinimum = rationsFarmMinimum; RationsFoodReserve = rationsFoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

@@ -145,7 +145,8 @@ namespace Rts.Providers
                 string label = line == nameof(ProcessingLineKind.CoreMetal) ? "金属" :
                     line == nameof(ProcessingLineKind.Steel) ? "鋼" :
                     line == nameof(ProcessingLineKind.CoreWood) ? "木材" :
-                    line == nameof(ProcessingLineKind.BowGear) ? "弓具" : line;
+                    line == nameof(ProcessingLineKind.BowGear) ? "弓具" :
+                    line == nameof(ProcessingLineKind.Rations) ? "糧食" : line;
                 criteria.Add(JsonString(line) + ":" + JsonString(label));
             }
             criteria.Add("\"unknown\":\"わからない\"");

@@ -177,6 +177,12 @@ namespace Rts.Simulation
         /// for each food point within FarmFoodReach metres and once more with river within FarmRiverReach, never under FarmMinTicks.</summary>
         public int FarmSizeCells = 2, FarmWoodCost = 80, FarmWork = 200, FarmHp = 400;
         public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
+        /// <summary>Rations: agrarian mills turn food into stock used for soldier training and quiet-time healing.</summary>
+        public bool Rations;
+        public int MillSizeCells = 2, MillWoodCost = 80, MillWork = 200, MillHp = 400, MillTicks = 80, MillFoodInput = 3;
+        public int RationsPerSoldier = 1, RationsTrainPermille = 700;
+        public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
+        public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

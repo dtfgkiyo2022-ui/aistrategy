@@ -32,7 +32,8 @@ namespace Rts.Simulation
                     string n="Soldiers["+p.Initial.Id.ToString(CultureInfo.InvariantCulture)+"].";
                     w.Value(n+"Id",p.Initial.Id); w.Value(n+"FactionId",p.Initial.FactionId); w.Value(n+"ArmyId",p.Initial.ArmyId); w.Value(n+"Kind",(byte)p.Initial.Kind);
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
-                    w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
+                     w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
+                     if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
@@ -112,6 +113,14 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
+                if (RationsOn)
+                {
+                    w.Value(n + "Rations", e.Rations);
+                    w.Value(n + "RationsProduced", e.RationsProduced);
+                    w.Value(n + "RationsConsumed", e.RationsConsumed);
+                    w.Value(n + "RationsTrainedSoldiers", e.RationsTrainedSoldiers);
+                    w.Value(n + "RationsHealedHp", e.RationsHealedHp);
+                }
             }
             if (RegionsOn)
             {
@@ -157,6 +166,12 @@ namespace Rts.Simulation
                         var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
                         w.Value(n + "QueueKinds.Count", (uint)kinds.Length);
                         for (int q = 0; q < kinds.Length; q++) w.Value(n + "QueueKinds[" + q.ToString(CultureInfo.InvariantCulture) + "]", (byte)kinds[q]);
+                        if (RationsOn)
+                        {
+                            var rationed = b.QueueRations ?? Array.Empty<bool>();
+                            w.Value(n + "QueueRations.Count", (uint)rationed.Length);
+                            for (int q = 0; q < rationed.Length; q++) w.Value(n + "QueueRations[" + q.ToString(CultureInfo.InvariantCulture) + "]", rationed[q]);
+                        }
                     }
                     if (b.Kind == BuildingKind.Bridge)
                     {
@@ -255,6 +270,7 @@ namespace Rts.Simulation
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
                     w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
+                    if (RationsOn) w.Value(n + "MillId", line.MillId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

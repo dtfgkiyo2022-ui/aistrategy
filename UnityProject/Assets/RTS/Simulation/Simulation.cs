@@ -356,6 +356,7 @@ namespace Rts.Simulation
                 {
                     var enemy = world.Soldiers[target];
                     if (!enemy.Alive || enemy.Initial.FactionId == s.Initial.FactionId || !IsVisibleTo(s.Initial.FactionId, enemy.Position) || !InRange(s.Position, enemy.Position, s.Parameters.Range)) continue;
+                    if (RationsOn) { s.LastCombatTick = world.Tick; world.Soldiers[target].LastCombatTick = world.Tick; }
                     if (s.Initial.Kind == UnitKind.Monk)
                     {
                         // V3-5 #22: conversion is a progress tick, not combat damage. A target accepts at most one
@@ -388,12 +389,13 @@ namespace Rts.Simulation
                         soldierDamage[target] = checked(soldierDamage[target] + damage);
                     }
                 }
-                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { AddRaidDamage(ref s); continue; }
+                else if (s.TargetKind == TargetVillager || s.TargetKind == TargetBuilding || s.TargetKind == TargetBelt) { if (RationsOn) s.LastCombatTick = world.Tick; AddRaidDamage(ref s); continue; }
                 else
                 {
                     var core = world.Cores[target];
                     if (core.Hp <= 0 || core.Definition.FactionId == s.Initial.FactionId
                         || !IsVisibleTo(s.Initial.FactionId, core.Definition.Position) || !InRange(s.Position, core.Definition.Position, s.Parameters.Range + world.Config.Rules.CoreRadius)) continue;
+                    if (RationsOn) s.LastCombatTick = world.Tick;
                     coreDamage[target] = checked(coreDamage[target] + SanctuaryDamage(s.Initial.FactionId, SiegeDamage(s)));
                 }
                 s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);

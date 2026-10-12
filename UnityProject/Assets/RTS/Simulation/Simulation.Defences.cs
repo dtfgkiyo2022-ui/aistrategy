@@ -128,6 +128,7 @@ namespace Rts.Simulation
                 {
                     int shot = TollgateDefenceDamage(world.Soldiers[best].Initial.FactionId, world.Soldiers[best].Position, TowerShot(b.FactionId, b.Kind));
                     soldierDamage[best] = checked(soldierDamage[best] + shot);
+                    if (RationsOn) world.Soldiers[best].LastCombatTick = world.Tick;
                     b.Timer = interval - 1;
                     b.Shots++;
                     continue;
@@ -235,6 +236,7 @@ namespace Rts.Simulation
                         var enemy = world.Soldiers[soldierIndex];
                         int shot = TollgateDefenceDamage(enemy.Initial.FactionId, enemy.Position, rules.CoreDefenceDamage);
                         soldierDamage[soldierIndex] = checked(soldierDamage[soldierIndex] + shot);
+                        if (RationsOn) world.Soldiers[soldierIndex].LastCombatTick = world.Tick;
                     }
                 }
                 if (targets.Count > 0) core.DefenceTimer = rules.CoreDefenceIntervalTicks - 1;

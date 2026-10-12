@@ -104,7 +104,7 @@ namespace Rts.Providers
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
                 ["location"] = NullableEnum(goals),
-                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear" }),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations" }),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }),
                 ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["tacticParam"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name)),
@@ -133,7 +133,7 @@ namespace Rts.Providers
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
                 ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
-                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear" }),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations" }),
                 ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
                 ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
@@ -224,7 +224,7 @@ sayの返事
 - economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、PlaceBuilding、Train、CancelTrain、RequestLineです。区域担当を変えるときはregionとcontrolを使います。
 - 全体の内政方針はregion=null、区域ごとの内政方針はregionに区域名を入れます。policyはMilitary（軍事）、Growth（経済・内政重視）、Balanced（均衡）です。入力の「兵の生産を優先」「軍事重視」はMilitary、「村人を増やす」「稼ぎを伸ばす」「内政を優先」はGrowthにします。
 - PlaceBuildingではbuildingとlocationを使います。場所を指定しない「もう一つ建てる」はlocation=お任せです。名前表の場所の近くならその場所名をlocationにします。
-- RequestLineではlineにCoreMetal、Steel、CoreWood、BowGearのいずれか、regionに名前表の自軍区域を入れます。「北の鉱山から鋼のラインを作って」のように資源地点が指定された場合も、その資源地点を含む区域をregionにします。区域が名前表にない場合だけ、名前表の地点をlocationに入れます。RequestLineは自動内政を止めず、指定区域または地点の資源に近い順で自動配置を依頼します。
+- RequestLineではlineにCoreMetal、Steel、CoreWood、BowGear、Rationsのいずれか、regionに名前表の自軍区域を入れます。「北の鉱山から鋼のラインを作って」のように資源地点が指定された場合も、その資源地点を含む区域をregionにします。区域が名前表にない場合だけ、名前表の地点をlocationに入れます。RequestLineは自動内政を止めず、指定区域または地点の資源に近い順で自動配置を依頼します。
 - Trainではunitとcountを使います。producerが指定されたときだけ名前表の建物名を使い、指定がない村人の訓練などではproducer=nullにします。CancelTrainはproducerを使います。
 - AdvanceAgeではcivを使います。文明が指定されない「次の時代へ」は、現在の文明やルールを確認できないためunknown=trueにします。
 
@@ -298,7 +298,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
         public const string StableInstructionsShort = @"
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
 sayは参謀の短い返事です。何をするかと理由を丁寧語で1〜2文、80字以内にしてください。命令の列挙はsayに書かず、足りない情報は聞き返してください。
-kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、RequestLine（ラインを頼む）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。RequestLineではline=CoreMetal/Steel/CoreWood/BowGear、region=区域名またはlocation=地点名を使います。不要な項目は空文字にしてください。
+kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、RequestLine（ラインを頼む）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。RequestLineではline=CoreMetal/Steel/CoreWood/BowGear/Rations、region=区域名またはlocation=地点名を使います。不要な項目は空文字にしてください。
 全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
 戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。定義された合図を送る命令はkind=SendTacticSignal、tacticSignalと、必要ならtacticSignalX/tacticSignalZを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
 戦術に合図があり、指示がその合図の表示名や意味に当たるとき（例：合図「allIn（総攻撃）」に「総攻撃して」）は、目標が書かれていなくても必ずkind=SendTacticSignalにします。
@@ -860,6 +860,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 lines.Add(nameof(ProcessingLineKind.CoreWood));
                 if (economy.Age >= 2) lines.Add(nameof(ProcessingLineKind.BowGear));
             }
+            if (economy.RationsEnabled && economy.Civ == CivKind.Agrarian && economy.Age >= 1)
+                lines.Add(nameof(ProcessingLineKind.Rations));
             return lines.AsReadOnly();
         }
 
@@ -881,6 +883,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 case BuildingKind.Mine: return "鉱山";
                 case BuildingKind.Smelter: return "溶鉱炉";
                 case BuildingKind.Farm: return "農場";
+                case BuildingKind.Mill: return "製粉所";
                 case BuildingKind.House: return "住居";
                 case BuildingKind.DropSite: return "資源拠点";
                 case BuildingKind.Wall: return "壁";
@@ -980,6 +983,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 b.Append("自軍内政: 食料=").Append(frame.Economy.Food).Append(" 木材=").Append(frame.Economy.Wood)
                     .Append(" 人口=").Append(frame.Economy.Population).Append('/').Append(frame.Economy.PopulationCap)
                     .Append(" 自動=").Append(frame.Economy.AutoEconomy ? "オン" : "オフ");
+                if (frame.Economy.RationsEnabled)
+                    b.Append(" 糧食=").Append(frame.Economy.Rations);
                 var buildingCounts = frame.Economy.Buildings.Where(x => x.FactionId == frame.FactionId).GroupBy(x => x.Kind)
                     .OrderBy(x => (int)x.Key).Select(x => BuildingName(x.Key) + x.Count().ToString(CultureInfo.InvariantCulture));
                 b.Append(" 建物=").Append(string.Join(",", buildingCounts));
@@ -1584,6 +1589,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "鋼": case "スチール": mapped = ProcessingLineKind.Steel; break;
                     case "コア木材": case "木材": mapped = ProcessingLineKind.CoreWood; break;
                     case "弓具": case "弓": mapped = ProcessingLineKind.BowGear; break;
+                    case "糧食": case "配給": mapped = ProcessingLineKind.Rations; break;
                 }
             }
             if (mapped == null) return false;

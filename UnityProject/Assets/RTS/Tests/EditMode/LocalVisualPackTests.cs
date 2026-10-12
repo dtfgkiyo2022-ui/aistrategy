@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using Rts.Application;
 using Rts.Contracts;
 using Rts.Presentation;
+using Rts.Simulation;
 using UnityEngine;
 
 namespace Rts.Tests.EditMode
@@ -236,6 +238,35 @@ namespace Rts.Tests.EditMode
                 LocalVisualPack.GetBuildingConstructionStage(false, 50, 100));
             Assert.AreEqual(LocalVisualPack.BuildingConstructionStage.Finished,
                 LocalVisualPack.GetBuildingConstructionStage(true, 100, 100));
+        }
+
+        [Test]
+        public void AgrarianMillUsesGranaryModelsAndTopBarShowsRations()
+        {
+            Assert.AreEqual(
+                "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/models/buildings/Granary.FBX",
+                LocalVisualPack.BuildingAssetPath(BuildingKind.Mill));
+            Assert.That(LocalVisualPack.BuildingConstructionAssetPath(BuildingKind.Mill, 0), Does.EndWith("Granary_0.FBX"));
+            Assert.That(LocalVisualPack.BuildingConstructionAssetPath(BuildingKind.Mill, 1), Does.EndWith("Granary_1.FBX"));
+
+            var scenario = MapGenerator.GenerateTerrain(7301UL, false, true);
+            scenario.Economy.Enabled = true;
+            scenario.Economy.Ages = true;
+            scenario.Economy.Industry = true;
+            scenario.Economy.ProcessingChain = true;
+            scenario.Economy.Rations = true;
+            scenario.Economy.AdvanceFoodCost = 0;
+            scenario.Economy.AdvanceWoodCost = 0;
+            scenario.Economy.AdvanceTicks = 1;
+            var simulation = new Rts.Simulation.Simulation(scenario);
+            var gateway = new CommandGateway(simulation);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Agrarian));
+            gateway.Step();
+            gateway.Step();
+
+            var entries = new List<TopBarResourceVisibility.ResourceEntry>();
+            TopBarResourceVisibility.Fill(simulation.Capture(1).Economy, entries);
+            Assert.IsTrue(entries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Rations));
         }
 
         [Test]

@@ -36,7 +36,12 @@ namespace Rts.Simulation
                 return;
             }
             if (TryDecideRequestedLine(faction)) return;
-            if (FarmingAllowed(faction)) { DecideFarms(faction); return; }
+            if (FarmingAllowed(faction))
+            {
+                DecideFarms(faction);
+                if (RationsAllowed(faction)) DecideRations(faction);
+                return;
+            }
             if (FishingAllowed(faction)) { DecideFishingHarbor(faction); return; }
             if (ForestryAllowed(faction))
             {
@@ -628,6 +633,55 @@ namespace Rts.Simulation
                 return world.NextBuildingId - 1;
             }
             return 0;
+        }
+
+        private void DecideRations(uint faction)
+        {
+            if (!RationsAllowed(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            int farms = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+            var rules = world.Config.Economy;
+            if (farms < rules.RationsFarmMinimum || economy.Food < rules.RationsFoodReserve) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Rations);
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            ref var line = ref world.ProcessingLines[index];
+            if (!BuildingReady(line.MillId))
+            {
+                if (BuildingPending(line.MillId) || economy.Wood < rules.MillWoodCost) return;
+                uint id = PlaceMill(faction);
+                if (id != 0) line.MillId = id;
+                return;
+            }
+            var mill = world.Buildings[line.MillId - 1];
+            bool whole = LayRationsLine(faction, index, mill);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceMill(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.MillSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Mill, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayRationsLine(uint faction, int lineIndex, BuildingState mill)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(mill), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
         }
 
         private bool LayForestryCoreLine(uint faction, int lineIndex, BuildingState camp)

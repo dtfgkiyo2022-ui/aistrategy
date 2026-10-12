@@ -105,6 +105,7 @@ namespace Rts.Tactics
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeAutoTick/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
+                ("economy.rations", "糧食。農耕の文明だけが製粉所で作り、兵の訓練短縮と静穏時の回復に使う"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("orders[]", "自陣営の有効な命令。id/source/kind/target/goal/status/acceptedTick/applyTick。idの昇順"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
@@ -128,7 +129,7 @@ namespace Rts.Tactics
 
         private static IEnumerable<EnumRow> EnumRows()
         {
-            var types = new[] { typeof(UnitKind), typeof(BuildingKind), typeof(ResourceKind), typeof(CivKind), typeof(TechKind), typeof(PolicyKind), typeof(GoalKind), typeof(ScopeKind), typeof(EndKind), typeof(CommandSource), typeof(CommandStatus), typeof(EconomyPolicy), typeof(EconomyTargetKind), typeof(EconomyCommandKind), typeof(RegionControl), typeof(RegionCenterKind), typeof(ExpireFlags), typeof(Facing), typeof(RaidTargetKind), typeof(CaravanStopReason) };
+            var types = new[] { typeof(UnitKind), typeof(BuildingKind), typeof(ResourceKind), typeof(ProcessingLineKind), typeof(CivKind), typeof(TechKind), typeof(PolicyKind), typeof(GoalKind), typeof(ScopeKind), typeof(EndKind), typeof(CommandSource), typeof(CommandStatus), typeof(EconomyPolicy), typeof(EconomyTargetKind), typeof(EconomyCommandKind), typeof(RegionControl), typeof(RegionCenterKind), typeof(ExpireFlags), typeof(Facing), typeof(RaidTargetKind), typeof(CaravanStopReason) };
             foreach (var type in types)
                 yield return new EnumRow { Name = type.Name, Values = Enum.GetValues(type).Cast<Enum>().Select(x => x.ToString()).ToArray() };
             yield return new EnumRow { Name = "ExtendedTechKind", Values = new[] { "Bridgeworks", "SiegeDeployment", "FishingNet", "DriedFish", "DeepShaft", "MountainFort", "Sermon", "MartyrBlessing", "GateDefence", "GateNetwork", "MarketFestivity", "CitizenMilitia", "Pilgrimage", "HolyRelic" } };
@@ -161,6 +162,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.GrandHouse, e.GrandHouseWoodCost, 0, e.GrandHouseWork); Add(rows, BuildingKind.Shrine, e.ShrineWoodCost, e.ShrineStoneCost, e.ShrineWork);
             Add(rows, BuildingKind.Town, e.TownWoodCost, e.TownStoneCost, e.TownWork);
             Add(rows, BuildingKind.Storage, e.StorageWoodCost, 0, e.StorageWork);
+            Add(rows, BuildingKind.Mill, e.MillWoodCost, 0, e.MillWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 
