@@ -308,7 +308,7 @@ namespace Rts.Simulation
         public int SiegeAge0Permille = 100, SiegeAge1Permille = 250, SiegeAge2Permille = 600, SiegeAge3Permille = 4000;
         /// <summary>V3-32.33: gather automatic late pushes into deterministic attack waves.</summary>
         public bool PushWaves;
-        public int WaveStagingDistance = 25, WaveSize = 24, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 350;
+        public int WaveStagingDistance = 25, WaveSize = 24, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 200;
         /// <summary>Manual control: allows a faction to stop its built-in late assault.</summary>
         public bool ManualControl;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
