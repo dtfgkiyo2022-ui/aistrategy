@@ -287,7 +287,7 @@ namespace Rts.Simulation
         public int SiegeAge0Permille = 100, SiegeAge1Permille = 250, SiegeAge2Permille = 600, SiegeAge3Permille = 4000;
         /// <summary>V3-32.33: gather automatic late pushes into deterministic attack waves.</summary>
         public bool PushWaves;
-        public int WaveStagingDistance = 25, WaveSize = 20, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 350;
+        public int WaveStagingDistance = 25, WaveSize = 24, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 350;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

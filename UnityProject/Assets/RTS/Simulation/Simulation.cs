@@ -152,13 +152,13 @@ namespace Rts.Simulation
                 // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
                 bool authoritativeAssault = IsLatePushAttack(a.Definition.Id)
                     && (IsPushWaveAssaultSoldier(s.Initial.Id) || !PushWavesOn);
-                if (authoritativeAssault && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core)
+                if (authoritativeAssault && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core
+                    && (!PushWavesOn || intent.TargetContactId == 0))
                 {
                     bool inCoreRange = InRange(s.Position, world.Cores[a.Goal.Id - 1].Definition.Position,
                         s.Parameters.Range + world.Config.Rules.CoreRadius);
-                    // Do not let a visible soldier pull a committed core assault off its route. The normal Tactics
-                    // priority is preserved everywhere else; here the mission remains the core, and the core becomes
-                    // the actual target only once the ordinary attack envelope is reached.
+                    // Keep the assault route fixed when normal Tactics has no unit to fight. A contact selected by
+                    // Tactics above remains authoritative, so a soldier in engagement range attacks soldiers first.
                     intent = new ArmyIntent(a.Definition.Id, world.Cores[a.Goal.Id - 1].Definition.Position,
                         0, inCoreRange ? a.Goal : default, false);
                 }

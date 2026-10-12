@@ -147,11 +147,81 @@ namespace Rts.Core.Tests
             {
                 sim.Step(tick, Array.Empty<ScheduledInput>());
                 events.AddRange(WaveEvents(sim));
-                if (tick < 9) Assert.That(events.Any(e => e.Value == 2), Is.False, "tick " + tick);
+                long gathering = events.Where(e => e.Value == 1).Select(e => e.Tick).DefaultIfEmpty(long.MaxValue).Min();
+                if (tick < gathering + scenario.Economy.WaveMaxWaitTicks)
+                    Assert.That(events.Any(e => e.Value == 2), Is.False, "tick " + tick);
             }
             Assert.That(events.Any(e => e.Value == 1), Is.True, "gathering was not reported");
             Assert.That(events.Any(e => e.Value == 2), Is.True,
                 "timeout did not start an eligible wave: " + string.Join(",", events.Select(e => e.Tick + ":" + e.Value)));
+        }
+
+        [Test]
+        public void PushWavesStartInAgeTwoWhenTheLatePushLatchFires()
+        {
+            var scenario = WaveScenario();
+            scenario.Economy.AgeClockTicks1 = 1000;
+            scenario.Economy.AgeClockTicks2 = 2000;
+            scenario.Economy.AgeClockTicks3 = 3000;
+            scenario.Economy.WaveSize = 1000;
+            var sim = new Battle(scenario);
+            var events = new List<GameEvent>();
+            for (long tick = 1; tick <= 4; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                events.AddRange(WaveEvents(sim));
+            }
+            Assert.That(sim.Capture(1).Economy.Age, Is.LessThan(3));
+            Assert.That(events.Any(e => e.Value == 1), Is.True,
+                "the late-push latch must start gathering before age 3: "
+                + string.Join(",", events.Select(e => e.Tick + ":" + e.Value)));
+        }
+
+        [Test]
+        public void PushWavesAssaultKeepsNormalSoldierEngagement()
+        {
+            var scenario = WaveScenario();
+            scenario.Economy.AgeClockTicks1 = 1000;
+            scenario.Economy.AgeClockTicks2 = 2000;
+            scenario.Economy.AgeClockTicks3 = 3000;
+            scenario.Economy.WaveSize = 1;
+            scenario.Economy.WaveMinSize = 1;
+            SetAdjacentCombatants(scenario);
+            var sim = new Battle(scenario);
+            for (long tick = 1; tick <= 3; tick++) sim.Step(tick, Array.Empty<ScheduledInput>());
+
+            var phase = DiagnosticComparison.Fields(sim.CaptureDiagnostic())
+                .First(p => p.Key == "PushWaves.Faction1.Phase").Value;
+            Assert.That(phase, Is.EqualTo("2"), "the pair must be in assault");
+            Assert.That(sim.Capture(1).Units.Any(u => u.IsOwn && u.IsAttacking), Is.True,
+                "an assault soldier in range must attack the enemy soldier, not only advance to the core");
+        }
+
+        [Test]
+        public void PushWavesGatheringAlsoFightsAUnitThatComesIntoRange()
+        {
+            var scenario = WaveScenario();
+            scenario.Economy.AgeClockTicks1 = 1000;
+            scenario.Economy.AgeClockTicks2 = 2000;
+            scenario.Economy.AgeClockTicks3 = 3000;
+            scenario.Economy.WaveSize = 1000;
+            SetAdjacentCombatants(scenario);
+            var sim = new Battle(scenario);
+            bool sawGatheringAttack = false;
+            for (long tick = 1; tick <= 3; tick++) sim.Step(tick, Array.Empty<ScheduledInput>());
+            for (long tick = 4; tick <= 25; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                var fields = DiagnosticComparison.Fields(sim.CaptureDiagnostic());
+                string currentPhase = fields.First(p => p.Key == "PushWaves.Faction1.Phase").Value;
+                sawGatheringAttack |= currentPhase == "1" && fields.Any(p => p.Key.StartsWith("Soldiers[", StringComparison.Ordinal)
+                    && p.Key.EndsWith(".TargetKind", StringComparison.Ordinal) && p.Value == "1");
+            }
+            var phase = DiagnosticComparison.Fields(sim.CaptureDiagnostic())
+                .First(p => p.Key == "PushWaves.Faction1.Phase").Value;
+            Assert.That(phase, Is.EqualTo("1"), "the pair must still be gathering");
+            Assert.That(sawGatheringAttack, Is.True,
+                "gathering soldiers must fight an enemy that reaches the engagement range");
         }
 
         [Test]
@@ -227,7 +297,8 @@ namespace Rts.Core.Tests
             sim.Step(2, Array.Empty<ScheduledInput>());
             var armyId = sim.Capture(1).Observation.OwnArmies.OrderBy(a => a.Id).First().Id;
             var target = new ScopeKey(1, ScopeKind.Army, armyId);
-            var order = new PolicyOrder(1, 1, source, target, PolicyKind.Focus,
+            ulong commandId = 1000;
+            var order = new PolicyOrder(commandId, commandId, source, target, PolicyKind.Focus,
                 new PolicyGoal(GoalKind.Core, 2, default), 50, new LossBudget(300),
                 new EndCondition(EndKind.UntilReplaced, 0), 0, sim.Revision(target),
                 sim.Versions(target).Where(v => !v.Scope.Equals(target)).ToArray(), 2,
@@ -275,6 +346,14 @@ namespace Rts.Core.Tests
             e.LatePushAdvantageAfterTicks = 100000;
             scenario.Cores[0].Hp = scenario.Cores[1].Hp = 1000000;
             return scenario;
+        }
+
+        private static void SetAdjacentCombatants(ScenarioDefinition scenario)
+        {
+            var first = scenario.Soldiers[0];
+            var second = scenario.Soldiers[20];
+            second.Position = new SimPoint(first.Position.X + Fix64.FromInt(1), first.Position.Z);
+            scenario.Soldiers[20] = second;
         }
 
         private static IEnumerable<GameEvent> WaveEvents(Battle sim)

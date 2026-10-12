@@ -97,7 +97,9 @@ namespace Rts.Simulation
                 bool reachedThirdAge = rules.SiegeByAge && world.Economies[faction - 1].Age >= 3;
                 if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, rules)))
                     latePushLatched[faction - 1] = true;
-                if (!latePushLatched[faction - 1] || !rules.SiegeByAge || world.Economies[faction - 1].Age < 3) continue;
+                // The late-push latch is the start signal. Once it fires, waves also operate in age 2;
+                // SiegeByAge scales that assault instead of delaying it until age 3.
+                if (!latePushLatched[faction - 1]) continue;
 
                 var wave = pushWaveStates[faction - 1];
                 if (wave.Phase == PushWavePhase.Inactive)
@@ -250,6 +252,18 @@ namespace Rts.Simulation
             if (!IsPushWaveStagingArmy(armyId)) return false;
             uint faction = world.Armies[armyId - 1].Definition.FactionId;
             return pushWaveStates[faction - 1].Phase != PushWavePhase.Assault;
+        }
+
+        private bool IsPushWaveDoctrine(PolicyOrder order)
+        {
+            if (!PushWavesOn || order.Source != CommandSource.Doctrine || order.Kind != PolicyKind.Focus
+                || order.Target.Kind != ScopeKind.Army) return false;
+            uint faction = world.Armies[order.Target.Id - 1].Definition.FactionId;
+            var wave = pushWaveStates[faction - 1];
+            if (wave.Phase == PushWavePhase.Inactive) return false;
+            // During an active wave every automatic army-focus doctrine in the faction is wave-owned. Do not
+            // require the point/core payload here: this helper is also called while a replacement is pending.
+            return true;
         }
 
         private void WaveNotice(uint faction, PushWavePhase phase)
