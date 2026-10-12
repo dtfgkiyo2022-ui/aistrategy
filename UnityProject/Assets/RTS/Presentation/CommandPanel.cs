@@ -57,7 +57,9 @@ namespace Rts.Presentation
 
         private void UpdateMeasured()
         {
-            if (playerControlMode != null && Input.GetKeyDown(KeyCode.M)) playerControlMode.Toggle();
+            // Not while a text field has the keyboard: typing to the staff officer must not flip the mode.
+            if (playerControlMode != null && !UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.M))
+                playerControlMode.Toggle();
             if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
             {
                 awaitingGround = false;
