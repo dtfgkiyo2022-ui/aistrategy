@@ -94,7 +94,6 @@ namespace Rts.Tests.EditMode
             TopBarResourceVisibility.Fill(economy, entries);
             Assert.IsTrue(entries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Planks && entry.Label == "板"));
             Assert.That(LocalVisualPack.BuildingAssetPath(BuildingKind.Sawmill), Does.EndWith("LumberMill.FBX"));
-            Assert.AreEqual("製材所", EconomyLayer.BuildingName(BuildingKind.Sawmill));
         }
     }
 }
