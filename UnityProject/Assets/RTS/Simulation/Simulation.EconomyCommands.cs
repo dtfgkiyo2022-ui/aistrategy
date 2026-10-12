@@ -22,6 +22,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.SetAutoEconomy:
                     economy.AutoOff = !c.Enabled;
                     return;
+                case EconomyCommandKind.SetAutoAssault:
+                    SetAutoAssault(faction, c.Enabled);
+                    return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;

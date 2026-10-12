@@ -5,6 +5,14 @@ using UnityEngine;
 
 namespace Rts.Presentation
 {
+    /// <summary>Presentation hook for the player's persistent all-manual/automatic control mode.</summary>
+    public interface IPlayerControlMode
+    {
+        bool IsManual { get; }
+        string StatusText { get; }
+        void Toggle();
+    }
+
     /// <summary>Standard-command buttons. Builds a UserPolicyIntent and sends it only through ICommandPort.</summary>
     public sealed class CommandPanel : MonoBehaviour
     {
@@ -49,6 +57,7 @@ namespace Rts.Presentation
 
         private void UpdateMeasured()
         {
+            if (playerControlMode != null && Input.GetKeyDown(KeyCode.M)) playerControlMode.Toggle();
             if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
             {
                 awaitingGround = false;
@@ -68,6 +77,7 @@ namespace Rts.Presentation
 
         private IOpponentControl ownDoctrine;
         private ITacticControl ownTactic;
+        private IPlayerControlMode playerControlMode;
         /// <summary>Lets the player pick a doctrine for their own side too ("none" leaves the armies to the player). Null hides it.</summary>
         public IOpponentControl OwnDoctrine { get { return ownDoctrine; } set { ownDoctrine = value; } }
 
@@ -76,6 +86,9 @@ namespace Rts.Presentation
 
         /// <summary>Lets the host expose the own side's optional tactic and its diagnostics.</summary>
         public ITacticControl OwnTactic { get { return ownTactic; } set { ownTactic = value; } }
+
+        /// <summary>Lets the host expose and change the player's all-manual/automatic mode.</summary>
+        public IPlayerControlMode PlayerControlMode { get { return playerControlMode; } set { playerControlMode = value; } }
 
         /// <summary>Returns the completed match-pack path for the result overlay, if saving succeeded.</summary>
         public System.Func<string> MatchPackPathProvider;

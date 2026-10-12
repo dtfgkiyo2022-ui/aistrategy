@@ -19,7 +19,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl, IStaffControl
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl, IStaffControl, IPlayerControlMode
     {
         /// <summary>Set by the command-line bootstrap so scene hosts do not start a second match.</summary>
         public static bool SmokeMode { get; set; }
@@ -42,6 +42,10 @@ namespace Rts.UnityHost
         private PresetController own;
         private uint ownFactionId = 1;
         private OwnDoctrineChoice ownDoctrine;
+        private const string ManualControlKey = "rts.match.manualControl";
+        private bool manualControl;
+        private string rememberedOwnPreset = "maintain";
+        private ulong manualControlSequence;
 
         [SerializeField] private string enemyTactic = "";
         [SerializeField] private string ownTactic = "";
@@ -267,6 +271,45 @@ namespace Rts.UnityHost
 
         /// <summary>The result overlay's "Play again": same delay and outside-AI setting, both sides back at tick 0.</summary>
         public void RestartMatch() { matchRestartRequested = true; }
+
+        bool IPlayerControlMode.IsManual { get { return manualControl; } }
+        string IPlayerControlMode.StatusText
+        {
+            get { return manualControl ? UiText.T("Manual", "全部自分で") : UiText.T("Auto", "お任せ"); }
+        }
+        void IPlayerControlMode.Toggle() { SetManualControl(!manualControl); }
+
+        private void SetManualControl(bool manual)
+        {
+            if (manual == manualControl) return;
+            if (manual) rememberedOwnPreset = ownPreset;
+            manualControl = manual;
+            PlayerPrefs.SetInt(ManualControlKey, manual ? 1 : 0);
+            PlayerPrefs.Save();
+            if (simulation != null && gateway != null) ApplyManualControlCommands(manual, rememberedOwnPreset);
+        }
+
+        private void ApplyManualControlCommands(bool manual, string doctrine)
+        {
+            foreach (var command in PlayerControlModeCommands.For(manual, doctrine))
+            {
+                switch (command.Kind)
+                {
+                    case PlayerControlCommandKind.SetAutoEconomy:
+                        gateway.SubmitEconomy(EconomyCommand.Auto(ownFactionId, ++manualControlSequence, command.Enabled));
+                        break;
+                    case PlayerControlCommandKind.ReturnEconomyToAuto:
+                        gateway.SubmitEconomy(EconomyCommand.ReturnToAuto(ownFactionId, ++manualControlSequence));
+                        break;
+                    case PlayerControlCommandKind.SwitchOwnDoctrine:
+                        SwitchOwnDoctrine(command.Doctrine);
+                        break;
+                    case PlayerControlCommandKind.SetAutoAssault:
+                        gateway.SubmitEconomy(EconomyCommand.SetAutoAssault(ownFactionId, ++manualControlSequence, command.Enabled));
+                        break;
+                }
+            }
+        }
 
         // IOpponentControl: which doctrine the opponent runs. Reads and writes the field Begin() already uses, so
         // picking a different one and restarting is the same path a fresh match always took.
@@ -817,6 +860,8 @@ namespace Rts.UnityHost
             // An outside AI already steers the own side; a doctrine on top of it would fight it.
             own = PolicyPresets.CreateController(external != null || ownTacticSide.HasTactic ? "none" : ownPreset, ownFactionId, gateway);
             own.Initialize();
+            manualControlSequence = 0;
+            ApplyManualControlCommands(manualControl, rememberedOwnPreset);
             if (external != null)
                 gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
                     PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
@@ -831,6 +876,7 @@ namespace Rts.UnityHost
             if (panel != null)
             {
                 panel.Bind(port, viewFactionId, viewFactionId, view);
+                panel.PlayerControlMode = this;
                 panel.ExternalAi = this;
                 panel.MatchRestart = this;
                 panel.Opponent = this;
@@ -1148,13 +1194,13 @@ namespace Rts.UnityHost
             TacticHostTickResult enemyTacticResult = null;
             if (ownFactionId == 1)
             {
-                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+                if (!manualControl && ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
                 if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
             }
             else
             {
                 if (enemyTacticSide != null && enemyTacticSide.Host != null) enemyTacticResult = enemyTacticSide.Host.Tick();
-                if (ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
+                if (!manualControl && ownTacticSide != null && ownTacticSide.Host != null) ownTacticResult = ownTacticSide.Host.Tick();
             }
             if (matchPack != null)
             {
@@ -1240,6 +1286,8 @@ namespace Rts.UnityHost
             }
             // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
             UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
+            manualControl = PlayerPrefs.GetInt(ManualControlKey, 0) == 1;
+            if (!manualControl) rememberedOwnPreset = ownPreset;
             if (!smokeRunner) allCivilisations = PlayerPrefs.GetInt(AllCivilisationsKey, allCivilisations ? 1 : 0) == 1;
             if (!smokeRunner)
             {
