@@ -245,6 +245,8 @@ namespace Rts.Simulation
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
         internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations;
+        /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
+        internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;

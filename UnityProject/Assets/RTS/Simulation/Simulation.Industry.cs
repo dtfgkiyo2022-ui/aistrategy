@@ -113,7 +113,11 @@ namespace Rts.Simulation
                         b.Input -= rules.MillFoodInput;
                         b.Timer = rules.MillTicks;
                     }
-                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.RationsProduced++;
+                    }
                 }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {

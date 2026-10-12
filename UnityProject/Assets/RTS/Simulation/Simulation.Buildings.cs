@@ -701,6 +701,7 @@ namespace Rts.Simulation
                 // A full population or full armies hold the finished soldier at the door until there is room.
                 if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
                 var unit = QueueAt(b, 0);
+                bool rationed = RationsOn && QueueRationsAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
@@ -709,6 +710,7 @@ namespace Rts.Simulation
                 ApplyClass(world.SoldierCount - 1, unit);
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
+                if (rationed) world.Economies[b.FactionId - 1].RationsTrainedSoldiers++;
                 Dequeue(b.FactionId, ref b, unit);
             }
         }

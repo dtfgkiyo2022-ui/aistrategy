@@ -24,7 +24,10 @@ namespace Rts.Simulation
                         || world.Tick - soldier.LastCombatTick < rules.RationsHealQuietTicks
                         || economy.Rations < 1) continue;
                     economy.Rations = checked(economy.Rations - 1);
+                    economy.RationsConsumed++;
+                    int before = soldier.Hp;
                     soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + rules.RationsHealHp));
+                    economy.RationsHealedHp = checked(economy.RationsHealedHp + soldier.Hp - before);
                     healed++;
                 }
             }

@@ -237,7 +237,11 @@ namespace Rts.Simulation
             b.QueuedGems = checked(b.QueuedGems + c.gems);
             b.QueuedGold = checked(b.QueuedGold + c.gold);
             bool rationed = UsesRations(faction, kind) && e.Rations >= world.Config.Economy.RationsPerSoldier;
-            if (rationed) e.Rations = checked(e.Rations - world.Config.Economy.RationsPerSoldier);
+            if (rationed)
+            {
+                e.Rations = checked(e.Rations - world.Config.Economy.RationsPerSoldier);
+                e.RationsConsumed = checked(e.RationsConsumed + world.Config.Economy.RationsPerSoldier);
+            }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed);
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
@@ -247,7 +251,8 @@ namespace Rts.Simulation
                 kinds[kinds.Length - 1] = kind;
                 b.QueueKinds = kinds;
             }
-            if (AgesOn || kind == UnitKind.Monk)
+            // Only under the flag: without it no queue entry is ever rationed, and the building keeps no extra state.
+            if (RationsOn && (AgesOn || kind == UnitKind.Monk))
             {
                 var rations = b.QueueRations ?? Array.Empty<bool>();
                 Array.Resize(ref rations, rations.Length + 1);
@@ -329,7 +334,11 @@ namespace Rts.Simulation
             int goldBack = Math.Min(c.gold, b.QueuedGold);
             b.QueuedGold -= goldBack;
             e.Gold = checked(e.Gold + goldBack);
-            if (rationed) e.Rations = checked(e.Rations + world.Config.Economy.RationsPerSoldier);
+            if (rationed)
+            {
+                e.Rations = checked(e.Rations + world.Config.Economy.RationsPerSoldier);
+                e.RationsConsumed = checked(e.RationsConsumed - world.Config.Economy.RationsPerSoldier);
+            }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 

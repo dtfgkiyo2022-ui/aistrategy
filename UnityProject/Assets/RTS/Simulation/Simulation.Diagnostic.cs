@@ -113,7 +113,14 @@ namespace Rts.Simulation
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "Food", e.Food); w.Value(n + "Wood", e.Wood); w.Value(n + "Queued", e.Queued); w.Value(n + "TrainRemaining", e.TrainRemaining); w.Value(n + "AutoOff", e.AutoOff);
-                if (RationsOn) w.Value(n + "Rations", e.Rations);
+                if (RationsOn)
+                {
+                    w.Value(n + "Rations", e.Rations);
+                    w.Value(n + "RationsProduced", e.RationsProduced);
+                    w.Value(n + "RationsConsumed", e.RationsConsumed);
+                    w.Value(n + "RationsTrainedSoldiers", e.RationsTrainedSoldiers);
+                    w.Value(n + "RationsHealedHp", e.RationsHealedHp);
+                }
             }
             if (RegionsOn)
             {
