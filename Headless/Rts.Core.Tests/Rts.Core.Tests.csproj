@@ -76,6 +76,7 @@
     <Compile Include="TackTests.cs" />
     <Compile Include="PlanksTests.cs" />
     <Compile Include="BooksTests.cs" />
+    <Compile Include="PreserveTests.cs" />
     <Compile Include="CaravanTests.cs" />
     <Compile Include="CavalryTests.cs" />
     <Compile Include="CivTailChainTests.cs" />

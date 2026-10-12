@@ -182,6 +182,10 @@ namespace Rts.Simulation
             case ResourceKind.Tack: economy.Tack = checked(economy.Tack + amount); break;
                 case ResourceKind.Planks: economy.Planks = checked(economy.Planks + amount); break;
                 case ResourceKind.Books: economy.Books = checked(economy.Books + amount); break;
+                case ResourceKind.Preserves:
+                    economy.Food = checked(economy.Food + amount * world.Config.Economy.PreserveFoodValue);
+                    economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * world.Config.Economy.PreserveFoodValue);
+                    break;
                 case ResourceKind.Gold: economy.Gold = checked(economy.Gold + amount); break;
             }
         }
@@ -220,7 +224,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
-            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)(BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
+            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)(PreservesOn ? ResourceKind.Preserves : BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;

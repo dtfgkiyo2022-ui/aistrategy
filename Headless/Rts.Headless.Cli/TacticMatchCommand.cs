@@ -63,6 +63,8 @@ internal static class TacticMatchCommand
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
         ReserveCivilisation(options.GetValueOrDefault("--west-civ"), 1, gateway);
         ReserveCivilisation(options.GetValueOrDefault("--east-civ"), 2, gateway);
+        if (options.ContainsKey("--west-auto-off")) gateway.SubmitEconomy(EconomyCommand.Auto(1, 1001, false));
+        if (options.ContainsKey("--east-auto-off")) gateway.SubmitEconomy(EconomyCommand.Auto(2, 1002, false));
         using var west = CreateHost(westName, 1, source, gateway, runtimes, options.GetValueOrDefault("--west-param"));
         using var east = CreateHost(eastName, 2, source, gateway, runtimes, options.GetValueOrDefault("--east-param"));
         west?.Start(SetupJson(scenario, 1));

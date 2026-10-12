@@ -43,7 +43,7 @@ namespace Rts.Simulation
                 if (RationsAllowed(faction)) DecideRations(faction);
                 return;
             }
-            if (FishingAllowed(faction)) { DecideFishingHarbor(faction); return; }
+            if (FishingAllowed(faction)) { DecideFishingHarbor(faction); DecidePreserves(faction); return; }
             if (ForestryAllowed(faction))
             {
                 if (world.Economies[faction - 1].Age < 2) { DecideLumberCamp(faction); return; }
@@ -151,6 +151,42 @@ namespace Rts.Simulation
             if (OwnBuildingIndex(faction, BuildingKind.Harbor) >= 0 || world.Economies[faction - 1].Wood < rules.HarborWoodCost) return;
             int origin = FindHarborSite(faction);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Harbor, origin, Facing.North, 0);
+        }
+
+        private bool FishingIndustryPrerequisites(uint faction)
+        {
+            if (!CompleteBarracks(faction)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction
+                    && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)) return true;
+            }
+            return false;
+        }
+
+        private void DecidePreserves(uint faction)
+        {
+            if (!PreservesAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int racks = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
+            if (racks >= rules.PreserveMaxRacks || economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Preserves);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.DryingRackId))
+            {
+                if (BuildingPending(line.DryingRackId)) return;
+                uint id = PlaceDryingRack(faction);
+                if (id != 0) line.DryingRackId = id;
+                return;
+            }
+            var rack = world.Buildings[line.DryingRackId - 1];
+            bool whole = LayPreservesLine(faction, index, rack);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
         }
 
         private int FindHarborSite(uint faction)
@@ -704,6 +740,31 @@ namespace Rts.Simulation
         {
             var taken = TakenForOtherLines(faction, lineIndex);
             var route = BeltRoute(faction, OutputCell(mill), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
+        private uint PlaceDryingRack(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.DryingRackSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.DryingRack, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayPreservesLine(uint faction, int lineIndex, BuildingState rack)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(rack), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null) return false;
             SetLineBelts(lineIndex, route);
             return LayRoutes(faction, route);

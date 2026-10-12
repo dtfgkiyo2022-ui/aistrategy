@@ -328,6 +328,7 @@ namespace Rts.Providers
             if (line == nameof(ProcessingLineKind.Rations)) return "糧食";
             if (line == nameof(ProcessingLineKind.Planks)) return "板材";
             if (line == nameof(ProcessingLineKind.Books)) return "書物";
+            if (line == nameof(ProcessingLineKind.Preserves)) return "保存食";
             return line ?? "加工";
         }
 

@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -176,7 +176,16 @@ namespace Rts.Simulation
                 booksPerResearch: BooksAllowed(faction) ? rules.BooksPerResearch : 0,
                 bookResearchPermille: BooksAllowed(faction) ? rules.BookResearchPermille : 0,
                 bookResearchCostPermille: BooksAllowed(faction) ? rules.BookResearchCostPermille : 0,
-                bookWoodReserve: BooksAllowed(faction) ? rules.BookWoodReserve : 0);
+                bookWoodReserve: BooksAllowed(faction) ? rules.BookWoodReserve : 0,
+                preservesEnabled: PreservesAllowed(faction),
+                dryingRackWoodCost: PreservesAllowed(faction) ? rules.DryingRackWoodCost : 0,
+                dryingRackSizeCells: PreservesAllowed(faction) ? rules.DryingRackSizeCells : 0,
+                preserveTicks: PreservesAllowed(faction) ? rules.PreserveTicks : 0,
+                preserveFoodInput: PreservesAllowed(faction) ? rules.PreserveFoodInput : 0,
+                preserveFoodValue: PreservesAllowed(faction) ? rules.PreserveFoodValue : 0,
+                preserveKeepFood: PreservesAllowed(faction) ? rules.PreserveKeepFood : 0,
+                preserveMaxRacks: PreservesAllowed(faction) ? rules.PreserveMaxRacks : 0,
+                preserveWoodReserve: PreservesAllowed(faction) ? rules.PreserveWoodReserve : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)
