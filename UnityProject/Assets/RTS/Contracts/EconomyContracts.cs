@@ -42,7 +42,9 @@ namespace Rts.Contracts
         /// <summary>V3-20: removes any own belt cell, including a component.</summary>
         RemoveBeltComponent = 21,
         /// <summary>V3-6 follow-up: asks the automatic economy to build one processing line near a region or cell.</summary>
-        RequestLine = 22
+        RequestLine = 22,
+        /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
+        SetAutoAssault = 23
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -206,6 +208,10 @@ namespace Rts.Contracts
 
         public static EconomyCommand Auto(uint faction, ulong sequence, bool enabled)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoEconomy, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
+
+        /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
+        public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoAssault, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
 
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);
@@ -689,6 +695,8 @@ namespace Rts.Contracts
         public int NextAgeGoldCost { get; }
         /// <summary>Age clock: the next scheduled age tick, or 0 when the clock is off or the last age is reached.</summary>
         public long NextAgeClockTick { get; }
+        /// <summary>Manual control: true while the faction's built-in late assault is stopped.</summary>
+        public bool AutoAssaultOff { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -724,9 +732,10 @@ namespace Rts.Contracts
              bool beltComponents = false, int fastBeltWoodCost = 0, int fastBeltTicksPerCell = 0,
              int splitterWoodCost = 0, int sorterWoodCost = 0, int undergroundBeltWoodCost = 0,
              int undergroundBeltMaxLength = 0, int storageWoodCost = 0, int storageSizeCells = 0, int storageCapacity = 0,
-             long nextAgeClockTick = 0)
+             long nextAgeClockTick = 0, bool autoAssaultOff = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
+            AutoAssaultOff = autoAssaultOff;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

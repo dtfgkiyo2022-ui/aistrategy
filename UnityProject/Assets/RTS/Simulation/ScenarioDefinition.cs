@@ -288,6 +288,8 @@ namespace Rts.Simulation
         /// <summary>V3-32.33: gather automatic late pushes into deterministic attack waves.</summary>
         public bool PushWaves;
         public int WaveStagingDistance = 25, WaveSize = 24, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 350;
+        /// <summary>Manual control: allows a faction to stop its built-in late assault.</summary>
+        public bool ManualControl;
         /// <summary>Stone and metal each side starts with (maps with ages).</summary>
         public int StartStone, StartMetal;
         /// <summary>V3-5 (32 #5): a tower shoots the nearest enemy soldier (else villager) in TowerRange metres, and sees around it.</summary>

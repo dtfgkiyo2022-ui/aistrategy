@@ -91,6 +91,7 @@ namespace Rts.Presentation
         private VisualElement economyActions;
         private Label economyTitle;
         private Label economyHeaderStatus;
+        private Button manualControlToggle;
         private Label economyHint;
         private Label economyNotice;
         private Button economyTabBuild;
@@ -522,6 +523,7 @@ namespace Rts.Presentation
             economyActions = root.Q<VisualElement>("economy-actions");
             economyTitle = root.Q<Label>("economy-title");
             economyHeaderStatus = root.Q<Label>("economy-header-status");
+            manualControlToggle = root.Q<Button>("manual-control-toggle");
             economyHint = root.Q<Label>("economy-hint");
             economyNotice = root.Q<Label>("economy-notice");
             economyTabBuild = root.Q<Button>("economy-tab-build");
@@ -696,6 +698,7 @@ namespace Rts.Presentation
             economyTabResearch.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Research);
             economyTabPolicy.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Policy);
             economyTabBlueprints.clicked += () => SelectEconomyTab(EconomyPanel.Tab.Blueprints);
+            if (manualControlToggle != null) manualControlToggle.clicked += () => commandPanel?.PlayerControlMode?.Toggle();
             if (blueprintSave != null) blueprintSave.clicked += () =>
             {
                 if (economyPanel != null)
@@ -1333,6 +1336,16 @@ namespace Rts.Presentation
                 string header = UiText.T("Commands go through the economy port", "命令は内政の送り口を通ります");
                 if (economyPanel.HasSelectedVillagers) header += "  /  " + economyPanel.SelectedVillagerSummary;
                 economyHeaderStatus.text = header;
+            }
+            if (manualControlToggle != null)
+            {
+                var mode = commandPanel == null ? null : commandPanel.PlayerControlMode;
+                manualControlToggle.style.display = mode == null ? DisplayStyle.None : DisplayStyle.Flex;
+                if (mode != null)
+                {
+                    manualControlToggle.text = mode.StatusText + "  [M]";
+                    manualControlToggle.EnableInClassList("is-selected", mode.IsManual);
+                }
             }
             RefreshEconomyTabs();
             bool blueprintsSelected = economyPanel.SelectedTab == EconomyPanel.Tab.Blueprints;

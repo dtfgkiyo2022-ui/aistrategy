@@ -657,6 +657,27 @@
     -unity-text-align: middle-right;
 }
 
+.manual-control-toggle {
+    flex-shrink: 0;
+    min-width: 144px;
+    height: 26px;
+    margin: 0 0 0 4px;
+    padding: 0 5px 0 5px;
+    color: var(--hud-button-text);
+    background-color: var(--hud-button);
+    border-width: var(--hud-border-width);
+    border-color: var(--hud-panel-border);
+    border-radius: var(--hud-radius);
+    font-size: var(--hud-small-font-size);
+    white-space: nowrap;
+    -unity-text-align: middle-center;
+}
+
+.manual-control-toggle:hover,
+.manual-control-toggle.is-selected {
+    background-color: var(--hud-accent);
+}
+
 .economy-tabs {
     flex-direction: row;
     flex-shrink: 0;

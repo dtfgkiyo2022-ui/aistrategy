@@ -6,6 +6,7 @@
             <ui:VisualElement class="economy-header">
                 <ui:Label name="economy-title" class="hud-heading economy-title" text="内政" />
                 <ui:Label name="economy-header-status" class="economy-header-status" />
+                <ui:Button name="manual-control-toggle" class="manual-control-toggle" />
             </ui:VisualElement>
             <ui:VisualElement name="economy-tabs" class="economy-tabs">
                 <ui:Button name="economy-tab-build" class="economy-tab" text="建てる" />

@@ -27,8 +27,36 @@ namespace Rts.Simulation
 
         private readonly bool[] latePushLatched = new bool[2];
         private readonly PushWaveState[] pushWaveStates = { new PushWaveState(), new PushWaveState() };
+        private readonly bool[] autoAssaultOff = new bool[2];
         private bool LatePushOn => world.Config.Economy.Enabled && world.Config.Economy.LatePush;
         private bool PushWavesOn => LatePushOn && world.Config.Economy.PushWaves;
+        private bool ManualControlOn => world.Config.Economy.Enabled && world.Config.Economy.ManualControl;
+
+        private bool AutoAssaultOffFor(uint faction)
+            => ManualControlOn && faction >= 1 && faction <= autoAssaultOff.Length && autoAssaultOff[faction - 1];
+
+        private void SetAutoAssault(uint faction, bool enabled)
+        {
+            if (!ManualControlOn || faction < 1 || faction > autoAssaultOff.Length) return;
+            if (enabled)
+            {
+                autoAssaultOff[faction - 1] = false;
+                return;
+            }
+
+            autoAssaultOff[faction - 1] = true;
+            foreach (var command in liveCommands.Where(c => !Terminal(c) && IsBuiltInAssaultDoctrine(c, faction)).ToArray())
+                EndCommand(command, CommandStatus.Cancelled, ReasonCode.Superseded);
+            pushWaveStates[faction - 1] = new PushWaveState();
+        }
+
+        private bool IsBuiltInAssaultDoctrine(CommandState command, uint faction)
+        {
+            if (command.Order.Source != CommandSource.Doctrine || command.Order.Target.FactionId != faction) return false;
+            if (command.Order.Kind != PolicyKind.Focus) return false;
+            if (command.Order.Target.Kind == ScopeKind.All && command.Order.Goal.Kind == GoalKind.Core) return true;
+            return PushWavesOn && IsPushWaveDoctrine(command.Order);
+        }
 
         /// <summary>
         /// Creates the built-in late-game policy from the last published faction observation. It is deliberately
@@ -44,6 +72,7 @@ namespace Rts.Simulation
             }
             for (uint faction = 1; faction <= 2; faction++)
             {
+                if (AutoAssaultOffFor(faction)) continue;
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= 3;
@@ -91,6 +120,7 @@ namespace Rts.Simulation
         {
             for (uint faction = 1; faction <= 2; faction++)
             {
+                if (AutoAssaultOffFor(faction)) continue;
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 var rules = world.Config.Economy;

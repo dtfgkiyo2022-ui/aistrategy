@@ -590,6 +590,7 @@ namespace Rts.Simulation
             Require(!e.PushWaves || (e.Enabled && e.Ages && e.LatePush && e.SiegeByAge && e.WaveStagingDistance > 0
                 && e.WaveSize > 0 && e.WaveMaxWaitTicks > 0 && e.WaveMinSize > 0 && e.WaveMinSize <= e.WaveSize
                 && e.WaveRetreatPermille > 0 && e.WaveRetreatPermille <= 1000), "Invalid push-wave rules.");
+            Require(!e.ManualControl || (e.Enabled && e.LatePush), "Manual control requires the economy and late-push rules.");
             Require(!e.FishingCiv || (e.Enabled && e.Ages && e.FishingEnabled && e.HarborSizeCells > 0 && e.HarborSizeCells <= 8
                 && e.HarborWoodCost >= 0 && e.HarborWork > 0 && e.HarborHp > 0
                 && e.FishingNetFoodCost >= 0 && e.FishingNetWoodCost >= 0 && e.FishingNetTicks > 0
@@ -825,6 +826,7 @@ namespace Rts.Simulation
                  SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille,
                  PushWaves = e.PushWaves, WaveStagingDistance = e.WaveStagingDistance, WaveSize = e.WaveSize,
                  WaveMaxWaitTicks = e.WaveMaxWaitTicks, WaveMinSize = e.WaveMinSize, WaveRetreatPermille = e.WaveRetreatPermille,
+                 ManualControl = e.ManualControl,
                 PopulationCap = e.PopulationCap, VillagerHp = e.VillagerHp, VillagerSpeed = e.VillagerSpeed,
                 CarryCapacity = e.CarryCapacity, GatherIntervalTicks = e.GatherIntervalTicks, VillagerFoodCost = e.VillagerFoodCost,
                 VillagerTrainTicks = e.VillagerTrainTicks, QueueLimit = e.QueueLimit, AutoVillagerTarget = e.AutoVillagerTarget,

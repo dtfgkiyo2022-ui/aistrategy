@@ -83,6 +83,11 @@ namespace Rts.Simulation
                         w.Point(n + "StagingPoint", wave.StagingPoint); w.Ids(n + "AssaultSoldierIds", wave.AssaultSoldierIds);
                     }
                 }
+                if (ManualControlOn)
+                {
+                    w.Value("ManualControl.Faction1.AutoAssaultOff", autoAssaultOff[0]);
+                    w.Value("ManualControl.Faction2.AutoAssaultOff", autoAssaultOff[1]);
+                }
                 // Active policies are keyed by army, ordered by ApplyTick then LogIndex then army ID.
                 var orders=(ArmyState[])world.Armies.Clone();
                 Array.Sort(orders,(a,b)=> { int c=a.ApplyTick.CompareTo(b.ApplyTick); if(c==0)c=a.LogIndex.CompareTo(b.LogIndex); return c==0?a.Definition.Id.CompareTo(b.Definition.Id):c; });

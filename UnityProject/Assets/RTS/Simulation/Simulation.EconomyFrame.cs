@@ -117,7 +117,7 @@ namespace Rts.Simulation
                 AgesOn && economy.Civ != CivKind.Primitive && economy.Age == 2 ? AdvancePrice(faction, economy).gold : 0,
                 rules.BeltComponents, rules.FastBeltWoodCost, rules.FastBeltTicksPerCell, rules.SplitterWoodCost, rules.SorterWoodCost,
                 rules.UndergroundBeltWoodCost, rules.UndergroundBeltMaxLength, rules.StorageWoodCost, rules.StorageSizeCells, rules.StorageCapacity,
-                nextAgeClockTick: NextAgeClockTick(faction));
+                 nextAgeClockTick: NextAgeClockTick(faction), autoAssaultOff: AutoAssaultOffFor(faction));
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)
