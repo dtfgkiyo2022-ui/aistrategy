@@ -522,6 +522,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public string Text { get; private set; }
         public IReadOnlyList<AiNameTableEntry> NameTable { get; private set; }
         public string Conversation { get; private set; } = "";
+        /// <summary>整形前の会話履歴で最後に完了した1往復。Jevの追加入力に使う。</summary>
+        public AiConversationTurn LatestConversationTurn { get; private set; }
         /// <summary>Processing lines allowed by the current economy rules.</summary>
         public IReadOnlyList<string> AvailableLineNames { get; set; } = Array.Empty<string>();
         public AiTacticInfo TacticInfo { get; private set; } = new AiTacticInfo();
@@ -543,7 +545,9 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
 
         public void SetConversation(IEnumerable<AiConversationTurn> turns)
         {
-            Conversation = AiConversationLimits.Format(turns);
+            var selected = (turns ?? Array.Empty<AiConversationTurn>()).Where(x => x != null).ToArray();
+            Conversation = AiConversationLimits.Format(selected);
+            LatestConversationTurn = selected.LastOrDefault();
         }
 
         public bool TryGet(string name, out AiNameTableEntry entry) => names.TryGetValue(name ?? "", out entry);
@@ -595,7 +599,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             return "名前表（この文字列だけを使う）:\n" + names +
                 "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
                 "\n自軍の戦術:\n" + TacticPrompt() +
-                (string.IsNullOrEmpty(Conversation) ? "" : "\n直前のやり取り（古い順。最大3往復）。最後の結果が「聞き返し」なら、今回の指示はその問いへの答えです。" +
+                (string.IsNullOrEmpty(Conversation) ? "" : "\n直前のやり取り（参考。最大3往復）古い順。最後の結果が「聞き返し」なら、今回の指示はその問いへの答えです。" +
                     "前の指示と合わせて1つの指示として解釈し、同じことを聞き返さないでください:\n" + Conversation) +
                 (string.IsNullOrEmpty(instructionNames) ? "" : "\n" + instructionNames) +
                 "\n指示:\n" + (instruction ?? "");
