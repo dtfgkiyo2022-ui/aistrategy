@@ -113,6 +113,7 @@ namespace Rts.Providers
                 ["tacticSignalX"] = new Dictionary<string, object> { ["type"] = "number" },
                 ["tacticSignalZ"] = new Dictionary<string, object> { ["type"] = "number" },
                 ["tactic"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.AvailableNames),
+                ["say"] = new Dictionary<string, object> { ["type"] = "string" },
                 ["reason"] = new Dictionary<string, object> { ["type"] = "string" }
             };
             return JsonValueWriter.Write(new Dictionary<string, object>
@@ -192,6 +193,14 @@ namespace Rts.Providers
 あなたはRTSゲームの参謀です。人間の日本語の指示を、実行可能な命令のJSONに変換してください。
 返答は必ず指定されたJSON Schemaに従うJSONだけにしてください。説明文、Markdown、コードフェンス、Schemaにないキーは返さないでください。
 
+sayの返事
+- sayは参謀が人に話しかける短い返事です。何をするかと、その理由を1〜2文の話し言葉（丁寧語）で書き、80字以内にしてください。
+- 命令の一覧はsayに列挙しません。命令の具体的な内容はcommandsまたはoperationsに入れます。
+- 命令を実行するときは「了解です。まず北の拠点を攻めます」のように、実行内容と理由を伝えます。
+- 対象が足りないときは断らず、「どこを攻めますか？ 北の拠点か敵のコアを選んでください」のように聞き返します。
+- 実行できないときは理由と代わりの案を短く伝えます。例：「敵のコアはまだ見えていません。先に偵察を出しましょうか？」
+- sayが空になりそうなときも、成功なら確認文、聞き返しや却下なら短い質問または理由を書きます。
+
 基本規則
 1. commandsは実行する命令を順番に並べます。指示の意味が明確で、現在の戦況で実行できるものだけを出します。
 2. scopeは動かす側です。指定できる値は名前表にある「全部隊」「第N軍」「北軍」「南軍」「斥候」「予備」などの部隊、拠点、区域です。
@@ -250,7 +259,7 @@ namespace Rts.Providers
 霧の中の敵や戦況に記載されていない対象について、位置、数、所有者を推測しません。見えている敵の報告を求められたときも、この契約では命令を作らず質問として扱います。観測事実と人間の希望を混ぜないでください。
 選択中の対象は指示文の前に別行で示されます。選択中の対象が「北の拠点」なら「ここを守れ」は全軍が北の拠点を守る命令になります。選択中の対象が第3軍なら「この部隊を下げて」は第3軍のRetreatです。選択中の対象がなしなら、同じ文は対象不明として断ります。
 選択中の対象が区域なら、区域の担当変更ではregionにその区域を入れます。選択中の対象が建物なら、訓練の取り消しではproducerに建物名を入れます。選択対象の種類と命令の種類が合わない場合、無理にscopeやgoalへ流用しません。
-reasonは人間が読んで分かる短い理由です。成功時はnullまたは空文字でよく、unknown時は「曖昧」「対象が不明」「自分の物でない」「対応していない」「質問」など原因を明示します。sayは短い確認文で、命令の代わりにしません。
+ reasonは人間が読んで分かる短い理由です。成功時はnullまたは空文字でよく、unknown時は「曖昧」「対象が不明」「自分の物でない」「対応していない」「質問」など原因を明示します。
 unknown=trueのときcommandsは必ず空配列にします。unknown=falseのときは少なくとも意味のあるcommandsを一つ返すか、命令が空である理由をsay/reasonに示します。成功した一部だけを出して残りを黙って捨てません。
 JSONのすべてのrequired項目を出します。命令ごとに使わない項目はnullです。整数を文字列にせず、true/falseを文字列にせず、nullを「なし」という文字列にしません。commandsの外に命令を置きません。
 出力前に、typeとkindの組み合わせ、名前表への一致、所有者、goalの必要性、regionとcontrolの組み合わせ、建物・兵・文明・policyのenum変換、数の範囲、unknownとcommandsの整合性を順に確認してください。
@@ -288,6 +297,7 @@ JSONのすべてのrequired項目を出します。命令ごとに使わない�
 
         public const string StableInstructionsShort = @"
 あなたはRTSの参謀です。指示を1つの命令にします。指定されたJSON Schemaに従うJSONだけを返してください。
+sayは参謀の短い返事です。何をするかと理由を丁寧語で1〜2文、80字以内にしてください。命令の列挙はsayに書かず、足りない情報は聞き返してください。
 kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、ReturnToAuto（自動に戻す）、SetRegionControl（区域の担当を変える）、RequestLine（ラインを頼む）、unknown（不明）です。scopeは動かす側、goalは目標の場所です。SetRegionControlではregionが区域名、controlがHumanまたはAiです。RequestLineではline=CoreMetal/Steel/CoreWood/BowGear、region=区域名またはlocation=地点名を使います。不要な項目は空文字にしてください。
 全体方針も選べます。攻め気味・積極的に・押していくはkind=SetDoctrine、doctrine=concentrate、守り気味・慎重に・維持はdoctrine=maintain、全部自分でやる・お任せをやめるはdoctrine=noneです。具体的な命令と同時には出せません。全体方針以外ではdoctrineを空文字にしてください。
 戦術を替える命令はkind=SwitchTactic、tacticは候補名（空文字は戦術なし）です。つまみを変える命令はkind=SetTacticParam、tacticParamとtacticParamValueを使います。定義された合図を送る命令はkind=SendTacticSignal、tacticSignalと、必要ならtacticSignalX/tacticSignalZを使います。これらは具体的な命令やSetDoctrineと同時に出せません。
@@ -354,6 +364,55 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public int Index { get; internal set; }
         public string Reason { get; internal set; }
         public string Kind { get; internal set; }
+    }
+
+    public sealed class AiConversationTurn
+    {
+        public AiConversationTurn(string instruction, string reply, string commands, string result)
+        {
+            Instruction = instruction ?? "";
+            Reply = reply ?? "";
+            Commands = commands ?? "";
+            Result = result ?? "";
+        }
+
+        public string Instruction { get; }
+        public string Reply { get; }
+        public string Commands { get; }
+        public string Result { get; }
+    }
+
+    /// <summary>参謀へ渡す直前の会話だけを、費用が膨らまない範囲で整形する。</summary>
+    public static class AiConversationLimits
+    {
+        public const int MaxTurns = 3;
+        public const int MaxTurnCharacters = 320;
+        public const int MaxCharacters = 1200;
+
+        public static string Format(IEnumerable<AiConversationTurn> turns)
+        {
+            var selected = (turns ?? Array.Empty<AiConversationTurn>()).Where(x => x != null).TakeLast(MaxTurns).ToArray();
+            if (selected.Length == 0) return "";
+            var b = new StringBuilder();
+            for (int i = 0; i < selected.Length; i++)
+            {
+                string turn = "人=" + OneLine(selected[i].Instruction) + "。参謀=" + OneLine(selected[i].Reply)
+                    + "。命令=" + OneLine(selected[i].Commands) + "。結果=" + OneLine(selected[i].Result);
+                turn = Trim(turn, MaxTurnCharacters);
+                if (b.Length != 0) b.Append('\n');
+                b.Append(i + 1).Append(". ").Append(turn);
+            }
+            return Trim(b.ToString(), MaxCharacters);
+        }
+
+        private static string OneLine(string value) => (value ?? "").Replace('\r', ' ').Replace('\n', ' ').Trim();
+
+        private static string Trim(string value, int limit)
+        {
+            if (string.IsNullOrEmpty(value) || value.Length <= limit) return value ?? "";
+            if (limit <= 1) return value.Substring(0, limit);
+            return value.Substring(0, limit - 1) + "…";
+        }
     }
 
     public sealed class AiNameTableEntry
@@ -462,6 +521,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
         public long Tick { get; private set; }
         public string Text { get; private set; }
         public IReadOnlyList<AiNameTableEntry> NameTable { get; private set; }
+        public string Conversation { get; private set; } = "";
         /// <summary>Processing lines allowed by the current economy rules.</summary>
         public IReadOnlyList<string> AvailableLineNames { get; set; } = Array.Empty<string>();
         public AiTacticInfo TacticInfo { get; private set; } = new AiTacticInfo();
@@ -479,6 +539,11 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 Parameters = (parameters ?? Array.Empty<AiTacticParameterInfo>()).Where(x => x != null).ToArray(),
                 Signals = (signals ?? Array.Empty<AiTacticSignalInfo>()).Where(x => x != null).ToArray()
             };
+        }
+
+        public void SetConversation(IEnumerable<AiConversationTurn> turns)
+        {
+            Conversation = AiConversationLimits.Format(turns);
         }
 
         public bool TryGet(string name, out AiNameTableEntry entry) => names.TryGetValue(name ?? "", out entry);
@@ -530,6 +595,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             return "名前表（この文字列だけを使う）:\n" + names +
                 "\n戦況:\n" + Text + "\n選択中の対象：" + (selected ?? (fixedTarget.HasValue ? "不明" : "なし")) +
                 "\n自軍の戦術:\n" + TacticPrompt() +
+                (string.IsNullOrEmpty(Conversation) ? "" : "\n直前のやり取り（古い順。最大3往復）。最後の結果が「聞き返し」なら、今回の指示はその問いへの答えです。" +
+                    "前の指示と合わせて1つの指示として解釈し、同じことを聞き返さないでください:\n" + Conversation) +
                 (string.IsNullOrEmpty(instructionNames) ? "" : "\n" + instructionNames) +
                 "\n指示:\n" + (instruction ?? "");
         }
@@ -966,7 +1033,11 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 if (root.ContainsKey("kind") && !root.ContainsKey("commands")) root = ExpandSmallAnswer(root);
                 var result = new AiCommandInterpretationResult { Say = AiJson.String(root, "say") ?? "", Reason = AiJson.String(root, "reason") ?? "" };
                 result.Unknown = AiJson.Bool(root, "unknown");
-                if (result.Unknown) return result;
+                if (result.Unknown)
+                {
+                    NormalizeReply(result);
+                    return result;
+                }
                 var policies = new List<UserPolicyIntent>();
                 var economy = new List<EconomyCommand>();
                 var doctrines = new List<string>();
@@ -1007,12 +1078,39 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 result.Policies = policies.AsReadOnly(); result.EconomyCommands = economy.AsReadOnly(); result.Operations = operations.AsReadOnly(); result.Rejected = rejected.AsReadOnly();
                 result.TacticCommands = tactics.AsReadOnly();
                 if (doctrines.Count != 0) result.Doctrine = doctrines[0];
+                NormalizeReply(result);
                 return result;
             }
             catch (Exception e) when (e is FormatException || e is InvalidOperationException || e is OverflowException)
             {
-                return new AiCommandInterpretationResult { Reason = "読めない答え: " + e.Message };
+                var result = new AiCommandInterpretationResult { Unknown = true, Reason = "読めない答え: " + e.Message };
+                NormalizeReply(result);
+                return result;
             }
+        }
+
+        /// <summary>
+        /// 空の返事と長すぎる返事だけを、画面へ出す前に整える。
+        /// 返事の中身（「攻め」「守」などの語）から命令との食い違いを推測して差し替えることはしない。
+        /// 語の一致では全体方針の切り替えなどを誤って差し替えてしまうため。
+        /// </summary>
+        public static string NormalizeReply(string say, string reason, bool hasAction, bool unknown)
+        {
+            say = (say ?? "").Trim();
+            if (say.Length > 80) say = say.Substring(0, 79) + "…";
+            if (say.Length == 0)
+            {
+                string fallback = hasAction ? "了解です。指示を実行します。" : (string.IsNullOrEmpty(reason) ? "もう少し具体的に教えてください。" : reason.Trim());
+                return fallback.Length > 80 ? fallback.Substring(0, 79) + "…" : fallback;
+            }
+            return say;
+        }
+
+        private static void NormalizeReply(AiCommandInterpretationResult result)
+        {
+            bool hasAction = result.Policies.Count != 0 || result.EconomyCommands.Count != 0 || result.Operations.Count != 0
+                || result.TacticCommands.Count != 0 || result.Doctrine != null;
+            result.Say = NormalizeReply(result.Say, result.Reason, hasAction, result.Unknown);
         }
 
         private static Dictionary<string, object> ExpandSmallAnswer(Dictionary<string, object> small)
@@ -1022,7 +1120,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             if (string.Equals(kind, "unknown", StringComparison.Ordinal) || string.IsNullOrEmpty(kind))
                 return new Dictionary<string, object>
                 {
-                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = "",
+                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = AiJson.String(small, "say") ?? "",
                     ["reason"] = reason, ["unknown"] = true
                 };
 
@@ -1030,7 +1128,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             if (!allowed.Contains(kind, StringComparer.Ordinal))
                 return new Dictionary<string, object>
                 {
-                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = "",
+                    ["commands"] = new List<object>(), ["operations"] = new List<object>(), ["say"] = AiJson.String(small, "say") ?? "",
                     ["reason"] = string.IsNullOrEmpty(reason) ? "対応していない命令" : reason, ["unknown"] = true
                 };
 
@@ -1077,7 +1175,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             }
             return new Dictionary<string, object>
             {
-                ["commands"] = new List<object> { command }, ["operations"] = new List<object>(), ["say"] = "",
+                ["commands"] = new List<object> { command }, ["operations"] = new List<object>(), ["say"] = AiJson.String(small, "say") ?? "",
                 ["reason"] = reason, ["unknown"] = false
             };
         }

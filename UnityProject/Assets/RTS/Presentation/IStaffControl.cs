@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Rts.Presentation
 {
@@ -46,18 +47,21 @@ namespace Rts.Presentation
         public const string DetailTone = "detail";
         public const string BadTone = "bad";
 
-        public StaffChatLine(string time, string speaker, string body, string tone)
+        public StaffChatLine(string time, string speaker, string body, string tone, string detail = "")
         {
             Time = time ?? "";
             Speaker = speaker ?? "";
             Body = body ?? "";
             Tone = tone ?? DetailTone;
+            Detail = detail ?? "";
         }
 
         public string Time { get; }
         public string Speaker { get; }
         public string Body { get; }
         public string Tone { get; }
+        /// <summary>Small print under the bubble's text: orders issued, rejections and cost. Empty for none.</summary>
+        public string Detail { get; }
     }
 
     /// <summary>Unity-free input used by StaffChatText to turn one host history item into display lines.</summary>
@@ -113,25 +117,20 @@ namespace Rts.Presentation
                 string reply = !string.IsNullOrEmpty(item.Reply) ? item.Reply : item.Reason;
                 string staffBody = string.IsNullOrEmpty(reply) ? state : reply;
                 if (!string.IsNullOrEmpty(item.ModelDisplayName)) staffBody = "（" + item.ModelDisplayName + "）" + staffBody;
-                lines.Add(new StaffChatLine(item.Time, "参謀", staffBody,
-                    item.State == StaffInstructionView.Unknown || item.State == StaffInstructionView.Expired
-                        ? StaffChatLine.BadTone : StaffChatLine.StaffTone));
-
+                var supplement = new List<string>();
                 if (!string.IsNullOrEmpty(item.Reply) && !string.IsNullOrEmpty(item.Reason) && item.Reason != item.Reply)
-                    lines.Add(new StaffChatLine(item.Time, "詳しく", "理由：" + item.Reason, StaffChatLine.DetailTone));
-
-                bool carriedOut = item.State == StaffInstructionView.Executing
-                    || item.State == StaffInstructionView.Completed
-                    || item.State == StaffInstructionView.Cancelled;
-                foreach (string issued in item.Issued ?? Array.Empty<string>())
-                    lines.Add(new StaffChatLine(item.Time, "詳しく", "→ " + (issued ?? "") + (carriedOut ? "" : "（実行せず）"), StaffChatLine.DetailTone));
-                foreach (string rejected in item.RejectedReasons ?? Array.Empty<string>())
-                    lines.Add(new StaffChatLine(item.Time, "詳しく", "× 却下：" + (rejected ?? ""), StaffChatLine.BadTone));
-
+                    supplement.Add("理由：" + item.Reason);
+                if (item.Issued != null && item.Issued.Count != 0)
+                    supplement.Add("命令：" + string.Join("、", item.Issued.Where(x => !string.IsNullOrEmpty(x))));
+                if (item.RejectedReasons != null && item.RejectedReasons.Count != 0)
+                    supplement.Add("却下：" + string.Join("、", item.RejectedReasons.Where(x => !string.IsNullOrEmpty(x))));
                 string cost = item.State == StaffInstructionView.Interpreting
                     ? "見積もり " + item.EstimatedCostYen.ToString("0.000")
                     : item.ActualCostYen.ToString("0.000");
-                lines.Add(new StaffChatLine(item.Time, "状態", "［" + state + "　" + cost + "円］", StaffChatLine.DetailTone));
+                if (!string.IsNullOrEmpty(cost)) supplement.Add("費用：" + cost + "円");
+                lines.Add(new StaffChatLine(item.Time, "参謀", staffBody,
+                    item.State == StaffInstructionView.Unknown || item.State == StaffInstructionView.Expired
+                        ? StaffChatLine.BadTone : StaffChatLine.StaffTone, string.Join("\n", supplement)));
             }
             return lines;
         }
