@@ -270,6 +270,53 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void MasonryBrickKilnUsesWorkshopModelAndTopBarShowsBricksOnlyForMasonry()
+        {
+            Assert.AreEqual(
+                "Assets/ThirdParty/ToonyTinyPeople/TT_RTS/TT_RTS_Standard/models/buildings/Workshop.FBX",
+                LocalVisualPack.BuildingAssetPath(BuildingKind.BrickKiln));
+            Assert.That(LocalVisualPack.BuildingConstructionAssetPath(BuildingKind.BrickKiln, 0), Does.EndWith("Workshop_0.FBX"));
+            Assert.That(LocalVisualPack.BuildingConstructionAssetPath(BuildingKind.BrickKiln, 1), Does.EndWith("Workshop_1.FBX"));
+
+            var masonryScenario = MapGenerator.GenerateTerrain(8811UL);
+            masonryScenario.Economy.Enabled = true;
+            masonryScenario.Economy.Ages = true;
+            masonryScenario.Economy.Industry = true;
+            masonryScenario.Economy.ProcessingChain = true;
+            masonryScenario.Economy.Masonry = true;
+            masonryScenario.Economy.Bricks = true;
+            masonryScenario.Economy.AdvanceFoodCost = 0;
+            masonryScenario.Economy.AdvanceWoodCost = 0;
+            masonryScenario.Economy.AdvanceTicks = 1;
+            var masonry = new Rts.Simulation.Simulation(masonryScenario);
+            var masonryGateway = new CommandGateway(masonry);
+            masonryGateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Masonry));
+            masonryGateway.Step();
+            masonryGateway.Step();
+            var masonryEntries = new List<TopBarResourceVisibility.ResourceEntry>();
+            TopBarResourceVisibility.Fill(masonry.Capture(1).Economy, masonryEntries);
+            Assert.IsTrue(masonryEntries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Bricks));
+
+            var agrarianScenario = MapGenerator.GenerateTerrain(8811UL);
+            agrarianScenario.Economy.Enabled = true;
+            agrarianScenario.Economy.Ages = true;
+            agrarianScenario.Economy.Industry = true;
+            agrarianScenario.Economy.Masonry = true;
+            agrarianScenario.Economy.Bricks = true;
+            agrarianScenario.Economy.AdvanceFoodCost = 0;
+            agrarianScenario.Economy.AdvanceWoodCost = 0;
+            agrarianScenario.Economy.AdvanceTicks = 1;
+            var agrarian = new Rts.Simulation.Simulation(agrarianScenario);
+            var agrarianGateway = new CommandGateway(agrarian);
+            agrarianGateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Agrarian));
+            agrarianGateway.Step();
+            agrarianGateway.Step();
+            var agrarianEntries = new List<TopBarResourceVisibility.ResourceEntry>();
+            TopBarResourceVisibility.Fill(agrarian.Capture(1).Economy, agrarianEntries);
+            Assert.IsFalse(agrarianEntries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Bricks));
+        }
+
+        [Test]
         public void MissingPackReportsFalseForEffects()
         {
             LocalVisualPack.Disabled = true;
