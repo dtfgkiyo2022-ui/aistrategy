@@ -62,6 +62,7 @@ namespace Rts.Providers
                 ["stateVersion"] = "command-g5",
                 ["summary"] = request.Summary == null ? "" : request.Summary.Text ?? "",
                 ["instruction"] = request.Instruction ?? "",
+                ["conversation"] = request.Summary == null ? "" : request.Summary.Conversation ?? "",
                 ["names"] = (request.Summary == null ? Array.Empty<object>() : request.Summary.NameTable.Select(n => (object)n.Name).ToArray())
             });
             Task<JevAnswers> task = Task.Run(async () => transport is IQuestionAwareJevTransport aware
