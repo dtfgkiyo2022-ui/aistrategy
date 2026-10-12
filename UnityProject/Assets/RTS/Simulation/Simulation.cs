@@ -696,9 +696,12 @@ namespace Rts.Simulation
 
         private void PublishFrames()
         {
+            measure?.Invoke("FramesCommands", true);
             RefreshCommandViews();
+            measure?.Invoke("FramesCommands", false);
             for (uint f = 1; f <= 2; f++)
             {
+                measure?.Invoke("FramesUnits", true);
                 var units = new List<RenderUnit>();
                 var enemies = new List<VisibleEnemy>();
                 var contacts = new List<EnemyContact>();
@@ -759,6 +762,7 @@ namespace Rts.Simulation
                     if (world.Soldiers[i].Initial.FactionId != f && world.Factions[f - 1].ContactIds[i] != 0 && !(world.Soldiers[i].Alive && IsVisibleTo(f, world.Soldiers[i].Position))) contacts.Add(Contact(f, i, false));
                 AddArmyContacts(f, contacts);
                 var observation = new FactionObservation(f, world.Tick, armies, enemies, contacts, objectives, world.Config.Rules.FactionCap);
+                measure?.Invoke("FramesUnits", false);
                 // Combat event detail is deferred; terminal outcomes are already useful to the host.
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
                     world.Result.IsFault ? EventKind.Fault : EventKind.MatchEnded, 3, 0, 0, default,
@@ -773,10 +777,20 @@ namespace Rts.Simulation
                             e.CommandId, e.Position, e.Value, e.Reason));
                 foreach (var e in events) visibleEvents.Add(new GameEvent(e.Tick, (uint)visibleEvents.Count, e.Kind,
                     e.AudienceMask, e.SubjectId, e.CommandId, e.Position, e.Value, e.Reason));
+                measure?.Invoke("FramesEconomy", true);
+                var economyView = EconomyViewFor(f);
+                measure?.Invoke("FramesEconomy", false);
+                measure?.Invoke("FramesRegions", true);
+                var regionViews = RegionViewsFor(f);
+                var cellRegions = CellRegionsForFrame();
+                measure?.Invoke("FramesRegions", false);
+                measure?.Invoke("FramesFog", true);
+                var fog = new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells);
+                measure?.Invoke("FramesFog", false);
                 frames[f - 1] = new FactionFrame(world.Tick, f, units, observation, frameCommandViews[f - 1], visibleEvents,
-                    new FogView(world.Factions[f - 1].VisibleCells, world.Factions[f - 1].ExploredCells), world.Result,
-                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), EconomyViewFor(f),
-                    RegionViewsFor(f), CellRegionsForFrame());
+                    fog, world.Result,
+                    world.Factions[f - 1].AliveCount, world.Config.Rules.FactionCap, ReinforcementViews(f), economyView,
+                    regionViews, cellRegions);
             }
         }
 

@@ -23,6 +23,9 @@ namespace Rts.Simulation
         private const int PathCacheLimit = 4096;
         private readonly Dictionary<(uint Faction, int Start, long GoalX, long GoalZ), int[]> paths = new Dictionary<(uint, int, long, long), int[]>();
         private readonly Queue<(uint Faction, int Start, long GoalX, long GoalZ)> pathOrder = new Queue<(uint, int, long, long)>();
+        // Cell centres of the cached paths, kept and dropped together with them. Like a cached path, the array is
+        // shared by every caller and must only be read.
+        private readonly Dictionary<(uint Faction, int Start, long GoalX, long GoalZ), SimPoint[]> pathCenters = new Dictionary<(uint, int, long, long), SimPoint[]>();
         public int[] SharedRoute(int start, SimPoint goal)
             => SharedRoute(start, goal, 0);
 
@@ -98,10 +101,10 @@ namespace Rts.Simulation
             if (passable[cell] == value) return;
             passable[cell] = value;
             routes.Clear(); routeOrder.Clear();
-            paths.Clear(); pathOrder.Clear();
+            paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
-        internal void InvalidateRoutes() { routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); }
+        internal void InvalidateRoutes() { routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); }
         public bool IsPassable(int cell) => cell >= 0 && cell < passable.Length && passable[cell];
         public bool IsPassableFor(int cell, uint factionId)
             => cell >= 0 && cell < passable.Length && (FactionPassability == null ? passable[cell] : FactionPassability(cell, factionId));
@@ -123,19 +126,37 @@ namespace Rts.Simulation
                 var key = (factionId, start, goal.X.Raw, goal.Z.Raw);
                 if (paths.TryGetValue(key, out var cached)) return cached;
                 var path = FindPathCore(start, goal, factionId);
-                if (pathOrder.Count == PathCacheLimit) paths.Remove(pathOrder.Dequeue());
+                if (pathOrder.Count == PathCacheLimit) { var oldest = pathOrder.Dequeue(); paths.Remove(oldest); pathCenters.Remove(oldest); }
                 paths.Add(key, path); pathOrder.Enqueue(key);
                 return path;
             }
             finally { Measure?.Invoke("Pathfinding", false); }
         }
+        /// <summary>The centres of FindPath's cells. The decision asks for them on every tick, for every army and objective.</summary>
+        public SimPoint[] FindPathCenters(int start, SimPoint goal, uint factionId)
+        {
+            var path = FindPath(start, goal, factionId);
+            var key = (factionId, start, goal.X.Raw, goal.Z.Raw);
+            if (pathCenters.TryGetValue(key, out var cached)) return cached;
+            var centers = new SimPoint[path.Length];
+            for (int i = 0; i < path.Length; i++) centers[i] = Center(path[i]);
+            if (paths.ContainsKey(key)) pathCenters[key] = centers;
+            return centers;
+        }
+
+        private int[] searchG, searchParent;
+        private bool[] searchClosed;
+
         private int[] FindPathCore(int start, SimPoint goal, uint factionId)
         {
             if (!IsPassableFor(start, factionId)) return Array.Empty<int>();
             int target = Cell(goal);
-            var g = new int[passable.Length]; Array.Fill(g, int.MaxValue);
-            var parent = new int[passable.Length]; Array.Fill(parent, -1);
-            var closed = new bool[passable.Length];
+            // The three work tables are kept between searches (a search fills them again before reading), so a
+            // cache miss no longer allocates three arrays the size of the map. One GridMap is stepped by one thread.
+            if (searchG == null) { searchG = new int[passable.Length]; searchParent = new int[passable.Length]; searchClosed = new bool[passable.Length]; }
+            var g = searchG; Array.Fill(g, int.MaxValue);
+            var parent = searchParent; Array.Fill(parent, -1);
+            var closed = searchClosed; Array.Clear(closed, 0, closed.Length);
             var open = new SortedSet<(int f, int h, int id)>();
             int heuristicCell = target >= 0 ? target : start;
             g[start] = 0; open.Add((H(start, heuristicCell), H(start, heuristicCell), start));
@@ -149,10 +170,11 @@ namespace Rts.Simulation
                 if (distance < bestDistance || (distance == bestDistance && id < best)) { best = id; bestDistance = distance; }
                 if (id == target) { best = id; break; }
                 int x = id % width, z = id / width;
-                int[] neighbors = { z + 1 < height ? id + width : -1, x + 1 < width ? id + 1 : -1,
-                    z > 0 ? id - width : -1, x > 0 ? id - 1 : -1 };
-                foreach (int next in neighbors)
+                // Same neighbour order as before (north, east, south, west), without an array per expanded cell.
+                for (int side = 0; side < 4; side++)
                 {
+                    int next = side == 0 ? (z + 1 < height ? id + width : -1) : side == 1 ? (x + 1 < width ? id + 1 : -1)
+                        : side == 2 ? (z > 0 ? id - width : -1) : (x > 0 ? id - 1 : -1);
                     if (!IsPassableFor(next, factionId) || closed[next] || g[next] <= g[id] + 1) continue;
                     int h = H(next, heuristicCell);
                     if (g[next] != int.MaxValue) open.Remove((g[next] + h, h, next));
