@@ -68,7 +68,7 @@ namespace Rts.Contracts
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -156,7 +156,7 @@ namespace Rts.Contracts
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
         ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19, Caravanserai = 20,
         EngineerCamp = 21, Bridge = 22, Academy = 23, Monastery = 24, Harbor = 25, MineShaft = 26, Tollgate = 27, GrandHouse = 28, Shrine = 29, Town = 30,
-        Storage = 31, Mill = 32 }
+        Storage = 31, Mill = 32, BrickKiln = 33 }
 
     public enum EventKind : byte
     {

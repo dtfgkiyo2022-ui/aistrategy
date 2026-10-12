@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using Rts.Contracts;
@@ -29,19 +30,50 @@ namespace Rts.Simulation
             foreach (int cell in c.Cells)
             {
                 if (economy.Stone < StoneOf(BuildingKind.Wall, faction)) break;
+                bool brick = BrickDefenceAvailable(faction, BuildingKind.Wall);
                 if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0
                     || IsNodeCell(cell) || InsideAnyCore(cell) || !NearOwnBase(faction, cell, rules.WallReach) || !KeepsMapConnected(faction, cell, 1)) continue;
                 economy.Stone = checked(economy.Stone - StoneOf(BuildingKind.Wall, faction));
+                if (brick)
+                {
+                    economy.Bricks = checked(economy.Bricks - rules.BricksPerWall);
+                    economy.BricksConsumed = checked(economy.BricksConsumed + rules.BricksPerWall);
+                }
                 int index = world.BuildingCount;
                 if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
                 world.Map.SetPassable(cell, false);
                 world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Wall, OriginCell = cell,
-                    WorkCell = cell, Alive = true, Complete = true, Hp = MountainFortHp(rules.WallHp, faction, cell, 1), Progress = 1, Held = IndustryOn, Facing = Facing.North };
+                    WorkCell = cell, Alive = true, Complete = true, Hp = brick ? BrickHpOf(BuildingKind.Wall, faction, cell) : HpOf(BuildingKind.Wall, faction, cell),
+                    BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 changed = true;
             }
             if (changed) TerrainChanged();
+        }
+
+        private void ApplyBrickUpgrades()
+        {
+            if (!BricksOn || world.Tick <= 0 || world.Tick % world.Config.Economy.BrickUpgradeIntervalTicks != 0) return;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var b = ref world.Buildings[i];
+                if (!b.Alive || !b.Complete || b.BrickUpgraded || !MasonryAllowed(b.FactionId)
+                    || (b.Kind != BuildingKind.Wall && b.Kind != BuildingKind.Tower)) continue;
+                int cost = b.Kind == BuildingKind.Wall ? rules.BricksPerWall : rules.BricksPerTower;
+                ref var economy = ref world.Economies[b.FactionId - 1];
+                if (economy.Bricks < cost) continue;
+                int oldMax = HpOf(b.Kind, b.FactionId, b.OriginCell);
+                int newMax = BrickHpOf(b.Kind, b.FactionId, b.OriginCell);
+                int oldHp = b.Hp;
+                economy.Bricks -= cost;
+                economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+                b.BrickUpgraded = true;
+                b.Hp = oldMax > 0 ? Math.Min(newMax, checked(oldHp * newMax / oldMax)) : newMax;
+                if (b.Kind == BuildingKind.Wall) economy.BricksUpgradedWalls++; else economy.BricksUpgradedTowers++;
+                break;
+            }
         }
 
         private bool NearOwnBase(uint faction, int cell, int reach)

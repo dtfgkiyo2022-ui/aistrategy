@@ -264,6 +264,7 @@ namespace Rts.Presentation
             { BuildingKind.LumberCamp, new BuildingSpec("LumberMill.FBX", 3.0f) },
             { BuildingKind.Fletcher, new BuildingSpec("Archery.FBX", 2.2f, 0.7f) },
             { BuildingKind.Mill, new BuildingSpec("Granary.FBX", 2.2f, 1f, new Color(0.82f, 0.70f, 0.42f, 1f)) },
+            { BuildingKind.BrickKiln, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.72f, 0.28f, 0.16f, 1f)) },
             { BuildingKind.Academy, new BuildingSpec("Library.FBX", 3.0f) },
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },

@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -156,7 +156,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells
                 : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -165,7 +165,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -174,6 +174,12 @@ namespace Rts.Presentation
         }
 
         private static string Name(BuildingKind kind)
+        {
+            if (kind == BuildingKind.BrickKiln) return UiText.T("Brick kiln", "煉瓦窯");
+            return NameLegacy(kind);
+        }
+
+        private static string NameLegacy(BuildingKind kind)
             => kind == BuildingKind.Mine ? UiText.T("Mine", "採掘場") : kind == BuildingKind.Smelter ? UiText.T("Smelter", "精錬所")
                 : kind == BuildingKind.Farm ? UiText.T("Farm", "農場") : kind == BuildingKind.Mill ? UiText.T("Mill", "製粉所") : kind == BuildingKind.House ? UiText.T("House", "住居")
                 : kind == BuildingKind.DropSite ? UiText.T("Drop-off", "資源置き場") : kind == BuildingKind.Tower ? UiText.T("Tower", "見張り塔")
@@ -184,12 +190,15 @@ namespace Rts.Presentation
                 : UiText.T("Barracks", "兵舎");
 
         private static BuildingKind KindOf(Mode m)
-            => m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
+        {
+            if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
+            return m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
                 : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
                 : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable
                 : m == Mode.Castle ? BuildingKind.Castle : m == Mode.Storage ? BuildingKind.Storage : BuildingKind.Barracks;
+        }
 
         private static string CivName(CivKind c)
         {

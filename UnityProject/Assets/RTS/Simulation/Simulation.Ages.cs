@@ -28,6 +28,7 @@ namespace Rts.Simulation
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
         private bool RationsOn => AgesOn && world.Config.Economy.Rations;
+        private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Bricks;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -65,6 +66,12 @@ namespace Rts.Simulation
 
         private bool ProcessingAvailable(uint faction)
             => ProcessingOn && AgesOn && world.Economies[faction - 1].Civ == CivKind.Metallurgy && world.Economies[faction - 1].Age >= 2;
+
+        private bool BricksAllowed(uint faction)
+            => BricksOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;
+
+        private bool CharcoalKilnAllowed(uint faction)
+            => ProcessingAvailable(faction) || BricksAllowed(faction);
 
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;

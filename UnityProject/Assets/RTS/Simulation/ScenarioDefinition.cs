@@ -183,6 +183,12 @@ namespace Rts.Simulation
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
         public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
+        /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
+        public bool Bricks;
+        public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;
+        public int BrickTicks = 100, BrickStoneInput = 2, BrickCharcoalInput = 1;
+        public int BricksPerWall = 1, BricksPerTower = 3, BricksPerCastle = 10;
+        public int BrickHpPermille = 1500, BrickUpgradeIntervalTicks = 100, BrickCastleStonePermille = 600;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

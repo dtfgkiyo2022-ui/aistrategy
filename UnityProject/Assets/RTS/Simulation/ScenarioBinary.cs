@@ -91,6 +91,9 @@ namespace Rts.Simulation
         private const int RationsExtensionId = 20;
         private const int RationsExtensionVersion = 1;
         private const int RationsExtensionDataLength = 15 * sizeof(int);
+        private const int BricksExtensionId = 21;
+        private const int BricksExtensionVersion = 1;
+        private const int BricksExtensionDataLength = 14 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -119,6 +122,7 @@ namespace Rts.Simulation
             new ExtensionRegistration(PushWavesExtensionId, PushWavesExtensionVersion, PushWavesExtensionDataLength),
             new ExtensionRegistration(ManualControlExtensionId, ManualControlExtensionVersion, ManualControlExtensionDataLength),
             new ExtensionRegistration(RationsExtensionId, RationsExtensionVersion, RationsExtensionDataLength)
+            ,new ExtensionRegistration(BricksExtensionId, BricksExtensionVersion, BricksExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -680,6 +684,7 @@ namespace Rts.Simulation
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
+                    else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -729,6 +734,7 @@ namespace Rts.Simulation
                extensions.RemoveAll(extension => extension != null && extension.Id == PushWavesExtensionId && !c.Economy.PushWaves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
                 extensions.RemoveAll(extension => extension != null && extension.Id == RationsExtensionId && !c.Economy.Rations);
+                extensions.RemoveAll(extension => extension != null && extension.Id == BricksExtensionId && !c.Economy.Bricks);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -888,6 +894,14 @@ namespace Rts.Simulation
                         extensions[i] = CreateRationsExtension(c.Economy);
                     }
                 if (c.Economy.Rations && !hasRations) extensions.Add(CreateRationsExtension(c.Economy));
+                bool hasBricks = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == BricksExtensionId)
+                    {
+                        hasBricks = true;
+                        extensions[i] = CreateBricksExtension(c.Economy);
+                    }
+                if (c.Economy.Bricks && !hasBricks) extensions.Add(CreateBricksExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -920,6 +934,36 @@ namespace Rts.Simulation
                 e.RationsHealIntervalTicks = reader.ReadInt32(); e.RationsHealQuietTicks = reader.ReadInt32(); e.RationsHealHp = reader.ReadInt32();
                 e.RationsHealMaxPerInterval = reader.ReadInt32(); e.RationsFarmMinimum = reader.ReadInt32(); e.RationsFoodReserve = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing rations extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateBricksExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Bricks ? 1 : 0);
+                writer.Write(e.BrickKilnSizeCells); writer.Write(e.BrickKilnWoodCost); writer.Write(e.BrickKilnWork); writer.Write(e.BrickKilnHp);
+                writer.Write(e.BrickTicks); writer.Write(e.BrickStoneInput); writer.Write(e.BrickCharcoalInput);
+                writer.Write(e.BricksPerWall); writer.Write(e.BricksPerTower); writer.Write(e.BricksPerCastle);
+                writer.Write(e.BrickHpPermille); writer.Write(e.BrickUpgradeIntervalTicks); writer.Write(e.BrickCastleStonePermille);
+                return new ScenarioExtensionData { Id = BricksExtensionId, Version = BricksExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBricksExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid bricks flag.");
+                e.Bricks = enabled != 0;
+                e.BrickKilnSizeCells = reader.ReadInt32(); e.BrickKilnWoodCost = reader.ReadInt32(); e.BrickKilnWork = reader.ReadInt32(); e.BrickKilnHp = reader.ReadInt32();
+                e.BrickTicks = reader.ReadInt32(); e.BrickStoneInput = reader.ReadInt32(); e.BrickCharcoalInput = reader.ReadInt32();
+                e.BricksPerWall = reader.ReadInt32(); e.BricksPerTower = reader.ReadInt32(); e.BricksPerCastle = reader.ReadInt32();
+                e.BrickHpPermille = reader.ReadInt32(); e.BrickUpgradeIntervalTicks = reader.ReadInt32(); e.BrickCastleStonePermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing bricks extension data.");
             }
         }
 

@@ -49,10 +49,10 @@ namespace Rts.Simulation
                     else caravanReason = CaravanStopReason.Normal;
                 }
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
-                    own ? b.Hp : 0, own ? HpOf(b.Kind, b.FactionId, b.OriginCell) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
+                    own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -127,7 +127,19 @@ namespace Rts.Simulation
                   rationsHealHp: RationsAllowed(faction) ? rules.RationsHealHp : 0,
                   rationsHealMaxPerInterval: RationsAllowed(faction) ? rules.RationsHealMaxPerInterval : 0,
                   rationsFarmMinimum: RationsAllowed(faction) ? rules.RationsFarmMinimum : 0,
-                  rationsFoodReserve: RationsAllowed(faction) ? rules.RationsFoodReserve : 0);
+                  rationsFoodReserve: RationsAllowed(faction) ? rules.RationsFoodReserve : 0,
+                  bricksEnabled: BricksAllowed(faction), bricks: BricksAllowed(faction) ? economy.Bricks : 0,
+                  brickKilnWoodCost: BricksAllowed(faction) ? rules.BrickKilnWoodCost : 0,
+                  brickKilnSizeCells: BricksAllowed(faction) ? rules.BrickKilnSizeCells : 0,
+                  brickTicks: BricksAllowed(faction) ? rules.BrickTicks : 0,
+                  brickStoneInput: BricksAllowed(faction) ? rules.BrickStoneInput : 0,
+                  brickCharcoalInput: BricksAllowed(faction) ? rules.BrickCharcoalInput : 0,
+                  bricksPerWall: BricksAllowed(faction) ? rules.BricksPerWall : 0,
+                  bricksPerTower: BricksAllowed(faction) ? rules.BricksPerTower : 0,
+                  bricksPerCastle: BricksAllowed(faction) ? rules.BricksPerCastle : 0,
+                  brickHpPermille: BricksAllowed(faction) ? rules.BrickHpPermille : 0,
+                  brickUpgradeIntervalTicks: BricksAllowed(faction) ? rules.BrickUpgradeIntervalTicks : 0,
+                  brickCastleStonePermille: BricksAllowed(faction) ? rules.BrickCastleStonePermille : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

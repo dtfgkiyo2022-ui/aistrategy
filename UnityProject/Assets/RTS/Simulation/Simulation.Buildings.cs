@@ -332,7 +332,20 @@ namespace Rts.Simulation
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
             economy.Wood = checked(economy.Wood - WoodOf(kind, faction));
+            bool brickCastle = kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction);
+            bool brickDefence = BrickDefenceAvailable(faction, kind);
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
+            if (brickCastle)
+            {
+                economy.Bricks = checked(economy.Bricks - world.Config.Economy.BricksPerCastle);
+                economy.BricksConsumed = checked(economy.BricksConsumed + world.Config.Economy.BricksPerCastle);
+            }
+            if (brickDefence)
+            {
+                int cost = kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower;
+                economy.Bricks = checked(economy.Bricks - cost);
+                economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+            }
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
             var footprint = kind == BuildingKind.Bridge ? bridgeCells
@@ -345,7 +358,8 @@ namespace Rts.Simulation
             world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
-                Alive = true, Hp = HpOf(kind, faction, origin), Facing = facing, NodeId = nodeId };
+                Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
+                BrickUpgraded = brickDefence, Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
@@ -746,7 +760,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
                 : kind == BuildingKind.Steelworks ? e.SteelworksSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
-                : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells
+                : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells
                 : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerSizeCells : kind == BuildingKind.Blacksmith ? e.BlacksmithSizeCells
                 : kind == BuildingKind.Market ? e.MarketSizeCells : kind == BuildingKind.SiegeWorkshop ? e.WorkshopSizeCells
@@ -769,7 +783,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int hp = kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
-                : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp
+                : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp : kind == BuildingKind.BrickKiln ? e.BrickKilnHp
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
                 : kind == BuildingKind.Wall ? e.WallHp : kind == BuildingKind.Tower ? e.TowerHp : kind == BuildingKind.Blacksmith ? e.BlacksmithHp
                 : kind == BuildingKind.Market ? e.MarketHp : kind == BuildingKind.SiegeWorkshop ? e.WorkshopHp
@@ -799,7 +813,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int work = kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
-                : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork
+                : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork : kind == BuildingKind.BrickKiln ? e.BrickKilnWork
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
                 : kind == BuildingKind.Wall ? 1 : kind == BuildingKind.Tower ? e.TowerWork : kind == BuildingKind.Blacksmith ? e.BlacksmithWork
                 : kind == BuildingKind.Market ? e.MarketWork : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWork
@@ -818,7 +832,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int wood = kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
-                : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost
+                : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Wall ? 0 : kind == BuildingKind.Tower ? e.TowerWoodCost : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -844,8 +858,24 @@ namespace Rts.Simulation
             int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
                 : kind == BuildingKind.Town ? e.TownStoneCost : 0;
+            if (kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction))
+                return MasonryDiscount(stone, e.BrickCastleStonePermille);
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
         }
+
+        private bool BrickCastleDiscountAvailable(uint faction)
+            => BricksAllowed(faction) && world.Economies[faction - 1].Bricks >= world.Config.Economy.BricksPerCastle;
+
+        private bool BrickDefenceAvailable(uint faction, BuildingKind kind)
+            => BricksAllowed(faction) && (kind == BuildingKind.Wall || kind == BuildingKind.Tower)
+                && world.Economies[faction - 1].Bricks >= (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower);
+
+        private int BrickHpOf(BuildingKind kind, uint faction, int origin = -1)
+            => checked(HpOf(kind, faction, origin) * world.Config.Economy.BrickHpPermille / 1000);
+
+        private int MaxHpOf(BuildingState building)
+            => building.BrickUpgraded && (building.Kind == BuildingKind.Wall || building.Kind == BuildingKind.Tower)
+                ? BrickHpOf(building.Kind, building.FactionId, building.OriginCell) : HpOf(building.Kind, building.FactionId, building.OriginCell);
 
         private int[] Footprint(BuildingState b) => b.Kind == BuildingKind.Bridge ? b.BridgeCells ?? System.Array.Empty<int>()
             : b.Kind == BuildingKind.Tollgate ? TollgateFootprint(b.OriginCell, b.Facing) : Footprint(b.OriginCell, SizeOf(b.Kind));

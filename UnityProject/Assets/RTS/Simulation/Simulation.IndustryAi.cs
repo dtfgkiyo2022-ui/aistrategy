@@ -49,7 +49,7 @@ namespace Rts.Simulation
                 DecideForestryLines(faction);
                 return;
             }
-            if (MasonryAllowed(faction)) { DecideQuarry(faction); return; }
+            if (MasonryAllowed(faction)) { DecideQuarry(faction); if (BricksAllowed(faction)) DecideBricks(faction); return; }
             if (MountainAllowed(faction)) { DecideMountain(faction); return; }
             if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
@@ -282,6 +282,29 @@ namespace Rts.Simulation
                 whole = LayBelts(faction, route.cells, route.facings);
             }
             SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+        }
+
+        private void DecideBricks(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int quarry = OwnBuildingIndex(faction, BuildingKind.Quarry);
+            if (quarry < 0 || !world.Buildings[quarry].Complete || world.Buildings[quarry].Held
+                || economy.Stone < world.Config.Economy.BrickStoneInput * 2) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Bricks);
+            ref var line = ref world.ProcessingLines[index];
+            if (line.Manager != LineManager.Automatic || line.RequestPending) return;
+            if (line.BrickKilnId != 0)
+            {
+                if (BuildingReady(line.QuarryId) && BuildingReady(line.KilnId) && BuildingReady(line.BrickKilnId))
+                {
+                    bool whole = LayBricksLine(faction, index, world.Buildings[line.QuarryId - 1], world.Buildings[line.KilnId - 1], world.Buildings[line.BrickKilnId - 1]);
+                    SetLineHaulers(faction, line, whole ? 0 : 1);
+                }
+                return;
+            }
+            line.QuarryId = world.Buildings[quarry].Id;
+            line.RequestedCell = world.Buildings[quarry].OriginCell;
+            line.RequestPending = true;
         }
 
         /// <summary>V3-11: build the camp, then choose and build one useful bridge at a time.</summary>
@@ -684,6 +707,21 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
+        private bool LayBricksLine(uint faction, int lineIndex, BuildingState quarry, BuildingState kiln, BuildingState brickKiln)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var toBrickStone = BeltRoute(faction, OutputCell(quarry), taken, next => InFootprint(brickKiln, next));
+            if (toBrickStone.cells == null) return false;
+            foreach (int c in toBrickStone.cells) taken[c] = true;
+            var toBrickCharcoal = BeltRoute(faction, OutputCell(kiln), taken, next => InFootprint(brickKiln, next));
+            if (toBrickCharcoal.cells == null) return false;
+            foreach (int c in toBrickCharcoal.cells) taken[c] = true;
+            var toCore = BeltRoute(faction, OutputCell(brickKiln), taken, next => FeedsOwnCore(next, faction));
+            if (toCore.cells == null) return false;
+            SetLineBelts(lineIndex, toBrickStone, toBrickCharcoal, toCore);
+            return LayRoutes(faction, toBrickStone, toBrickCharcoal, toCore);
+        }
+
         private bool LayForestryCoreLine(uint faction, int lineIndex, BuildingState camp)
         {
             var taken = TakenForOtherLines(faction, lineIndex);
@@ -741,9 +779,9 @@ namespace Rts.Simulation
         }
 
         /// <summary>Places the quarry over the nearest remaining stone point, with the same fixed search as a lumber camp.</summary>
-        private uint PlaceQuarry(uint faction)
+        private uint PlaceQuarry(uint faction, int preferredCell = -1)
         {
-            var core = OwnCore(faction).Definition.Position;
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.QuarrySizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             var order = new int[world.Nodes.Length];
             for (int i = 0; i < order.Length; i++) order[i] = i;
@@ -868,6 +906,21 @@ namespace Rts.Simulation
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.CharcoalKilnSizeCells, side), faction)) continue;
                 PlaceBuildingAt(faction, BuildingKind.CharcoalKiln, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private uint PlaceBrickKiln(uint faction, int preferredCell = -1)
+        {
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
+            int size = world.Config.Economy.BrickKilnSizeCells;
+            int origin = FindProcessingSite(faction, preferredCell >= 0 ? preferredCell : world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.BrickKiln, origin, side, 0);
                 return world.NextBuildingId - 1;
             }
             return 0;
