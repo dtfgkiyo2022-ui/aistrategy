@@ -248,7 +248,8 @@ namespace Rts.Simulation
         internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
-        internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers;
+        internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
+        internal int BricksConsumedWalls, BricksConsumedTowers, BricksConsumedCoreRepair, BricksConsumedCastles;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -534,6 +535,8 @@ namespace Rts.Simulation
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
                 && e.BrickCharcoalInput <= e.BufferLimit && e.BricksPerWall >= 0 && e.BricksPerTower >= 0 && e.BricksPerCastle >= 0
                 && e.BrickHpPermille >= 1000 && e.BrickUpgradeIntervalTicks > 0 && e.BrickCastleStonePermille > 0
+                && e.BrickCoreRepairIntervalTicks > 0 && e.BricksPerCoreRepair > 0 && e.BrickCoreRepairHp > 0
+                && e.BrickExtraTowers >= 0
                 && e.BrickCastleStonePermille <= 1000), "Invalid bricks rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
@@ -881,6 +884,8 @@ namespace Rts.Simulation
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,
                   BricksPerTower = e.BricksPerTower, BricksPerCastle = e.BricksPerCastle, BrickHpPermille = e.BrickHpPermille,
                   BrickUpgradeIntervalTicks = e.BrickUpgradeIntervalTicks, BrickCastleStonePermille = e.BrickCastleStonePermille,
+                  BrickCoreRepairIntervalTicks = e.BrickCoreRepairIntervalTicks, BricksPerCoreRepair = e.BricksPerCoreRepair,
+                  BrickCoreRepairHp = e.BrickCoreRepairHp, BrickExtraTowers = e.BrickExtraTowers,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

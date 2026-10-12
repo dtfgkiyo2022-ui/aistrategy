@@ -34,6 +34,11 @@ namespace Rts.Simulation
         public int BricksConsumed { get; internal set; }
         public int BricksUpgradedWalls { get; internal set; }
         public int BricksUpgradedTowers { get; internal set; }
+        public int BricksCoreRepairHp { get; internal set; }
+        public int BricksConsumedWalls { get; internal set; }
+        public int BricksConsumedTowers { get; internal set; }
+        public int BricksConsumedCoreRepair { get; internal set; }
+        public int BricksConsumedCastles { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -86,6 +91,11 @@ namespace Rts.Simulation
                     BricksConsumed = economy.BricksConsumed,
                     BricksUpgradedWalls = economy.BricksUpgradedWalls,
                     BricksUpgradedTowers = economy.BricksUpgradedTowers,
+                    BricksCoreRepairHp = economy.BricksCoreRepairHp,
+                    BricksConsumedWalls = economy.BricksConsumedWalls,
+                    BricksConsumedTowers = economy.BricksConsumedTowers,
+                    BricksConsumedCoreRepair = economy.BricksConsumedCoreRepair,
+                    BricksConsumedCastles = economy.BricksConsumedCastles,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

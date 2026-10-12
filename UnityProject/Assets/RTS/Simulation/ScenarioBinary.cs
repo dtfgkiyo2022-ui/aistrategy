@@ -92,8 +92,10 @@ namespace Rts.Simulation
         private const int RationsExtensionVersion = 1;
         private const int RationsExtensionDataLength = 15 * sizeof(int);
         private const int BricksExtensionId = 21;
-        private const int BricksExtensionVersion = 1;
-        private const int BricksExtensionDataLength = 14 * sizeof(int);
+        private const int BricksExtensionVersion = 2;
+        private const int BricksExtensionDataLength = 18 * sizeof(int);
+        private const int BricksExtensionV1 = 1;
+        private const int BricksExtensionV1DataLength = 14 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -656,7 +658,9 @@ namespace Rts.Simulation
                     && dataLength == TollgateExtensionV1DataLength;
                 bool oldSanctuary = id == SanctuaryExtensionId && featureVersion == SanctuaryExtensionV1
                     && dataLength == SanctuaryExtensionV1DataLength;
-                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary;
+                bool oldBricks = id == BricksExtensionId && featureVersion == BricksExtensionV1
+                    && dataLength == BricksExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -947,6 +951,7 @@ namespace Rts.Simulation
                 writer.Write(e.BrickTicks); writer.Write(e.BrickStoneInput); writer.Write(e.BrickCharcoalInput);
                 writer.Write(e.BricksPerWall); writer.Write(e.BricksPerTower); writer.Write(e.BricksPerCastle);
                 writer.Write(e.BrickHpPermille); writer.Write(e.BrickUpgradeIntervalTicks); writer.Write(e.BrickCastleStonePermille);
+                writer.Write(e.BrickCoreRepairIntervalTicks); writer.Write(e.BricksPerCoreRepair); writer.Write(e.BrickCoreRepairHp); writer.Write(e.BrickExtraTowers);
                 return new ScenarioExtensionData { Id = BricksExtensionId, Version = BricksExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -963,6 +968,11 @@ namespace Rts.Simulation
                 e.BrickTicks = reader.ReadInt32(); e.BrickStoneInput = reader.ReadInt32(); e.BrickCharcoalInput = reader.ReadInt32();
                 e.BricksPerWall = reader.ReadInt32(); e.BricksPerTower = reader.ReadInt32(); e.BricksPerCastle = reader.ReadInt32();
                 e.BrickHpPermille = reader.ReadInt32(); e.BrickUpgradeIntervalTicks = reader.ReadInt32(); e.BrickCastleStonePermille = reader.ReadInt32();
+                if (extension.Version >= BricksExtensionVersion)
+                {
+                    e.BrickCoreRepairIntervalTicks = reader.ReadInt32(); e.BricksPerCoreRepair = reader.ReadInt32();
+                    e.BrickCoreRepairHp = reader.ReadInt32(); e.BrickExtraTowers = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing bricks extension data.");
             }
         }

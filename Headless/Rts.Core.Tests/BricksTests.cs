@@ -73,6 +73,10 @@ namespace Rts.Core.Tests
             s.Economy.BrickTicks = 100;
             s.Economy.BrickStoneInput = 2;
             s.Economy.BrickCharcoalInput = 1;
+            s.Economy.BrickCoreRepairIntervalTicks = 100;
+            s.Economy.BricksPerCoreRepair = 2;
+            s.Economy.BrickCoreRepairHp = 60;
+            s.Economy.BrickExtraTowers = 2;
             s.Economy.BeltTicksPerCell = 1;
             s.Economy.BeltLimit = 4096;
             s.Cores[0].Hp = 1000000;
@@ -85,6 +89,10 @@ namespace Rts.Core.Tests
 
         private static long Number(Dictionary<string, string> fields, string name)
             => long.Parse(fields[name], CultureInfo.InvariantCulture);
+
+        private static int CountBuildings(Dictionary<string, string> fields, BuildingKind kind)
+            => fields.Count(pair => pair.Key.StartsWith("Buildings[", StringComparison.Ordinal) && pair.Key.EndsWith("].Kind", StringComparison.Ordinal)
+                && pair.Value == ((byte)kind).ToString(CultureInfo.InvariantCulture));
 
         private static int CellOf(SimPoint p) => (int)(p.Z.Raw / 65536 / 2) * Width + (int)(p.X.Raw / 65536 / 2);
 
@@ -194,6 +202,57 @@ namespace Rts.Core.Tests
             Assert.Fail("建物が見つからない: " + buildingId);
         }
 
+        private static void SetCore(Battle simulation, uint coreId, string fieldName, object value)
+        {
+            var world = World(simulation);
+            var field = world.GetType().GetField("Cores", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var cores = (Array)field.GetValue(world);
+            for (int i = 0; i < cores.Length; i++)
+            {
+                var core = cores.GetValue(i);
+                var definition = core.GetType().GetField("Definition", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(core);
+                uint id = (uint)definition.GetType().GetField("Id", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(definition);
+                if (id != coreId) continue;
+                core.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).SetValue(core, value);
+                cores.SetValue(core, i);
+                return;
+            }
+            Assert.Fail("コアが見つからない: " + coreId);
+        }
+
+        private static byte[] AsBricksVersionOne(byte[] current)
+        {
+            const int marker = 0x4E545845;
+            const int bricksId = 21;
+            const int currentDataLength = 18 * sizeof(int);
+            const int oldDataLength = 14 * sizeof(int);
+            int markerOffset = -1;
+            for (int i = 0; i <= current.Length - sizeof(int); i++)
+                if (BitConverter.ToInt32(current, i) == marker) { markerOffset = i; break; }
+            Assert.That(markerOffset, Is.GreaterThanOrEqualTo(0), "拡張欄のマーカーが見つからない");
+            int sectionLength = BitConverter.ToInt32(current, markerOffset + 8);
+            int cursor = markerOffset + 12;
+            int sectionEnd = cursor + sectionLength;
+            for (; cursor < sectionEnd; )
+            {
+                int id = BitConverter.ToInt32(current, cursor);
+                int dataLength = BitConverter.ToInt32(current, cursor + 8);
+                if (id != bricksId) { cursor += 12 + dataLength; continue; }
+                Assert.That(dataLength, Is.EqualTo(currentDataLength));
+                int removed = currentDataLength - oldDataLength;
+                var old = new byte[current.Length - removed];
+                Buffer.BlockCopy(current, 0, old, 0, cursor + 12 + oldDataLength);
+                Buffer.BlockCopy(current, cursor + 12 + currentDataLength, old, cursor + 12 + oldDataLength,
+                    current.Length - (cursor + 12 + currentDataLength));
+                Array.Copy(BitConverter.GetBytes(1), 0, old, cursor + 4, sizeof(int));
+                Array.Copy(BitConverter.GetBytes(oldDataLength), 0, old, cursor + 8, sizeof(int));
+                Array.Copy(BitConverter.GetBytes(sectionLength - removed), 0, old, markerOffset + 8, sizeof(int));
+                return old;
+            }
+            Assert.Fail("煉瓦拡張欄が見つからない");
+            return null;
+        }
+
         private static (Fixture fixture, uint kiln) ReadyKiln(int startStone = 2)
         {
             var scenario = Scenario(true);
@@ -213,13 +272,30 @@ namespace Rts.Core.Tests
             var s = Scenario(true);
             s.Economy.BrickTicks = 117;
             s.Economy.BrickHpPermille = 1517;
+            s.Economy.BrickCoreRepairIntervalTicks = 107;
+            s.Economy.BricksPerCoreRepair = 3;
+            s.Economy.BrickCoreRepairHp = 67;
+            s.Economy.BrickExtraTowers = 4;
             var bytes = ScenarioBinary.Encode(s);
             var decoded = ScenarioBinary.Decode(bytes);
-            Assert.That(decoded.Extensions.Single(x => x.Id == 21).Version, Is.EqualTo(1));
+            Assert.That(decoded.Extensions.Single(x => x.Id == 21).Version, Is.EqualTo(2));
             Assert.That(decoded.Economy.Bricks, Is.True);
             Assert.That(decoded.Economy.BrickTicks, Is.EqualTo(117));
             Assert.That(decoded.Economy.BrickHpPermille, Is.EqualTo(1517));
+            Assert.That(decoded.Economy.BrickCoreRepairIntervalTicks, Is.EqualTo(107));
+            Assert.That(decoded.Economy.BricksPerCoreRepair, Is.EqualTo(3));
+            Assert.That(decoded.Economy.BrickCoreRepairHp, Is.EqualTo(67));
+            Assert.That(decoded.Economy.BrickExtraTowers, Is.EqualTo(4));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+
+            var oldDecoded = ScenarioBinary.Decode(AsBricksVersionOne(bytes));
+            Assert.That(oldDecoded.Extensions.Single(x => x.Id == 21).Version, Is.EqualTo(1));
+            Assert.That(oldDecoded.Economy.Bricks, Is.True);
+            Assert.That(oldDecoded.Economy.BrickTicks, Is.EqualTo(117));
+            Assert.That(oldDecoded.Economy.BrickCoreRepairIntervalTicks, Is.EqualTo(100));
+            Assert.That(oldDecoded.Economy.BricksPerCoreRepair, Is.EqualTo(2));
+            Assert.That(oldDecoded.Economy.BrickCoreRepairHp, Is.EqualTo(60));
+            Assert.That(oldDecoded.Economy.BrickExtraTowers, Is.EqualTo(2));
 
             using (var stream = new MemoryStream())
             {
@@ -301,6 +377,121 @@ namespace Rts.Core.Tests
             } };
             var fixture = new Fixture(scenario);
             Assert.That(Number(Fields(fixture.Simulation), "Economy[1].Bricks"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void MasonryCoreUsesTwoBricksForSixtyHpEveryHundredTicksAndStopsAtMax()
+        {
+            var fixture = new Fixture(Scenario(true));
+            ReachCivilisation(fixture, CivKind.Masonry);
+            SetEconomy(fixture.Simulation, 1, "Wood", 0);
+            SetEconomy(fixture.Simulation, 1, "Stone", 0);
+            int maxHp = fixture.Scenario.Cores[0].Hp;
+            SetCore(fixture.Simulation, 1, "Hp", maxHp - 200);
+            SetEconomy(fixture.Simulation, 1, "Bricks", 4);
+            int toBoundary = 100 - (int)(Number(Fields(fixture.Simulation), "Tick") % 100);
+            fixture.Step(toBoundary - 1);
+            Assert.That(Number(Fields(fixture.Simulation), "Cores[1].Hp"), Is.EqualTo(maxHp - 200));
+            fixture.Step(1);
+            var first = Fields(fixture.Simulation);
+            Assert.That(Number(first, "Cores[1].Hp"), Is.EqualTo(maxHp - 140));
+            Assert.That(Number(first, "Economy[1].Bricks"), Is.EqualTo(2));
+            Assert.That(Number(first, "Economy[1].BricksCoreRepairHp"), Is.EqualTo(60));
+            fixture.Step(100);
+            var second = Fields(fixture.Simulation);
+            Assert.That(Number(second, "Cores[1].Hp"), Is.EqualTo(maxHp - 80));
+            Assert.That(Number(second, "Economy[1].Bricks"), Is.EqualTo(0));
+            Assert.That(Number(second, "Economy[1].BricksCoreRepairHp"), Is.EqualTo(120));
+
+            SetEconomy(fixture.Simulation, 1, "Bricks", 2);
+            fixture.Step(100);
+            Assert.That(Number(Fields(fixture.Simulation), "Cores[1].Hp"), Is.EqualTo(maxHp - 20));
+            SetEconomy(fixture.Simulation, 1, "Bricks", 2);
+            fixture.Step(100);
+            var capped = Fields(fixture.Simulation);
+            Assert.That(Number(capped, "Cores[1].Hp"), Is.EqualTo(maxHp));
+            Assert.That(Number(capped, "Economy[1].Bricks"), Is.EqualTo(0));
+
+            var intact = new Fixture(Scenario(true));
+            ReachCivilisation(intact, CivKind.Masonry);
+            SetEconomy(intact.Simulation, 1, "Bricks", 2);
+            intact.Step(100);
+            Assert.That(Number(Fields(intact.Simulation), "Cores[1].Hp"), Is.EqualTo(maxHp));
+            Assert.That(Number(Fields(intact.Simulation), "Economy[1].Bricks"), Is.EqualTo(2));
+
+            var dead = new Fixture(Scenario(true));
+            ReachCivilisation(dead, CivKind.Masonry);
+            SetCore(dead.Simulation, 1, "Hp", 0);
+            SetEconomy(dead.Simulation, 1, "Bricks", 2);
+            dead.Step(100);
+            Assert.That(Number(Fields(dead.Simulation), "Cores[1].Hp"), Is.EqualTo(0));
+            Assert.That(Number(Fields(dead.Simulation), "Economy[1].Bricks"), Is.EqualTo(2));
+
+            var insufficient = new Fixture(Scenario(true));
+            ReachCivilisation(insufficient, CivKind.Masonry);
+            SetCore(insufficient.Simulation, 1, "Hp", maxHp - 10);
+            SetEconomy(insufficient.Simulation, 1, "Bricks", 1);
+            insufficient.Step(100);
+            Assert.That(Number(Fields(insufficient.Simulation), "Cores[1].Hp"), Is.EqualTo(maxHp - 10));
+
+            var other = new Fixture(Scenario(true));
+            ReachCivilisation(other, CivKind.Agrarian);
+            SetCore(other.Simulation, 1, "Hp", maxHp - 10);
+            SetEconomy(other.Simulation, 1, "Bricks", 2);
+            other.Step(100);
+            Assert.That(Number(Fields(other.Simulation), "Cores[1].Hp"), Is.EqualTo(maxHp - 10));
+        }
+
+        [Test]
+        public void MasonryAutomaticTowersGainTwoSlotsOnlyWhileBricksCanFundStrengthening()
+        {
+            var fixture = new Fixture(Scenario(true));
+            ReachCivilisation(fixture, CivKind.Masonry);
+            Place(fixture, BuildingKind.Quarry);
+            SetEconomy(fixture.Simulation, 1, "Wood", 50000);
+            SetEconomy(fixture.Simulation, 1, "Stone", 50000);
+            SetEconomy(fixture.Simulation, 1, "Bricks", 12);
+            var decide = typeof(Battle).GetMethod("DecideTower", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(decide, Is.Not.Null);
+            for (int i = 0; i < 6; i++)
+            {
+                decide.Invoke(fixture.Simulation, new object[] { 1u });
+                var fields = Fields(fixture.Simulation);
+                int count = (int)Number(fields, "Buildings.Count");
+                for (int id = 1; id <= count; id++)
+                    if (fields.TryGetValue("Buildings[" + id + "].Kind", out string kind)
+                        && kind == ((byte)BuildingKind.Tower).ToString(CultureInfo.InvariantCulture))
+                        SetBuilding(fixture.Simulation, (uint)id, "Complete", true);
+            }
+            var after = Fields(fixture.Simulation);
+            Assert.That(CountBuildings(after, BuildingKind.Tower), Is.EqualTo(4));
+            Assert.That(Number(after, "Economy[1].Bricks"), Is.EqualTo(0));
+
+            var noBricks = new Fixture(Scenario(true));
+            ReachCivilisation(noBricks, CivKind.Masonry);
+            Place(noBricks, BuildingKind.Quarry);
+            SetEconomy(noBricks.Simulation, 1, "Wood", 50000);
+            SetEconomy(noBricks.Simulation, 1, "Stone", 50000);
+            decide.Invoke(noBricks.Simulation, new object[] { 1u });
+            Assert.That(CountBuildings(Fields(noBricks.Simulation), BuildingKind.Tower), Is.EqualTo(1));
+
+            var otherCiv = new Fixture(Scenario(true));
+            ReachCivilisation(otherCiv, CivKind.Agrarian);
+            Place(otherCiv, BuildingKind.Farm);
+            SetEconomy(otherCiv.Simulation, 1, "Wood", 50000);
+            SetEconomy(otherCiv.Simulation, 1, "Stone", 50000);
+            SetEconomy(otherCiv.Simulation, 1, "Bricks", 12);
+            for (int i = 0; i < 4; i++)
+            {
+                decide.Invoke(otherCiv.Simulation, new object[] { 1u });
+                var fields = Fields(otherCiv.Simulation);
+                int count = (int)Number(fields, "Buildings.Count");
+                for (int id = 1; id <= count; id++)
+                    if (fields.TryGetValue("Buildings[" + id + "].Kind", out string kind)
+                        && kind == ((byte)BuildingKind.Tower).ToString(CultureInfo.InvariantCulture))
+                        SetBuilding(otherCiv.Simulation, (uint)id, "Complete", true);
+            }
+            Assert.That(CountBuildings(Fields(otherCiv.Simulation), BuildingKind.Tower), Is.EqualTo(2));
         }
 
         [Test]

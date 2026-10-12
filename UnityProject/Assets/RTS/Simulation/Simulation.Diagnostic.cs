@@ -126,6 +126,11 @@ namespace Rts.Simulation
                     w.Value(n + "Bricks", e.Bricks); w.Value(n + "BricksProduced", e.BricksProduced);
                     w.Value(n + "BricksConsumed", e.BricksConsumed); w.Value(n + "BricksUpgradedWalls", e.BricksUpgradedWalls);
                     w.Value(n + "BricksUpgradedTowers", e.BricksUpgradedTowers);
+                    w.Value(n + "BricksCoreRepairHp", e.BricksCoreRepairHp);
+                    w.Value(n + "BricksConsumedWalls", e.BricksConsumedWalls);
+                    w.Value(n + "BricksConsumedTowers", e.BricksConsumedTowers);
+                    w.Value(n + "BricksConsumedCoreRepair", e.BricksConsumedCoreRepair);
+                    w.Value(n + "BricksConsumedCastles", e.BricksConsumedCastles);
                 }
             }
             if (RegionsOn)

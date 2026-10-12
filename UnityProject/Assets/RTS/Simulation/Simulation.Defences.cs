@@ -38,6 +38,7 @@ namespace Rts.Simulation
                 {
                     economy.Bricks = checked(economy.Bricks - rules.BricksPerWall);
                     economy.BricksConsumed = checked(economy.BricksConsumed + rules.BricksPerWall);
+                    economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + rules.BricksPerWall);
                 }
                 int index = world.BuildingCount;
                 if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
@@ -69,10 +70,33 @@ namespace Rts.Simulation
                 int oldHp = b.Hp;
                 economy.Bricks -= cost;
                 economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+                if (b.Kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
+                else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
                 b.BrickUpgraded = true;
                 b.Hp = oldMax > 0 ? Math.Min(newMax, checked(oldHp * newMax / oldMax)) : newMax;
                 if (b.Kind == BuildingKind.Wall) economy.BricksUpgradedWalls++; else economy.BricksUpgradedTowers++;
                 break;
+            }
+        }
+
+        /// <summary>Bricks continuation: a living masonry core repairs itself from the faction's brick stock at a fixed interval.</summary>
+        private void RepairMasonryCoresWithBricks()
+        {
+            if (!BricksOn || world.Tick <= 0 || world.Tick % world.Config.Economy.BrickCoreRepairIntervalTicks != 0) return;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.Cores.Length; i++)
+            {
+                ref var core = ref world.Cores[i];
+                uint faction = core.Definition.FactionId;
+                if (core.Hp <= 0 || core.Hp >= core.Definition.Hp || !MasonryAllowed(faction)) continue;
+                ref var economy = ref world.Economies[faction - 1];
+                if (economy.Bricks < rules.BricksPerCoreRepair) continue;
+                int repaired = System.Math.Min(rules.BrickCoreRepairHp, core.Definition.Hp - core.Hp);
+                economy.Bricks = checked(economy.Bricks - rules.BricksPerCoreRepair);
+                economy.BricksConsumed = checked(economy.BricksConsumed + rules.BricksPerCoreRepair);
+                economy.BricksConsumedCoreRepair = checked(economy.BricksConsumedCoreRepair + rules.BricksPerCoreRepair);
+                core.Hp = checked(core.Hp + repaired);
+                economy.BricksCoreRepairHp = checked(economy.BricksCoreRepairHp + repaired);
             }
         }
 
@@ -324,7 +348,10 @@ namespace Rts.Simulation
                 if (!b.Complete) return; // one at a time
                 towers++;
             }
-            if (towers >= AutoTowers) return;
+            int towerLimit = AutoTowers;
+            if (BricksAllowed(faction) && economy.Bricks >= rules.BricksPerTower)
+                towerLimit = checked(towerLimit + rules.BrickExtraTowers);
+            if (towers >= towerLimit) return;
             int origin = FindSite(faction, rules.TowerSizeCells);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Tower, origin, Facing.North, 0);
         }

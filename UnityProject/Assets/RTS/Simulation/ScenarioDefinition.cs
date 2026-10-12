@@ -189,6 +189,8 @@ namespace Rts.Simulation
         public int BrickTicks = 100, BrickStoneInput = 2, BrickCharcoalInput = 1;
         public int BricksPerWall = 1, BricksPerTower = 3, BricksPerCastle = 10;
         public int BrickHpPermille = 1500, BrickUpgradeIntervalTicks = 100, BrickCastleStonePermille = 600;
+        /// <summary>Bricks continuation: masonry cores spend stored bricks on periodic repairs, and the automatic economy may add towers while that stock exists.</summary>
+        public int BrickCoreRepairIntervalTicks = 100, BricksPerCoreRepair = 2, BrickCoreRepairHp = 60, BrickExtraTowers = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

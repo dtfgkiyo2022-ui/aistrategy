@@ -339,12 +339,15 @@ namespace Rts.Simulation
             {
                 economy.Bricks = checked(economy.Bricks - world.Config.Economy.BricksPerCastle);
                 economy.BricksConsumed = checked(economy.BricksConsumed + world.Config.Economy.BricksPerCastle);
+                economy.BricksConsumedCastles = checked(economy.BricksConsumedCastles + world.Config.Economy.BricksPerCastle);
             }
             if (brickDefence)
             {
                 int cost = kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower;
                 economy.Bricks = checked(economy.Bricks - cost);
                 economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+                if (kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
+                else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
             }
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
