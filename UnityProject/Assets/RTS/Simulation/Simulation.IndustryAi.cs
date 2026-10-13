@@ -35,12 +35,14 @@ namespace Rts.Simulation
                 DecideFarms(faction);
                 if (CavalryAllowed(faction)) DecideTack(faction);
                 if (IncenseAllowed(faction)) DecideIncense(faction);
+                if (CharmsAllowed(faction)) DecideCharms(faction);
                 return;
             }
             if (TryDecideRequestedLine(faction)) return;
             // No return: the caravan's own decisions below stay exactly as they were.
             if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
             if (IncenseAllowed(faction)) DecideIncense(faction);
+            if (CharmsAllowed(faction)) DecideCharms(faction);
             if (FarmingAllowed(faction))
             {
                 DecideFarms(faction);
@@ -273,6 +275,56 @@ namespace Rts.Simulation
             var house = world.Buildings[line.IncenseHouseId - 1];
             bool whole = LayIncenseLine(faction, index, house);
             SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private void DecideCharms(uint faction)
+        {
+            if (!CharmsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
+            int workshops = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.CharmWorkshop) workshops++;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Charms);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.CharmWorkshopId))
+            {
+                if (BuildingPending(line.CharmWorkshopId)) return;
+                if (workshops >= rules.CharmMaxWorkshops || economy.Wood < rules.CharmWoodCost + rules.CharmWoodReserve) return;
+                uint id = PlaceCharmWorkshop(faction);
+                if (id != 0) line.CharmWorkshopId = id;
+                return;
+            }
+            var workshop = world.Buildings[line.CharmWorkshopId - 1];
+            bool whole = LayCharmsLine(faction, index, workshop);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceCharmWorkshop(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.CharmSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.CharmWorkshop, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayCharmsLine(uint faction, int lineIndex, BuildingState workshop)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(workshop), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
         }
 
         private uint PlaceIncenseHouse(uint faction, int preferredCell = -1)

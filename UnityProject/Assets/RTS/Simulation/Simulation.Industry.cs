@@ -325,6 +325,26 @@ namespace Rts.Simulation
                         economy.IncenseProduced++;
                     }
                 }
+                else if (CharmsAllowed(b.FactionId) && b.Kind == BuildingKind.CharmWorkshop)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Wood > rules.CharmKeepWood)
+                    {
+                        economy.Wood--;
+                        b.Input++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.CharmWoodInput
+                        && b.Output < rules.BufferLimit && economy.Charms < rules.CharmStockLimit)
+                    {
+                        b.Input -= rules.CharmWoodInput;
+                        b.Timer = rules.CharmTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.CharmsProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -356,7 +376,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
                 : kind == BuildingKind.Lapidary ? ResourceKind.Gems
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
-                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : ResourceKind.Metal;
+                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -442,6 +462,10 @@ namespace Rts.Simulation
                 {
                     if (item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Food && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
+                if (CharmsAllowed(faction) && b.Kind == BuildingKind.CharmWorkshop && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
+                {
+                    b.Input++; return true;
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -618,6 +642,10 @@ namespace Rts.Simulation
                     int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
                 }
             }
+            if (CharmsAllowed(target.FactionId) && target.Kind == BuildingKind.CharmWorkshop && kind == ResourceKind.Wood)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -644,7 +672,8 @@ namespace Rts.Simulation
                || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food)
                || (JewelsOn && destination == BuildingKind.Lapidary && (kind == ResourceKind.Stone || kind == ResourceKind.Ore))
                || (TradeGoodsOn && destination == BuildingKind.Weaver && kind == ResourceKind.Wood)
-               || (IncenseOn && destination == BuildingKind.IncenseHouse && (kind == ResourceKind.Wood || kind == ResourceKind.Food));
+               || (IncenseOn && destination == BuildingKind.IncenseHouse && (kind == ResourceKind.Wood || kind == ResourceKind.Food))
+               || (CharmsOn && destination == BuildingKind.CharmWorkshop && kind == ResourceKind.Wood);
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Incense)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Charms)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -67,7 +67,7 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && FindRequestedResourceNode(command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
                 return;
@@ -76,7 +76,7 @@ namespace Rts.Simulation
             if (existing >= 0)
             {
                 var current = world.ProcessingLines[existing];
-                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0)
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0 || current.CharmWorkshopId != 0)
                 {
                     RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
                     return;
@@ -106,6 +106,7 @@ namespace Rts.Simulation
             if (kind == ProcessingLineKind.Jewels) return JewelsAllowed(faction);
             if (kind == ProcessingLineKind.TradeGoods) return TradeGoodsAllowed(faction);
             if (kind == ProcessingLineKind.Incense) return IncenseAllowed(faction);
+            if (kind == ProcessingLineKind.Charms) return CharmsAllowed(faction);
             if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear)
                 return ForestryAllowed(faction) && (kind != ProcessingLineKind.BowGear || world.Economies[faction - 1].Age >= 2);
             if (!IndustryOn || !ProcessingOn || !MetalworkAllowed(faction)) return false;
@@ -123,6 +124,7 @@ namespace Rts.Simulation
                 : kind == ProcessingLineKind.Jewels ? world.Config.Economy.LapidaryWoodCost
             : kind == ProcessingLineKind.TradeGoods ? world.Config.Economy.WeaverWoodCost
             : kind == ProcessingLineKind.Incense ? world.Config.Economy.IncenseWoodCost
+            : kind == ProcessingLineKind.Charms ? world.Config.Economy.CharmWoodCost
             : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
                 : world.Config.Economy.MineWoodCost;
@@ -312,6 +314,18 @@ namespace Rts.Simulation
                 }
                 LayIncenseLine(faction, index, world.Buildings[line.IncenseHouseId - 1]);
             }
+            else if (line.Kind == ProcessingLineKind.Charms)
+            {
+                if (!BuildingReady(line.CharmWorkshopId))
+                {
+                    if (BuildingPending(line.CharmWorkshopId)) return true;
+                    if (economy.Wood < world.Config.Economy.CharmWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceCharmWorkshop(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.CharmWorkshopId = id; return true;
+                }
+                LayCharmsLine(faction, index, world.Buildings[line.CharmWorkshopId - 1]);
+            }
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
                 if (line.Kind == ProcessingLineKind.Steel)
@@ -412,7 +426,7 @@ namespace Rts.Simulation
                 if (line.FactionId != faction) continue;
                 if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
                     || line.LumberCampId == buildingId || line.FletcherId == buildingId || line.MillId == buildingId
-                || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.DryingRackId == buildingId || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId) return i;
+                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.DryingRackId == buildingId || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId) return i;
             }
             return -1;
         }
@@ -537,7 +551,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId, line.CharmWorkshopId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -568,6 +582,8 @@ namespace Rts.Simulation
                 return BuildingReady(line.WeaverId);
             if (line.Kind == ProcessingLineKind.Incense)
                 return BuildingReady(line.IncenseHouseId);
+            if (line.Kind == ProcessingLineKind.Charms)
+                return BuildingReady(line.CharmWorkshopId);
             return BuildingReady(line.MineId) && BuildingReady(line.SmelterId) && BuildingReady(line.KilnId) && BuildingReady(line.SteelworksId);
         }
 
@@ -595,6 +611,7 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.Lapidary) line.LapidaryId = id;
             else if (kind == BuildingKind.Weaver) line.WeaverId = id;
             else if (kind == BuildingKind.IncenseHouse) line.IncenseHouseId = id;
+            else if (kind == BuildingKind.CharmWorkshop) line.CharmWorkshopId = id;
             else if (kind == BuildingKind.IncenseHouse) line.IncenseHouseId = id;
         }
 
@@ -690,6 +707,11 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.Incense)
             {
                 SetSimpleHaulers(faction, line.IncenseHouseId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.Charms)
+            {
+                SetSimpleHaulers(faction, line.CharmWorkshopId, 0, wanted);
                 return;
             }
             int current = 0;

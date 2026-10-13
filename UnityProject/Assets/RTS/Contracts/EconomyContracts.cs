@@ -55,7 +55,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -813,6 +813,17 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int IncenseHealHp { get; }
         public int IncenseMaxHouses { get; }
         public int IncenseWoodReserve { get; }
+        public bool CharmsEnabled { get; }
+        public int Charms { get; }
+        public int CharmWorkshopWoodCost { get; }
+        public int CharmWorkshopSizeCells { get; }
+        public int CharmTicks { get; }
+        public int CharmWoodInput { get; }
+        public int CharmKeepWood { get; }
+        public int CharmStockLimit { get; }
+        public int CharmMaxWorkshops { get; }
+        public int CharmWoodReserve { get; }
+        public int CharmHpPermille { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -882,7 +893,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool incenseEnabled = false, int incense = 0, int incenseHouseWoodCost = 0, int incenseHouseSizeCells = 0,
              int incenseTicks = 0, int incenseWoodInput = 0, int incenseFoodInput = 0, int incenseKeepWood = 0,
              int incenseKeepFood = 0, int incenseStockLimit = 0, int incenseHealIntervalTicks = 0,
-             int incenseHealHp = 0, int incenseMaxHouses = 0, int incenseWoodReserve = 0)
+             int incenseHealHp = 0, int incenseMaxHouses = 0, int incenseWoodReserve = 0,
+             bool charmsEnabled = false, int charms = 0, int charmWorkshopWoodCost = 0, int charmWorkshopSizeCells = 0,
+             int charmTicks = 0, int charmWoodInput = 0, int charmKeepWood = 0, int charmStockLimit = 0,
+             int charmMaxWorkshops = 0, int charmWoodReserve = 0, int charmHpPermille = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -924,6 +938,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             IncenseKeepWood = incenseKeepWood; IncenseKeepFood = incenseKeepFood; IncenseStockLimit = incenseStockLimit;
             IncenseHealIntervalTicks = incenseHealIntervalTicks; IncenseHealHp = incenseHealHp; IncenseMaxHouses = incenseMaxHouses;
             IncenseWoodReserve = incenseWoodReserve;
+            CharmsEnabled = charmsEnabled; Charms = charms; CharmWorkshopWoodCost = charmWorkshopWoodCost; CharmWorkshopSizeCells = charmWorkshopSizeCells;
+            CharmTicks = charmTicks; CharmWoodInput = charmWoodInput; CharmKeepWood = charmKeepWood; CharmStockLimit = charmStockLimit;
+            CharmMaxWorkshops = charmMaxWorkshops; CharmWoodReserve = charmWoodReserve; CharmHpPermille = charmHpPermille;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

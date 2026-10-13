@@ -176,6 +176,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Lapidary, e.LapidaryWoodCost, 0, e.LapidaryWork);
             Add(rows, BuildingKind.Weaver, e.WeaverWoodCost, 0, e.WeaverWork);
             Add(rows, BuildingKind.IncenseHouse, e.IncenseWoodCost, 0, e.IncenseWork);
+            Add(rows, BuildingKind.CharmWorkshop, e.CharmWoodCost, 0, e.CharmWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

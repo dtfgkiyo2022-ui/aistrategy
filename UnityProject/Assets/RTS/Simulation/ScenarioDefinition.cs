@@ -232,6 +232,11 @@ namespace Rts.Simulation
         public int IncenseTicks = 80, IncenseWoodInput = 2, IncenseFoodInput = 1;
         public int IncenseKeepWood = 80, IncenseKeepFood = 60, IncenseStockLimit = 30;
         public int IncenseHealIntervalTicks = 40, IncenseHealHp = 20, IncenseMaxHouses = 1, IncenseWoodReserve = 20;
+        /// <summary>Sanctuary charms: wood is turned into stock for blessed soldiers.</summary>
+        public bool Charms;
+        public int CharmSizeCells = 2, CharmWoodCost = 80, CharmWork = 200, CharmHp = 400;
+        public int CharmTicks = 100, CharmWoodInput = 3, CharmKeepWood = 80, CharmStockLimit = 20;
+        public int CharmMaxWorkshops = 1, CharmWoodReserve = 20, CharmHpPermille = 1200;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

@@ -94,6 +94,7 @@
     <Compile Include="JewelsTests.cs" />
     <Compile Include="TradeGoodsTests.cs" />
     <Compile Include="IncenseTests.cs" />
+    <Compile Include="CharmsTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

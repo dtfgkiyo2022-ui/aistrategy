@@ -214,10 +214,13 @@ namespace Rts.Simulation
         private static UnitKind QueueAt(BuildingState b, int i) => b.QueueKinds == null || i >= b.QueueKinds.Length ? UnitKind.Infantry : b.QueueKinds[i];
         private static bool QueueRationsAt(BuildingState b, int i) => b.QueueRations != null && i >= 0 && i < b.QueueRations.Length && b.QueueRations[i];
         private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
+        private static bool QueueCharmsAt(BuildingState b, int i) => b.QueueCharms != null && i >= 0 && i < b.QueueCharms.Length && b.QueueCharms[i];
         private bool UsesRations(uint faction, UnitKind kind)
             => RationsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Scout;
         private bool UsesPlanks(uint faction, UnitKind kind)
             => PlanksAllowed(faction) && kind == UnitKind.Ram;
+        private bool UsesCharms(uint faction, UnitKind kind)
+            => CharmsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk;
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {
             return TrainTicksFor(faction, kind, ticks, rationed, false);
@@ -290,6 +293,12 @@ namespace Rts.Simulation
                 e.PlanksConsumed = checked(e.PlanksConsumed + world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams + world.Config.Economy.PlanksPerRam);
             }
+            bool charmed = UsesCharms(faction, kind) && e.Charms >= 1;
+            if (charmed)
+            {
+                e.Charms = checked(e.Charms - 1);
+                e.CharmsConsumed = checked(e.CharmsConsumed + 1);
+            }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
@@ -313,6 +322,13 @@ namespace Rts.Simulation
                 Array.Resize(ref planks, planks.Length + 1);
                 planks[planks.Length - 1] = planked;
                 b.QueuePlanks = planks;
+            }
+            if (CharmsOn && (AgesOn || kind == UnitKind.Monk))
+            {
+                var charms = b.QueueCharms ?? Array.Empty<bool>();
+                Array.Resize(ref charms, charms.Length + 1);
+                charms[charms.Length - 1] = charmed;
+                b.QueueCharms = charms;
             }
         }
 
@@ -359,12 +375,14 @@ namespace Rts.Simulation
             var kind = QueueAt(b, b.Queued - 1);
             bool rationed = QueueRationsAt(b, b.Queued - 1);
             bool planked = QueuePlanksAt(b, b.Queued - 1);
+            bool charmed = QueueCharmsAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
             if (b.QueueKinds != null && b.QueueKinds.Length > 0) Array.Resize(ref b.QueueKinds, b.QueueKinds.Length - 1);
             if (b.QueueRations != null && b.QueueRations.Length > 0) Array.Resize(ref b.QueueRations, b.QueueRations.Length - 1);
             if (b.QueuePlanks != null && b.QueuePlanks.Length > 0) Array.Resize(ref b.QueuePlanks, b.QueuePlanks.Length - 1);
+            if (b.QueueCharms != null && b.QueueCharms.Length > 0) Array.Resize(ref b.QueueCharms, b.QueueCharms.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -409,6 +427,11 @@ namespace Rts.Simulation
                 e.PlanksConsumed = checked(e.PlanksConsumed - world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams - world.Config.Economy.PlanksPerRam);
             }
+            if (charmed)
+            {
+                e.Charms = checked(e.Charms + 1);
+                e.CharmsConsumed = checked(e.CharmsConsumed - 1);
+            }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -433,6 +456,12 @@ namespace Rts.Simulation
                 var rest = new bool[b.QueuePlanks.Length - 1];
                 Array.Copy(b.QueuePlanks, 1, rest, 0, rest.Length);
                 b.QueuePlanks = rest;
+            }
+            if (b.QueueCharms != null && b.QueueCharms.Length > 0)
+            {
+                var rest = new bool[b.QueueCharms.Length - 1];
+                Array.Copy(b.QueueCharms, 1, rest, 0, rest.Length);
+                b.QueueCharms = rest;
             }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;
