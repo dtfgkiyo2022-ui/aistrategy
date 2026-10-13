@@ -996,7 +996,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
             GoodsMarketEnabled = goodsMarketEnabled; GoodsTradeLot = goodsTradeLot;
             GoodsPrices = ContractList.Copy(goodsPrices ?? Array.Empty<GoodsPriceView>());
-             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
+            BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
             StorageCapacity = storageCapacity;

@@ -1,6 +1,6 @@
 # オーナー側（A）作業の引き継ぎメモ
 
-最終更新：2026-10-12 午後（製品版の重さ・参謀の会話・見本の戦術。押し込みの波と計算のメモリ確保を作業中。PC の電源断が続いている）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
+最終更新：2026-10-14 朝（14文明の加工の連鎖がそろった。加工品を市場で売る作業を Codex で実行中）。前のセッション（別アカウントの Claude Code）から、次のセッションへ渡すためのメモです。**作業を始める前に全部読んでください。**
 
 このメモは「今どこまで進んでいて、次に何をするか」と「このリポジトリで作業するときの落とし穴」をまとめたものです。恒常的なルールは `CLAUDE.md`、仕様は `docs/technical-design.md`、進め方は `ROADMAP.md` と GitHub Issues が正です。このメモと矛盾したら、そちらを優先してください。
 
@@ -10,7 +10,67 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-13 午後。これが最新）
+### 今どこにいるか（2026-10-14 朝。これが最新）
+
+**最初にやること：下の「動いている作業」の `.done` を見る。細部は `D:/rts-verify/state_0928.md` の末尾。**
+
+- **14文明すべての加工の連鎖が main に入った**（聖地 #409・関所 #410・都市 #411。都市の画面の名前は「工具工房」「工具」＝既にある技術「道具（採集が速い）」と区別するため）。#135 に告知済み。standard は main に合わせ済み
+- `Simulation.Incense.cs` の `.meta` が抜けていたのを足した（この引き継ぎの PR）
+- 製品版：`D:/rts-verify/build1014b/起動.bat`（main b27f594。起動して1分動かし、例外なし）
+
+**動いている作業**
+
+| ブランチ（worktree） | 中身 | 状況 | 次にやること |
+|---|---|---|---|
+| `a/goods-market`（`../aistrategy-wt-goods`、土台 a/craft-metropolis） | **加工品を市場で売れる**（旗 `GoodsMarket`、拡張欄 **ID 33**）：自分の市場で加工品（鋼・弓の装備・糧食・煉瓦・馬具・板・書物・香・護符・補修材・工具）を5個ずつ食料・木材・石に替える。値段は材料の約2倍。お任せは溜まった加工品を食料・木材の少ない方に替える（5個は残す）。市場が無ければ建てる。ねらい：余る加工品（馬具・書物・板）の使い道と、お任せの木材不足 | **Codex 実行中**（10-14 5:20 開始）：`D:/rts-verify/astra/goods_market1.done`、結果 `result_goods_market1.md`、依頼 `request_goods_market1_luna.md`。Contracts は `EconomyView` の欄だけ（列挙は足さない） | レビュー（下の「Codex の成果で毎回見る所」）→ main を取り込む → 関連テスト → Unity EditMode → 設計書に 32.36 を足す → 全体テスト → マージ → #135 |
+
+- 次の ID は **34**
+- その次（オーナーと合意済み）：釣り合いをまとめて見る（下の「連鎖が全部入った後にやること」）→ チュートリアル
+
+### 今どこにいるか（2026-10-14 未明。アカウント切り替えの引き継ぎ。聖地・関所・都市は上のとおりマージ済み）
+
+**最初にやること：下の「動いている作業」の `.done` を見る。細かい経緯は `D:/rts-verify/state_0928.md` の末尾（10-13〜10-14）。メモリは `C:/Users/きよ/.claude/projects/D----------------aistrategy-aistrategy/memory/`（`MEMORY.md` が索引。自動では読まれないので自分から読む）。**
+
+**main に入っているもの（aa267cf、#403〜#407）**
+- #403 お任せが選ぶ文明の偏りの直し（旗 `CivVariety`、設計書 32.35）／#404 山岳の連鎖（宝石）／#405 隊商の連鎖（交易品）／#406 教団の連鎖（香）／#407 兵を右クリックで動かす＋「全部自分で」（M キー）に切り替えた瞬間に村人と兵を止める
+- テストプレイ用：エディタは `../aistrategy-wt-standard`（main と同じ）。製品版は `D:/rts-verify/build1014a/起動.bat`（main aa267cf。**起動の確認はしていない**）
+- #407 の画面での確認はまだ（オーナーに頼んである）：軍団を選んで地面・敵のコア・前哨地を右クリック／M キーで村人と兵が止まり、ログに「村人と兵を止めました。」
+
+**動いている作業（3本とも、前の連鎖のブランチに積んである。この順にマージする）**
+
+| 順 | ブランチ（worktree） | 中身 | 状況 | 次にやること |
+|---|---|---|---|---|
+| 1 | `a/craft-sanctuary`（`../aistrategy-wt-craft10`） | 聖地：木材 → 護符工房 → 護符 → 最大 HP 1.2 倍の兵（旗 `Charms`、ID 30） | 関連テスト・Unity EditMode 通過。**全体テスト実行中**：`D:/rts-verify/fulltest_sanct.done`（10-14 0:00 開始、約3時間） | `EXIT=0` なら main を取り込み → push → PR → マージ → standard を ff → #135 に Contracts（`ResourceKind.Charms = 19`・`BuildingKind.CharmWorkshop = 41`・`ProcessingLineKind.Charms = 14`） |
+| 2 | `a/craft-tollgate`（`../aistrategy-wt-craft11`） | 関所：木材 → 修繕所 → 補修材 → 建物とコアの修理（旗 `RepairKits`、ID 31） | 関連テスト・Unity EditMode 通過。**全体テストは未実行** | `D:/rts-verify/fulltest_toll.ps1`（BOM 付きで用意済み）を Start-Process で起動 → 通ったら 1 と同じ流れ。Contracts：`RepairKits = 20`・`RepairYard = 42`・`ProcessingLineKind.RepairKits = 15` |
+| 3 | `a/craft-metropolis`（`../aistrategy-wt-craft12`） | 都市：木材 → 道具工房 → 道具 → 村人の訓練が食料 0.7 倍・時間 0.5 倍（旗 `Tools`、ID 32）。**最後の連鎖** | **Codex 実行中**：`D:/rts-verify/astra/craft_metropolis1.done`、結果 `result_craft_metropolis1.md`、依頼 `request_craft_metropolis1_luna.md` | 返ってきたらレビュー（下の「Codex の成果で毎回見る所」）→ 作業中としてコミット → 関連テスト → Unity EditMode → 設計書 32.34 に行と節を足す → 全体テスト → マージ。Contracts：`Tools = 21`・`ToolShop = 43`・`ProcessingLineKind.Tools = 16` |
+
+- 3本とも入ったら製品版を作り直す（`D:/rts-verify/build1014a.ps1` を写して名前を変える。Unity の作業フォルダ `../aistrategy-wt-siegeage` を `git checkout --detach origin/main` してから）
+- 旗と拡張欄の ID は 32 まで予約済み。**次は 33**。`EconomyCommandKind` は 24（`StopVillagers`）まで
+
+**Codex の成果で毎回見る所（10-13 に実際にあった不具合）**
+- お任せの産業の判断（`Simulation.IndustryAi.cs` の `DecideIndustry`）で、新しい判断の後に `return` で打ち切っていないか（隊商：旗オフでも先の判断に届かなくなった。6000 tick の一致のテストはすり抜けた）
+- Unity 側（`TopBarResourceVisibility.cs` など）に同じ欄・同じメソッドを2回書いていないか（教団：Headless は通るが Unity のコンパイルが落ちた）。**Unity EditMode は必ず自分で回す**
+- お任せの新しい判断が「ほかにできなかったときだけ」「待ち行列が空のときだけ」になっていないか（山岳：宝石 62 個のうち 12 個しか使わなかった）
+- 測定の条件（`--west-civ X --east-civ Agrarian`、戦術は指定しない、種1〜3）と、どちらの陣営がその文明かが報告に書いてあるか。おかしければ自分で測り直す
+- コアは `world.Cores[world.Factions[faction - 1].CoreId - 1]`（陣営の番号をそのまま添字にしない）
+
+**運用で踏んだ落とし穴（10-13）**
+- **`.ps1` を bash の `printf`・heredoc で書かない**（パスの `\a`・`\r` が化けて、何も始まらないまま黙って終わる）。Write で書き、PowerShell で BOM を付け、起動の 40 秒後にログができているか見る
+- 重い処理は同時に2本まで（全体テスト・Unity・Codex のビルド・`tactic-match`）。全体テストは約 2 時間 40 分〜3 時間
+- **`SteelEconomySampleAsksForALineInThePlayedGame` は負荷で落ちる**（「JavaScript 戦術の呼び出しが 50ms を超えました」＝実時間の制限）。全体テストでこれ1件だけ落ちたら、`dotnet test Headless/Rts.Core.Tests/Rts.Core.Tests.csproj --configuration Release --no-build --filter FullyQualifiedName~SteelEconomySample` を単独で回す。直すのは宿題
+- 測定の `replay.rpl` は読んだら消す（1試合で最大 4GB。10-13 朝に D が満杯になった）。測定の控えは `D:/rts-verify/craft_*_1013/`・`civ_variety_1013/`
+- 積み重ねた PR は、`gh pr merge N --merge` の前にそのブランチで `git merge origin/main` → push。push は PowerShell で PATH を読み直してから（git-lfs）
+
+**連鎖が全部入った後にやること（オーナーと合意済みの順）**
+1. 釣り合いをまとめて見る（設計書 32.34 の末尾・32.35）：お任せの陣営は木材と食料がいつも少なく、加工の建物（木材 80）が兵と取り合いになる → 「お任せが加工の建物を建てる時期」から調べる／冶金と農耕がお任せにほとんど選ばれなくなった（満点の決め方）／関所は選ばれない／石工が煉瓦で弱くなる／馬具・書物・板が余る／お任せの隊商は石を使わない
+2. チュートリアル（オーナー：要素を足し終えてから）
+
+**オーナーに聞いてあって、返事待ちのこと**
+- 生産した村人が同じ1マスに重なって出る（「全部自分で」のときは待機のまま重なり、1人に見えるかコアに隠れる）。**出現する場所をコアの周りに1人ずつずらす案**を出してある（`Simulation.Economy.cs` の `SpawnVillager`。旗の下に入れること）。「入れてよい」と言われたら作る
+- `D:/rts-verify/timing_gs3.json`（8.4GB、10-09 の測定）を消してよいか
+- 採掘の建物からベルトで運ぶ案（オーナー「今の仕様を全部把握してから」）
+
+### 今どこにいるか（2026-10-13 午後）
 
 **最初にやること：`D:/rts-verify/state_0928.md` の末尾（10-13）を読む。**
 
