@@ -33,6 +33,7 @@ namespace Rts.Simulation
             e.Books = allCivilisations;
             e.Preserves = allCivilisations;
             e.Jewels = allCivilisations;
+            e.TradeGoods = allCivilisations;
             e.BeltComponents = true;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;

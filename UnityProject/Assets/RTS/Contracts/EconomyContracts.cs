@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -784,6 +784,15 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int JewelMercenaryGems { get; }
         public int JewelMercenaryFood { get; }
         public int JewelMercenaryInfantryRatio { get; }
+        public bool TradeGoodsEnabled { get; }
+        public int WeaverWoodCost { get; }
+        public int WeaverSizeCells { get; }
+        public int TradeGoodsTicks { get; }
+        public int TradeGoodsWoodInput { get; }
+        public int TradeGoodsKeepWood { get; }
+        public int TradeGoodsValue { get; }
+        public int TradeGoodsMaxWeavers { get; }
+        public int TradeGoodsWoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -846,7 +855,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool jewelsEnabled = false, int lapidaryWoodCost = 0, int lapidarySizeCells = 0,
              int jewelTicks = 0, int jewelStoneInput = 0, int jewelOreInput = 0,
              int jewelMaxLapidaries = 0, int jewelKeepStone = 0,
-             int jewelMercenaryGems = 0, int jewelMercenaryFood = 0, int jewelMercenaryInfantryRatio = 0)
+             int jewelMercenaryGems = 0, int jewelMercenaryFood = 0, int jewelMercenaryInfantryRatio = 0,
+             bool tradeGoodsEnabled = false, int weaverWoodCost = 0, int weaverSizeCells = 0,
+             int tradeGoodsTicks = 0, int tradeGoodsWoodInput = 0, int tradeGoodsKeepWood = 0,
+             int tradeGoodsValue = 0, int tradeGoodsMaxWeavers = 0, int tradeGoodsWoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -880,6 +892,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             JewelMaxLapidaries = jewelMaxLapidaries; JewelKeepStone = jewelKeepStone;
             JewelMercenaryGems = jewelMercenaryGems; JewelMercenaryFood = jewelMercenaryFood;
             JewelMercenaryInfantryRatio = jewelMercenaryInfantryRatio;
+            TradeGoodsEnabled = tradeGoodsEnabled; WeaverWoodCost = weaverWoodCost; WeaverSizeCells = weaverSizeCells;
+            TradeGoodsTicks = tradeGoodsTicks; TradeGoodsWoodInput = tradeGoodsWoodInput; TradeGoodsKeepWood = tradeGoodsKeepWood;
+            TradeGoodsValue = tradeGoodsValue; TradeGoodsMaxWeavers = tradeGoodsMaxWeavers; TradeGoodsWoodReserve = tradeGoodsWoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

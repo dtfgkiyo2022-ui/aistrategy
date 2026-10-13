@@ -237,7 +237,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -256,6 +256,7 @@ namespace Rts.Simulation
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int PreservesProduced, PreservesConvertedFood;
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
+        internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -574,6 +575,10 @@ namespace Rts.Simulation
                 && e.JewelStoneInput > 0 && e.JewelOreInput > 0 && e.JewelStoneInput <= e.BufferLimit && e.JewelOreInput <= e.BufferLimit
                 && e.JewelMaxLapidaries > 0 && e.JewelKeepStone >= 0 && e.JewelWoodReserve >= 0
                 && e.JewelMercenaryGems > 0 && e.JewelMercenaryFood >= 0 && e.JewelMercenaryInfantryRatio > 0), "Invalid jewels rules.");
+            Require(!e.TradeGoods || (e.Enabled && e.Industry && e.Ages && e.WeaverSizeCells > 0 && e.WeaverSizeCells <= 8
+                && e.WeaverWoodCost >= 0 && e.WeaverWork > 0 && e.WeaverHp > 0 && e.TradeGoodsTicks > 0
+                && e.TradeGoodsWoodInput > 0 && e.TradeGoodsWoodInput <= e.BufferLimit && e.TradeGoodsKeepWood >= 0
+                && e.TradeGoodsValue > 0 && e.TradeGoodsMaxWeavers > 0 && e.TradeGoodsWoodReserve >= 0), "Invalid trade-goods rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -780,7 +785,8 @@ namespace Rts.Simulation
                         || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
-                        || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves))
+                        || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
+                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -949,6 +955,11 @@ namespace Rts.Simulation
                   JewelStoneInput = e.JewelStoneInput, JewelOreInput = e.JewelOreInput, JewelMaxLapidaries = e.JewelMaxLapidaries,
                   JewelKeepStone = e.JewelKeepStone, JewelWoodReserve = e.JewelWoodReserve, JewelMercenaryGems = e.JewelMercenaryGems,
                   JewelMercenaryFood = e.JewelMercenaryFood, JewelMercenaryInfantryRatio = e.JewelMercenaryInfantryRatio,
+                  TradeGoods = e.TradeGoods, WeaverSizeCells = e.WeaverSizeCells, WeaverWoodCost = e.WeaverWoodCost,
+                  WeaverWork = e.WeaverWork, WeaverHp = e.WeaverHp, TradeGoodsTicks = e.TradeGoodsTicks,
+                  TradeGoodsWoodInput = e.TradeGoodsWoodInput, TradeGoodsKeepWood = e.TradeGoodsKeepWood,
+                  TradeGoodsValue = e.TradeGoodsValue, TradeGoodsMaxWeavers = e.TradeGoodsMaxWeavers,
+                  TradeGoodsWoodReserve = e.TradeGoodsWoodReserve,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -196,7 +196,16 @@ namespace Rts.Simulation
                 jewelKeepStone: JewelsAllowed(faction) ? rules.JewelKeepStone : 0,
                 jewelMercenaryGems: JewelsAllowed(faction) ? rules.JewelMercenaryGems : 0,
                 jewelMercenaryFood: JewelsAllowed(faction) ? rules.JewelMercenaryFood : 0,
-                jewelMercenaryInfantryRatio: JewelsAllowed(faction) ? rules.JewelMercenaryInfantryRatio : 0);
+                jewelMercenaryInfantryRatio: JewelsAllowed(faction) ? rules.JewelMercenaryInfantryRatio : 0,
+                tradeGoodsEnabled: TradeGoodsAllowed(faction),
+                weaverWoodCost: TradeGoodsAllowed(faction) ? rules.WeaverWoodCost : 0,
+                weaverSizeCells: TradeGoodsAllowed(faction) ? rules.WeaverSizeCells : 0,
+                tradeGoodsTicks: TradeGoodsAllowed(faction) ? rules.TradeGoodsTicks : 0,
+                tradeGoodsWoodInput: TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodInput : 0,
+                tradeGoodsKeepWood: TradeGoodsAllowed(faction) ? rules.TradeGoodsKeepWood : 0,
+                tradeGoodsValue: TradeGoodsAllowed(faction) ? rules.TradeGoodsValue : 0,
+                tradeGoodsMaxWeavers: TradeGoodsAllowed(faction) ? rules.TradeGoodsMaxWeavers : 0,
+                tradeGoodsWoodReserve: TradeGoodsAllowed(faction) ? rules.TradeGoodsWoodReserve : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

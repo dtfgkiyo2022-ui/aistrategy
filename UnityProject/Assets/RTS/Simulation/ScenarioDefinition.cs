@@ -221,6 +221,11 @@ namespace Rts.Simulation
         public int LapidarySizeCells = 2, LapidaryWoodCost = 80, LapidaryWork = 200, LapidaryHp = 400;
         public int JewelTicks = 80, JewelStoneInput = 3, JewelOreInput = 1;
         public int JewelMaxLapidaries = 1, JewelKeepStone = 40, JewelWoodReserve = 20;
+        /// <summary>TradeGoods: caravan weavers turn stored wood into trade goods that become the lower core stock.</summary>
+        public bool TradeGoods;
+        public int WeaverSizeCells = 2, WeaverWoodCost = 80, WeaverWork = 200, WeaverHp = 400;
+        public int TradeGoodsTicks = 80, TradeGoodsWoodInput = 3, TradeGoodsKeepWood = 80, TradeGoodsValue = 4;
+        public int TradeGoodsMaxWeavers = 1, TradeGoodsWoodReserve = 20;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

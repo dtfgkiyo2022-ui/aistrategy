@@ -866,6 +866,7 @@ namespace Rts.Presentation
                 case BuildingKind.Storage: return UiText.T("Storage", "倉庫");
                 case BuildingKind.DryingRack: return UiText.T("Drying rack", "干し場");
                 case BuildingKind.Lapidary: return UiText.T("Lapidary", "研磨所");
+                case BuildingKind.Weaver: return UiText.T("Weaver", "織物工房");
                 default: return kind.ToString();
             }
         }
@@ -948,7 +949,7 @@ namespace Rts.Presentation
 
         private static bool RequiresInput(BuildingKind kind)
         {
-            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack;
+            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack || kind == BuildingKind.Weaver;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>
