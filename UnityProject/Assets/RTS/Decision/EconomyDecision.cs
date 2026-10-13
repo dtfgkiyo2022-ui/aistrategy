@@ -16,12 +16,22 @@ namespace Rts.Decision
             public CivKind Civ { get; }
             public int Score { get; }
             public int Priority { get; }
+            public int ScoreCap { get; }
+            public bool Enabled { get; }
 
             public CivScore(CivKind civ, int score, int priority)
+                : this(civ, score, priority, 1000, true)
+            {
+            }
+
+            /// <summary>A civilisation score with the cap used by the variety rule.</summary>
+            public CivScore(CivKind civ, int score, int priority, int scoreCap, bool enabled)
             {
                 Civ = civ;
                 Score = score;
                 Priority = priority;
+                ScoreCap = scoreCap;
+                Enabled = enabled;
             }
         }
 
@@ -37,6 +47,64 @@ namespace Rts.Decision
                     best = candidate;
             }
             return best.Civ;
+        }
+
+        /// <summary>
+        /// CivVariety compares unlike terrain scales in permille, then picks one of the near-best candidates with a
+        /// scenario-seed choice. The input is already in explicit priority order; no collection enumeration decides it.
+        /// </summary>
+        public static CivKind ChooseCivVariety(IReadOnlyList<CivScore> candidates, ulong scenarioSeed, uint faction,
+            int windowPermille)
+        {
+            if (candidates == null || candidates.Count == 0) return CivKind.Primitive;
+            int window = System.Math.Max(0, System.Math.Min(1000, windowPermille));
+            int bestPermille = -1;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (!candidate.Enabled || candidate.Score <= 0 || candidate.ScoreCap <= 0) continue;
+                int permille = NormalizedScorePermille(candidate.Score, candidate.ScoreCap);
+                if (permille > bestPermille) bestPermille = permille;
+            }
+            // No ground fits any civilisation: keep the historical answer (the first by priority) instead of none.
+            if (bestPermille <= 0) return ChooseCiv(candidates);
+
+            int count = 0;
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (candidate.Enabled && candidate.Score > 0 && candidate.ScoreCap > 0
+                    && NormalizedScorePermille(candidate.Score, candidate.ScoreCap) >= bestPermille - window)
+                    count++;
+            }
+            if (count == 0) return CivKind.Primitive;
+            int chosen = count == 1 ? 0 : (int)(MixCivVarietySeed(scenarioSeed, faction) % (ulong)count);
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                if (!candidate.Enabled || candidate.Score <= 0 || candidate.ScoreCap <= 0
+                    || NormalizedScorePermille(candidate.Score, candidate.ScoreCap) < bestPermille - window) continue;
+                if (chosen-- == 0) return candidate.Civ;
+            }
+            return CivKind.Primitive;
+        }
+
+        /// <summary>Converts a raw score to a capped integer permille without floating point.</summary>
+        public static int NormalizedScorePermille(int score, int scoreCap)
+        {
+            if (score <= 0 || scoreCap <= 0) return 0;
+            return (int)System.Math.Min(1000L, (long)score * 1000L / scoreCap);
+        }
+
+        private static ulong MixCivVarietySeed(ulong seed, uint faction)
+        {
+            unchecked
+            {
+                ulong z = seed + 0x9E3779B97F4A7C15UL + faction * 0xD1B54A32D192ED03UL;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+                return z ^ (z >> 31);
+            }
         }
 
         /// <summary>The numbers a policy sets for the automatic economy (technical-design-v3 20). The steps stay the same.</summary>

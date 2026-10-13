@@ -470,6 +470,9 @@ namespace Rts.Simulation
                     Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
+            Require(e.CivVarietyWindowPermille >= 0 && e.CivVarietyWindowPermille <= 1000,
+                "Invalid civ variety window.");
+            Require(!e.CivVariety || (e.Enabled && e.Ages), "Civ variety requires ages and an economy.");
             Require(e.LineRebuildDelayTicks >= 0 && e.RaidLinePriority >= 0, "Invalid line-raid rules.");
             if (e.Enabled)
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
@@ -937,6 +940,7 @@ namespace Rts.Simulation
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
+                CivVariety = e.CivVariety, CivVarietyWindowPermille = e.CivVarietyWindowPermille,
                 EarlyAdvanceFoodCost = e.EarlyAdvanceFoodCost, EarlyAdvanceWoodCost = e.EarlyAdvanceWoodCost, EarlyAdvanceTicks = e.EarlyAdvanceTicks,
                 EarlyAge2FoodCost = e.EarlyAge2FoodCost, EarlyAge2WoodCost = e.EarlyAge2WoodCost, EarlyAge2Ticks = e.EarlyAge2Ticks,
                 EarlyAdvanceVillagers = e.EarlyAdvanceVillagers, EarlyAge2Villagers = e.EarlyAge2Villagers,

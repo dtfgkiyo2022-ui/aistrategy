@@ -110,6 +110,9 @@ namespace Rts.Simulation
         private const int PreservesExtensionId = 25;
         private const int PreservesExtensionVersion = 1;
         private const int PreservesExtensionDataLength = 11 * sizeof(int);
+        private const int CivVarietyExtensionId = 26;
+        private const int CivVarietyExtensionVersion = 1;
+        private const int CivVarietyExtensionDataLength = 2 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -143,6 +146,7 @@ namespace Rts.Simulation
             ,new ExtensionRegistration(PlanksExtensionId, PlanksExtensionVersion, PlanksExtensionDataLength)
             ,new ExtensionRegistration(BooksExtensionId, BooksExtensionVersion, BooksExtensionDataLength)
             ,new ExtensionRegistration(PreservesExtensionId, PreservesExtensionVersion, PreservesExtensionDataLength)
+            ,new ExtensionRegistration(CivVarietyExtensionId, CivVarietyExtensionVersion, CivVarietyExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -711,8 +715,9 @@ namespace Rts.Simulation
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     else if (id == PlanksExtensionId) ReadPlanksExtension(extension, c.Economy);
-        else if (id == BooksExtensionId) ReadBooksExtension(extension, c.Economy);
-        else if (id == PreservesExtensionId) ReadPreservesExtension(extension, c.Economy);
+                    else if (id == BooksExtensionId) ReadBooksExtension(extension, c.Economy);
+                    else if (id == PreservesExtensionId) ReadPreservesExtension(extension, c.Economy);
+                    else if (id == CivVarietyExtensionId) ReadCivVarietyExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -767,6 +772,7 @@ namespace Rts.Simulation
                 extensions.RemoveAll(extension => extension != null && extension.Id == PlanksExtensionId && !c.Economy.Planks);
                 extensions.RemoveAll(extension => extension != null && extension.Id == BooksExtensionId && !c.Economy.Books);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PreservesExtensionId && !c.Economy.Preserves);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyExtensionId && !c.Economy.CivVariety);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -966,7 +972,41 @@ namespace Rts.Simulation
                         extensions[i] = CreatePreservesExtension(c.Economy);
                     }
                 if (c.Economy.Preserves && !hasPreserves) extensions.Add(CreatePreservesExtension(c.Economy));
+                bool hasCivVariety = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CivVarietyExtensionId)
+                    {
+                        hasCivVariety = true;
+                        extensions[i] = CreateCivVarietyExtension(c.Economy);
+                    }
+                if (c.Economy.CivVariety && !hasCivVariety) extensions.Add(CreateCivVarietyExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateCivVarietyExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CivVariety ? 1 : 0);
+                writer.Write(e.CivVarietyWindowPermille);
+                return new ScenarioExtensionData { Id = CivVarietyExtensionId, Version = CivVarietyExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCivVarietyExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid civ variety flag.");
+                e.CivVariety = enabled != 0;
+                e.CivVarietyWindowPermille = reader.ReadInt32();
+                if (e.CivVarietyWindowPermille < 0 || e.CivVarietyWindowPermille > 1000)
+                    throw new InvalidDataException("Invalid civ variety window.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing civ variety extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateRationsExtension(EconomyRules e)

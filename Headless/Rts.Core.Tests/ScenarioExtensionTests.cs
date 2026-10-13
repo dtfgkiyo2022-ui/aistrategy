@@ -122,6 +122,20 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void CivVarietyExtensionRoundTripsItsFlagAndWindow()
+        {
+            var scenario = MapGenerator.GenerateTerrain(1);
+            scenario.Economy.CivVariety = true;
+            scenario.Economy.CivVarietyWindowPermille = 317;
+            var bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.CivVariety, Is.True);
+            Assert.That(decoded.Economy.CivVarietyWindowPermille, Is.EqualTo(317));
+            Assert.That(decoded.Extensions.Any(x => x.Id == 26), Is.True);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
         public void InvalidExtensionRecordsAreRejected()
         {
             var valid = ScenarioBinary.Encode(WithTestExtension(7));

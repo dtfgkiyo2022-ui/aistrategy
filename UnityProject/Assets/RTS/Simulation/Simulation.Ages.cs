@@ -24,6 +24,8 @@ namespace Rts.Simulation
 
         private bool EarlyArmsOn => AgesOn && world.Config.Economy.EarlyArms;
 
+        private bool CivVarietyOn => AgesOn && world.Config.Economy.CivVariety;
+
         private bool AgeClockOn => AgesOn && world.Config.Economy.AgeClock;
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
@@ -464,18 +466,21 @@ namespace Rts.Simulation
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
             // Keep the old pure two-score decision, including its exact tie rule, when all optional flags are off.
-            if (!ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn && !TollgateOn && !MetropolisOn && !SanctuaryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
+            if (!CivVarietyOn && !ForestryOn && !MasonryOn && !CaravanOn && !CavalryOn && !BridgeOn && !AcademyOn && !CultOn && !FishingOn && !MountainOn && !TollgateOn && !MetropolisOn && !SanctuaryOn) return EconomyDecision.ChooseCiv(ore, food, GuaranteedFoodPoints);
 
-            // A civilisation whose flag is off scores zero, which never steals a tie from an older one. Scores are
-            // intentionally not normalised: cavalry remains 0..5 and bridge remains 0..3.
+            // A civilisation whose flag is off scores zero, which never steals a tie from an older one. CivVariety
+            // changes only this comparison; the raw score callbacks remain the terrain rules used by each civilisation.
             var candidates = new EconomyDecision.CivScore[CivRegistrations.Length];
             for (int i = 0; i < CivRegistrations.Length; i++)
             {
                 var row = CivRegistrations[i];
+                bool enabled = row.Enabled(this, faction);
                 candidates[i] = new EconomyDecision.CivScore(row.Civ,
-                    row.Enabled(this, faction) ? row.Score(this, faction, core, ore, food) : 0, row.Priority);
+                    enabled ? row.Score(this, faction, core, ore, food) : 0, row.Priority, row.ScoreCap, enabled);
             }
-            return EconomyDecision.ChooseCiv((System.Collections.Generic.IReadOnlyList<EconomyDecision.CivScore>)candidates);
+            return CivVarietyOn
+                ? EconomyDecision.ChooseCivVariety(candidates, world.Config.Seed, faction, world.Config.Economy.CivVarietyWindowPermille)
+                : EconomyDecision.ChooseCiv((System.Collections.Generic.IReadOnlyList<EconomyDecision.CivScore>)candidates);
         }
 
         /// <summary>
