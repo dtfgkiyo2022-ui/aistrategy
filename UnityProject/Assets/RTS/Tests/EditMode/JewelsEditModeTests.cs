@@ -22,7 +22,7 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
-        public void JewelsContractsExposeMountainBuildingAndLine()
+        public void LapidaryHasJapaneseNameAndFixedContractValues()
         {
             Assert.That((int)BuildingKind.Lapidary, Is.EqualTo(38));
             Assert.That((int)ProcessingLineKind.Jewels, Is.EqualTo(11));

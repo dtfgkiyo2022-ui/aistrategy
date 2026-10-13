@@ -219,9 +219,10 @@ namespace Rts.Simulation
         /// <summary>Jewels: the mountain civilisation turns stored stone and ore into gems for mercenaries.</summary>
         public bool Jewels;
         public int LapidarySizeCells = 2, LapidaryWoodCost = 80, LapidaryWork = 200, LapidaryHp = 400;
-        public int JewelTicks = 120, JewelStoneInput = 3, JewelOreInput = 1;
+        public int JewelTicks = 80, JewelStoneInput = 3, JewelOreInput = 1;
         public int JewelMaxLapidaries = 1, JewelKeepStone = 40, JewelWoodReserve = 20;
-        public int JewelMercenaryGems = 12, JewelMercenaryFood = 40, JewelMercenaryInfantryRatio = 3;
+        // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
+        public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

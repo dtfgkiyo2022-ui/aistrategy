@@ -55,7 +55,8 @@ namespace Rts.Simulation
             if (DecideScout(faction, ref first)) return;
             if (!EconomyScaleOn)
             {
-                if (!DecideInfantry(faction, ref first, ready)) DecideMountainMercenary(faction, ref first);
+                // The hire goes first: the infantry queue refills every time it empties, so a later check never ran.
+                if (!DecideMountainMercenary(faction, ref first)) DecideInfantry(faction, ref first, ready);
                 return;
             }
             // With scaling, each finished and unheld barracks gets its own short queue. The scan is in stable
@@ -64,20 +65,23 @@ namespace Rts.Simulation
             {
                 ref var building = ref world.Buildings[i];
                 if (!building.Alive || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Barracks || building.Held) continue;
-                if (!DecideInfantry(faction, ref building, true)) DecideMountainMercenary(faction, ref building);
+                if (!DecideMountainMercenary(faction, ref building)) DecideInfantry(faction, ref building, true);
             }
         }
 
-        private void DecideMountainMercenary(uint faction, ref BuildingState barracks)
+        private bool DecideMountainMercenary(uint faction, ref BuildingState barracks)
         {
             if (!JewelsAllowed(faction) || world.Economies[faction - 1].Age < 2 || !barracks.Complete
-                || barracks.Held || barracks.Queued != 0 || !Trains(barracks, UnitKind.Mercenary)) return;
+                || barracks.Held || !Trains(barracks, UnitKind.Mercenary)) return false;
             var rules = world.Config.Economy;
+            // Not "an empty queue": the infantry queue is refilled before it empties, and gems piled up unused.
+            if (barracks.Queued >= rules.QueueLimit) return false;
             int infantry = CountClass(faction, UnitKind.Infantry);
             int mercenaries = CountClass(faction, UnitKind.Mercenary);
-            if (mercenaries * rules.JewelMercenaryInfantryRatio >= infantry) return;
-            if (!HasRoomFor(faction, UnitKind.Mercenary) || !CanPay(faction, UnitKind.Mercenary, barracks.Kind)) return;
+            if (mercenaries * rules.JewelMercenaryInfantryRatio >= infantry) return false;
+            if (!HasRoomFor(faction, UnitKind.Mercenary) || !CanPay(faction, UnitKind.Mercenary, barracks.Kind)) return false;
             Enqueue(faction, ref barracks, UnitKind.Mercenary);
+            return true;
         }
 
         private bool DecideInfantry(uint faction, ref BuildingState building, bool ready)

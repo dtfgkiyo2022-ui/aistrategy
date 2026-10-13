@@ -776,7 +776,8 @@ namespace Rts.Simulation
                 var b = c.Belts[i];
                 Require(b.Cell >= 0 && b.Cell < m.WidthCells * m.HeightCells && (i == 0 || c.Belts[i - 1].Cell != b.Cell)
                     && b.FactionId >= 1 && b.FactionId <= 2 && (byte)b.Facing <= 3
-                    && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
+                    && ((byte)b.Item <= 4 || (e.Jewels && b.Item == ResourceKind.Gems)
+                        || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves))
