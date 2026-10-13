@@ -365,6 +365,25 @@ namespace Rts.Simulation
                         economy.RepairKitsProduced++;
                     }
                 }
+                else if (ToolsAllowed(b.FactionId) && b.Kind == BuildingKind.ToolShop)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Wood > rules.ToolKeepWood)
+                    {
+                        economy.Wood--; b.Input++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.ToolWoodInput
+                        && b.Output < rules.BufferLimit && economy.Tools < rules.ToolStockLimit)
+                    {
+                        b.Input -= rules.ToolWoodInput;
+                        b.Timer = rules.ToolTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.ToolsProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -396,7 +415,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
                 : kind == BuildingKind.Lapidary ? ResourceKind.Gems
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
-                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : ResourceKind.Metal;
+                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -488,6 +507,10 @@ namespace Rts.Simulation
                     b.Input++; return true;
                 }
                 if (RepairKitsAllowed(faction) && b.Kind == BuildingKind.RepairYard && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
+                {
+                    b.Input++; return true;
+                }
+                if (ToolsAllowed(faction) && b.Kind == BuildingKind.ToolShop && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
                 }
@@ -674,6 +697,10 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (ToolsAllowed(target.FactionId) && target.Kind == BuildingKind.ToolShop && kind == ResourceKind.Wood)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -702,7 +729,9 @@ namespace Rts.Simulation
                || (TradeGoodsOn && destination == BuildingKind.Weaver && kind == ResourceKind.Wood)
                || (IncenseOn && destination == BuildingKind.IncenseHouse && (kind == ResourceKind.Wood || kind == ResourceKind.Food))
                || (CharmsOn && destination == BuildingKind.CharmWorkshop && kind == ResourceKind.Wood)
-               || (RepairKitsOn && destination == BuildingKind.RepairYard && kind == ResourceKind.Wood);
+               || (RepairKitsOn && destination == BuildingKind.RepairYard && kind == ResourceKind.Wood)
+               || (ToolsOn && destination == BuildingKind.ToolShop && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood);
+               
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

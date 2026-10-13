@@ -55,7 +55,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -836,6 +836,18 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int RepairKitWoodReserve { get; }
         public int RepairKitIntervalTicks { get; }
         public int RepairKitHp { get; }
+        public bool ToolsEnabled { get; }
+        public int Tools { get; }
+        public int ToolShopWoodCost { get; }
+        public int ToolShopSizeCells { get; }
+        public int ToolTicks { get; }
+        public int ToolWoodInput { get; }
+        public int ToolKeepWood { get; }
+        public int ToolStockLimit { get; }
+        public int ToolMaxShops { get; }
+        public int ToolWoodReserve { get; }
+        public int ToolVillagerFoodPermille { get; }
+        public int ToolVillagerTicksPermille { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -911,7 +923,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int charmMaxWorkshops = 0, int charmWoodReserve = 0, int charmHpPermille = 0,
              bool repairKitsEnabled = false, int repairKits = 0, int repairYardWoodCost = 0, int repairYardSizeCells = 0,
              int repairKitTicks = 0, int repairKitWoodInput = 0, int repairKitKeepWood = 0, int repairKitStockLimit = 0,
-             int repairKitMaxYards = 0, int repairKitWoodReserve = 0, int repairKitIntervalTicks = 0, int repairKitHp = 0)
+             int repairKitMaxYards = 0, int repairKitWoodReserve = 0, int repairKitIntervalTicks = 0, int repairKitHp = 0,
+             bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
+             int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
+             int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -959,7 +974,13 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             RepairKitsEnabled = repairKitsEnabled; RepairKits = repairKits; RepairYardWoodCost = repairYardWoodCost; RepairYardSizeCells = repairYardSizeCells;
             RepairKitTicks = repairKitTicks; RepairKitWoodInput = repairKitWoodInput; RepairKitKeepWood = repairKitKeepWood; RepairKitStockLimit = repairKitStockLimit;
             RepairKitMaxYards = repairKitMaxYards; RepairKitWoodReserve = repairKitWoodReserve; RepairKitIntervalTicks = repairKitIntervalTicks; RepairKitHp = repairKitHp;
-            BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
+            ToolsEnabled = toolsEnabled; Tools = tools; ToolShopWoodCost = toolShopWoodCost; ToolShopSizeCells = toolShopSizeCells;
+            ToolTicks = toolTicks; ToolWoodInput = toolWoodInput; ToolKeepWood = toolKeepWood; ToolStockLimit = toolStockLimit;
+            ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
+             ToolsEnabled = toolsEnabled; Tools = tools; ToolShopWoodCost = toolShopWoodCost; ToolShopSizeCells = toolShopSizeCells;
+             ToolTicks = toolTicks; ToolWoodInput = toolWoodInput; ToolKeepWood = toolKeepWood; ToolStockLimit = toolStockLimit;
+             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
+             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
             StorageCapacity = storageCapacity;

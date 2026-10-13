@@ -189,6 +189,15 @@ namespace Rts.Simulation
                     w.Value(n + "RepairKitsRepairedHp", e.RepairKitsRepairedHp);
                     w.Value(n + "RepairKitsCoreRepairedHp", e.RepairKitsCoreRepairedHp);
                 }
+                if (ToolsOn)
+                {
+                    w.Value(n + "Tools", e.Tools); w.Value(n + "ToolsProduced", e.ToolsProduced);
+                    w.Value(n + "ToolsConsumed", e.ToolsConsumed); w.Value(n + "ToolsTrainedVillagers", e.ToolsTrainedVillagers);
+                    w.Value(n + "ToolsSavedFood", e.ToolsSavedFood);
+                    var tools = e.QueueTools ?? Array.Empty<bool>();
+                    w.Value(n + "QueueTools.Count", (uint)tools.Length);
+                    for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
+                }
             }
             if (RegionsOn)
             {
@@ -252,6 +261,12 @@ namespace Rts.Simulation
                             w.Value(n + "QueueCharms.Count", (uint)charmed.Length);
                             for (int q = 0; q < charmed.Length; q++) w.Value(n + "QueueCharms[" + q.ToString(CultureInfo.InvariantCulture) + "]", charmed[q]);
                         }
+                        if (ToolsOn)
+                        {
+                            var tools = b.QueueTools ?? Array.Empty<bool>();
+                            w.Value(n + "QueueTools.Count", (uint)tools.Length);
+                            for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
+                        }
                     }
                     if (b.Kind == BuildingKind.Bridge)
                     {
@@ -261,7 +276,7 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
@@ -362,6 +377,7 @@ namespace Rts.Simulation
                     if (IncenseOn) w.Value(n + "IncenseHouseId", line.IncenseHouseId);
                     if (CharmsOn) w.Value(n + "CharmWorkshopId", line.CharmWorkshopId);
                     if (RepairKitsOn) w.Value(n + "RepairYardId", line.RepairYardId);
+                    if (ToolsOn) w.Value(n + "ToolShopId", line.ToolShopId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

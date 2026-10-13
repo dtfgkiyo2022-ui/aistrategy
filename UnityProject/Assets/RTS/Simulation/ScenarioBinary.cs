@@ -128,6 +128,9 @@ private const int CharmsExtensionDataLength = 12 * sizeof(int);
 private const int RepairKitsExtensionId = 31;
 private const int RepairKitsExtensionVersion = 1;
 private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
+private const int ToolsExtensionId = 32;
+private const int ToolsExtensionVersion = 1;
+private const int ToolsExtensionDataLength = 13 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -167,6 +170,7 @@ private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
             ,new ExtensionRegistration(IncenseExtensionId, IncenseExtensionVersion, IncenseExtensionDataLength)
             ,new ExtensionRegistration(CharmsExtensionId, CharmsExtensionVersion, CharmsExtensionDataLength)
             ,new ExtensionRegistration(RepairKitsExtensionId, RepairKitsExtensionVersion, RepairKitsExtensionDataLength)
+            ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -743,6 +747,7 @@ private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
                     else if (id == IncenseExtensionId) ReadIncenseExtension(extension, c.Economy);
                     else if (id == CharmsExtensionId) ReadCharmsExtension(extension, c.Economy);
                     else if (id == RepairKitsExtensionId) ReadRepairKitsExtension(extension, c.Economy);
+                    else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -803,6 +808,7 @@ private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == IncenseExtensionId && !c.Economy.Incense);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CharmsExtensionId && !c.Economy.Charms);
                 extensions.RemoveAll(extension => extension != null && extension.Id == RepairKitsExtensionId && !c.Economy.RepairKits);
+                extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1050,7 +1056,43 @@ private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
                         extensions[i] = CreateRepairKitsExtension(c.Economy);
                     }
                 if (c.Economy.RepairKits && !hasRepairKits) extensions.Add(CreateRepairKitsExtension(c.Economy));
+                bool hasTools = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == ToolsExtensionId)
+                    {
+                        hasTools = true;
+                        extensions[i] = CreateToolsExtension(c.Economy);
+                    }
+                if (c.Economy.Tools && !hasTools) extensions.Add(CreateToolsExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateToolsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Tools ? 1 : 0);
+                writer.Write(e.ToolShopSizeCells); writer.Write(e.ToolShopWoodCost); writer.Write(e.ToolShopWork); writer.Write(e.ToolShopHp);
+                writer.Write(e.ToolTicks); writer.Write(e.ToolWoodInput); writer.Write(e.ToolKeepWood); writer.Write(e.ToolStockLimit);
+                writer.Write(e.ToolMaxShops); writer.Write(e.ToolWoodReserve); writer.Write(e.ToolVillagerFoodPermille); writer.Write(e.ToolVillagerTicksPermille);
+                return new ScenarioExtensionData { Id = ToolsExtensionId, Version = ToolsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadToolsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid tools flag.");
+                e.Tools = enabled != 0;
+                e.ToolShopSizeCells = reader.ReadInt32(); e.ToolShopWoodCost = reader.ReadInt32(); e.ToolShopWork = reader.ReadInt32(); e.ToolShopHp = reader.ReadInt32();
+                e.ToolTicks = reader.ReadInt32(); e.ToolWoodInput = reader.ReadInt32(); e.ToolKeepWood = reader.ReadInt32(); e.ToolStockLimit = reader.ReadInt32();
+                e.ToolMaxShops = reader.ReadInt32(); e.ToolWoodReserve = reader.ReadInt32(); e.ToolVillagerFoodPermille = reader.ReadInt32(); e.ToolVillagerTicksPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tools extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateRepairKitsExtension(EconomyRules e)

@@ -25,7 +25,8 @@ namespace Rts.Presentation
             Books,
             Incense,
             Charms,
-            RepairKits
+            RepairKits,
+            Tools
         }
 
         public readonly struct ResourceEntry
@@ -102,6 +103,11 @@ namespace Rts.Presentation
             return economy != null && economy.RepairKitsEnabled && (economy.Civ == CivKind.Tollgate || economy.RepairKits > 0);
         }
 
+        public static bool ShowTools(EconomyView economy)
+        {
+            return economy != null && economy.ToolsEnabled && (economy.Civ == CivKind.Metropolis || economy.Tools > 0);
+        }
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -145,6 +151,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Charms, UiText.T("Charms", "護符"), economy.Charms));
             if (ShowRepairKits(economy))
                 target.Add(new ResourceEntry(ResourceKind.RepairKits, UiText.T("Repair kits", "補修材"), economy.RepairKits));
+            if (ShowTools(economy))
+                target.Add(new ResourceEntry(ResourceKind.Tools, UiText.T("Tools", "工具"), economy.Tools));
             if (ShowBowGear(economy))
                 target.Add(new ResourceEntry(ResourceKind.BowGear, UiText.T("Bow gear", "弓具"), economy.BowGear));
         }

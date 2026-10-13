@@ -1,4 +1,5 @@
 using System.Numerics;
+using System;
 using Rts.Contracts;
 using Rts.Decision;
 
@@ -40,6 +41,7 @@ namespace Rts.Simulation
         private bool IncenseOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Incense;
         private bool CharmsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Charms;
         private bool RepairKitsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.RepairKits;
+        private bool ToolsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tools;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -102,6 +104,8 @@ namespace Rts.Simulation
             => CharmsOn && world.Economies[faction - 1].Civ == CivKind.Sanctuary && world.Economies[faction - 1].Age >= 1;
         private bool RepairKitsAllowed(uint faction)
             => RepairKitsOn && world.Economies[faction - 1].Civ == CivKind.Tollgate && world.Economies[faction - 1].Age >= 1;
+        private bool ToolsAllowed(uint faction)
+            => ToolsOn && world.Economies[faction - 1].Civ == CivKind.Metropolis && world.Economies[faction - 1].Age >= 1;
 
         private bool CharcoalKilnAllowed(uint faction)
             => ProcessingAvailable(faction) || BricksAllowed(faction);
@@ -154,16 +158,27 @@ namespace Rts.Simulation
         private int InfantryTicksFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryTicks : world.Config.Economy.InfantryTrainTicks;
 
         private int VillagerFoodCostFor(uint faction)
+            => VillagerFoodCostFor(faction, false);
+
+        private int VillagerFoodCostFor(uint faction, bool useTool)
         {
             var rules = world.Config.Economy;
-            return MetropolisAllowed(faction) ? checked(rules.VillagerFoodCost * 2 / 3) : rules.VillagerFoodCost;
+            int cost = MetropolisAllowed(faction) ? checked(rules.VillagerFoodCost * 2 / 3) : rules.VillagerFoodCost;
+            return useTool && ToolsAllowed(faction) ? checked((cost * rules.ToolVillagerFoodPermille + 999) / 1000) : cost;
         }
 
         private int VillagerTrainTicksFor(uint faction)
+            => VillagerTrainTicksFor(faction, false);
+
+        private int VillagerTrainTicksFor(uint faction, bool useTool)
         {
             var rules = world.Config.Economy;
-            return MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
+            int ticks = MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
+            return useTool && ToolsAllowed(faction) ? Math.Max(1, checked((ticks * rules.ToolVillagerTicksPermille + 999) / 1000)) : ticks;
         }
+
+        private bool CanUseToolForVillager(uint faction)
+            => ToolsAllowed(faction) && world.Economies[faction - 1].Tools > 0;
 
         private int AutoVillagerTargetFor(uint faction)
         {

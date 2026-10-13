@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn || ToolsOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -84,7 +84,7 @@ namespace Rts.Simulation
             int age3Food = AgeClockOn && economy.Age == 2 ? advancePrice.food : rules.Age3FoodCost;
             int age3Wood = AgeClockOn && economy.Age == 2 ? advancePrice.wood : rules.Age3WoodCost;
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
-                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction), InfantryFoodFor(faction),
+                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -240,7 +240,18 @@ namespace Rts.Simulation
                 repairKitMaxYards: RepairKitsAllowed(faction) ? rules.RepairKitMaxYards : 0,
                 repairKitWoodReserve: RepairKitsAllowed(faction) ? rules.RepairKitWoodReserve : 0,
                 repairKitIntervalTicks: RepairKitsAllowed(faction) ? rules.RepairKitIntervalTicks : 0,
-                repairKitHp: RepairKitsAllowed(faction) ? rules.RepairKitHp : 0);
+                repairKitHp: RepairKitsAllowed(faction) ? rules.RepairKitHp : 0,
+                toolsEnabled: ToolsAllowed(faction), tools: ToolsAllowed(faction) ? economy.Tools : 0,
+                toolShopWoodCost: ToolsAllowed(faction) ? rules.ToolShopWoodCost : 0,
+                toolShopSizeCells: ToolsAllowed(faction) ? rules.ToolShopSizeCells : 0,
+                toolTicks: ToolsAllowed(faction) ? rules.ToolTicks : 0,
+                toolWoodInput: ToolsAllowed(faction) ? rules.ToolWoodInput : 0,
+                toolKeepWood: ToolsAllowed(faction) ? rules.ToolKeepWood : 0,
+                toolStockLimit: ToolsAllowed(faction) ? rules.ToolStockLimit : 0,
+                toolMaxShops: ToolsAllowed(faction) ? rules.ToolMaxShops : 0,
+                toolWoodReserve: ToolsAllowed(faction) ? rules.ToolWoodReserve : 0,
+                toolVillagerFoodPermille: ToolsAllowed(faction) ? rules.ToolVillagerFoodPermille : 0,
+                toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

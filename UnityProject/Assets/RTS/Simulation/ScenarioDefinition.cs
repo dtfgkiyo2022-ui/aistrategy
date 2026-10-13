@@ -242,6 +242,11 @@ namespace Rts.Simulation
         public int RepairYardSizeCells = 2, RepairYardWoodCost = 80, RepairYardWork = 200, RepairYardHp = 400;
         public int RepairKitTicks = 80, RepairKitWoodInput = 2, RepairKitKeepWood = 80, RepairKitStockLimit = 20;
         public int RepairKitMaxYards = 1, RepairKitWoodReserve = 20, RepairKitIntervalTicks = 60, RepairKitHp = 40;
+        /// <summary>Metropolis tools: wood is turned into stock that discounts villager training.</summary>
+        public bool Tools;
+        public int ToolShopSizeCells = 2, ToolShopWoodCost = 80, ToolShopWork = 200, ToolShopHp = 400;
+        public int ToolTicks = 80, ToolWoodInput = 2, ToolKeepWood = 80, ToolStockLimit = 10;
+        public int ToolMaxShops = 1, ToolWoodReserve = 20, ToolVillagerFoodPermille = 700, ToolVillagerTicksPermille = 500;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

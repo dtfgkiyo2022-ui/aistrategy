@@ -169,7 +169,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -303,6 +303,11 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:repair-yard", UiText.T("Repair yard", "修繕所"), true, "", mode == Mode.RepairYard);
                 Add(rows, "line:RepairKits", UiText.T("Ask for repair kits line", "補修材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.RepairKits);
+            }
+            if (economy.ToolsEnabled && economy.Civ == CivKind.Metropolis && economy.Age >= 1)
+            {
+                Add(rows, "build:tool-shop", UiText.T("Tool shop", "工具工房"), true, "", mode == Mode.ToolShop);
+                Add(rows, "line:Tools", UiText.T("Ask for tools line", "工具ラインを指定"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tools);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)

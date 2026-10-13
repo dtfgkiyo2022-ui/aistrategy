@@ -185,6 +185,7 @@ namespace Rts.Simulation
                 case ResourceKind.Incense: economy.Incense = Math.Min(world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;
                 case ResourceKind.RepairKits: economy.RepairKits = Math.Min(world.Config.Economy.RepairKitStockLimit, checked(economy.RepairKits + amount)); break;
+                case ResourceKind.Tools: economy.Tools = Math.Min(world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
                 case ResourceKind.Preserves:
                     economy.Food = checked(economy.Food + amount * world.Config.Economy.PreserveFoodValue);
                     economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * world.Config.Economy.PreserveFoodValue);
@@ -240,7 +241,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
-            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)(CharmsOn ? ResourceKind.Charms : IncenseOn ? ResourceKind.Incense : TradeGoodsOn ? ResourceKind.TradeGoods : PreservesOn ? ResourceKind.Preserves : BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
+            if (c.SorterKind != 0 && (byte)c.SorterKind > (byte)(ToolsOn ? ResourceKind.Tools : CharmsOn ? ResourceKind.Charms : IncenseOn ? ResourceKind.Incense : TradeGoodsOn ? ResourceKind.TradeGoods : PreservesOn ? ResourceKind.Preserves : BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;

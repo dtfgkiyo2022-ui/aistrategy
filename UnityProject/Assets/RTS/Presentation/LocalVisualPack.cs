@@ -286,6 +286,7 @@ namespace Rts.Presentation
             { BuildingKind.CharmWorkshop, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.45f, 0.72f, 0.78f, 1f)) },
             // No dedicated repair-yard asset is available in the local pack; Workshop is the deterministic fallback.
             { BuildingKind.RepairYard, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.66f, 0.66f, 0.72f, 1f)) },
+            { BuildingKind.ToolShop, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.82f, 0.62f, 0.24f, 1f)) },
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },
             { BuildingKind.Town, new BuildingSpec("TownHall.FBX", 3.0f) },

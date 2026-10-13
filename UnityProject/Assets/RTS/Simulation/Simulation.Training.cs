@@ -215,6 +215,37 @@ namespace Rts.Simulation
         private static bool QueueRationsAt(BuildingState b, int i) => b.QueueRations != null && i >= 0 && i < b.QueueRations.Length && b.QueueRations[i];
         private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
         private static bool QueueCharmsAt(BuildingState b, int i) => b.QueueCharms != null && i >= 0 && i < b.QueueCharms.Length && b.QueueCharms[i];
+        private static bool QueueToolsAt(BuildingState b, int i) => b.QueueTools != null && i >= 0 && i < b.QueueTools.Length && b.QueueTools[i];
+        private static bool QueueToolsAt(FactionEconomy economy, int i)
+            => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
+
+        private void EnqueueCoreVillager(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            bool tool = CanUseToolForVillager(faction);
+            int food = VillagerFoodCostFor(faction, tool);
+            economy.Food = checked(economy.Food - food);
+            if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
+            if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction, tool);
+            economy.Queued++;
+            if (ToolsOn)
+            {
+                var tools = economy.QueueTools ?? Array.Empty<bool>();
+                Array.Resize(ref tools, tools.Length + 1); tools[tools.Length - 1] = tool; economy.QueueTools = tools;
+            }
+        }
+
+        private void CancelCoreVillager(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Queued == 0) return;
+            bool tool = QueueToolsAt(economy, economy.Queued - 1);
+            economy.Queued--;
+            economy.Food = checked(economy.Food + VillagerFoodCostFor(faction, tool));
+            if (tool) { economy.Tools++; economy.ToolsConsumed--; economy.ToolsTrainedVillagers--; economy.ToolsSavedFood = checked(economy.ToolsSavedFood - (VillagerFoodCostFor(faction, false) - VillagerFoodCostFor(faction, true))); }
+            if (economy.QueueTools != null && economy.QueueTools.Length > 0) Array.Resize(ref economy.QueueTools, economy.QueueTools.Length - 1);
+            if (economy.Queued == 0) economy.TrainRemaining = 0;
+        }
         private bool UsesRations(uint faction, UnitKind kind)
             => RationsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Scout;
         private bool UsesPlanks(uint faction, UnitKind kind)
@@ -337,32 +368,43 @@ namespace Rts.Simulation
                 && b.Queued < world.Config.Economy.QueueLimit
                 && LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued
                     + QueuedInfantry(faction) + QueuedTownVillagers(faction) < PopCapFor(faction)
-                && world.Economies[faction - 1].Food >= VillagerFoodCostFor(faction);
+                && world.Economies[faction - 1].Food >= VillagerFoodCostFor(faction, CanUseToolForVillager(faction));
 
         private void EnqueueTownVillager(uint faction, ref BuildingState b)
         {
             ref var economy = ref world.Economies[faction - 1];
-            economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
-            if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction);
+            bool tool = CanUseToolForVillager(faction);
+            int food = VillagerFoodCostFor(faction, tool);
+            economy.Food = checked(economy.Food - food);
+            if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
+            if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction, tool);
             b.Queued++;
             var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
             Array.Resize(ref kinds, kinds.Length + 1);
             kinds[kinds.Length - 1] = UnitKind.Villager;
             b.QueueKinds = kinds;
+            if (ToolsOn)
+            {
+                var tools = b.QueueTools ?? Array.Empty<bool>();
+                Array.Resize(ref tools, tools.Length + 1); tools[tools.Length - 1] = tool; b.QueueTools = tools;
+            }
         }
 
         private void CancelTownVillager(uint faction, ref BuildingState b)
         {
             if (b.Queued == 0) return;
             ref var economy = ref world.Economies[faction - 1];
+            bool tool = QueueToolsAt(b, b.Queued - 1);
             b.Queued--;
-            economy.Food = checked(economy.Food + VillagerFoodCostFor(faction));
+            economy.Food = checked(economy.Food + VillagerFoodCostFor(faction, tool));
+            if (tool) { economy.Tools++; economy.ToolsConsumed--; economy.ToolsTrainedVillagers--; economy.ToolsSavedFood = checked(economy.ToolsSavedFood - (VillagerFoodCostFor(faction, false) - VillagerFoodCostFor(faction, true))); }
             if (b.QueueKinds != null && b.QueueKinds.Length > 0)
             {
                 var kinds = new UnitKind[b.QueueKinds.Length - 1];
                 Array.Copy(b.QueueKinds, 0, kinds, 0, kinds.Length);
                 b.QueueKinds = kinds;
             }
+            if (b.QueueTools != null && b.QueueTools.Length > 0) Array.Resize(ref b.QueueTools, b.QueueTools.Length - 1);
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
