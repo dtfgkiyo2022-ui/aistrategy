@@ -39,6 +39,7 @@ namespace Rts.Presentation
         private BattlefieldView view;
         private ulong issuerSequence;
         private bool awaitingGround;
+        private int pickCancelledFrame = -1;
         private TacticSignalView awaitingSignal;
         private readonly List<string> log = new List<string>();
 
@@ -59,11 +60,17 @@ namespace Rts.Presentation
         {
             // Not while a text field has the keyboard: typing to the staff officer must not flip the mode.
             if (playerControlMode != null && !UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.M))
+            {
+                bool wasManual = playerControlMode.IsManual;
                 playerControlMode.Toggle();
+                if (!wasManual && playerControlMode.IsManual)
+                    AddLog(UiText.T("Villagers and armies stopped.", "村人と兵を止めました。"));
+            }
             if ((awaitingGround || awaitingSignal != null) && (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)))
             {
                 awaitingGround = false;
                 awaitingSignal = null;
+                pickCancelledFrame = Time.frameCount;
                 AddLog(UiText.T("Cancelled.", "取り消しました。"));
             }
         }
@@ -169,6 +176,52 @@ namespace Rts.Presentation
                 Send(PolicyKind.Focus, new ScopeKey(factionId, ScopeKind.Army, army), new PolicyGoal(GoalKind.Point, 0, point), 0,
                     UiText.T("Attack Army ", "攻撃 軍団 ") + army + " -> (" + hit.x.ToString("0.0") + ", " + hit.z.ToString("0.0") + ")");
             return true;
+        }
+
+        /// <summary>Right-click entry for selected armies; it uses the same policy send and delay path as buttons.</summary>
+        public bool TryIssueSelectedArmyOrder(Camera camera, Vector2 screenPoint)
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return false;
+            // The same right-click that cancels a pending pick must not also send an order, whichever script ran first.
+            if (awaitingGround || awaitingSignal != null || pickCancelledFrame == Time.frameCount) return true;
+            SoldierControlRules.Target target;
+            if (!view.TryPickRightClickTarget(camera, screenPoint, 54f, out target))
+            {
+                var ray = camera.ScreenPointToRay(screenPoint);
+                var ground = new Plane(Vector3.up, Vector3.zero);
+                if (!ground.Raycast(ray, out float enter))
+                {
+                    AddLog(UiText.T("Click was not on the ground.", "地面ではない所をクリックしました。"));
+                    return true;
+                }
+                var hit = ray.GetPoint(enter);
+                if (!GroundPointQuantizer.TryQuantize(hit.x, hit.z, mapWidthMeters, mapHeightMeters, out var point))
+                {
+                    AddLog(UiText.T("Click was outside the map.", "マップの外をクリックしました。"));
+                    return true;
+                }
+                target = new SoldierControlRules.Target(SoldierControlRules.TargetKind.Ground,
+                    new PolicyGoal(GoalKind.Point, 0, point));
+            }
+
+            if (!SoldierControlRules.TryResolve(true, false, target, out var kind, out var goal)) return true;
+            foreach (uint army in SelectedArmies())
+                Send(kind, ArmyScope(army), goal, 0, RightClickDescription(target, army));
+            return true;
+        }
+
+        private string RightClickDescription(SoldierControlRules.Target target, uint army)
+        {
+            string prefix = UiText.T("Attack Army ", "攻撃 軍団 ") + army + UiText.T(" -> ", " → ");
+            switch (target.Kind)
+            {
+                case SoldierControlRules.TargetKind.EnemyCore: return prefix + UiText.T("enemy Core ", "敵コア ") + target.Goal.Id;
+                case SoldierControlRules.TargetKind.EnemyOutpost: return prefix + UiText.T("enemy Outpost ", "敵拠点 ") + target.Goal.Id;
+                case SoldierControlRules.TargetKind.EnemyArmy: return prefix + UiText.T("visible enemy army", "見えている敵軍団");
+                case SoldierControlRules.TargetKind.EnemySoldier: return prefix + UiText.T("visible enemy soldier", "見えている敵兵");
+                case SoldierControlRules.TargetKind.EnemyBuilding: return prefix + UiText.T("visible enemy building", "見えている敵建物");
+                default: return prefix + UiText.T("point", "地点");
+            }
         }
 
         private const int ButtonRows = 7;
@@ -953,6 +1006,7 @@ namespace Rts.Presentation
         public void CancelGroundPick()
         {
             awaitingGround = false;
+            pickCancelledFrame = Time.frameCount;
         }
 
         public ScopeKey ArmyScope(uint army) { return new ScopeKey(factionId, ScopeKind.Army, army); }

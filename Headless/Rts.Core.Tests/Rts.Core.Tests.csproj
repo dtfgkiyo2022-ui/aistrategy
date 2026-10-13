@@ -122,6 +122,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
@@ -151,6 +152,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DecisionArithmeticTests.cs" Link="Tests/DecisionArithmeticTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/TestDistanceReference.cs" Link="Tests/TestDistanceReference.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/PlayerControlModeCommandsTests.cs" Link="Tests/PlayerControlModeCommandsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/SoldierControlRulesTests.cs" Link="Tests/SoldierControlRulesTests.cs" />
     <Compile Include="CommandInterpreterTests.cs" />
     <Compile Include="OperationTableTests.cs" />
     <Compile Include="HttpCommandInterpreterTests.cs" />
