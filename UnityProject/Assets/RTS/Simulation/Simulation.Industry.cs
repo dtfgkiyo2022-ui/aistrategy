@@ -299,6 +299,32 @@ namespace Rts.Simulation
                         if (lineIndex >= 0 && IsAutoLine(lineIndex)) SetSimpleHaulers(b.FactionId, b.Id, 0, 1);
                     }
                 }
+                else if (IncenseAllowed(b.FactionId) && b.Kind == BuildingKind.IncenseHouse)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Wood > rules.IncenseKeepWood)
+                    {
+                        economy.Wood--;
+                        b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.Food > rules.IncenseKeepFood)
+                    {
+                        economy.Food--;
+                        b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.IncenseWoodInput && b.InputSecondary >= rules.IncenseFoodInput
+                        && b.Output < rules.BufferLimit && economy.Incense < rules.IncenseStockLimit)
+                    {
+                        b.Input -= rules.IncenseWoodInput;
+                        b.InputSecondary -= rules.IncenseFoodInput;
+                        b.Timer = rules.IncenseTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.IncenseProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -329,7 +355,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Scriptorium ? ResourceKind.Books
                 : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
                 : kind == BuildingKind.Lapidary ? ResourceKind.Gems
-                : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods : ResourceKind.Metal;
+                : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
+                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -410,6 +437,11 @@ namespace Rts.Simulation
                 if (TradeGoodsAllowed(faction) && b.Kind == BuildingKind.Weaver && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (IncenseAllowed(faction) && b.Kind == BuildingKind.IncenseHouse)
+                {
+                    if (item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Food && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -575,6 +607,17 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (IncenseAllowed(target.FactionId) && target.Kind == BuildingKind.IncenseHouse)
+            {
+                if (kind == ResourceKind.Wood)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Food)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -600,7 +643,8 @@ namespace Rts.Simulation
                    && (kind == ResourceKind.Gold || kind == ResourceKind.Wood))
                || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food)
                || (JewelsOn && destination == BuildingKind.Lapidary && (kind == ResourceKind.Stone || kind == ResourceKind.Ore))
-               || (TradeGoodsOn && destination == BuildingKind.Weaver && kind == ResourceKind.Wood);
+               || (TradeGoodsOn && destination == BuildingKind.Weaver && kind == ResourceKind.Wood)
+               || (IncenseOn && destination == BuildingKind.IncenseHouse && (kind == ResourceKind.Wood || kind == ResourceKind.Food));
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

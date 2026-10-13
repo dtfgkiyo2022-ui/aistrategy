@@ -289,6 +289,11 @@ namespace Rts.Presentation
                 Add(rows, "build:weaver", UiText.T("Weaver (", "織物工房（木材 ") + economy.WeaverWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Weaver);
                 Add(rows, "line:TradeGoods", UiText.T("Ask for trade goods line", "交易品ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.TradeGoods);
             }
+            if (economy.IncenseEnabled && economy.Civ == CivKind.Cult && economy.Age >= 1)
+            {
+                Add(rows, "build:incense-house", UiText.T("Incense house", "香房"), true, "", mode == Mode.IncenseHouse);
+                Add(rows, "line:Incense", UiText.T("Ask for incense line", "香ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Incense);
+            }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)
             {

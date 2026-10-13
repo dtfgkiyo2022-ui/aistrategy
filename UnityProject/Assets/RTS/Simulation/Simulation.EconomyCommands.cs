@@ -32,7 +32,7 @@ namespace Rts.Simulation
                     PlaceBeltComponent(faction, c, IndustryOn);
                     return;
                 case EconomyCommandKind.ReturnLineToAuto:
-                    if (ProcessingOn || ForestryOn) ReturnLineToAuto(faction, c.LineId);
+                    if (ProcessingOn || ForestryOn || IncenseOn) ReturnLineToAuto(faction, c.LineId);
                     return;
                 case EconomyCommandKind.RequestLine:
                     RequestProcessingLine(faction, c);
@@ -83,14 +83,14 @@ namespace Rts.Simulation
                     RemoveBelt(faction, c.Cell);
                     return;
                 case EconomyCommandKind.RotateBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
                     ref var rotating = ref world.Buildings[rotateIndex];
                     if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
                     MarkLinesForBuilding(faction, rotating.Id);
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
@@ -133,6 +133,7 @@ namespace Rts.Simulation
                         && !(PreservesAllowed(faction) && kind == BuildingKind.DryingRack)
                         && !(JewelsAllowed(faction) && kind == BuildingKind.Lapidary)
                         && !(TradeGoodsAllowed(faction) && kind == BuildingKind.Weaver)
+                        && !(IncenseAllowed(faction) && kind == BuildingKind.IncenseHouse)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -261,6 +262,7 @@ namespace Rts.Simulation
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
                             || (BooksAllowed(faction) && target.Kind == BuildingKind.Scriptorium)
+                            || (IncenseAllowed(faction) && target.Kind == BuildingKind.IncenseHouse)
                             || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));
                         if (target.Complete && !haul) return;
                     }
