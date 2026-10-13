@@ -181,6 +181,7 @@ namespace Rts.Simulation
         internal bool[] QueueRations;
         internal bool[] QueuePlanks;
         internal bool[] QueueCharms;
+        internal bool[] QueueTools;
         /// <summary>V3-5 tower: shots fired so far.</summary>
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
@@ -238,7 +239,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -247,7 +248,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -261,6 +262,7 @@ namespace Rts.Simulation
         internal int IncenseProduced, IncenseConsumed, IncenseHealedHp;
         internal int CharmsProduced, CharmsConsumed, CharmsTrainedSoldiers;
         internal int RepairKitsProduced, RepairKitsConsumed, RepairKitsRepairedHp, RepairKitsCoreRepairedHp;
+        internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -268,6 +270,7 @@ namespace Rts.Simulation
         internal bool AutoOff;
         /// <summary>V3-3 (19): the player trained or cancelled at the core; the automatic economy trains no villagers.</summary>
         internal bool CoreHeld;
+        internal bool[] QueueTools;
         /// <summary>V3-3 (20): what the automatic economy aims for. Balanced without industry.</summary>
         internal EconomyPolicy Policy;
         /// <summary>V3-4 (26): the civilisation, and while advancing the one chosen and the ticks left.</summary>
@@ -408,7 +411,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0 };
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -509,7 +512,7 @@ namespace Rts.Simulation
                     Require((byte)b.Component <= (byte)BeltComponentKind.UndergroundExit && (byte)b.Speed <= (byte)BeltSpeed.Fast,
                         "Invalid belt component.");
                     if (b.Component == BeltComponentKind.Sorter)
-            Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
+            Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
                     if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
@@ -599,6 +602,12 @@ namespace Rts.Simulation
                 && e.RepairKitWoodInput > 0 && e.RepairKitWoodInput <= e.BufferLimit && e.RepairKitKeepWood >= 0
                 && e.RepairKitStockLimit > 0 && e.RepairKitMaxYards > 0 && e.RepairKitWoodReserve >= 0
                 && e.RepairKitIntervalTicks > 0 && e.RepairKitHp > 0), "Invalid repair-kits rules.");
+            Require(!e.Tools || (e.Enabled && e.Industry && e.Ages && e.ToolShopSizeCells > 0 && e.ToolShopSizeCells <= 8
+                && e.ToolShopWoodCost >= 0 && e.ToolShopWork > 0 && e.ToolShopHp > 0 && e.ToolTicks > 0
+                && e.ToolWoodInput > 0 && e.ToolWoodInput <= e.BufferLimit && e.ToolKeepWood >= 0
+                && e.ToolStockLimit > 0 && e.ToolMaxShops > 0 && e.ToolWoodReserve >= 0
+                && e.ToolVillagerFoodPermille > 0 && e.ToolVillagerFoodPermille <= 1000
+                && e.ToolVillagerTicksPermille > 0 && e.ToolVillagerTicksPermille <= 1000), "Invalid tools rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -806,7 +815,7 @@ namespace Rts.Simulation
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
-                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms))
+|| (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms) || (e.Tools && b.Item == ResourceKind.Tools))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -995,6 +1004,11 @@ namespace Rts.Simulation
                   RepairKitWoodInput = e.RepairKitWoodInput, RepairKitKeepWood = e.RepairKitKeepWood, RepairKitStockLimit = e.RepairKitStockLimit,
                   RepairKitMaxYards = e.RepairKitMaxYards, RepairKitWoodReserve = e.RepairKitWoodReserve,
                   RepairKitIntervalTicks = e.RepairKitIntervalTicks, RepairKitHp = e.RepairKitHp,
+                  Tools = e.Tools, ToolShopSizeCells = e.ToolShopSizeCells, ToolShopWoodCost = e.ToolShopWoodCost,
+                  ToolShopWork = e.ToolShopWork, ToolShopHp = e.ToolShopHp, ToolTicks = e.ToolTicks,
+                  ToolWoodInput = e.ToolWoodInput, ToolKeepWood = e.ToolKeepWood, ToolStockLimit = e.ToolStockLimit,
+                  ToolMaxShops = e.ToolMaxShops, ToolWoodReserve = e.ToolWoodReserve,
+                  ToolVillagerFoodPermille = e.ToolVillagerFoodPermille, ToolVillagerTicksPermille = e.ToolVillagerTicksPermille,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

@@ -96,6 +96,7 @@
     <Compile Include="IncenseTests.cs" />
     <Compile Include="CharmsTests.cs" />
     <Compile Include="RepairKitsTests.cs" />
+    <Compile Include="ToolsTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

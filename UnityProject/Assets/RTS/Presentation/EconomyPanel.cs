@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -157,7 +157,7 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 3;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells
-                : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
+                : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
 
@@ -170,7 +170,7 @@ namespace Rts.Presentation
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : e.BarracksWoodCost;
+                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : e.BarracksWoodCost;
         }
 
         private static string Name(BuildingKind kind)
@@ -185,6 +185,7 @@ namespace Rts.Presentation
             if (kind == BuildingKind.IncenseHouse) return UiText.T("Incense house", "香房");
             if (kind == BuildingKind.CharmWorkshop) return UiText.T("Charm workshop", "護符工房");
             if (kind == BuildingKind.RepairYard) return UiText.T("Repair yard", "修繕所");
+            if (kind == BuildingKind.ToolShop) return UiText.T("Tool shop", "工具工房");
             return NameLegacy(kind);
         }
 
@@ -211,7 +212,7 @@ namespace Rts.Presentation
             return m == Mode.CharmWorkshop ? BuildingKind.CharmWorkshop : m == Mode.RepairYard ? BuildingKind.RepairYard : m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
-                : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
+                : m == Mode.ToolShop ? BuildingKind.ToolShop : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
                 : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable
                 : m == Mode.Castle ? BuildingKind.Castle : m == Mode.Storage ? BuildingKind.Storage : BuildingKind.Barracks;
         }
@@ -594,6 +595,11 @@ namespace Rts.Presentation
             if (economy.RepairKitsEnabled && economy.Civ == CivKind.Tollgate && economy.Age >= 1)
             {
                 ModeButton(new Rect(x, y, w, 22f), Mode.RepairYard, UiText.T("Repair yard", "修繕所"));
+                y += 26f;
+            }
+            if (economy.ToolsEnabled && economy.Civ == CivKind.Metropolis && economy.Age >= 1)
+            {
+                ModeButton(new Rect(x, y, w, 22f), Mode.ToolShop, UiText.T("Tool shop", "工具工房"));
                 y += 26f;
             }
             if (!economy.Industry) return;

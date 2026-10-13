@@ -74,6 +74,11 @@ namespace Rts.Simulation
         public int RepairKitsConsumed { get; internal set; }
         public int RepairKitsRepairedHp { get; internal set; }
         public int RepairKitsCoreRepairedHp { get; internal set; }
+        public int Tools { get; internal set; }
+        public int ToolsProduced { get; internal set; }
+        public int ToolsConsumed { get; internal set; }
+        public int ToolsTrainedVillagers { get; internal set; }
+        public int ToolsSavedFood { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -166,6 +171,11 @@ namespace Rts.Simulation
                     RepairKitsConsumed = economy.RepairKitsConsumed,
                     RepairKitsRepairedHp = economy.RepairKitsRepairedHp,
                     RepairKitsCoreRepairedHp = economy.RepairKitsCoreRepairedHp,
+                    Tools = economy.Tools,
+                    ToolsProduced = economy.ToolsProduced,
+                    ToolsConsumed = economy.ToolsConsumed,
+                    ToolsTrainedVillagers = economy.ToolsTrainedVillagers,
+                    ToolsSavedFood = economy.ToolsSavedFood,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

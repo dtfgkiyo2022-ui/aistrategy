@@ -36,12 +36,11 @@ namespace Rts.Simulation
                     int villagers = LivingVillagers(faction);
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
                     DecideAdvance(faction);
+                    bool tool = CanUseToolForVillager(faction);
                     if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                        VillagerFoodCostFor(faction), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
+                        VillagerFoodCostFor(faction, tool), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
                     {
-                        economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
-                        if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
-                        economy.Queued++;
+                        EnqueueCoreVillager(faction);
                     }
                     ResumeUnbuilt(faction);
                     DecideHouse(faction);
@@ -230,7 +229,12 @@ namespace Rts.Simulation
                 if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
                 SpawnVillager(faction);
                 economy.Queued--;
-                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction) : 0;
+                if (economy.QueueTools != null && economy.QueueTools.Length > 0)
+                {
+                    var rest = new bool[economy.QueueTools.Length - 1];
+                    Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                }
+                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
             }
         }
 

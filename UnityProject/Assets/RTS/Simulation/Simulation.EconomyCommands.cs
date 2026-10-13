@@ -35,7 +35,7 @@ namespace Rts.Simulation
                     PlaceBeltComponent(faction, c, IndustryOn);
                     return;
                 case EconomyCommandKind.ReturnLineToAuto:
-                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn) ReturnLineToAuto(faction, c.LineId);
+                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn) ReturnLineToAuto(faction, c.LineId);
                     return;
                 case EconomyCommandKind.RequestLine:
                     RequestProcessingLine(faction, c);
@@ -86,14 +86,14 @@ namespace Rts.Simulation
                     RemoveBelt(faction, c.Cell);
                     return;
                 case EconomyCommandKind.RotateBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
                     ref var rotating = ref world.Buildings[rotateIndex];
                     if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
                     MarkLinesForBuilding(faction, rotating.Id);
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
@@ -139,6 +139,7 @@ namespace Rts.Simulation
                         && !(IncenseAllowed(faction) && kind == BuildingKind.IncenseHouse)
                         && !(CharmsAllowed(faction) && kind == BuildingKind.CharmWorkshop)
                         && !(RepairKitsAllowed(faction) && kind == BuildingKind.RepairYard)
+                        && !(ToolsAllowed(faction) && kind == BuildingKind.ToolShop)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -193,11 +194,10 @@ namespace Rts.Simulation
                     if (population >= PopCapFor(faction)) return;
                     if (c.ProducerId == 0)
                     {
-                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < VillagerFoodCostFor(faction) || economy.AdvanceRemaining > 0) return;
+                        bool tool = CanUseToolForVillager(faction);
+                        if (c.Unit != UnitKind.Villager || economy.Queued >= rules.QueueLimit || economy.Food < VillagerFoodCostFor(faction, tool) || economy.AdvanceRemaining > 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
-                        economy.Food = checked(economy.Food - VillagerFoodCostFor(faction));
-                        if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction);
-                        economy.Queued++;
+                        EnqueueCoreVillager(faction);
                         return;
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;
@@ -224,9 +224,7 @@ namespace Rts.Simulation
                     {
                         if (economy.Queued == 0) return;
                         if (IndustryOn) economy.CoreHeld = true;
-                        economy.Queued--;
-                        economy.Food = checked(economy.Food + VillagerFoodCostFor(faction));
-                        if (economy.Queued == 0) economy.TrainRemaining = 0;
+                        CancelCoreVillager(faction);
                         return;
                     }
                     if (!OwnBuilding(faction, c.ProducerId, out int index)) return;

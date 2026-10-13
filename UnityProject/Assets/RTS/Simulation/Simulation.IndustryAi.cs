@@ -37,9 +37,10 @@ namespace Rts.Simulation
                 if (IncenseAllowed(faction)) DecideIncense(faction);
                 if (CharmsAllowed(faction)) DecideCharms(faction);
                 if (RepairKitsAllowed(faction)) DecideRepairKits(faction);
+                if (ToolsAllowed(faction)) DecideTools(faction);
                 return;
             }
-            if (TryDecideRequestedLine(faction)) return;
+            if (TryDecideRequestedLine(faction)) { if (ToolsAllowed(faction)) DecideTools(faction); return; }
             // No return: the caravan's own decisions below stay exactly as they were.
             if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
             if (IncenseAllowed(faction)) DecideIncense(faction);
@@ -62,6 +63,7 @@ namespace Rts.Simulation
             if (CavalryAllowed(faction)) { DecideTack(faction); return; }
             if (MountainAllowed(faction)) { DecideMountain(faction); DecideJewels(faction); return; }
             if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); DecidePlanks(faction); return; }
+            if (ToolsAllowed(faction)) DecideTools(faction);
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -301,6 +303,63 @@ namespace Rts.Simulation
             var workshop = world.Buildings[line.CharmWorkshopId - 1];
             bool whole = LayCharmsLine(faction, index, workshop);
             SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private void DecideTools(uint faction)
+        {
+            if (!ToolsAllowed(faction) || !CompleteBarracks(faction)) return;
+            bool hasHouse = false;
+            int shops = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || b.FactionId != faction) continue;
+                if (b.Complete && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)) hasHouse = true;
+                if (b.Kind == BuildingKind.ToolShop) shops++;
+            }
+            if (!hasHouse) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Tools);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.ToolShopId))
+            {
+                if (BuildingPending(line.ToolShopId)) return;
+                if (shops >= rules.ToolMaxShops || economy.Wood < rules.ToolShopWoodCost + rules.ToolWoodReserve) return;
+                uint id = PlaceToolShop(faction);
+                if (id != 0) line.ToolShopId = id;
+                return;
+            }
+            var workshop = world.Buildings[line.ToolShopId - 1];
+            bool whole = LayToolsLine(faction, index, workshop);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceToolShop(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.ToolShopSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.ToolShop, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayToolsLine(uint faction, int lineIndex, BuildingState workshop)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(workshop), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
         }
 
         private uint PlaceCharmWorkshop(uint faction, int preferredCell = -1)

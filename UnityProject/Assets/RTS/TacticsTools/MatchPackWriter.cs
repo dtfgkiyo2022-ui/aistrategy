@@ -185,6 +185,7 @@ namespace Rts.Tactics
                 Field(b, "incense", "{\"stock\":" + f.Incense + ",\"produced\":" + f.IncenseProduced + ",\"consumed\":" + f.IncenseConsumed + ",\"healedHp\":" + f.IncenseHealedHp + "}");
                 Field(b, "charms", "{\"stock\":" + f.Charms + ",\"produced\":" + f.CharmsProduced + ",\"consumed\":" + f.CharmsConsumed + ",\"trainedSoldiers\":" + f.CharmsTrainedSoldiers + "}");
                 Field(b, "repairKits", "{\"stock\":" + f.RepairKits + ",\"produced\":" + f.RepairKitsProduced + ",\"consumed\":" + f.RepairKitsConsumed + ",\"repairedHp\":" + f.RepairKitsRepairedHp + ",\"coreRepairedHp\":" + f.RepairKitsCoreRepairedHp + "}");
+                Field(b, "tools", "{\"stock\":" + f.Tools + ",\"produced\":" + f.ToolsProduced + ",\"consumed\":" + f.ToolsConsumed + ",\"trainedVillagers\":" + f.ToolsTrainedVillagers + ",\"savedFood\":" + f.ToolsSavedFood + "}");
                 Field(b, "buildings", CountsJson(f.Buildings)); Field(b, "age", f.Age.ToString(CultureInfo.InvariantCulture)); Field(b, "civ", Quote(f.Civ)); b.Append('}'); } b.Append(']');
             Field(b, "cores", ObjectivesJson(s.Cores)); Field(b, "outposts", ObjectivesJson(s.Outposts)); b.Append('}'); return b.ToString();
         }

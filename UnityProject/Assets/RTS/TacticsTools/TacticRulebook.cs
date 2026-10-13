@@ -179,6 +179,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.IncenseHouse, e.IncenseWoodCost, 0, e.IncenseWork);
             Add(rows, BuildingKind.CharmWorkshop, e.CharmWoodCost, 0, e.CharmWork);
             Add(rows, BuildingKind.RepairYard, e.RepairYardWoodCost, 0, e.RepairYardWork);
+            Add(rows, BuildingKind.ToolShop, e.ToolShopWoodCost, 0, e.ToolShopWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 
