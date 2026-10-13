@@ -865,6 +865,7 @@ namespace Rts.Presentation
                 case BuildingKind.Shrine: return UiText.T("Shrine", "祠");
                 case BuildingKind.Storage: return UiText.T("Storage", "倉庫");
                 case BuildingKind.DryingRack: return UiText.T("Drying rack", "干し場");
+                case BuildingKind.Lapidary: return UiText.T("Lapidary", "研磨所");
                 default: return kind.ToString();
             }
         }

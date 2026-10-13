@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Scriptorium, DryingRack, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Scriptorium, DryingRack, Lapidary, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -157,7 +157,7 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 3;
             return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells
-                : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
+                : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
 
@@ -166,7 +166,7 @@ namespace Rts.Presentation
             var e = Economy();
             if (e == null) return 0;
             return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost
-                : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
+                : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
@@ -180,6 +180,7 @@ namespace Rts.Presentation
             if (kind == BuildingKind.Sawmill) return UiText.T("Sawmill", "製材所");
             if (kind == BuildingKind.Scriptorium) return UiText.T("Scriptorium", "写本所");
             if (kind == BuildingKind.DryingRack) return UiText.T("Drying rack", "干し場");
+            if (kind == BuildingKind.Lapidary) return UiText.T("Lapidary", "研磨所");
             return NameLegacy(kind);
         }
 
@@ -200,6 +201,7 @@ namespace Rts.Presentation
             if (m == Mode.Sawmill) return BuildingKind.Sawmill;
             if (m == Mode.Scriptorium) return BuildingKind.Scriptorium;
             if (m == Mode.DryingRack) return BuildingKind.DryingRack;
+            if (m == Mode.Lapidary) return BuildingKind.Lapidary;
             return m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
@@ -563,6 +565,11 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x, y, w, 22f), Mode.DryingRack, UiText.T("Drying rack (", "干し場（木材 ") + economy.DryingRackWoodCost + UiText.T(" wood)", "）"));
                 y += 26f;
             }
+            if (economy.JewelsEnabled && economy.Civ == CivKind.Mountain && economy.Age >= 1)
+            {
+                ModeButton(new Rect(x, y, w, 22f), Mode.Lapidary, UiText.T("Lapidary (", "研磨所（木材 ") + economy.LapidaryWoodCost + UiText.T(" wood)", "）"));
+                y += 26f;
+            }
             if (!economy.Industry) return;
             // Mines and smelters belong to metallurgy, farms to farming (V3-4); a map without ages has mines only.
             if (!economy.Ages || economy.Civ == CivKind.Metallurgy)
@@ -702,6 +709,13 @@ namespace Rts.Presentation
                     if (GUI.Button(new Rect(x + 3f * (fourth + 4f), y, fourth, 22f), UiText.T("Castle: mercenary (", "城：傭兵（") + economy.MercenaryGemsCost + UiText.T(" Gems)", " 宝）")))
                         Send(EconomyCommand.Train(faction, ++sequence, castle.Value.Id, UnitKind.Mercenary), UiText.T("Mercenary requested", "傭兵を依頼しました"));
                     GUI.enabled = true;
+                    y += 26f;
+                }
+                if (economy.JewelsEnabled && economy.Civ == CivKind.Mountain && economy.Age >= 2 && barracks.HasValue && barracks.Value.Complete)
+                {
+                    string mercenary = UiText.T("Mercenary (", "傭兵（食料 ") + economy.JewelMercenaryFood + UiText.T("F, ", "、宝石 ") + economy.JewelMercenaryGems + UiText.T(" Gems)", "）");
+                    if (GUI.Button(new Rect(x, y, w, 22f), mercenary))
+                        Send(EconomyCommand.Train(faction, ++sequence, barracks.Value.Id, UnitKind.Mercenary), UiText.T("Mercenary requested", "傭兵を依頼しました"));
                     y += 26f;
                 }
                 var market = OwnBuilding(economy, BuildingKind.Market);

@@ -55,6 +55,9 @@ namespace Rts.Simulation
         public int BooksUsedResearch { get; internal set; }
         public int PreservesProduced { get; internal set; }
         public int PreservesConvertedFood { get; internal set; }
+        public int JewelsProduced { get; internal set; }
+        public int JewelsConsumed { get; internal set; }
+        public int JewelsTrainedMercenaries { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -128,6 +131,9 @@ namespace Rts.Simulation
                     BooksUsedResearch = economy.BooksUsedResearch,
                     PreservesProduced = economy.PreservesProduced,
                     PreservesConvertedFood = economy.PreservesConvertedFood,
+                    JewelsProduced = economy.JewelsProduced,
+                    JewelsConsumed = economy.JewelsConsumed,
+                    JewelsTrainedMercenaries = economy.JewelsTrainedMercenaries,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

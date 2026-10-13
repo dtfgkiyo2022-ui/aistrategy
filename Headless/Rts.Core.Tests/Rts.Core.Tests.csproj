@@ -91,6 +91,7 @@
     <Compile Include="CultTests.cs" />
     <Compile Include="FishingCivTests.cs" />
     <Compile Include="MountainTests.cs" />
+    <Compile Include="JewelsTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -137,6 +138,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CoordinatedOffenseTests.cs" Link="Tests/CoordinatedOffenseTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AutoOffenseDecisionTests.cs" Link="Tests/AutoOffenseDecisionTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ContractsTests.cs" Link="Tests/ContractsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/JewelsEditModeTests.cs" Link="Tests/JewelsEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Fix64Tests.cs" Link="Tests/Fix64Tests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/SplitMix64Tests.cs" Link="Tests/SplitMix64Tests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ReplayTests.cs" Link="Tests/ReplayTests.cs" />

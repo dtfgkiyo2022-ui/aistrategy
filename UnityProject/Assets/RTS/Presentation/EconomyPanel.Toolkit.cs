@@ -113,6 +113,7 @@ namespace Rts.Presentation
             if (actionId == "make:scout") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Scout, UiText.T("Scout requested", "斥候を依頼しました")); return; }
             if (actionId == "make:archer-barracks") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Archer, UiText.T("Archer requested", "弓兵を依頼しました")); return; }
             if (actionId == "make:cavalry-barracks") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Cavalry, UiText.T("Cavalry requested", "騎兵を依頼しました")); return; }
+            if (actionId == "make:mercenary-barracks") { TrainFromBuilding(economy, BuildingKind.Barracks, UnitKind.Mercenary, UiText.T("Mercenary requested", "傭兵を依頼しました")); return; }
             if (actionId == "make:ram") { TrainFromBuilding(economy, BuildingKind.SiegeWorkshop, UnitKind.Ram, UiText.T("Ram requested", "破城槌を依頼しました")); return; }
             if (actionId == "make:archer-range") { TrainFromBuilding(economy, BuildingKind.ArcheryRange, UnitKind.Archer, UiText.T("Archer requested", "弓兵を依頼しました")); return; }
             if (actionId == "make:cavalry-stable") { TrainFromBuilding(economy, BuildingKind.Stable, UnitKind.Cavalry, UiText.T("Cavalry requested", "騎兵を依頼しました")); return; }
@@ -168,7 +169,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -278,6 +279,11 @@ namespace Rts.Presentation
                 Add(rows, "build:drying-rack", UiText.T("Drying rack (", "干し場（木材 ") + economy.DryingRackWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.DryingRack);
                 Add(rows, "line:Preserves", UiText.T("Ask for preserves line", "保存食ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Preserves);
             }
+            if (economy.JewelsEnabled && economy.Civ == CivKind.Mountain && economy.Age >= 1)
+            {
+                Add(rows, "build:lapidary", UiText.T("Lapidary (", "研磨所（木材 ") + economy.LapidaryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Lapidary);
+                Add(rows, "line:Jewels", UiText.T("Ask for jewels line", "宝石のラインを依頼"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Jewels);
+            }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)
             {
@@ -355,6 +361,7 @@ namespace Rts.Presentation
                 Add(rows, "make:scout", UiText.T("Scout (", "斥候（食料 ") + economy.ScoutFoodCost + UiText.T(" food)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
                 if (economy.Age >= 2 && economy.Civ == CivKind.Agrarian) Add(rows, "make:archer-barracks", UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
                 else if (economy.Age >= 2 && economy.Civ == CivKind.Metallurgy) Add(rows, "make:cavalry-barracks", UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
+                else if (economy.Age >= 2 && economy.Civ == CivKind.Mountain) AddProducerRows(rows, economy, BuildingKind.Barracks, "make:mercenary-barracks", UiText.T("Mercenary (", "傭兵（食料 ") + economy.JewelMercenaryFood + UiText.T("F, ", "、宝石 ") + economy.JewelMercenaryGems + UiText.T(" Gems)", "）"), UnitKind.Mercenary);
                 AddProducerRows(rows, economy, BuildingKind.SiegeWorkshop, "make:ram", UiText.T("Ram (", "破城槌（食") + economy.RamFoodCost + UiText.T("F ", " 木") + economy.RamWoodCost + UiText.T("W)", "）"), UnitKind.Ram);
                 bool rangeExists = OwnBuilding(economy, BuildingKind.ArcheryRange).HasValue;
                 bool stableExists = OwnBuilding(economy, BuildingKind.Stable).HasValue;

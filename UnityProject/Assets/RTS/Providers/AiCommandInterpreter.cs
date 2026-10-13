@@ -104,7 +104,7 @@ namespace Rts.Providers
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
                 ["location"] = NullableEnum(goals),
-                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack" }),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels" }),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }),
                 ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["tacticParam"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name)),
@@ -133,8 +133,8 @@ namespace Rts.Providers
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
                 ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
-                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack" }),
-                ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town" }),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels" }),
+                ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "研磨所", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town", "Lapidary" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
                 ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
                 ["civ"] = NullableEnum(new[] { "原始", "農耕", "冶金", "森林", "石工", "商業", "騎兵", "橋梁", "学術", "信仰", "漁業", "山岳", "関所", "都市", "聖域", "Primitive", "Agrarian", "Metallurgy", "Forestry", "Masonry", "Caravan", "Cavalry", "Bridge", "Academy", "Cult", "Fishing", "Mountain", "Tollgate", "Metropolis", "Sanctuary" }),
@@ -1604,6 +1604,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "板材": case "板": mapped = ProcessingLineKind.Planks; break;
                     case "書物": case "本": mapped = ProcessingLineKind.Books; break;
                     case "保存食": case "干し場": mapped = ProcessingLineKind.Preserves; break;
+                    case "宝石": case "宝石加工": case "研磨所": mapped = ProcessingLineKind.Jewels; break;
                 }
             }
             if (mapped == null) return false;

@@ -32,6 +32,12 @@ namespace Rts.Simulation
 
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, BuildingKind producer)
         {
+            if (producer == BuildingKind.Barracks && kind == UnitKind.Mercenary && JewelsAllowed(faction)
+                && world.Economies[faction - 1].Age >= 2)
+            {
+                var mountain = world.Config.Economy;
+                return (mountain.JewelMercenaryFood, 0, 0, mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
+            }
             if (producer == BuildingKind.Monastery && kind == UnitKind.Monk && CultAllowed(faction))
             {
                 var e = world.Config.Economy;
@@ -69,6 +75,7 @@ namespace Rts.Simulation
             return kind == UnitKind.Scout
                 || (kind == UnitKind.Archer && e.Civ == CivKind.Agrarian && e.Age >= 2)
                 || (kind == UnitKind.Cavalry && e.Civ == CivKind.Metallurgy && e.Age >= 2)
+                || (kind == UnitKind.Mercenary && JewelsAllowed(b.FactionId) && e.Age >= 2)
                 || (kind == UnitKind.HeavyInfantry && ProcessingAvailable(b.FactionId))
                 || (kind == UnitKind.SkirmishArcher && ForestryAllowed(b.FactionId) && e.Age >= 2);
         }
@@ -271,6 +278,11 @@ namespace Rts.Simulation
                 e.Rations = checked(e.Rations - world.Config.Economy.RationsPerSoldier);
                 e.RationsConsumed = checked(e.RationsConsumed + world.Config.Economy.RationsPerSoldier);
             }
+            if (JewelsAllowed(faction) && b.Kind == BuildingKind.Barracks && kind == UnitKind.Mercenary)
+            {
+                e.JewelsConsumed = checked(e.JewelsConsumed + c.gems);
+                e.JewelsTrainedMercenaries++;
+            }
             bool planked = UsesPlanks(faction, kind) && e.Planks >= world.Config.Economy.PlanksPerRam;
             if (planked)
             {
@@ -389,6 +401,8 @@ namespace Rts.Simulation
                 e.Rations = checked(e.Rations + world.Config.Economy.RationsPerSoldier);
                 e.RationsConsumed = checked(e.RationsConsumed - world.Config.Economy.RationsPerSoldier);
             }
+            if (JewelsAllowed(faction) && b.Kind == BuildingKind.Barracks && kind == UnitKind.Mercenary)
+                e.JewelsConsumed = checked(e.JewelsConsumed - c.gems);
             if (planked)
             {
                 e.Planks = checked(e.Planks + world.Config.Economy.PlanksPerRam);
@@ -454,7 +468,7 @@ namespace Rts.Simulation
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
                     + QueuedOf(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.HeavyCavalry) + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
-                    + (CaravanAllowed(faction) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
+                    + ((CaravanAllowed(faction) || JewelsAllowed(faction)) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)
             {

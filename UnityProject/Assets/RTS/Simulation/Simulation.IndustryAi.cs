@@ -52,7 +52,7 @@ namespace Rts.Simulation
             }
             if (MasonryAllowed(faction)) { DecideQuarry(faction); if (BricksAllowed(faction)) DecideBricks(faction); return; }
             if (CavalryAllowed(faction)) { DecideTack(faction); return; }
-            if (MountainAllowed(faction)) { DecideMountain(faction); return; }
+            if (MountainAllowed(faction)) { DecideMountain(faction); DecideJewels(faction); return; }
             if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); DecidePlanks(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
@@ -740,6 +740,63 @@ namespace Rts.Simulation
         {
             var taken = TakenForOtherLines(faction, lineIndex);
             var route = BeltRoute(faction, OutputCell(mill), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
+        private void DecideJewels(uint faction)
+        {
+            if (!JewelsAllowed(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int shafts = 0, lapidaries = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || b.FactionId != faction) continue;
+                if (b.Kind == BuildingKind.MineShaft && b.Complete) shafts++;
+                if (b.Kind == BuildingKind.Lapidary) lapidaries++;
+            }
+            if (shafts == 0) return;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Jewels);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.LapidaryId))
+            {
+                if (lapidaries >= rules.JewelMaxLapidaries) return;
+                if (BuildingPending(line.LapidaryId)) return;
+                if (economy.Wood < rules.LapidaryWoodCost + rules.JewelWoodReserve) return;
+                uint id = PlaceLapidary(faction);
+                if (id != 0) line.LapidaryId = id;
+                return;
+            }
+            var lapidary = world.Buildings[line.LapidaryId - 1];
+            bool whole = LayJewelsLine(faction, index, lapidary);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceLapidary(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.LapidarySizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Lapidary, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayJewelsLine(uint faction, int lineIndex, BuildingState lapidary)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(lapidary), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null) return false;
             SetLineBelts(lineIndex, route);
             return LayRoutes(faction, route);

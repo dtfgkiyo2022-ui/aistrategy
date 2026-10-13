@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Preserves)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Jewels)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -67,7 +67,7 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && FindRequestedResourceNode(command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
                 return;
@@ -103,6 +103,7 @@ namespace Rts.Simulation
             if (kind == ProcessingLineKind.Planks) return PlanksAllowed(faction);
             if (kind == ProcessingLineKind.Books) return BooksAllowed(faction);
             if (kind == ProcessingLineKind.Preserves) return PreservesAllowed(faction);
+            if (kind == ProcessingLineKind.Jewels) return JewelsAllowed(faction);
             if (kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear)
                 return ForestryAllowed(faction) && (kind != ProcessingLineKind.BowGear || world.Economies[faction - 1].Age >= 2);
             if (!IndustryOn || !ProcessingOn || !MetalworkAllowed(faction)) return false;
@@ -117,6 +118,7 @@ namespace Rts.Simulation
                 : kind == ProcessingLineKind.Books ? world.Config.Economy.ScriptoriumWoodCost
                 : kind == ProcessingLineKind.Preserves ? world.Config.Economy.DryingRackWoodCost
                 : kind == ProcessingLineKind.Rations ? world.Config.Economy.MillWoodCost
+                : kind == ProcessingLineKind.Jewels ? world.Config.Economy.LapidaryWoodCost
                 : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
                 : world.Config.Economy.MineWoodCost;
@@ -270,6 +272,18 @@ namespace Rts.Simulation
                 }
                 LayPreservesLine(faction, index, world.Buildings[line.DryingRackId - 1]);
             }
+            else if (line.Kind == ProcessingLineKind.Jewels)
+            {
+                if (!BuildingReady(line.LapidaryId))
+                {
+                    if (BuildingPending(line.LapidaryId)) return true;
+                    if (economy.Wood < world.Config.Economy.LapidaryWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceLapidary(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.LapidaryId = id; return true;
+                }
+                LayJewelsLine(faction, index, world.Buildings[line.LapidaryId - 1]);
+            }
             else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
             {
                 if (line.Kind == ProcessingLineKind.Steel)
@@ -370,7 +384,7 @@ namespace Rts.Simulation
                 if (line.FactionId != faction) continue;
                 if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
                     || line.LumberCampId == buildingId || line.FletcherId == buildingId || line.MillId == buildingId
-                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.DryingRackId == buildingId) return i;
+                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.DryingRackId == buildingId || line.LapidaryId == buildingId) return i;
             }
             return -1;
         }
@@ -495,7 +509,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.DryingRackId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -520,6 +534,8 @@ namespace Rts.Simulation
                 return BuildingReady(line.LumberCampId) && BuildingReady(line.SawmillId);
             if (line.Kind == ProcessingLineKind.Preserves)
                 return BuildingReady(line.DryingRackId);
+            if (line.Kind == ProcessingLineKind.Jewels)
+                return BuildingReady(line.LapidaryId);
             return BuildingReady(line.MineId) && BuildingReady(line.SmelterId) && BuildingReady(line.KilnId) && BuildingReady(line.SteelworksId);
         }
 
@@ -544,6 +560,7 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.Saddlery) line.SaddleryId = id;
             else if (kind == BuildingKind.Sawmill) line.SawmillId = id;
             else if (kind == BuildingKind.DryingRack) line.DryingRackId = id;
+            else if (kind == BuildingKind.Lapidary) line.LapidaryId = id;
         }
 
         private bool LineContainsBelt(int index, int cell)
@@ -623,6 +640,11 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.Preserves)
             {
                 SetSimpleHaulers(faction, line.DryingRackId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.Jewels)
+            {
+                SetSimpleHaulers(faction, line.LapidaryId, 0, wanted);
                 return;
             }
             int current = 0;
