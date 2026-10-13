@@ -55,7 +55,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -824,6 +824,18 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int CharmMaxWorkshops { get; }
         public int CharmWoodReserve { get; }
         public int CharmHpPermille { get; }
+        public bool RepairKitsEnabled { get; }
+        public int RepairKits { get; }
+        public int RepairYardWoodCost { get; }
+        public int RepairYardSizeCells { get; }
+        public int RepairKitTicks { get; }
+        public int RepairKitWoodInput { get; }
+        public int RepairKitKeepWood { get; }
+        public int RepairKitStockLimit { get; }
+        public int RepairKitMaxYards { get; }
+        public int RepairKitWoodReserve { get; }
+        public int RepairKitIntervalTicks { get; }
+        public int RepairKitHp { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -896,7 +908,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int incenseHealHp = 0, int incenseMaxHouses = 0, int incenseWoodReserve = 0,
              bool charmsEnabled = false, int charms = 0, int charmWorkshopWoodCost = 0, int charmWorkshopSizeCells = 0,
              int charmTicks = 0, int charmWoodInput = 0, int charmKeepWood = 0, int charmStockLimit = 0,
-             int charmMaxWorkshops = 0, int charmWoodReserve = 0, int charmHpPermille = 0)
+             int charmMaxWorkshops = 0, int charmWoodReserve = 0, int charmHpPermille = 0,
+             bool repairKitsEnabled = false, int repairKits = 0, int repairYardWoodCost = 0, int repairYardSizeCells = 0,
+             int repairKitTicks = 0, int repairKitWoodInput = 0, int repairKitKeepWood = 0, int repairKitStockLimit = 0,
+             int repairKitMaxYards = 0, int repairKitWoodReserve = 0, int repairKitIntervalTicks = 0, int repairKitHp = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -941,6 +956,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CharmsEnabled = charmsEnabled; Charms = charms; CharmWorkshopWoodCost = charmWorkshopWoodCost; CharmWorkshopSizeCells = charmWorkshopSizeCells;
             CharmTicks = charmTicks; CharmWoodInput = charmWoodInput; CharmKeepWood = charmKeepWood; CharmStockLimit = charmStockLimit;
             CharmMaxWorkshops = charmMaxWorkshops; CharmWoodReserve = charmWoodReserve; CharmHpPermille = charmHpPermille;
+            RepairKitsEnabled = repairKitsEnabled; RepairKits = repairKits; RepairYardWoodCost = repairYardWoodCost; RepairYardSizeCells = repairYardSizeCells;
+            RepairKitTicks = repairKitTicks; RepairKitWoodInput = repairKitWoodInput; RepairKitKeepWood = repairKitKeepWood; RepairKitStockLimit = repairKitStockLimit;
+            RepairKitMaxYards = repairKitMaxYards; RepairKitWoodReserve = repairKitWoodReserve; RepairKitIntervalTicks = repairKitIntervalTicks; RepairKitHp = repairKitHp;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

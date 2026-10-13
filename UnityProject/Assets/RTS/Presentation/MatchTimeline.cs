@@ -226,6 +226,7 @@ namespace Rts.Presentation
             case ProcessingLineKind.TradeGoods: return UiText.T("trade goods", "交易品");
                 case ProcessingLineKind.Incense: return UiText.T("incense", "香");
                 case ProcessingLineKind.Charms: return UiText.T("charms", "護符");
+                case ProcessingLineKind.RepairKits: return UiText.T("repair kits", "補修材");
                 default: return value.ToString();
             }
         }

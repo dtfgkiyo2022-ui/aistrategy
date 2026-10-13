@@ -238,7 +238,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -247,7 +247,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -260,6 +260,7 @@ namespace Rts.Simulation
         internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
         internal int IncenseProduced, IncenseConsumed, IncenseHealedHp;
         internal int CharmsProduced, CharmsConsumed, CharmsTrainedSoldiers;
+        internal int RepairKitsProduced, RepairKitsConsumed, RepairKitsRepairedHp, RepairKitsCoreRepairedHp;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -407,7 +408,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0 };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -593,6 +594,11 @@ namespace Rts.Simulation
                 && e.CharmWoodInput > 0 && e.CharmWoodInput <= e.BufferLimit && e.CharmKeepWood >= 0
                 && e.CharmStockLimit > 0 && e.CharmMaxWorkshops > 0 && e.CharmWoodReserve >= 0
                 && e.CharmHpPermille >= 1000), "Invalid charms rules.");
+            Require(!e.RepairKits || (e.Enabled && e.Industry && e.Ages && e.RepairYardSizeCells > 0 && e.RepairYardSizeCells <= 8
+                && e.RepairYardWoodCost >= 0 && e.RepairYardWork > 0 && e.RepairYardHp > 0 && e.RepairKitTicks > 0
+                && e.RepairKitWoodInput > 0 && e.RepairKitWoodInput <= e.BufferLimit && e.RepairKitKeepWood >= 0
+                && e.RepairKitStockLimit > 0 && e.RepairKitMaxYards > 0 && e.RepairKitWoodReserve >= 0
+                && e.RepairKitIntervalTicks > 0 && e.RepairKitHp > 0), "Invalid repair-kits rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -984,6 +990,11 @@ namespace Rts.Simulation
                   CharmWork = e.CharmWork, CharmHp = e.CharmHp, CharmTicks = e.CharmTicks, CharmWoodInput = e.CharmWoodInput,
                   CharmKeepWood = e.CharmKeepWood, CharmStockLimit = e.CharmStockLimit, CharmMaxWorkshops = e.CharmMaxWorkshops,
                   CharmWoodReserve = e.CharmWoodReserve, CharmHpPermille = e.CharmHpPermille,
+                  RepairKits = e.RepairKits, RepairYardSizeCells = e.RepairYardSizeCells, RepairYardWoodCost = e.RepairYardWoodCost,
+                  RepairYardWork = e.RepairYardWork, RepairYardHp = e.RepairYardHp, RepairKitTicks = e.RepairKitTicks,
+                  RepairKitWoodInput = e.RepairKitWoodInput, RepairKitKeepWood = e.RepairKitKeepWood, RepairKitStockLimit = e.RepairKitStockLimit,
+                  RepairKitMaxYards = e.RepairKitMaxYards, RepairKitWoodReserve = e.RepairKitWoodReserve,
+                  RepairKitIntervalTicks = e.RepairKitIntervalTicks, RepairKitHp = e.RepairKitHp,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

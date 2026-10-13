@@ -111,6 +111,7 @@ namespace Rts.Tactics
                 ("economy.preserves", "保存食。漁業文明の干し場が食料を加工し、中核到着時に食料へ変換する"),
                 ("economy.incense", "香。教団文明の香房が木材2と食料1を80 tickで加工し、戦闘中に最も傷ついた兵を40 tickごとに20回復する"),
                 ("economy.jewels", "宝石。山岳文明の研磨所が石3と鉱石1を80 tickで加工し、時代2から兵舎で傭兵を宝石10で雇う"),
+                ("economy.repairKits", "補修材。関所文明の修繕所が木材2を80 tickで加工し、60 tickごとに完成した自軍建物またはコアを1個で最大40 HP修繕する"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("orders[]", "自陣営の有効な命令。id/source/kind/target/goal/status/acceptedTick/applyTick。idの昇順"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
@@ -177,6 +178,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Weaver, e.WeaverWoodCost, 0, e.WeaverWork);
             Add(rows, BuildingKind.IncenseHouse, e.IncenseWoodCost, 0, e.IncenseWork);
             Add(rows, BuildingKind.CharmWorkshop, e.CharmWoodCost, 0, e.CharmWork);
+            Add(rows, BuildingKind.RepairYard, e.RepairYardWoodCost, 0, e.RepairYardWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 
