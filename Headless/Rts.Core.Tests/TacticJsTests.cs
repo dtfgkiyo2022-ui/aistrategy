@@ -215,16 +215,17 @@ namespace Rts.Core.Tests
         [Test]
         public void SteelEconomySampleAsksForALineInThePlayedGame()
         {
-            // Seed 11 of the played game's rules gives the west metallurgy; the sample asks for its metal line in a region.
+            // Seed 12 of the played game's rules gives the east metallurgy; the sample asks for its metal line in a region.
+            // (Until CivVariety it was the west of seed 11; the variety rule now gives that ground the cult.)
             var loaded = TacticFolder.Load(SamplePath("steel-economy"));
             Assert.That(loaded.IsSuccess, Is.True, loaded.Error);
-            var scenario = LiveGameRules.Create(11, false, true, false, false);
+            var scenario = LiveGameRules.Create(12, false, true, false, false);
             var simulation = new Battle(scenario);
             var gateway = new CommandGateway(simulation);
-            var host = new TacticHost(1, new SimulationFrames(simulation), gateway, gateway, loaded.Runtime);
-            host.Start("{\"matchSeed\":" + scenario.Seed + ",\"factionId\":1}");
+            var host = new TacticHost(2, new SimulationFrames(simulation), gateway, gateway, loaded.Runtime);
+            host.Start("{\"matchSeed\":" + scenario.Seed + ",\"factionId\":2}");
             ScheduledInput request = null;
-            for (int i = 0; i < 12000 && request == null && !simulation.Capture(1).Result.HasEnded; i++)
+            for (int i = 0; i < 12000 && request == null && !simulation.Capture(2).Result.HasEnded; i++)
             {
                 var result = host.Tick();
                 if (result.Called) Assert.That(result.Failure, Is.Null, result.Failure == null ? "" : result.Failure.Reason);
