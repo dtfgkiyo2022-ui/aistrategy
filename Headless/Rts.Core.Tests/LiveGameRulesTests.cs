@@ -24,6 +24,8 @@ namespace Rts.Core.Tests
             var all = LiveGameRules.Create(3, true, true, false, false).Economy;
             Assert.That(all.BeltComponents && all.Masonry && all.Sanctuary && all.Towns && all.EarlyArms && all.AgeClock
                 && all.SiegeByAge && all.ManualControl, Is.True);
+            Assert.That(all.CivVariety, Is.True);
+            Assert.That(all.CivVarietyWindowPermille, Is.EqualTo(200));
         }
 
         [TestCase(3UL, false)]

@@ -253,6 +253,10 @@ namespace Rts.Simulation
         public bool Sanctuary;
         /// <summary>Early arms and the accelerated automatic economy. False preserves the historical age-map decisions.</summary>
         public bool EarlyArms;
+        /// <summary>CivVariety: compare unlike civilisation terrain scores on one integer scale.</summary>
+        public bool CivVariety;
+        /// <summary>CivVariety: near-best normalised scores remain eligible for the seed-based choice.</summary>
+        public int CivVarietyWindowPermille = 250;
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;

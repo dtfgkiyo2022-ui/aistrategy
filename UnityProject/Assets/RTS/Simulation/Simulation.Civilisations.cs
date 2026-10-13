@@ -14,6 +14,7 @@ namespace Rts.Simulation
         {
             public CivKind Civ { get; }
             public int Priority { get; }
+            public int ScoreCap { get; }
             public bool UsesFoodMarket { get; }
             public Func<Simulation, uint, bool> Enabled { get; }
             public Func<Simulation, uint, SimPoint, int, int, int> Score { get; }
@@ -23,7 +24,7 @@ namespace Rts.Simulation
             /// <summary>Whether the foundation could be placed now apart from its cost (null: always).</summary>
             public Func<Simulation, uint, bool> FoundationReady { get; }
 
-            public CivRegistration(CivKind civ, int priority, bool usesFoodMarket,
+            public CivRegistration(CivKind civ, int priority, int scoreCap, bool usesFoodMarket,
                 Func<Simulation, uint, bool> enabled,
                 Func<Simulation, uint, SimPoint, int, int, int> score,
                 Func<Simulation, uint, bool> lineStarted,
@@ -32,6 +33,7 @@ namespace Rts.Simulation
             {
                 Civ = civ;
                 Priority = priority;
+                ScoreCap = scoreCap;
                 UsesFoodMarket = usesFoodMarket;
                 Enabled = enabled;
                 Score = score;
@@ -47,34 +49,34 @@ namespace Rts.Simulation
         /// </summary>
         private static readonly CivRegistration[] CivRegistrations =
         {
-            new CivRegistration(CivKind.Agrarian, 0, false, (s, f) => s.AgesOn, AgrarianScore,
+            new CivRegistration(CivKind.Agrarian, 0, 6, false, (s, f) => s.AgesOn, AgrarianScore,
                 (s, f) => s.OwnBuildingIndex(f, BuildingKind.Farm) >= 0),
-            new CivRegistration(CivKind.Metallurgy, 1, true, (s, f) => s.AgesOn, MetallurgyScore,
+            new CivRegistration(CivKind.Metallurgy, 1, 8, true, (s, f) => s.AgesOn, MetallurgyScore,
                 (s, f) => s.OwnBuildingIndex(f, BuildingKind.Mine) >= 0 && s.OwnBuildingIndex(f, BuildingKind.Smelter) >= 0),
-            new CivRegistration(CivKind.Forestry, 2, true, (s, f) => s.ForestryOn, ForestryScore,
+            new CivRegistration(CivKind.Forestry, 2, 7, true, (s, f) => s.ForestryOn, ForestryScore,
                 (s, f) => s.ForestryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.LumberCamp) >= 0),
-            new CivRegistration(CivKind.Masonry, 3, true, (s, f) => s.MasonryOn, MasonryScore,
+            new CivRegistration(CivKind.Masonry, 3, 6, true, (s, f) => s.MasonryOn, MasonryScore,
                 (s, f) => s.MasonryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Quarry) >= 0),
-            new CivRegistration(CivKind.Caravan, 4, true, (s, f) => s.CaravanOn, CaravanScore,
+            new CivRegistration(CivKind.Caravan, 4, 2, true, (s, f) => s.CaravanOn, CaravanScore,
                 (s, f) => s.CaravanAllowed(f) && s.OwnFinishedMarketIndex(f) >= 0),
-            new CivRegistration(CivKind.Cavalry, 5, true, (s, f) => s.CavalryOn, CavalryScore,
+            new CivRegistration(CivKind.Cavalry, 5, 5, true, (s, f) => s.CavalryOn, CavalryScore,
                 (s, f) => s.CavalryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Stable) >= 0),
-            new CivRegistration(CivKind.Bridge, 6, true, (s, f) => s.BridgeOn, BridgeScore,
+            new CivRegistration(CivKind.Bridge, 6, 3, true, (s, f) => s.BridgeOn, BridgeScore,
                 (s, f) => s.BridgeAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.EngineerCamp) >= 0),
-            new CivRegistration(CivKind.Academy, 7, true, (s, f) => s.AcademyOn, AcademyScore,
+            new CivRegistration(CivKind.Academy, 7, 3, true, (s, f) => s.AcademyOn, AcademyScore,
                 (s, f) => s.AcademyAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Academy) >= 0),
-            new CivRegistration(CivKind.Cult, 8, true, (s, f) => s.CultOn, CultScore,
+            new CivRegistration(CivKind.Cult, 8, 3, true, (s, f) => s.CultOn, CultScore,
                 (s, f) => s.CultAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Monastery) >= 0),
-            new CivRegistration(CivKind.Fishing, 9, false, (s, f) => s.FishingOn, FishingScore,
+            new CivRegistration(CivKind.Fishing, 9, 3, false, (s, f) => s.FishingOn, FishingScore,
                 (s, f) => s.FishingAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Harbor) >= 0),
-            new CivRegistration(CivKind.Mountain, 10, true, (s, f) => s.MountainOn, MountainScore,
+            new CivRegistration(CivKind.Mountain, 10, 4, true, (s, f) => s.MountainOn, MountainScore,
                 (s, f) => s.MountainAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.MineShaft) >= 0),
-            new CivRegistration(CivKind.Tollgate, 11, true, (s, f) => s.TollgateOn, TollgateScore,
+            new CivRegistration(CivKind.Tollgate, 11, 3, true, (s, f) => s.TollgateOn, TollgateScore,
                 (s, f) => s.TollgateAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Tollgate) >= 0,
                 BuildingKind.Tollgate, (s, f) => s.TollgateFoundationReady(f)),
-            new CivRegistration(CivKind.Metropolis, 12, true, (s, f) => s.MetropolisOn, MetropolisScore,
+            new CivRegistration(CivKind.Metropolis, 12, 3, true, (s, f) => s.MetropolisOn, MetropolisScore,
                 (s, f) => s.MetropolisAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.GrandHouse) >= 0),
-            new CivRegistration(CivKind.Sanctuary, 13, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
+            new CivRegistration(CivKind.Sanctuary, 13, 3, true, (s, f) => s.SanctuaryOn, SanctuaryScore,
                 (s, f) => s.SanctuaryAllowed(f) && s.OwnBuildingIndex(f, BuildingKind.Shrine) >= 0,
                 BuildingKind.Shrine, (s, f) => s.SanctuaryFoundationReady(f))
         };
