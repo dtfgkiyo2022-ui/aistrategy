@@ -92,6 +92,7 @@
     <Compile Include="FishingCivTests.cs" />
     <Compile Include="MountainTests.cs" />
     <Compile Include="JewelsTests.cs" />
+    <Compile Include="TradeGoodsTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

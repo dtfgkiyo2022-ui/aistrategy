@@ -29,6 +29,7 @@ namespace Rts.Presentation
             case ResourceKind.Tack: return new Color(0.46f, 0.28f, 0.12f);
                 case ResourceKind.Preserves: return new Color(0.92f, 0.72f, 0.28f);
                 case ResourceKind.Bricks: return new Color(0.72f, 0.28f, 0.16f);
+                case ResourceKind.TradeGoods: return new Color(0.78f, 0.54f, 0.30f);
                 default: return Color.white;
             }
         }

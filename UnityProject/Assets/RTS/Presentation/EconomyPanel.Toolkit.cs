@@ -169,7 +169,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -283,6 +283,11 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:lapidary", UiText.T("Lapidary (", "研磨所（木材 ") + economy.LapidaryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Lapidary);
                 Add(rows, "line:Jewels", UiText.T("Ask for jewels line", "宝石のラインを依頼"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Jewels);
+            }
+            if (economy.TradeGoodsEnabled && economy.Civ == CivKind.Caravan && economy.Age >= 1)
+            {
+                Add(rows, "build:weaver", UiText.T("Weaver (", "織物工房（木材 ") + economy.WeaverWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Weaver);
+                Add(rows, "line:TradeGoods", UiText.T("Ask for trade goods line", "交易品ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.TradeGoods);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)

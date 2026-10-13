@@ -223,6 +223,7 @@ namespace Rts.Presentation
             case ProcessingLineKind.Books: return UiText.T("books", "書物");
             case ProcessingLineKind.Preserves: return UiText.T("preserves", "保存食");
             case ProcessingLineKind.Jewels: return UiText.T("jewels", "宝石");
+            case ProcessingLineKind.TradeGoods: return UiText.T("trade goods", "交易品");
                 default: return value.ToString();
             }
         }

@@ -37,6 +37,8 @@ namespace Rts.Simulation
                 return;
             }
             if (TryDecideRequestedLine(faction)) return;
+            // No return: the caravan's own decisions below stay exactly as they were.
+            if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
             if (FarmingAllowed(faction))
             {
                 DecideFarms(faction);
@@ -187,6 +189,56 @@ namespace Rts.Simulation
             var rack = world.Buildings[line.DryingRackId - 1];
             bool whole = LayPreservesLine(faction, index, rack);
             SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private void DecideTradeGoods(uint faction)
+        {
+            if (!TradeGoodsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int weavers = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.TradeGoods);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.WeaverId))
+            {
+                if (BuildingPending(line.WeaverId)) return;
+                if (weavers >= rules.TradeGoodsMaxWeavers || economy.Wood < rules.WeaverWoodCost + rules.TradeGoodsWoodReserve) return;
+                uint id = PlaceWeaver(faction);
+                if (id != 0) line.WeaverId = id;
+                return;
+            }
+            var weaver = world.Buildings[line.WeaverId - 1];
+            bool whole = LayTradeGoodsLine(faction, index, weaver);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceWeaver(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.WeaverSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Weaver, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayTradeGoodsLine(uint faction, int lineIndex, BuildingState weaver)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(weaver), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
         }
 
         private int FindHarborSite(uint faction)

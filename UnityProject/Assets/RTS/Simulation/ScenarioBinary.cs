@@ -116,6 +116,9 @@ namespace Rts.Simulation
         private const int JewelsExtensionId = 27;
         private const int JewelsExtensionVersion = 1;
         private const int JewelsExtensionDataLength = 14 * sizeof(int);
+        private const int TradeGoodsExtensionId = 28;
+        private const int TradeGoodsExtensionVersion = 1;
+        private const int TradeGoodsExtensionDataLength = 11 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -151,6 +154,7 @@ namespace Rts.Simulation
             ,new ExtensionRegistration(PreservesExtensionId, PreservesExtensionVersion, PreservesExtensionDataLength)
             ,new ExtensionRegistration(CivVarietyExtensionId, CivVarietyExtensionVersion, CivVarietyExtensionDataLength)
             ,new ExtensionRegistration(JewelsExtensionId, JewelsExtensionVersion, JewelsExtensionDataLength)
+            ,new ExtensionRegistration(TradeGoodsExtensionId, TradeGoodsExtensionVersion, TradeGoodsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -723,6 +727,7 @@ namespace Rts.Simulation
                     else if (id == PreservesExtensionId) ReadPreservesExtension(extension, c.Economy);
                     else if (id == CivVarietyExtensionId) ReadCivVarietyExtension(extension, c.Economy);
                     else if (id == JewelsExtensionId) ReadJewelsExtension(extension, c.Economy);
+                    else if (id == TradeGoodsExtensionId) ReadTradeGoodsExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -779,6 +784,7 @@ namespace Rts.Simulation
                 extensions.RemoveAll(extension => extension != null && extension.Id == PreservesExtensionId && !c.Economy.Preserves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyExtensionId && !c.Economy.CivVariety);
                 extensions.RemoveAll(extension => extension != null && extension.Id == JewelsExtensionId && !c.Economy.Jewels);
+                extensions.RemoveAll(extension => extension != null && extension.Id == TradeGoodsExtensionId && !c.Economy.TradeGoods);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -994,7 +1000,43 @@ namespace Rts.Simulation
                         extensions[i] = CreateJewelsExtension(c.Economy);
                     }
                 if (c.Economy.Jewels && !hasJewels) extensions.Add(CreateJewelsExtension(c.Economy));
+                bool hasTradeGoods = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == TradeGoodsExtensionId)
+                    {
+                        hasTradeGoods = true;
+                        extensions[i] = CreateTradeGoodsExtension(c.Economy);
+                    }
+                if (c.Economy.TradeGoods && !hasTradeGoods) extensions.Add(CreateTradeGoodsExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateTradeGoodsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.TradeGoods ? 1 : 0);
+                writer.Write(e.WeaverSizeCells); writer.Write(e.WeaverWoodCost); writer.Write(e.WeaverWork); writer.Write(e.WeaverHp);
+                writer.Write(e.TradeGoodsTicks); writer.Write(e.TradeGoodsWoodInput); writer.Write(e.TradeGoodsKeepWood);
+                writer.Write(e.TradeGoodsValue); writer.Write(e.TradeGoodsMaxWeavers); writer.Write(e.TradeGoodsWoodReserve);
+                return new ScenarioExtensionData { Id = TradeGoodsExtensionId, Version = TradeGoodsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadTradeGoodsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid trade-goods flag.");
+                e.TradeGoods = enabled != 0;
+                e.WeaverSizeCells = reader.ReadInt32(); e.WeaverWoodCost = reader.ReadInt32(); e.WeaverWork = reader.ReadInt32(); e.WeaverHp = reader.ReadInt32();
+                e.TradeGoodsTicks = reader.ReadInt32(); e.TradeGoodsWoodInput = reader.ReadInt32(); e.TradeGoodsKeepWood = reader.ReadInt32();
+                e.TradeGoodsValue = reader.ReadInt32(); e.TradeGoodsMaxWeavers = reader.ReadInt32(); e.TradeGoodsWoodReserve = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing trade-goods extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateJewelsExtension(EconomyRules e)
