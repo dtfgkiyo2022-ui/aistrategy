@@ -226,6 +226,12 @@ namespace Rts.Simulation
         public int WeaverSizeCells = 2, WeaverWoodCost = 80, WeaverWork = 200, WeaverHp = 400;
         public int TradeGoodsTicks = 80, TradeGoodsWoodInput = 3, TradeGoodsKeepWood = 80, TradeGoodsValue = 4;
         public int TradeGoodsMaxWeavers = 1, TradeGoodsWoodReserve = 20;
+        /// <summary>Incense: the cult civilisation turns wood and food into stock that heals soldiers during battle.</summary>
+        public bool Incense;
+        public int IncenseSizeCells = 2, IncenseWoodCost = 80, IncenseWork = 200, IncenseHp = 400;
+        public int IncenseTicks = 80, IncenseWoodInput = 2, IncenseFoodInput = 1;
+        public int IncenseKeepWood = 80, IncenseKeepFood = 60, IncenseStockLimit = 30;
+        public int IncenseHealIntervalTicks = 40, IncenseHealHp = 20, IncenseMaxHouses = 1, IncenseWoodReserve = 20;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

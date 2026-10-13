@@ -282,6 +282,7 @@ namespace Rts.Presentation
             { BuildingKind.DryingRack, new BuildingSpec("Tower_A.FBX", 1.8f, 0.75f, new Color(0.82f, 0.62f, 0.34f, 1f)) },
             { BuildingKind.Lapidary, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.38f, 0.58f, 0.78f, 1f)) },
             { BuildingKind.Weaver, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.78f, 0.54f, 0.30f, 1f)) },
+            { BuildingKind.IncenseHouse, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.62f, 0.38f, 0.72f, 1f)) },
             { BuildingKind.Monastery, new BuildingSpec("Temple.FBX", 3.0f) },
             { BuildingKind.Shrine, new BuildingSpec("MageTower.FBX", 3.0f) },
             { BuildingKind.Town, new BuildingSpec("TownHall.FBX", 3.0f) },

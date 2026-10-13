@@ -116,9 +116,12 @@ namespace Rts.Simulation
         private const int JewelsExtensionId = 27;
         private const int JewelsExtensionVersion = 1;
         private const int JewelsExtensionDataLength = 14 * sizeof(int);
-        private const int TradeGoodsExtensionId = 28;
-        private const int TradeGoodsExtensionVersion = 1;
-        private const int TradeGoodsExtensionDataLength = 11 * sizeof(int);
+private const int TradeGoodsExtensionId = 28;
+private const int TradeGoodsExtensionVersion = 1;
+private const int TradeGoodsExtensionDataLength = 11 * sizeof(int);
+private const int IncenseExtensionId = 29;
+private const int IncenseExtensionVersion = 1;
+private const int IncenseExtensionDataLength = 15 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -154,7 +157,8 @@ namespace Rts.Simulation
             ,new ExtensionRegistration(PreservesExtensionId, PreservesExtensionVersion, PreservesExtensionDataLength)
             ,new ExtensionRegistration(CivVarietyExtensionId, CivVarietyExtensionVersion, CivVarietyExtensionDataLength)
             ,new ExtensionRegistration(JewelsExtensionId, JewelsExtensionVersion, JewelsExtensionDataLength)
-            ,new ExtensionRegistration(TradeGoodsExtensionId, TradeGoodsExtensionVersion, TradeGoodsExtensionDataLength)
+,new ExtensionRegistration(TradeGoodsExtensionId, TradeGoodsExtensionVersion, TradeGoodsExtensionDataLength)
+,new ExtensionRegistration(IncenseExtensionId, IncenseExtensionVersion, IncenseExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -728,6 +732,7 @@ namespace Rts.Simulation
                     else if (id == CivVarietyExtensionId) ReadCivVarietyExtension(extension, c.Economy);
                     else if (id == JewelsExtensionId) ReadJewelsExtension(extension, c.Economy);
                     else if (id == TradeGoodsExtensionId) ReadTradeGoodsExtension(extension, c.Economy);
+                    else if (id == IncenseExtensionId) ReadIncenseExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -785,6 +790,7 @@ namespace Rts.Simulation
                 extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyExtensionId && !c.Economy.CivVariety);
                 extensions.RemoveAll(extension => extension != null && extension.Id == JewelsExtensionId && !c.Economy.Jewels);
                 extensions.RemoveAll(extension => extension != null && extension.Id == TradeGoodsExtensionId && !c.Economy.TradeGoods);
+                extensions.RemoveAll(extension => extension != null && extension.Id == IncenseExtensionId && !c.Economy.Incense);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1008,7 +1014,45 @@ namespace Rts.Simulation
                         extensions[i] = CreateTradeGoodsExtension(c.Economy);
                     }
                 if (c.Economy.TradeGoods && !hasTradeGoods) extensions.Add(CreateTradeGoodsExtension(c.Economy));
+                bool hasIncense = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == IncenseExtensionId)
+                    {
+                        hasIncense = true;
+                        extensions[i] = CreateIncenseExtension(c.Economy);
+                    }
+                if (c.Economy.Incense && !hasIncense) extensions.Add(CreateIncenseExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateIncenseExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Incense ? 1 : 0);
+                writer.Write(e.IncenseSizeCells); writer.Write(e.IncenseWoodCost); writer.Write(e.IncenseWork); writer.Write(e.IncenseHp);
+                writer.Write(e.IncenseTicks); writer.Write(e.IncenseWoodInput); writer.Write(e.IncenseFoodInput);
+                writer.Write(e.IncenseKeepWood); writer.Write(e.IncenseKeepFood); writer.Write(e.IncenseStockLimit);
+                writer.Write(e.IncenseHealIntervalTicks); writer.Write(e.IncenseHealHp); writer.Write(e.IncenseMaxHouses); writer.Write(e.IncenseWoodReserve);
+                return new ScenarioExtensionData { Id = IncenseExtensionId, Version = IncenseExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadIncenseExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid incense flag.");
+                e.Incense = enabled != 0;
+                e.IncenseSizeCells = reader.ReadInt32(); e.IncenseWoodCost = reader.ReadInt32(); e.IncenseWork = reader.ReadInt32(); e.IncenseHp = reader.ReadInt32();
+                e.IncenseTicks = reader.ReadInt32(); e.IncenseWoodInput = reader.ReadInt32(); e.IncenseFoodInput = reader.ReadInt32();
+                e.IncenseKeepWood = reader.ReadInt32(); e.IncenseKeepFood = reader.ReadInt32(); e.IncenseStockLimit = reader.ReadInt32();
+                e.IncenseHealIntervalTicks = reader.ReadInt32(); e.IncenseHealHp = reader.ReadInt32(); e.IncenseMaxHouses = reader.ReadInt32(); e.IncenseWoodReserve = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing incense extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateTradeGoodsExtension(EconomyRules e)

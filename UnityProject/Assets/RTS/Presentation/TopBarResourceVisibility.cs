@@ -19,10 +19,12 @@ namespace Rts.Presentation
             Steel,
             BowGear,
             Rations,
+            Incense,
             Bricks,
             Tack,
             Planks,
-            Books
+            Books,
+            Incense
         }
 
         public readonly struct ResourceEntry
@@ -64,6 +66,11 @@ namespace Rts.Presentation
             return economy != null && economy.RationsEnabled && (economy.Civ == CivKind.Agrarian || economy.Rations > 0);
         }
 
+        public static bool ShowIncense(EconomyView economy)
+        {
+            return economy != null && economy.IncenseEnabled && (economy.Civ == CivKind.Cult || economy.Incense > 0);
+        }
+
         public static bool ShowBricks(EconomyView economy)
         {
             return economy != null && economy.BricksEnabled && (economy.Civ == CivKind.Masonry || economy.Bricks > 0);
@@ -82,6 +89,11 @@ namespace Rts.Presentation
         public static bool ShowBooks(EconomyView economy)
         {
             return economy != null && economy.BooksEnabled && (economy.Civ == CivKind.Academy || economy.Books > 0);
+        }
+
+        public static bool ShowIncense(EconomyView economy)
+        {
+            return economy != null && economy.IncenseEnabled && (economy.Civ == CivKind.Cult || economy.Incense > 0);
         }
 
         /// <summary>
@@ -113,6 +125,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Steel, UiText.T("Steel", "鋼"), economy.Steel));
             if (ShowRations(economy))
                 target.Add(new ResourceEntry(ResourceKind.Rations, UiText.T("Rations", "糧食"), economy.Rations));
+            if (ShowIncense(economy))
+                target.Add(new ResourceEntry(ResourceKind.Incense, UiText.T("Incense", "香"), economy.Incense));
             if (ShowBricks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Bricks, UiText.T("Bricks", "煉瓦"), economy.Bricks));
             if (ShowTack(economy))
@@ -121,6 +135,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Planks, UiText.T("Planks", "板"), economy.Planks));
             if (ShowBooks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Books, UiText.T("Books", "書物"), economy.Books));
+            if (ShowIncense(economy))
+                target.Add(new ResourceEntry(ResourceKind.Incense, UiText.T("Incense", "香"), economy.Incense));
             if (ShowBowGear(economy))
                 target.Add(new ResourceEntry(ResourceKind.BowGear, UiText.T("Bow gear", "弓具"), economy.BowGear));
         }

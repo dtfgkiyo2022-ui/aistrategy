@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -793,6 +793,20 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int TradeGoodsValue { get; }
         public int TradeGoodsMaxWeavers { get; }
         public int TradeGoodsWoodReserve { get; }
+        public bool IncenseEnabled { get; }
+        public int Incense { get; }
+        public int IncenseHouseWoodCost { get; }
+        public int IncenseHouseSizeCells { get; }
+        public int IncenseTicks { get; }
+        public int IncenseWoodInput { get; }
+        public int IncenseFoodInput { get; }
+        public int IncenseKeepWood { get; }
+        public int IncenseKeepFood { get; }
+        public int IncenseStockLimit { get; }
+        public int IncenseHealIntervalTicks { get; }
+        public int IncenseHealHp { get; }
+        public int IncenseMaxHouses { get; }
+        public int IncenseWoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -858,7 +872,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int jewelMercenaryGems = 0, int jewelMercenaryFood = 0, int jewelMercenaryInfantryRatio = 0,
              bool tradeGoodsEnabled = false, int weaverWoodCost = 0, int weaverSizeCells = 0,
              int tradeGoodsTicks = 0, int tradeGoodsWoodInput = 0, int tradeGoodsKeepWood = 0,
-             int tradeGoodsValue = 0, int tradeGoodsMaxWeavers = 0, int tradeGoodsWoodReserve = 0)
+             int tradeGoodsValue = 0, int tradeGoodsMaxWeavers = 0, int tradeGoodsWoodReserve = 0,
+             bool incenseEnabled = false, int incense = 0, int incenseHouseWoodCost = 0, int incenseHouseSizeCells = 0,
+             int incenseTicks = 0, int incenseWoodInput = 0, int incenseFoodInput = 0, int incenseKeepWood = 0,
+             int incenseKeepFood = 0, int incenseStockLimit = 0, int incenseHealIntervalTicks = 0,
+             int incenseHealHp = 0, int incenseMaxHouses = 0, int incenseWoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -895,6 +913,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             TradeGoodsEnabled = tradeGoodsEnabled; WeaverWoodCost = weaverWoodCost; WeaverSizeCells = weaverSizeCells;
             TradeGoodsTicks = tradeGoodsTicks; TradeGoodsWoodInput = tradeGoodsWoodInput; TradeGoodsKeepWood = tradeGoodsKeepWood;
             TradeGoodsValue = tradeGoodsValue; TradeGoodsMaxWeavers = tradeGoodsMaxWeavers; TradeGoodsWoodReserve = tradeGoodsWoodReserve;
+            IncenseEnabled = incenseEnabled; Incense = incense; IncenseHouseWoodCost = incenseHouseWoodCost; IncenseHouseSizeCells = incenseHouseSizeCells;
+            IncenseTicks = incenseTicks; IncenseWoodInput = incenseWoodInput; IncenseFoodInput = incenseFoodInput;
+            IncenseKeepWood = incenseKeepWood; IncenseKeepFood = incenseKeepFood; IncenseStockLimit = incenseStockLimit;
+            IncenseHealIntervalTicks = incenseHealIntervalTicks; IncenseHealHp = incenseHealHp; IncenseMaxHouses = incenseMaxHouses;
+            IncenseWoodReserve = incenseWoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

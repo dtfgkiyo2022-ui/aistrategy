@@ -237,7 +237,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -246,7 +246,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -257,6 +257,7 @@ namespace Rts.Simulation
         internal int PreservesProduced, PreservesConvertedFood;
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
         internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
+        internal int IncenseProduced, IncenseConsumed, IncenseHealedHp;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -404,7 +405,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0 };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -505,7 +506,7 @@ namespace Rts.Simulation
                     Require((byte)b.Component <= (byte)BeltComponentKind.UndergroundExit && (byte)b.Speed <= (byte)BeltSpeed.Fast,
                         "Invalid belt component.");
                     if (b.Component == BeltComponentKind.Sorter)
-                        Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
+                        Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
                     if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
@@ -579,6 +580,12 @@ namespace Rts.Simulation
                 && e.WeaverWoodCost >= 0 && e.WeaverWork > 0 && e.WeaverHp > 0 && e.TradeGoodsTicks > 0
                 && e.TradeGoodsWoodInput > 0 && e.TradeGoodsWoodInput <= e.BufferLimit && e.TradeGoodsKeepWood >= 0
                 && e.TradeGoodsValue > 0 && e.TradeGoodsMaxWeavers > 0 && e.TradeGoodsWoodReserve >= 0), "Invalid trade-goods rules.");
+            Require(!e.Incense || (e.Enabled && e.Industry && e.Ages && e.IncenseSizeCells > 0 && e.IncenseSizeCells <= 8
+                && e.IncenseWoodCost >= 0 && e.IncenseWork > 0 && e.IncenseHp > 0 && e.IncenseTicks > 0
+                && e.IncenseWoodInput > 0 && e.IncenseWoodInput <= e.BufferLimit && e.IncenseFoodInput > 0
+                && e.IncenseFoodInput <= e.BufferLimit && e.IncenseKeepWood >= 0 && e.IncenseKeepFood >= 0
+                && e.IncenseStockLimit > 0 && e.IncenseHealIntervalTicks > 0 && e.IncenseHealHp > 0
+                && e.IncenseMaxHouses > 0 && e.IncenseWoodReserve >= 0), "Invalid incense rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -786,7 +793,7 @@ namespace Rts.Simulation
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
-                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods))
+                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -960,6 +967,12 @@ namespace Rts.Simulation
                   TradeGoodsWoodInput = e.TradeGoodsWoodInput, TradeGoodsKeepWood = e.TradeGoodsKeepWood,
                   TradeGoodsValue = e.TradeGoodsValue, TradeGoodsMaxWeavers = e.TradeGoodsMaxWeavers,
                   TradeGoodsWoodReserve = e.TradeGoodsWoodReserve,
+                  Incense = e.Incense, IncenseSizeCells = e.IncenseSizeCells, IncenseWoodCost = e.IncenseWoodCost,
+                  IncenseWork = e.IncenseWork, IncenseHp = e.IncenseHp, IncenseTicks = e.IncenseTicks,
+                  IncenseWoodInput = e.IncenseWoodInput, IncenseFoodInput = e.IncenseFoodInput,
+                  IncenseKeepWood = e.IncenseKeepWood, IncenseKeepFood = e.IncenseKeepFood, IncenseStockLimit = e.IncenseStockLimit,
+                  IncenseHealIntervalTicks = e.IncenseHealIntervalTicks, IncenseHealHp = e.IncenseHealHp,
+                  IncenseMaxHouses = e.IncenseMaxHouses, IncenseWoodReserve = e.IncenseWoodReserve,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
