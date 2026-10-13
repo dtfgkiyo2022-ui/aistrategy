@@ -95,5 +95,12 @@ namespace Rts.Tests.EditMode
             Assert.IsTrue(entries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Planks && entry.Label == "板"));
             Assert.That(LocalVisualPack.BuildingAssetPath(BuildingKind.Sawmill), Does.EndWith("LumberMill.FBX"));
         }
+
+        [Test]
+        public void FishingDryingRackUsesJapaneseNameAndUnusedPackModel()
+        {
+            Assert.AreEqual("干し場", EconomyLayer.BuildingName(BuildingKind.DryingRack));
+            Assert.That(LocalVisualPack.BuildingAssetPath(BuildingKind.DryingRack), Does.EndWith("Tower_A.FBX"));
+        }
     }
 }

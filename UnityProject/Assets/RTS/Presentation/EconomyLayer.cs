@@ -661,7 +661,7 @@ namespace Rts.Presentation
                     : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : b.Kind == BuildingKind.Blacksmith ? 2.0f
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
                     : b.Kind == BuildingKind.ArcheryRange ? 2.2f : b.Kind == BuildingKind.Stable ? 2.4f
-                    : b.Kind == BuildingKind.Castle ? 6f : 3f;
+                    : b.Kind == BuildingKind.Castle ? 6f : b.Kind == BuildingKind.DryingRack ? 1.8f : 3f;
                 float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
@@ -825,7 +825,7 @@ namespace Rts.Presentation
         }
 
         /// <summary>Short display names for the name tags (display only).</summary>
-        internal static string BuildingName(BuildingKind kind)
+        public static string BuildingName(BuildingKind kind)
         {
             switch (kind)
             {
@@ -864,6 +864,7 @@ namespace Rts.Presentation
                 case BuildingKind.GrandHouse: return UiText.T("Grand house", "大住居");
                 case BuildingKind.Shrine: return UiText.T("Shrine", "祠");
                 case BuildingKind.Storage: return UiText.T("Storage", "倉庫");
+                case BuildingKind.DryingRack: return UiText.T("Drying rack", "干し場");
                 default: return kind.ToString();
             }
         }
@@ -946,7 +947,7 @@ namespace Rts.Presentation
 
         private static bool RequiresInput(BuildingKind kind)
         {
-            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium;
+            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>

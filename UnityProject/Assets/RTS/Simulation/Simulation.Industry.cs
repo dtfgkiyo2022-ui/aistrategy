@@ -231,6 +231,26 @@ namespace Rts.Simulation
                         economy.BooksProduced++;
                     }
                 }
+                else if (PreservesAllowed(b.FactionId) && b.Kind == BuildingKind.DryingRack)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    // Pull from the core only while food is above the configured safety floor.
+                    if (b.Input < rules.BufferLimit && economy.Food > rules.PreserveKeepFood)
+                    {
+                        economy.Food--;
+                        b.Input++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.PreserveFoodInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.PreserveFoodInput;
+                        b.Timer = rules.PreserveTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.PreservesProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -258,7 +278,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Fletcher ? ResourceKind.BowGear : kind == BuildingKind.Mill ? ResourceKind.Rations
                 : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : kind == BuildingKind.Saddlery ? ResourceKind.Tack
                 : kind == BuildingKind.Sawmill ? ResourceKind.Planks
-                : kind == BuildingKind.Scriptorium ? ResourceKind.Books : ResourceKind.Metal;
+                : kind == BuildingKind.Scriptorium ? ResourceKind.Books
+                : kind == BuildingKind.DryingRack ? ResourceKind.Preserves : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -326,6 +347,10 @@ namespace Rts.Simulation
                 {
                     if (item == ResourceKind.Gold && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Wood && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                }
+                if (PreservesAllowed(faction) && b.Kind == BuildingKind.DryingRack && item == ResourceKind.Food && b.Input < rules.BufferLimit)
+                {
+                    b.Input++; return true;
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -472,6 +497,10 @@ namespace Rts.Simulation
                     int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
                 }
             }
+            if (PreservesAllowed(target.FactionId) && target.Kind == BuildingKind.DryingRack && kind == ResourceKind.Food)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -494,7 +523,8 @@ namespace Rts.Simulation
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (BooksOn && destination == BuildingKind.Scriptorium
-                   && (kind == ResourceKind.Gold || kind == ResourceKind.Wood));
+                   && (kind == ResourceKind.Gold || kind == ResourceKind.Wood))
+               || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food);
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

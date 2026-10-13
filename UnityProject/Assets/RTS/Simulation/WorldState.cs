@@ -237,7 +237,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -254,6 +254,7 @@ namespace Rts.Simulation
         internal int TackProduced, TackConsumed, TackTrainedHeavyCavalry;
         internal int PlanksProduced, PlanksConsumed, PlanksConsumedRams, PlanksConsumedBridges, PlanksEnhancedRams;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
+        internal int PreservesProduced, PreservesConvertedFood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -401,7 +402,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0 };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -560,6 +561,10 @@ namespace Rts.Simulation
                 && e.BookGoldInput > 0 && e.BookWoodInput > 0 && e.BookGoldInput <= e.BufferLimit && e.BookWoodInput <= e.BufferLimit
                 && e.BooksPerResearch > 0 && e.BookResearchPermille > 0 && e.BookResearchPermille <= 1000
                 && e.BookResearchCostPermille > 0 && e.BookResearchCostPermille <= 1000 && e.BookWoodReserve >= 0), "Invalid books rules.");
+            Require(!e.Preserves || (e.Enabled && e.Industry && e.Ages && e.DryingRackSizeCells > 0 && e.DryingRackSizeCells <= 8
+                && e.DryingRackWoodCost >= 0 && e.DryingRackWork > 0 && e.DryingRackHp > 0 && e.PreserveTicks > 0
+                && e.PreserveFoodInput > 0 && e.PreserveFoodInput <= e.BufferLimit && e.PreserveFoodValue > 0
+                && e.PreserveKeepFood >= 0 && e.PreserveMaxRacks > 0 && e.PreserveWoodReserve >= 0), "Invalid preserves rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -765,7 +770,7 @@ namespace Rts.Simulation
                     && ((byte)b.Item <= 4 || (e.ProcessingChain && (b.Item == ResourceKind.Charcoal || b.Item == ResourceKind.Steel))
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
-                        || (e.Books && b.Item == ResourceKind.Books))
+                        || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -925,6 +930,10 @@ namespace Rts.Simulation
                   ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,
                   BookGoldInput = e.BookGoldInput, BookWoodInput = e.BookWoodInput, BooksPerResearch = e.BooksPerResearch,
                   BookResearchPermille = e.BookResearchPermille, BookResearchCostPermille = e.BookResearchCostPermille, BookWoodReserve = e.BookWoodReserve,
+                  Preserves = e.Preserves, DryingRackSizeCells = e.DryingRackSizeCells, DryingRackWoodCost = e.DryingRackWoodCost,
+                  DryingRackWork = e.DryingRackWork, DryingRackHp = e.DryingRackHp, PreserveTicks = e.PreserveTicks,
+                  PreserveFoodInput = e.PreserveFoodInput, PreserveFoodValue = e.PreserveFoodValue, PreserveKeepFood = e.PreserveKeepFood,
+                  PreserveMaxRacks = e.PreserveMaxRacks, PreserveWoodReserve = e.PreserveWoodReserve,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

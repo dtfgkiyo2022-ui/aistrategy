@@ -179,6 +179,7 @@ namespace Rts.Tactics
                 Field(b, "tack", "{\"produced\":" + f.TackProduced + ",\"consumed\":" + f.TackConsumed + ",\"trainedHeavyCavalry\":" + f.TackTrainedHeavyCavalry + "}");
                 Field(b, "planks", "{\"produced\":" + f.PlanksProduced + ",\"consumed\":" + f.PlanksConsumed + ",\"consumedRams\":" + f.PlanksConsumedRams + ",\"consumedBridges\":" + f.PlanksConsumedBridges + ",\"enhancedRams\":" + f.PlanksEnhancedRams + "}");
                 Field(b, "books", "{\"stock\":" + f.Books + ",\"produced\":" + f.BooksProduced + ",\"consumed\":" + f.BooksConsumed + ",\"usedResearch\":" + f.BooksUsedResearch + "}");
+                Field(b, "preserves", "{\"produced\":" + f.PreservesProduced + ",\"convertedFood\":" + f.PreservesConvertedFood + "}");
                 Field(b, "buildings", CountsJson(f.Buildings)); Field(b, "age", f.Age.ToString(CultureInfo.InvariantCulture)); Field(b, "civ", Quote(f.Civ)); b.Append('}'); } b.Append(']');
             Field(b, "cores", ObjectivesJson(s.Cores)); Field(b, "outposts", ObjectivesJson(s.Outposts)); b.Append('}'); return b.ToString();
         }

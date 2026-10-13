@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -764,6 +764,15 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int BookResearchPermille { get; }
         public int BookResearchCostPermille { get; }
         public int BookWoodReserve { get; }
+        public bool PreservesEnabled { get; }
+        public int DryingRackWoodCost { get; }
+        public int DryingRackSizeCells { get; }
+        public int PreserveTicks { get; }
+        public int PreserveFoodInput { get; }
+        public int PreserveFoodValue { get; }
+        public int PreserveKeepFood { get; }
+        public int PreserveMaxRacks { get; }
+        public int PreserveWoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -819,7 +828,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int plankExtraRams = 0, int plankWoodReserve = 0,
              bool booksEnabled = false, int books = 0, int scriptoriumWoodCost = 0, int scriptoriumSizeCells = 0,
              int bookTicks = 0, int bookGoldInput = 0, int bookWoodInput = 0, int booksPerResearch = 0,
-             int bookResearchPermille = 0, int bookResearchCostPermille = 0, int bookWoodReserve = 0)
+             int bookResearchPermille = 0, int bookResearchCostPermille = 0, int bookWoodReserve = 0,
+             bool preservesEnabled = false, int dryingRackWoodCost = 0, int dryingRackSizeCells = 0,
+             int preserveTicks = 0, int preserveFoodInput = 0, int preserveFoodValue = 0,
+             int preserveKeepFood = 0, int preserveMaxRacks = 0, int preserveWoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -845,6 +857,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             BooksEnabled = booksEnabled; Books = books; ScriptoriumWoodCost = scriptoriumWoodCost; ScriptoriumSizeCells = scriptoriumSizeCells;
             BookTicks = bookTicks; BookGoldInput = bookGoldInput; BookWoodInput = bookWoodInput; BooksPerResearch = booksPerResearch;
             BookResearchPermille = bookResearchPermille; BookResearchCostPermille = bookResearchCostPermille; BookWoodReserve = bookWoodReserve;
+            PreservesEnabled = preservesEnabled; DryingRackWoodCost = dryingRackWoodCost; DryingRackSizeCells = dryingRackSizeCells;
+            PreserveTicks = preserveTicks; PreserveFoodInput = preserveFoodInput; PreserveFoodValue = preserveFoodValue;
+            PreserveKeepFood = preserveKeepFood; PreserveMaxRacks = preserveMaxRacks; PreserveWoodReserve = preserveWoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

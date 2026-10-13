@@ -211,6 +211,11 @@ namespace Rts.Simulation
         public int BookTicks = 120, BookGoldInput = 1, BookWoodInput = 2;
         public int BooksPerResearch = 3, BookResearchPermille = 500, BookResearchCostPermille = 700;
         public int BookWoodReserve = 20;
+        /// <summary>Preserves: the fishing civilisation turns food into more food at drying racks.</summary>
+        public bool Preserves;
+        public int DryingRackSizeCells = 2, DryingRackWoodCost = 80, DryingRackWork = 200, DryingRackHp = 400;
+        public int PreserveTicks = 60, PreserveFoodInput = 2, PreserveFoodValue = 3;
+        public int PreserveKeepFood = 60, PreserveMaxRacks = 2, PreserveWoodReserve = 20;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

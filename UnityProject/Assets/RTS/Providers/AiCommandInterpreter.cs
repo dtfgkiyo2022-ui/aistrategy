@@ -866,6 +866,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 lines.Add(nameof(ProcessingLineKind.Planks));
             if (economy.BooksEnabled && economy.Civ == CivKind.Academy && economy.Age >= 1)
                 lines.Add(nameof(ProcessingLineKind.Books));
+            if (economy.PreservesEnabled && economy.Civ == CivKind.Fishing && economy.Age >= 1)
+                lines.Add(nameof(ProcessingLineKind.Preserves));
             return lines.AsReadOnly();
         }
 
@@ -890,6 +892,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 case BuildingKind.Mill: return "製粉所";
                 case BuildingKind.Sawmill: return "製材所";
                 case BuildingKind.Scriptorium: return "写本所";
+                case BuildingKind.DryingRack: return "干し場";
                 case BuildingKind.House: return "住居";
                 case BuildingKind.DropSite: return "資源拠点";
                 case BuildingKind.Wall: return "壁";
@@ -1600,6 +1603,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "糧食": case "配給": mapped = ProcessingLineKind.Rations; break;
                     case "板材": case "板": mapped = ProcessingLineKind.Planks; break;
                     case "書物": case "本": mapped = ProcessingLineKind.Books; break;
+                    case "保存食": case "干し場": mapped = ProcessingLineKind.Preserves; break;
                 }
             }
             if (mapped == null) return false;

@@ -150,6 +150,11 @@ namespace Rts.Simulation
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
                     w.Value(n + "BooksConsumed", e.BooksConsumed); w.Value(n + "BooksUsedResearch", e.BooksUsedResearch);
                 }
+                if (PreservesOn)
+                {
+                    w.Value(n + "PreservesProduced", e.PreservesProduced);
+                    w.Value(n + "PreservesConvertedFood", e.PreservesConvertedFood);
+                }
             }
             if (RegionsOn)
             {
@@ -216,7 +221,7 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
@@ -295,7 +300,7 @@ namespace Rts.Simulation
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
                 }
             }
-            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -311,6 +316,7 @@ namespace Rts.Simulation
                     if (TackOn) w.Value(n + "SaddleryId", line.SaddleryId);
                     if (PlanksOn) { w.Value(n + "LumberCampId", line.LumberCampId); w.Value(n + "SawmillId", line.SawmillId); }
                     if (BooksOn) w.Value(n + "ScriptoriumId", line.ScriptoriumId);
+                    if (PreservesOn) w.Value(n + "DryingRackId", line.DryingRackId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)
