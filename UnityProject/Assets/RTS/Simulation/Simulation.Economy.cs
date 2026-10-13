@@ -48,6 +48,7 @@ namespace Rts.Simulation
                     DecideTower(faction);
                     DecideResearch(faction);
                     DecideMarket(faction);
+                    DecideGoodsMarket(faction);
                     DecideCaravanserai(faction);
                     DecideCaravanRoute(faction);
                     DecideTradeRoute(faction);

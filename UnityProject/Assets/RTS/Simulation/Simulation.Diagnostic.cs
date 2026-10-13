@@ -198,6 +198,18 @@ namespace Rts.Simulation
                     w.Value(n + "QueueTools.Count", (uint)tools.Length);
                     for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
                 }
+                if (GoodsMarketOn && e.GoodsSoldCounts != null)
+                {
+                    foreach (var goods in GoodsKinds)
+                    {
+                        int i = (int)goods;
+                        string key = n + "GoodsMarket." + goods.ToString();
+                        w.Value(key + ".SoldCount", e.GoodsSoldCounts[i]);
+                        w.Value(key + ".SoldUnits", e.GoodsSoldUnits[i]);
+                        w.Value(key + ".ReceivedFood", e.GoodsReceivedFood[i]);
+                        w.Value(key + ".ReceivedWood", e.GoodsReceivedWood[i]);
+                    }
+                }
             }
             if (RegionsOn)
             {

@@ -97,6 +97,7 @@
     <Compile Include="CharmsTests.cs" />
     <Compile Include="RepairKitsTests.cs" />
     <Compile Include="ToolsTests.cs" />
+    <Compile Include="GoodsMarketTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -124,6 +125,7 @@
     <Compile Include="TacticGymTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/GoodsMarketUiText.cs" Link="Presentation/GoodsMarketUiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
   </ItemGroup>
@@ -138,6 +140,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/MovementTests.cs" Link="Tests/MovementTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ReinforcementTests.cs" Link="Tests/ReinforcementTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DeterminismSourceTests.cs" Link="Tests/DeterminismSourceTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/GoodsMarketEditModeTests.cs" Link="Tests/GoodsMarketEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CommandStateTests.cs" Link="Tests/CommandStateTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CommandTestInput.cs" Link="Tests/CommandTestInput.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/PolicyDecisionTests.cs" Link="Tests/PolicyDecisionTests.cs" />

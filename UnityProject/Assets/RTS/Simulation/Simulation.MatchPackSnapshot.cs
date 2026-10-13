@@ -79,6 +79,7 @@ namespace Rts.Simulation
         public int ToolsConsumed { get; internal set; }
         public int ToolsTrainedVillagers { get; internal set; }
         public int ToolsSavedFood { get; internal set; }
+        public MatchPackGoodsTradeSnapshot[] GoodsMarket { get; internal set; } = Array.Empty<MatchPackGoodsTradeSnapshot>();
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -95,6 +96,15 @@ namespace Rts.Simulation
     {
         public string Kind { get; internal set; }
         public int Count { get; internal set; }
+    }
+
+    public sealed class MatchPackGoodsTradeSnapshot
+    {
+        public string Goods { get; internal set; }
+        public int SoldCount { get; internal set; }
+        public int SoldUnits { get; internal set; }
+        public int ReceivedFood { get; internal set; }
+        public int ReceivedWood { get; internal set; }
     }
 
     public sealed partial class Simulation
@@ -176,6 +186,7 @@ namespace Rts.Simulation
                     ToolsConsumed = economy.ToolsConsumed,
                     ToolsTrainedVillagers = economy.ToolsTrainedVillagers,
                     ToolsSavedFood = economy.ToolsSavedFood,
+                    GoodsMarket = GoodsMarketSnapshot(economy),
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),
@@ -190,6 +201,22 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Outposts.Length; i++)
                 snapshot.Outposts[i] = new MatchPackObjectiveSnapshot { Id = world.Outposts[i].Definition.Id, OwnerFactionId = world.Outposts[i].OwnerFactionId };
             return snapshot;
+        }
+
+        private MatchPackGoodsTradeSnapshot[] GoodsMarketSnapshot(FactionEconomy economy)
+        {
+            if (!GoodsMarketOn || economy.GoodsSoldCounts == null) return Array.Empty<MatchPackGoodsTradeSnapshot>();
+            var result = new MatchPackGoodsTradeSnapshot[GoodsKinds.Length];
+            for (int i = 0; i < GoodsKinds.Length; i++)
+            {
+                int index = (int)GoodsKinds[i];
+                result[i] = new MatchPackGoodsTradeSnapshot
+                {
+                    Goods = GoodsKinds[i].ToString(), SoldCount = economy.GoodsSoldCounts[index], SoldUnits = economy.GoodsSoldUnits[index],
+                    ReceivedFood = economy.GoodsReceivedFood[index], ReceivedWood = economy.GoodsReceivedWood[index]
+                };
+            }
+            return result;
         }
 
         private MatchPackCount[] CountSoldiers(uint factionId)

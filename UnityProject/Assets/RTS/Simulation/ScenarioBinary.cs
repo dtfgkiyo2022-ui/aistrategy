@@ -131,6 +131,9 @@ private const int RepairKitsExtensionDataLength = 13 * sizeof(int);
 private const int ToolsExtensionId = 32;
 private const int ToolsExtensionVersion = 1;
 private const int ToolsExtensionDataLength = 13 * sizeof(int);
+private const int GoodsMarketExtensionId = 33;
+private const int GoodsMarketExtensionVersion = 1;
+private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -171,6 +174,7 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
             ,new ExtensionRegistration(CharmsExtensionId, CharmsExtensionVersion, CharmsExtensionDataLength)
             ,new ExtensionRegistration(RepairKitsExtensionId, RepairKitsExtensionVersion, RepairKitsExtensionDataLength)
             ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
+            ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -748,6 +752,7 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
                     else if (id == CharmsExtensionId) ReadCharmsExtension(extension, c.Economy);
                     else if (id == RepairKitsExtensionId) ReadRepairKitsExtension(extension, c.Economy);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
+                    else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -809,6 +814,7 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CharmsExtensionId && !c.Economy.Charms);
                 extensions.RemoveAll(extension => extension != null && extension.Id == RepairKitsExtensionId && !c.Economy.RepairKits);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
+                extensions.RemoveAll(extension => extension != null && extension.Id == GoodsMarketExtensionId && !c.Economy.GoodsMarket);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1064,6 +1070,14 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
                         extensions[i] = CreateToolsExtension(c.Economy);
                     }
                 if (c.Economy.Tools && !hasTools) extensions.Add(CreateToolsExtension(c.Economy));
+                bool hasGoodsMarket = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == GoodsMarketExtensionId)
+                    {
+                        hasGoodsMarket = true;
+                        extensions[i] = CreateGoodsMarketExtension(c.Economy);
+                    }
+                if (c.Economy.GoodsMarket && !hasGoodsMarket) extensions.Add(CreateGoodsMarketExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1092,6 +1106,40 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
                 e.ToolTicks = reader.ReadInt32(); e.ToolWoodInput = reader.ReadInt32(); e.ToolKeepWood = reader.ReadInt32(); e.ToolStockLimit = reader.ReadInt32();
                 e.ToolMaxShops = reader.ReadInt32(); e.ToolWoodReserve = reader.ReadInt32(); e.ToolVillagerFoodPermille = reader.ReadInt32(); e.ToolVillagerTicksPermille = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing tools extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateGoodsMarketExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.GoodsMarket ? 1 : 0);
+                writer.Write(e.GoodsTradeLot); writer.Write(e.GoodsAutoSellAt); writer.Write(e.GoodsAutoSellIntervalTicks);
+                writer.Write(e.GoodsAutoKeep); writer.Write(e.GoodsMarketWoodReserve);
+                writer.Write(e.GoodsValueSteel); writer.Write(e.GoodsValueBowGear); writer.Write(e.GoodsValueRations);
+                writer.Write(e.GoodsValueBricks); writer.Write(e.GoodsValueTack); writer.Write(e.GoodsValuePlanks);
+                writer.Write(e.GoodsValueBooks); writer.Write(e.GoodsValueIncense); writer.Write(e.GoodsValueCharms);
+                writer.Write(e.GoodsValueRepairKits); writer.Write(e.GoodsValueTools);
+                return new ScenarioExtensionData { Id = GoodsMarketExtensionId, Version = GoodsMarketExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadGoodsMarketExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid goods market flag.");
+                e.GoodsMarket = enabled != 0;
+                e.GoodsTradeLot = reader.ReadInt32(); e.GoodsAutoSellAt = reader.ReadInt32(); e.GoodsAutoSellIntervalTicks = reader.ReadInt32();
+                e.GoodsAutoKeep = reader.ReadInt32(); e.GoodsMarketWoodReserve = reader.ReadInt32();
+                e.GoodsValueSteel = reader.ReadInt32(); e.GoodsValueBowGear = reader.ReadInt32(); e.GoodsValueRations = reader.ReadInt32();
+                e.GoodsValueBricks = reader.ReadInt32(); e.GoodsValueTack = reader.ReadInt32(); e.GoodsValuePlanks = reader.ReadInt32();
+                e.GoodsValueBooks = reader.ReadInt32(); e.GoodsValueIncense = reader.ReadInt32(); e.GoodsValueCharms = reader.ReadInt32();
+                e.GoodsValueRepairKits = reader.ReadInt32(); e.GoodsValueTools = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing goods market extension data.");
             }
         }
 

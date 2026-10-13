@@ -761,6 +761,22 @@ namespace Rts.Presentation
                     TradeButton(new Rect(x + 100f + 2f * (third + 4f), y, third, 22f), economy, ResourceKind.Wood, ResourceKind.Stone, UiText.T("Wood->Stone", "木材→石"));
                     GUI.enabled = true;
                     y += 26f;
+                    if (economy.GoodsMarketEnabled && economy.GoodsTradeLot > 0)
+                    {
+                        foreach (var goods in GoodsKindsForDisplay)
+                        {
+                            if (GoodsStock(economy, goods) < economy.GoodsTradeLot) continue;
+                            int price = GoodsPrice(economy, goods);
+                            GUI.enabled = market.Value.Complete;
+                            GUI.Label(new Rect(x, y, 96f, 22f), GoodsMarketUiText.GoodsName(goods) + economy.GoodsTradeLot + UiText.T(" -> ", " → "));
+                            float goodsThird = (w - 100f - 8f) / 3f;
+                            GoodsTradeButton(new Rect(x + 100f, y, goodsThird, 22f), goods, ResourceKind.Food, economy.GoodsTradeLot, price);
+                            GoodsTradeButton(new Rect(x + 100f + goodsThird + 4f, y, goodsThird, 22f), goods, ResourceKind.Wood, economy.GoodsTradeLot, price);
+                            GoodsTradeButton(new Rect(x + 100f + 2f * (goodsThird + 4f), y, goodsThird, 22f), goods, ResourceKind.Stone, economy.GoodsTradeLot, price);
+                            GUI.enabled = true;
+                            y += 26f;
+                        }
+                    }
                     // V3-5 (32 #19): the only way to get Gems - a steep, one-way exchange (give, never returned).
                     GUI.enabled = market.Value.Complete;
                     if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Wood->Gems (", "木材→宝石（") + economy.GemsTradeReturn + UiText.T(")", "）")))
@@ -871,6 +887,35 @@ namespace Rts.Presentation
         {
             if (GUI.Button(r, label))
                 Send(EconomyCommand.Trade(faction, ++sequence, give, take), label + UiText.T(" traded", " を交換しました"));
+        }
+
+        private static readonly ResourceKind[] GoodsKindsForDisplay =
+        {
+            ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
+            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools
+        };
+
+        public static string GoodsTradeLabel(ResourceKind goods, ResourceKind take, int lot)
+            => GoodsMarketUiText.GoodsTradeLabel(goods, take, lot);
+
+        private static int GoodsStock(EconomyView economy, ResourceKind kind)
+            => kind == ResourceKind.Steel ? economy.Steel : kind == ResourceKind.BowGear ? economy.BowGear
+                : kind == ResourceKind.Rations ? economy.Rations : kind == ResourceKind.Bricks ? economy.Bricks
+                : kind == ResourceKind.Tack ? economy.Tack : kind == ResourceKind.Planks ? economy.Planks
+                : kind == ResourceKind.Books ? economy.Books : kind == ResourceKind.Incense ? economy.Incense
+                : kind == ResourceKind.Charms ? economy.Charms : kind == ResourceKind.RepairKits ? economy.RepairKits
+                : kind == ResourceKind.Tools ? economy.Tools : 0;
+
+        private static int GoodsPrice(EconomyView economy, ResourceKind kind)
+        {
+            for (int i = 0; i < economy.GoodsPrices.Count; i++) if (economy.GoodsPrices[i].Goods == kind) return economy.GoodsPrices[i].Amount;
+            return 0;
+        }
+
+        private void GoodsTradeButton(Rect r, ResourceKind goods, ResourceKind take, int lot, int price)
+        {
+            string label = GoodsTradeLabel(goods, take, lot) + " (" + price + ")";
+            if (GUI.Button(r, label)) Send(EconomyCommand.Trade(faction, ++sequence, goods, take), label + UiText.T(" traded", " を交換しました"));
         }
 
         private static string TechName(TechKind t)
