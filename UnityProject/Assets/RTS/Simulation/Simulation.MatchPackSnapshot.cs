@@ -69,6 +69,11 @@ namespace Rts.Simulation
         public int CharmsProduced { get; internal set; }
         public int CharmsConsumed { get; internal set; }
         public int CharmsTrainedSoldiers { get; internal set; }
+        public int RepairKits { get; internal set; }
+        public int RepairKitsProduced { get; internal set; }
+        public int RepairKitsConsumed { get; internal set; }
+        public int RepairKitsRepairedHp { get; internal set; }
+        public int RepairKitsCoreRepairedHp { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -156,6 +161,11 @@ namespace Rts.Simulation
                     CharmsProduced = economy.CharmsProduced,
                     CharmsConsumed = economy.CharmsConsumed,
                     CharmsTrainedSoldiers = economy.CharmsTrainedSoldiers,
+                    RepairKits = economy.RepairKits,
+                    RepairKitsProduced = economy.RepairKitsProduced,
+                    RepairKitsConsumed = economy.RepairKitsConsumed,
+                    RepairKitsRepairedHp = economy.RepairKitsRepairedHp,
+                    RepairKitsCoreRepairedHp = economy.RepairKitsCoreRepairedHp,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

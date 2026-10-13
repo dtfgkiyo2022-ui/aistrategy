@@ -1,3 +1,4 @@
+using System;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -61,6 +62,54 @@ namespace Rts.Simulation
                     && (v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building)) return; // someone is on it
             }
             AssignBuilders(ref world.Buildings[worst]);
+        }
+
+        /// <summary>Tollgate stock repairs one finished own target every configured interval, in stable priority order.</summary>
+        private void ApplyRepairKits()
+        {
+            var rules = world.Config.Economy;
+            if (!RepairKitsOn || rules.RepairKitIntervalTicks <= 0 || world.Tick == 0 || world.Tick % rules.RepairKitIntervalTicks != 0) return;
+            for (uint faction = 1; faction <= world.Factions.Length; faction++)
+            {
+                if (!RepairKitsAllowed(faction)) continue;
+                ref var economy = ref world.Economies[faction - 1];
+                if (economy.RepairKits <= 0) continue;
+                int target = -1, targetRank = int.MaxValue;
+                uint targetId = uint.MaxValue;
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var b = world.Buildings[i];
+                    if (!b.Alive || !b.Complete || b.FactionId != faction) continue;
+                    int max = HpOf(b.Kind, faction, b.OriginCell);
+                    if (b.Hp >= max) continue;
+                    int rank = b.Kind == BuildingKind.Tollgate ? 0 : b.Kind == BuildingKind.Tower ? 1 : b.Kind == BuildingKind.Wall ? 2 : 4;
+                    if (rank < targetRank || rank == targetRank && b.Id < targetId)
+                    {
+                        target = i;
+                        targetRank = rank;
+                        targetId = b.Id;
+                    }
+                }
+                ref var core = ref world.Cores[world.Factions[faction - 1].CoreId - 1];
+                if (core.Hp > 0 && core.Hp < core.Definition.Hp
+                    && (3 < targetRank || 3 == targetRank && core.Definition.Id < targetId))
+                {
+                    int repaired = Math.Min(rules.RepairKitHp, core.Definition.Hp - core.Hp);
+                    core.Hp += repaired;
+                    economy.RepairKits--;
+                    economy.RepairKitsConsumed++;
+                    economy.RepairKitsCoreRepairedHp += repaired;
+                    continue;
+                }
+                if (target < 0) continue;
+                ref var building = ref world.Buildings[target];
+                int amount = Math.Min(rules.RepairKitHp, HpOf(building.Kind, faction, building.OriginCell) - building.Hp);
+                if (amount <= 0) continue;
+                building.Hp += amount;
+                economy.RepairKits--;
+                economy.RepairKitsConsumed++;
+                economy.RepairKitsRepairedHp += amount;
+            }
         }
     }
 }

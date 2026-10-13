@@ -45,6 +45,7 @@ namespace Rts.Presentation
             TopBarResourceVisibility.ResourceKind.Rations,
             TopBarResourceVisibility.ResourceKind.Incense,
             TopBarResourceVisibility.ResourceKind.Charms,
+            TopBarResourceVisibility.ResourceKind.RepairKits,
             TopBarResourceVisibility.ResourceKind.Bricks,
             TopBarResourceVisibility.ResourceKind.Tack
         };
@@ -1845,7 +1846,8 @@ namespace Rts.Presentation
                 case TopBarResourceVisibility.ResourceKind.BowGear: return "quiver";
                 case TopBarResourceVisibility.ResourceKind.Rations: return "wheat";
             case TopBarResourceVisibility.ResourceKind.Incense: return "sparkles";
-            case TopBarResourceVisibility.ResourceKind.Charms: return "shield";
+                case TopBarResourceVisibility.ResourceKind.Charms: return "shield";
+                case TopBarResourceVisibility.ResourceKind.RepairKits: return "wrench";
                 case TopBarResourceVisibility.ResourceKind.Tack: return "leather";
                 default: return "";
             }

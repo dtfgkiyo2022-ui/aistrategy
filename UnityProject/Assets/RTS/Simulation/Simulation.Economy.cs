@@ -130,6 +130,7 @@ namespace Rts.Simulation
             RepairMasonryCoresWithBricks();
             ApplyRationsHealing();
             ApplyIncenseHealing();
+            ApplyRepairKits();
             AdvanceMountain();
             AdvanceByAgeClock();
             AdvanceAges();

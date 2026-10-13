@@ -36,6 +36,7 @@ namespace Rts.Simulation
                 if (CavalryAllowed(faction)) DecideTack(faction);
                 if (IncenseAllowed(faction)) DecideIncense(faction);
                 if (CharmsAllowed(faction)) DecideCharms(faction);
+                if (RepairKitsAllowed(faction)) DecideRepairKits(faction);
                 return;
             }
             if (TryDecideRequestedLine(faction)) return;
@@ -43,6 +44,7 @@ namespace Rts.Simulation
             if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
             if (IncenseAllowed(faction)) DecideIncense(faction);
             if (CharmsAllowed(faction)) DecideCharms(faction);
+            if (RepairKitsAllowed(faction)) DecideRepairKits(faction);
             if (FarmingAllowed(faction))
             {
                 DecideFarms(faction);
@@ -322,6 +324,56 @@ namespace Rts.Simulation
         {
             var taken = TakenForOtherLines(faction, lineIndex);
             var route = BeltRoute(faction, OutputCell(workshop), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null) return false;
+            SetLineBelts(lineIndex, route);
+            return LayRoutes(faction, route);
+        }
+
+        private void DecideRepairKits(uint faction)
+        {
+            if (!RepairKitsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
+            int yards = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int index = GetOrCreateLine(faction, ProcessingLineKind.RepairKits);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.RepairYardId))
+            {
+                if (BuildingPending(line.RepairYardId)) return;
+                if (yards >= rules.RepairKitMaxYards || economy.Wood < rules.RepairYardWoodCost + rules.RepairKitWoodReserve) return;
+                uint id = PlaceRepairYard(faction);
+                if (id != 0) line.RepairYardId = id;
+                return;
+            }
+            var yard = world.Buildings[line.RepairYardId - 1];
+            bool whole = LayRepairKitsLine(faction, index, yard);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private uint PlaceRepairYard(uint faction, int preferredCell = -1)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(core);
+            int size = world.Config.Economy.RepairYardSizeCells;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(core), size);
+            if (origin < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.RepairYard, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayRepairKitsLine(uint faction, int lineIndex, BuildingState yard)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var route = BeltRoute(faction, OutputCell(yard), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null) return false;
             SetLineBelts(lineIndex, route);
             return LayRoutes(faction, route);

@@ -237,6 +237,11 @@ namespace Rts.Simulation
         public int CharmSizeCells = 2, CharmWoodCost = 80, CharmWork = 200, CharmHp = 400;
         public int CharmTicks = 100, CharmWoodInput = 3, CharmKeepWood = 80, CharmStockLimit = 20;
         public int CharmMaxWorkshops = 1, CharmWoodReserve = 20, CharmHpPermille = 1200;
+        /// <summary>Tollgate repair kits: stored wood is turned into kits for deterministic building and core repairs.</summary>
+        public bool RepairKits;
+        public int RepairYardSizeCells = 2, RepairYardWoodCost = 80, RepairYardWork = 200, RepairYardHp = 400;
+        public int RepairKitTicks = 80, RepairKitWoodInput = 2, RepairKitKeepWood = 80, RepairKitStockLimit = 20;
+        public int RepairKitMaxYards = 1, RepairKitWoodReserve = 20, RepairKitIntervalTicks = 60, RepairKitHp = 40;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

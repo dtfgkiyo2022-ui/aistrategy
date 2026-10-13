@@ -104,7 +104,7 @@ namespace Rts.Providers
                 ["goal"] = NullableEnum(goals),
                 ["region"] = NullableEnum(regions),
                 ["location"] = NullableEnum(goals),
-            ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels", "TradeGoods", "Incense", "Charms" }),
+            ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels", "TradeGoods", "Incense", "Charms", "RepairKits" }),
                 ["control"] = NullableEnum(new[] { "Human", "Ai" }),
                 ["doctrine"] = NullableEnum(new[] { "none", "maintain", "concentrate" }),
                 ["tacticParam"] = NullableEnum(summary == null || summary.TacticInfo == null ? Array.Empty<string>() : summary.TacticInfo.Parameters.Select(p => p.Name)),
@@ -133,8 +133,8 @@ namespace Rts.Providers
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
                 ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
-                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels", "TradeGoods", "Incense", "Charms" }),
-                ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "研磨所", "織物工房", "護符工房", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town", "Lapidary", "Weaver", "CharmWorkshop" }),
+                ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels", "TradeGoods", "Incense", "Charms", "RepairKits" }),
+                ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "研磨所", "織物工房", "護符工房", "修繕所", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town", "Lapidary", "Weaver", "CharmWorkshop", "RepairYard" }),
                 ["location"] = NullableEnum(locations), ["producer"] = NullableEnum(producers),
                 ["unit"] = NullableEnum(new[] { "歩兵", "斥候", "村人", "弓兵", "騎兵", "破城槌", "傭兵", "僧侶", "重歩兵", "散兵", "軽騎兵", "Infantry", "Scout", "Villager", "Archer", "Cavalry", "Ram", "Mercenary", "Monk", "HeavyInfantry", "SkirmishArcher", "LightCavalry" }),
                 ["civ"] = NullableEnum(new[] { "原始", "農耕", "冶金", "森林", "石工", "商業", "騎兵", "橋梁", "学術", "信仰", "漁業", "山岳", "関所", "都市", "聖域", "Primitive", "Agrarian", "Metallurgy", "Forestry", "Masonry", "Caravan", "Cavalry", "Bridge", "Academy", "Cult", "Fishing", "Mountain", "Tollgate", "Metropolis", "Sanctuary" }),
@@ -874,6 +874,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 lines.Add(nameof(ProcessingLineKind.Incense));
             if (economy.CharmsEnabled && economy.Civ == CivKind.Sanctuary && economy.Age >= 1)
                 lines.Add(nameof(ProcessingLineKind.Charms));
+            if (economy.RepairKitsEnabled && economy.Civ == CivKind.Tollgate && economy.Age >= 1)
+                lines.Add(nameof(ProcessingLineKind.RepairKits));
             return lines.AsReadOnly();
         }
 
@@ -913,6 +915,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 case BuildingKind.Weaver: return "織物工房";
                 case BuildingKind.IncenseHouse: return "香房";
                 case BuildingKind.CharmWorkshop: return "護符工房";
+                case BuildingKind.RepairYard: return "修繕所";
                 default: return kind.ToString();
             }
         }
@@ -1617,6 +1620,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "保存食": case "干し場": mapped = ProcessingLineKind.Preserves; break;
                     case "宝石": case "宝石加工": case "研磨所": mapped = ProcessingLineKind.Jewels; break;
                     case "交易品": case "交易": case "織物工房": mapped = ProcessingLineKind.TradeGoods; break;
+                    case "補修材": case "修繕所": mapped = ProcessingLineKind.RepairKits; break;
                 }
             }
             if (mapped == null) return false;

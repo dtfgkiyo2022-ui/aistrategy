@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -229,7 +229,18 @@ namespace Rts.Simulation
                 charmStockLimit: CharmsAllowed(faction) ? rules.CharmStockLimit : 0,
                 charmMaxWorkshops: CharmsAllowed(faction) ? rules.CharmMaxWorkshops : 0,
                 charmWoodReserve: CharmsAllowed(faction) ? rules.CharmWoodReserve : 0,
-                charmHpPermille: CharmsAllowed(faction) ? rules.CharmHpPermille : 0);
+                charmHpPermille: CharmsAllowed(faction) ? rules.CharmHpPermille : 0,
+                repairKitsEnabled: RepairKitsAllowed(faction), repairKits: RepairKitsAllowed(faction) ? economy.RepairKits : 0,
+                repairYardWoodCost: RepairKitsAllowed(faction) ? rules.RepairYardWoodCost : 0,
+                repairYardSizeCells: RepairKitsAllowed(faction) ? rules.RepairYardSizeCells : 0,
+                repairKitTicks: RepairKitsAllowed(faction) ? rules.RepairKitTicks : 0,
+                repairKitWoodInput: RepairKitsAllowed(faction) ? rules.RepairKitWoodInput : 0,
+                repairKitKeepWood: RepairKitsAllowed(faction) ? rules.RepairKitKeepWood : 0,
+                repairKitStockLimit: RepairKitsAllowed(faction) ? rules.RepairKitStockLimit : 0,
+                repairKitMaxYards: RepairKitsAllowed(faction) ? rules.RepairKitMaxYards : 0,
+                repairKitWoodReserve: RepairKitsAllowed(faction) ? rules.RepairKitWoodReserve : 0,
+                repairKitIntervalTicks: RepairKitsAllowed(faction) ? rules.RepairKitIntervalTicks : 0,
+                repairKitHp: RepairKitsAllowed(faction) ? rules.RepairKitHp : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)
