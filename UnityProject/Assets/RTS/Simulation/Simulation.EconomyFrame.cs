@@ -52,7 +52,7 @@ namespace Rts.Simulation
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
-                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn) ? b.InputSecondary : 0,
+                    own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || PlanksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || BooksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -166,7 +166,17 @@ namespace Rts.Simulation
                 planksPerBridgeCell: PlanksAllowed(faction) ? rules.PlanksPerBridgeCell : 0,
                 plankBridgeWoodPermille: PlanksAllowed(faction) ? rules.PlankBridgeWoodPermille : 0,
                 plankExtraRams: PlanksAllowed(faction) ? rules.PlankExtraRams : 0,
-                plankWoodReserve: PlanksAllowed(faction) ? rules.PlankWoodReserve : 0);
+                plankWoodReserve: PlanksAllowed(faction) ? rules.PlankWoodReserve : 0,
+                booksEnabled: BooksAllowed(faction), books: BooksAllowed(faction) ? economy.Books : 0,
+                scriptoriumWoodCost: BooksAllowed(faction) ? rules.ScriptoriumWoodCost : 0,
+                scriptoriumSizeCells: BooksAllowed(faction) ? rules.ScriptoriumSizeCells : 0,
+                bookTicks: BooksAllowed(faction) ? rules.BookTicks : 0,
+                bookGoldInput: BooksAllowed(faction) ? rules.BookGoldInput : 0,
+                bookWoodInput: BooksAllowed(faction) ? rules.BookWoodInput : 0,
+                booksPerResearch: BooksAllowed(faction) ? rules.BooksPerResearch : 0,
+                bookResearchPermille: BooksAllowed(faction) ? rules.BookResearchPermille : 0,
+                bookResearchCostPermille: BooksAllowed(faction) ? rules.BookResearchCostPermille : 0,
+                bookWoodReserve: BooksAllowed(faction) ? rules.BookWoodReserve : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

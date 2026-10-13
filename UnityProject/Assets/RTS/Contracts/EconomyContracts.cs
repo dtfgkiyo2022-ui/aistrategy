@@ -53,7 +53,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -753,6 +753,17 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int PlankBridgeWoodPermille { get; }
         public int PlankExtraRams { get; }
         public int PlankWoodReserve { get; }
+        public bool BooksEnabled { get; }
+        public int Books { get; }
+        public int ScriptoriumWoodCost { get; }
+        public int ScriptoriumSizeCells { get; }
+        public int BookTicks { get; }
+        public int BookGoldInput { get; }
+        public int BookWoodInput { get; }
+        public int BooksPerResearch { get; }
+        public int BookResearchPermille { get; }
+        public int BookResearchCostPermille { get; }
+        public int BookWoodReserve { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -805,7 +816,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool planksEnabled = false, int planks = 0, int sawmillWoodCost = 0, int sawmillSizeCells = 0,
              int plankTicks = 0, int plankWoodInput = 0, int planksPerRam = 0, int plankRamHpPermille = 0,
              int plankRamTrainPermille = 0, int planksPerBridgeCell = 0, int plankBridgeWoodPermille = 0,
-             int plankExtraRams = 0, int plankWoodReserve = 0)
+             int plankExtraRams = 0, int plankWoodReserve = 0,
+             bool booksEnabled = false, int books = 0, int scriptoriumWoodCost = 0, int scriptoriumSizeCells = 0,
+             int bookTicks = 0, int bookGoldInput = 0, int bookWoodInput = 0, int booksPerResearch = 0,
+             int bookResearchPermille = 0, int bookResearchCostPermille = 0, int bookWoodReserve = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -828,6 +842,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             PlankRamHpPermille = plankRamHpPermille; PlankRamTrainPermille = plankRamTrainPermille;
             PlanksPerBridgeCell = planksPerBridgeCell; PlankBridgeWoodPermille = plankBridgeWoodPermille;
             PlankExtraRams = plankExtraRams; PlankWoodReserve = plankWoodReserve;
+            BooksEnabled = booksEnabled; Books = books; ScriptoriumWoodCost = scriptoriumWoodCost; ScriptoriumSizeCells = scriptoriumSizeCells;
+            BookTicks = bookTicks; BookGoldInput = bookGoldInput; BookWoodInput = bookWoodInput; BooksPerResearch = booksPerResearch;
+            BookResearchPermille = bookResearchPermille; BookResearchCostPermille = bookResearchCostPermille; BookWoodReserve = bookWoodReserve;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

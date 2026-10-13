@@ -327,6 +327,7 @@ namespace Rts.Providers
             if (line == nameof(ProcessingLineKind.BowGear)) return "弓具";
             if (line == nameof(ProcessingLineKind.Rations)) return "糧食";
             if (line == nameof(ProcessingLineKind.Planks)) return "板材";
+            if (line == nameof(ProcessingLineKind.Books)) return "書物";
             return line ?? "加工";
         }
 

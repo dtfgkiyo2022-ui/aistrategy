@@ -129,6 +129,7 @@ namespace Rts.Simulation
                         && !(BricksAllowed(faction) && kind == BuildingKind.BrickKiln)
                         && !(TackAllowed(faction) && kind == BuildingKind.Saddlery)
                         && !(PlanksAllowed(faction) && kind == BuildingKind.Sawmill)
+                        && !(BooksAllowed(faction) && kind == BuildingKind.Scriptorium)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -256,6 +257,7 @@ namespace Rts.Simulation
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
+                            || (BooksAllowed(faction) && target.Kind == BuildingKind.Scriptorium)
                             || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));
                         if (target.Complete && !haul) return;
                     }

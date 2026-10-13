@@ -205,6 +205,12 @@ namespace Rts.Simulation
         public int PlankRamHpPermille = 1500, PlankRamTrainPermille = 700;
         public int PlanksPerBridgeCell = 1, PlankBridgeWoodPermille = 500;
         public int PlankExtraRams = 1, PlankWoodReserve = 20;
+        /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
+        public bool Books;
+        public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;
+        public int BookTicks = 120, BookGoldInput = 1, BookWoodInput = 2;
+        public int BooksPerResearch = 3, BookResearchPermille = 500, BookResearchCostPermille = 700;
+        public int BookWoodReserve = 20;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

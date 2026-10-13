@@ -836,6 +836,7 @@ namespace Rts.Presentation
                 case BuildingKind.BrickKiln: return UiText.T("Brick kiln", "煉瓦窯");
                 case BuildingKind.Saddlery: return UiText.T("Saddlery", "馬具工房");
                 case BuildingKind.Sawmill: return UiText.T("Sawmill", "製材所");
+                case BuildingKind.Scriptorium: return UiText.T("Scriptorium", "写本所");
                 case BuildingKind.Farm: return UiText.T("Farm", "農場");
                 case BuildingKind.House: return UiText.T("House", "住居");
                 case BuildingKind.DropSite: return UiText.T("Drop site", "集積所");
@@ -945,7 +946,7 @@ namespace Rts.Presentation
 
         private static bool RequiresInput(BuildingKind kind)
         {
-            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill;
+            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>

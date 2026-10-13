@@ -49,6 +49,10 @@ namespace Rts.Simulation
         public int PlanksConsumedRams { get; internal set; }
         public int PlanksConsumedBridges { get; internal set; }
         public int PlanksEnhancedRams { get; internal set; }
+        public int Books { get; internal set; }
+        public int BooksProduced { get; internal set; }
+        public int BooksConsumed { get; internal set; }
+        public int BooksUsedResearch { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -116,6 +120,10 @@ namespace Rts.Simulation
                     PlanksConsumedRams = economy.PlanksConsumedRams,
                     PlanksConsumedBridges = economy.PlanksConsumedBridges,
                     PlanksEnhancedRams = economy.PlanksEnhancedRams,
+                    Books = economy.Books,
+                    BooksProduced = economy.BooksProduced,
+                    BooksConsumed = economy.BooksConsumed,
+                    BooksUsedResearch = economy.BooksUsedResearch,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),
