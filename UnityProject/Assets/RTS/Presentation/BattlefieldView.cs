@@ -178,6 +178,76 @@ namespace Rts.Presentation
             return target.Kind != SelectionKind.None;
         }
 
+        /// <summary>Returns the nearest visible enemy target for the army right-click path.</summary>
+        public bool TryPickRightClickTarget(Camera camera, Vector2 screenPoint, float radiusPixels,
+            out SoldierControlRules.Target target)
+        {
+            target = default(SoldierControlRules.Target);
+            if (camera == null || latestFrame == null || latestFrame.Observation == null) return false;
+            float best = radiusPixels * radiusPixels;
+            int bestRank = int.MaxValue;
+            uint bestId = uint.MaxValue;
+
+            foreach (var objective in latestFrame.Objectives)
+            {
+                if (!objective.IsOwnerKnown || objective.OwnerFactionId == latestFrame.FactionId) continue;
+                var kind = objective.Kind == GoalKind.Core ? SoldierControlRules.TargetKind.EnemyCore
+                    : objective.Kind == GoalKind.Outpost ? SoldierControlRules.TargetKind.EnemyOutpost
+                    : SoldierControlRules.TargetKind.Nothing;
+                if (kind == SoldierControlRules.TargetKind.Nothing) continue;
+                var goal = new PolicyGoal(objective.Kind, objective.Id, default(SimPoint));
+                ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(objective.Position, 1.2f), 0,
+                    objective.Id, ref best, ref bestRank, ref bestId, ref target,
+                    new SoldierControlRules.Target(kind, goal));
+            }
+
+            foreach (var contact in latestFrame.Observation.Contacts)
+            {
+                if (!contact.IsArmyContact || !contact.IsCurrentlyVisible) continue;
+                var goal = new PolicyGoal(GoalKind.Point, 0, contact.LastPosition);
+                ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(contact.LastPosition, 1.2f), 1,
+                    contact.ContactId, ref best, ref bestRank, ref bestId, ref target,
+                    new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyArmy, goal));
+            }
+
+            foreach (var unit in latestFrame.Units)
+            {
+                if (unit.IsOwn || unit.Kind == UnitKind.Villager) continue;
+                var goal = new PolicyGoal(GoalKind.Point, 0, unit.Position);
+                ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(unit.Position, 1.2f), 2,
+                    unit.Id, ref best, ref bestRank, ref bestId, ref target,
+                    new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemySoldier, goal));
+            }
+
+            if (latestFrame.Economy != null)
+            {
+                foreach (var building in latestFrame.Economy.Buildings)
+                {
+                    if (building.FactionId == latestFrame.FactionId) continue;
+                    var goal = new PolicyGoal(GoalKind.Point, 0, building.Center);
+                    ConsiderRightClick(camera, screenPoint, radiusPixels, ToWorld(building.Center, 1.2f), 3,
+                        building.Id, ref best, ref bestRank, ref bestId, ref target,
+                        new SoldierControlRules.Target(SoldierControlRules.TargetKind.EnemyBuilding, goal));
+                }
+            }
+            return bestRank != int.MaxValue;
+        }
+
+        private static bool ConsiderRightClick(Camera camera, Vector2 screenPoint, float radiusPixels, Vector3 world,
+            int rank, uint id, ref float best, ref int bestRank, ref uint bestId,
+            ref SoldierControlRules.Target destination, SoldierControlRules.Target candidate)
+        {
+            var projected = camera.WorldToScreenPoint(world);
+            if (projected.z <= 0f) return false;
+            float distance = ((Vector2)projected - screenPoint).sqrMagnitude;
+            if (distance > best || distance == best && (rank > bestRank || rank == bestRank && id >= bestId)) return false;
+            best = distance;
+            bestRank = rank;
+            bestId = id;
+            destination = candidate;
+            return true;
+        }
+
         public string DescribeSelection()
         {
             if (selectedArmies.Count > 1)

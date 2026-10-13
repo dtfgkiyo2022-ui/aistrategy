@@ -125,10 +125,12 @@ namespace Rts.Simulation
 
         private bool RegionBlocksAiArmy(ArmyState army)
         {
+            bool hasHumanCombatCommand = liveCommands.Any(c => c.Status == CommandStatus.Executing && c.Order.Source == CommandSource.Human
+                && Combat(c.Order) && c.Armies.Any(e => e.ArmyId == army.Definition.Id && e.Active && !e.Finished));
+            if (AutoAssaultOffFor(army.Definition.FactionId) && !hasHumanCombatCommand) return true;
             if (!RegionsOn) return false;
             if (!HumanRegion(army.Definition.FactionId, RegionForArmy(army))) return false;
-            return !liveCommands.Any(c => c.Status == CommandStatus.Executing && c.Order.Source == CommandSource.Human
-                && Combat(c.Order) && c.Armies.Any(e => e.ArmyId == army.Definition.Id && e.Active && !e.Finished));
+            return !hasHumanCombatCommand;
         }
 
         private uint[] RegionArmyIds(ScopeKey scope)

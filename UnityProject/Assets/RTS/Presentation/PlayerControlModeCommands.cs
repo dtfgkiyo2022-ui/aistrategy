@@ -6,8 +6,10 @@ namespace Rts.Presentation
     public enum PlayerControlCommandKind : byte
     {
         SetAutoEconomy,
+        StopVillagers,
         ReturnEconomyToAuto,
         SwitchOwnDoctrine,
+        StopArmies,
         SetAutoAssault
     }
 
@@ -35,7 +37,9 @@ namespace Rts.Presentation
                 return new[]
                 {
                     new PlayerControlCommand(PlayerControlCommandKind.SetAutoEconomy, false),
+                    new PlayerControlCommand(PlayerControlCommandKind.StopVillagers),
                     new PlayerControlCommand(PlayerControlCommandKind.SwitchOwnDoctrine, doctrine: "none"),
+                    new PlayerControlCommand(PlayerControlCommandKind.StopArmies),
                     new PlayerControlCommand(PlayerControlCommandKind.SetAutoAssault, false)
                 };
 

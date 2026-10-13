@@ -44,7 +44,9 @@ namespace Rts.Contracts
         /// <summary>V3-6 follow-up: asks the automatic economy to build one processing line near a region or cell.</summary>
         RequestLine = 22,
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
-        SetAutoAssault = 23
+        SetAutoAssault = 23,
+        /// <summary>Manual control: stops every own villager and holds the current work state.</summary>
+        StopVillagers = 24
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -212,6 +214,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         public static EconomyCommand SetAutoAssault(uint faction, ulong sequence, bool enabled)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.SetAutoAssault, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, enabled);
+
+        /// <summary>Manual control: stops every own villager at its current position.</summary>
+        public static EconomyCommand StopVillagers(uint faction, ulong sequence)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.StopVillagers, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
 
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, cells, facings);

@@ -44,9 +44,19 @@ namespace Rts.Presentation
             if (Input.GetMouseButtonDown(1))
             {
                 if (UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height)) return;
+                if (panel != null && panel.IsAwaitingGround)
+                {
+                    panel.CancelGroundPick();
+                    return;
+                }
                 // The order itself is an economy command, so it goes through the economy panel's port.
                 if (economyLayer != null && economyLayer.HasVillagerSelection && economyPanel != null)
+                {
                     economyPanel.TryIssueSelectedVillagerOrder(camera, Input.mousePosition);
+                    return;
+                }
+                if (panel != null && view != null && view.Selected.Kind == SelectionKind.Army)
+                    panel.TryIssueSelectedArmyOrder(camera, Input.mousePosition);
                 return;
             }
             if (Input.GetMouseButtonDown(0))

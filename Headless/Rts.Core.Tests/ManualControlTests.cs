@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Rts.Application;
 using Rts.Contracts;
 using Rts.Replay;
 using Rts.Simulation;
@@ -109,6 +110,78 @@ namespace Rts.Core.Tests
                 EconomyCommand.SetAutoAssault(1, 2, true)) });
             Assert.That(WaveEvents(sim).Any(e => e.Value == 1), Is.True);
             Assert.That(sim.Capture(1).Economy.AutoAssaultOff, Is.False);
+        }
+
+        [Test]
+        public void StopVillagersCommandLeavesEveryoneIdleAndPreservesCarriedStock()
+        {
+            var scenario = LatePushScenario();
+            var sim = new Battle(scenario);
+            var gateway = new Rts.Application.CommandGateway(sim);
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, 1, false));
+            gateway.SubmitEconomy(EconomyCommand.StopVillagers(1, 2));
+            gateway.Step();
+
+            var stopped = sim.Capture(1);
+            var stockFood = stopped.Economy.Food;
+            var stockWood = stopped.Economy.Wood;
+            var carried = stopped.Economy.Villagers.Where(v => v.IsOwn).ToDictionary(v => v.Id, v => v.Carry);
+            Assert.That(stopped.Economy.Villagers.Where(v => v.IsOwn).All(v => v.Activity == VillagerActivity.Idle), Is.True);
+            Assert.That(stopped.Economy.Villagers.Where(v => v.IsOwn).All(v => v.PlayerHeld), Is.True);
+
+            for (int i = 0; i < 600; i++) gateway.Step();
+
+            var after = sim.Capture(1);
+            Assert.That(after.Economy.AutoEconomy, Is.False);
+            Assert.That(after.Economy.Food, Is.EqualTo(stockFood));
+            Assert.That(after.Economy.Wood, Is.EqualTo(stockWood));
+            foreach (var villager in after.Economy.Villagers.Where(v => v.IsOwn))
+            {
+                Assert.That(villager.Activity, Is.EqualTo(VillagerActivity.Idle), "villager " + villager.Id);
+                Assert.That(villager.Carry, Is.EqualTo(carried[villager.Id]), "carried stock " + villager.Id);
+            }
+        }
+
+        [Test]
+        public void ReturnToAutoHumanCommandStopsAnArmyAndIsReplayable()
+        {
+            var scenario = LatePushScenario();
+            scenario.Economy.ManualControl = true;
+            var sim = new Battle(scenario);
+            var gateway = new Rts.Application.CommandGateway(sim);
+            gateway.Submit(new UserPolicyIntent(1, new ScopeKey(1, ScopeKind.Army, 1), PolicyKind.Focus,
+                new PolicyGoal(GoalKind.Point, 0, new SimPoint(Fix64.FromInt(120), Fix64.FromInt(64))), 50,
+                new LossBudget(300), new EndCondition(EndKind.UntilReplaced, 0), 0,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            gateway.Step();
+            gateway.Submit(new UserPolicyIntent(2, new ScopeKey(1, ScopeKind.All, 0), PolicyKind.ReturnToAuto,
+                default(PolicyGoal), 100, new LossBudget(1000), new EndCondition(EndKind.UntilReplaced, 0), 0,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            gateway.SubmitEconomy(EconomyCommand.SetAutoAssault(1, 3, false));
+            gateway.Step();
+            var stopped = sim.Capture(1);
+            var positions = stopped.Units.Where(u => u.IsOwn && u.Kind != UnitKind.Villager)
+                .ToDictionary(u => u.Id, u => u.Position);
+            Assert.That(stopped.Commands.Any(c => c.Source == CommandSource.Human && c.Kind == PolicyKind.Focus
+                && c.Status == CommandStatus.Executing), Is.False);
+
+            for (int i = 0; i < 600; i++) gateway.Step();
+            var after = sim.Capture(1);
+            foreach (var unit in after.Units.Where(u => u.IsOwn && u.Kind != UnitKind.Villager))
+                Assert.That(unit.Position, Is.EqualTo(positions[unit.Id]), "unit " + unit.Id + " moved while stopped (expected "
+                    + positions[unit.Id].X.Raw + "," + positions[unit.Id].Z.Raw + ", actual "
+                    + unit.Position.X.Raw + "," + unit.Position.Z.Raw + ")");
+            Assert.That(after.Economy.AutoAssaultOff, Is.True);
+
+            using (var stream = new System.IO.MemoryStream())
+            {
+                var build = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, gateway.Inputs, after.Tick, build);
+                stream.Position = 0;
+                var replay = ReplayRunner.Replay(stream, build);
+                Assert.That(replay.FirstMismatchTick, Is.Null);
+                Assert.That(replay.IsFault, Is.False);
+            }
         }
 
         private static ScenarioDefinition LatePushScenario()

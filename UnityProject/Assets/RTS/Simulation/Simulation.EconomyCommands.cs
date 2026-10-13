@@ -25,6 +25,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.SetAutoAssault:
                     SetAutoAssault(faction, c.Enabled);
                     return;
+                case EconomyCommandKind.StopVillagers:
+                    StopVillagers(faction);
+                    return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
@@ -325,6 +328,29 @@ namespace Rts.Simulation
             {
                 if (world.ProcessingLines[i].FactionId != faction) continue;
                 world.ProcessingLines[i].Manager = LineManager.Automatic;
+            }
+        }
+
+        /// <summary>Manual control: stop every villager without changing stock or unfinished buildings.</summary>
+        private void StopVillagers(uint faction)
+        {
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction) continue;
+                v.Task = VillagerTask.Idle;
+                v.NodeId = 0;
+                v.Route = Array.Empty<int>();
+                v.RouteCursor = 0;
+                v.RouteGoal = v.Position;
+                v.BuildingId = 0;
+                v.HaulFrom = 0;
+                v.HaulTo = 0;
+                v.HaulNodeId = 0;
+                ClearCaravan(ref v);
+                v.Held = true;
+                v.MoveGoal = v.Position;
+                v.IsMoving = false;
             }
         }
 

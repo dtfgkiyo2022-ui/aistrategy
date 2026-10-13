@@ -298,11 +298,26 @@ namespace Rts.UnityHost
                     case PlayerControlCommandKind.SetAutoEconomy:
                         gateway.SubmitEconomy(EconomyCommand.Auto(ownFactionId, ++manualControlSequence, command.Enabled));
                         break;
+                    case PlayerControlCommandKind.StopVillagers:
+                        gateway.SubmitEconomy(EconomyCommand.StopVillagers(ownFactionId, ++manualControlSequence));
+                        break;
                     case PlayerControlCommandKind.ReturnEconomyToAuto:
                         gateway.SubmitEconomy(EconomyCommand.ReturnToAuto(ownFactionId, ++manualControlSequence));
                         break;
                     case PlayerControlCommandKind.SwitchOwnDoctrine:
                         SwitchOwnDoctrine(command.Doctrine);
+                        break;
+                    case PlayerControlCommandKind.StopArmies:
+                        gateway.Submit(new UserPolicyIntent(
+                            ++manualControlSequence,
+                            new ScopeKey(ownFactionId, ScopeKind.All, 0),
+                            PolicyKind.ReturnToAuto,
+                            default(PolicyGoal),
+                            100,
+                            new LossBudget(1000),
+                            new EndCondition(EndKind.UntilReplaced, 0),
+                            0,
+                            new Expiration(long.MaxValue, 0, ExpireFlags.None)));
                         break;
                     case PlayerControlCommandKind.SetAutoAssault:
                         gateway.SubmitEconomy(EconomyCommand.SetAutoAssault(ownFactionId, ++manualControlSequence, command.Enabled));
