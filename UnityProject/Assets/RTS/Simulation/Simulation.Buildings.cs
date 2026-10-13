@@ -745,6 +745,7 @@ namespace Rts.Simulation
                 var unit = QueueAt(b, 0);
                 bool rationed = RationsOn && QueueRationsAt(b, 0);
                 bool planked = PlanksOn && QueuePlanksAt(b, 0);
+                bool charmed = CharmsOn && QueueCharmsAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
@@ -760,6 +761,13 @@ namespace Rts.Simulation
                 }
                 if (paid) ForgeIfMetallurgy(b.FactionId, world.SoldierCount - 1);
                 ApplySoldierTechs(b.FactionId, world.SoldierCount - 1);
+                if (charmed)
+                {
+                    ref var blessed = ref world.Soldiers[world.SoldierCount - 1];
+                    int hp = checked(blessed.Parameters.Hp * world.Config.Economy.CharmHpPermille / 1000);
+                    blessed.Parameters.Hp = hp; blessed.Hp = hp; blessed.Initial.Hp = hp;
+                    world.Economies[b.FactionId - 1].CharmsTrainedSoldiers++;
+                }
                 if (rationed) world.Economies[b.FactionId - 1].RationsTrainedSoldiers++;
                 if (unit == UnitKind.HeavyCavalry) world.Economies[b.FactionId - 1].TackTrainedHeavyCavalry++;
                 Dequeue(b.FactionId, ref b, unit);
@@ -811,7 +819,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.MineShaft ? e.MountainSizeCells
                 : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
                  : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
-            : kind == BuildingKind.Town ? e.TownSizeCells : kind == BuildingKind.Storage ? e.StorageSizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseSizeCells
+            : kind == BuildingKind.Town ? e.TownSizeCells : kind == BuildingKind.Storage ? e.StorageSizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmSizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
@@ -830,7 +838,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineHp
                 : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
                  : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp
-            : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+            : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.CharmWorkshop ? e.CharmHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
             return hp;
@@ -860,7 +868,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineWork
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
                  : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
-            : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+            : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.CharmWorkshop ? e.CharmWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
         }
 
@@ -879,7 +887,7 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Shrine ? e.ShrineWoodCost
                  : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
                   : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
-            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
         }
 

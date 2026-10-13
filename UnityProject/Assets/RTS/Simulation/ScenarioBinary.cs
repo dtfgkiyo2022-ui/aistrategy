@@ -122,6 +122,9 @@ private const int TradeGoodsExtensionDataLength = 11 * sizeof(int);
 private const int IncenseExtensionId = 29;
 private const int IncenseExtensionVersion = 1;
 private const int IncenseExtensionDataLength = 15 * sizeof(int);
+private const int CharmsExtensionId = 30;
+private const int CharmsExtensionVersion = 1;
+private const int CharmsExtensionDataLength = 12 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -159,6 +162,7 @@ private const int IncenseExtensionDataLength = 15 * sizeof(int);
             ,new ExtensionRegistration(JewelsExtensionId, JewelsExtensionVersion, JewelsExtensionDataLength)
 ,new ExtensionRegistration(TradeGoodsExtensionId, TradeGoodsExtensionVersion, TradeGoodsExtensionDataLength)
 ,new ExtensionRegistration(IncenseExtensionId, IncenseExtensionVersion, IncenseExtensionDataLength)
+            ,new ExtensionRegistration(CharmsExtensionId, CharmsExtensionVersion, CharmsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -733,6 +737,7 @@ private const int IncenseExtensionDataLength = 15 * sizeof(int);
                     else if (id == JewelsExtensionId) ReadJewelsExtension(extension, c.Economy);
                     else if (id == TradeGoodsExtensionId) ReadTradeGoodsExtension(extension, c.Economy);
                     else if (id == IncenseExtensionId) ReadIncenseExtension(extension, c.Economy);
+                    else if (id == CharmsExtensionId) ReadCharmsExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -791,6 +796,7 @@ private const int IncenseExtensionDataLength = 15 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == JewelsExtensionId && !c.Economy.Jewels);
                 extensions.RemoveAll(extension => extension != null && extension.Id == TradeGoodsExtensionId && !c.Economy.TradeGoods);
                 extensions.RemoveAll(extension => extension != null && extension.Id == IncenseExtensionId && !c.Economy.Incense);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CharmsExtensionId && !c.Economy.Charms);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1022,7 +1028,43 @@ private const int IncenseExtensionDataLength = 15 * sizeof(int);
                         extensions[i] = CreateIncenseExtension(c.Economy);
                     }
                 if (c.Economy.Incense && !hasIncense) extensions.Add(CreateIncenseExtension(c.Economy));
+                bool hasCharms = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CharmsExtensionId)
+                    {
+                        hasCharms = true;
+                        extensions[i] = CreateCharmsExtension(c.Economy);
+                    }
+                if (c.Economy.Charms && !hasCharms) extensions.Add(CreateCharmsExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateCharmsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Charms ? 1 : 0);
+                writer.Write(e.CharmSizeCells); writer.Write(e.CharmWoodCost); writer.Write(e.CharmWork); writer.Write(e.CharmHp);
+                writer.Write(e.CharmTicks); writer.Write(e.CharmWoodInput); writer.Write(e.CharmKeepWood); writer.Write(e.CharmStockLimit);
+                writer.Write(e.CharmMaxWorkshops); writer.Write(e.CharmWoodReserve); writer.Write(e.CharmHpPermille);
+                return new ScenarioExtensionData { Id = CharmsExtensionId, Version = CharmsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCharmsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid charms flag.");
+                e.Charms = enabled != 0;
+                e.CharmSizeCells = reader.ReadInt32(); e.CharmWoodCost = reader.ReadInt32(); e.CharmWork = reader.ReadInt32(); e.CharmHp = reader.ReadInt32();
+                e.CharmTicks = reader.ReadInt32(); e.CharmWoodInput = reader.ReadInt32(); e.CharmKeepWood = reader.ReadInt32(); e.CharmStockLimit = reader.ReadInt32();
+                e.CharmMaxWorkshops = reader.ReadInt32(); e.CharmWoodReserve = reader.ReadInt32(); e.CharmHpPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing charms extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateIncenseExtension(EconomyRules e)

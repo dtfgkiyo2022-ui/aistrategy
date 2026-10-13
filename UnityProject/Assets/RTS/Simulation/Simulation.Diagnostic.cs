@@ -174,6 +174,13 @@ namespace Rts.Simulation
                     w.Value(n + "IncenseConsumed", e.IncenseConsumed);
                     w.Value(n + "IncenseHealedHp", e.IncenseHealedHp);
                 }
+                if (CharmsOn)
+                {
+                    w.Value(n + "Charms", e.Charms);
+                    w.Value(n + "CharmsProduced", e.CharmsProduced);
+                    w.Value(n + "CharmsConsumed", e.CharmsConsumed);
+                    w.Value(n + "CharmsTrainedSoldiers", e.CharmsTrainedSoldiers);
+                }
             }
             if (RegionsOn)
             {
@@ -231,6 +238,12 @@ namespace Rts.Simulation
                             w.Value(n + "QueuePlanks.Count", (uint)planked.Length);
                             for (int q = 0; q < planked.Length; q++) w.Value(n + "QueuePlanks[" + q.ToString(CultureInfo.InvariantCulture) + "]", planked[q]);
                         }
+                        if (CharmsOn)
+                        {
+                            var charmed = b.QueueCharms ?? Array.Empty<bool>();
+                            w.Value(n + "QueueCharms.Count", (uint)charmed.Length);
+                            for (int q = 0; q < charmed.Length; q++) w.Value(n + "QueueCharms[" + q.ToString(CultureInfo.InvariantCulture) + "]", charmed[q]);
+                        }
                     }
                     if (b.Kind == BuildingKind.Bridge)
                     {
@@ -240,7 +253,7 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
@@ -319,7 +332,7 @@ namespace Rts.Simulation
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
                 }
             }
-            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -339,6 +352,7 @@ namespace Rts.Simulation
                     if (JewelsOn) w.Value(n + "LapidaryId", line.LapidaryId);
                     if (TradeGoodsOn) w.Value(n + "WeaverId", line.WeaverId);
                     if (IncenseOn) w.Value(n + "IncenseHouseId", line.IncenseHouseId);
+                    if (CharmsOn) w.Value(n + "CharmWorkshopId", line.CharmWorkshopId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

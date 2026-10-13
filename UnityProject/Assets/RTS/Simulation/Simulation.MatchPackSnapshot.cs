@@ -65,6 +65,10 @@ namespace Rts.Simulation
         public int IncenseProduced { get; internal set; }
         public int IncenseConsumed { get; internal set; }
         public int IncenseHealedHp { get; internal set; }
+        public int Charms { get; internal set; }
+        public int CharmsProduced { get; internal set; }
+        public int CharmsConsumed { get; internal set; }
+        public int CharmsTrainedSoldiers { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -148,6 +152,10 @@ namespace Rts.Simulation
                     IncenseProduced = economy.IncenseProduced,
                     IncenseConsumed = economy.IncenseConsumed,
                     IncenseHealedHp = economy.IncenseHealedHp,
+                    Charms = economy.Charms,
+                    CharmsProduced = economy.CharmsProduced,
+                    CharmsConsumed = economy.CharmsConsumed,
+                    CharmsTrainedSoldiers = economy.CharmsTrainedSoldiers,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

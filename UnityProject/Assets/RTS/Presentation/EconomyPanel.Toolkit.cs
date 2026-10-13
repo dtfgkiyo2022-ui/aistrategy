@@ -169,7 +169,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -293,6 +293,11 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:incense-house", UiText.T("Incense house", "香房"), true, "", mode == Mode.IncenseHouse);
                 Add(rows, "line:Incense", UiText.T("Ask for incense line", "香ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Incense);
+            }
+            if (economy.CharmsEnabled && economy.Civ == CivKind.Sanctuary && economy.Age >= 1)
+            {
+                Add(rows, "build:charm-workshop", UiText.T("Charm workshop", "護符工房"), true, "", mode == Mode.CharmWorkshop);
+                Add(rows, "line:Charms", UiText.T("Ask for charms line", "護符ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Charms);
             }
             if (!economy.Industry) return;
             if (economy.ProcessingChain)

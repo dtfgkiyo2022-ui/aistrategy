@@ -180,6 +180,7 @@ namespace Rts.Simulation
         internal UnitKind[] QueueKinds;
         internal bool[] QueueRations;
         internal bool[] QueuePlanks;
+        internal bool[] QueueCharms;
         /// <summary>V3-5 tower: shots fired so far.</summary>
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
@@ -237,7 +238,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -246,7 +247,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -258,6 +259,7 @@ namespace Rts.Simulation
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
         internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
         internal int IncenseProduced, IncenseConsumed, IncenseHealedHp;
+        internal int CharmsProduced, CharmsConsumed, CharmsTrainedSoldiers;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -405,7 +407,7 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0 };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0 };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -506,7 +508,7 @@ namespace Rts.Simulation
                     Require((byte)b.Component <= (byte)BeltComponentKind.UndergroundExit && (byte)b.Speed <= (byte)BeltSpeed.Fast,
                         "Invalid belt component.");
                     if (b.Component == BeltComponentKind.Sorter)
-                        Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
+            Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
                     if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
@@ -586,6 +588,11 @@ namespace Rts.Simulation
                 && e.IncenseFoodInput <= e.BufferLimit && e.IncenseKeepWood >= 0 && e.IncenseKeepFood >= 0
                 && e.IncenseStockLimit > 0 && e.IncenseHealIntervalTicks > 0 && e.IncenseHealHp > 0
                 && e.IncenseMaxHouses > 0 && e.IncenseWoodReserve >= 0), "Invalid incense rules.");
+            Require(!e.Charms || (e.Enabled && e.Industry && e.Ages && e.CharmSizeCells > 0 && e.CharmSizeCells <= 8
+                && e.CharmWoodCost >= 0 && e.CharmWork > 0 && e.CharmHp > 0 && e.CharmTicks > 0
+                && e.CharmWoodInput > 0 && e.CharmWoodInput <= e.BufferLimit && e.CharmKeepWood >= 0
+                && e.CharmStockLimit > 0 && e.CharmMaxWorkshops > 0 && e.CharmWoodReserve >= 0
+                && e.CharmHpPermille >= 1000), "Invalid charms rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -793,7 +800,7 @@ namespace Rts.Simulation
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
-                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense))
+                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -973,6 +980,10 @@ namespace Rts.Simulation
                   IncenseKeepWood = e.IncenseKeepWood, IncenseKeepFood = e.IncenseKeepFood, IncenseStockLimit = e.IncenseStockLimit,
                   IncenseHealIntervalTicks = e.IncenseHealIntervalTicks, IncenseHealHp = e.IncenseHealHp,
                   IncenseMaxHouses = e.IncenseMaxHouses, IncenseWoodReserve = e.IncenseWoodReserve,
+                  Charms = e.Charms, CharmSizeCells = e.CharmSizeCells, CharmWoodCost = e.CharmWoodCost,
+                  CharmWork = e.CharmWork, CharmHp = e.CharmHp, CharmTicks = e.CharmTicks, CharmWoodInput = e.CharmWoodInput,
+                  CharmKeepWood = e.CharmKeepWood, CharmStockLimit = e.CharmStockLimit, CharmMaxWorkshops = e.CharmMaxWorkshops,
+                  CharmWoodReserve = e.CharmWoodReserve, CharmHpPermille = e.CharmHpPermille,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

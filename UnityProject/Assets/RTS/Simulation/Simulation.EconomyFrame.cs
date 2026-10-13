@@ -219,7 +219,17 @@ namespace Rts.Simulation
                 incenseHealIntervalTicks: IncenseAllowed(faction) ? rules.IncenseHealIntervalTicks : 0,
                 incenseHealHp: IncenseAllowed(faction) ? rules.IncenseHealHp : 0,
                 incenseMaxHouses: IncenseAllowed(faction) ? rules.IncenseMaxHouses : 0,
-                incenseWoodReserve: IncenseAllowed(faction) ? rules.IncenseWoodReserve : 0);
+                incenseWoodReserve: IncenseAllowed(faction) ? rules.IncenseWoodReserve : 0,
+                charmsEnabled: CharmsAllowed(faction), charms: CharmsAllowed(faction) ? economy.Charms : 0,
+                charmWorkshopWoodCost: CharmsAllowed(faction) ? rules.CharmWoodCost : 0,
+                charmWorkshopSizeCells: CharmsAllowed(faction) ? rules.CharmSizeCells : 0,
+                charmTicks: CharmsAllowed(faction) ? rules.CharmTicks : 0,
+                charmWoodInput: CharmsAllowed(faction) ? rules.CharmWoodInput : 0,
+                charmKeepWood: CharmsAllowed(faction) ? rules.CharmKeepWood : 0,
+                charmStockLimit: CharmsAllowed(faction) ? rules.CharmStockLimit : 0,
+                charmMaxWorkshops: CharmsAllowed(faction) ? rules.CharmMaxWorkshops : 0,
+                charmWoodReserve: CharmsAllowed(faction) ? rules.CharmWoodReserve : 0,
+                charmHpPermille: CharmsAllowed(faction) ? rules.CharmHpPermille : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)
