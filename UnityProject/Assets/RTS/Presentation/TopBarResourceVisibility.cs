@@ -19,7 +19,6 @@ namespace Rts.Presentation
             Steel,
             BowGear,
             Rations,
-            Incense,
             Bricks,
             Tack,
             Planks,
@@ -64,11 +63,6 @@ namespace Rts.Presentation
         public static bool ShowRations(EconomyView economy)
         {
             return economy != null && economy.RationsEnabled && (economy.Civ == CivKind.Agrarian || economy.Rations > 0);
-        }
-
-        public static bool ShowIncense(EconomyView economy)
-        {
-            return economy != null && economy.IncenseEnabled && (economy.Civ == CivKind.Cult || economy.Incense > 0);
         }
 
         public static bool ShowBricks(EconomyView economy)
@@ -125,8 +119,6 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Steel, UiText.T("Steel", "鋼"), economy.Steel));
             if (ShowRations(economy))
                 target.Add(new ResourceEntry(ResourceKind.Rations, UiText.T("Rations", "糧食"), economy.Rations));
-            if (ShowIncense(economy))
-                target.Add(new ResourceEntry(ResourceKind.Incense, UiText.T("Incense", "香"), economy.Incense));
             if (ShowBricks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Bricks, UiText.T("Bricks", "煉瓦"), economy.Bricks));
             if (ShowTack(economy))
