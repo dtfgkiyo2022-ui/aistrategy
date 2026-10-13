@@ -128,6 +128,7 @@ namespace Rts.Simulation
                         && !(ProcessingAvailable(faction) && kind == BuildingKind.Steelworks)
                         && !(BricksAllowed(faction) && kind == BuildingKind.BrickKiln)
                         && !(TackAllowed(faction) && kind == BuildingKind.Saddlery)
+                        && !(PlanksAllowed(faction) && kind == BuildingKind.Sawmill)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)
@@ -254,6 +255,7 @@ namespace Rts.Simulation
                         haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
+                            || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
                             || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));
                         if (target.Complete && !haul) return;
                     }

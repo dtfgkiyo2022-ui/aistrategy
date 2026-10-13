@@ -862,6 +862,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
             }
             if (economy.RationsEnabled && economy.Civ == CivKind.Agrarian && economy.Age >= 1)
                 lines.Add(nameof(ProcessingLineKind.Rations));
+            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1)
+                lines.Add(nameof(ProcessingLineKind.Planks));
             return lines.AsReadOnly();
         }
 
@@ -884,6 +886,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                 case BuildingKind.Smelter: return "溶鉱炉";
                 case BuildingKind.Farm: return "農場";
                 case BuildingKind.Mill: return "製粉所";
+                case BuildingKind.Sawmill: return "製材所";
                 case BuildingKind.House: return "住居";
                 case BuildingKind.DropSite: return "資源拠点";
                 case BuildingKind.Wall: return "壁";
@@ -1552,6 +1555,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "鍛冶場": mapped = BuildingKind.Blacksmith; break; case "市場": mapped = BuildingKind.Market; break;
                     case "攻城工房": mapped = BuildingKind.SiegeWorkshop; break; case "射手育成所": mapped = BuildingKind.ArcheryRange; break;
                     case "騎兵育成所": mapped = BuildingKind.Stable; break; case "城": mapped = BuildingKind.Castle; break;
+                    case "製材所": mapped = BuildingKind.Sawmill; break;
                     case "支城": case "町の中心": mapped = BuildingKind.Town; break;
                 }
             }
@@ -1590,6 +1594,7 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "コア木材": case "木材": mapped = ProcessingLineKind.CoreWood; break;
                     case "弓具": case "弓": mapped = ProcessingLineKind.BowGear; break;
                     case "糧食": case "配給": mapped = ProcessingLineKind.Rations; break;
+                    case "板材": case "板": mapped = ProcessingLineKind.Planks; break;
                 }
             }
             if (mapped == null) return false;

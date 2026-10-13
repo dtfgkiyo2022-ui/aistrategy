@@ -198,6 +198,13 @@ namespace Rts.Simulation
         public int HeavyCavalryTackCost = 2, HeavyCavalryFoodCost = 70, HeavyCavalryTrainTicks = 300;
         public int HeavyCavalryHp = 128, HeavyCavalryDamage = 10, HeavyCavalryAttackIntervalTicks = 20;
         public Fix64 HeavyCavalryRange = Fix64.FromInt(2), HeavyCavalrySpeed = Fix64.FromInt(4), HeavyCavalryVision = Fix64.FromInt(24);
+        /// <summary>Planks: the bridge civilisation turns wood into planks for rams and bridges.</summary>
+        public bool Planks;
+        public int SawmillSizeCells = 2, SawmillWoodCost = 80, SawmillWork = 200, SawmillHp = 400;
+        public int PlankTicks = 80, PlankWoodInput = 3, PlanksPerRam = 3;
+        public int PlankRamHpPermille = 1500, PlankRamTrainPermille = 700;
+        public int PlanksPerBridgeCell = 1, PlankBridgeWoodPermille = 500;
+        public int PlankExtraRams = 1, PlankWoodReserve = 20;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
         public int LumberCampSizeCells = 2, LumberCampWoodCost = 80, LumberCampWork = 200, LumberCampHp = 400, LumberCampIntervalTicks = 20;
         /// <summary>V3-7 provisional market-food policy for non-agrarian civilizations.</summary>

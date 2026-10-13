@@ -108,7 +108,7 @@ namespace Rts.Simulation
                 ProcessingOn ? rules.CharcoalKilnSizeCells : 0, ProcessingOn ? rules.SteelworksSizeCells : 0,
                 ProcessingOn ? rules.HeavyInfantryFoodCost : 0, ProcessingOn ? rules.HeavyInfantrySteelCost : 0,
                 ProcessingOn ? economy.Charcoal : 0, ProcessingOn ? economy.Steel : 0,
-                (ProcessingOn || BricksOn || TackOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
+                (ProcessingOn || BricksOn || TackOn || PlanksOn || ForestryOn && economy.Age >= 2) ? new List<LineView>(LineViews(faction)) : null,
                 rules.GoldEnabled ? economy.Gold : 0,
                 ForestryOn ? economy.BowGear : 0, ForestryOn ? rules.FletcherWoodCost : 0, ForestryOn ? rules.FletcherSizeCells : 0,
                 ForestryOn ? rules.FletcherTicks : 0, ForestryOn ? rules.SkirmishArcherFoodCost : 0,
@@ -154,7 +154,19 @@ namespace Rts.Simulation
                 heavyCavalryAttackIntervalTicks: TackAllowed(faction) ? rules.HeavyCavalryAttackIntervalTicks : 0,
                 heavyCavalryRange: TackAllowed(faction) ? rules.HeavyCavalryRange : default(Fix64),
                 heavyCavalrySpeed: TackAllowed(faction) ? rules.HeavyCavalrySpeed : default(Fix64),
-                heavyCavalryVision: TackAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64));
+                heavyCavalryVision: TackAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64),
+                planksEnabled: PlanksAllowed(faction), planks: PlanksAllowed(faction) ? economy.Planks : 0,
+                sawmillWoodCost: PlanksAllowed(faction) ? rules.SawmillWoodCost : 0,
+                sawmillSizeCells: PlanksAllowed(faction) ? rules.SawmillSizeCells : 0,
+                plankTicks: PlanksAllowed(faction) ? rules.PlankTicks : 0,
+                plankWoodInput: PlanksAllowed(faction) ? rules.PlankWoodInput : 0,
+                planksPerRam: PlanksAllowed(faction) ? rules.PlanksPerRam : 0,
+                plankRamHpPermille: PlanksAllowed(faction) ? rules.PlankRamHpPermille : 0,
+                plankRamTrainPermille: PlanksAllowed(faction) ? rules.PlankRamTrainPermille : 0,
+                planksPerBridgeCell: PlanksAllowed(faction) ? rules.PlanksPerBridgeCell : 0,
+                plankBridgeWoodPermille: PlanksAllowed(faction) ? rules.PlankBridgeWoodPermille : 0,
+                plankExtraRams: PlanksAllowed(faction) ? rules.PlankExtraRams : 0,
+                plankWoodReserve: PlanksAllowed(faction) ? rules.PlankWoodReserve : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

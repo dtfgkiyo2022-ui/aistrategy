@@ -53,7 +53,7 @@ namespace Rts.Simulation
             if (MasonryAllowed(faction)) { DecideQuarry(faction); if (BricksAllowed(faction)) DecideBricks(faction); return; }
             if (CavalryAllowed(faction)) { DecideTack(faction); return; }
             if (MountainAllowed(faction)) { DecideMountain(faction); return; }
-            if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); return; }
+            if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); DecidePlanks(faction); return; }
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
@@ -329,7 +329,7 @@ namespace Rts.Simulation
             // be rebuilt without stopping the surviving route.
             if (AutomaticBridgeRebuildBlocked(faction)) return;
             ref var bridgeEconomy = ref world.Economies[faction - 1];
-            if (bridgeEconomy.Wood < world.Config.Economy.BridgeWoodCost) return;
+            if (bridgeEconomy.Wood < BridgeWoodCostFor(faction, 1)) return;
             if (!TryFindBridgeCandidate(faction, out int[] cells, out Facing facing, out int workCell)) return;
             if (!TryValidateBridge(faction, cells, facing, out cells, out workCell)) return;
             PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], facing, 0, cells, workCell);
@@ -709,6 +709,35 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
+        private void DecidePlanks(uint faction)
+        {
+            if (!PlanksAllowed(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Planks);
+            ref var line = ref world.ProcessingLines[index];
+            if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.LumberCampId))
+            {
+                if (BuildingPending(line.LumberCampId)) return;
+                if (economy.Wood < rules.LumberCampWoodCost + rules.SawmillWoodCost + rules.PlankWoodReserve) return;
+                uint id = PlaceLumberCamp(faction);
+                if (id != 0) line.LumberCampId = id;
+                return;
+            }
+            if (!BuildingReady(line.SawmillId))
+            {
+                if (BuildingPending(line.SawmillId) || economy.Wood < rules.SawmillWoodCost + rules.PlankWoodReserve) return;
+                uint id = PlaceSawmill(faction, world.Buildings[line.LumberCampId - 1]);
+                if (id != 0) line.SawmillId = id;
+                return;
+            }
+            var camp = world.Buildings[line.LumberCampId - 1];
+            var sawmill = world.Buildings[line.SawmillId - 1];
+            bool whole = LayPlanksLine(faction, index, camp, sawmill);
+            SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
         private void DecideTack(uint faction)
         {
             if (!TackAllowed(faction)) return;
@@ -755,6 +784,35 @@ namespace Rts.Simulation
             if (route.cells == null) return false;
             SetLineBelts(lineIndex, route);
             return LayRoutes(faction, route);
+        }
+
+        private uint PlaceSawmill(uint faction, BuildingState camp)
+        {
+            int size = world.Config.Economy.SawmillSizeCells;
+            int centre = camp.OriginCell;
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
+                return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private bool LayPlanksLine(uint faction, int lineIndex, BuildingState camp, BuildingState sawmill)
+        {
+            var taken = TakenForOtherLines(faction, lineIndex);
+            var toSawmill = BeltRoute(faction, OutputCell(camp), taken, next => InFootprint(sawmill, next));
+            if (toSawmill.cells == null) return false;
+            foreach (int c in toSawmill.cells) taken[c] = true;
+            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, next => FeedsOwnCore(next, faction));
+            if (toCore.cells == null) return false;
+            SetLineBelts(lineIndex, toSawmill, toCore);
+            return LayRoutes(faction, toSawmill, toCore);
         }
 
         private bool LayBricksLine(uint faction, int lineIndex, BuildingState quarry, BuildingState kiln, BuildingState brickKiln)

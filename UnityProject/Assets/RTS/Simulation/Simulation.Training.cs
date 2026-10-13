@@ -206,12 +206,20 @@ namespace Rts.Simulation
 
         private static UnitKind QueueAt(BuildingState b, int i) => b.QueueKinds == null || i >= b.QueueKinds.Length ? UnitKind.Infantry : b.QueueKinds[i];
         private static bool QueueRationsAt(BuildingState b, int i) => b.QueueRations != null && i >= 0 && i < b.QueueRations.Length && b.QueueRations[i];
+        private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
         private bool UsesRations(uint faction, UnitKind kind)
             => RationsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Scout;
+        private bool UsesPlanks(uint faction, UnitKind kind)
+            => PlanksAllowed(faction) && kind == UnitKind.Ram;
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {
-            if (!rationed) return ticks;
-            return Math.Max(1, checked(ticks * world.Config.Economy.RationsTrainPermille / 1000));
+            return TrainTicksFor(faction, kind, ticks, rationed, false);
+        }
+        private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed, bool planked)
+        {
+            if (rationed) ticks = Math.Max(1, checked(ticks * world.Config.Economy.RationsTrainPermille / 1000));
+            if (planked) ticks = Math.Max(1, checked(ticks * world.Config.Economy.PlankRamTrainPermille / 1000));
+            return ticks;
         }
 
         private bool CanPay(uint faction, UnitKind kind) => CanPay(faction, kind, BuildingKind.Barracks);
@@ -263,7 +271,14 @@ namespace Rts.Simulation
                 e.Rations = checked(e.Rations - world.Config.Economy.RationsPerSoldier);
                 e.RationsConsumed = checked(e.RationsConsumed + world.Config.Economy.RationsPerSoldier);
             }
-            if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed);
+            bool planked = UsesPlanks(faction, kind) && e.Planks >= world.Config.Economy.PlanksPerRam;
+            if (planked)
+            {
+                e.Planks = checked(e.Planks - world.Config.Economy.PlanksPerRam);
+                e.PlanksConsumed = checked(e.PlanksConsumed + world.Config.Economy.PlanksPerRam);
+                e.PlanksConsumedRams = checked(e.PlanksConsumedRams + world.Config.Economy.PlanksPerRam);
+            }
+            if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
             {
@@ -279,6 +294,13 @@ namespace Rts.Simulation
                 Array.Resize(ref rations, rations.Length + 1);
                 rations[rations.Length - 1] = rationed;
                 b.QueueRations = rations;
+            }
+            if (PlanksOn && (AgesOn || kind == UnitKind.Monk))
+            {
+                var planks = b.QueuePlanks ?? Array.Empty<bool>();
+                Array.Resize(ref planks, planks.Length + 1);
+                planks[planks.Length - 1] = planked;
+                b.QueuePlanks = planks;
             }
         }
 
@@ -324,11 +346,13 @@ namespace Rts.Simulation
         {
             var kind = QueueAt(b, b.Queued - 1);
             bool rationed = QueueRationsAt(b, b.Queued - 1);
+            bool planked = QueuePlanksAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
             if (b.QueueKinds != null && b.QueueKinds.Length > 0) Array.Resize(ref b.QueueKinds, b.QueueKinds.Length - 1);
             if (b.QueueRations != null && b.QueueRations.Length > 0) Array.Resize(ref b.QueueRations, b.QueueRations.Length - 1);
+            if (b.QueuePlanks != null && b.QueuePlanks.Length > 0) Array.Resize(ref b.QueuePlanks, b.QueuePlanks.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -365,6 +389,12 @@ namespace Rts.Simulation
                 e.Rations = checked(e.Rations + world.Config.Economy.RationsPerSoldier);
                 e.RationsConsumed = checked(e.RationsConsumed - world.Config.Economy.RationsPerSoldier);
             }
+            if (planked)
+            {
+                e.Planks = checked(e.Planks + world.Config.Economy.PlanksPerRam);
+                e.PlanksConsumed = checked(e.PlanksConsumed - world.Config.Economy.PlanksPerRam);
+                e.PlanksConsumedRams = checked(e.PlanksConsumedRams - world.Config.Economy.PlanksPerRam);
+            }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -384,6 +414,12 @@ namespace Rts.Simulation
                 Array.Copy(b.QueueRations, 1, rest, 0, rest.Length);
                 b.QueueRations = rest;
             }
+            if (b.QueuePlanks != null && b.QueuePlanks.Length > 0)
+            {
+                var rest = new bool[b.QueuePlanks.Length - 1];
+                Array.Copy(b.QueuePlanks, 1, rest, 0, rest.Length);
+                b.QueuePlanks = rest;
+            }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;
             int gems = doneCost.gems;
@@ -394,7 +430,7 @@ namespace Rts.Simulation
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
                 b.QueuedGold = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGold - gold);
-            b.TrainRemaining = b.Queued > 0 ? TrainTicksFor(faction, QueueAt(b, 0), CostOf(faction, QueueAt(b, 0), b.Kind).ticks, QueueRationsAt(b, 0)) : 0;
+            b.TrainRemaining = b.Queued > 0 ? TrainTicksFor(faction, QueueAt(b, 0), CostOf(faction, QueueAt(b, 0), b.Kind).ticks, QueueRationsAt(b, 0), QueuePlanksAt(b, 0)) : 0;
         }
 
         /// <summary>Units of <paramref name="kind"/> queued in all the faction's buildings.</summary>

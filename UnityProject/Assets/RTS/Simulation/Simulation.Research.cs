@@ -262,7 +262,13 @@ namespace Rts.Simulation
         }
 
         private int AutoRamLimitFor(uint faction)
-            => AutoRams + (HasTech(faction, BridgeTech.SiegeDeployment) ? world.Config.Economy.SiegeDeploymentRamCapacityBonus : 0);
+        {
+            int bonus = HasTech(faction, BridgeTech.SiegeDeployment) ? world.Config.Economy.SiegeDeploymentRamCapacityBonus : 0;
+            if (PlanksAllowed(faction) && world.Economies[faction - 1].Planks >= world.Config.Economy.PlanksPerRam
+                && OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0)
+                bonus += world.Config.Economy.PlankExtraRams;
+            return AutoRams + bonus;
+        }
 
         private bool BeingResearched(uint faction, TechKind tech)
         {

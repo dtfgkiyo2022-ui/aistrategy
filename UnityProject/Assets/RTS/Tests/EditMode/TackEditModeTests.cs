@@ -67,5 +67,34 @@ namespace Rts.Tests.EditMode
             Assert.IsTrue(entries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Tack && entry.Label == "馬具"));
             Assert.AreEqual("重騎兵", BattlefieldView.UnitName(UnitKind.HeavyCavalry));
         }
+
+        [Test]
+        public void BridgeTopBarShowsPlanksAndSawmillUsesJapaneseNameAndModel()
+        {
+            var scenario = MapGenerator.GenerateTerrain(4322UL, false, true);
+            scenario.Economy.Enabled = true;
+            scenario.Economy.Ages = true;
+            scenario.Economy.Industry = true;
+            scenario.Economy.ProcessingChain = true;
+            scenario.Economy.Bridge = true;
+            scenario.Economy.Planks = true;
+            scenario.Economy.AdvanceFoodCost = 0;
+            scenario.Economy.AdvanceWoodCost = 0;
+            scenario.Economy.AdvanceTicks = 1;
+            var simulation = new Rts.Simulation.Simulation(scenario);
+            var gateway = new CommandGateway(simulation);
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, 1, CivKind.Bridge));
+            gateway.Step();
+            gateway.Step();
+
+            var economy = simulation.Capture(1).Economy;
+            Assert.IsTrue(economy.PlanksEnabled);
+            Assert.IsTrue(TopBarResourceVisibility.ShowPlanks(economy));
+            var entries = new List<TopBarResourceVisibility.ResourceEntry>();
+            TopBarResourceVisibility.Fill(economy, entries);
+            Assert.IsTrue(entries.Exists(entry => entry.Kind == TopBarResourceVisibility.ResourceKind.Planks && entry.Label == "板"));
+            Assert.That(LocalVisualPack.BuildingAssetPath(BuildingKind.Sawmill), Does.EndWith("LumberMill.FBX"));
+            Assert.AreEqual("製材所", EconomyLayer.BuildingName(BuildingKind.Sawmill));
+        }
     }
 }
