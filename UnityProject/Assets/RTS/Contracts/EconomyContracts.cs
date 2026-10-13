@@ -977,10 +977,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ToolsEnabled = toolsEnabled; Tools = tools; ToolShopWoodCost = toolShopWoodCost; ToolShopSizeCells = toolShopSizeCells;
             ToolTicks = toolTicks; ToolWoodInput = toolWoodInput; ToolKeepWood = toolKeepWood; ToolStockLimit = toolStockLimit;
             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
-             ToolsEnabled = toolsEnabled; Tools = tools; ToolShopWoodCost = toolShopWoodCost; ToolShopSizeCells = toolShopSizeCells;
-             ToolTicks = toolTicks; ToolWoodInput = toolWoodInput; ToolKeepWood = toolKeepWood; ToolStockLimit = toolStockLimit;
-             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
-             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
+            BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
             StorageCapacity = storageCapacity;
