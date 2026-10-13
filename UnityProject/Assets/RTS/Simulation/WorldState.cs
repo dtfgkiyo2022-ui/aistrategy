@@ -237,7 +237,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -255,6 +255,7 @@ namespace Rts.Simulation
         internal int PlanksProduced, PlanksConsumed, PlanksConsumedRams, PlanksConsumedBridges, PlanksEnhancedRams;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int PreservesProduced, PreservesConvertedFood;
+        internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -568,6 +569,11 @@ namespace Rts.Simulation
                 && e.DryingRackWoodCost >= 0 && e.DryingRackWork > 0 && e.DryingRackHp > 0 && e.PreserveTicks > 0
                 && e.PreserveFoodInput > 0 && e.PreserveFoodInput <= e.BufferLimit && e.PreserveFoodValue > 0
                 && e.PreserveKeepFood >= 0 && e.PreserveMaxRacks > 0 && e.PreserveWoodReserve >= 0), "Invalid preserves rules.");
+            Require(!e.Jewels || (e.Enabled && e.Industry && e.Ages && e.LapidarySizeCells > 0 && e.LapidarySizeCells <= 8
+                && e.LapidaryWoodCost >= 0 && e.LapidaryWork > 0 && e.LapidaryHp > 0 && e.JewelTicks > 0
+                && e.JewelStoneInput > 0 && e.JewelOreInput > 0 && e.JewelStoneInput <= e.BufferLimit && e.JewelOreInput <= e.BufferLimit
+                && e.JewelMaxLapidaries > 0 && e.JewelKeepStone >= 0 && e.JewelWoodReserve >= 0
+                && e.JewelMercenaryGems > 0 && e.JewelMercenaryFood >= 0 && e.JewelMercenaryInfantryRatio > 0), "Invalid jewels rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -937,6 +943,11 @@ namespace Rts.Simulation
                   DryingRackWork = e.DryingRackWork, DryingRackHp = e.DryingRackHp, PreserveTicks = e.PreserveTicks,
                   PreserveFoodInput = e.PreserveFoodInput, PreserveFoodValue = e.PreserveFoodValue, PreserveKeepFood = e.PreserveKeepFood,
                   PreserveMaxRacks = e.PreserveMaxRacks, PreserveWoodReserve = e.PreserveWoodReserve,
+                  Jewels = e.Jewels, LapidarySizeCells = e.LapidarySizeCells, LapidaryWoodCost = e.LapidaryWoodCost,
+                  LapidaryWork = e.LapidaryWork, LapidaryHp = e.LapidaryHp, JewelTicks = e.JewelTicks,
+                  JewelStoneInput = e.JewelStoneInput, JewelOreInput = e.JewelOreInput, JewelMaxLapidaries = e.JewelMaxLapidaries,
+                  JewelKeepStone = e.JewelKeepStone, JewelWoodReserve = e.JewelWoodReserve, JewelMercenaryGems = e.JewelMercenaryGems,
+                  JewelMercenaryFood = e.JewelMercenaryFood, JewelMercenaryInfantryRatio = e.JewelMercenaryInfantryRatio,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

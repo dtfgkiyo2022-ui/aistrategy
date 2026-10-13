@@ -251,6 +251,32 @@ namespace Rts.Simulation
                         economy.PreservesProduced++;
                     }
                 }
+                else if (JewelsAllowed(b.FactionId) && b.Kind == BuildingKind.Lapidary)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    // Stone stays in the core above the configured floor so the mountain defences keep their reserve.
+                    if (b.Input < rules.BufferLimit && economy.Stone > rules.JewelKeepStone)
+                    {
+                        economy.Stone--;
+                        b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.Ore > 0)
+                    {
+                        economy.Ore--;
+                        b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.JewelStoneInput && b.InputSecondary >= rules.JewelOreInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.JewelStoneInput;
+                        b.InputSecondary -= rules.JewelOreInput;
+                        b.Timer = rules.JewelTicks;
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.JewelsProduced++;
+                    }
+                }
                 else if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {
                     // Storage is passive: it accepts any one resource kind and releases one item per tick
@@ -279,7 +305,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.BrickKiln ? ResourceKind.Bricks : kind == BuildingKind.Saddlery ? ResourceKind.Tack
                 : kind == BuildingKind.Sawmill ? ResourceKind.Planks
                 : kind == BuildingKind.Scriptorium ? ResourceKind.Books
-                : kind == BuildingKind.DryingRack ? ResourceKind.Preserves : ResourceKind.Metal;
+                : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
+                : kind == BuildingKind.Lapidary ? ResourceKind.Gems : ResourceKind.Metal;
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -351,6 +378,11 @@ namespace Rts.Simulation
                 if (PreservesAllowed(faction) && b.Kind == BuildingKind.DryingRack && item == ResourceKind.Food && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (JewelsAllowed(faction) && b.Kind == BuildingKind.Lapidary)
+                {
+                    if (item == ResourceKind.Stone && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Ore && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage && b.StorageCount < rules.StorageCapacity
                     && (b.StorageCount == 0 || b.StorageKind == item))
@@ -501,6 +533,17 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (JewelsAllowed(target.FactionId) && target.Kind == BuildingKind.Lapidary)
+            {
+                if (kind == ResourceKind.Stone)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.Ore)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
+            }
             if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
@@ -524,7 +567,8 @@ namespace Rts.Simulation
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (BooksOn && destination == BuildingKind.Scriptorium
                    && (kind == ResourceKind.Gold || kind == ResourceKind.Wood))
-               || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food);
+               || (PreservesOn && destination == BuildingKind.DryingRack && kind == ResourceKind.Food)
+               || (JewelsOn && destination == BuildingKind.Lapidary && (kind == ResourceKind.Stone || kind == ResourceKind.Ore));
 
         /// <summary>The own finished smelter with the lowest id, or 0.</summary>
         private uint OwnSmelter(uint faction)

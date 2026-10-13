@@ -109,6 +109,7 @@ namespace Rts.Tactics
                 ("economy.planks", "板。工兵の文明だけが製材所で作り、破城槌と橋に使う"),
                 ("economy.books", "書物。学府の文明だけが写本所で作り、研究を短縮する"),
                 ("economy.preserves", "保存食。漁業文明の干し場が食料を加工し、中核到着時に食料へ変換する"),
+                ("economy.jewels", "宝石。山岳文明の研磨所が石3と鉱石1を120 tickで加工し、傭兵の宝石費用に使う"),
                 ("economy.villagers[]", "id/position/activity/hp"), ("economy.buildings[]", "id/kind/position/complete/queued/researching"), ("economy.resources[]", "id/kind/position/remaining"),
                 ("regions[]", "id/centerKind/centerId/center/control/policy/economyPolicy"), ("orders[]", "自陣営の有効な命令。id/source/kind/target/goal/status/acceptedTick/applyTick。idの昇順"), ("signals[]", "人から届いた合図。name/tick、地点付きならpoint{ x,z }。次の呼び出しに一度だけ含まれる"), ("params", "tactic.jsonで宣言したつまみの現在値")
             };
@@ -171,6 +172,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Sawmill, e.SawmillWoodCost, 0, e.SawmillWork);
             Add(rows, BuildingKind.Scriptorium, e.ScriptoriumWoodCost, 0, e.ScriptoriumWork);
             Add(rows, BuildingKind.DryingRack, e.DryingRackWoodCost, 0, e.DryingRackWork);
+            Add(rows, BuildingKind.Lapidary, e.LapidaryWoodCost, 0, e.LapidaryWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

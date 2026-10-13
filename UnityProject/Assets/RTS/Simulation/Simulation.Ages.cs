@@ -35,6 +35,7 @@ namespace Rts.Simulation
         private bool PlanksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Planks;
         private bool BooksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Books;
         private bool PreservesOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Preserves;
+        private bool JewelsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Jewels;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -84,6 +85,9 @@ namespace Rts.Simulation
             => BooksOn && world.Economies[faction - 1].Civ == CivKind.Academy && world.Economies[faction - 1].Age >= 1;
         private bool PreservesAllowed(uint faction)
             => PreservesOn && world.Economies[faction - 1].Civ == CivKind.Fishing && world.Economies[faction - 1].Age >= 1;
+
+        private bool JewelsAllowed(uint faction)
+            => JewelsOn && world.Economies[faction - 1].Civ == CivKind.Mountain && world.Economies[faction - 1].Age >= 1;
 
         private bool CharcoalKilnAllowed(uint faction)
             => ProcessingAvailable(faction) || BricksAllowed(faction);

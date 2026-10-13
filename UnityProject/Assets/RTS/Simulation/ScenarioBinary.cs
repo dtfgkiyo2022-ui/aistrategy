@@ -113,6 +113,9 @@ namespace Rts.Simulation
         private const int CivVarietyExtensionId = 26;
         private const int CivVarietyExtensionVersion = 1;
         private const int CivVarietyExtensionDataLength = 2 * sizeof(int);
+        private const int JewelsExtensionId = 27;
+        private const int JewelsExtensionVersion = 1;
+        private const int JewelsExtensionDataLength = 14 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -147,6 +150,7 @@ namespace Rts.Simulation
             ,new ExtensionRegistration(BooksExtensionId, BooksExtensionVersion, BooksExtensionDataLength)
             ,new ExtensionRegistration(PreservesExtensionId, PreservesExtensionVersion, PreservesExtensionDataLength)
             ,new ExtensionRegistration(CivVarietyExtensionId, CivVarietyExtensionVersion, CivVarietyExtensionDataLength)
+            ,new ExtensionRegistration(JewelsExtensionId, JewelsExtensionVersion, JewelsExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -718,6 +722,7 @@ namespace Rts.Simulation
                     else if (id == BooksExtensionId) ReadBooksExtension(extension, c.Economy);
                     else if (id == PreservesExtensionId) ReadPreservesExtension(extension, c.Economy);
                     else if (id == CivVarietyExtensionId) ReadCivVarietyExtension(extension, c.Economy);
+                    else if (id == JewelsExtensionId) ReadJewelsExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -773,6 +778,7 @@ namespace Rts.Simulation
                 extensions.RemoveAll(extension => extension != null && extension.Id == BooksExtensionId && !c.Economy.Books);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PreservesExtensionId && !c.Economy.Preserves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyExtensionId && !c.Economy.CivVariety);
+                extensions.RemoveAll(extension => extension != null && extension.Id == JewelsExtensionId && !c.Economy.Jewels);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -980,7 +986,45 @@ namespace Rts.Simulation
                         extensions[i] = CreateCivVarietyExtension(c.Economy);
                     }
                 if (c.Economy.CivVariety && !hasCivVariety) extensions.Add(CreateCivVarietyExtension(c.Economy));
+                bool hasJewels = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == JewelsExtensionId)
+                    {
+                        hasJewels = true;
+                        extensions[i] = CreateJewelsExtension(c.Economy);
+                    }
+                if (c.Economy.Jewels && !hasJewels) extensions.Add(CreateJewelsExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateJewelsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Jewels ? 1 : 0);
+                writer.Write(e.LapidarySizeCells); writer.Write(e.LapidaryWoodCost); writer.Write(e.LapidaryWork); writer.Write(e.LapidaryHp);
+                writer.Write(e.JewelTicks); writer.Write(e.JewelStoneInput); writer.Write(e.JewelOreInput);
+                writer.Write(e.JewelMaxLapidaries); writer.Write(e.JewelKeepStone); writer.Write(e.JewelWoodReserve);
+                writer.Write(e.JewelMercenaryGems); writer.Write(e.JewelMercenaryFood); writer.Write(e.JewelMercenaryInfantryRatio);
+                return new ScenarioExtensionData { Id = JewelsExtensionId, Version = JewelsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadJewelsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid jewels flag.");
+                e.Jewels = enabled != 0;
+                e.LapidarySizeCells = reader.ReadInt32(); e.LapidaryWoodCost = reader.ReadInt32(); e.LapidaryWork = reader.ReadInt32(); e.LapidaryHp = reader.ReadInt32();
+                e.JewelTicks = reader.ReadInt32(); e.JewelStoneInput = reader.ReadInt32(); e.JewelOreInput = reader.ReadInt32();
+                e.JewelMaxLapidaries = reader.ReadInt32(); e.JewelKeepStone = reader.ReadInt32(); e.JewelWoodReserve = reader.ReadInt32();
+                e.JewelMercenaryGems = reader.ReadInt32(); e.JewelMercenaryFood = reader.ReadInt32(); e.JewelMercenaryInfantryRatio = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing jewels extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateCivVarietyExtension(EconomyRules e)
