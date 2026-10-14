@@ -618,6 +618,7 @@ namespace Rts.Simulation
                 && e.GoodsValueSteel > 0 && e.GoodsValueBowGear > 0 && e.GoodsValueRations > 0 && e.GoodsValueBricks > 0
                 && e.GoodsValueTack > 0 && e.GoodsValuePlanks > 0 && e.GoodsValueBooks > 0 && e.GoodsValueIncense > 0
                 && e.GoodsValueCharms > 0 && e.GoodsValueRepairKits > 0 && e.GoodsValueTools > 0), "Invalid goods market rules.");
+            Require(!e.CraftTiming || (e.Enabled && e.Industry && e.Ages && e.CraftTimingFoodPerWood > 0), "Invalid craft-timing rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -1025,6 +1026,7 @@ namespace Rts.Simulation
                    GoodsValueBricks = e.GoodsValueBricks, GoodsValueTack = e.GoodsValueTack, GoodsValuePlanks = e.GoodsValuePlanks,
                    GoodsValueBooks = e.GoodsValueBooks, GoodsValueIncense = e.GoodsValueIncense, GoodsValueCharms = e.GoodsValueCharms,
                    GoodsValueRepairKits = e.GoodsValueRepairKits, GoodsValueTools = e.GoodsValueTools,
+                   CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

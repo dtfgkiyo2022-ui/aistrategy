@@ -17,10 +17,15 @@ namespace Rts.Simulation
     {
         public uint FactionId { get; internal set; }
         public int Villagers { get; internal set; }
+        public int FoodGatherers { get; internal set; }
+        public int WoodGatherers { get; internal set; }
         public int Food { get; internal set; }
         public int Wood { get; internal set; }
         public int Ore { get; internal set; }
         public int Metal { get; internal set; }
+        public int Charcoal { get; internal set; }
+        public int Steel { get; internal set; }
+        public int BowGear { get; internal set; }
         public int Stone { get; internal set; }
         public int Gold { get; internal set; }
         public int Gems { get; internal set; }
@@ -124,10 +129,15 @@ namespace Rts.Simulation
                 {
                     FactionId = world.Factions[f].Id,
                     Villagers = LivingVillagers(world.Factions[f].Id),
+                    FoodGatherers = CountGatherers(world.Factions[f].Id, ResourceKind.Food),
+                    WoodGatherers = CountGatherers(world.Factions[f].Id, ResourceKind.Wood),
                     Food = economy.Food,
                     Wood = economy.Wood,
                     Ore = economy.Ore,
                     Metal = economy.Metal,
+                    Charcoal = economy.Charcoal,
+                    Steel = economy.Steel,
+                    BowGear = economy.BowGear,
                     Stone = economy.Stone,
                     Gold = economy.Gold,
                     Gems = economy.Gems,
@@ -217,6 +227,19 @@ namespace Rts.Simulation
                 };
             }
             return result;
+        }
+
+        private int CountGatherers(uint factionId, ResourceKind kind)
+        {
+            int count = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                if (!villager.Alive || villager.FactionId != factionId || villager.NodeId == 0
+                    || villager.NodeId > world.Nodes.Length) continue;
+                if (world.Nodes[villager.NodeId - 1].Definition.Kind == kind) count++;
+            }
+            return count;
         }
 
         private MatchPackCount[] CountSoldiers(uint factionId)

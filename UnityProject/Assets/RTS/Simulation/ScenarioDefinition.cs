@@ -253,6 +253,9 @@ namespace Rts.Simulation
         public int GoodsValueSteel = 8, GoodsValueBowGear = 4, GoodsValueRations = 6, GoodsValueBricks = 6;
         public int GoodsValueTack = 8, GoodsValuePlanks = 6, GoodsValueBooks = 6, GoodsValueIncense = 6;
         public int GoodsValueCharms = 6, GoodsValueRepairKits = 4, GoodsValueTools = 4;
+        /// <summary>Craft timing: automatic economies gather more wood until their civilisation's first processing building is complete.</summary>
+        public bool CraftTiming;
+        public int CraftTimingFoodPerWood = 1;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
