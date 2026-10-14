@@ -173,7 +173,7 @@ namespace Rts.Tactics
             var b = new StringBuilder(); b.Append('{'); Field(b, "tick", s.Tick.ToString(CultureInfo.InvariantCulture));
             b.Append(",\"factions\":["); for (int i = 0; i < s.Factions.Length; i++) { if (i != 0) b.Append(','); var f = s.Factions[i]; b.Append('{');
                 Field(b, "factionId", f.FactionId.ToString(CultureInfo.InvariantCulture)); Field(b, "soldiers", CountsJson(f.Soldiers)); Field(b, "villagers", f.Villagers.ToString(CultureInfo.InvariantCulture));
-                Field(b, "resources", "{\"Food\":" + f.Food + ",\"Wood\":" + f.Wood + ",\"Ore\":" + f.Ore + ",\"Metal\":" + f.Metal + ",\"Stone\":" + f.Stone + ",\"Gold\":" + f.Gold + ",\"Gems\":" + f.Gems + ",\"Rations\":" + f.Rations + ",\"Bricks\":" + f.Bricks + ",\"Tack\":" + f.Tack + ",\"Planks\":" + f.Planks + ",\"Books\":" + f.Books + ",\"Incense\":" + f.Incense + ",\"Charms\":" + f.Charms + ",\"RepairKits\":" + f.RepairKits + "}");
+                Field(b, "resources", "{\"Food\":" + f.Food + ",\"Wood\":" + f.Wood + ",\"Ore\":" + f.Ore + ",\"Metal\":" + f.Metal + ",\"Stone\":" + f.Stone + ",\"Gold\":" + f.Gold + ",\"Gems\":" + f.Gems + ",\"Rations\":" + f.Rations + ",\"Bricks\":" + f.Bricks + ",\"Tack\":" + f.Tack + ",\"Planks\":" + f.Planks + ",\"Books\":" + f.Books + ",\"Incense\":" + f.Incense + ",\"Charms\":" + f.Charms + ",\"RepairKits\":" + f.RepairKits + ",\"Tools\":" + f.Tools + "}");
                 Field(b, "rations", "{\"produced\":" + f.RationsProduced + ",\"consumed\":" + f.RationsConsumed + ",\"trainedSoldiers\":" + f.RationsTrainedSoldiers + ",\"healedHp\":" + f.RationsHealedHp + "}");
                 Field(b, "bricks", "{\"produced\":" + f.BricksProduced + ",\"consumed\":" + f.BricksConsumed + ",\"consumedWalls\":" + f.BricksConsumedWalls + ",\"consumedTowers\":" + f.BricksConsumedTowers + ",\"consumedCoreRepair\":" + f.BricksConsumedCoreRepair + ",\"consumedCastles\":" + f.BricksConsumedCastles + ",\"coreRepairHp\":" + f.BricksCoreRepairHp + ",\"upgradedWalls\":" + f.BricksUpgradedWalls + ",\"upgradedTowers\":" + f.BricksUpgradedTowers + "}");
                 Field(b, "tack", "{\"produced\":" + f.TackProduced + ",\"consumed\":" + f.TackConsumed + ",\"trainedHeavyCavalry\":" + f.TackTrainedHeavyCavalry + "}");
@@ -186,11 +186,16 @@ namespace Rts.Tactics
                 Field(b, "charms", "{\"stock\":" + f.Charms + ",\"produced\":" + f.CharmsProduced + ",\"consumed\":" + f.CharmsConsumed + ",\"trainedSoldiers\":" + f.CharmsTrainedSoldiers + "}");
                 Field(b, "repairKits", "{\"stock\":" + f.RepairKits + ",\"produced\":" + f.RepairKitsProduced + ",\"consumed\":" + f.RepairKitsConsumed + ",\"repairedHp\":" + f.RepairKitsRepairedHp + ",\"coreRepairedHp\":" + f.RepairKitsCoreRepairedHp + "}");
                 Field(b, "tools", "{\"stock\":" + f.Tools + ",\"produced\":" + f.ToolsProduced + ",\"consumed\":" + f.ToolsConsumed + ",\"trainedVillagers\":" + f.ToolsTrainedVillagers + ",\"savedFood\":" + f.ToolsSavedFood + "}");
+                if (f.GoodsMarket != null && f.GoodsMarket.Length > 0) Field(b, "goodsMarket", GoodsMarketJson(f.GoodsMarket));
                 Field(b, "buildings", CountsJson(f.Buildings)); Field(b, "age", f.Age.ToString(CultureInfo.InvariantCulture)); Field(b, "civ", Quote(f.Civ)); b.Append('}'); } b.Append(']');
             Field(b, "cores", ObjectivesJson(s.Cores)); Field(b, "outposts", ObjectivesJson(s.Outposts)); b.Append('}'); return b.ToString();
         }
 
         private static string CountsJson(IEnumerable<MatchPackCount> counts) => "[" + string.Join(",", counts.Select(x => "{\"kind\":" + Quote(x.Kind) + ",\"count\":" + x.Count.ToString(CultureInfo.InvariantCulture) + "}")) + "]";
+        private static string GoodsMarketJson(IEnumerable<MatchPackGoodsTradeSnapshot> values)
+            => "[" + string.Join(",", values.Select(x => "{\"goods\":" + Quote(x.Goods) + ",\"soldCount\":" + x.SoldCount.ToString(CultureInfo.InvariantCulture)
+                + ",\"soldUnits\":" + x.SoldUnits.ToString(CultureInfo.InvariantCulture) + ",\"receivedFood\":" + x.ReceivedFood.ToString(CultureInfo.InvariantCulture)
+                + ",\"receivedWood\":" + x.ReceivedWood.ToString(CultureInfo.InvariantCulture) + "}")) + "]";
         private static string ObjectivesJson(IEnumerable<MatchPackObjectiveSnapshot> values) => "[" + string.Join(",", values.Select(x => "{\"id\":" + x.Id + ",\"ownerFactionId\":" + x.OwnerFactionId + "}")) + "]";
         private static string RejectedJson(IEnumerable<TacticRejectedCommand> values) => "[" + string.Join(",", (values ?? Array.Empty<TacticRejectedCommand>()).Select(x => "{\"index\":" + x.Index + ",\"type\":" + Quote(x.Type) + ",\"reason\":" + Quote(x.Reason) + "}")) + "]";
         private static string FailureJson(TacticFailure x) => "{\"reason\":" + Quote(x.Reason) + ",\"consecutive\":" + x.Consecutive + "}";

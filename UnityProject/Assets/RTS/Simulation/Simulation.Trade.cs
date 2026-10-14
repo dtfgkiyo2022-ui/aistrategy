@@ -13,6 +13,11 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int TradeRich = 600, TradePoor = 150, AutoRams = 2, AutoTradeVillagers = 2;
+        private static readonly ResourceKind[] GoodsKinds =
+        {
+            ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
+            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools
+        };
         // V3-9 #2 provisional caravan safety policy. The values are deliberately small and tick-based:
         // danger is only what the faction currently sees, and a route needs 20 clear ticks before restarting.
         private const int CaravanDangerMeters = 1, CaravanSafetyTicks = 20, CaravanGemsReward = 1;
@@ -21,30 +26,111 @@ namespace Rts.Simulation
 
         private static bool TradeTakeable(ResourceKind kind) => Tradable(kind) || kind == ResourceKind.Gems;
 
+        private static bool GoodsTradeable(ResourceKind kind)
+        {
+            foreach (var goods in GoodsKinds) if (goods == kind) return true;
+            return false;
+        }
+
         private static int StockOf(FactionEconomy e, ResourceKind kind)
             => kind == ResourceKind.Food ? e.Food : kind == ResourceKind.Wood ? e.Wood : kind == ResourceKind.Ore ? e.Ore
-                : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : 0;
+                : kind == ResourceKind.Stone ? e.Stone : kind == ResourceKind.Gems ? e.Gems : kind == ResourceKind.Steel ? e.Steel
+                : kind == ResourceKind.BowGear ? e.BowGear : kind == ResourceKind.Rations ? e.Rations : kind == ResourceKind.Bricks ? e.Bricks
+                : kind == ResourceKind.Tack ? e.Tack : kind == ResourceKind.Planks ? e.Planks : kind == ResourceKind.Books ? e.Books
+                : kind == ResourceKind.Incense ? e.Incense : kind == ResourceKind.Charms ? e.Charms
+                : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools : 0;
 
-        private void TradeAtMarket(uint faction, ResourceKind give, ResourceKind take)
+        private static int GoodsValue(EconomyRules rules, ResourceKind kind)
+            => kind == ResourceKind.Steel ? rules.GoodsValueSteel : kind == ResourceKind.BowGear ? rules.GoodsValueBowGear
+                : kind == ResourceKind.Rations ? rules.GoodsValueRations : kind == ResourceKind.Bricks ? rules.GoodsValueBricks
+                : kind == ResourceKind.Tack ? rules.GoodsValueTack : kind == ResourceKind.Planks ? rules.GoodsValuePlanks
+                : kind == ResourceKind.Books ? rules.GoodsValueBooks : kind == ResourceKind.Incense ? rules.GoodsValueIncense
+                : kind == ResourceKind.Charms ? rules.GoodsValueCharms : kind == ResourceKind.RepairKits ? rules.GoodsValueRepairKits
+                : kind == ResourceKind.Tools ? rules.GoodsValueTools : 0;
+
+        // The goods whose workshops stop at a stock limit. Selling at that limit lets the workshop run again.
+        private static int GoodsCap(EconomyRules rules, ResourceKind kind)
+            => kind == ResourceKind.Incense ? rules.IncenseStockLimit : kind == ResourceKind.Charms ? rules.CharmStockLimit
+                : kind == ResourceKind.RepairKits ? rules.RepairKitStockLimit : kind == ResourceKind.Tools ? rules.ToolStockLimit : 0;
+
+        private int MarketReturnFor(uint faction, int baseReturn)
         {
-            bool mountainOreTrade = MountainAllowed(faction) && give == ResourceKind.Ore
-                && (take == ResourceKind.Food || take == ResourceKind.Wood);
-            if (!AgesOn || give == take || (!mountainOreTrade && (!Tradable(give) || !TradeTakeable(take)))) return;
-            int market = OwnBuildingIndex(faction, BuildingKind.Market);
-            if (market < 0 || !world.Buildings[market].Complete) return;
             var rules = world.Config.Economy;
-            if (StockOf(world.Economies[faction - 1], give) < rules.TradeLot) return;
-            AddStock(faction, give, -rules.TradeLot);
-            int returned = take == ResourceKind.Gems ? rules.GemsTradeReturn
-                : rules.TradeReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0);
-            if (take != ResourceKind.Gems && HasTech(faction, MetropolisTech.MarketFestivity))
+            int returned = checked(baseReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0));
+            if (HasTech(faction, MetropolisTech.MarketFestivity))
             {
                 int steps = Math.Min(rules.MetropolisMarketMaxBonusPermille / rules.MetropolisMarketBonusPermille,
                     LivingVillagers(faction) / rules.MetropolisMarketVillagerStep);
                 int bonus = checked(steps * rules.MetropolisMarketBonusPermille);
                 returned = checked(returned * (1000 + bonus) / 1000);
             }
+            return returned;
+        }
+
+        private void TradeAtMarket(uint faction, ResourceKind give, ResourceKind take)
+        {
+            bool mountainOreTrade = MountainAllowed(faction) && give == ResourceKind.Ore
+                && (take == ResourceKind.Food || take == ResourceKind.Wood);
+            bool goodsTrade = GoodsMarketOn && GoodsTradeable(give) && Tradable(take);
+            if (!AgesOn || give == take || (!mountainOreTrade && !goodsTrade && (!Tradable(give) || !TradeTakeable(take)))) return;
+            int market = OwnBuildingIndex(faction, BuildingKind.Market);
+            if (market < 0 || !world.Buildings[market].Complete) return;
+            var rules = world.Config.Economy;
+            int lot = goodsTrade ? rules.GoodsTradeLot : rules.TradeLot;
+            if (StockOf(world.Economies[faction - 1], give) < lot) return;
+            AddStock(faction, give, -lot);
+            int returned = goodsTrade ? MarketReturnFor(faction, checked(GoodsValue(rules, give) * lot))
+                : take == ResourceKind.Gems ? rules.GemsTradeReturn : MarketReturnFor(faction, rules.TradeReturn);
+            if (goodsTrade)
+            {
+                ref var stats = ref world.Economies[faction - 1];
+                int index = (int)give;
+                if (stats.GoodsSoldCounts != null)
+                {
+                    stats.GoodsSoldCounts[index] = checked(stats.GoodsSoldCounts[index] + 1);
+                    stats.GoodsSoldUnits[index] = checked(stats.GoodsSoldUnits[index] + lot);
+                    if (take == ResourceKind.Food) stats.GoodsReceivedFood[index] = checked(stats.GoodsReceivedFood[index] + returned);
+                    if (take == ResourceKind.Wood) stats.GoodsReceivedWood[index] = checked(stats.GoodsReceivedWood[index] + returned);
+                }
+            }
             AddStock(faction, take, returned);
+        }
+
+        private List<GoodsPriceView> GoodsPriceViews(uint faction)
+        {
+            var prices = new List<GoodsPriceView>(GoodsKinds.Length);
+            var rules = world.Config.Economy;
+            foreach (var goods in GoodsKinds)
+                prices.Add(new GoodsPriceView(goods, MarketReturnFor(faction, checked(GoodsValue(rules, goods) * rules.GoodsTradeLot))));
+            return prices;
+        }
+
+        private void DecideGoodsMarket(uint faction)
+        {
+            if (!GoodsMarketOn || world.Tick % world.Config.Economy.GoodsAutoSellIntervalTicks != 0) return;
+            var rules = world.Config.Economy;
+            var economy = world.Economies[faction - 1];
+            ResourceKind selected = 0;
+            foreach (var goods in GoodsKinds)
+            {
+                int cap = GoodsCap(rules, goods);
+                int threshold = cap > 0 ? Math.Min(rules.GoodsAutoSellAt, cap) : rules.GoodsAutoSellAt;
+                int stock = StockOf(economy, goods);
+                if (stock >= threshold && stock - rules.GoodsTradeLot >= rules.GoodsAutoKeep) { selected = goods; break; }
+            }
+            if (selected == 0) return;
+            int market = OwnBuildingIndex(faction, BuildingKind.Market);
+            if (market < 0)
+            {
+                // Same door as DecideMarket: no new market while the faction saves for its next age.
+                if (SavingToAdvance(faction) || economy.Wood < rules.MarketWoodCost + rules.GoodsMarketWoodReserve) return;
+                int origin = FindSite(faction, rules.MarketSizeCells);
+                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
+                return;
+            }
+            if (!world.Buildings[market].Complete || world.Buildings[market].Held) return;
+            ResourceKind take = economy.Food < economy.Wood ? ResourceKind.Food : ResourceKind.Wood;
+            TradeAtMarket(faction, selected, take);
         }
 
         private int OwnFinishedMarketIndex(uint faction)

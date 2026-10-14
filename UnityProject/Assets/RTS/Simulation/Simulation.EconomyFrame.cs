@@ -251,7 +251,10 @@ namespace Rts.Simulation
                 toolMaxShops: ToolsAllowed(faction) ? rules.ToolMaxShops : 0,
                 toolWoodReserve: ToolsAllowed(faction) ? rules.ToolWoodReserve : 0,
                 toolVillagerFoodPermille: ToolsAllowed(faction) ? rules.ToolVillagerFoodPermille : 0,
-                toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0);
+                toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0,
+                goodsMarketEnabled: GoodsMarketOn,
+                goodsTradeLot: GoodsMarketOn ? rules.GoodsTradeLot : 0,
+                goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

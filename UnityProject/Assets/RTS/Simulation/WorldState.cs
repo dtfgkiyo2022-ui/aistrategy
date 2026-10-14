@@ -263,6 +263,8 @@ namespace Rts.Simulation
         internal int CharmsProduced, CharmsConsumed, CharmsTrainedSoldiers;
         internal int RepairKitsProduced, RepairKitsConsumed, RepairKitsRepairedHp, RepairKitsCoreRepairedHp;
         internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
+        /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
+        internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -411,7 +413,10 @@ namespace Rts.Simulation
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0 };
+            bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
+            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0,
+                GoodsSoldCounts = goodsMarket ? new int[22] : null, GoodsSoldUnits = goodsMarket ? new int[22] : null,
+                GoodsReceivedFood = goodsMarket ? new int[22] : null, GoodsReceivedWood = goodsMarket ? new int[22] : null };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -602,12 +607,17 @@ namespace Rts.Simulation
                 && e.RepairKitWoodInput > 0 && e.RepairKitWoodInput <= e.BufferLimit && e.RepairKitKeepWood >= 0
                 && e.RepairKitStockLimit > 0 && e.RepairKitMaxYards > 0 && e.RepairKitWoodReserve >= 0
                 && e.RepairKitIntervalTicks > 0 && e.RepairKitHp > 0), "Invalid repair-kits rules.");
-            Require(!e.Tools || (e.Enabled && e.Industry && e.Ages && e.ToolShopSizeCells > 0 && e.ToolShopSizeCells <= 8
+             Require(!e.Tools || (e.Enabled && e.Industry && e.Ages && e.ToolShopSizeCells > 0 && e.ToolShopSizeCells <= 8
                 && e.ToolShopWoodCost >= 0 && e.ToolShopWork > 0 && e.ToolShopHp > 0 && e.ToolTicks > 0
                 && e.ToolWoodInput > 0 && e.ToolWoodInput <= e.BufferLimit && e.ToolKeepWood >= 0
                 && e.ToolStockLimit > 0 && e.ToolMaxShops > 0 && e.ToolWoodReserve >= 0
                 && e.ToolVillagerFoodPermille > 0 && e.ToolVillagerFoodPermille <= 1000
-                && e.ToolVillagerTicksPermille > 0 && e.ToolVillagerTicksPermille <= 1000), "Invalid tools rules.");
+                 && e.ToolVillagerTicksPermille > 0 && e.ToolVillagerTicksPermille <= 1000), "Invalid tools rules.");
+            Require(!e.GoodsMarket || (e.Enabled && e.Industry && e.Ages && e.GoodsTradeLot > 0
+                && e.GoodsAutoSellAt > 0 && e.GoodsAutoSellIntervalTicks > 0 && e.GoodsAutoKeep >= 0 && e.GoodsMarketWoodReserve >= 0
+                && e.GoodsValueSteel > 0 && e.GoodsValueBowGear > 0 && e.GoodsValueRations > 0 && e.GoodsValueBricks > 0
+                && e.GoodsValueTack > 0 && e.GoodsValuePlanks > 0 && e.GoodsValueBooks > 0 && e.GoodsValueIncense > 0
+                && e.GoodsValueCharms > 0 && e.GoodsValueRepairKits > 0 && e.GoodsValueTools > 0), "Invalid goods market rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -1008,7 +1018,13 @@ namespace Rts.Simulation
                   ToolShopWork = e.ToolShopWork, ToolShopHp = e.ToolShopHp, ToolTicks = e.ToolTicks,
                   ToolWoodInput = e.ToolWoodInput, ToolKeepWood = e.ToolKeepWood, ToolStockLimit = e.ToolStockLimit,
                   ToolMaxShops = e.ToolMaxShops, ToolWoodReserve = e.ToolWoodReserve,
-                  ToolVillagerFoodPermille = e.ToolVillagerFoodPermille, ToolVillagerTicksPermille = e.ToolVillagerTicksPermille,
+                   ToolVillagerFoodPermille = e.ToolVillagerFoodPermille, ToolVillagerTicksPermille = e.ToolVillagerTicksPermille,
+                   GoodsMarket = e.GoodsMarket, GoodsTradeLot = e.GoodsTradeLot, GoodsAutoSellAt = e.GoodsAutoSellAt,
+                   GoodsAutoSellIntervalTicks = e.GoodsAutoSellIntervalTicks, GoodsAutoKeep = e.GoodsAutoKeep, GoodsMarketWoodReserve = e.GoodsMarketWoodReserve,
+                   GoodsValueSteel = e.GoodsValueSteel, GoodsValueBowGear = e.GoodsValueBowGear, GoodsValueRations = e.GoodsValueRations,
+                   GoodsValueBricks = e.GoodsValueBricks, GoodsValueTack = e.GoodsValueTack, GoodsValuePlanks = e.GoodsValuePlanks,
+                   GoodsValueBooks = e.GoodsValueBooks, GoodsValueIncense = e.GoodsValueIncense, GoodsValueCharms = e.GoodsValueCharms,
+                   GoodsValueRepairKits = e.GoodsValueRepairKits, GoodsValueTools = e.GoodsValueTools,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

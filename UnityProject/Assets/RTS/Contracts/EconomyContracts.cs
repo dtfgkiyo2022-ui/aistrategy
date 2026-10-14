@@ -471,6 +471,19 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         }
     }
 
+    /// <summary>One finished good's displayed return for a single market lot, after the faction's modifiers.</summary>
+    public readonly struct GoodsPriceView
+    {
+        public ResourceKind Goods { get; }
+        public int Amount { get; }
+
+        public GoodsPriceView(ResourceKind goods, int amount)
+        {
+            Goods = goods;
+            Amount = amount;
+        }
+    }
+
     /// <summary>
     /// V3-2: a belt cell, own or enemy on a cell the faction sees now. Item is 0 when the cell is empty; Progress counts the
     /// ticks since the item entered the cell (it moves on at TicksPerCell), so the display can slide it along.
@@ -848,6 +861,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int ToolWoodReserve { get; }
         public int ToolVillagerFoodPermille { get; }
         public int ToolVillagerTicksPermille { get; }
+        public bool GoodsMarketEnabled { get; }
+        public int GoodsTradeLot { get; }
+        public IReadOnlyList<GoodsPriceView> GoodsPrices { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -926,7 +942,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int repairKitMaxYards = 0, int repairKitWoodReserve = 0, int repairKitIntervalTicks = 0, int repairKitHp = 0,
              bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
              int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
-             int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0)
+             int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0,
+             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -977,6 +994,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ToolsEnabled = toolsEnabled; Tools = tools; ToolShopWoodCost = toolShopWoodCost; ToolShopSizeCells = toolShopSizeCells;
             ToolTicks = toolTicks; ToolWoodInput = toolWoodInput; ToolKeepWood = toolKeepWood; ToolStockLimit = toolStockLimit;
             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
+            GoodsMarketEnabled = goodsMarketEnabled; GoodsTradeLot = goodsTradeLot;
+            GoodsPrices = ContractList.Copy(goodsPrices ?? Array.Empty<GoodsPriceView>());
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

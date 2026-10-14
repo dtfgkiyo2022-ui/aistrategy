@@ -247,6 +247,12 @@ namespace Rts.Simulation
         public int ToolShopSizeCells = 2, ToolShopWoodCost = 80, ToolShopWork = 200, ToolShopHp = 400;
         public int ToolTicks = 80, ToolWoodInput = 2, ToolKeepWood = 80, ToolStockLimit = 10;
         public int ToolMaxShops = 1, ToolWoodReserve = 20, ToolVillagerFoodPermille = 700, ToolVillagerTicksPermille = 500;
+        /// <summary>Goods market: finished civilisation goods can be sold in small lots for food, wood, or stone.</summary>
+        public bool GoodsMarket;
+        public int GoodsTradeLot = 5, GoodsAutoSellAt = 15, GoodsAutoSellIntervalTicks = 100, GoodsAutoKeep = 5, GoodsMarketWoodReserve = 20;
+        public int GoodsValueSteel = 8, GoodsValueBowGear = 4, GoodsValueRations = 6, GoodsValueBricks = 6;
+        public int GoodsValueTack = 8, GoodsValuePlanks = 6, GoodsValueBooks = 6, GoodsValueIncense = 6;
+        public int GoodsValueCharms = 6, GoodsValueRepairKits = 4, GoodsValueTools = 4;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>

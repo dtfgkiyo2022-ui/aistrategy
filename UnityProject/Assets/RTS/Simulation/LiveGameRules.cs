@@ -38,6 +38,7 @@ namespace Rts.Simulation
             e.Charms = allCivilisations;
             e.RepairKits = allCivilisations;
             e.Tools = allCivilisations;
+            e.GoodsMarket = allCivilisations;
             e.BeltComponents = true;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;

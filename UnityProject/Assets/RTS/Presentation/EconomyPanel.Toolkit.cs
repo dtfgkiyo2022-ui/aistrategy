@@ -131,6 +131,12 @@ namespace Rts.Presentation
                 if (trade.Length == 2) Send(EconomyCommand.Trade(faction, ++sequence, ParseResource(trade[0]), ParseResource(trade[1])), UiText.T("Trade requested", "交換を依頼しました"));
                 return;
             }
+            if (actionId.StartsWith("make:goods:", StringComparison.Ordinal))
+            {
+                var goodsTrade = actionId.Substring(11).Split('-');
+                if (goodsTrade.Length == 2) Send(EconomyCommand.Trade(faction, ++sequence, ParseResource(goodsTrade[0]), ParseResource(goodsTrade[1])), UiText.T("Goods trade requested", "加工品の売却を依頼しました"));
+                return;
+            }
             if (actionId == "make:wood-gems") { Send(EconomyCommand.Trade(faction, ++sequence, ResourceKind.Wood, ResourceKind.Gems), UiText.T("Wood->Gems traded", "木材→宝石 を交換しました")); return; }
             if (actionId.StartsWith("make:idle:", StringComparison.Ordinal)) { SendIdle(economy, ParseResource(actionId.Substring(10))); return; }
             if (actionId == "make:idle-trade") { SendIdleToTrade(economy); return; }
@@ -200,7 +206,7 @@ namespace Rts.Presentation
             if (value == "tack" || value == "馬具") return ResourceKind.Tack;
             if (value == "planks" || value == "板") return ResourceKind.Planks;
             if (value == "books" || value == "書物") return ResourceKind.Books;
-            switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; case "rations": case "糧食": return ResourceKind.Rations; case "bricks": case "煉瓦": return ResourceKind.Bricks; default: return ResourceKind.Wood; }
+            switch (value) { case "food": return ResourceKind.Food; case "wood": return ResourceKind.Wood; case "stone": return ResourceKind.Stone; case "gems": return ResourceKind.Gems; case "steel": case "鋼": return ResourceKind.Steel; case "bowgear": case "弓具": return ResourceKind.BowGear; case "rations": case "糧食": return ResourceKind.Rations; case "bricks": case "煉瓦": return ResourceKind.Bricks; case "incense": case "香": return ResourceKind.Incense; case "charms": case "護符": return ResourceKind.Charms; case "repairkits": case "補修材": return ResourceKind.RepairKits; case "tools": case "工具": return ResourceKind.Tools; default: return ResourceKind.Wood; }
         }
 
         private void TrainFromBuilding(EconomyView economy, BuildingKind kind, UnitKind unit, string notice)
@@ -413,6 +419,11 @@ namespace Rts.Presentation
                     AddProducerRows(rows, economy, BuildingKind.Market, "make:trade:food-wood", UiText.T("Food->Wood", "食料→木材"), 0);
                     AddProducerRows(rows, economy, BuildingKind.Market, "make:trade:wood-food", UiText.T("Wood->Food", "木材→食料"), 0);
                     AddProducerRows(rows, economy, BuildingKind.Market, "make:trade:wood-stone", UiText.T("Wood->Stone", "木材→石"), 0);
+                    if (economy.GoodsMarketEnabled && economy.GoodsTradeLot > 0)
+                        foreach (var goods in GoodsKindsForDisplay)
+                            if (GoodsStock(economy, goods) >= economy.GoodsTradeLot)
+                                foreach (var take in new[] { ResourceKind.Food, ResourceKind.Wood, ResourceKind.Stone })
+                                    AddProducerRows(rows, economy, BuildingKind.Market, "make:goods:" + goods.ToString().ToLowerInvariant() + "-" + take.ToString().ToLowerInvariant(), GoodsTradeLabel(goods, take, economy.GoodsTradeLot) + " (" + GoodsPrice(economy, goods) + ")", 0);
                     AddProducerRows(rows, economy, BuildingKind.Market, "make:wood-gems", UiText.T("Wood->Gems (", "木材→宝石（") + economy.GemsTradeReturn + UiText.T(")", "）"), 0);
                     Add(rows, "make:idle-trade", UiText.T("Idle -> trade route", "待機中の村人 → 交易路"), market.Value.Complete, market.Value.Complete ? "" : UiText.T("Build the market first", "市場を完成させる"));
                 }
