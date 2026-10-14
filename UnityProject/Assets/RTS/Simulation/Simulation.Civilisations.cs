@@ -427,5 +427,41 @@ namespace Rts.Simulation
             if (OwnBuildingIndex(faction, row.Foundation) >= 0) return false;
             return row.FoundationReady == null || row.FoundationReady(this, faction);
         }
+
+        private bool CraftTimingNeedsWood(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            if (economy.Age != 1 || economy.AutoOff) return false;
+            BuildingKind processing = CraftTimingBuilding(economy.Civ);
+            if (processing == 0) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.Complete && building.FactionId == faction && building.Kind == processing)
+                    return false;
+            }
+            return true;
+        }
+
+        private static BuildingKind CraftTimingBuilding(CivKind civ)
+        {
+            switch (civ)
+            {
+                case CivKind.Metallurgy: return BuildingKind.CharcoalKiln;
+                case CivKind.Forestry: return BuildingKind.Fletcher;
+                case CivKind.Masonry: return BuildingKind.BrickKiln;
+                case CivKind.Caravan: return BuildingKind.Weaver;
+                case CivKind.Cavalry: return BuildingKind.Saddlery;
+                case CivKind.Bridge: return BuildingKind.Sawmill;
+                case CivKind.Academy: return BuildingKind.Scriptorium;
+                case CivKind.Cult: return BuildingKind.IncenseHouse;
+                case CivKind.Fishing: return BuildingKind.DryingRack;
+                case CivKind.Mountain: return BuildingKind.Lapidary;
+                case CivKind.Tollgate: return BuildingKind.RepairYard;
+                case CivKind.Metropolis: return BuildingKind.ToolShop;
+                case CivKind.Sanctuary: return BuildingKind.CharmWorkshop;
+                default: return 0;
+            }
+        }
     }
 }

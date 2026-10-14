@@ -38,6 +38,7 @@ internal static class TacticMatchCommand
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), false, true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");
