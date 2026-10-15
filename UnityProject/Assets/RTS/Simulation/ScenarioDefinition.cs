@@ -223,6 +223,14 @@ namespace Rts.Simulation
         public int ArmsKitAttack = 2, ArmsKitHpPermille = 1100, FineArmsKitAttack = 3, FineArmsKitHpPermille = 1150;
         public int ScholarlyPerResearch = 1, ScholarlyCostPermille = 600, ScholarlyTimePermille = 700;
         public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
+        /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
+        public bool CraftTree3;
+        public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;
+        public int MechanismTicks = 150, MechanismArmsKitInput = 1, MechanismScholarlyInput = 1, MechanismCutStoneInput = 1;
+        public int SiegePartsHpPermille = 1500, SiegePartsDamagePermille = 1300, SiegePartsPerCastle = 3, SiegePartsCastleStonePermille = 700;
+        public int MechanismBuildingTimePermille = 500, MechanismBuildingMaterialPermille = 900;
+        public int MechanismResearchCostPermille = 500, MechanismResearchTimePermille = 500;
+        public int GoodsValueSiegeParts = 20, GoodsValueMechanism = 22;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;

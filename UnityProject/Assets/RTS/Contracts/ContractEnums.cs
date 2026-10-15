@@ -68,7 +68,7 @@ namespace Rts.Contracts
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -159,7 +159,7 @@ namespace Rts.Contracts
         Storage = 31, Mill = 32, BrickKiln = 33, Saddlery = 34, Sawmill = 35, Scriptorium = 36, DryingRack = 37, Lapidary = 38, Weaver = 39, IncenseHouse = 40, CharmWorkshop = 41, RepairYard = 42, ToolShop = 43, Stonecutter = 44, Joinery = 45, Assembler = 46 }
 
     /// <summary>CraftTree2 recipes. Values are compact so later stages can append recipes without gaps.</summary>
-    public enum RecipeKind : byte { None = 0, Frames = 1, ArmsKit = 2, Scholarly = 3 }
+    public enum RecipeKind : byte { None = 0, Frames = 1, ArmsKit = 2, Scholarly = 3, SiegeParts = 4, Mechanism = 5 }
 
     public enum EventKind : byte
     {

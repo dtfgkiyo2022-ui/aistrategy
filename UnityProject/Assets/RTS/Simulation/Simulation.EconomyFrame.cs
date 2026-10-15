@@ -60,7 +60,7 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
                     CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
-                    own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
+                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -292,7 +292,20 @@ namespace Rts.Simulation
                 scholarlyTicks: CraftTree2On ? rules.ScholarlyTicks : 0,
                 scholarlyPlankInput: CraftTree2On ? rules.ScholarlyPlankInput : 0,
                 scholarlyCharcoalInput: CraftTree2On ? rules.ScholarlyCharcoalInput : 0,
-                scholarlyFoodInput: CraftTree2On ? rules.ScholarlyFoodInput : 0);
+                 scholarlyFoodInput: CraftTree2On ? rules.ScholarlyFoodInput : 0,
+                 craftTree3Enabled: CraftTree3On,
+                 siegeParts: CraftTree3On ? economy.SiegeParts : 0,
+                 mechanism: CraftTree3On ? economy.Mechanism : 0,
+                 siegePartsTicks: CraftTree3On ? rules.SiegePartsTicks : 0,
+                 mechanismTicks: CraftTree3On ? rules.MechanismTicks : 0,
+                 siegePartsHpPermille: CraftTree3On ? rules.SiegePartsHpPermille : 0,
+                 siegePartsDamagePermille: CraftTree3On ? rules.SiegePartsDamagePermille : 0,
+                 siegePartsPerCastle: CraftTree3On ? rules.SiegePartsPerCastle : 0,
+                 siegePartsCastleStonePermille: CraftTree3On ? rules.SiegePartsCastleStonePermille : 0,
+                 mechanismBuildingTimePermille: CraftTree3On ? rules.MechanismBuildingTimePermille : 0,
+                 mechanismBuildingMaterialPermille: CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0,
+                 mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
+                 mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

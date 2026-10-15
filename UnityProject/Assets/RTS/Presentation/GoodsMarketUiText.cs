@@ -17,7 +17,9 @@ namespace Rts.Presentation
                 : kind == ResourceKind.Tools ? UiText.T("Tools", "工具")
                 : kind == ResourceKind.ArmsKit ? UiText.T("Arms kit", "Arms kit")
                 : kind == ResourceKind.Scholarly ? UiText.T("Scholarly", "Scholarly")
-                : kind == ResourceKind.FineArmsKit ? UiText.T("Fine arms kit", "Fine arms kit") : kind.ToString();
+                : kind == ResourceKind.FineArmsKit ? UiText.T("Fine arms kit", "Fine arms kit")
+                : kind == ResourceKind.SiegeParts ? UiText.T("Siege parts", "攻城部品")
+                : kind == ResourceKind.Mechanism ? UiText.T("Mechanism", "精密部品") : kind.ToString();
 
         private static string ResourceName(ResourceKind kind)
             => kind == ResourceKind.Food ? UiText.T("Food", "食料") : kind == ResourceKind.Wood ? UiText.T("Wood", "木材")

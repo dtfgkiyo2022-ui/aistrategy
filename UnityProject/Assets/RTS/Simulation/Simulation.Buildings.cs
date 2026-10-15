@@ -364,9 +364,15 @@ namespace Rts.Simulation
                 economy.PlanksConsumed = checked(economy.PlanksConsumed + planks);
                 economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
             }
-            bool brickCastle = kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction);
+            bool siegeCastle = kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction);
+            bool brickCastle = kind == BuildingKind.Castle && !siegeCastle && BrickCastleDiscountAvailable(faction);
             bool brickDefence = BrickDefenceAvailable(faction, kind);
             economy.Stone = checked(economy.Stone - StoneOf(kind, faction));
+            if (siegeCastle)
+            {
+                economy.SiegeParts = checked(economy.SiegeParts - world.Config.Economy.SiegePartsPerCastle);
+                economy.SiegePartsConsumed = checked(economy.SiegePartsConsumed + world.Config.Economy.SiegePartsPerCastle);
+            }
             if (brickCastle)
             {
                 economy.Bricks = checked(economy.Bricks - world.Config.Economy.BricksPerCastle);
@@ -760,6 +766,7 @@ namespace Rts.Simulation
                 bool charmed = CharmsOn && QueueCharmsAt(b, 0);
                 bool armed = CraftTree2On && QueueArmsAt(b, 0);
                 bool fineArmed = CraftTree2On && QueueFineArmsAt(b, 0);
+                bool siegeParts = CraftTree3On && QueueSiegePartsAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
                 bool paid = unit == UnitKind.Infantry && metal > 0 && b.QueuedMetal >= metal;
@@ -774,6 +781,13 @@ namespace Rts.Simulation
                     equipped.Parameters.Damage = checked(equipped.Parameters.Damage + attack);
                     int hp = checked((equipped.Parameters.Hp * hpPermille + 999) / 1000);
                     equipped.Parameters.Hp = hp; equipped.Hp = hp; equipped.Initial.Hp = hp;
+                }
+                if (siegeParts && unit == UnitKind.Ram)
+                {
+                    ref var ram = ref world.Soldiers[world.SoldierCount - 1];
+                    int hp = checked((ram.Parameters.Hp * world.Config.Economy.SiegePartsHpPermille + 999) / 1000);
+                    ram.Parameters.Hp = hp; ram.Hp = hp; ram.Initial.Hp = hp; ram.SiegePartsEnhanced = true;
+                    world.Economies[b.FactionId - 1].SiegePartsEnhancedRams++;
                 }
                 if (planked && unit == UnitKind.Ram)
                 {
@@ -943,14 +957,24 @@ namespace Rts.Simulation
         {
             if (!CraftTree1On || !OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-            if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 2) return;
+            if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 3) return;
             ref var economy = ref world.Economies[faction - 1];
-            int cost = world.Config.Economy.CraftTreeLevel2FramesCost;
-            if (economy.Frames < cost) return;
-            economy.Frames -= cost;
-            economy.FramesConsumed = checked(economy.FramesConsumed + cost);
-            economy.FramesConsumedUpgrades = checked(economy.FramesConsumedUpgrades + cost);
-            building.Level = 2;
+            if (building.Level == 1)
+            {
+                int cost = world.Config.Economy.CraftTreeLevel2FramesCost;
+                if (economy.Frames < cost) return;
+                economy.Frames -= cost;
+                economy.FramesConsumed = checked(economy.FramesConsumed + cost);
+                economy.FramesConsumedUpgrades = checked(economy.FramesConsumedUpgrades + cost);
+                building.Level = 2;
+            }
+            else
+            {
+                if (!CraftTree3On || economy.Mechanism < 1) return;
+                economy.Mechanism--;
+                economy.MechanismConsumed = checked(economy.MechanismConsumed + 1);
+                building.Level = 3;
+            }
         }
 
         private bool PlankBridgeAvailable(uint faction, int cells)
@@ -973,6 +997,8 @@ namespace Rts.Simulation
             int stone = kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
                 : kind == BuildingKind.Town ? e.TownStoneCost : 0;
+            if (kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction))
+                return checked((stone * e.SiegePartsCastleStonePermille + 999) / 1000);
             if (kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction))
                 return MasonryDiscount(stone, e.BrickCastleStonePermille);
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(stone, e.MasonryDefenceCostPermille) : stone;
@@ -980,6 +1006,10 @@ namespace Rts.Simulation
 
         private bool BrickCastleDiscountAvailable(uint faction)
             => BricksAllowed(faction) && world.Economies[faction - 1].Bricks >= world.Config.Economy.BricksPerCastle;
+
+        private bool SiegePartsCastleAvailable(uint faction)
+            => CraftTree3On && world.Economies[faction - 1].Age >= 3
+                && world.Economies[faction - 1].SiegeParts >= world.Config.Economy.SiegePartsPerCastle;
 
         private bool BrickDefenceAvailable(uint faction, BuildingKind kind)
             => BricksAllowed(faction) && (kind == BuildingKind.Wall || kind == BuildingKind.Tower)

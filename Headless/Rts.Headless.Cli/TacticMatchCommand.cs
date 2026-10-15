@@ -41,6 +41,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--craft-tree1-off")) scenario.Economy.CraftTree1 = false;
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
+        if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");

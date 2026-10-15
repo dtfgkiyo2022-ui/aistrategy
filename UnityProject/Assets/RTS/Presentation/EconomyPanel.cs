@@ -783,6 +783,7 @@ namespace Rts.Presentation
                         {
                             if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !economy.CraftTree1Enabled) continue;
                             if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !economy.CraftTree2Enabled) continue;
+                            if ((goods == ResourceKind.SiegeParts || goods == ResourceKind.Mechanism) && !economy.CraftTree3Enabled) continue;
                             if (GoodsStock(economy, goods) < economy.GoodsTradeLot) continue;
                             int price = GoodsPrice(economy, goods);
                             GUI.enabled = market.Value.Complete;
@@ -911,7 +912,7 @@ namespace Rts.Presentation
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
             ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
-            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit
+            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit, ResourceKind.SiegeParts, ResourceKind.Mechanism
         };
 
         public static string GoodsTradeLabel(ResourceKind goods, ResourceKind take, int lot)
@@ -925,7 +926,8 @@ namespace Rts.Presentation
                 : kind == ResourceKind.Charms ? economy.Charms : kind == ResourceKind.RepairKits ? economy.RepairKits
                 : kind == ResourceKind.Tools ? economy.Tools : kind == ResourceKind.CutStone ? economy.CutStone
                 : kind == ResourceKind.Frames ? economy.Frames : kind == ResourceKind.ArmsKit ? economy.ArmsKit
-                : kind == ResourceKind.Scholarly ? economy.Scholarly : kind == ResourceKind.FineArmsKit ? economy.FineArmsKit : 0;
+                 : kind == ResourceKind.Scholarly ? economy.Scholarly : kind == ResourceKind.FineArmsKit ? economy.FineArmsKit
+                 : kind == ResourceKind.SiegeParts ? economy.SiegeParts : kind == ResourceKind.Mechanism ? economy.Mechanism : 0;
 
         private static int GoodsPrice(EconomyView economy, ResourceKind kind)
         {

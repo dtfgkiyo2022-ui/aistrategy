@@ -221,6 +221,8 @@ namespace Rts.Presentation
             if (string.Equals(value, "armskit", StringComparison.OrdinalIgnoreCase)) return ResourceKind.ArmsKit;
             if (string.Equals(value, "scholarly", StringComparison.OrdinalIgnoreCase)) return ResourceKind.Scholarly;
             if (string.Equals(value, "finearmskit", StringComparison.OrdinalIgnoreCase)) return ResourceKind.FineArmsKit;
+            if (string.Equals(value, "siegeparts", StringComparison.OrdinalIgnoreCase)) return ResourceKind.SiegeParts;
+            if (string.Equals(value, "mechanism", StringComparison.OrdinalIgnoreCase)) return ResourceKind.Mechanism;
             if (value == "cutstone" || value == "切石") return ResourceKind.CutStone;
             if (value == "frames" || value == "建材") return ResourceKind.Frames;
             if (value == "preserves" || value == "保存食") return ResourceKind.Preserves;
@@ -346,6 +348,11 @@ namespace Rts.Presentation
                     Add(rows, "recipe:" + assembler.Id + ":ArmsKit", UiText.T("Assembler " + assembler.Id + ": Arms kit (plank 1 + charcoal 2 or steel 1, " + economy.ArmsKitTicks + "t)", "Assembler " + assembler.Id + ": 武具キット（板1＋木炭2または鋼1、" + economy.ArmsKitTicks + "t）"), true, armsMaterial ? "" : UiText.T("Missing planks and charcoal/steel", "板材と木炭/鋼が不足"), assembler.Recipe == RecipeKind.ArmsKit);
                     bool scholarlyMaterial = economy.Planks >= economy.ScholarlyPlankInput && economy.Charcoal >= economy.ScholarlyCharcoalInput && economy.Food >= economy.ScholarlyFoodInput;
                     Add(rows, "recipe:" + assembler.Id + ":Scholarly", UiText.T("Assembler " + assembler.Id + ": Scholarly (plank 1 + charcoal 1 + food 2, " + economy.ScholarlyTicks + "t)", "Assembler " + assembler.Id + ": 学術資材（板1＋木炭1＋食料2、" + economy.ScholarlyTicks + "t）"), true, scholarlyMaterial ? "" : UiText.T("Missing planks, charcoal, or food", "板材・木炭・食料が不足"), assembler.Recipe == RecipeKind.Scholarly);
+                    if (economy.CraftTree3Enabled)
+                    {
+                        Add(rows, "recipe:" + assembler.Id + ":SiegeParts", UiText.T("Assembler " + assembler.Id + ": Siege parts (frames 1 + arms kit 1, " + economy.SiegePartsTicks + "t)", "Assembler " + assembler.Id + ": 攻城部品（建材1＋武具1、" + economy.SiegePartsTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeParts);
+                        Add(rows, "recipe:" + assembler.Id + ":Mechanism", UiText.T("Assembler " + assembler.Id + ": Mechanism (arms kit 1 + scholarly 1 + cut stone 1, " + economy.MechanismTicks + "t)", "Assembler " + assembler.Id + ": 精密部品（武具1＋学術品1＋切石1、" + economy.MechanismTicks + "t）"), true, "", assembler.Recipe == RecipeKind.Mechanism);
+                    }
                 }
             }
             if (economy.PreservesEnabled && economy.Civ == CivKind.Fishing && economy.Age >= 1)

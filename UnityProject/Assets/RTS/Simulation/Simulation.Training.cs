@@ -218,6 +218,7 @@ namespace Rts.Simulation
         private static bool QueueToolsAt(BuildingState b, int i) => b.QueueTools != null && i >= 0 && i < b.QueueTools.Length && b.QueueTools[i];
         private static bool QueueArmsAt(BuildingState b, int i) => b.QueueArmsKit != null && i >= 0 && i < b.QueueArmsKit.Length && b.QueueArmsKit[i];
         private static bool QueueFineArmsAt(BuildingState b, int i) => b.QueueFineArmsKit != null && i >= 0 && i < b.QueueFineArmsKit.Length && b.QueueFineArmsKit[i];
+        private static bool QueueSiegePartsAt(BuildingState b, int i) => b.QueueSiegeParts != null && i >= 0 && i < b.QueueSiegeParts.Length && b.QueueSiegeParts[i];
         private static bool QueueToolsAt(FactionEconomy economy, int i)
             => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
 
@@ -336,8 +337,10 @@ namespace Rts.Simulation
             }
             bool fineArms = CraftTree2On && UsesArmsKit(kind) && e.FineArmsKit >= 1;
             bool arms = CraftTree2On && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
+            bool siegeParts = CraftTree3On && kind == UnitKind.Ram && e.SiegeParts >= 1;
             if (fineArms) { e.FineArmsKit--; e.FineArmsKitConsumed++; }
             else if (arms) { e.ArmsKit--; e.ArmsKitConsumed++; }
+            if (siegeParts) { e.SiegeParts--; e.SiegePartsConsumed++; }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
@@ -375,6 +378,8 @@ namespace Rts.Simulation
                 Array.Resize(ref armsQueue, armsQueue.Length + 1); armsQueue[armsQueue.Length - 1] = arms; b.QueueArmsKit = armsQueue;
                 var fineQueue = b.QueueFineArmsKit ?? Array.Empty<bool>();
                 Array.Resize(ref fineQueue, fineQueue.Length + 1); fineQueue[fineQueue.Length - 1] = fineArms; b.QueueFineArmsKit = fineQueue;
+                var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
+                Array.Resize(ref siegeQueue, siegeQueue.Length + 1); siegeQueue[siegeQueue.Length - 1] = siegeParts; b.QueueSiegeParts = siegeQueue;
             }
         }
 
@@ -435,6 +440,7 @@ namespace Rts.Simulation
             bool charmed = QueueCharmsAt(b, b.Queued - 1);
             bool armed = QueueArmsAt(b, b.Queued - 1);
             bool fineArmed = QueueFineArmsAt(b, b.Queued - 1);
+            bool siegeParts = QueueSiegePartsAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
@@ -444,6 +450,7 @@ namespace Rts.Simulation
             if (b.QueueCharms != null && b.QueueCharms.Length > 0) Array.Resize(ref b.QueueCharms, b.QueueCharms.Length - 1);
             if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0) Array.Resize(ref b.QueueArmsKit, b.QueueArmsKit.Length - 1);
             if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0) Array.Resize(ref b.QueueFineArmsKit, b.QueueFineArmsKit.Length - 1);
+            if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0) Array.Resize(ref b.QueueSiegeParts, b.QueueSiegeParts.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -495,6 +502,7 @@ namespace Rts.Simulation
             }
             if (fineArmed) { e.FineArmsKit++; e.FineArmsKitConsumed--; }
             else if (armed) { e.ArmsKit++; e.ArmsKitConsumed--; }
+            if (siegeParts) { e.SiegeParts++; e.SiegePartsConsumed--; }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -535,6 +543,11 @@ namespace Rts.Simulation
             {
                 var rest = new bool[b.QueueFineArmsKit.Length - 1];
                 Array.Copy(b.QueueFineArmsKit, 1, rest, 0, rest.Length); b.QueueFineArmsKit = rest;
+            }
+            if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0)
+            {
+                var rest = new bool[b.QueueSiegeParts.Length - 1];
+                Array.Copy(b.QueueSiegeParts, 1, rest, 0, rest.Length); b.QueueSiegeParts = rest;
             }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;

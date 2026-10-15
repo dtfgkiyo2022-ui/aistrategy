@@ -810,6 +810,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int ArmsKit { get; }
         public int Scholarly { get; }
         public int FineArmsKit { get; }
+        public int SiegeParts { get; }
+        public int Mechanism { get; }
         public int StonecutterWoodCost { get; }
         public int StonecutterSizeCells { get; }
         public int StonecutterTicks { get; }
@@ -839,6 +841,17 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int ScholarlyPerResearch { get; }
         public int ScholarlyCostPermille { get; }
         public int ScholarlyTimePermille { get; }
+        public bool CraftTree3Enabled { get; }
+        public int SiegePartsTicks { get; }
+        public int MechanismTicks { get; }
+        public int SiegePartsHpPermille { get; }
+        public int SiegePartsDamagePermille { get; }
+        public int SiegePartsPerCastle { get; }
+        public int SiegePartsCastleStonePermille { get; }
+        public int MechanismBuildingTimePermille { get; }
+        public int MechanismBuildingMaterialPermille { get; }
+        public int MechanismResearchCostPermille { get; }
+        public int MechanismResearchTimePermille { get; }
         public bool BooksEnabled { get; }
         public int Books { get; }
         public int ScriptoriumWoodCost { get; }
@@ -1019,7 +1032,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int assemblerWoodCost = 0, int assemblerSizeCells = 0, int armsKitAttack = 0, int armsKitHpPermille = 0,
              int scholarlyPerResearch = 0, int scholarlyCostPermille = 0, int scholarlyTimePermille = 0,
              int armsKitTicks = 0, int armsKitPlankInput = 0, int armsKitCharcoalInput = 0, int armsKitSteelInput = 0,
-             int scholarlyTicks = 0, int scholarlyPlankInput = 0, int scholarlyCharcoalInput = 0, int scholarlyFoodInput = 0)
+              int scholarlyTicks = 0, int scholarlyPlankInput = 0, int scholarlyCharcoalInput = 0, int scholarlyFoodInput = 0,
+              bool craftTree3Enabled = false, int siegeParts = 0, int mechanism = 0, int siegePartsTicks = 0, int mechanismTicks = 0,
+              int siegePartsHpPermille = 0, int siegePartsDamagePermille = 0, int siegePartsPerCastle = 0, int siegePartsCastleStonePermille = 0,
+              int mechanismBuildingTimePermille = 0, int mechanismBuildingMaterialPermille = 0,
+              int mechanismResearchCostPermille = 0, int mechanismResearchTimePermille = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -1073,7 +1090,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             GoodsMarketEnabled = goodsMarketEnabled; GoodsTradeLot = goodsTradeLot;
             GoodsPrices = ContractList.Copy(goodsPrices ?? Array.Empty<GoodsPriceView>());
             CraftTree1Enabled = craftTree1Enabled; CutStone = cutStone; Frames = frames;
-            CraftTree2Enabled = craftTree2Enabled; ArmsKit = armsKit; Scholarly = scholarly; FineArmsKit = fineArmsKit;
+             CraftTree2Enabled = craftTree2Enabled; ArmsKit = armsKit; Scholarly = scholarly; FineArmsKit = fineArmsKit;
+             CraftTree3Enabled = craftTree3Enabled; SiegeParts = siegeParts; Mechanism = mechanism;
             StonecutterWoodCost = stonecutterWoodCost; StonecutterSizeCells = stonecutterSizeCells;
             StonecutterTicks = stonecutterTicks; StonecutterStoneInput = stonecutterStoneInput;
             JoineryWoodCost = joineryWoodCost; JoinerySizeCells = joinerySizeCells; JoineryTicks = joineryTicks;
@@ -1083,7 +1101,12 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ArmsKitTicks = armsKitTicks; ArmsKitPlankInput = armsKitPlankInput; ArmsKitCharcoalInput = armsKitCharcoalInput; ArmsKitSteelInput = armsKitSteelInput;
             ScholarlyTicks = scholarlyTicks; ScholarlyPlankInput = scholarlyPlankInput; ScholarlyCharcoalInput = scholarlyCharcoalInput; ScholarlyFoodInput = scholarlyFoodInput;
             ArmsKitAttack = armsKitAttack; ArmsKitHpPermille = armsKitHpPermille; ScholarlyPerResearch = scholarlyPerResearch;
-            ScholarlyCostPermille = scholarlyCostPermille; ScholarlyTimePermille = scholarlyTimePermille;
+             ScholarlyCostPermille = scholarlyCostPermille; ScholarlyTimePermille = scholarlyTimePermille;
+             SiegePartsTicks = siegePartsTicks; MechanismTicks = mechanismTicks;
+             SiegePartsHpPermille = siegePartsHpPermille; SiegePartsDamagePermille = siegePartsDamagePermille;
+             SiegePartsPerCastle = siegePartsPerCastle; SiegePartsCastleStonePermille = siegePartsCastleStonePermille;
+             MechanismBuildingTimePermille = mechanismBuildingTimePermille; MechanismBuildingMaterialPermille = mechanismBuildingMaterialPermille;
+             MechanismResearchCostPermille = mechanismResearchCostPermille; MechanismResearchTimePermille = mechanismResearchTimePermille;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

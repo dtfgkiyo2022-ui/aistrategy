@@ -32,6 +32,7 @@ namespace Rts.Simulation
         {
             DecideCraftTree1(faction);
             DecideCraftTree2(faction);
+            DecideCraftTree3(faction);
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
@@ -194,6 +195,29 @@ namespace Rts.Simulation
                 whole = LayRoutes(faction, route);
             }
             SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private void DecideCraftTree3(uint faction)
+        {
+            if (!CraftTree3Allowed(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            int assemblerIndex = OwnBuildingIndex(faction, BuildingKind.Assembler);
+            if (assemblerIndex < 0) return;
+            ref var assembler = ref world.Buildings[assemblerIndex];
+            if (!assembler.Alive || !assembler.Complete) return;
+            bool hasRamBuilding = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0;
+            RecipeKind wanted = hasRamBuilding ? RecipeKind.SiegeParts : (ShouldResearchWithAssembler(faction) ? RecipeKind.Mechanism : RecipeKind.SiegeParts);
+            if (assembler.Recipe != wanted && assembler.Timer == 0)
+                SetAssemblerRecipe(faction, assembler.Id, wanted);
+            if (economy.Mechanism < 1) return;
+            for (uint buildingId = 1; buildingId < world.NextBuildingId; buildingId++)
+            {
+                if (!OwnBuilding(faction, buildingId, out int buildingIndex)) continue;
+                var building = world.Buildings[buildingIndex];
+                if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level != 2) continue;
+                UpgradeProcessingBuilding(faction, buildingId);
+                return;
+            }
         }
 
         private RecipeKind PreferredAssemblerRecipe(uint faction)

@@ -57,10 +57,11 @@ namespace Rts.Simulation
                 }
                 else if (b.Kind == BuildingKind.Smelter)
                 {
-                    if (b.Timer == 0 && b.Input >= rules.OrePerMetal && b.Output < rules.BufferLimit)
+                    int oreInput = CraftInputFor(b, rules.OrePerMetal);
+                    if (b.Timer == 0 && b.Input >= oreInput && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.OrePerMetal;
-                        b.Timer = SmeltTicksFor(b.FactionId);
+                        b.Input -= oreInput;
+                        b.Timer = CraftTicksFor(b, SmeltTicksFor(b.FactionId));
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -91,11 +92,12 @@ namespace Rts.Simulation
                 else if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
                     // Both materials are consumed as one atomic operation on the same tick.
-                    if (b.Timer == 0 && b.Input >= 1 && b.InputSecondary >= 1 && b.Output < rules.BufferLimit)
+                    int steelInput = CraftInputFor(b, 1);
+                    if (b.Timer == 0 && b.Input >= steelInput && b.InputSecondary >= steelInput && b.Output < rules.BufferLimit)
                     {
-                        b.Input--;
-                        b.InputSecondary--;
-                        b.Timer = rules.SteelTicks;
+                        b.Input -= steelInput;
+                        b.InputSecondary -= steelInput;
+                        b.Timer = CraftTicksFor(b, rules.SteelTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -111,11 +113,12 @@ namespace Rts.Simulation
                     {
                         economy.Food--; b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.FletcherWoodInput && b.InputSecondary >= rules.FletcherFoodInput && b.Output < rules.BufferLimit)
+                    int fletcherWood = CraftInputFor(b, rules.FletcherWoodInput), fletcherFood = CraftInputFor(b, rules.FletcherFoodInput);
+                    if (b.Timer == 0 && b.Input >= fletcherWood && b.InputSecondary >= fletcherFood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.FletcherWoodInput;
-                        b.InputSecondary -= rules.FletcherFoodInput;
-                        b.Timer = rules.FletcherTicks;
+                        b.Input -= fletcherWood;
+                        b.InputSecondary -= fletcherFood;
+                        b.Timer = CraftTicksFor(b, rules.FletcherTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -129,10 +132,11 @@ namespace Rts.Simulation
                     {
                         economy.Food--; b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.MillFoodInput && b.Output < rules.BufferLimit)
+                    int millFood = CraftInputFor(b, rules.MillFoodInput);
+                    if (b.Timer == 0 && b.Input >= millFood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.MillFoodInput;
-                        b.Timer = rules.MillTicks;
+                        b.Input -= millFood;
+                        b.Timer = CraftTicksFor(b, rules.MillTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -151,11 +155,12 @@ namespace Rts.Simulation
                     {
                         economy.Wood--; b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.TackFoodInput && b.InputSecondary >= rules.TackWoodInput && b.Output < rules.BufferLimit)
+                    int tackFood = CraftInputFor(b, rules.TackFoodInput), tackWood = CraftInputFor(b, rules.TackWoodInput);
+                    if (b.Timer == 0 && b.Input >= tackFood && b.InputSecondary >= tackWood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.TackFoodInput;
-                        b.InputSecondary -= rules.TackWoodInput;
-                        b.Timer = rules.TackTicks;
+                        b.Input -= tackFood;
+                        b.InputSecondary -= tackWood;
+                        b.Timer = CraftTicksFor(b, rules.TackTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -171,6 +176,7 @@ namespace Rts.Simulation
                         economy.Wood--; b.Input++;
                     }
                     int plankInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreePlankWoodInput : rules.PlankWoodInput;
+                    plankInput = CraftInputFor(b, plankInput);
                     if (b.Timer == 0 && b.Input >= plankInput && b.Output < rules.BufferLimit)
                     {
                         b.Input -= plankInput;
@@ -190,9 +196,10 @@ namespace Rts.Simulation
                         economy.Stone--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.CraftTreeStoneInput && b.Output < rules.BufferLimit)
+                    int stoneInput = CraftInputFor(b, rules.CraftTreeStoneInput);
+                    if (b.Timer == 0 && b.Input >= stoneInput && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.CraftTreeStoneInput;
+                        b.Input -= stoneInput;
                         b.Timer = CraftTicksFor(b, rules.CraftTreeStonecutterTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
@@ -214,13 +221,14 @@ namespace Rts.Simulation
                         economy.CutStone--;
                         b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.CraftTreeJoineryPlankInput
-                        && b.InputSecondary >= rules.CraftTreeJoineryCutStoneInput && b.Output < rules.BufferLimit)
+                    int joineryPlanks = CraftInputFor(b, rules.CraftTreeJoineryPlankInput), joineryStone = CraftInputFor(b, rules.CraftTreeJoineryCutStoneInput);
+                    if (b.Timer == 0 && b.Input >= joineryPlanks
+                        && b.InputSecondary >= joineryStone && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.CraftTreeJoineryPlankInput;
-                        b.InputSecondary -= rules.CraftTreeJoineryCutStoneInput;
-                        economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.CraftTreeJoineryPlankInput);
-                        economy.CutStoneConsumed = checked(economy.CutStoneConsumed + rules.CraftTreeJoineryCutStoneInput);
+                        b.Input -= joineryPlanks;
+                        b.InputSecondary -= joineryStone;
+                        economy.PlanksConsumed = checked(economy.PlanksConsumed + joineryPlanks);
+                        economy.CutStoneConsumed = checked(economy.CutStoneConsumed + joineryStone);
                         b.Timer = CraftTicksFor(b, rules.CraftTreeJoineryTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
@@ -256,11 +264,12 @@ namespace Rts.Simulation
                             b.InputSecondary++;
                             break;
                         }
-                    if (b.Timer == 0 && b.Input >= rules.BrickStoneInput && b.InputSecondary >= rules.BrickCharcoalInput && b.Output < rules.BufferLimit)
+                    int brickStone = CraftInputFor(b, rules.BrickStoneInput), brickCharcoal = CraftInputFor(b, rules.BrickCharcoalInput);
+                    if (b.Timer == 0 && b.Input >= brickStone && b.InputSecondary >= brickCharcoal && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.BrickStoneInput;
-                        b.InputSecondary -= rules.BrickCharcoalInput;
-                        b.Timer = rules.BrickTicks;
+                        b.Input -= brickStone;
+                        b.InputSecondary -= brickCharcoal;
+                        b.Timer = CraftTicksFor(b, rules.BrickTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -281,11 +290,12 @@ namespace Rts.Simulation
                         economy.Wood--;
                         b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.BookGoldInput && b.InputSecondary >= rules.BookWoodInput && b.Output < rules.BufferLimit)
+                    int bookGold = CraftInputFor(b, rules.BookGoldInput), bookWood = CraftInputFor(b, rules.BookWoodInput);
+                    if (b.Timer == 0 && b.Input >= bookGold && b.InputSecondary >= bookWood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.BookGoldInput;
-                        b.InputSecondary -= rules.BookWoodInput;
-                        b.Timer = rules.BookTicks;
+                        b.Input -= bookGold;
+                        b.InputSecondary -= bookWood;
+                        b.Timer = CraftTicksFor(b, rules.BookTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -302,10 +312,11 @@ namespace Rts.Simulation
                         economy.Food--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.PreserveFoodInput && b.Output < rules.BufferLimit)
+                    int preserveFood = CraftInputFor(b, rules.PreserveFoodInput);
+                    if (b.Timer == 0 && b.Input >= preserveFood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.PreserveFoodInput;
-                        b.Timer = rules.PreserveTicks;
+                        b.Input -= preserveFood;
+                        b.Timer = CraftTicksFor(b, rules.PreserveTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -327,11 +338,12 @@ namespace Rts.Simulation
                         economy.Ore--;
                         b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.JewelStoneInput && b.InputSecondary >= rules.JewelOreInput && b.Output < rules.BufferLimit)
+                    int jewelStone = CraftInputFor(b, rules.JewelStoneInput), jewelOre = CraftInputFor(b, rules.JewelOreInput);
+                    if (b.Timer == 0 && b.Input >= jewelStone && b.InputSecondary >= jewelOre && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.JewelStoneInput;
-                        b.InputSecondary -= rules.JewelOreInput;
-                        b.Timer = rules.JewelTicks;
+                        b.Input -= jewelStone;
+                        b.InputSecondary -= jewelOre;
+                        b.Timer = CraftTicksFor(b, rules.JewelTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -348,10 +360,11 @@ namespace Rts.Simulation
                         economy.Wood--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.TradeGoodsWoodInput && b.Output < rules.BufferLimit)
+                    int tradeWood = CraftInputFor(b, rules.TradeGoodsWoodInput);
+                    if (b.Timer == 0 && b.Input >= tradeWood && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.TradeGoodsWoodInput;
-                        b.Timer = rules.TradeGoodsTicks;
+                        b.Input -= tradeWood;
+                        b.Timer = CraftTicksFor(b, rules.TradeGoodsTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -374,12 +387,13 @@ namespace Rts.Simulation
                         economy.Food--;
                         b.InputSecondary++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.IncenseWoodInput && b.InputSecondary >= rules.IncenseFoodInput
+                    int incenseWood = CraftInputFor(b, rules.IncenseWoodInput), incenseFood = CraftInputFor(b, rules.IncenseFoodInput);
+                    if (b.Timer == 0 && b.Input >= incenseWood && b.InputSecondary >= incenseFood
                         && b.Output < rules.BufferLimit && economy.Incense < rules.IncenseStockLimit)
                     {
-                        b.Input -= rules.IncenseWoodInput;
-                        b.InputSecondary -= rules.IncenseFoodInput;
-                        b.Timer = rules.IncenseTicks;
+                        b.Input -= incenseWood;
+                        b.InputSecondary -= incenseFood;
+                        b.Timer = CraftTicksFor(b, rules.IncenseTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -395,11 +409,12 @@ namespace Rts.Simulation
                         economy.Wood--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.CharmWoodInput
+                    int charmWood = CraftInputFor(b, rules.CharmWoodInput);
+                    if (b.Timer == 0 && b.Input >= charmWood
                         && b.Output < rules.BufferLimit && economy.Charms < rules.CharmStockLimit)
                     {
-                        b.Input -= rules.CharmWoodInput;
-                        b.Timer = rules.CharmTicks;
+                        b.Input -= charmWood;
+                        b.Timer = CraftTicksFor(b, rules.CharmTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -415,11 +430,12 @@ namespace Rts.Simulation
                         economy.Wood--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.RepairKitWoodInput
+                    int repairWood = CraftInputFor(b, rules.RepairKitWoodInput);
+                    if (b.Timer == 0 && b.Input >= repairWood
                         && b.Output < rules.BufferLimit && economy.RepairKits < rules.RepairKitStockLimit)
                     {
-                        b.Input -= rules.RepairKitWoodInput;
-                        b.Timer = rules.RepairKitTicks;
+                        b.Input -= repairWood;
+                        b.Timer = CraftTicksFor(b, rules.RepairKitTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -434,11 +450,12 @@ namespace Rts.Simulation
                     {
                         economy.Wood--; b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.ToolWoodInput
+                    int toolWood = CraftInputFor(b, rules.ToolWoodInput);
+                    if (b.Timer == 0 && b.Input >= toolWood
                         && b.Output < rules.BufferLimit && economy.Tools < rules.ToolStockLimit)
                     {
-                        b.Input -= rules.ToolWoodInput;
-                        b.Timer = rules.ToolTicks;
+                        b.Input -= toolWood;
+                        b.Timer = CraftTicksFor(b, rules.ToolTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
@@ -477,14 +494,24 @@ namespace Rts.Simulation
                 : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
                 : kind == BuildingKind.Lapidary ? ResourceKind.Gems
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
-                : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
-                : kind == BuildingKind.Joinery ? ResourceKind.Frames
-                : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
+                 : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
+                 : kind == BuildingKind.Joinery ? ResourceKind.Frames
+                 : kind == BuildingKind.Assembler ? (ResourceKind)0
+                 : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
         private int CraftTicksFor(BuildingState building, int baseTicks)
         {
             if (!CraftTree1On || building.Level < 2) return baseTicks;
+            if (building.Level >= 3 && CraftTree3On)
+                return Math.Max(1, checked((baseTicks * world.Config.Economy.MechanismBuildingTimePermille + 999) / 1000));
             return Math.Max(1, checked((baseTicks * 2 + 2) / 3));
+        }
+
+        private int CraftInputFor(BuildingState building, int baseInput)
+        {
+            if (CraftTree3On && building.Level >= 3)
+                return Math.Max(1, checked(baseInput * world.Config.Economy.MechanismBuildingMaterialPermille / 1000));
+            return baseInput;
         }
 
         private void AdvanceAssembler(ref BuildingState building, ref FactionEconomy economy)
@@ -501,6 +528,8 @@ namespace Rts.Simulation
                         else { economy.ArmsKit++; economy.ArmsKitProduced++; }
                     }
                     else if (building.Recipe == RecipeKind.Scholarly) { economy.Scholarly++; economy.ScholarlyProduced++; }
+                    else if (building.Recipe == RecipeKind.SiegeParts) { economy.SiegeParts++; economy.SiegePartsProduced++; }
+                    else if (building.Recipe == RecipeKind.Mechanism) { economy.Mechanism++; economy.MechanismProduced++; }
                     building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
                 }
                 return;
@@ -508,40 +537,72 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (building.Recipe == RecipeKind.Frames)
             {
-                Fill(ref economy.Planks, ref building.Input, rules.CraftTreeJoineryPlankInput);
+                int plankInput = CraftInputFor(building, rules.CraftTreeJoineryPlankInput);
+                int stoneInput = CraftInputFor(building, rules.CraftTreeJoineryCutStoneInput);
+                Fill(ref economy.Planks, ref building.Input, plankInput);
                 if (economy.CutStone > 0 || building.InputSecondaryKind == ResourceKind.CutStone)
                 {
-                    Fill(ref economy.CutStone, ref building.InputSecondary, rules.CraftTreeJoineryCutStoneInput);
+                    Fill(ref economy.CutStone, ref building.InputSecondary, stoneInput);
                     building.InputSecondaryKind = ResourceKind.CutStone;
                 }
                 else
                 {
-                    Fill(ref economy.Bricks, ref building.InputSecondary, rules.CraftTreeJoineryCutStoneInput);
+                    Fill(ref economy.Bricks, ref building.InputSecondary, stoneInput);
                     building.InputSecondaryKind = ResourceKind.Bricks;
                 }
-                if (building.Input < rules.CraftTreeJoineryPlankInput || building.InputSecondary < rules.CraftTreeJoineryCutStoneInput) return;
-                if (building.InputSecondaryKind == ResourceKind.Bricks) economy.BricksConsumed = checked(economy.BricksConsumed + rules.CraftTreeJoineryCutStoneInput);
-                else economy.CutStoneConsumed = checked(economy.CutStoneConsumed + rules.CraftTreeJoineryCutStoneInput);
+                if (building.Input < plankInput || building.InputSecondary < stoneInput) return;
+                if (building.InputSecondaryKind == ResourceKind.Bricks) economy.BricksConsumed = checked(economy.BricksConsumed + stoneInput);
+                else economy.CutStoneConsumed = checked(economy.CutStoneConsumed + stoneInput);
                 building.Timer = CraftTicksFor(building, rules.CraftTreeJoineryTicks);
                 return;
             }
             if (building.Recipe == RecipeKind.ArmsKit)
             {
-                Fill(ref economy.Planks, ref building.Input, rules.ArmsKitPlankInput);
+                int plankInput = CraftInputFor(building, rules.ArmsKitPlankInput);
+                Fill(ref economy.Planks, ref building.Input, plankInput);
                 if (building.InputSecondaryKind == 0)
                     building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel : ResourceKind.Charcoal;
-                if (building.InputSecondaryKind == ResourceKind.Steel) Fill(ref economy.Steel, ref building.InputSecondary, rules.ArmsKitSteelInput);
-                else Fill(ref economy.Charcoal, ref building.InputSecondary, rules.ArmsKitCharcoalInput);
-                if (building.Input < rules.ArmsKitPlankInput || building.InputSecondary < (building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : rules.ArmsKitCharcoalInput)) return;
+                if (building.InputSecondaryKind == ResourceKind.Steel) Fill(ref economy.Steel, ref building.InputSecondary, CraftInputFor(building, rules.ArmsKitSteelInput));
+                else Fill(ref economy.Charcoal, ref building.InputSecondary, CraftInputFor(building, rules.ArmsKitCharcoalInput));
+                if (building.Input < CraftInputFor(building, rules.ArmsKitPlankInput) || building.InputSecondary < CraftInputFor(building, building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : rules.ArmsKitCharcoalInput)) return;
                 building.Timer = CraftTicksFor(building, rules.ArmsKitTicks);
                 return;
             }
-            Fill(ref economy.Planks, ref building.Input, rules.ScholarlyPlankInput);
-            Fill(ref economy.Charcoal, ref building.InputSecondary, rules.ScholarlyCharcoalInput);
-            Fill(ref economy.Food, ref building.InputTertiary, rules.ScholarlyFoodInput);
-            building.InputSecondaryKind = ResourceKind.Charcoal;
-            if (building.Input < rules.ScholarlyPlankInput || building.InputSecondary < rules.ScholarlyCharcoalInput || building.InputTertiary < rules.ScholarlyFoodInput) return;
-            building.Timer = CraftTicksFor(building, rules.ScholarlyTicks);
+            if (building.Recipe == RecipeKind.Scholarly)
+            {
+                Fill(ref economy.Planks, ref building.Input, CraftInputFor(building, rules.ScholarlyPlankInput));
+                Fill(ref economy.Charcoal, ref building.InputSecondary, CraftInputFor(building, rules.ScholarlyCharcoalInput));
+                Fill(ref economy.Food, ref building.InputTertiary, CraftInputFor(building, rules.ScholarlyFoodInput));
+                building.InputSecondaryKind = ResourceKind.Charcoal;
+                if (building.Input < CraftInputFor(building, rules.ScholarlyPlankInput) || building.InputSecondary < CraftInputFor(building, rules.ScholarlyCharcoalInput) || building.InputTertiary < CraftInputFor(building, rules.ScholarlyFoodInput)) return;
+                building.Timer = CraftTicksFor(building, rules.ScholarlyTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.SiegeParts)
+            {
+                int frames = CraftInputFor(building, rules.SiegePartsFramesInput), arms = CraftInputFor(building, rules.SiegePartsArmsKitInput);
+                Fill(ref economy.Frames, ref building.Input, frames);
+                Fill(ref economy.ArmsKit, ref building.InputSecondary, arms);
+                building.InputSecondaryKind = ResourceKind.ArmsKit;
+                if (building.Input < frames || building.InputSecondary < arms) return;
+                economy.FramesConsumed = checked(economy.FramesConsumed + frames);
+                economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
+                building.Timer = CraftTicksFor(building, rules.SiegePartsTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.Mechanism)
+            {
+                int arms = CraftInputFor(building, rules.MechanismArmsKitInput), scholarly = CraftInputFor(building, rules.MechanismScholarlyInput), stone = CraftInputFor(building, rules.MechanismCutStoneInput);
+                Fill(ref economy.ArmsKit, ref building.Input, arms);
+                Fill(ref economy.Scholarly, ref building.InputSecondary, scholarly);
+                Fill(ref economy.CutStone, ref building.InputTertiary, stone);
+                building.InputSecondaryKind = ResourceKind.Scholarly;
+                if (building.Input < arms || building.InputSecondary < scholarly || building.InputTertiary < stone) return;
+                economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
+                economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + scholarly);
+                economy.CutStoneConsumed = checked(economy.CutStoneConsumed + stone);
+                building.Timer = CraftTicksFor(building, rules.MechanismTicks);
+            }
         }
 
         private static void Fill(ref int stock, ref int slot, int required)
@@ -555,7 +616,8 @@ namespace Rts.Simulation
         {
             if (!AssemblerAllowed(faction) || !OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-            if (!building.Alive || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Scholarly) return;
+            if (!building.Alive || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Mechanism
+                || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
             building.Recipe = recipe;
             building.Timer = 0;
@@ -580,6 +642,14 @@ namespace Rts.Simulation
             else if (building.Recipe == RecipeKind.Scholarly)
             {
                 economy.Planks += building.Input; economy.Charcoal += building.InputSecondary; economy.Food += building.InputTertiary;
+            }
+            else if (building.Recipe == RecipeKind.SiegeParts)
+            {
+                economy.Frames += building.Input; economy.ArmsKit += building.InputSecondary;
+            }
+            else if (building.Recipe == RecipeKind.Mechanism)
+            {
+                economy.ArmsKit += building.Input; economy.Scholarly += building.InputSecondary; economy.CutStone += building.InputTertiary;
             }
             building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
         }
@@ -643,7 +713,9 @@ namespace Rts.Simulation
                 }
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None)
                 {
-                    if (item == ResourceKind.Planks && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Planks && (b.Recipe == RecipeKind.Frames || b.Recipe == RecipeKind.ArmsKit || b.Recipe == RecipeKind.Scholarly) && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.Frames && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.ArmsKit && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
                     if (b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Steel && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Steel; b.InputSecondary++; return true; }
                     if ((b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Charcoal || b.Recipe == RecipeKind.Scholarly && item == ResourceKind.Charcoal)
@@ -653,6 +725,12 @@ namespace Rts.Simulation
                     { b.InputSecondaryKind = ResourceKind.CutStone; b.InputSecondary++; return true; }
                     if (b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && b.InputSecondary < rules.BufferLimit)
                     { b.InputSecondaryKind = ResourceKind.Bricks; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.ArmsKit && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.ArmsKit; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.Scholarly && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.Scholarly; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.CutStone && b.InputTertiary < rules.BufferLimit)
+                    { b.InputTertiary++; return true; }
                 }
                 if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone && b.Input < rules.BufferLimit)
                 {

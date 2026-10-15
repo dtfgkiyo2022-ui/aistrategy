@@ -63,6 +63,7 @@ namespace Rts.Simulation
         public int FramesConsumedBuildings { get; internal set; }
         public int FramesConsumedUpgrades { get; internal set; }
         public int Level2Buildings { get; internal set; }
+        public int Level3Buildings { get; internal set; }
         public int Books { get; internal set; }
         public int BooksProduced { get; internal set; }
         public int BooksConsumed { get; internal set; }
@@ -77,6 +78,14 @@ namespace Rts.Simulation
         public int ScholarlyProduced { get; internal set; }
         public int ScholarlyConsumed { get; internal set; }
         public int ScholarlyUsedResearch { get; internal set; }
+        public int SiegeParts { get; internal set; }
+        public int SiegePartsProduced { get; internal set; }
+        public int SiegePartsConsumed { get; internal set; }
+        public int SiegePartsEnhancedRams { get; internal set; }
+        public int Mechanism { get; internal set; }
+        public int MechanismProduced { get; internal set; }
+        public int MechanismConsumed { get; internal set; }
+        public int MechanismUsedResearch { get; internal set; }
         public int PreservesProduced { get; internal set; }
         public int PreservesConvertedFood { get; internal set; }
         public int JewelsProduced { get; internal set; }
@@ -194,6 +203,7 @@ namespace Rts.Simulation
                     FramesConsumedBuildings = economy.FramesConsumedBuildings,
                     FramesConsumedUpgrades = economy.FramesConsumedUpgrades,
                     Level2Buildings = CountLevel2Buildings(world.Factions[f].Id),
+                    Level3Buildings = CountLevel3Buildings(world.Factions[f].Id),
                     Books = economy.Books,
                     BooksProduced = economy.BooksProduced,
                     BooksConsumed = economy.BooksConsumed,
@@ -208,6 +218,14 @@ namespace Rts.Simulation
                     ScholarlyProduced = economy.ScholarlyProduced,
                     ScholarlyConsumed = economy.ScholarlyConsumed,
                     ScholarlyUsedResearch = economy.ScholarlyUsedResearch,
+                    SiegeParts = economy.SiegeParts,
+                    SiegePartsProduced = economy.SiegePartsProduced,
+                    SiegePartsConsumed = economy.SiegePartsConsumed,
+                    SiegePartsEnhancedRams = economy.SiegePartsEnhancedRams,
+                    Mechanism = economy.Mechanism,
+                    MechanismProduced = economy.MechanismProduced,
+                    MechanismConsumed = economy.MechanismConsumed,
+                    MechanismUsedResearch = economy.MechanismUsedResearch,
                     PreservesProduced = economy.PreservesProduced,
                     PreservesConvertedFood = economy.PreservesConvertedFood,
                     JewelsProduced = economy.JewelsProduced,
@@ -287,6 +305,17 @@ namespace Rts.Simulation
             {
                 var building = world.Buildings[i];
                 if (building.Alive && building.FactionId == factionId && building.Level >= 2) count++;
+            }
+            return count;
+        }
+
+        private int CountLevel3Buildings(uint factionId)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.FactionId == factionId && building.Level >= 3) count++;
             }
             return count;
         }

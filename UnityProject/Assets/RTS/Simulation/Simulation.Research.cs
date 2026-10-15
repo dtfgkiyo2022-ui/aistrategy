@@ -336,7 +336,8 @@ namespace Rts.Simulation
             // effect at the common start point so both the player's EconomyCommand.Research route and the
             // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
             bool bookResearch = BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
-            bool scholarlyResearch = CraftTree2On && !bookResearch && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch;
+            bool mechanismResearch = CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech) && economy.Mechanism >= 1;
+            bool scholarlyResearch = CraftTree2On && !bookResearch && !mechanismResearch && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch;
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);
@@ -352,6 +353,15 @@ namespace Rts.Simulation
                 oreForMetal = ScholarlyDiscount(oreForMetal, world.Config.Economy.ScholarlyCostPermille);
                 gems = ScholarlyDiscount(gems, world.Config.Economy.ScholarlyCostPermille);
                 gold = ScholarlyDiscount(gold, world.Config.Economy.ScholarlyCostPermille);
+            }
+            if (mechanismResearch)
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.MechanismResearchCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.MechanismResearchCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.MechanismResearchCostPermille);
+                oreForMetal = ScholarlyDiscount(oreForMetal, world.Config.Economy.MechanismResearchCostPermille);
+                gems = ScholarlyDiscount(gems, world.Config.Economy.MechanismResearchCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.MechanismResearchCostPermille);
             }
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
@@ -374,9 +384,16 @@ namespace Rts.Simulation
                 economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + world.Config.Economy.ScholarlyPerResearch);
                 economy.ScholarlyUsedResearch++;
             }
+            if (mechanismResearch)
+            {
+                economy.Mechanism = checked(economy.Mechanism - 1);
+                economy.MechanismConsumed = checked(economy.MechanismConsumed + 1);
+                economy.MechanismUsedResearch++;
+            }
             smith.Researching = tech;
             int ticks = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : fishing ? FishingTicks(tech) : tollgate ? TollgateTicks(tech) : metropolis ? MetropolisTicks(tech) : sanctuary ? SanctuaryTicks(tech) : TechTicks(tech);
             smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000))
+                : mechanismResearch ? Math.Max(1, checked((ticks * world.Config.Economy.MechanismResearchTimePermille + 999) / 1000))
                 : scholarlyResearch ? Math.Max(1, checked((ticks * world.Config.Economy.ScholarlyTimePermille + 999) / 1000)) : ticks;
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
@@ -699,6 +716,12 @@ namespace Rts.Simulation
 
         private int ScholarlyDiscount(int cost, int permille)
             => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
+
+        private bool IsThirdAgeResearch(TechKind tech)
+            => tech == TechKind.Siegecraft || tech == TechKind.Masonry || tech == TechKind.Banking || tech == TechKind.GemArmor
+                || tech == BridgeTech.SiegeDeployment || tech == MountainTech.MountainFort || tech == FishingTech.DriedFish
+                || tech == CultTech.MartyrBlessing || tech == TollgateTech.GateNetwork || tech == MetropolisTech.CitizenMilitia
+                || tech == SanctuaryTech.HolyRelic;
 
         private bool AcademyOffenseReady(uint faction)
         {
