@@ -56,15 +56,20 @@ namespace Rts.Core.Tests
 
         /// <summary>
         /// Early arms (10-10): from its first civilisation age a side fields its civilisation's second unit (archers or
-        /// light cavalry), so a ten-minute army is no longer infantry alone. Seed 4 puts both sides in the cavalry
-        /// civilisation by 5.5 minutes (measured).
+        /// light cavalry), so a ten-minute army is no longer infantry alone. Both sides reserve the cavalry civilisation:
+        /// the choice by the ground changed with the resource fog (10-15), and this test is about the second unit.
         /// </summary>
         [Test]
         public void AutomaticSidesFieldMoreThanInfantryByTenMinutes()
         {
             var sim = new Battle(LiveGameRules.Create(4, false, true, false, false));
+            var reserve = new[]
+            {
+                new ScheduledInput(1, 0, 1, EconomyCommand.Advance(1, 1, CivKind.Cavalry)),
+                new ScheduledInput(1, 0, 2, EconomyCommand.Advance(2, 1, CivKind.Cavalry)),
+            };
             for (long tick = 1; tick <= 12000 && !sim.Capture(1).Result.HasEnded; tick++)
-                sim.Step(tick, Array.Empty<ScheduledInput>());
+                sim.Step(tick, tick == 1 ? reserve : Array.Empty<ScheduledInput>());
             int others = 0;
             for (uint faction = 1; faction <= 2; faction++)
                 others += sim.Capture(faction).Units.Count(u => u.IsOwn
