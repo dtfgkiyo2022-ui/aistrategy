@@ -633,6 +633,8 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
                 y += 26f;
+                GUI.Label(new Rect(x, y, w, 22f), UiText.StorageDescription());
+                y += 26f;
             }
             ModeButton(new Rect(right, y, half - 70f, 22f), Mode.RemoveBelt, UiText.T("Remove", "ベルトを外す"));
             GUI.Label(new Rect(right + half - 66f, y, 66f, 22f), UiText.T("R: ", "R：") + FacingName(facing));

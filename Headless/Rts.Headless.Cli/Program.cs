@@ -137,7 +137,7 @@ internal static class Program
             for(int i=1;i<args.Length;i++)
             {
                 string key=args[i]; if(!key.StartsWith("--",StringComparison.Ordinal))throw new InvalidDataException("Expected option.");
-                string value=key=="--allow-build-mismatch"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"||key=="--ages"||key=="--all-civs"||key=="--large"||key=="--core-defence"||key=="--army-growth"||key=="--economy-scale"||key=="--late-push"||key=="--profile"||key=="--west-auto-off"||key=="--east-auto-off"||key=="--craft-timing-off"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
+                string value=key=="--allow-build-mismatch"||key=="--alloc-types"||key=="--economy"||key=="--industry"||key=="--terrain"||key=="--ages"||key=="--all-civs"||key=="--large"||key=="--core-defence"||key=="--army-growth"||key=="--economy-scale"||key=="--late-push"||key=="--profile"||key=="--west-auto-off"||key=="--east-auto-off"||key=="--craft-timing-off"||key=="--drop-site-limit-off"||key=="--ai-belts-off"?"true":(++i<args.Length?args[i]:throw new InvalidDataException("Missing option value."));
                 if(!options.TryAdd(key,value))
                 {
                     if(key == "--west-param" || key == "--east-param" || key == "--west-signal") options[key] += "\n" + value;

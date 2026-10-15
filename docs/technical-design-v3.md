@@ -1468,3 +1468,10 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 - 決着は平均 19885 → 18990 tick（16.6分 → 15.8分）。早まった 23・延びた 16
 - 西（連鎖の文明）の勝ちは 39 試合中 19 → 24。**勝者が変わったのは 17 試合**（Codex の報告書の「39/39」は数え間違い）
 - **関所は3試合とも決着が延びた**（種1 19030→26987 tick で勝ちが負けに）。教団 種1・漁労 種1 も延びた。食料が減るぶん、ほかの建物の順番と取り合いになっている。文明ごとの比を持たせるかは、釣り合いをまとめて見るときに決める
+
+### 32.40 生資源をStorageへ搬入するAIベルトと集積所上限
+
+- `DropSiteLimit` は `AliveDropSites` で陣営ごとのAliveな集積所を数え、建設中も含めて `DropSiteMax` を配置時・AI自動配置時に適用する。
+- `AiBelts` は Food/Wood/Stone/Gold/Ore を対象にし、Civ許可時の LumberCamp/Quarry/Mine を優先し、それ以外はStorageへフォールバックする。Storage出口から自己コアへ実在ベルトで到達する場合だけ村人荷下ろしと搬送を許可する。
+- Storage経路は通常ベルト、Splitter左枝、Underground pairを辿る。容量・資源種別・接続性を村人搬入と加工先搬入の両方で検証し、切断Storageには搬入しない。
+- フラグOFFのシナリオバイト列とシミュレーションハッシュ一致、建設中を含む人間配置上限、AI各tick上限、接続/切断Storage、12,000tickリプレイをヘッドレス個別テストで確認した。標準seed 1–8とCavalry対Agrarian seed 1–3の `tactic-match` 測定は `dropsite_limit/report.md` に記録した。

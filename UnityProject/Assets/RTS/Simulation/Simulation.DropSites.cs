@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Rts.Contracts;
 
@@ -14,6 +15,8 @@ namespace Rts.Simulation
 
         /// <summary>Early arms: at most this many own drop-offs, and none by a point with less than this left.</summary>
         private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
+        private long storageConnectivityTick = long.MinValue;
+        private bool[] storageConnectivity;
 
         private int AliveDropSites(uint faction)
         {
@@ -27,7 +30,7 @@ namespace Rts.Simulation
         }
 
         /// <summary>Where <paramref name="v"/> unloads now, and how close it must come.</summary>
-        private (SimPoint point, Fix64 reach) DropOff(VillagerState v)
+        private (SimPoint point, Fix64 reach, uint storageId) DropOff(VillagerState v)
         {
             var rules = world.Config.Economy;
             var point = OwnCore(v.FactionId).Definition.Position;
@@ -36,7 +39,7 @@ namespace Rts.Simulation
             {
                 var target = world.Buildings[v.HaulTo - 1];
                 if (target.Alive && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
-                    return (world.Map.Center(target.WorkCell), GatherReach);
+                    return (world.Map.Center(target.WorkCell), GatherReach, 0);
             }
             if (FishingAllowed(v.FactionId) && v.CarryKind == ResourceKind.Food && v.NodeId > 0 && v.NodeId <= world.Nodes.Length
                 && world.Nodes[v.NodeId - 1].Fishing)
@@ -71,8 +74,9 @@ namespace Rts.Simulation
                     }
                 }
             }
-            if (!AgesOn) return (point, reach);
+            if (!AgesOn) return (point, reach, 0);
             BigInteger best = DistanceSquared(v.Position, point);
+            uint storageId = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
@@ -85,7 +89,80 @@ namespace Rts.Simulation
                 point = spot;
                 reach = rules.DropOffMargin;
             }
-            return (point, reach);
+            if (AiBeltsOn && IsRawResource(v.CarryKind))
+            {
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var storage = world.Buildings[i];
+                    if (!storage.Alive || !storage.Complete || storage.FactionId != v.FactionId || storage.Kind != BuildingKind.Storage
+                        || !StorageCanAccept(storage, v.CarryKind) || !StorageFeedsCore(storage, v.FactionId)) continue;
+                    var spot = world.Map.Center(storage.WorkCell);
+                    var distance = DistanceSquared(v.Position, spot);
+                    if (distance >= best) continue;
+                    best = distance;
+                    point = spot;
+                    reach = GatherReach;
+                    storageId = storage.Id;
+                }
+            }
+            return (point, reach, storageId);
+        }
+
+        private static bool IsRawResource(ResourceKind kind)
+            => kind == ResourceKind.Food || kind == ResourceKind.Wood || kind == ResourceKind.Stone
+                || kind == ResourceKind.Gold || kind == ResourceKind.Ore;
+
+        /// <summary>Returns true only when the storage output already has a directed belt path into this faction's core.</summary>
+        private bool StorageFeedsCore(BuildingState storage, uint faction)
+        {
+            if (!storage.Alive || !storage.Complete || storage.FactionId != faction || storage.Kind != BuildingKind.Storage) return false;
+            RefreshStorageConnectivity();
+            return storage.Id < storageConnectivity.Length && storageConnectivity[storage.Id];
+        }
+
+        private void RefreshStorageConnectivity()
+        {
+            if (storageConnectivityTick == world.Tick) return;
+            storageConnectivityTick = world.Tick;
+            storageConnectivity = new bool[Math.Max(1, world.NextBuildingId)];
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var storage = world.Buildings[i];
+                if (storage.Alive && storage.Complete && storage.Kind == BuildingKind.Storage)
+                    storageConnectivity[storage.Id] = StorageHasBeltPathToCore(storage, storage.FactionId);
+            }
+        }
+
+        private bool StorageHasBeltPathToCore(BuildingState storage, uint faction)
+        {
+            int start = OutputCell(storage);
+            if (start < 0 || start >= world.Belts.Length || world.Belts[start].FactionId != faction) return false;
+            var seen = new bool[world.Belts.Length];
+            var queue = new int[world.Belts.Length];
+            int head = 0, tail = 0;
+            seen[start] = true;
+            queue[tail++] = start;
+            while (head < tail)
+            {
+                int cell = queue[head++];
+                ref var belt = ref world.Belts[cell];
+                if (Visit(BeltOutputCell(cell, ref belt))) return true;
+                if (belt.Component == BeltComponentKind.UndergroundEntrance && Visit(belt.PairCell)) return true;
+                if (belt.Component == BeltComponentKind.Splitter && Visit(BeltNext(cell, TurnLeft(belt.Facing)))) return true;
+            }
+            return false;
+
+            bool Visit(int next)
+            {
+                if (next < 0 || next >= world.Belts.Length) return false;
+                if (FeedsOwnCore(next, faction) && world.Belts[next].FactionId == 0) return true;
+                if (!seen[next] && world.Belts[next].FactionId == faction)
+                {
+                    seen[next] = true;
+                    queue[tail++] = next;
+                }
+                return false;
+            }
         }
 
         /// <summary>
@@ -150,7 +227,7 @@ namespace Rts.Simulation
 
         /// <summary>
         /// With the drop-site cap reached, give a distant raw point a receiver and route its output to the core.
-        /// Only existing raw-resource receivers are used; food and gold deliberately have no universal receiver here.
+        /// Existing raw-resource receivers are preferred where a civilisation has them; otherwise a storage is used.
         /// </summary>
         private void DecideAiRawBelts(uint faction)
         {
@@ -177,14 +254,15 @@ namespace Rts.Simulation
                 best = n;
             }
             if (best < 0) return;
-            var kind = RawReceiverKind(world.Nodes[best].Definition.Kind);
+            var kind = RawReceiverKind(faction, world.Nodes[best].Definition.Kind);
             uint receiver = FindRawReceiver(faction, kind, world.Nodes[best].Definition.Id);
             if (receiver == 0)
             {
                 if (economy.Wood < RawReceiverWoodCost(kind) + world.Config.Economy.AiBeltWoodReserve) return;
                 int preferred = world.Map.Cell(world.Nodes[best].Definition.Position);
                 receiver = kind == BuildingKind.LumberCamp ? PlaceLumberCamp(faction, preferred)
-                    : kind == BuildingKind.Quarry ? PlaceQuarry(faction, preferred) : PlaceMine(faction, preferred);
+                    : kind == BuildingKind.Quarry ? PlaceQuarry(faction, preferred)
+                    : kind == BuildingKind.Mine ? PlaceMine(faction, preferred) : PlaceStorage(faction, preferred, world.Nodes[best].Definition.Id);
                 if (receiver == 0) return;
             }
             var building = world.Buildings[receiver - 1];
@@ -196,17 +274,18 @@ namespace Rts.Simulation
         }
 
         private bool RawReceiverAllowed(uint faction, ResourceKind kind)
-            => kind == ResourceKind.Wood ? ForestryAllowed(faction)
-                : kind == ResourceKind.Stone ? MasonryAllowed(faction)
-                : kind == ResourceKind.Ore && MetalworkAllowed(faction);
+            => world.Config.Economy.BeltComponents && IsRawResource(kind);
 
-        private BuildingKind RawReceiverKind(ResourceKind kind)
-            => kind == ResourceKind.Wood ? BuildingKind.LumberCamp
-                : kind == ResourceKind.Stone ? BuildingKind.Quarry : BuildingKind.Mine;
+        private BuildingKind RawReceiverKind(uint faction, ResourceKind kind)
+            => kind == ResourceKind.Wood && ForestryAllowed(faction) ? BuildingKind.LumberCamp
+                : kind == ResourceKind.Stone && MasonryAllowed(faction) ? BuildingKind.Quarry
+                : kind == ResourceKind.Ore && MetalworkAllowed(faction) ? BuildingKind.Mine
+                : BuildingKind.Storage;
 
         private int RawReceiverWoodCost(BuildingKind kind)
             => kind == BuildingKind.LumberCamp ? world.Config.Economy.LumberCampWoodCost
-                : kind == BuildingKind.Quarry ? world.Config.Economy.QuarryWoodCost : world.Config.Economy.MineWoodCost;
+                : kind == BuildingKind.Quarry ? world.Config.Economy.QuarryWoodCost
+                : kind == BuildingKind.Mine ? world.Config.Economy.MineWoodCost : world.Config.Economy.StorageWoodCost;
 
         private uint FindRawReceiver(uint faction, BuildingKind kind, uint nodeId)
         {
@@ -214,6 +293,24 @@ namespace Rts.Simulation
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.FactionId == faction && b.Kind == kind && b.NodeId == nodeId) return b.Id;
+            }
+            return 0;
+        }
+
+        private uint PlaceStorage(uint faction, int preferredCell, uint nodeId)
+        {
+            if (!world.Config.Economy.BeltComponents) return 0;
+            int size = world.Config.Economy.StorageSizeCells;
+            int centre = preferredCell >= 0 ? preferredCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+            {
+                if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                PlaceBuildingAt(faction, BuildingKind.Storage, origin, side, 0);
+                world.Buildings[world.BuildingCount - 1].NodeId = nodeId;
+                return world.NextBuildingId - 1;
             }
             return 0;
         }

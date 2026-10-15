@@ -701,7 +701,7 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
-            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage
+            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsCore(target, target.FactionId)
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
                 int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
@@ -709,6 +709,23 @@ namespace Rts.Simulation
             }
             return 0;
         }
+
+        private int PutIntoStorage(ref BuildingState target, ResourceKind kind, int amount)
+        {
+            var rules = world.Config.Economy;
+            if (!rules.BeltComponents || !StorageFeedsCore(target, target.FactionId) || !StorageCanAccept(target, kind)) return 0;
+            int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
+            target.StorageKind = kind;
+            target.StorageCount += put;
+            target.Input = target.StorageCount;
+            target.Output = target.StorageCount;
+            return put;
+        }
+
+        private bool StorageCanAccept(BuildingState target, ResourceKind kind)
+            => target.Kind == BuildingKind.Storage && IsRawResource(kind)
+                && target.StorageCount < world.Config.Economy.StorageCapacity
+                && (target.StorageCount == 0 || target.StorageKind == kind);
 
         private bool CanHaulTo(BuildingKind source, BuildingKind destination, ResourceKind kind)
             => (world.Config.Economy.BeltComponents && destination == BuildingKind.Storage

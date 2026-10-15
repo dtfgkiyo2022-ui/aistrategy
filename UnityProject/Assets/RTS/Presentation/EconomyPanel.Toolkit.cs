@@ -348,6 +348,7 @@ namespace Rts.Presentation
                 Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石"), true, "", mode == Mode.Sorter);
                 Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト"), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
+                Add(rows, "build:storage-info", UiText.StorageDescription(), false, "", false, true);
             }
             Add(rows, "build:remove-belt", UiText.T("Remove", "ベルトを外す"), true, "", mode == Mode.RemoveBelt);
             Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);

@@ -17,5 +17,9 @@ namespace Rts.Presentation
             return Japanese ? "集積所 " + countText + "（木" + woodCost + "）"
                 : "Drop-off " + countText + " (" + woodCost + " wood)";
         }
+
+        public static string StorageDescription()
+            => T("Villagers can unload here; the exit belt sends it to the core",
+                "村人が荷を下ろせる（出口からベルトで送る）");
     }
 }

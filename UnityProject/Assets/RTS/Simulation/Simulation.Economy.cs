@@ -187,8 +187,19 @@ namespace Rts.Simulation
                         v.HaulTo = 0; v.Task = VillagerTask.Idle;
                         continue;
                     }
-                    AddStock(v.FactionId, v.CarryKind, v.Carry);
-                    v.Carry = 0;
+                    if (drop.storageId != 0)
+                    {
+                        if (drop.storageId > world.BuildingCount) continue;
+                        ref var storage = ref world.Buildings[drop.storageId - 1];
+                        int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
+                        v.Carry -= stored;
+                        if (v.Carry > 0) continue;
+                    }
+                    else
+                    {
+                        AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        v.Carry = 0;
+                    }
                     if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
                     {
                         v.Task = VillagerTask.ToCaravanMarket;
