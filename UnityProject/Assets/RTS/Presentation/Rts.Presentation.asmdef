@@ -3,7 +3,8 @@
   "rootNamespace": "Rts.Presentation",
   "references": [
     "Rts.Contracts",
-    "Unity.RenderPipelines.Universal.Runtime"
+    "Unity.RenderPipelines.Universal.Runtime",
+    "Unity.RenderPipelines.Core.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
