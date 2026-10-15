@@ -864,6 +864,16 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public bool GoodsMarketEnabled { get; }
         public int GoodsTradeLot { get; }
         public IReadOnlyList<GoodsPriceView> GoodsPrices { get; }
+        /// <summary>Manual placement uses the effective clearance and the read-only map snapshot below.</summary>
+        public bool AdjacentBuildings { get; }
+        public int BuildingClearanceCells { get; }
+        public int CoreClearanceCells { get; }
+        public int NodeClearanceCells { get; }
+        public int MapWidthCells { get; }
+        public int MapHeightCells { get; }
+        public int CellSizeMeters { get; }
+        public IReadOnlyList<bool> PassableCells { get; }
+        public IReadOnlyList<bool> RiverCells { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -872,6 +882,22 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
                 barracksWoodCost, villagerFoodCost, infantryFoodCost, infantryWoodCost, villagers, buildings, resources,
                 false, 0, 0, 0, 0, null, 0, 0, 0, 0, 0, false, EconomyPolicy.Balanced, false, CivKind.Primitive, CivKind.Primitive, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         {
+        }
+
+        public EconomyView(int wood, int stone, bool adjacentBuildings, int buildingClearanceCells, int coreClearanceCells,
+            int nodeClearanceCells, int mapWidthCells, int mapHeightCells, int cellSizeMeters,
+            IReadOnlyList<BuildingView> buildings, IReadOnlyList<ResourceView> resources, IReadOnlyList<BeltView> belts,
+            IReadOnlyList<bool> passableCells, IReadOnlyList<bool> riverCells)
+        {
+            Wood = wood; Stone = stone; AdjacentBuildings = adjacentBuildings;
+            BuildingClearanceCells = buildingClearanceCells; CoreClearanceCells = coreClearanceCells;
+            NodeClearanceCells = nodeClearanceCells; MapWidthCells = mapWidthCells; MapHeightCells = mapHeightCells;
+            CellSizeMeters = cellSizeMeters;
+            Buildings = ContractList.Copy(buildings ?? Array.Empty<BuildingView>());
+            Resources = ContractList.Copy(resources ?? Array.Empty<ResourceView>());
+            Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());
+            PassableCells = ContractList.Copy(passableCells ?? Array.Empty<bool>());
+            RiverCells = ContractList.Copy(riverCells ?? Array.Empty<bool>());
         }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
@@ -940,10 +966,13 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool repairKitsEnabled = false, int repairKits = 0, int repairYardWoodCost = 0, int repairYardSizeCells = 0,
              int repairKitTicks = 0, int repairKitWoodInput = 0, int repairKitKeepWood = 0, int repairKitStockLimit = 0,
              int repairKitMaxYards = 0, int repairKitWoodReserve = 0, int repairKitIntervalTicks = 0, int repairKitHp = 0,
-             bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
-             int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
-             int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0,
-             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null)
+              bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
+              int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
+              int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0,
+              bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null,
+              bool adjacentBuildings = false, int buildingClearanceCells = 2, int coreClearanceCells = 4,
+              int nodeClearanceCells = 2, int mapWidthCells = 0, int mapHeightCells = 0, int cellSizeMeters = 0,
+              IReadOnlyList<bool> passableCells = null, IReadOnlyList<bool> riverCells = null)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -996,6 +1025,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
             GoodsMarketEnabled = goodsMarketEnabled; GoodsTradeLot = goodsTradeLot;
             GoodsPrices = ContractList.Copy(goodsPrices ?? Array.Empty<GoodsPriceView>());
+            AdjacentBuildings = adjacentBuildings; BuildingClearanceCells = buildingClearanceCells;
+            CoreClearanceCells = coreClearanceCells; NodeClearanceCells = nodeClearanceCells;
+            MapWidthCells = mapWidthCells; MapHeightCells = mapHeightCells; CellSizeMeters = cellSizeMeters;
+            PassableCells = ContractList.Copy(passableCells ?? Array.Empty<bool>());
+            RiverCells = ContractList.Copy(riverCells ?? Array.Empty<bool>());
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;
