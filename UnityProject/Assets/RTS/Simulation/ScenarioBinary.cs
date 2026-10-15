@@ -139,7 +139,7 @@ private const int CraftTimingExtensionVersion = 1;
 private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
 private const int CraftBalanceExtensionId = 36;
 private const int CraftBalanceExtensionVersion = 1;
-private const int CraftBalanceExtensionDataLength = 3 * sizeof(int);
+private const int CraftBalanceExtensionDataLength = sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -1138,8 +1138,6 @@ private const int CraftBalanceExtensionDataLength = 3 * sizeof(int);
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
             {
-                writer.Write(e.CraftBalance ? 1 : 0);
-                writer.Write(e.CraftBalanceMarketSaveTicks);
                 writer.Write(e.CraftBalanceTollgateTiming);
                 return new ScenarioExtensionData { Id = CraftBalanceExtensionId, Version = CraftBalanceExtensionVersion, Data = stream.ToArray() };
             }
@@ -1150,11 +1148,8 @@ private const int CraftBalanceExtensionDataLength = 3 * sizeof(int);
             using (var stream = new MemoryStream(extension.Data, false))
             using (var reader = new BinaryReader(stream))
             {
-                int enabled = reader.ReadInt32();
-                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-balance flag.");
-                e.CraftBalance = enabled != 0;
-                e.CraftBalanceMarketSaveTicks = reader.ReadInt32();
                 e.CraftBalanceTollgateTiming = reader.ReadInt32();
+                e.CraftBalance = true;
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-balance extension data.");
             }
         }

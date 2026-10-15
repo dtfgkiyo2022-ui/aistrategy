@@ -57,7 +57,7 @@ namespace Rts.Simulation
         private void DecideHouse(uint faction)
         {
             // Saving to advance comes first: the base that makes it save already has its villagers.
-            if (!AgesOn || SavingToAdvance(faction) || CraftBalanceShouldDelayWood(faction)) return;
+            if (!AgesOn || SavingToAdvance(faction)) return;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int cap = PopCapFor(faction);

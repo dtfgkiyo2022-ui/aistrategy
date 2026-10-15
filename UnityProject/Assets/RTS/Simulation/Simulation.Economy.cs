@@ -43,24 +43,24 @@ namespace Rts.Simulation
                         EnqueueCoreVillager(faction);
                     }
                     ResumeUnbuilt(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideHouse(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideDropSite(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideTower(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideResearch(faction);
+                    DecideHouse(faction);
+                    DecideDropSite(faction);
+                    DecideTower(faction);
+                    DecideResearch(faction);
                     DecideMarket(faction);
                     DecideGoodsMarket(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideCaravanserai(faction);
+                    DecideCaravanserai(faction);
                     DecideCaravanRoute(faction);
                     DecideTradeRoute(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideSiege(faction);
+                    DecideSiege(faction);
                     DecideCrossUnit(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideCastle(faction);
+                    DecideCastle(faction);
                     DecideCaravanMercenary(faction);
                     DecideRepair(faction);
                     DecideBuildings(faction);
                     DecideTownVillagers(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideIndustry(faction);
-                    if (!CraftBalanceShouldDelayWood(faction)) DecideTollgate(faction);
+                    DecideIndustry(faction);
+                    DecideTollgate(faction);
                     DecideCavalryStable(faction);
                 }
                 finally { automaticEconomyAction = false; }

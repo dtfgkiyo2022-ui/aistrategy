@@ -123,9 +123,7 @@ namespace Rts.Simulation
             if (market < 0)
             {
                 // Same door as DecideMarket: no new market while the faction saves for its next age.
-                if (SavingToAdvance(faction)) return;
-                if (CraftBalanceShouldDelayWood(faction)) return;
-                if (economy.Wood < rules.MarketWoodCost + rules.GoodsMarketWoodReserve) return;
+                if (SavingToAdvance(faction) || economy.Wood < rules.MarketWoodCost + rules.GoodsMarketWoodReserve) return;
                 int origin = FindSite(faction, rules.MarketSizeCells);
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
                 return;
@@ -674,7 +672,6 @@ namespace Rts.Simulation
             int workshop = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop);
             if (workshop < 0)
             {
-                if (CraftBalanceShouldDelayWood(faction)) return;
                 if (world.Economies[faction - 1].Wood < rules.WorkshopWoodCost) return;
                 int origin = FindSite(faction, rules.WorkshopSizeCells);
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, origin, Facing.North, 0);

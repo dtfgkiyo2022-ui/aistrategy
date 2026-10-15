@@ -45,8 +45,8 @@ namespace Rts.Simulation
             }
             else if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood, rules.BarracksWoodCost))
                 PlaceBarracks(faction);
-            if (!CraftBalanceShouldDelayWood(faction)) DecideTown(faction);
-            if (!CraftBalanceShouldDelayWood(faction)) DecideSanctuaryShrine(faction);
+            DecideTown(faction);
+            DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
             if (CultAllowed(faction) && !DecideCultMonastery(faction)) return;
             ref var first = ref world.Buildings[barracks];

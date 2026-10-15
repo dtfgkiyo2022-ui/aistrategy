@@ -37,60 +37,20 @@ namespace Rts.Core.Tests
         }
 
         [Test]
-        public void CraftBalanceExtension36RoundTripsAllValues()
+        public void CraftBalanceExtension36RoundTripsTollgateValue()
         {
             var scenario = LiveGameRules.Create(7352UL, false, true, false, false);
             scenario.Economy.CraftBalance = true;
-            scenario.Economy.CraftBalanceMarketSaveTicks = 3333;
             scenario.Economy.CraftBalanceTollgateTiming = 1;
             scenario.Extensions = Array.Empty<ScenarioExtensionData>();
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             var extension = decoded.Extensions.Single(x => x.Id == 36);
             Assert.That(extension.Version, Is.EqualTo(1));
+            Assert.That(extension.Data.Length, Is.EqualTo(sizeof(int)));
             Assert.That(decoded.Economy.CraftBalance, Is.True);
-            Assert.That(decoded.Economy.CraftBalanceMarketSaveTicks, Is.EqualTo(3333));
             Assert.That(decoded.Economy.CraftBalanceTollgateTiming, Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
-        }
-
-        [Test]
-        public void AutomaticEconomyReservesMarketWoodButBarracksContinueAndTimeoutRestores()
-        {
-            var scenario = BalanceScenario(7353UL);
-            scenario.Economy.StartWood = 180;
-            scenario.Economy.CraftBalanceMarketSaveTicks = 10;
-            var sim = new Battle(scenario);
-            SetEconomy(sim, "Age", 1);
-            AddStock(sim, ResourceKind.Tack, 15);
-            SetTick(sim, 100);
-
-            Assert.That(InvokeBool(sim, "CraftBalanceShouldDelayWood", 1u), Is.True);
-            int woodBefore = EconomyValue<int>(sim, "Wood");
-            InvokeVoid(sim, "DecideHouse", 1u);
-            Assert.That(EconomyValue<int>(sim, "Wood"), Is.EqualTo(woodBefore));
-            InvokeVoid(sim, "DecideBuildings", 1u);
-            Assert.That(BuildingCount(sim, BuildingKind.Barracks), Is.GreaterThanOrEqualTo(1));
-
-            SetTick(sim, 111);
-            Assert.That(InvokeBool(sim, "CraftBalanceShouldDelayWood", 1u), Is.False);
-            Assert.That(EconomyValue<long>(sim, "CraftBalanceMarketSaveStartedTick"), Is.EqualTo(-1));
-        }
-
-        [Test]
-        public void MarketConstructionClearsCraftBalanceReservation()
-        {
-            var scenario = BalanceScenario(7354UL);
-            scenario.Economy.StartWood = 180;
-            var sim = new Battle(scenario);
-            SetEconomy(sim, "Age", 1);
-            AddStock(sim, ResourceKind.Tack, 15);
-            SetTick(sim, 100);
-            Assert.That(InvokeBool(sim, "CraftBalanceShouldDelayWood", 1u), Is.True);
-            SetEconomy(sim, "Wood", scenario.Economy.MarketWoodCost + scenario.Economy.GoodsMarketWoodReserve);
-            InvokeVoid(sim, "DecideGoodsMarket", 1u);
-            Assert.That(BuildingCount(sim, BuildingKind.Market), Is.EqualTo(1));
-            Assert.That(InvokeBool(sim, "CraftBalanceShouldDelayWood", 1u), Is.False);
         }
 
         [Test]
@@ -108,19 +68,6 @@ namespace Rts.Core.Tests
             SetEconomy(enabled, "Age", 1);
             SetEconomy(enabled, "Civ", CivKind.Tollgate);
             Assert.That(InvokeBool(enabled, "CraftTimingNeedsWood", 1u), Is.True);
-        }
-
-        [Test]
-        public void CraftBalanceDoesNotAffectHumanEconomy()
-        {
-            var scenario = BalanceScenario(7356UL);
-            var sim = new Battle(scenario);
-            SetEconomy(sim, "Age", 1);
-            SetEconomy(sim, "AutoOff", true);
-            AddStock(sim, ResourceKind.Tack, 15);
-            SetTick(sim, 100);
-            Assert.That(InvokeBool(sim, "CraftBalanceShouldDelayWood", 1u), Is.False);
-            Assert.That(EconomyValue<long>(sim, "CraftBalanceMarketSaveStartedTick"), Is.EqualTo(0));
         }
 
         [Test]
@@ -153,19 +100,9 @@ namespace Rts.Core.Tests
             scenario.Economy.GoodsMarket = true;
             scenario.Economy.CraftBalance = true;
             scenario.Economy.Tack = true;
-            scenario.Economy.CraftBalanceMarketSaveTicks = 6000;
             scenario.Extensions = Array.Empty<ScenarioExtensionData>();
             return scenario;
         }
-
-        private static void AddStock(Battle simulation, ResourceKind kind, int amount)
-            => SetEconomy(simulation, kind.ToString(), amount);
-
-        private static int BuildingCount(Battle simulation, BuildingKind kind)
-            => simulation.CaptureMatchPackSnapshot().Factions[0].Buildings.Single(x => x.Kind == kind.ToString()).Count;
-
-        private static void SetTick(Battle simulation, long tick)
-            => typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation).GetType().GetField("Tick", PrivateInstance).SetValue(typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation), tick);
 
         private static void SetEconomy(Battle simulation, string name, object value)
         {
@@ -180,19 +117,8 @@ namespace Rts.Core.Tests
             economiesField.SetValue(world, economies);
         }
 
-        private static T EconomyValue<T>(Battle simulation, string name)
-        {
-            var world = typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
-            var economies = (Array)world.GetType().GetField("Economies", PrivateInstance).GetValue(world);
-            var economy = economies.GetValue(0);
-            return (T)Convert.ChangeType(economy.GetType().GetField(name, PrivateInstance).GetValue(economy), typeof(T));
-        }
-
         private static bool InvokeBool(Battle simulation, string name, params object[] args)
             => (bool)typeof(Battle).GetMethod(name, PrivateInstance).Invoke(simulation, args);
-
-        private static void InvokeVoid(Battle simulation, string name, params object[] args)
-            => typeof(Battle).GetMethod(name, PrivateInstance).Invoke(simulation, args);
 
         private static string Hash(Battle simulation)
             => Convert.ToHexString(ReplayBinary.Hash(simulation.CaptureDiagnostic().CanonicalState));
