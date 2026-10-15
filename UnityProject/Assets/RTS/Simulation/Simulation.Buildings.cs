@@ -176,12 +176,12 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var candidate = world.Nodes[i];
-                if (candidate.Remaining <= 0 || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                if (!ResourceKnownToFaction(faction, i) || candidate.Remaining <= 0 || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
                 int count = 0, amount = 0;
                 for (int j = 0; j < world.Nodes.Length; j++)
                 {
                     var node = world.Nodes[j];
-                    if (node.Remaining <= 0 || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
+                    if (!ResourceKnownToFaction(faction, j) || node.Remaining <= 0 || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
                     count++; amount = checked(amount + node.Remaining);
                 }
                 if (count > bestCount || count == bestCount && (amount > bestAmount || amount == bestAmount && candidate.Definition.Id < world.Nodes[best].Definition.Id))
@@ -220,7 +220,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Remaining <= 0 || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
+                if (!ResourceKnownToFaction(town.FactionId, i) || node.Remaining <= 0 || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
                 var distance = DistanceSquared(from, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
                 { best = i; bestDistance = distance; }
@@ -390,7 +390,7 @@ namespace Rts.Simulation
                 BrickUpgraded = brickDefence, Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
-            if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(origin);
+            if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
             else if (kind == BuildingKind.Quarry) world.Buildings[index].Interval = world.Config.Economy.QuarryIntervalTicks;
             EvacuateFootprint(footprint);

@@ -40,6 +40,7 @@ internal static class TacticMatchCommand
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--craft-balance-off")) scenario.Economy.CraftBalance = false;
+        if (options.ContainsKey("--resource-fog-off")) scenario.Economy.ResourceFog = false;
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");
@@ -98,6 +99,13 @@ internal static class TacticMatchCommand
             pack = new MatchPackWriter(packPath, scenario, westName, eastName);
             pack.RecordInitial(simulation);
         }
+        StreamWriter resourceFogTrace = null;
+        if (options.TryGetValue("--resource-fog-trace-out", out var resourceFogTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(resourceFogTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            resourceFogTrace = new StreamWriter(resourceFogTracePath, false, new UTF8Encoding(false));
+        }
         // --timing-out: average milliseconds of one gateway step per 1000 ticks (tick,ms), to see a match slow down.
         var timing = options.ContainsKey("--timing-out") ? new List<string> { "tick,stepMs" } : null;
         double stepMs = 0;
@@ -120,6 +128,12 @@ internal static class TacticMatchCommand
             pack?.RecordTactic(eastResult, 2, eastName);
             long stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
+            if (resourceFogTrace != null)
+            {
+                var frame = simulation.Capture(1);
+                if (frame.Tick == 3000 || frame.Tick == 6000 || frame.Tick == 12000)
+                    WriteResourceFogTrace(resourceFogTrace, scenario, frame, simulation.Capture(2));
+            }
             if (researchTrace != null)
             {
                 var economy = simulation.Capture(1).Economy;
@@ -172,6 +186,15 @@ internal static class TacticMatchCommand
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
+        resourceFogTrace?.WriteLine(JsonSerializer.Serialize(new
+        {
+            @event = "summary",
+            tick = simulation.Capture(1).Tick,
+            ended = simulation.Capture(1).Result.HasEnded,
+            winner = simulation.Capture(1).Result.WinnerFactionId,
+            factions = new[] { simulation.Capture(1).Economy?.Civ.ToString(), simulation.Capture(2).Economy?.Civ.ToString() }
+        }));
+        resourceFogTrace?.Dispose();
         researchTrace?.WriteLine("{\"event\":\"summary\",\"thresholdTick\":" + firstBooksThresholdTick + ",\"researchStarts\":" + researchStarts + ",\"researchCompletions\":" + researchCompletions + ",\"finalBooks\":" + (simulation.Capture(1).Economy?.Books ?? 0) + "}");
         researchTrace?.Dispose();
         if (timing != null) File.WriteAllLines(options["--timing-out"], timing, new UTF8Encoding(false));
@@ -185,6 +208,32 @@ internal static class TacticMatchCommand
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
         return result.IsFault ? 4 : 0;
     }
+
+    private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)
+    {
+        writer.WriteLine(JsonSerializer.Serialize(new
+        {
+            tick = west.Tick,
+            allResourcePoints = scenario.ResourceNodes.Length,
+            factions = new[] { west, east }.Select(frame => new
+            {
+                factionId = frame.FactionId,
+                food = frame.Economy?.Food ?? 0,
+                wood = frame.Economy?.Wood ?? 0,
+                villagers = frame.Economy?.Villagers?.Count ?? 0,
+                civ = frame.Economy?.Civ.ToString(),
+                knownResourcePoints = scenario.Economy.ResourceFog
+                    ? scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)])
+                    : scenario.ResourceNodes.Length,
+                shownResourcePoints = frame.Economy?.Resources?.Count ?? 0
+            })
+        }));
+        writer.Flush();
+    }
+
+    private static int CellOf(ScenarioDefinition scenario, SimPoint point)
+        => (int)(point.Z.Raw / 65536 / scenario.Map.CellSizeMeters) * scenario.Map.WidthCells
+            + (int)(point.X.Raw / 65536 / scenario.Map.CellSizeMeters);
 
     private static void ReserveCivilisation(string civText, uint faction, CommandGateway gateway)
     {

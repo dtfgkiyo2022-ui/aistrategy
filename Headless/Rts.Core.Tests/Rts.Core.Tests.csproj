@@ -56,6 +56,7 @@
     <Compile Include="MonkConversionTests.cs" />
     <Compile Include="ProcessingChainTests.cs" />
     <Compile Include="RationsTests.cs" />
+    <Compile Include="ResourceFogTests.cs" />
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="MatchLengthMeasurementTests.cs" />
