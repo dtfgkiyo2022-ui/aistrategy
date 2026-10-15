@@ -22,7 +22,7 @@ namespace Rts.Core.Tests
             scenario.Economy.ProcessingChain = true;
             scenario.Economy.CraftTree1 = true;
             scenario.Economy.CraftTree2 = enabled;
-            scenario.Economy.CraftTreeJoineryPlankInput = 1;
+            scenario.Economy.CraftTreeJoineryPlankInput = 2;
             scenario.Economy.CraftTreeJoineryCutStoneInput = 1;
             scenario.Economy.CraftTreeJoineryTicks = 80;
             scenario.Economy.AssemblerSizeCells = 2;
@@ -148,7 +148,7 @@ namespace Rts.Core.Tests
             var call = typeof(Battle).GetMethod("AdvanceAssembler", PrivateInstance);
             var building = Activator.CreateInstance(buildingType);
             var economy = Activator.CreateInstance(economyType);
-            Set(building, "Recipe", RecipeKind.Frames); Set(economy, "Planks", 1); Set(economy, "Bricks", 1);
+            Set(building, "Recipe", RecipeKind.Frames); Set(economy, "Planks", 2); Set(economy, "Bricks", 1);
             var args = new object[] { building, economy }; call.Invoke(simulation, args);
             Assert.That(Get(args[1], "Bricks"), Is.EqualTo(0));
             Assert.That(Get(args[0], "Timer"), Is.GreaterThan(0));
@@ -168,6 +168,49 @@ namespace Rts.Core.Tests
             var discount = typeof(Battle).GetMethod("ScholarlyDiscount", PrivateInstance);
             Assert.That(discount.Invoke(simulation, new object[] { 100, 600 }), Is.EqualTo(60));
             Assert.That(discount.Invoke(simulation, new object[] { 101, 600 }), Is.EqualTo(61));
+        }
+
+        [Test, Explicit("30000 tickの旗オフ全tick一致検証")]
+        public void CraftTree2OffMatchesAfterRoundTripEveryTick()
+        {
+            var scenario = LiveGameRules.Create(5, false, true, false, false);
+            scenario.Economy.CraftTree2 = false;
+            var bytes = ScenarioBinary.Encode(scenario);
+            var decoded = ScenarioBinary.Decode(bytes);
+            Assert.That(decoded.Economy.CraftTree2, Is.False);
+            Assert.That(decoded.Extensions.Any(x => x.Id == 42), Is.False);
+            Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+            var left = new Battle(scenario);
+            var right = new Battle(decoded);
+            for (long tick = 1; tick <= 30000 && !left.Capture(1).Result.HasEnded; tick++)
+            {
+                left.Step(tick, Array.Empty<ScheduledInput>());
+                right.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
+                    Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
+            }
+        }
+
+        [Test, Explicit("長い自動対自動の検証")]
+        public void AutoEconomyBuildsAssemblerSelectsRecipeAndProducesCraftedGoods()
+        {
+            var simulation = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            for (long tick = 1; tick <= 30000 && !simulation.Capture(1).Result.HasEnded; tick++)
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+            bool selected = false, produced = false;
+            for (int faction = 0; faction < 2; faction++)
+            {
+                var economy = GetEconomyObject(simulation, faction);
+                produced |= Get(economy, "ArmsKitProduced") > 0 || Get(economy, "FineArmsKitProduced") > 0 || Get(economy, "ScholarlyProduced") > 0;
+                var world = typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
+                var buildings = (Array)world.GetType().GetField("Buildings", PrivateInstance).GetValue(world);
+                foreach (var building in buildings)
+                    if ((BuildingKind)building.GetType().GetField("Kind", PrivateInstance).GetValue(building) == BuildingKind.Assembler
+                        && (RecipeKind)building.GetType().GetField("Recipe", PrivateInstance).GetValue(building) != RecipeKind.None)
+                        selected = true;
+            }
+            Assert.That(selected, Is.True);
+            Assert.That(produced, Is.True);
         }
 
         [Test]
@@ -197,9 +240,14 @@ namespace Rts.Core.Tests
 
         private static int GetEconomy(Battle simulation, int index, string name)
         {
+            return Get(GetEconomyObject(simulation, index), name);
+        }
+
+        private static object GetEconomyObject(Battle simulation, int index)
+        {
             var world = typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
             var economies = (Array)world.GetType().GetField("Economies", PrivateInstance).GetValue(world);
-            return Get(economies.GetValue(index), name);
+            return economies.GetValue(index);
         }
     }
 }

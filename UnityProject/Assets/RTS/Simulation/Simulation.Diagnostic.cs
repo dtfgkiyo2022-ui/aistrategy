@@ -406,7 +406,7 @@ namespace Rts.Simulation
                     string n = "ProcessingLines[" + i.ToString(CultureInfo.InvariantCulture) + "].";
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
-                    w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
+                    w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId); w.Value(n + "AssemblerId", line.AssemblerId);
                     if (RationsOn) w.Value(n + "MillId", line.MillId);
                     if (BricksOn) { w.Value(n + "QuarryId", line.QuarryId); w.Value(n + "BrickKilnId", line.BrickKilnId); }
                     if (TackOn) w.Value(n + "SaddleryId", line.SaddleryId);

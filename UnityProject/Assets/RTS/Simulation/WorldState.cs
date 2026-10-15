@@ -247,7 +247,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }

@@ -151,20 +151,53 @@ namespace Rts.Simulation
             if (!AssemblerAllowed(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
+            int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.Assembler);
+            ref var line = ref world.ProcessingLines[lineIndex];
             int existing = OwnBuildingIndex(faction, BuildingKind.Assembler);
             if (existing >= 0)
             {
                 ref var current = ref world.Buildings[existing];
-                if (current.Alive && current.Recipe == RecipeKind.None && current.Complete)
-                    current.Recipe = ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
+                line.AssemblerId = current.Id;
+                if (current.Alive && current.Complete && current.Recipe == RecipeKind.None)
+                    current.Recipe = PreferredAssemblerRecipe(faction);
+            }
+            else
+            {
+                if (economy.Wood < rules.AssemblerWoodCost) return;
+                uint id = PlaceAssembler(faction);
+                if (id == 0) return;
+                line.AssemblerId = id;
                 return;
             }
-            if (!CompleteBarracks(faction) || economy.Wood < rules.AssemblerWoodCost + 20) return;
-            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), rules.AssemblerSizeCells);
-            if (origin < 0) return;
-            PlaceBuildingAt(faction, BuildingKind.Assembler, origin, Facing.North, 0);
-            world.Buildings[world.BuildingCount - 1].Recipe = ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
+
+            if (!BuildingReady(line.AssemblerId)) return;
+            ref var assembler = ref world.Buildings[line.AssemblerId - 1];
+            if (assembler.Recipe == RecipeKind.None) return;
+
+            // CraftTree1 makes charcoal legal for every civilisation, but the old automatic
+            // economy only built a kiln for the metallurgy/masonry chains.  The assembler owns
+            // one shared kiln line so its charcoal can reach the core stock.
+            if (!BuildingReady(line.KilnId))
+            {
+                if (BuildingPending(line.KilnId)) return;
+                if (economy.Wood < rules.CharcoalKilnWoodCost) return;
+                uint id = PlaceKiln(faction, assembler.OriginCell);
+                if (id != 0) line.KilnId = id;
+                return;
+            }
+            var kiln = world.Buildings[line.KilnId - 1];
+            var route = BeltRoute(faction, OutputCell(kiln), TakenForOtherLines(faction, lineIndex), next => FeedsOwnCore(next, faction));
+            bool whole = false;
+            if (route.cells != null)
+            {
+                SetLineBelts(lineIndex, route);
+                whole = LayRoutes(faction, route);
+            }
+            SetLineHaulers(faction, line, whole ? 0 : 1);
         }
+
+        private RecipeKind PreferredAssemblerRecipe(uint faction)
+            => ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
 
         private bool ShouldResearchWithAssembler(uint faction)
         {
@@ -174,7 +207,10 @@ namespace Rts.Simulation
                 if (b.Alive && b.Complete && b.FactionId == faction
                     && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy) && b.Researching != 0) return true;
             }
-            return world.Economies[faction - 1].Age >= 2 && OwnBuildingIndex(faction, BuildingKind.Blacksmith) >= 0;
+            // A completed blacksmith is not evidence that a research will start soon.  Choosing
+            // Scholarly on that guess left the stock unused in auto matches; ArmsKit is the
+            // useful default until a real research queue is visible.
+            return false;
         }
 
         private void DecideCraftTree1(uint faction)
@@ -286,6 +322,21 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     PlaceBuildingAt(faction, BuildingKind.Joinery, origin, side, 0);
+                    return world.NextBuildingId - 1;
+                }
+            return 0;
+        }
+
+        private uint PlaceAssembler(uint faction)
+        {
+            int size = world.Config.Economy.AssemblerSizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
                     return world.NextBuildingId - 1;
                 }
             return 0;

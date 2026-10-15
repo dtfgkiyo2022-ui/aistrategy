@@ -641,6 +641,19 @@ namespace Rts.Simulation
                 {
                     b.Input++; return true;
                 }
+                if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None)
+                {
+                    if (item == ResourceKind.Planks && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
+                    if (b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Steel && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Steel; b.InputSecondary++; return true; }
+                    if ((b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Charcoal || b.Recipe == RecipeKind.Scholarly && item == ResourceKind.Charcoal)
+                        && (b.InputSecondaryKind == 0 || b.InputSecondaryKind == ResourceKind.Charcoal) && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.Charcoal; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.Frames && item == ResourceKind.CutStone && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.CutStone; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.Frames && item == ResourceKind.Bricks && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.Bricks; b.InputSecondary++; return true; }
+                }
                 if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;

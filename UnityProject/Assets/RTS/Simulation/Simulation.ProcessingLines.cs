@@ -78,7 +78,7 @@ namespace Rts.Simulation
             if (existing >= 0)
             {
                 var current = world.ProcessingLines[existing];
-                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.StonecutterId != 0 || current.JoineryId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0 || current.CharmWorkshopId != 0 || current.RepairYardId != 0 || current.ToolShopId != 0)
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.StonecutterId != 0 || current.JoineryId != 0 || current.AssemblerId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0 || current.CharmWorkshopId != 0 || current.RepairYardId != 0 || current.ToolShopId != 0)
                 {
                     RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
                     return;
@@ -238,6 +238,29 @@ namespace Rts.Simulation
                 var route = BeltRoute(faction, OutputCell(joinery), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
                 if (route.cells == null) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
                 SetLineBelts(index, route); LayRoutes(faction, route); line.RequestPending = false; return true;
+            }
+            if (line.Kind == ProcessingLineKind.Assembler && AssemblerAllowed(faction))
+            {
+                if (!BuildingReady(line.AssemblerId))
+                {
+                    if (BuildingPending(line.AssemblerId)) return true;
+                    if (economy.Wood < world.Config.Economy.AssemblerWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceAssembler(faction);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.AssemblerId = id; return true;
+                }
+                if (!BuildingReady(line.KilnId))
+                {
+                    if (BuildingPending(line.KilnId)) return true;
+                    if (economy.Wood < world.Config.Economy.CharcoalKilnWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceKiln(faction, line.RequestedCell);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.KilnId = id; return true;
+                }
+                var kiln = world.Buildings[line.KilnId - 1];
+                var route = BeltRoute(faction, OutputCell(kiln), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+                if (route.cells == null) { SetLineHaulers(faction, line, 1); line.RequestPending = false; return true; }
+                SetLineBelts(index, route); LayRoutes(faction, route); SetLineHaulers(faction, line, LineBeltsWhole(index) ? 0 : 1); line.RequestPending = false; return true;
             }
             if (line.Kind == ProcessingLineKind.Bricks)
             {
@@ -633,7 +656,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId, line.CharmWorkshopId, line.RepairYardId, line.ToolShopId, line.StonecutterId, line.JoineryId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId, line.CharmWorkshopId, line.RepairYardId, line.ToolShopId, line.StonecutterId, line.JoineryId, line.AssemblerId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -660,6 +683,8 @@ namespace Rts.Simulation
                 return BuildingReady(line.StonecutterId);
             if (line.Kind == ProcessingLineKind.Frames)
                 return BuildingReady(line.JoineryId);
+            if (line.Kind == ProcessingLineKind.Assembler)
+                return BuildingReady(line.AssemblerId) && BuildingReady(line.KilnId);
             if (line.Kind == ProcessingLineKind.Preserves)
                 return BuildingReady(line.DryingRackId);
             if (line.Kind == ProcessingLineKind.Jewels)
@@ -699,6 +724,7 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.Sawmill) line.SawmillId = id;
             else if (kind == BuildingKind.Stonecutter) line.StonecutterId = id;
             else if (kind == BuildingKind.Joinery) line.JoineryId = id;
+            else if (kind == BuildingKind.Assembler) line.AssemblerId = id;
             else if (kind == BuildingKind.DryingRack) line.DryingRackId = id;
             else if (kind == BuildingKind.Lapidary) line.LapidaryId = id;
             else if (kind == BuildingKind.Weaver) line.WeaverId = id;
@@ -790,6 +816,12 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.Frames)
             {
                 SetSimpleHaulers(faction, line.JoineryId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.Assembler)
+            {
+                SetKilnWoodHaulers(faction, line.KilnId, wanted == 0 ? 0 : 1);
+                SetSimpleHaulers(faction, line.KilnId, 0, wanted);
                 return;
             }
             if (line.Kind == ProcessingLineKind.Preserves)
