@@ -184,6 +184,27 @@
     font-size: 13px;
 }
 
+/* Eleven or more resources take three rows: smaller chips so all three fit the bar's height (10-16). */
+.hud-resource-row.is-very-dense .hud-resource {
+    height: 16px;
+    margin-top: 0;
+    margin-bottom: 1px;
+}
+
+.hud-resource-row.is-very-dense .hud-resource-icon {
+    width: 12px;
+    height: 12px;
+}
+
+.hud-resource-row.is-very-dense .hud-resource-name {
+    font-size: 11px;
+}
+
+.hud-resource-row.is-very-dense .hud-resource-value {
+    width: 26px;
+    font-size: 11px;
+}
+
 .hud-status-block {
     flex-direction: column;
     justify-content: center;
