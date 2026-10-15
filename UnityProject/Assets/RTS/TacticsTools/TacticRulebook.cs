@@ -87,6 +87,15 @@ namespace Rts.Tactics
             markdown.AppendLine("時代進行: `Age2` は food=" + scenario.Economy.Age2FoodCost + ", wood=" + scenario.Economy.Age2WoodCost + ", ticks=" + scenario.Economy.Age2Ticks + "。`Age3` は food=" + scenario.Economy.Age3FoodCost + ", wood=" + scenario.Economy.Age3WoodCost + ", ticks=" + scenario.Economy.Age3Ticks + "。");
             markdown.AppendLine("時代時計が有効なとき、`economy.nextAgeAutoTick` が次の自動進行tick、`economy.nextAgeCost` が今払う費用です。時計が無効または最後の時代なら自動tickは0です。");
             markdown.AppendLine();
+            if (scenario.Economy.CraftTree3)
+            {
+                markdown.AppendLine("### CraftTree3（3段目）");
+                markdown.AppendLine();
+                markdown.AppendLine("組立所: `SiegeParts`（攻城部品、建材1＋武具1→1、" + scenario.Economy.SiegePartsTicks + " tick）、`Mechanism`（精密部品、武具1＋学術品1＋切石1→1、" + scenario.Economy.MechanismTicks + " tick）。");
+                markdown.AppendLine("攻城部品: 破城槌のHP " + scenario.Economy.SiegePartsHpPermille + "‰、建物攻撃 " + scenario.Economy.SiegePartsDamagePermille + "‰、城は" + scenario.Economy.SiegePartsPerCastle + "個で石" + scenario.Economy.SiegePartsCastleStonePermille + "‰。");
+                markdown.AppendLine("精密部品: Lv2加工建物をLv3へ強化し、作成時間" + scenario.Economy.MechanismBuildingTimePermille + "‰・材料" + scenario.Economy.MechanismBuildingMaterialPermille + "‰。時代3研究の費用・時間は" + scenario.Economy.MechanismResearchCostPermille + "‰・" + scenario.Economy.MechanismResearchTimePermille + "‰。");
+                markdown.AppendLine();
+            }
             markdown.AppendLine("## 見本 `TacticSamples/defend-then-push/main.js`");
             markdown.AppendLine();
             markdown.AppendLine("```javascript");
@@ -185,6 +194,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.ToolShop, e.ToolShopWoodCost, 0, e.ToolShopWork);
             Add(rows, BuildingKind.Stonecutter, e.StonecutterWoodCost, 0, e.StonecutterWork);
             Add(rows, BuildingKind.Joinery, e.JoineryWoodCost, 0, e.JoineryWork);
+            Add(rows, BuildingKind.Assembler, e.AssemblerWoodCost, 0, e.AssemblerWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

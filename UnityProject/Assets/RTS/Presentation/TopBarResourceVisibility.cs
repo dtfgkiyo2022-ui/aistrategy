@@ -28,7 +28,12 @@ namespace Rts.Presentation
             RepairKits,
             Tools,
             CutStone,
-            Frames
+            Frames,
+            ArmsKit,
+            Scholarly,
+            FineArmsKit,
+            SiegeParts,
+            Mechanism
         }
 
         public readonly struct ResourceEntry
@@ -143,6 +148,24 @@ namespace Rts.Presentation
             return economy != null && (CommonCraftFrom(economy, 2) || economy.Frames > 0);
         }
 
+        public static bool ShowArmsKit(EconomyView economy)
+        {
+            return economy != null && economy.CraftTree2Enabled && economy.ArmsKit > 0;
+        }
+
+        public static bool ShowScholarly(EconomyView economy)
+        {
+            return economy != null && economy.CraftTree2Enabled && economy.Scholarly > 0;
+        }
+
+        public static bool ShowFineArmsKit(EconomyView economy)
+        {
+            return economy != null && economy.CraftTree2Enabled && economy.FineArmsKit > 0;
+        }
+
+        public static bool ShowSiegeParts(EconomyView economy) => economy != null && economy.CraftTree3Enabled && economy.SiegeParts > 0;
+        public static bool ShowMechanism(EconomyView economy) => economy != null && economy.CraftTree3Enabled && economy.Mechanism > 0;
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -181,6 +204,11 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.CutStone, UiText.T("Cut stone", "切石"), economy.CutStone));
             if (ShowFrames(economy))
                 target.Add(new ResourceEntry(ResourceKind.Frames, UiText.T("Frames", "建材"), economy.Frames));
+            if (ShowArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.ArmsKit, UiText.T("Arms kit", "Arms kit"), economy.ArmsKit));
+            if (ShowScholarly(economy)) target.Add(new ResourceEntry(ResourceKind.Scholarly, UiText.T("Scholarly", "Scholarly"), economy.Scholarly));
+            if (ShowFineArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.FineArmsKit, UiText.T("Fine arms kit", "Fine arms kit"), economy.FineArmsKit));
+            if (ShowSiegeParts(economy)) target.Add(new ResourceEntry(ResourceKind.SiegeParts, UiText.T("Siege parts", "攻城部品"), economy.SiegeParts));
+            if (ShowMechanism(economy)) target.Add(new ResourceEntry(ResourceKind.Mechanism, UiText.T("Mechanism", "精密部品"), economy.Mechanism));
             if (ShowBooks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Books, UiText.T("Books", "書物"), economy.Books));
             if (ShowIncense(economy))

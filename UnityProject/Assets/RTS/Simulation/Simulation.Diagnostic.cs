@@ -34,7 +34,8 @@ namespace Rts.Simulation
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
                      w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
                      if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
-                    w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
+                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
+                     if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
@@ -162,6 +163,19 @@ namespace Rts.Simulation
                     w.Value(n + "CutStone", e.CutStone); w.Value(n + "CutStoneProduced", e.CutStoneProduced); w.Value(n + "CutStoneConsumed", e.CutStoneConsumed);
                     w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
                     w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
+                }
+                if (CraftTree2On)
+                {
+                    w.Value(n + "ArmsKit", e.ArmsKit); w.Value(n + "ArmsKitProduced", e.ArmsKitProduced); w.Value(n + "ArmsKitConsumed", e.ArmsKitConsumed);
+                    w.Value(n + "FineArmsKit", e.FineArmsKit); w.Value(n + "FineArmsKitProduced", e.FineArmsKitProduced); w.Value(n + "FineArmsKitConsumed", e.FineArmsKitConsumed);
+                    w.Value(n + "Scholarly", e.Scholarly); w.Value(n + "ScholarlyProduced", e.ScholarlyProduced); w.Value(n + "ScholarlyConsumed", e.ScholarlyConsumed);
+                     w.Value(n + "ScholarlyUsedResearch", e.ScholarlyUsedResearch);
+                }
+                if (CraftTree3On)
+                {
+                    w.Value(n + "SiegeParts", e.SiegeParts); w.Value(n + "SiegePartsProduced", e.SiegePartsProduced); w.Value(n + "SiegePartsConsumed", e.SiegePartsConsumed); w.Value(n + "SiegePartsEnhancedRams", e.SiegePartsEnhancedRams);
+                    w.Value(n + "Mechanism", e.Mechanism); w.Value(n + "MechanismProduced", e.MechanismProduced); w.Value(n + "MechanismConsumed", e.MechanismConsumed);
+                    w.Value(n + "MechanismUsedResearch", e.MechanismUsedResearch);
                 }
                 if (BooksOn)
                 {
@@ -319,6 +333,20 @@ namespace Rts.Simulation
                         w.Value(n + "Level", b.Level);
                         w.Value(n + "FramesUsed", b.FramesUsed);
                     }
+                    if (CraftTree2On)
+                    {
+                        w.Value(n + "InputTertiary", b.InputTertiary); w.Value(n + "Recipe", (byte)b.Recipe);
+                        w.Value(n + "InputSecondaryKind", (byte)b.InputSecondaryKind);
+                        var armed = b.QueueArmsKit ?? Array.Empty<bool>();
+                        var fineArmed = b.QueueFineArmsKit ?? Array.Empty<bool>();
+                        w.Value(n + "QueueArmsKit.Count", (uint)armed.Length);
+                        for (int q = 0; q < armed.Length; q++) w.Value(n + "QueueArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", armed[q]);
+                        w.Value(n + "QueueFineArmsKit.Count", (uint)fineArmed.Length);
+                        for (int q = 0; q < fineArmed.Length; q++) w.Value(n + "QueueFineArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", fineArmed[q]);
+                        var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
+                        w.Value(n + "QueueSiegeParts.Count", (uint)siegeQueue.Length);
+                        for (int q = 0; q < siegeQueue.Length; q++) w.Value(n + "QueueSiegeParts[" + q.ToString(CultureInfo.InvariantCulture) + "]", siegeQueue[q]);
+                    }
                     if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                     {
                         w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
@@ -400,7 +428,7 @@ namespace Rts.Simulation
                     string n = "ProcessingLines[" + i.ToString(CultureInfo.InvariantCulture) + "].";
                     w.Value(n + "Id", line.Id); w.Value(n + "FactionId", line.FactionId); w.Value(n + "Kind", (byte)line.Kind);
                     w.Value(n + "Manager", (byte)line.Manager); w.Value(n + "MineId", line.MineId); w.Value(n + "SmelterId", line.SmelterId);
-                    w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId);
+                    w.Value(n + "KilnId", line.KilnId); w.Value(n + "SteelworksId", line.SteelworksId); w.Value(n + "AssemblerId", line.AssemblerId);
                     if (RationsOn) w.Value(n + "MillId", line.MillId);
                     if (BricksOn) { w.Value(n + "QuarryId", line.QuarryId); w.Value(n + "BrickKilnId", line.BrickKilnId); }
                     if (TackOn) w.Value(n + "SaddleryId", line.SaddleryId);

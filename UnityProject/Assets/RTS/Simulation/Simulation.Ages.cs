@@ -48,6 +48,8 @@ namespace Rts.Simulation
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
+        private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
+        private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -124,6 +126,12 @@ namespace Rts.Simulation
 
         private bool JoineryAllowed(uint faction)
             => CraftTree1On && world.Economies[faction - 1].Age >= 2;
+
+        private bool AssemblerAllowed(uint faction)
+            => CraftTree2On && world.Economies[faction - 1].Age >= 2;
+
+        private bool CraftTree3Allowed(uint faction)
+            => CraftTree3On && world.Economies[faction - 1].Age >= 3;
 
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;

@@ -31,6 +31,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.UpgradeBuilding:
                     UpgradeProcessingBuilding(faction, c.ProducerId);
                     return;
+                case EconomyCommandKind.SetRecipe:
+                    SetAssemblerRecipe(faction, c.ProducerId, c.Recipe);
+                    return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
@@ -145,6 +148,7 @@ namespace Rts.Simulation
                         && !(CharmsAllowed(faction) && kind == BuildingKind.CharmWorkshop)
                         && !(RepairKitsAllowed(faction) && kind == BuildingKind.RepairYard)
                         && !(ToolsAllowed(faction) && kind == BuildingKind.ToolShop)
+                        && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)

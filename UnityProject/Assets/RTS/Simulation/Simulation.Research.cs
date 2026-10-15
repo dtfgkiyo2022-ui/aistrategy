@@ -267,6 +267,10 @@ namespace Rts.Simulation
             if (PlanksAllowed(faction) && world.Economies[faction - 1].Planks >= world.Config.Economy.PlanksPerRam
                 && OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0)
                 bonus += world.Config.Economy.PlankExtraRams;
+            if (CraftTree3On)
+                // Stored siege parts are a reservation for additional rams.  This makes the
+                // stock visible to the same numeric cap that gates automatic training.
+                bonus += world.Economies[faction - 1].SiegeParts;
             return AutoRams + bonus;
         }
 
@@ -322,6 +326,13 @@ namespace Rts.Simulation
             }
             else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || IsTollgateTech(tech) || IsMetropolisTech(tech) || IsSanctuaryTech(tech) || !TechOpen(faction, tech)) return false;
             ref var economy = ref world.Economies[faction - 1];
+            if (CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech)
+                && economy.Mechanism < 1 && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch
+                && OwnBuildingIndex(faction, BuildingKind.Assembler) >= 0)
+                // Let the single assembler turn Scholarly into Mechanism first.  Without this
+                // one-cycle reservation, DecideResearch runs before DecideIndustry and consumes
+                // the intermediate directly, so Mechanism can never reach a third-age research.
+                return false;
             int food = academy ? AcademyFoodCost(tech) : mountain ? MountainFoodCost(tech) : fishing ? FishingFoodCost(tech) : tollgate ? TollgateFoodCost(tech) : metropolis ? MetropolisFoodCost(tech) : sanctuary ? SanctuaryFoodCost(tech) : TechFoodCost(tech);
             int wood = academy ? AcademyWoodCost(tech) : mountain ? MountainWoodCost(tech) : fishing ? FishingWoodCost(tech) : tollgate ? TollgateWoodCost(tech) : metropolis ? MetropolisWoodCost(tech) : sanctuary ? SanctuaryWoodCost(tech) : TechWoodCost(tech);
             int gold = academy ? AcademyGoldCost(tech) : 0;
@@ -336,12 +347,32 @@ namespace Rts.Simulation
             // effect at the common start point so both the player's EconomyCommand.Research route and the
             // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
             bool bookResearch = BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
+            bool mechanismResearch = CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech) && economy.Mechanism >= 1;
+            bool scholarlyResearch = CraftTree2On && !bookResearch && !mechanismResearch && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch;
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);
                 wood = BookDiscount(wood, world.Config.Economy.BookResearchCostPermille);
                 metal = BookDiscount(metal, world.Config.Economy.BookResearchCostPermille);
                 gems = BookDiscount(gems, world.Config.Economy.BookResearchCostPermille);
+            }
+            if (scholarlyResearch)
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.ScholarlyCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.ScholarlyCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.ScholarlyCostPermille);
+                oreForMetal = ScholarlyDiscount(oreForMetal, world.Config.Economy.ScholarlyCostPermille);
+                gems = ScholarlyDiscount(gems, world.Config.Economy.ScholarlyCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.ScholarlyCostPermille);
+            }
+            if (mechanismResearch)
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.MechanismResearchCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.MechanismResearchCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.MechanismResearchCostPermille);
+                oreForMetal = ScholarlyDiscount(oreForMetal, world.Config.Economy.MechanismResearchCostPermille);
+                gems = ScholarlyDiscount(gems, world.Config.Economy.MechanismResearchCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.MechanismResearchCostPermille);
             }
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
@@ -358,9 +389,23 @@ namespace Rts.Simulation
                 economy.BooksConsumed = checked(economy.BooksConsumed + world.Config.Economy.BooksPerResearch);
                 economy.BooksUsedResearch++;
             }
+            if (scholarlyResearch)
+            {
+                economy.Scholarly = checked(economy.Scholarly - world.Config.Economy.ScholarlyPerResearch);
+                economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + world.Config.Economy.ScholarlyPerResearch);
+                economy.ScholarlyUsedResearch++;
+            }
+            if (mechanismResearch)
+            {
+                economy.Mechanism = checked(economy.Mechanism - 1);
+                economy.MechanismConsumed = checked(economy.MechanismConsumed + 1);
+                economy.MechanismUsedResearch++;
+            }
             smith.Researching = tech;
             int ticks = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : fishing ? FishingTicks(tech) : tollgate ? TollgateTicks(tech) : metropolis ? MetropolisTicks(tech) : sanctuary ? SanctuaryTicks(tech) : TechTicks(tech);
-            smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000)) : ticks;
+            smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000))
+                : mechanismResearch ? Math.Max(1, checked((ticks * world.Config.Economy.MechanismResearchTimePermille + 999) / 1000))
+                : scholarlyResearch ? Math.Max(1, checked((ticks * world.Config.Economy.ScholarlyTimePermille + 999) / 1000)) : ticks;
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -679,6 +724,15 @@ namespace Rts.Simulation
 
         private int BookDiscount(int cost, int permille)
             => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
+
+        private int ScholarlyDiscount(int cost, int permille)
+            => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
+
+        private bool IsThirdAgeResearch(TechKind tech)
+            => tech == TechKind.Siegecraft || tech == TechKind.Masonry || tech == TechKind.Banking || tech == TechKind.GemArmor
+                || tech == BridgeTech.SiegeDeployment || tech == MountainTech.MountainFort || tech == FishingTech.DriedFish
+                || tech == CultTech.MartyrBlessing || tech == TollgateTech.GateNetwork || tech == MetropolisTech.CitizenMilitia
+                || tech == SanctuaryTech.HolyRelic;
 
         private bool AcademyOffenseReady(uint faction)
         {
