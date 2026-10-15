@@ -27,6 +27,8 @@ namespace Rts.Simulation
             // the region controls name them) and S-3 outpost towns. The large map had none of the belt rules.
             e.ProcessingChain = true;
             e.ResourceFog = true;
+            e.DropSiteLimit = true;
+            e.AiBelts = true;
             e.Rations = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;

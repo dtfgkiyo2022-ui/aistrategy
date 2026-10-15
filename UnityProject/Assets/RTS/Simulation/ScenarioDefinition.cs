@@ -188,6 +188,12 @@ namespace Rts.Simulation
         /// <summary>Allows human building commands to touch an existing building without changing automatic site searches.</summary>
         public bool AdjacentBuildings;
         public int AdjacentBuildingClearanceCells = 1;
+        /// <summary>V3-5 drop-site limit: both human and automatic placement share this cap, including construction.</summary>
+        public bool DropSiteLimit;
+        public int DropSiteMax = 2;
+        /// <summary>AI raw-resource belts: the automatic economy keeps this much wood after laying a route.</summary>
+        public bool AiBelts;
+        public int AiBeltWoodReserve = 40;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;

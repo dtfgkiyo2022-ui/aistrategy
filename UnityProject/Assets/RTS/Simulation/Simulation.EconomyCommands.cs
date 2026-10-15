@@ -165,6 +165,7 @@ namespace Rts.Simulation
                         && economy.Frames >= rules.CraftTreeFramesPerBuilding;
                     if ((byte)c.Facing > 3 || economy.Wood < WoodOfForPlacement(kind, faction, framesAvailable)
                         || economy.Stone < StoneOf(kind, faction)) return;
+                    if (kind == BuildingKind.DropSite && DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
                     uint node = 0;

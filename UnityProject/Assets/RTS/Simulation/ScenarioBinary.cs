@@ -152,6 +152,12 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
 private const int CraftTree1ExtensionId = 41;
 private const int CraftTree1ExtensionVersion = 1;
 private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
+private const int DropSiteLimitExtensionId = 38;
+private const int DropSiteLimitExtensionVersion = 1;
+private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
+private const int AiBeltsExtensionId = 40;
+private const int AiBeltsExtensionVersion = 1;
+private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -199,6 +205,8 @@ private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
              ,new ExtensionRegistration(CraftBalanceExtensionId, CraftBalanceExtensionVersion, CraftBalanceExtensionDataLength)
             ,new ExtensionRegistration(ResourceFogExtensionId, ResourceFogExtensionVersion, ResourceFogExtensionDataLength)
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
+            ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
+            ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -783,6 +791,8 @@ private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
                      else if (id == CraftBalanceExtensionId) ReadCraftBalanceExtension(extension, c.Economy);
                     else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
+                    else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
+                    else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -851,6 +861,8 @@ private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftBalanceExtensionId && !c.Economy.CraftBalance);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
+                extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
+                extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1162,7 +1174,73 @@ private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
                         extensions[i] = CreateCraftTree1Extension(c.Economy);
                     }
                 if (c.Economy.CraftTree1 && !hasCraftTree1) extensions.Add(CreateCraftTree1Extension(c.Economy));
+                bool hasDropSiteLimit = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == DropSiteLimitExtensionId)
+                    {
+                        hasDropSiteLimit = true;
+                        extensions[i] = CreateDropSiteLimitExtension(c.Economy);
+                    }
+                if (c.Economy.DropSiteLimit && !hasDropSiteLimit) extensions.Add(CreateDropSiteLimitExtension(c.Economy));
+                bool hasAiBelts = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == AiBeltsExtensionId)
+                    {
+                        hasAiBelts = true;
+                        extensions[i] = CreateAiBeltsExtension(c.Economy);
+                    }
+                if (c.Economy.AiBelts && !hasAiBelts) extensions.Add(CreateAiBeltsExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateDropSiteLimitExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.DropSiteLimit ? 1 : 0);
+                writer.Write(e.DropSiteMax);
+                return new ScenarioExtensionData { Id = DropSiteLimitExtensionId, Version = DropSiteLimitExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadDropSiteLimitExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid drop-site-limit flag.");
+                e.DropSiteLimit = enabled != 0;
+                e.DropSiteMax = reader.ReadInt32();
+                if (e.DropSiteMax <= 0) throw new InvalidDataException("Invalid drop-site maximum.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing drop-site-limit extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiBeltsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiBelts ? 1 : 0);
+                writer.Write(e.AiBeltWoodReserve);
+                return new ScenarioExtensionData { Id = AiBeltsExtensionId, Version = AiBeltsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiBeltsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI-belts flag.");
+                e.AiBelts = enabled != 0;
+                e.AiBeltWoodReserve = reader.ReadInt32();
+                if (e.AiBeltWoodReserve < 0) throw new InvalidDataException("Invalid AI-belt wood reserve.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-belts extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateCraftTimingExtension(EconomyRules e)

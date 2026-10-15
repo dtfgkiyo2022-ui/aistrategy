@@ -287,7 +287,9 @@ namespace Rts.Simulation
                 framesPerBuilding: CraftTree1On ? rules.CraftTreeFramesPerBuilding : 0,
                 frameWoodPermille: CraftTree1On ? rules.CraftTreeFrameWoodPermille : 0,
                 frameWorkPermille: CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0,
-                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0);
+                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0,
+                dropSiteMax: DropSiteLimitOn ? rules.DropSiteMax : 0,
+                dropSiteCount: DropSiteLimitOn ? AliveDropSites(faction) : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

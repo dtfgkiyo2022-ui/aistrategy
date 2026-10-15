@@ -653,6 +653,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int HouseWoodCost { get; }
         /// <summary>V3-5: a resource drop-off (maps with ages only; 0 otherwise).</summary>
         public int DropSiteWoodCost { get; }
+        /// <summary>V3-5: configured living/construction drop-site cap (0 when disabled).</summary>
+        public int DropSiteMax { get; }
+        /// <summary>V3-5: current living drop-site count, including construction.</summary>
+        public int DropSiteCount { get; }
         /// <summary>V3-5 stone and defences (maps with ages only; 0 otherwise).</summary>
         public int Stone { get; }
         /// <summary>V3-5 (32 #19): Gems received from a market (maps with ages only; 0 otherwise).</summary>
@@ -1004,7 +1008,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int stonecutterWoodCost = 0, int stonecutterSizeCells = 0, int stonecutterTicks = 0, int stonecutterStoneInput = 0,
              int joineryWoodCost = 0, int joinerySizeCells = 0, int joineryTicks = 0, int joineryPlankInput = 0,
              int joineryCutStoneInput = 0, int framesPerBuilding = 0, int frameWoodPermille = 0, int frameWorkPermille = 0,
-             int level2FramesCost = 0)
+             int level2FramesCost = 0,
+             int dropSiteMax = 0, int dropSiteCount = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -1098,6 +1103,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             TechGemsCosts = ContractList.Copy(techGemsCosts ?? Array.Empty<int>());
             Stone = stone; Gems = gems; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
+            DropSiteMax = dropSiteMax; DropSiteCount = dropSiteCount;
             HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;
             FarmWoodCost = farmWoodCost; FarmSizeCells = farmSizeCells;

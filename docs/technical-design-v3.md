@@ -1495,6 +1495,13 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 
 市場用木材を保存する欄・状態・自動経済の待たせ分岐・診断／pack出力は削除した。`SavingToAdvance` 中に市場を建てない既存の決まりと、教団・漁労へ同じ例外を追加しない判断はそのまま残す。
 
+### 32.40 生資源をStorageへ搬入するAIベルトと集積所上限
+
+- `DropSiteLimit` は `AliveDropSites` で陣営ごとのAliveな集積所を数え、建設中も含めて `DropSiteMax` を配置時・AI自動配置時に適用する。
+- `AiBelts` は Food/Wood/Stone/Gold/Ore を対象にし、Civ許可時の LumberCamp/Quarry/Mine を優先し、それ以外はStorageへフォールバックする。Storage出口から自己コアへ実在ベルトで到達する場合だけ村人荷下ろしと搬送を許可する。
+- Storage経路は通常ベルト、Splitter左枝、Underground pairを辿る。容量・資源種別・接続性を村人搬入と加工先搬入の両方で検証し、切断Storageには搬入しない。
+- フラグOFFのシナリオバイト列とシミュレーションハッシュ一致、建設中を含む人間配置上限、AI各tick上限、接続/切断Storage、12,000tickリプレイをヘッドレス個別テストで確認した。標準seed 1–8とCavalry対Agrarian seed 1–3の `tactic-match` 測定は `dropsite_limit/report.md` に記録した。
+
 ## 33. 多段の加工（加工の木、2026-10-15〜）
 
 **オーナー決定（2026-10-15）**：加工の連鎖とクラフトをもっと充実させる。Factorio などを参考に、**2段にとどめず多段で作ってよい**。方向は4つとも：(1) 加工品どうしを組み合わせる上の段、(2) どの文明も使う共通の加工、(3) 加工品で研究・強化、(4) 加工の建物の強化とレシピの選択。

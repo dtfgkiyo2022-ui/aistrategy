@@ -96,6 +96,8 @@ namespace Rts.Simulation
         public MatchPackGoodsTradeSnapshot[] GoodsMarket { get; internal set; } = Array.Empty<MatchPackGoodsTradeSnapshot>();
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
+        public int BeltCells { get; internal set; }
+        public int BeltResourceAmount { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
         public MatchPackCount[] Buildings { get; internal set; } = Array.Empty<MatchPackCount>();
     }
@@ -217,6 +219,8 @@ namespace Rts.Simulation
                     GoodsMarket = GoodsMarketSnapshot(economy),
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
+                    BeltCells = CountBelts(world.Factions[f].Id, false),
+                    BeltResourceAmount = CountBelts(world.Factions[f].Id, true),
                     Soldiers = CountSoldiers(world.Factions[f].Id),
                     Buildings = CountBuildings(world.Factions[f].Id)
                 };
@@ -288,6 +292,19 @@ namespace Rts.Simulation
             foreach (var pair in counts)
                 result[index++] = new MatchPackCount { Kind = pair.Key.ToString(), Count = pair.Value };
             return result;
+        }
+
+        private int CountBelts(uint factionId, bool resourcesOnly)
+        {
+            int count = 0;
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                var belt = world.Belts[cell];
+                if (belt.FactionId != factionId) continue;
+                if (resourcesOnly && (byte)belt.Item == 0) continue;
+                count++;
+            }
+            return count;
         }
 
         private MatchPackCount[] CountBuildings(uint factionId)

@@ -102,6 +102,7 @@
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="CraftTree1Tests.cs" />
+    <Compile Include="DropSiteLimitTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -190,5 +191,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AdjacentBuildingsEditModeTests.cs" Link="Tests/AdjacentBuildingsEditModeTests.cs" />
     <Compile Include="AdjacentBuildingsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
   </ItemGroup>
 </Project>

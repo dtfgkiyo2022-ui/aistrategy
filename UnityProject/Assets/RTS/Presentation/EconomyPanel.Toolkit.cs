@@ -251,7 +251,10 @@ namespace Rts.Presentation
             }
             if (economy.Ages)
             {
-                Add(rows, "build:drop-site", UiText.T("Drop-off (", "資源置き場（木") + economy.DropSiteWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.DropSite);
+                bool dropSiteCapped = economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+                if (dropSiteCapped && mode == Mode.DropSite) SetMode(Mode.None);
+                Add(rows, "build:drop-site", UiText.DropSiteLabel(economy.DropSiteCount, economy.DropSiteMax, economy.DropSiteWoodCost),
+                    !dropSiteCapped, dropSiteCapped ? UiText.T("Drop-site limit reached", "集積所の上限に達しています") : "", mode == Mode.DropSite);
                 Add(rows, "build:tower", UiText.T("Tower (", "見張り塔（石") + economy.TowerStoneCost + UiText.T("S ", " 木") + economy.TowerWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.Tower);
                 Add(rows, "build:wall", mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ") : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"), true, "", mode == Mode.Wall);
                 if (economy.Civ != CivKind.Primitive) Add(rows, "build:market", UiText.T("Market (", "市場（木材 ") + economy.MarketWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Market);
@@ -387,6 +390,7 @@ namespace Rts.Presentation
                 Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石"), true, "", mode == Mode.Sorter);
                 Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト"), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
+                Add(rows, "build:storage-info", UiText.StorageDescription(), false, "", false, true);
             }
             Add(rows, "build:remove-belt", UiText.T("Remove", "ベルトを外す"), true, "", mode == Mode.RemoveBelt);
             Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);
