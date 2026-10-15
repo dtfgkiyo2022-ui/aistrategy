@@ -125,7 +125,7 @@ namespace Rts.Presentation
             if (mode == Mode.FastBelt) return true;
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
-            Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (the simulation checks the ground).", "（置けるかはシミュレーションが判断します）"));
+            Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (if rejected, no building is placed).", "（置けない場合は建物は置かれません）"));
             SetMode(Mode.None);
             return true;
         }
@@ -170,7 +170,15 @@ namespace Rts.Presentation
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
-                : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : e.BarracksWoodCost;
+                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : e.BarracksWoodCost;
+        }
+
+        private int StoneOf(BuildingKind kind)
+        {
+            var e = Economy();
+            if (e == null) return 0;
+            return kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
+                : kind == BuildingKind.Castle ? e.CastleStoneCost : 0;
         }
 
         private static string Name(BuildingKind kind)
@@ -427,8 +435,11 @@ namespace Rts.Presentation
             var kind = KindOf(mode);
             int size = SizeOf(kind);
             var center = Vector3.zero;
-            bool shown = onMap && Footprint(cell, size, out _, out center);
-            layer.ShowGhost(shown, center, size * CellMeters, economy.Wood >= WoodOf(kind));
+            int origin = -1;
+            bool shown = onMap && Footprint(cell, size, out origin, out center);
+            bool legal = shown && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
+                view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind));
+            layer.ShowGhost(shown, center, size * CellMeters, legal);
         }
 
         private EconomyView Economy() { var frame = view == null ? null : view.LatestFrame; return frame == null ? null : frame.Economy; }

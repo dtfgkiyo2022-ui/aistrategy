@@ -134,9 +134,12 @@ private const int ToolsExtensionDataLength = 13 * sizeof(int);
 private const int GoodsMarketExtensionId = 33;
 private const int GoodsMarketExtensionVersion = 1;
 private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
-private const int CraftTimingExtensionId = 34;
-private const int CraftTimingExtensionVersion = 1;
-private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
+        private const int CraftTimingExtensionId = 34;
+        private const int CraftTimingExtensionVersion = 1;
+        private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
+        private const int AdjacentBuildingsExtensionId = 37;
+        private const int AdjacentBuildingsExtensionVersion = 1;
+        private const int AdjacentBuildingsExtensionDataLength = 2 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -177,9 +180,10 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(CharmsExtensionId, CharmsExtensionVersion, CharmsExtensionDataLength)
             ,new ExtensionRegistration(RepairKitsExtensionId, RepairKitsExtensionVersion, RepairKitsExtensionDataLength)
             ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
-            ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
-            ,new ExtensionRegistration(CraftTimingExtensionId, CraftTimingExtensionVersion, CraftTimingExtensionDataLength)
-        };
+             ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
+             ,new ExtensionRegistration(CraftTimingExtensionId, CraftTimingExtensionVersion, CraftTimingExtensionDataLength)
+             ,new ExtensionRegistration(AdjacentBuildingsExtensionId, AdjacentBuildingsExtensionVersion, AdjacentBuildingsExtensionDataLength)
+         };
 
         public static byte[] Encode(ScenarioDefinition source)
         {
@@ -756,9 +760,10 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                     else if (id == CharmsExtensionId) ReadCharmsExtension(extension, c.Economy);
                     else if (id == RepairKitsExtensionId) ReadRepairKitsExtension(extension, c.Economy);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
-                    else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
-                    else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
-                    extensions.Add(extension);
+                     else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
+                     else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
+                     else if (id == AdjacentBuildingsExtensionId) ReadAdjacentBuildingsExtension(extension, c.Economy);
+                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
             c.Extensions = extensions.ToArray();
@@ -820,7 +825,8 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == RepairKitsExtensionId && !c.Economy.RepairKits);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
                 extensions.RemoveAll(extension => extension != null && extension.Id == GoodsMarketExtensionId && !c.Economy.GoodsMarket);
-                extensions.RemoveAll(extension => extension != null && extension.Id == CraftTimingExtensionId && !c.Economy.CraftTiming);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTimingExtensionId && !c.Economy.CraftTiming);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == AdjacentBuildingsExtensionId && !c.Economy.AdjacentBuildings);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1091,7 +1097,15 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                         hasCraftTiming = true;
                         extensions[i] = CreateCraftTimingExtension(c.Economy);
                     }
-                if (c.Economy.CraftTiming && !hasCraftTiming) extensions.Add(CreateCraftTimingExtension(c.Economy));
+                 if (c.Economy.CraftTiming && !hasCraftTiming) extensions.Add(CreateCraftTimingExtension(c.Economy));
+                 bool hasAdjacentBuildings = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == AdjacentBuildingsExtensionId)
+                     {
+                         hasAdjacentBuildings = true;
+                         extensions[i] = CreateAdjacentBuildingsExtension(c.Economy);
+                     }
+                 if (c.Economy.AdjacentBuildings && !hasAdjacentBuildings) extensions.Add(CreateAdjacentBuildingsExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1380,6 +1394,30 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 e.RationsHealIntervalTicks = reader.ReadInt32(); e.RationsHealQuietTicks = reader.ReadInt32(); e.RationsHealHp = reader.ReadInt32();
                 e.RationsHealMaxPerInterval = reader.ReadInt32(); e.RationsFarmMinimum = reader.ReadInt32(); e.RationsFoodReserve = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing rations extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAdjacentBuildingsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AdjacentBuildings ? 1 : 0);
+                writer.Write(e.AdjacentBuildingClearanceCells);
+                return new ScenarioExtensionData { Id = AdjacentBuildingsExtensionId, Version = AdjacentBuildingsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAdjacentBuildingsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid adjacent-buildings flag.");
+                e.AdjacentBuildings = enabled != 0;
+                e.AdjacentBuildingClearanceCells = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing adjacent-buildings extension data.");
             }
         }
 

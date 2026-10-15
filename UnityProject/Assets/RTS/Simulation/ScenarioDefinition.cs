@@ -183,6 +183,9 @@ namespace Rts.Simulation
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
         public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
+        /// <summary>Allows human building commands to touch an existing building without changing automatic site searches.</summary>
+        public bool AdjacentBuildings;
+        public int AdjacentBuildingClearanceCells = 1;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;

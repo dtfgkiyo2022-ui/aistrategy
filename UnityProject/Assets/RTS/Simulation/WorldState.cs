@@ -552,6 +552,8 @@ namespace Rts.Simulation
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+            Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
+                "Invalid adjacent-building rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -961,8 +963,9 @@ namespace Rts.Simulation
                   MillTicks = e.MillTicks, MillFoodInput = e.MillFoodInput, RationsPerSoldier = e.RationsPerSoldier,
                   RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
-                  RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
-                  RationsFoodReserve = e.RationsFoodReserve,
+                   RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
+                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
+                   AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,
                   BrickKilnWork = e.BrickKilnWork, BrickKilnHp = e.BrickKilnHp, BrickTicks = e.BrickTicks,
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,

@@ -14,6 +14,9 @@ namespace Rts.Simulation
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
+        /// <summary>Counts the changes made through SetPassable, so a reader can keep its own copy until the next one.
+        /// Not part of the state: it only says when to rebuild a view.</summary>
+        internal int PassableVersion { get; private set; }
         // Derived from immutable terrain only. FIFO eviction changes cost, never route choices.
         private readonly Dictionary<(uint Faction, int Target), int[]> routes = new Dictionary<(uint, int), int[]>();
         private readonly Queue<(uint Faction, int Target)> routeOrder = new Queue<(uint, int)>();
@@ -100,6 +103,7 @@ namespace Rts.Simulation
         {
             if (passable[cell] == value) return;
             passable[cell] = value;
+            PassableVersion++;
             routes.Clear(); routeOrder.Clear();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
         }

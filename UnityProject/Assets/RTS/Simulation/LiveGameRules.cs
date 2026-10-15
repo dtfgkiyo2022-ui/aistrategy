@@ -45,6 +45,7 @@ namespace Rts.Simulation
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
             e.Regions = true;
             e.Towns = true;
+            e.AdjacentBuildings = true;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;
