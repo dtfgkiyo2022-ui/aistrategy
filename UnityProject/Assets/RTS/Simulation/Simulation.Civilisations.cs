@@ -434,6 +434,7 @@ namespace Rts.Simulation
             if (economy.Age != 1 || economy.AutoOff) return false;
             BuildingKind processing = CraftTimingBuilding(economy.Civ);
             if (processing == 0) return false;
+            if (economy.Civ == CivKind.Tollgate && world.Config.Economy.CraftBalanceTollgateTiming == 0) return false;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];

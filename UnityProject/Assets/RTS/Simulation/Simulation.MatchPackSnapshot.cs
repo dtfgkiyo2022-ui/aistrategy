@@ -85,6 +85,7 @@ namespace Rts.Simulation
         public int ToolsTrainedVillagers { get; internal set; }
         public int ToolsSavedFood { get; internal set; }
         public MatchPackGoodsTradeSnapshot[] GoodsMarket { get; internal set; } = Array.Empty<MatchPackGoodsTradeSnapshot>();
+        public long CraftBalanceMarketSaveStartedTick { get; internal set; }
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
@@ -197,6 +198,7 @@ namespace Rts.Simulation
                     ToolsTrainedVillagers = economy.ToolsTrainedVillagers,
                     ToolsSavedFood = economy.ToolsSavedFood,
                     GoodsMarket = GoodsMarketSnapshot(economy),
+                    CraftBalanceMarketSaveStartedTick = CraftBalanceOn ? economy.CraftBalanceMarketSaveStartedTick : 0,
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
                     Soldiers = CountSoldiers(world.Factions[f].Id),

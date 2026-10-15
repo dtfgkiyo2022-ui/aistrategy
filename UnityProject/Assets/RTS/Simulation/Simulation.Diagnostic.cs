@@ -210,6 +210,7 @@ namespace Rts.Simulation
                         w.Value(key + ".ReceivedWood", e.GoodsReceivedWood[i]);
                     }
                 }
+                if (CraftBalanceOn) w.Value(n + "CraftBalance.MarketSaveStartedTick", e.CraftBalanceMarketSaveStartedTick);
             }
             if (RegionsOn)
             {

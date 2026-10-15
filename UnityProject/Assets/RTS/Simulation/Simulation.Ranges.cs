@@ -39,6 +39,7 @@ namespace Rts.Simulation
             int index = OwnBuildingIndex(faction, kind);
             if (index < 0)
             {
+                if (CraftBalanceShouldDelayWood(faction)) return;
                 if (world.Economies[faction - 1].Wood < WoodOf(kind, faction)) return;
                 int origin = FindSite(faction, SizeOf(kind));
                 if (origin >= 0) PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
@@ -62,6 +63,7 @@ namespace Rts.Simulation
             int index = OwnBuildingIndex(faction, BuildingKind.Stable);
             if (index < 0)
             {
+                if (CraftBalanceShouldDelayWood(faction)) return;
                 if (world.Economies[faction - 1].Wood < rules.StableWoodCost) return;
                 int origin = FindSite(faction, rules.StableSizeCells);
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Stable, origin, Facing.North, 0);

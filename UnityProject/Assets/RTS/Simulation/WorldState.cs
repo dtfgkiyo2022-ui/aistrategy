@@ -265,6 +265,8 @@ namespace Rts.Simulation
         internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
+        /// <summary>Craft-balance market save start tick; 0 is inactive and -1 means the current opportunity timed out.</summary>
+        internal long CraftBalanceMarketSaveStartedTick;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
         internal int Queued;
         internal long TrainRemaining;
@@ -619,6 +621,8 @@ namespace Rts.Simulation
                 && e.GoodsValueTack > 0 && e.GoodsValuePlanks > 0 && e.GoodsValueBooks > 0 && e.GoodsValueIncense > 0
                 && e.GoodsValueCharms > 0 && e.GoodsValueRepairKits > 0 && e.GoodsValueTools > 0), "Invalid goods market rules.");
             Require(!e.CraftTiming || (e.Enabled && e.Industry && e.Ages && e.CraftTimingFoodPerWood > 0), "Invalid craft-timing rules.");
+            Require(!e.CraftBalance || (e.Enabled && e.Industry && e.Ages && e.GoodsMarket && e.CraftBalanceMarketSaveTicks > 0
+                && e.CraftBalanceTollgateTiming >= 0 && e.CraftBalanceTollgateTiming <= 1), "Invalid craft-balance rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -1027,6 +1031,8 @@ namespace Rts.Simulation
                    GoodsValueBooks = e.GoodsValueBooks, GoodsValueIncense = e.GoodsValueIncense, GoodsValueCharms = e.GoodsValueCharms,
                    GoodsValueRepairKits = e.GoodsValueRepairKits, GoodsValueTools = e.GoodsValueTools,
                    CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
+                   CraftBalance = e.CraftBalance, CraftBalanceMarketSaveTicks = e.CraftBalanceMarketSaveTicks,
+                   CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,

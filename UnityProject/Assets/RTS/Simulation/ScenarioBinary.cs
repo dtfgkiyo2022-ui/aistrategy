@@ -137,6 +137,9 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
 private const int CraftTimingExtensionId = 34;
 private const int CraftTimingExtensionVersion = 1;
 private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
+private const int CraftBalanceExtensionId = 36;
+private const int CraftBalanceExtensionVersion = 1;
+private const int CraftBalanceExtensionDataLength = 3 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -179,6 +182,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
             ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
             ,new ExtensionRegistration(CraftTimingExtensionId, CraftTimingExtensionVersion, CraftTimingExtensionDataLength)
+            ,new ExtensionRegistration(CraftBalanceExtensionId, CraftBalanceExtensionVersion, CraftBalanceExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -758,6 +762,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
                     else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
                     else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
+                    else if (id == CraftBalanceExtensionId) ReadCraftBalanceExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -821,6 +826,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
                 extensions.RemoveAll(extension => extension != null && extension.Id == GoodsMarketExtensionId && !c.Economy.GoodsMarket);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTimingExtensionId && !c.Economy.CraftTiming);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CraftBalanceExtensionId && !c.Economy.CraftBalance);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1092,6 +1098,14 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                         extensions[i] = CreateCraftTimingExtension(c.Economy);
                     }
                 if (c.Economy.CraftTiming && !hasCraftTiming) extensions.Add(CreateCraftTimingExtension(c.Economy));
+                bool hasCraftBalance = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CraftBalanceExtensionId)
+                    {
+                        hasCraftBalance = true;
+                        extensions[i] = CreateCraftBalanceExtension(c.Economy);
+                    }
+                if (c.Economy.CraftBalance && !hasCraftBalance) extensions.Add(CreateCraftBalanceExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1116,6 +1130,32 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 e.CraftTiming = enabled != 0;
                 e.CraftTimingFoodPerWood = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-timing extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftBalanceExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftBalance ? 1 : 0);
+                writer.Write(e.CraftBalanceMarketSaveTicks);
+                writer.Write(e.CraftBalanceTollgateTiming);
+                return new ScenarioExtensionData { Id = CraftBalanceExtensionId, Version = CraftBalanceExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftBalanceExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-balance flag.");
+                e.CraftBalance = enabled != 0;
+                e.CraftBalanceMarketSaveTicks = reader.ReadInt32();
+                e.CraftBalanceTollgateTiming = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-balance extension data.");
             }
         }
 

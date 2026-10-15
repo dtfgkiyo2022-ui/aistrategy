@@ -119,7 +119,7 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideCastle(uint faction)
         {
-            if (!AgesOn || world.Economies[faction - 1].Age < 3 || SavingToAdvance(faction)) return;
+            if (!AgesOn || world.Economies[faction - 1].Age < 3 || SavingToAdvance(faction) || CraftBalanceShouldDelayWood(faction)) return;
             if (OwnBuildingIndex(faction, BuildingKind.Castle) >= 0) return;
             var rules = world.Config.Economy;
             var e = world.Economies[faction - 1];
@@ -336,7 +336,7 @@ namespace Rts.Simulation
         /// <summary>AI phase: up to AutoTowers towers by the core, one at a time, once in a civilisation and not saving.</summary>
         private void DecideTower(uint faction)
         {
-            if (!AgesOn || !CivLineStarted(faction)) return;
+            if (!AgesOn || !CivLineStarted(faction) || CraftBalanceShouldDelayWood(faction)) return;
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
             if (economy.Wood < WoodOf(BuildingKind.Tower, faction) || economy.Stone < StoneOf(BuildingKind.Tower, faction)) return;
