@@ -72,7 +72,8 @@ namespace Rts.Tests.EditMode
                 else
                 {
                     // Package references are explicit too: an unknown assembly must not bypass the table.
-                    string[] packages = name == "Editor"
+                    // Presentation draws with URP (volumes for the light and the post effects, 10-15): display only.
+                    string[] packages = name == "Editor" || name == "Presentation"
                         ? new[] { "Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.Universal.Runtime" }
                         : name == "Tests.EditMode" ? new[] { "UnityEngine.TestRunner", "UnityEditor.TestRunner" }
                         : name == "TacticsJs" ? new[] { "Jint", "Acornima", "System.Runtime.CompilerServices.Unsafe" }
@@ -91,7 +92,8 @@ namespace Rts.Tests.EditMode
             Assert.That(AllowedReferences["Decision"], Does.Not.Contain("Rts.Simulation"));
             Assert.That(ReadDefinition("Decision").references, Does.Not.Contain("Rts.Simulation"));
             Assert.That(AllowedReferences["Presentation"], Is.EqualTo(new[] { "Rts.Contracts" }));
-            Assert.That(ReadDefinition("Presentation").references, Is.SubsetOf(new[] { "Rts.Contracts" }));
+            Assert.That(ReadDefinition("Presentation").references.Where(r => r.StartsWith("Rts.", StringComparison.Ordinal)),
+                Is.SubsetOf(new[] { "Rts.Contracts" }));
         }
 
         [TestCase("Contracts")]

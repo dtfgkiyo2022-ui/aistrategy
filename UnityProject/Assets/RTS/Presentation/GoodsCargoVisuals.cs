@@ -79,6 +79,8 @@ namespace Rts.Presentation
             table[ResourceKind.Charms] = new CargoVisual(CargoShape.Charm, new Color(0.82f, 0.32f, 0.66f));
             table[ResourceKind.RepairKits] = new CargoVisual(CargoShape.RepairKit, new Color(0.20f, 0.39f, 0.52f));
             table[ResourceKind.Tools] = new CargoVisual(CargoShape.Tool, new Color(0.22f, 0.55f, 0.60f));
+            table[ResourceKind.CutStone] = new CargoVisual(CargoShape.StoneBlock, new Color(0.70f, 0.71f, 0.74f));
+            table[ResourceKind.Frames] = new CargoVisual(CargoShape.Crate, new Color(0.77f, 0.59f, 0.36f));
             return table;
         }
     }

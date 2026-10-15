@@ -51,6 +51,7 @@ namespace Rts.Presentation
         private static void CompareObjectives(IReadOnlyList<KnownObjective> before, IReadOnlyList<KnownObjective> after, uint ownFactionId, List<FrameSoundEvent> output)
         {
             beforeObjectives.Clear(); afterObjectives.Clear();
+            if (before == null || after == null) return;
             for (int i = 0; i < before.Count; i++) beforeObjectives[before[i].Id] = before[i];
             for (int i = 0; i < after.Count; i++) afterObjectives[after[i].Id] = after[i];
             foreach (var pair in afterObjectives)
@@ -88,6 +89,7 @@ namespace Rts.Presentation
         private static void CompareBuildings(IReadOnlyList<BuildingView> before, IReadOnlyList<BuildingView> after, uint ownFactionId, List<FrameSoundEvent> output)
         {
             beforeBuildings.Clear(); afterBuildings.Clear();
+            if (before == null || after == null) return;
             for (int i = 0; i < before.Count; i++) beforeBuildings[before[i].Id] = before[i];
             for (int i = 0; i < after.Count; i++) afterBuildings[after[i].Id] = after[i];
             foreach (var pair in afterBuildings)
@@ -111,6 +113,7 @@ namespace Rts.Presentation
         private static void CompareVillagers(IReadOnlyList<VillagerView> before, IReadOnlyList<VillagerView> after, uint ownFactionId, List<FrameSoundEvent> output)
         {
             beforeVillagers.Clear(); afterVillagers.Clear();
+            if (before == null || after == null) return;
             for (int i = 0; i < before.Count; i++) if (before[i].IsOwn && before[i].Id != 0) beforeVillagers[before[i].Id] = before[i];
             for (int i = 0; i < after.Count; i++) if (after[i].IsOwn && after[i].Id != 0) afterVillagers[after[i].Id] = after[i];
             foreach (var pair in afterVillagers)
@@ -141,6 +144,7 @@ namespace Rts.Presentation
             Dictionary<uint, RenderUnit> beforeIndex, Dictionary<uint, RenderUnit> afterIndex)
         {
             beforeIndex.Clear(); afterIndex.Clear();
+            if (before == null || after == null) return;
             for (int i = 0; i < before.Count; i++) beforeIndex[before[i].Id] = before[i];
             for (int i = 0; i < after.Count; i++) afterIndex[after[i].Id] = after[i];
         }
