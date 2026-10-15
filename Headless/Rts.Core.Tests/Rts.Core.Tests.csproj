@@ -99,6 +99,7 @@
     <Compile Include="ToolsTests.cs" />
   <Compile Include="GoodsMarketTests.cs" />
   <Compile Include="CraftTimingTests.cs" />
+  <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

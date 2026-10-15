@@ -259,6 +259,9 @@ namespace Rts.Simulation
         /// <summary>Craft timing: automatic economies gather more wood until their civilisation's first processing building is complete.</summary>
         public bool CraftTiming;
         public int CraftTimingFoodPerWood = 1;
+        /// <summary>Craft balance: keeps the tollgate outside CraftTiming when set to 0.</summary>
+        public bool CraftBalance;
+        public int CraftBalanceTollgateTiming;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
