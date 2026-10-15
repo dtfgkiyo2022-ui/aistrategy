@@ -184,7 +184,12 @@
     font-size: 13px;
 }
 
-/* Eleven or more resources take three rows: smaller chips so all three fit the bar's height (10-16). */
+/* Nine or more resources take three rows: smaller chips so all three fit the bar's height, packed from the top so
+   none is pushed above it (10-16). */
+.hud-resource-row.is-very-dense {
+    align-content: flex-start;
+}
+
 .hud-resource-row.is-very-dense .hud-resource {
     height: 16px;
     margin-top: 0;

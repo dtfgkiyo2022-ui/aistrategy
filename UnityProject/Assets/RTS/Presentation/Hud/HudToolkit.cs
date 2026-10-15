@@ -2010,8 +2010,8 @@ namespace Rts.Presentation
             slots.Clear();
             // Five or more resources do not fit one row of full cards; they become two rows of small chips (10-10).
             resourceRow.EnableInClassList("is-dense", resources.Count >= 5);
-            // Eleven or more (a late game with the common craft tree and a civilisation's goods) need a third row.
-            resourceRow.EnableInClassList("is-very-dense", resources.Count >= 11);
+            // Nine or more (metallurgy in its first age already has ten with the common craft tree) need a third row.
+            resourceRow.EnableInClassList("is-very-dense", resources.Count >= 9);
             foreach (var entry in resources)
             {
                 var card = new VisualElement { name = "resource-" + entry.Kind };
@@ -2067,6 +2067,9 @@ namespace Rts.Presentation
             {
                 var kind = IconKinds[i];
                 var texture = Resources.Load<Texture2D>("Hud/Icons/" + IconFileName(kind));
+                // The HUD set has no picture for the later goods (incense, charms, repair kits, tack, cut stone...); the
+                // drawn goods icons cover every resource, so they stand in (10-16).
+                if (texture == null) texture = GoodsIcons.Get(kind);
                 resourceIcons[kind] = texture;
                 if (texture == null)
                     Debug.LogWarning("UI Toolkit HUD icon not found at Resources/Hud/Icons/" + IconFileName(kind) + ".");
