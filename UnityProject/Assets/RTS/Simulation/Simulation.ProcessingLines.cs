@@ -67,7 +67,7 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(faction, command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
                 return;
@@ -134,7 +134,7 @@ namespace Rts.Simulation
                 : world.Config.Economy.MineWoodCost;
         }
 
-        private int FindRequestedResourceNode(ProcessingLineKind kind, int requestedCell)
+        private int FindRequestedResourceNode(uint faction, ProcessingLineKind kind, int requestedCell)
         {
             ResourceKind resource = kind == ProcessingLineKind.Bricks ? ResourceKind.Stone
                 : kind == ProcessingLineKind.Rations || kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear || kind == ProcessingLineKind.Planks
@@ -145,7 +145,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != resource || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != resource || node.Remaining <= 0) continue;
                 var distance = DistanceSquared(node.Definition.Position, point);
                 if (best < 0 || distance < DistanceSquared(world.Nodes[best].Definition.Position, point)
                     || distance == DistanceSquared(world.Nodes[best].Definition.Position, point)

@@ -59,9 +59,16 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason));
             }
-            var resources = new List<ResourceView>();
-            foreach (var n in world.Nodes)
-                if (n.Remaining > 0) resources.Add(new ResourceView(n.Definition.Id, n.Definition.Kind, n.Definition.Position, n.Remaining));
+            IReadOnlyList<ResourceView> resources;
+            if (ResourceFogOn)
+                resources = ResourceViewsFor(faction);
+            else
+            {
+                var publicResources = new List<ResourceView>();
+                foreach (var n in world.Nodes)
+                    if (n.Remaining > 0) publicResources.Add(new ResourceView(n.Definition.Id, n.Definition.Kind, n.Definition.Position, n.Remaining));
+                resources = publicResources;
+            }
             int population = LivingVillagers(faction) + LivingSoldiers(faction);
             // V3-2: own belts in full, enemy belts on cells the faction sees now (without what they carry).
             var belts = new List<BeltView>();

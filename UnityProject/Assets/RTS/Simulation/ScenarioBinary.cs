@@ -137,6 +137,9 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
 private const int CraftTimingExtensionId = 34;
 private const int CraftTimingExtensionVersion = 1;
 private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
+        private const int ResourceFogExtensionId = 39;
+        private const int ResourceFogExtensionVersion = 1;
+        private const int ResourceFogExtensionDataLength = sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -179,6 +182,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
             ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
             ,new ExtensionRegistration(CraftTimingExtensionId, CraftTimingExtensionVersion, CraftTimingExtensionDataLength)
+            ,new ExtensionRegistration(ResourceFogExtensionId, ResourceFogExtensionVersion, ResourceFogExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -758,6 +762,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
                     else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
                     else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
+                    else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -821,6 +826,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
                 extensions.RemoveAll(extension => extension != null && extension.Id == GoodsMarketExtensionId && !c.Economy.GoodsMarket);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTimingExtensionId && !c.Economy.CraftTiming);
+                extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1092,6 +1098,14 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                         extensions[i] = CreateCraftTimingExtension(c.Economy);
                     }
                 if (c.Economy.CraftTiming && !hasCraftTiming) extensions.Add(CreateCraftTimingExtension(c.Economy));
+                bool hasResourceFog = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == ResourceFogExtensionId)
+                    {
+                        hasResourceFog = true;
+                        extensions[i] = CreateResourceFogExtension(c.Economy);
+                    }
+                if (c.Economy.ResourceFog && !hasResourceFog) extensions.Add(CreateResourceFogExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1116,6 +1130,28 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 e.CraftTiming = enabled != 0;
                 e.CraftTimingFoodPerWood = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-timing extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateResourceFogExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ResourceFog ? 1 : 0);
+                return new ScenarioExtensionData { Id = ResourceFogExtensionId, Version = ResourceFogExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadResourceFogExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid resource-fog flag.");
+                e.ResourceFog = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing resource-fog extension data.");
             }
         }
 

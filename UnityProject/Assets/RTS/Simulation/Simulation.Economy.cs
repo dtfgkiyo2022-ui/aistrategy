@@ -341,6 +341,22 @@ namespace Rts.Simulation
         private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
         {
             if (kind == ResourceKind.Gold) return NearestGoldNode(position, faction);
+            if (ResourceFogOn)
+            {
+                int best = -1;
+                long bestDistance = 0;
+                for (int i = 0; i < world.Nodes.Length; i++)
+                {
+                    var node = world.Nodes[i];
+                    if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != kind || node.Remaining <= 0) continue;
+                    long dx = node.Definition.Position.X.Raw - position.X.Raw;
+                    long dz = node.Definition.Position.Z.Raw - position.Z.Raw;
+                    long distance = checked(dx * dx + dz * dz);
+                    if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
+                    { best = i; bestDistance = distance; }
+                }
+                return best;
+            }
             int n = world.Nodes.Length;
             var positions = new SimPoint[n];
             var kinds = new ResourceKind[n];
@@ -355,7 +371,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0) continue;
                 if (world.Map.SharedRoute(world.Map.Cell(position), node.Definition.Position, faction).Length == 0) continue;
                 long dx = node.Definition.Position.X.Raw - position.X.Raw, dz = node.Definition.Position.Z.Raw - position.Z.Raw;
                 long distance = checked(dx * dx + dz * dz);
@@ -399,7 +415,7 @@ namespace Rts.Simulation
             for (int n = 0; n < world.Nodes.Length; n++)
             {
                 var node = world.Nodes[n];
-                if (node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0 || nodeId != 0 && node.Definition.Id != nodeId) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Gold || node.Remaining <= 0 || nodeId != 0 && node.Definition.Id != nodeId) continue;
                 if (world.Map.SharedRoute(world.Map.Cell(core), node.Definition.Position, faction).Length == 0) continue;
                 bool dangerFound = false;
                 foreach (int i in world.SoldierTraversal)

@@ -64,6 +64,13 @@ namespace Rts.Simulation
                 w.Value("Factions.Count",(uint)world.Factions.Length);
                 foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds);
                     w.Bools(n+"VisibleCells", f.VisibleCells); w.Bools(n+"ExploredCells", f.ExploredCells);
+                    if (ResourceFogOn)
+                    {
+                        w.Bools(n+"ResourceSeen", f.ResourceSeen);
+                        w.Value(n+"ResourceRemaining.Count", (uint)f.ResourceRemaining.Length);
+                        for (int i = 0; i < f.ResourceRemaining.Length; i++)
+                            w.Value(n+"ResourceRemaining[" + i.ToString(CultureInfo.InvariantCulture) + "]", f.ResourceRemaining[i]);
+                    }
                     for(int i=0;i<f.Objectives.Length;i++) { var m=f.Objectives[i]; string o=n+"Objectives["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(o+"OwnerKnown",m.OwnerKnown); w.Value(o+"Owner",m.OwnerFactionId); w.Value(o+"HpKnown",m.HpKnown); w.Value(o+"Hp",m.Hp); w.Value(o+"LastSeenTick",m.LastSeenTick); }
                 }
                 w.Value("Inputs.Cursor",world.InputCursor);

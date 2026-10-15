@@ -565,6 +565,7 @@ namespace Rts.Simulation
                 if (AgesOn) RevealTowers(ref faction);
                 for (int i = 0; i < faction.VisibleCells.Length; i++) if (faction.VisibleCells[i]) faction.ExploredCells[i] = true;
             }
+            UpdateResourceObservations();
         }
 
         private void Reveal(bool[] visible, SimPoint source, Fix64 radius)

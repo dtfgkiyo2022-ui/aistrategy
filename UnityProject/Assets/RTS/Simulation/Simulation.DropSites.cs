@@ -112,6 +112,7 @@ namespace Rts.Simulation
             int bestNode = -1;
             for (int n = 0; n < world.Nodes.Length; n++)
             {
+                if (!ResourceKnownToFaction(faction, n)) continue;
                 if (gatherers[n] < DropSiteGatherers || (bestNode >= 0 && gatherers[n] <= gatherers[bestNode])) continue;
                 // Early arms: not by a point that is nearly gathered out.
                 if (EarlyArmsOn && world.Nodes[n].Remaining < EarlyDropSiteMinRemaining) continue;

@@ -85,6 +85,9 @@ namespace Rts.Simulation
         internal long[] CultObservedLastSeenTicks;
         internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
+        /// <summary>Resource amounts last seen by this faction. Allocated only while ResourceFog is enabled.</summary>
+        internal bool[] ResourceSeen;
+        internal int[] ResourceRemaining;
         internal ObjectiveMemory[] Objectives;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
@@ -378,6 +381,8 @@ namespace Rts.Simulation
                     CultObservedContactIds = new uint[Soldiers.Length], CultObservedKinds = new UnitKind[Soldiers.Length],
                     CultObservedLastSeenTicks = new long[Soldiers.Length], CultObservedValidUntilTicks = new long[Soldiers.Length],
                     VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
+                    ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
+                    ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
@@ -552,6 +557,7 @@ namespace Rts.Simulation
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+            Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -963,6 +969,7 @@ namespace Rts.Simulation
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                   RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
                   RationsFoodReserve = e.RationsFoodReserve,
+                  ResourceFog = e.ResourceFog,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,
                   BrickKilnWork = e.BrickKilnWork, BrickKilnHp = e.BrickKilnHp, BrickTicks = e.BrickTicks,
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,

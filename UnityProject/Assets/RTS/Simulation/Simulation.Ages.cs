@@ -31,6 +31,7 @@ namespace Rts.Simulation
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
         private bool RationsOn => AgesOn && world.Config.Economy.Rations;
+        private bool ResourceFogOn => world.Config.Economy.Enabled && world.Config.Economy.ResourceFog;
         private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Bricks;
         private bool TackOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tack;
         private bool PlanksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Planks;
@@ -222,13 +223,17 @@ namespace Rts.Simulation
         /// Ticks per food of a farm on <paramref name="origin"/> (27): FarmStepTicks faster for each food point within
         /// FarmFoodReach of its centre and once more if river lies within FarmRiverReach, never under FarmMinTicks.
         /// </summary>
-        private int FarmInterval(int origin)
+        private int FarmInterval(uint faction, int origin)
         {
             var rules = world.Config.Economy;
             var centre = FootprintCenter(origin, rules.FarmSizeCells);
             int steps = 0;
-            foreach (var node in world.Nodes)
-                if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, centre, Fix64.FromInt(rules.FarmFoodReach))) steps++;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (ResourceKnownToFaction(faction, i)
+                    && node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, centre, Fix64.FromInt(rules.FarmFoodReach))) steps++;
+            }
             // River: only the cells around the farm can be in reach, so only they are looked at.
             var terrain = world.Config.Map.Terrain;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, cellSize = world.Config.Map.CellSizeMeters;
@@ -495,8 +500,10 @@ namespace Rts.Simulation
             var core = OwnCore(faction).Definition.Position;
             int ore = 0, food = 0;
             // The ground, not what is left of it: points gathered empty in the primitive age still count.
-            foreach (var node in world.Nodes)
+            for (int i = 0; i < world.Nodes.Length; i++)
             {
+                var node = world.Nodes[i];
+                if (!ResourceKnownToFaction(faction, i)) continue;
                 if (node.Definition.Kind == ResourceKind.Ore && InRange(node.Definition.Position, core, Fix64.FromInt(CivOreReach))) ore++;
                 else if (node.Definition.Kind == ResourceKind.Food && InRange(node.Definition.Position, core, Fix64.FromInt(CivFoodReach))) food++;
             }
@@ -559,7 +566,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0
                     || !InRange(node.Definition.Position, core, Fix64.FromInt(CivForestReach))) continue;
                 int cell = world.Map.Cell(node.Definition.Position);
                 if (!TouchesForest(cell) || !HasUsableLumberCampSite(faction, cell, node.Definition.Id)) continue;
@@ -612,7 +619,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0
                     || !InRange(node.Definition.Position, core, Fix64.FromInt(CivStoneReach))) continue;
                 int cell = world.Map.Cell(node.Definition.Position);
                 if (!HasUsableQuarrySite(faction, cell, node.Definition.Id)) continue;

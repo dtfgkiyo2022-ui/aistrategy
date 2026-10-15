@@ -482,7 +482,7 @@ namespace Rts.Simulation
                 for (int n = 0; n < world.Nodes.Length; n++)
                 {
                     var node = world.Nodes[n];
-                    if (!node.Fishing || node.Remaining <= 0) continue;
+                    if (!ResourceKnownToFaction(faction, n) || !node.Fishing || node.Remaining <= 0) continue;
                     BigInteger distance = DistanceSquared(centre, node.Definition.Position);
                     if (distance > limit) continue;
                     if (!nearFish || distance < fishDistance) { nearFish = true; fishDistance = distance; }
@@ -1308,7 +1308,7 @@ namespace Rts.Simulation
             foreach (int n in order)
             {
                 var node = world.Nodes[n];
-                if (node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0) continue;
                 int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
                 for (int dz = 0; dz < size; dz++)
                     for (int dx = 0; dx < size; dx++)
@@ -1343,7 +1343,7 @@ namespace Rts.Simulation
             foreach (int n in order)
             {
                 var node = world.Nodes[n];
-                if (node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Stone || node.Remaining <= 0) continue;
                 int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
                 for (int dz = 0; dz < size; dz++)
                     for (int dx = 0; dx < size; dx++)
@@ -1388,7 +1388,7 @@ namespace Rts.Simulation
             foreach (int n in order)
             {
                 var node = world.Nodes[n];
-                if (node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0) continue;
                 int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
                 for (int dz = 0; dz < size; dz++)
                     for (int dx = 0; dx < size; dx++)
@@ -1443,7 +1443,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != ResourceKind.Wood || node.Remaining <= 0) continue;
                 if (bestNode < 0 || DistanceSquared(node.Definition.Position, core) < DistanceSquared(world.Nodes[bestNode].Definition.Position, core)
                     || DistanceSquared(node.Definition.Position, core) == DistanceSquared(world.Nodes[bestNode].Definition.Position, core)
                     && node.Definition.Id < world.Nodes[bestNode].Definition.Id) bestNode = i;
@@ -1870,7 +1870,7 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
-                            candidates.Add((FarmInterval(origin), order++, origin, side));
+                            candidates.Add((FarmInterval(faction, origin), order++, origin, side));
                             break;
                         }
                     }
