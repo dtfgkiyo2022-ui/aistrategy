@@ -17,7 +17,7 @@ namespace Rts.Simulation
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
             ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
-            ResourceKind.CutStone, ResourceKind.Frames
+            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit
         };
         // V3-9 #2 provisional caravan safety policy. The values are deliberately small and tick-based:
         // danger is only what the faction currently sees, and a route needs 20 clear ticks before restarting.
@@ -30,6 +30,7 @@ namespace Rts.Simulation
         private bool GoodsTradeable(ResourceKind kind)
         {
             if ((kind == ResourceKind.CutStone || kind == ResourceKind.Frames) && !CraftTree1On) return false;
+            if ((kind == ResourceKind.ArmsKit || kind == ResourceKind.Scholarly || kind == ResourceKind.FineArmsKit) && !CraftTree2On) return false;
             foreach (var goods in GoodsKinds) if (goods == kind) return true;
             return false;
         }
@@ -41,7 +42,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.Tack ? e.Tack : kind == ResourceKind.Planks ? e.Planks : kind == ResourceKind.Books ? e.Books
                 : kind == ResourceKind.Incense ? e.Incense : kind == ResourceKind.Charms ? e.Charms
                 : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools
-                : kind == ResourceKind.CutStone ? e.CutStone : kind == ResourceKind.Frames ? e.Frames : 0;
+                : kind == ResourceKind.CutStone ? e.CutStone : kind == ResourceKind.Frames ? e.Frames
+                : kind == ResourceKind.ArmsKit ? e.ArmsKit : kind == ResourceKind.Scholarly ? e.Scholarly : kind == ResourceKind.FineArmsKit ? e.FineArmsKit : 0;
 
         private static int GoodsValue(EconomyRules rules, ResourceKind kind)
             => kind == ResourceKind.Steel ? rules.GoodsValueSteel : kind == ResourceKind.BowGear ? rules.GoodsValueBowGear
@@ -50,7 +52,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.Books ? rules.GoodsValueBooks : kind == ResourceKind.Incense ? rules.GoodsValueIncense
                 : kind == ResourceKind.Charms ? rules.GoodsValueCharms : kind == ResourceKind.RepairKits ? rules.GoodsValueRepairKits
                 : kind == ResourceKind.Tools ? rules.GoodsValueTools : kind == ResourceKind.CutStone ? 4
-                : kind == ResourceKind.Frames ? 10 : 0;
+                : kind == ResourceKind.Frames ? 10 : kind == ResourceKind.ArmsKit ? rules.GoodsValueArmsKit
+                : kind == ResourceKind.Scholarly ? rules.GoodsValueScholarly : kind == ResourceKind.FineArmsKit ? rules.GoodsValueFineArmsKit : 0;
 
         // The goods whose workshops stop at a stock limit. Selling at that limit lets the workshop run again.
         private static int GoodsCap(EconomyRules rules, ResourceKind kind)
@@ -107,6 +110,8 @@ namespace Rts.Simulation
             foreach (var goods in GoodsKinds)
             {
                 if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !CraftTree1On) continue;
+                if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !CraftTree2On) continue;
+                if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !CraftTree2On) continue;
                 prices.Add(new GoodsPriceView(goods, MarketReturnFor(faction, checked(GoodsValue(rules, goods) * rules.GoodsTradeLot))));
             }
             return prices;

@@ -183,6 +183,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.ToolShop, e.ToolShopWoodCost, 0, e.ToolShopWork);
             Add(rows, BuildingKind.Stonecutter, e.StonecutterWoodCost, 0, e.StonecutterWork);
             Add(rows, BuildingKind.Joinery, e.JoineryWoodCost, 0, e.JoineryWork);
+            Add(rows, BuildingKind.Assembler, e.AssemblerWoodCost, 0, e.AssemblerWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

@@ -216,6 +216,8 @@ namespace Rts.Simulation
         private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
         private static bool QueueCharmsAt(BuildingState b, int i) => b.QueueCharms != null && i >= 0 && i < b.QueueCharms.Length && b.QueueCharms[i];
         private static bool QueueToolsAt(BuildingState b, int i) => b.QueueTools != null && i >= 0 && i < b.QueueTools.Length && b.QueueTools[i];
+        private static bool QueueArmsAt(BuildingState b, int i) => b.QueueArmsKit != null && i >= 0 && i < b.QueueArmsKit.Length && b.QueueArmsKit[i];
+        private static bool QueueFineArmsAt(BuildingState b, int i) => b.QueueFineArmsKit != null && i >= 0 && i < b.QueueFineArmsKit.Length && b.QueueFineArmsKit[i];
         private static bool QueueToolsAt(FactionEconomy economy, int i)
             => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
 
@@ -252,6 +254,8 @@ namespace Rts.Simulation
             => PlanksAllowed(faction) && kind == UnitKind.Ram;
         private bool UsesCharms(uint faction, UnitKind kind)
             => CharmsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk;
+        private bool UsesArmsKit(UnitKind kind)
+            => kind != UnitKind.Villager && kind != UnitKind.Scout && kind != UnitKind.Monk;
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {
             return TrainTicksFor(faction, kind, ticks, rationed, false);
@@ -330,6 +334,10 @@ namespace Rts.Simulation
                 e.Charms = checked(e.Charms - 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed + 1);
             }
+            bool fineArms = CraftTree2On && UsesArmsKit(kind) && e.FineArmsKit >= 1;
+            bool arms = CraftTree2On && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
+            if (fineArms) { e.FineArmsKit--; e.FineArmsKitConsumed++; }
+            else if (arms) { e.ArmsKit--; e.ArmsKitConsumed++; }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);
             b.Queued++;
             if (AgesOn || kind == UnitKind.Monk)
@@ -360,6 +368,13 @@ namespace Rts.Simulation
                 Array.Resize(ref charms, charms.Length + 1);
                 charms[charms.Length - 1] = charmed;
                 b.QueueCharms = charms;
+            }
+            if (CraftTree2On)
+            {
+                var armsQueue = b.QueueArmsKit ?? Array.Empty<bool>();
+                Array.Resize(ref armsQueue, armsQueue.Length + 1); armsQueue[armsQueue.Length - 1] = arms; b.QueueArmsKit = armsQueue;
+                var fineQueue = b.QueueFineArmsKit ?? Array.Empty<bool>();
+                Array.Resize(ref fineQueue, fineQueue.Length + 1); fineQueue[fineQueue.Length - 1] = fineArms; b.QueueFineArmsKit = fineQueue;
             }
         }
 
@@ -418,6 +433,8 @@ namespace Rts.Simulation
             bool rationed = QueueRationsAt(b, b.Queued - 1);
             bool planked = QueuePlanksAt(b, b.Queued - 1);
             bool charmed = QueueCharmsAt(b, b.Queued - 1);
+            bool armed = QueueArmsAt(b, b.Queued - 1);
+            bool fineArmed = QueueFineArmsAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
@@ -425,6 +442,8 @@ namespace Rts.Simulation
             if (b.QueueRations != null && b.QueueRations.Length > 0) Array.Resize(ref b.QueueRations, b.QueueRations.Length - 1);
             if (b.QueuePlanks != null && b.QueuePlanks.Length > 0) Array.Resize(ref b.QueuePlanks, b.QueuePlanks.Length - 1);
             if (b.QueueCharms != null && b.QueueCharms.Length > 0) Array.Resize(ref b.QueueCharms, b.QueueCharms.Length - 1);
+            if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0) Array.Resize(ref b.QueueArmsKit, b.QueueArmsKit.Length - 1);
+            if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0) Array.Resize(ref b.QueueFineArmsKit, b.QueueFineArmsKit.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -474,6 +493,8 @@ namespace Rts.Simulation
                 e.Charms = checked(e.Charms + 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed - 1);
             }
+            if (fineArmed) { e.FineArmsKit++; e.FineArmsKitConsumed--; }
+            else if (armed) { e.ArmsKit++; e.ArmsKitConsumed--; }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -504,6 +525,16 @@ namespace Rts.Simulation
                 var rest = new bool[b.QueueCharms.Length - 1];
                 Array.Copy(b.QueueCharms, 1, rest, 0, rest.Length);
                 b.QueueCharms = rest;
+            }
+            if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0)
+            {
+                var rest = new bool[b.QueueArmsKit.Length - 1];
+                Array.Copy(b.QueueArmsKit, 1, rest, 0, rest.Length); b.QueueArmsKit = rest;
+            }
+            if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0)
+            {
+                var rest = new bool[b.QueueFineArmsKit.Length - 1];
+                Array.Copy(b.QueueFineArmsKit, 1, rest, 0, rest.Length); b.QueueFineArmsKit = rest;
             }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;

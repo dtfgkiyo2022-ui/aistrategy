@@ -873,6 +873,7 @@ namespace Rts.Presentation
                 case BuildingKind.ToolShop: return UiText.T("Tool shop", "工具工房");
                 case BuildingKind.Stonecutter: return UiText.T("Stonecutter", "石工場");
                 case BuildingKind.Joinery: return UiText.T("Joinery", "木工所");
+                case BuildingKind.Assembler: return "Assembler";
                 default: return kind.ToString();
             }
         }

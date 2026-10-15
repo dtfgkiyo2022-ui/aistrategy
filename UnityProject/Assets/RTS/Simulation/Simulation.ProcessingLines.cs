@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Frames)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Assembler)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -67,7 +67,8 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            bool commonLine = CraftTreeCommonAllowed(faction) && (command.Line == ProcessingLineKind.Planks || command.Line == ProcessingLineKind.CutStone || command.Line == ProcessingLineKind.Frames);
+            bool commonLine = CraftTreeCommonAllowed(faction) && (command.Line == ProcessingLineKind.Planks || command.Line == ProcessingLineKind.CutStone || command.Line == ProcessingLineKind.Frames)
+                || AssemblerAllowed(faction) && command.Line == ProcessingLineKind.Assembler;
             if (!commonLine && command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
@@ -100,6 +101,7 @@ namespace Rts.Simulation
         {
             if (kind == ProcessingLineKind.Planks || kind == ProcessingLineKind.CutStone) return CraftTreeCommonAllowed(faction);
             if (kind == ProcessingLineKind.Frames) return JoineryAllowed(faction);
+            if (kind == ProcessingLineKind.Assembler) return AssemblerAllowed(faction);
             if (kind == ProcessingLineKind.Bricks) return BricksAllowed(faction);
             if (kind == ProcessingLineKind.Rations) return RationsAllowed(faction);
             if (kind == ProcessingLineKind.Tack) return TackAllowed(faction);
@@ -134,6 +136,7 @@ namespace Rts.Simulation
                 : kind == ProcessingLineKind.Tools ? world.Config.Economy.ToolShopWoodCost
                 : kind == ProcessingLineKind.CutStone ? world.Config.Economy.StonecutterWoodCost
                 : kind == ProcessingLineKind.Frames ? world.Config.Economy.JoineryWoodCost
+                : kind == ProcessingLineKind.Assembler ? world.Config.Economy.AssemblerWoodCost
             : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
                 : world.Config.Economy.MineWoodCost;

@@ -336,12 +336,22 @@ namespace Rts.Simulation
             // effect at the common start point so both the player's EconomyCommand.Research route and the
             // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
             bool bookResearch = BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
+            bool scholarlyResearch = CraftTree2On && !bookResearch && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch;
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);
                 wood = BookDiscount(wood, world.Config.Economy.BookResearchCostPermille);
                 metal = BookDiscount(metal, world.Config.Economy.BookResearchCostPermille);
                 gems = BookDiscount(gems, world.Config.Economy.BookResearchCostPermille);
+            }
+            if (scholarlyResearch)
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.ScholarlyCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.ScholarlyCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.ScholarlyCostPermille);
+                oreForMetal = ScholarlyDiscount(oreForMetal, world.Config.Economy.ScholarlyCostPermille);
+                gems = ScholarlyDiscount(gems, world.Config.Economy.ScholarlyCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.ScholarlyCostPermille);
             }
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
@@ -358,9 +368,16 @@ namespace Rts.Simulation
                 economy.BooksConsumed = checked(economy.BooksConsumed + world.Config.Economy.BooksPerResearch);
                 economy.BooksUsedResearch++;
             }
+            if (scholarlyResearch)
+            {
+                economy.Scholarly = checked(economy.Scholarly - world.Config.Economy.ScholarlyPerResearch);
+                economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + world.Config.Economy.ScholarlyPerResearch);
+                economy.ScholarlyUsedResearch++;
+            }
             smith.Researching = tech;
             int ticks = academy ? AcademyTicks(tech) : mountain ? MountainTicks(tech) : fishing ? FishingTicks(tech) : tollgate ? TollgateTicks(tech) : metropolis ? MetropolisTicks(tech) : sanctuary ? SanctuaryTicks(tech) : TechTicks(tech);
-            smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000)) : ticks;
+            smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000))
+                : scholarlyResearch ? Math.Max(1, checked((ticks * world.Config.Economy.ScholarlyTimePermille + 999) / 1000)) : ticks;
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }
@@ -678,6 +695,9 @@ namespace Rts.Simulation
         }
 
         private int BookDiscount(int cost, int permille)
+            => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
+
+        private int ScholarlyDiscount(int cost, int permille)
             => cost <= 0 ? 0 : checked((cost * permille + 999) / 1000);
 
         private bool AcademyOffenseReady(uint faction)

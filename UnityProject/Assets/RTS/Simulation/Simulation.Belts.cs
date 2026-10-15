@@ -183,6 +183,9 @@ namespace Rts.Simulation
                 case ResourceKind.Planks: economy.Planks = checked(economy.Planks + amount); break;
                 case ResourceKind.CutStone: economy.CutStone = checked(economy.CutStone + amount); break;
                 case ResourceKind.Frames: economy.Frames = checked(economy.Frames + amount); break;
+                case ResourceKind.ArmsKit: economy.ArmsKit = checked(economy.ArmsKit + amount); break;
+                case ResourceKind.Scholarly: economy.Scholarly = checked(economy.Scholarly + amount); break;
+                case ResourceKind.FineArmsKit: economy.FineArmsKit = checked(economy.FineArmsKit + amount); break;
                 case ResourceKind.Books: economy.Books = checked(economy.Books + amount); break;
                 case ResourceKind.Incense: economy.Incense = Math.Min(world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;

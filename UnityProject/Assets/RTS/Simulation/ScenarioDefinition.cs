@@ -215,6 +215,14 @@ namespace Rts.Simulation
         public int CraftTreeJoineryTicks = 80, CraftTreeJoineryPlankInput = 2, CraftTreeJoineryCutStoneInput = 1;
         public int CraftTreeFramesPerBuilding = 1, CraftTreeFrameWoodPermille = 700, CraftTreeFrameWorkPermille = 700;
         public int CraftTreeLevel2FramesCost = 2;
+        /// <summary>CraftTree2: the shared second-stage assembler and its effects.</summary>
+        public bool CraftTree2;
+        public int AssemblerSizeCells = 2, AssemblerWoodCost = 120, AssemblerWork = 300, AssemblerHp = 600;
+        public int ArmsKitTicks = 80, ArmsKitPlankInput = 1, ArmsKitCharcoalInput = 2, ArmsKitSteelInput = 1;
+        public int ScholarlyTicks = 100, ScholarlyPlankInput = 1, ScholarlyCharcoalInput = 1, ScholarlyFoodInput = 2;
+        public int ArmsKitAttack = 2, ArmsKitHpPermille = 1100, FineArmsKitAttack = 3, FineArmsKitHpPermille = 1150;
+        public int ScholarlyPerResearch = 1, ScholarlyCostPermille = 600, ScholarlyTimePermille = 700;
+        public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;

@@ -67,6 +67,16 @@ namespace Rts.Simulation
         public int BooksProduced { get; internal set; }
         public int BooksConsumed { get; internal set; }
         public int BooksUsedResearch { get; internal set; }
+        public int ArmsKit { get; internal set; }
+        public int ArmsKitProduced { get; internal set; }
+        public int ArmsKitConsumed { get; internal set; }
+        public int FineArmsKit { get; internal set; }
+        public int FineArmsKitProduced { get; internal set; }
+        public int FineArmsKitConsumed { get; internal set; }
+        public int Scholarly { get; internal set; }
+        public int ScholarlyProduced { get; internal set; }
+        public int ScholarlyConsumed { get; internal set; }
+        public int ScholarlyUsedResearch { get; internal set; }
         public int PreservesProduced { get; internal set; }
         public int PreservesConvertedFood { get; internal set; }
         public int JewelsProduced { get; internal set; }
@@ -188,6 +198,16 @@ namespace Rts.Simulation
                     BooksProduced = economy.BooksProduced,
                     BooksConsumed = economy.BooksConsumed,
                     BooksUsedResearch = economy.BooksUsedResearch,
+                    ArmsKit = economy.ArmsKit,
+                    ArmsKitProduced = economy.ArmsKitProduced,
+                    ArmsKitConsumed = economy.ArmsKitConsumed,
+                    FineArmsKit = economy.FineArmsKit,
+                    FineArmsKitProduced = economy.FineArmsKitProduced,
+                    FineArmsKitConsumed = economy.FineArmsKitConsumed,
+                    Scholarly = economy.Scholarly,
+                    ScholarlyProduced = economy.ScholarlyProduced,
+                    ScholarlyConsumed = economy.ScholarlyConsumed,
+                    ScholarlyUsedResearch = economy.ScholarlyUsedResearch,
                     PreservesProduced = economy.PreservesProduced,
                     PreservesConvertedFood = economy.PreservesConvertedFood,
                     JewelsProduced = economy.JewelsProduced,

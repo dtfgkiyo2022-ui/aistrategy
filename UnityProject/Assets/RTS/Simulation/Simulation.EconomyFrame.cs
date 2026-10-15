@@ -59,7 +59,8 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
-                    CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1));
+                    CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
+                    own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
             }
             var resources = new List<ResourceView>();
             foreach (var n in world.Nodes)
@@ -272,7 +273,26 @@ namespace Rts.Simulation
                 framesPerBuilding: CraftTree1On ? rules.CraftTreeFramesPerBuilding : 0,
                 frameWoodPermille: CraftTree1On ? rules.CraftTreeFrameWoodPermille : 0,
                 frameWorkPermille: CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0,
-                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0);
+                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0,
+                craftTree2Enabled: CraftTree2On,
+                armsKit: CraftTree2On ? economy.ArmsKit : 0,
+                scholarly: CraftTree2On ? economy.Scholarly : 0,
+                fineArmsKit: CraftTree2On ? economy.FineArmsKit : 0,
+                assemblerWoodCost: AssemblerAllowed(faction) ? rules.AssemblerWoodCost : 0,
+                assemblerSizeCells: AssemblerAllowed(faction) ? rules.AssemblerSizeCells : 0,
+                armsKitAttack: CraftTree2On ? rules.ArmsKitAttack : 0,
+                armsKitHpPermille: CraftTree2On ? rules.ArmsKitHpPermille : 0,
+                scholarlyPerResearch: CraftTree2On ? rules.ScholarlyPerResearch : 0,
+                scholarlyCostPermille: CraftTree2On ? rules.ScholarlyCostPermille : 0,
+                scholarlyTimePermille: CraftTree2On ? rules.ScholarlyTimePermille : 0,
+                armsKitTicks: CraftTree2On ? rules.ArmsKitTicks : 0,
+                armsKitPlankInput: CraftTree2On ? rules.ArmsKitPlankInput : 0,
+                armsKitCharcoalInput: CraftTree2On ? rules.ArmsKitCharcoalInput : 0,
+                armsKitSteelInput: CraftTree2On ? rules.ArmsKitSteelInput : 0,
+                scholarlyTicks: CraftTree2On ? rules.ScholarlyTicks : 0,
+                scholarlyPlankInput: CraftTree2On ? rules.ScholarlyPlankInput : 0,
+                scholarlyCharcoalInput: CraftTree2On ? rules.ScholarlyCharcoalInput : 0,
+                scholarlyFoodInput: CraftTree2On ? rules.ScholarlyFoodInput : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

@@ -229,6 +229,11 @@ namespace Rts.Simulation
                         economy.FramesProduced++;
                     }
                 }
+                else if (AssemblerAllowed(b.FactionId) && b.Kind == BuildingKind.Assembler)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    AdvanceAssembler(ref b, ref economy);
+                }
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
@@ -480,6 +485,103 @@ namespace Rts.Simulation
         {
             if (!CraftTree1On || building.Level < 2) return baseTicks;
             return Math.Max(1, checked((baseTicks * 2 + 2) / 3));
+        }
+
+        private void AdvanceAssembler(ref BuildingState building, ref FactionEconomy economy)
+        {
+            if (building.Recipe == RecipeKind.None) return;
+            if (building.Timer > 0)
+            {
+                if (--building.Timer == 0)
+                {
+                    if (building.Recipe == RecipeKind.Frames) { economy.Frames++; economy.FramesProduced++; }
+                    else if (building.Recipe == RecipeKind.ArmsKit)
+                    {
+                        if (building.InputSecondaryKind == ResourceKind.Steel) { economy.FineArmsKit++; economy.FineArmsKitProduced++; }
+                        else { economy.ArmsKit++; economy.ArmsKitProduced++; }
+                    }
+                    else if (building.Recipe == RecipeKind.Scholarly) { economy.Scholarly++; economy.ScholarlyProduced++; }
+                    building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
+                }
+                return;
+            }
+            var rules = world.Config.Economy;
+            if (building.Recipe == RecipeKind.Frames)
+            {
+                Fill(ref economy.Planks, ref building.Input, rules.CraftTreeJoineryPlankInput);
+                if (economy.CutStone > 0 || building.InputSecondaryKind == ResourceKind.CutStone)
+                {
+                    Fill(ref economy.CutStone, ref building.InputSecondary, rules.CraftTreeJoineryCutStoneInput);
+                    building.InputSecondaryKind = ResourceKind.CutStone;
+                }
+                else
+                {
+                    Fill(ref economy.Bricks, ref building.InputSecondary, rules.CraftTreeJoineryCutStoneInput);
+                    building.InputSecondaryKind = ResourceKind.Bricks;
+                }
+                if (building.Input < rules.CraftTreeJoineryPlankInput || building.InputSecondary < rules.CraftTreeJoineryCutStoneInput) return;
+                if (building.InputSecondaryKind == ResourceKind.Bricks) economy.BricksConsumed = checked(economy.BricksConsumed + rules.CraftTreeJoineryCutStoneInput);
+                else economy.CutStoneConsumed = checked(economy.CutStoneConsumed + rules.CraftTreeJoineryCutStoneInput);
+                building.Timer = CraftTicksFor(building, rules.CraftTreeJoineryTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.ArmsKit)
+            {
+                Fill(ref economy.Planks, ref building.Input, rules.ArmsKitPlankInput);
+                if (building.InputSecondaryKind == 0)
+                    building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel : ResourceKind.Charcoal;
+                if (building.InputSecondaryKind == ResourceKind.Steel) Fill(ref economy.Steel, ref building.InputSecondary, rules.ArmsKitSteelInput);
+                else Fill(ref economy.Charcoal, ref building.InputSecondary, rules.ArmsKitCharcoalInput);
+                if (building.Input < rules.ArmsKitPlankInput || building.InputSecondary < (building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : rules.ArmsKitCharcoalInput)) return;
+                building.Timer = CraftTicksFor(building, rules.ArmsKitTicks);
+                return;
+            }
+            Fill(ref economy.Planks, ref building.Input, rules.ScholarlyPlankInput);
+            Fill(ref economy.Charcoal, ref building.InputSecondary, rules.ScholarlyCharcoalInput);
+            Fill(ref economy.Food, ref building.InputTertiary, rules.ScholarlyFoodInput);
+            building.InputSecondaryKind = ResourceKind.Charcoal;
+            if (building.Input < rules.ScholarlyPlankInput || building.InputSecondary < rules.ScholarlyCharcoalInput || building.InputTertiary < rules.ScholarlyFoodInput) return;
+            building.Timer = CraftTicksFor(building, rules.ScholarlyTicks);
+        }
+
+        private static void Fill(ref int stock, ref int slot, int required)
+        {
+            if (slot >= required || stock <= 0) return;
+            int amount = Math.Min(stock, required - slot);
+            stock -= amount; slot += amount;
+        }
+
+        private void SetAssemblerRecipe(uint faction, uint buildingId, RecipeKind recipe)
+        {
+            if (!AssemblerAllowed(faction) || !OwnBuilding(faction, buildingId, out int index)) return;
+            ref var building = ref world.Buildings[index];
+            if (!building.Alive || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Scholarly) return;
+            RefundAssemblerInputs(faction, ref building);
+            building.Recipe = recipe;
+            building.Timer = 0;
+            building.InputSecondaryKind = 0;
+        }
+
+        private void RefundAssemblerInputs(uint faction, ref BuildingState building)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            if (building.Recipe == RecipeKind.Frames)
+            {
+                economy.Planks += building.Input;
+                if (building.InputSecondaryKind == ResourceKind.Bricks) economy.Bricks += building.InputSecondary;
+                else economy.CutStone += building.InputSecondary;
+            }
+            else if (building.Recipe == RecipeKind.ArmsKit)
+            {
+                if (building.InputSecondaryKind == ResourceKind.Steel) economy.Steel += building.InputSecondary;
+                else economy.Charcoal += building.InputSecondary;
+                economy.Planks += building.Input;
+            }
+            else if (building.Recipe == RecipeKind.Scholarly)
+            {
+                economy.Planks += building.Input; economy.Charcoal += building.InputSecondary; economy.Food += building.InputTertiary;
+            }
+            building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
         }
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>

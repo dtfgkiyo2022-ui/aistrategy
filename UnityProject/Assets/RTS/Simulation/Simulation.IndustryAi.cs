@@ -31,6 +31,7 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             DecideCraftTree1(faction);
+            DecideCraftTree2(faction);
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
@@ -143,6 +144,37 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private void DecideCraftTree2(uint faction)
+        {
+            if (!AssemblerAllowed(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int existing = OwnBuildingIndex(faction, BuildingKind.Assembler);
+            if (existing >= 0)
+            {
+                ref var current = ref world.Buildings[existing];
+                if (current.Alive && current.Recipe == RecipeKind.None && current.Complete)
+                    current.Recipe = ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
+                return;
+            }
+            if (!CompleteBarracks(faction) || economy.Wood < rules.AssemblerWoodCost + 20) return;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), rules.AssemblerSizeCells);
+            if (origin < 0) return;
+            PlaceBuildingAt(faction, BuildingKind.Assembler, origin, Facing.North, 0);
+            world.Buildings[world.BuildingCount - 1].Recipe = ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
+        }
+
+        private bool ShouldResearchWithAssembler(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.Complete && b.FactionId == faction
+                    && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy) && b.Researching != 0) return true;
+            }
+            return world.Economies[faction - 1].Age >= 2 && OwnBuildingIndex(faction, BuildingKind.Blacksmith) >= 0;
         }
 
         private void DecideCraftTree1(uint faction)

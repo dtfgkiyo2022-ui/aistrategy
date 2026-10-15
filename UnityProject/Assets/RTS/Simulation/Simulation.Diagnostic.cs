@@ -151,6 +151,13 @@ namespace Rts.Simulation
                     w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
                     w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
                 }
+                if (CraftTree2On)
+                {
+                    w.Value(n + "ArmsKit", e.ArmsKit); w.Value(n + "ArmsKitProduced", e.ArmsKitProduced); w.Value(n + "ArmsKitConsumed", e.ArmsKitConsumed);
+                    w.Value(n + "FineArmsKit", e.FineArmsKit); w.Value(n + "FineArmsKitProduced", e.FineArmsKitProduced); w.Value(n + "FineArmsKitConsumed", e.FineArmsKitConsumed);
+                    w.Value(n + "Scholarly", e.Scholarly); w.Value(n + "ScholarlyProduced", e.ScholarlyProduced); w.Value(n + "ScholarlyConsumed", e.ScholarlyConsumed);
+                    w.Value(n + "ScholarlyUsedResearch", e.ScholarlyUsedResearch);
+                }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
@@ -306,6 +313,17 @@ namespace Rts.Simulation
                     {
                         w.Value(n + "Level", b.Level);
                         w.Value(n + "FramesUsed", b.FramesUsed);
+                    }
+                    if (CraftTree2On)
+                    {
+                        w.Value(n + "InputTertiary", b.InputTertiary); w.Value(n + "Recipe", (byte)b.Recipe);
+                        w.Value(n + "InputSecondaryKind", (byte)b.InputSecondaryKind);
+                        var armed = b.QueueArmsKit ?? Array.Empty<bool>();
+                        var fineArmed = b.QueueFineArmsKit ?? Array.Empty<bool>();
+                        w.Value(n + "QueueArmsKit.Count", (uint)armed.Length);
+                        for (int q = 0; q < armed.Length; q++) w.Value(n + "QueueArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", armed[q]);
+                        w.Value(n + "QueueFineArmsKit.Count", (uint)fineArmed.Length);
+                        for (int q = 0; q < fineArmed.Length; q++) w.Value(n + "QueueFineArmsKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", fineArmed[q]);
                     }
                     if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                     {

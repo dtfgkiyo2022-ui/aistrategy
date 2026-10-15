@@ -100,6 +100,7 @@
   <Compile Include="GoodsMarketTests.cs" />
     <Compile Include="CraftTimingTests.cs" />
     <Compile Include="CraftTree1Tests.cs" />
+    <Compile Include="CraftTree2Tests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

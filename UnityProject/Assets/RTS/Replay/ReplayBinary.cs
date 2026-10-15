@@ -139,6 +139,8 @@ namespace Rts.Replay
                 if(e.Kind==EconomyCommandKind.Research) w.Write((byte)e.Tech);
                 // V3-5: only a trade carries what it gives and takes.
                 if(e.Kind==EconomyCommandKind.Trade) { w.Write((byte)e.Give); w.Write((byte)e.Take); }
+                // CraftTree2: only an assembler recipe change carries the selected recipe.
+                if(e.Kind==EconomyCommandKind.SetRecipe) w.Write((byte)e.Recipe);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -181,7 +183,7 @@ namespace Rts.Replay
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take,
-                    line));
+                    line, ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });
