@@ -113,6 +113,9 @@ namespace Rts.Simulation
         private const int CivVarietyExtensionId = 26;
         private const int CivVarietyExtensionVersion = 1;
         private const int CivVarietyExtensionDataLength = 2 * sizeof(int);
+        private const int CivVarietyCapsExtensionId = 35;
+        private const int CivVarietyCapsExtensionVersion = 1;
+        private const int CivVarietyCapsExtensionDataLength = 3 * sizeof(int);
         private const int JewelsExtensionId = 27;
         private const int JewelsExtensionVersion = 1;
         private const int JewelsExtensionDataLength = 14 * sizeof(int);
@@ -171,6 +174,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(BooksExtensionId, BooksExtensionVersion, BooksExtensionDataLength)
             ,new ExtensionRegistration(PreservesExtensionId, PreservesExtensionVersion, PreservesExtensionDataLength)
             ,new ExtensionRegistration(CivVarietyExtensionId, CivVarietyExtensionVersion, CivVarietyExtensionDataLength)
+            ,new ExtensionRegistration(CivVarietyCapsExtensionId, CivVarietyCapsExtensionVersion, CivVarietyCapsExtensionDataLength)
             ,new ExtensionRegistration(JewelsExtensionId, JewelsExtensionVersion, JewelsExtensionDataLength)
 ,new ExtensionRegistration(TradeGoodsExtensionId, TradeGoodsExtensionVersion, TradeGoodsExtensionDataLength)
             ,new ExtensionRegistration(IncenseExtensionId, IncenseExtensionVersion, IncenseExtensionDataLength)
@@ -750,6 +754,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                     else if (id == BooksExtensionId) ReadBooksExtension(extension, c.Economy);
                     else if (id == PreservesExtensionId) ReadPreservesExtension(extension, c.Economy);
                     else if (id == CivVarietyExtensionId) ReadCivVarietyExtension(extension, c.Economy);
+                    else if (id == CivVarietyCapsExtensionId) ReadCivVarietyCapsExtension(extension, c.Economy);
                     else if (id == JewelsExtensionId) ReadJewelsExtension(extension, c.Economy);
                     else if (id == TradeGoodsExtensionId) ReadTradeGoodsExtension(extension, c.Economy);
                     else if (id == IncenseExtensionId) ReadIncenseExtension(extension, c.Economy);
@@ -813,6 +818,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == BooksExtensionId && !c.Economy.Books);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PreservesExtensionId && !c.Economy.Preserves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyExtensionId && !c.Economy.CivVariety);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CivVarietyCapsExtensionId && !c.Economy.CivVarietyCaps);
                 extensions.RemoveAll(extension => extension != null && extension.Id == JewelsExtensionId && !c.Economy.Jewels);
                 extensions.RemoveAll(extension => extension != null && extension.Id == TradeGoodsExtensionId && !c.Economy.TradeGoods);
                 extensions.RemoveAll(extension => extension != null && extension.Id == IncenseExtensionId && !c.Economy.Incense);
@@ -1028,6 +1034,14 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                         extensions[i] = CreateCivVarietyExtension(c.Economy);
                     }
                 if (c.Economy.CivVariety && !hasCivVariety) extensions.Add(CreateCivVarietyExtension(c.Economy));
+                bool hasCivVarietyCaps = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CivVarietyCapsExtensionId)
+                    {
+                        hasCivVarietyCaps = true;
+                        extensions[i] = CreateCivVarietyCapsExtension(c.Economy);
+                    }
+                if (c.Economy.CivVarietyCaps && !hasCivVarietyCaps) extensions.Add(CreateCivVarietyCapsExtension(c.Economy));
                 bool hasJewels = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == JewelsExtensionId)
@@ -1348,6 +1362,34 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 if (e.CivVarietyWindowPermille < 0 || e.CivVarietyWindowPermille > 1000)
                     throw new InvalidDataException("Invalid civ variety window.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing civ variety extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCivVarietyCapsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CivVarietyCaps ? 1 : 0);
+                writer.Write(e.CivVarietyCapMetallurgy);
+                writer.Write(e.CivVarietyCapAgrarian);
+                return new ScenarioExtensionData { Id = CivVarietyCapsExtensionId, Version = CivVarietyCapsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCivVarietyCapsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid civ variety caps flag.");
+                e.CivVarietyCaps = enabled != 0;
+                e.CivVarietyCapMetallurgy = reader.ReadInt32();
+                e.CivVarietyCapAgrarian = reader.ReadInt32();
+                if (e.CivVarietyCapMetallurgy <= 0 || e.CivVarietyCapAgrarian <= 0)
+                    throw new InvalidDataException("Invalid civ variety caps.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing civ variety caps extension data.");
             }
         }
 
