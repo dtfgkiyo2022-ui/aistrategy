@@ -67,15 +67,27 @@ namespace Rts.Presentation
         private GameObject ghost;
         private readonly Dictionary<int, GameObject> belts = new Dictionary<int, GameObject>();
         private readonly Dictionary<int, GameObject> items = new Dictionary<int, GameObject>();
-        private readonly Dictionary<uint, string> buildingWarnings = new Dictionary<uint, string>();
+        private readonly Dictionary<int, ResourceKind> itemKinds = new Dictionary<int, ResourceKind>();
+        private readonly Dictionary<uint, GameObject> buildingStatusBubbles = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, GameObject> buildingActivityPuffs = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, GameObject> buildingDetailOverlays = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, GameObject> buildingLineHighlights = new Dictionary<uint, GameObject>();
+        private readonly HashSet<uint> highlightedBuildingIds = new HashSet<uint>();
+        private readonly HashSet<int> highlightedBeltCells = new HashSet<int>();
+        private readonly CraftLineTraversal.Scratch lineTraversalScratch = new CraftLineTraversal.Scratch();
+        private readonly Dictionary<int, BeltComponentKind> beltComponents = new Dictionary<int, BeltComponentKind>();
+        private readonly HashSet<int> beltSeen = new HashSet<int>();
+        private readonly HashSet<int> beltCarrying = new HashSet<int>();
+        private readonly HashSet<int> beltOwnCells = new HashSet<int>();
+        private readonly HashSet<int> beltEndCells = new HashSet<int>();
+        private readonly List<int> beltGone = new List<int>();
+        private readonly MaterialPropertyBlock beltPropertyBlock = new MaterialPropertyBlock();
         private readonly List<GameObject> beltPreview = new List<GameObject>();
         private readonly EconomyFlowMetrics flowMetrics = new EconomyFlowMetrics();
         private long lastMetricTick = long.MinValue;
         private const float CellMeters = 2f;
         private const int MapWidthCells = 128, MapHeightCells = 64;
 
-        private static readonly Color OreItemColor = new Color(0.55f, 0.35f, 0.2f);
-        private static readonly Color MetalItemColor = new Color(0.85f, 0.88f, 0.95f);
         private static readonly Color BeltColor = new Color(0.18f, 0.18f, 0.2f);
         private static readonly Color EnemyBeltColor = new Color(0.3f, 0.2f, 0.2f);
         private static readonly Color StripeColor = new Color(0.75f, 0.75f, 0.8f);
@@ -89,15 +101,40 @@ namespace Rts.Presentation
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
         private static readonly Color EastColor = new Color(0.85f, 0.25f, 0.25f);
-        private static readonly Color BeltStallColor = new Color(1f, 0.12f, 0.08f);
-        private static readonly Color WarningColor = new Color(1f, 0.55f, 0.2f);
         private static readonly Color VillagerSelectionColor = new Color(0.35f, 1f, 0.85f);
-        private const int DisplayBufferLimit = 10;
+        private const int MaxCargoIcons = 24;
+        private const float CargoIconDistance = 18f;
+        private uint selectedBuildingId;
+        private bool detailModeEnabled;
+        private long lastLineTraversalTick = long.MinValue;
+        private uint lastLineTraversalBuilding;
+
+        private static readonly Color LineHighlightColor = new Color(1f, 0.82f, 0.18f, 1f);
 
         public void Bind(BattlefieldView battlefield) { view = battlefield; }
 
         public IReadOnlyList<uint> SelectedVillagers { get { return selectedVillagers; } }
         public bool HasVillagerSelection { get { return selectedVillagers.Count > 0; } }
+        public bool DetailModeEnabled { get { return detailModeEnabled; } }
+        public EconomyFlowMetrics FlowMetrics { get { return flowMetrics; } }
+        public uint SelectedBuildingId { get { return selectedBuildingId; } }
+
+        public void ToggleDetailMode() { detailModeEnabled = CraftDisplayMode.Toggle(detailModeEnabled); }
+
+        public void SelectBuilding(uint id)
+        {
+            selectedBuildingId = id;
+            lastLineTraversalTick = long.MinValue;
+        }
+
+        public void ClearBuildingSelection()
+        {
+            if (selectedBuildingId == 0) return;
+            selectedBuildingId = 0;
+            lastLineTraversalTick = long.MinValue;
+            highlightedBuildingIds.Clear();
+            highlightedBeltCells.Clear();
+        }
 
         public void ClearVillagerSelection()
         {
@@ -245,6 +282,10 @@ namespace Rts.Presentation
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
             foreach (var go in items.Values) Destroy(go);
+            foreach (var go in buildingStatusBubbles.Values) Destroy(go);
+            foreach (var go in buildingActivityPuffs.Values) Destroy(go);
+            foreach (var go in buildingDetailOverlays.Values) Destroy(go);
+            foreach (var go in buildingLineHighlights.Values) Destroy(go);
             resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
@@ -257,7 +298,10 @@ namespace Rts.Presentation
             villagerInterpolationSeconds = 0f;
             ownVillagerAnimations.Clear(); enemyVillagerAnimations.Clear();
             packedBuildings.Clear();
-            belts.Clear(); items.Clear(); buildingWarnings.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
+            belts.Clear(); items.Clear(); itemKinds.Clear(); beltComponents.Clear(); beltSeen.Clear(); beltCarrying.Clear(); beltOwnCells.Clear(); beltEndCells.Clear(); beltGone.Clear();
+            buildingStatusBubbles.Clear(); buildingActivityPuffs.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
+            buildingDetailOverlays.Clear(); buildingLineHighlights.Clear(); highlightedBuildingIds.Clear(); highlightedBeltCells.Clear();
+            selectedBuildingId = 0; detailModeEnabled = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
         }
 
         private void Update()
@@ -271,7 +315,12 @@ namespace Rts.Presentation
         {
             var frame = view == null ? null : view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
-            if (economy == null) { if (resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear(); return; }
+            if (economy == null)
+            {
+                if (detailModeEnabled || selectedBuildingId != 0 || resources.Count + ownVillagers.Count + buildings.Count + enemyVillagers.Count + belts.Count > 0) Clear();
+                return;
+            }
+            if (!UiHitAreas.Shared.KeyboardCaptured && Input.GetKeyDown(KeyCode.LeftAlt)) ToggleDetailMode();
             long part = PerfProbe.Start();
             SyncResources(economy);
             PerfProbe.Stop("EcoRes", part);
@@ -281,9 +330,11 @@ namespace Rts.Presentation
             part = PerfProbe.Start();
             SyncBuildings(economy);
             UpdateBuildingEffects(Time.deltaTime);
+            UpdateBuildingStatusBillboards();
             PerfProbe.Stop("EcoBld", part);
             part = PerfProbe.Start();
             SyncBelts(economy);
+            UpdateCargoIcons();
             PerfProbe.Stop("EcoBelt", part);
             float matchRate = view == null ? 0f : view.MatchRate;
             villagerInterpolationSeconds = Mathf.Min(BattlefieldView.TickSeconds,
@@ -592,6 +643,7 @@ namespace Rts.Presentation
         {
             var seen = new HashSet<uint>();
             uint ownFaction = view.LatestFrame.FactionId;
+            RefreshLineHighlights(economy, ownFaction);
             foreach (var b in economy.Buildings)
             {
                 seen.Add(b.Id);
@@ -632,9 +684,12 @@ namespace Rts.Presentation
                     buildings.Add(b.Id, go);
                 }
                 int desiredPackedStage = finished ? 2 : constructionStage;
-                if (packedBuildings.Contains(b.Id) && own &&
-                    ((desiredPackedStage == 2 && packedBuildingStages.ContainsKey(b.Id)) ||
-                    (desiredPackedStage < 2 && (!packedBuildingStages.TryGetValue(b.Id, out var previousStage) || previousStage != desiredPackedStage))))
+                int previousStage;
+                bool hasPreviousStage = packedBuildingStages.TryGetValue(b.Id, out previousStage);
+                bool shouldRecreate = packedBuildings.Contains(b.Id) && own &&
+                    ((desiredPackedStage == 2 && hasPreviousStage) ||
+                    (desiredPackedStage < 2 && (!hasPreviousStage || previousStage != desiredPackedStage)));
+                if (shouldRecreate)
                 {
                     Destroy(go);
                     packedBuildings.Remove(b.Id);
@@ -697,13 +752,11 @@ namespace Rts.Presentation
                     SyncBuildingFire(b.Id, b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
-                if (b.FactionId == ownFaction)
-                {
-                    string warning = b.Output >= DisplayBufferLimit ? UiText.T("出口が詰まり", "出口が詰まり")
-                        : RequiresInput(b.Kind) && b.Complete && b.Input == 0 ? UiText.T("材料待ち", "材料待ち") : "";
-                    if (string.IsNullOrEmpty(warning)) buildingWarnings.Remove(b.Id); else buildingWarnings[b.Id] = warning;
-                }
-                else buildingWarnings.Remove(b.Id);
+                SyncBuildingState(b, economy, own, new Vector3(p.x, height, p.z));
+                CraftRecipe recipe = default(CraftRecipe);
+                bool hasRecipe = own && CraftVisualRules.TryGetRecipe(b.Kind, out recipe);
+                SetBuildingDetail(b.Id, hasRecipe, recipe, new Vector3(p.x, height, p.z));
+                SetBuildingLineHighlight(b.Id, highlightedBuildingIds.Contains(b.Id), b.SizeMeters, new Vector3(p.x, height, p.z));
                 if (b.PlayerHeld)
                 {
                     if (!buildingFlags.TryGetValue(b.Id, out var flag))
@@ -736,26 +789,216 @@ namespace Rts.Presentation
             foreach (var id in fxGone) { buildingFxStates.Remove(id); RemoveBuildingFire(id); }
             Remove(buildingFlags, seen);
             Remove(ports, seen);
-            var warningGone = new List<uint>();
-            foreach (var id in buildingWarnings.Keys) if (!seen.Contains(id)) warningGone.Add(id);
-            foreach (var id in warningGone) buildingWarnings.Remove(id);
+            Remove(buildingStatusBubbles, seen);
+            Remove(buildingActivityPuffs, seen);
+            Remove(buildingDetailOverlays, seen);
+            Remove(buildingLineHighlights, seen);
             var untagged = new List<uint>();
             foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
             foreach (var id in untagged) buildingTags.Remove(id);
+        }
+
+        private void RefreshLineHighlights(EconomyView economy, uint ownFaction)
+        {
+            if (selectedBuildingId == 0)
+            {
+                highlightedBuildingIds.Clear();
+                highlightedBeltCells.Clear();
+                lastLineTraversalTick = long.MinValue;
+                return;
+            }
+            if (lastLineTraversalTick == view.LatestFrame.Tick && lastLineTraversalBuilding == selectedBuildingId) return;
+            highlightedBuildingIds.Clear();
+            highlightedBeltCells.Clear();
+            BuildingView selected = default(BuildingView);
+            bool found = false;
+            foreach (var building in economy.Buildings)
+                if (building.Id == selectedBuildingId && building.FactionId == ownFaction) { selected = building; found = true; break; }
+            if (!found) { selectedBuildingId = 0; lastLineTraversalTick = long.MinValue; return; }
+            CraftLineTraversal.FindBeltCellsForBuilding(selected, economy, MapWidthCells, MapHeightCells,
+                highlightedBeltCells, highlightedBuildingIds, lineTraversalScratch);
+            lastLineTraversalTick = view.LatestFrame.Tick;
+            lastLineTraversalBuilding = selectedBuildingId;
+        }
+
+        private void SetBuildingDetail(uint id, bool shown, CraftRecipe recipe, Vector3 top)
+        {
+            if (!detailModeEnabled || !shown)
+            {
+                if (buildingDetailOverlays.TryGetValue(id, out var hidden)) hidden.SetActive(false);
+                return;
+            }
+            if (!buildingDetailOverlays.TryGetValue(id, out var overlay))
+            {
+                overlay = new GameObject("Craft detail " + id);
+                overlay.transform.SetParent(transform, false);
+                CreateDetailIcon(overlay.transform, "Input", -0.55f, 0f);
+                CreateDetailIcon(overlay.transform, "InputSecondary", -0.22f, 0f);
+                var arrow = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                arrow.name = "Arrow";
+                Destroy(arrow.GetComponent<Collider>());
+                arrow.transform.SetParent(overlay.transform, false);
+                arrow.transform.localScale = new Vector3(0.22f, 0.08f, 0.08f);
+                arrow.transform.localPosition = new Vector3(0.1f, 0f, 0f);
+                arrow.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.85f, 0.25f));
+                CreateDetailIcon(overlay.transform, "Output", 0.48f, 0f);
+                buildingDetailOverlays.Add(id, overlay);
+            }
+            overlay.SetActive(true);
+            overlay.transform.position = top + Vector3.up * 0.86f;
+            var camera = Camera.main;
+            if (camera != null) overlay.transform.rotation = Quaternion.LookRotation(camera.transform.position - overlay.transform.position, Vector3.up);
+            SetDetailIcon(overlay.transform.Find("Input"), recipe.Input);
+            SetDetailIcon(overlay.transform.Find("InputSecondary"), recipe.InputSecondary);
+            SetDetailIcon(overlay.transform.Find("Output"), recipe.Output);
+        }
+
+        private static void CreateDetailIcon(Transform parent, string name, float x, float z)
+        {
+            var icon = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            icon.name = name;
+            Destroy(icon.GetComponent<Collider>());
+            icon.transform.SetParent(parent, false);
+            icon.transform.localPosition = new Vector3(x, 0f, z);
+            icon.transform.localScale = Vector3.one * 0.38f;
+        }
+
+        private static void SetDetailIcon(Transform icon, ResourceKind kind)
+        {
+            if (icon == null) return;
+            bool shown = kind != 0 && GoodsIcons.Get(kind) != null;
+            icon.gameObject.SetActive(shown);
+            if (shown) icon.GetComponent<Renderer>().sharedMaterial = GoodsIcons.GetMaterial(kind);
+        }
+
+        private void SetBuildingLineHighlight(uint id, bool shown, int sizeMeters, Vector3 top)
+        {
+            if (!shown)
+            {
+                if (buildingLineHighlights.TryGetValue(id, out var hidden)) hidden.SetActive(false);
+                return;
+            }
+            if (!buildingLineHighlights.TryGetValue(id, out var outline))
+            {
+                outline = new GameObject("Line highlight " + id);
+                outline.transform.SetParent(transform, false);
+                CreateHighlightEdge(outline.transform, "North");
+                CreateHighlightEdge(outline.transform, "South");
+                CreateHighlightEdge(outline.transform, "East");
+                CreateHighlightEdge(outline.transform, "West");
+                buildingLineHighlights.Add(id, outline);
+            }
+            outline.SetActive(true);
+            float size = Mathf.Max(1f, sizeMeters) + 0.22f;
+            outline.transform.position = new Vector3(top.x, 0.18f, top.z);
+            foreach (Transform edge in outline.transform)
+            {
+                bool horizontal = edge.name == "North" || edge.name == "South";
+                edge.localScale = horizontal ? new Vector3(size, 0.08f, 0.08f) : new Vector3(0.08f, 0.08f, size);
+                edge.localPosition = edge.name == "North" ? new Vector3(0f, 0f, size / 2f)
+                    : edge.name == "South" ? new Vector3(0f, 0f, -size / 2f)
+                    : edge.name == "East" ? new Vector3(size / 2f, 0f, 0f) : new Vector3(-size / 2f, 0f, 0f);
+            }
+        }
+
+        private static void CreateHighlightEdge(Transform parent, string name)
+        {
+            var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            edge.name = name;
+            Destroy(edge.GetComponent<Collider>());
+            edge.transform.SetParent(parent, false);
+            edge.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(LineHighlightColor);
+        }
+
+        private void SyncBuildingState(BuildingView building, EconomyView economy, bool own, Vector3 top)
+        {
+            if (!own)
+            {
+                SetBuildingStatusBubble(building.Id, null, top);
+                SetBuildingActivityPuff(building.Id, false, top);
+                return;
+            }
+            var state = CraftVisualRules.Evaluate(building, economy);
+            Texture2D icon = state == CraftBuildingState.WaitingForMaterial
+                ? GoodsIcons.Get(CraftVisualRules.MissingInputKind(building.Kind))
+                : GoodsIcons.GetStatus(state);
+            SetBuildingStatusBubble(building.Id, icon, top);
+            SetBuildingActivityPuff(building.Id, state == CraftBuildingState.Working, top);
+        }
+
+        private void SetBuildingStatusBubble(uint id, Texture2D icon, Vector3 top)
+        {
+            if (icon == null)
+            {
+                if (buildingStatusBubbles.TryGetValue(id, out var hidden)) hidden.SetActive(false);
+                return;
+            }
+            if (!buildingStatusBubbles.TryGetValue(id, out var bubble))
+            {
+                bubble = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                bubble.name = "Craft status " + id;
+                Destroy(bubble.GetComponent<Collider>());
+                bubble.transform.SetParent(transform, false);
+                bubble.transform.localScale = Vector3.one * 0.62f;
+                buildingStatusBubbles.Add(id, bubble);
+            }
+            bubble.SetActive(true);
+            bubble.transform.position = top + Vector3.up * 0.72f;
+            bubble.GetComponent<Renderer>().sharedMaterial = GoodsIcons.GetMaterial(icon);
+        }
+
+        private void SetBuildingActivityPuff(uint id, bool shown, Vector3 top)
+        {
+            if (!shown)
+            {
+                if (buildingActivityPuffs.TryGetValue(id, out var hidden)) hidden.SetActive(false);
+                return;
+            }
+            if (!buildingActivityPuffs.TryGetValue(id, out var puff))
+            {
+                puff = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                puff.name = "Craft steam " + id;
+                Destroy(puff.GetComponent<Collider>());
+                puff.transform.SetParent(transform, false);
+                puff.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.82f, 0.86f, 0.88f, 0.75f));
+                buildingActivityPuffs.Add(id, puff);
+            }
+            puff.SetActive(true);
+            float phase = (id % 17) * 0.31f;
+            float wave = (Mathf.Sin(Time.time * 2.1f + phase) + 1f) * 0.5f;
+            puff.transform.position = top + Vector3.up * (0.28f + wave * 0.42f);
+            float scale = 0.12f + wave * 0.1f;
+            puff.transform.localScale = Vector3.one * scale;
+        }
+
+        private void UpdateBuildingStatusBillboards()
+        {
+            var camera = Camera.main;
+            if (camera == null) return;
+            foreach (var bubble in buildingStatusBubbles.Values)
+            {
+                if (!bubble.activeSelf) continue;
+                bubble.transform.rotation = Quaternion.LookRotation(camera.transform.position - bubble.transform.position, Vector3.up);
+            }
+            foreach (var overlay in buildingDetailOverlays.Values)
+            {
+                if (!overlay.activeSelf) continue;
+                overlay.transform.rotation = Quaternion.LookRotation(camera.transform.position - overlay.transform.position, Vector3.up);
+            }
         }
 
         private void SyncBuildingFire(uint id, int hp, int maxHp, Vector3 position)
         {
             string file = hp <= maxHp * 0.25f ? "FX_Building_burning.prefab" : hp <= maxHp * 0.5f ? "FX_Building_burning_small.prefab" : null;
             if (file == null) { RemoveBuildingFire(id); return; }
-            if (buildingFire.TryGetValue(id, out var current) && current.Object != null)
+            if (buildingFire.TryGetValue(id, out var current))
             {
-                if (current.File == file)
+                if (current.Object != null && current.File == file)
                 {
                     current.Object.transform.position = position;
                     return;
                 }
-                RemoveBuildingFire(id);
+                if (current.Object != null) RemoveBuildingFire(id);
             }
             if (buildingFire.Count + buildingEffects.Count >= MaxBuildingEffects) return;
             if (!LocalVisualPack.TryCreateEffect(file, transform, out var effect)) return;
@@ -811,17 +1054,7 @@ namespace Rts.Presentation
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), BuildingName(tag.Key), tagStyle);
-                string warning;
-                if (buildingWarnings.TryGetValue(tagPair.Key, out warning) && !string.IsNullOrEmpty(warning))
-                    GUI.Label(new Rect(screen.x - 70f, Screen.height - screen.y + 8f, 140f, 18f), warning, WarningStyle());
             }
-        }
-
-        private static GUIStyle WarningStyle()
-        {
-            var style = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 10 };
-            style.normal.textColor = WarningColor;
-            return style;
         }
 
         /// <summary>Short display names for the name tags (display only).</summary>
@@ -877,17 +1110,17 @@ namespace Rts.Presentation
 
         private void SyncBelts(EconomyView economy)
         {
-            var seen = new HashSet<int>();
-            var carrying = new HashSet<int>();
-            var ownCells = new HashSet<int>();
-            var endCells = new HashSet<int>();
+            beltSeen.Clear();
+            beltCarrying.Clear();
+            beltOwnCells.Clear();
+            beltEndCells.Clear();
             uint ownFaction = view.LatestFrame.FactionId;
-            foreach (var belt in economy.Belts) if (belt.FactionId == ownFaction) ownCells.Add(belt.Cell);
+            foreach (var belt in economy.Belts) if (belt.FactionId == ownFaction) beltOwnCells.Add(belt.Cell);
             foreach (var b in economy.Belts)
             {
-                seen.Add(b.Cell);
+                beltSeen.Add(b.Cell);
                 int ticks = b.Speed == BeltSpeed.Fast && economy.FastBeltTicksPerCell > 0 ? economy.FastBeltTicksPerCell : Mathf.Max(1, economy.BeltTicksPerCell);
-                if (b.FactionId == ownFaction && !ownCells.Contains(NextCell(b.Cell, b.Facing))) endCells.Add(b.Cell);
+                if (b.FactionId == ownFaction && !beltOwnCells.Contains(NextCell(b.Cell, b.Facing))) beltEndCells.Add(b.Cell);
                 var centre = CellCenter(b.Cell);
                 var dir = Direction(b.Facing);
                 if (!belts.TryGetValue(b.Cell, out var plate))
@@ -907,40 +1140,196 @@ namespace Rts.Presentation
                     belts.Add(b.Cell, plate);
                 }
                 bool stalled = b.FactionId == ownFaction && b.Item != 0 && b.Progress >= ticks * 2;
-                Color baseColor = b.Component == BeltComponentKind.Splitter ? new Color(0.95f, 0.75f, 0.2f)
-                    : b.Component == BeltComponentKind.Sorter ? new Color(0.75f, 0.35f, 0.95f)
-                    : b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit ? new Color(0.3f, 0.35f, 0.45f)
-                    : BeltColor;
-                plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(stalled ? BeltStallColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : baseColor);
+                bool lineHighlighted = highlightedBeltCells.Contains(b.Cell);
+                Color baseColor = lineHighlighted ? LineHighlightColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor;
+                var plateRenderer = plate.GetComponent<Renderer>();
+                plateRenderer.sharedMaterial = BeltVisualMaterials.Get(b.Speed, stalled);
+                beltPropertyBlock.Clear();
+                Color beltColor = stalled ? new Color(1f, 0.24f, 0.18f) : baseColor;
+                beltPropertyBlock.SetColor("_BaseColor", beltColor);
+                beltPropertyBlock.SetColor("_Color", beltColor);
+                plateRenderer.SetPropertyBlock(beltPropertyBlock);
+                EnsureBeltAccent(plate, b.Component);
                 plate.transform.position = new Vector3(centre.x, 0.05f, centre.z);
                 plate.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 if (b.Item == 0) continue;
-                carrying.Add(b.Cell);
+                beltCarrying.Add(b.Cell);
                 if (!items.TryGetValue(b.Cell, out var item))
                 {
-                    item = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    item.name = "Item " + b.Cell;
-                    Destroy(item.GetComponent<Collider>());
+                    item = new GameObject("Item " + b.Cell);
                     item.transform.SetParent(transform, false);
-                    item.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
                     items.Add(b.Cell, item);
                 }
-                item.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(b.Item == ResourceKind.Metal ? MetalItemColor : OreItemColor);
+                if (!itemKinds.TryGetValue(b.Cell, out var oldKind) || oldKind != b.Item)
+                {
+                    BuildCargoVisual(item, b.Item);
+                    itemKinds[b.Cell] = b.Item;
+                }
                 // From the edge it came in at to the edge it leaves by, as its ticks on this cell run.
                 float along = Mathf.Clamp01((float)b.Progress / ticks) - 0.5f;
                 item.transform.position = new Vector3(centre.x, 0.5f, centre.z) + dir * (along * CellMeters);
+                item.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
             }
-            var gone = new List<int>();
-            foreach (var cell in belts.Keys) if (!seen.Contains(cell)) gone.Add(cell);
-            foreach (var cell in gone) { Destroy(belts[cell]); belts.Remove(cell); }
-            gone.Clear();
-            foreach (var cell in items.Keys) if (!carrying.Contains(cell)) gone.Add(cell);
-            foreach (var cell in gone) { Destroy(items[cell]); items.Remove(cell); }
+            beltGone.Clear();
+            foreach (var cell in belts.Keys) if (!beltSeen.Contains(cell)) beltGone.Add(cell);
+            foreach (var cell in beltGone) { Destroy(belts[cell]); belts.Remove(cell); beltComponents.Remove(cell); }
+            beltGone.Clear();
+            foreach (var cell in items.Keys) if (!beltCarrying.Contains(cell)) beltGone.Add(cell);
+            foreach (var cell in beltGone) { Destroy(items[cell]); items.Remove(cell); itemKinds.Remove(cell); }
+            BeltVisualMaterials.Tick(Time.time);
             if (view.LatestFrame.Tick != lastMetricTick)
             {
                 lastMetricTick = view.LatestFrame.Tick;
                 flowMetrics.ObserveBuildings(lastMetricTick, economy.Buildings, ownFaction);
-                flowMetrics.ObserveBeltEnds(lastMetricTick, economy.Belts, endCells, ownFaction);
+                flowMetrics.ObserveBeltEnds(lastMetricTick, economy.Belts, beltEndCells, ownFaction);
+            }
+        }
+
+        private void EnsureBeltAccent(GameObject plate, BeltComponentKind component)
+        {
+            int cell = ParseCell(plate.name);
+            if (beltComponents.TryGetValue(cell, out var old))
+            {
+                if (old == component) return;
+            }
+            foreach (Transform child in plate.transform)
+                if (child.name != "Stripe") Destroy(child.gameObject);
+            CreateBeltEdge(plate.transform, "Belt edge L", -0.82f);
+            CreateBeltEdge(plate.transform, "Belt edge R", 0.82f);
+            if (component != BeltComponentKind.None)
+            {
+                var part = GameObject.CreatePrimitive(component == BeltComponentKind.Splitter ? PrimitiveType.Cylinder : PrimitiveType.Cube);
+                part.name = "Belt component";
+                Destroy(part.GetComponent<Collider>());
+                part.transform.SetParent(plate.transform, false);
+                part.transform.localPosition = new Vector3(0f, 0.2f, 0f);
+                part.transform.localScale = component == BeltComponentKind.Splitter ? new Vector3(0.5f, 0.35f, 0.5f) : new Vector3(0.5f, 0.28f, 0.5f);
+                part.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(
+                    component == BeltComponentKind.Sorter ? new Color(0.75f, 0.35f, 0.95f)
+                    : component == BeltComponentKind.Splitter ? new Color(0.95f, 0.75f, 0.2f)
+                    : new Color(0.3f, 0.35f, 0.45f));
+            }
+            beltComponents[cell] = component;
+        }
+
+        private static void CreateBeltEdge(Transform parent, string name, float x)
+        {
+            var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            edge.name = name;
+            Destroy(edge.GetComponent<Collider>());
+            edge.transform.SetParent(parent, false);
+            edge.transform.localPosition = new Vector3(x, 0.12f, 0f);
+            edge.transform.localScale = new Vector3(0.08f, 0.18f, 1.78f);
+            edge.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.08f, 0.08f, 0.1f));
+        }
+
+        private static int ParseCell(string name)
+        {
+            int split = name.LastIndexOf(' ');
+            return split < 0 ? -1 : int.TryParse(name.Substring(split + 1), out var cell) ? cell : -1;
+        }
+
+        private static void BuildCargoVisual(GameObject item, ResourceKind kind)
+        {
+            for (int i = item.transform.childCount - 1; i >= 0; i--)
+                if (item.transform.GetChild(i).name != "CargoIcon") Destroy(item.transform.GetChild(i).gameObject);
+            var visual = GoodsCargoVisuals.Get(kind);
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Cargo " + visual.Shape;
+            Destroy(body.GetComponent<Collider>());
+            body.transform.SetParent(item.transform, false);
+            body.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(visual.Color);
+            switch (visual.Shape)
+            {
+                case CargoShape.Log:
+                    body.transform.localScale = new Vector3(0.42f, 0.42f, 0.9f);
+                    body.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    break;
+                case CargoShape.RoughStone:
+                    body = ReplaceCargoPrimitive(body, PrimitiveType.Sphere, new Vector3(0.72f, 0.58f, 0.68f));
+                    break;
+                case CargoShape.Ingot:
+                    body.transform.localScale = new Vector3(0.46f, 0.28f, 0.86f);
+                    break;
+                case CargoShape.StoneBlock:
+                case CargoShape.Crate:
+                case CargoShape.Book:
+                case CargoShape.RepairKit:
+                    body.transform.localScale = visual.Shape == CargoShape.Book ? new Vector3(0.62f, 0.18f, 0.78f) : new Vector3(0.66f, 0.5f, 0.66f);
+                    break;
+                case CargoShape.Gem:
+                    body = ReplaceCargoPrimitive(body, PrimitiveType.Cylinder, new Vector3(0.54f, 0.45f, 0.54f));
+                    body.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                    break;
+                case CargoShape.Coin:
+                    body = ReplaceCargoPrimitive(body, PrimitiveType.Cylinder, new Vector3(0.62f, 0.14f, 0.62f));
+                    break;
+                case CargoShape.Sack:
+                case CargoShape.Charcoal:
+                case CargoShape.Jar:
+                case CargoShape.Charm:
+                    body = ReplaceCargoPrimitive(body, visual.Shape == CargoShape.Sack ? PrimitiveType.Capsule : PrimitiveType.Sphere,
+                        visual.Shape == CargoShape.Sack ? new Vector3(0.5f, 0.62f, 0.5f) : new Vector3(0.52f, 0.56f, 0.52f));
+                    break;
+                case CargoShape.Bow:
+                    body = ReplaceCargoPrimitive(body, PrimitiveType.Capsule, new Vector3(0.22f, 0.65f, 0.22f));
+                    body.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+                    break;
+                case CargoShape.Tool:
+                    body = ReplaceCargoPrimitive(body, PrimitiveType.Cylinder, new Vector3(0.2f, 0.65f, 0.2f));
+                    body.transform.localRotation = Quaternion.Euler(45f, 0f, 45f);
+                    break;
+            }
+            body.transform.localPosition = Vector3.zero;
+            EnsureCargoIcon(item, kind);
+        }
+
+        private static GameObject ReplaceCargoPrimitive(GameObject body, PrimitiveType type, Vector3 scale)
+        {
+            var parent = body.transform.parent;
+            var material = body.GetComponent<Renderer>().sharedMaterial;
+            Destroy(body);
+            body = GameObject.CreatePrimitive(type);
+            body.name = "Cargo shape";
+            Destroy(body.GetComponent<Collider>());
+            body.transform.SetParent(parent, false);
+            body.transform.localScale = scale;
+            body.GetComponent<Renderer>().sharedMaterial = material;
+            return body;
+        }
+
+        private static void EnsureCargoIcon(GameObject item, ResourceKind kind)
+        {
+            var icon = item.transform.Find("CargoIcon");
+            if (icon == null)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                go.name = "CargoIcon";
+                Destroy(go.GetComponent<Collider>());
+                go.transform.SetParent(item.transform, false);
+                go.transform.localScale = Vector3.one * 0.3f;
+                icon = go.transform;
+            }
+            icon.GetComponent<Renderer>().sharedMaterial = GoodsIcons.GetMaterial(kind);
+            icon.gameObject.SetActive(GoodsIcons.Get(kind) != null);
+        }
+
+        private void UpdateCargoIcons()
+        {
+            var camera = Camera.main;
+            if (camera == null) return;
+            int shown = 0;
+            float maxDistance = CargoIconDistance * CargoIconDistance;
+            foreach (var item in items)
+            {
+                var icon = item.Value.transform.Find("CargoIcon");
+                if (icon == null) continue;
+                bool visible = shown < MaxCargoIcons && (detailModeEnabled || (camera.transform.position - item.Value.transform.position).sqrMagnitude <= maxDistance);
+                icon.gameObject.SetActive(visible && icon.GetComponent<Renderer>().sharedMaterial != null);
+                if (!visible) continue;
+                shown++;
+                icon.position = item.Value.transform.position + Vector3.up * 0.48f;
+                icon.rotation = Quaternion.LookRotation(camera.transform.position - icon.position, Vector3.up);
             }
         }
 
@@ -949,11 +1338,6 @@ namespace Rts.Presentation
             int x = cell % MapWidthCells, z = cell / MapWidthCells;
             if (facing == Facing.North) z++; else if (facing == Facing.South) z--; else if (facing == Facing.East) x++; else x--;
             return x < 0 || z < 0 || x >= MapWidthCells || z >= MapHeightCells ? -1 : z * MapWidthCells + x;
-        }
-
-        private static bool RequiresInput(BuildingKind kind)
-        {
-            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>

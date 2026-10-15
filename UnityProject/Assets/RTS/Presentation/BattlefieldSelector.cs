@@ -1,9 +1,10 @@
 using UnityEngine;
+using Rts.Contracts;
 
 namespace Rts.Presentation
 {
     /// <summary>
-    /// Left click picks the nearest army marker, core, or own villager on screen and passes its frame ID to the view.
+    /// Left click picks the nearest own processing building, army marker, core, or own villager on screen.
     /// Dragging draws a box instead; a box containing an own soldier keeps the existing army selection behavior.
     /// </summary>
     public sealed class BattlefieldSelector : MonoBehaviour
@@ -78,17 +79,34 @@ namespace Rts.Presentation
                 if (economyLayer != null && economyLayer.TryPickOwnVillager(camera, pressAt, villagerPickRadiusPixels, out villagerId))
                 {
                     economyLayer.SelectVillager(villagerId, additive);
+                    economyLayer.ClearBuildingSelection();
+                    view.Select(SelectionTarget.None);
+                    return;
+                }
+                BuildingView ownBuilding;
+                if (economyLayer != null && economyLayer.TryPickOwnBuilding(camera, pressAt, pickRadiusPixels, out ownBuilding))
+                {
+                    economyLayer.ClearVillagerSelection();
+                    economyLayer.SelectBuilding(ownBuilding.Id);
                     view.Select(SelectionTarget.None);
                     return;
                 }
                 if (view.TryPick(camera, pressAt, pickRadiusPixels, out var target))
                 {
-                    if (economyLayer != null) economyLayer.ClearVillagerSelection();
+                    if (economyLayer != null)
+                    {
+                        economyLayer.ClearVillagerSelection();
+                        economyLayer.ClearBuildingSelection();
+                    }
                     view.Select(target);
                 }
                 else
                 {
-                    if (!additive && economyLayer != null) economyLayer.ClearVillagerSelection();
+                    if (!additive && economyLayer != null)
+                    {
+                        economyLayer.ClearVillagerSelection();
+                        economyLayer.ClearBuildingSelection();
+                    }
                     view.Select(SelectionTarget.None);
                 }
                 return;
@@ -97,7 +115,11 @@ namespace Rts.Presentation
             var armies = view.ArmiesInScreenRect(camera, box);
             if (armies.Count > 0)
             {
-                if (economyLayer != null) economyLayer.ClearVillagerSelection();
+                if (economyLayer != null)
+                {
+                    economyLayer.ClearVillagerSelection();
+                    economyLayer.ClearBuildingSelection();
+                }
                 view.SelectArmies(armies);
                 return;
             }
@@ -105,6 +127,7 @@ namespace Rts.Presentation
             {
                 economyLayer.SelectVillagers(economyLayer.VillagersInScreenRect(camera, box),
                     Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+                economyLayer.ClearBuildingSelection();
                 view.Select(SelectionTarget.None);
             }
         }

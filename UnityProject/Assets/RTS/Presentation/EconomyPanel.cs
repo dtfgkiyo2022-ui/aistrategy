@@ -42,6 +42,7 @@ namespace Rts.Presentation
         private readonly List<string> notes = new List<string>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
             new List<TopBarResourceVisibility.ResourceEntry>();
+        private readonly List<float> topBarIconOffsets = new List<float>();
 
         public bool IsPlacing { get { return mode != Mode.None; } }
 
@@ -482,10 +483,13 @@ namespace Rts.Presentation
             string age = TopBarDisplayText.Age(economy);
             TopBarResourceVisibility.Fill(economy, topBarResources);
             string stock = "";
+            topBarIconOffsets.Clear();
             for (int i = 0; i < topBarResources.Count; i++)
             {
                 var resource = topBarResources[i];
-                stock += (i == 0 ? "" : "  ") + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
+                string prefix = age + stock;
+                topBarIconOffsets.Add(GUI.skin.label.CalcSize(new GUIContent(prefix)).x);
+                stock += (i == 0 ? "" : "  ") + "   " + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
             }
             string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy));
             var line = new GUIContent(age + stock + people);
@@ -493,7 +497,17 @@ namespace Rts.Presentation
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
             var normal = GUI.skin.label;
             float wide = normal.CalcSize(line).x;
-            if (wide <= rect.width) { GUI.Label(rect, line); return; }
+            if (wide <= rect.width)
+            {
+                GUI.Label(rect, line);
+                for (int i = 0; i < topBarResources.Count; i++)
+                {
+                    var texture = GoodsIcons.Get(topBarResources[i].Kind);
+                    if (texture == null) continue;
+                    GUI.DrawTexture(new Rect(rect.x + topBarIconOffsets[i] + (i == 0 ? 0f : 14f), rect.y + 4f, 16f, 16f), texture, ScaleMode.ScaleToFit, true);
+                }
+                return;
+            }
             if (topBarSmall == null) topBarSmall = new GUIStyle(normal);
             int baseSize = normal.fontSize > 0 ? normal.fontSize : 13;
             topBarSmall.fontSize = Mathf.Max(9, Mathf.FloorToInt(baseSize * rect.width / wide));
