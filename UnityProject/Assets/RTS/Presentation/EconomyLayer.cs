@@ -81,7 +81,9 @@ namespace Rts.Presentation
         private readonly HashSet<int> beltOwnCells = new HashSet<int>();
         private readonly HashSet<int> beltEndCells = new HashSet<int>();
         private readonly List<int> beltGone = new List<int>();
-        private readonly MaterialPropertyBlock beltPropertyBlock = new MaterialPropertyBlock();
+        // Unity forbids creating a property block in a field initializer (the layer is added at run time), so it is made
+        // on first use.
+        private MaterialPropertyBlock beltPropertyBlock;
         private readonly List<GameObject> beltPreview = new List<GameObject>();
         private readonly EconomyFlowMetrics flowMetrics = new EconomyFlowMetrics();
         private long lastMetricTick = long.MinValue;
@@ -1146,6 +1148,7 @@ namespace Rts.Presentation
                 Color baseColor = lineHighlighted ? LineHighlightColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor;
                 var plateRenderer = plate.GetComponent<Renderer>();
                 plateRenderer.sharedMaterial = BeltVisualMaterials.Get(b.Speed, stalled);
+                if (beltPropertyBlock == null) beltPropertyBlock = new MaterialPropertyBlock();
                 beltPropertyBlock.Clear();
                 Color beltColor = stalled ? new Color(1f, 0.24f, 0.18f) : baseColor;
                 beltPropertyBlock.SetColor("_BaseColor", beltColor);

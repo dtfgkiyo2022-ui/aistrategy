@@ -39,6 +39,9 @@ namespace Rts.Presentation
         {
             if (instance != null && instance != this) { Destroy(gameObject); return; }
             instance = this;
+            // The scenes have no audio listener of their own. Distance is applied to the volume here, so one listener
+            // anywhere is enough.
+            if (FindAnyObjectByType<AudioListener>() == null) gameObject.AddComponent<AudioListener>();
             for (int i = 0; i < MaxSources; i++) { var source = gameObject.AddComponent<AudioSource>(); source.playOnAwake = false; sources.Add(source); }
             calmSource = AddBgmSource(); battleSource = AddBgmSource();
             var manifest = Resources.Load<LocalSoundPackManifest>(LocalSoundPack.ManifestResourceName);
