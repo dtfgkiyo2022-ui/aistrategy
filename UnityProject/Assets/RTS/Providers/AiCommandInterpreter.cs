@@ -24,7 +24,7 @@ namespace Rts.Providers
       ""required"": [""type"", ""kind"", ""scope"", ""goal"", ""region"", ""building"", ""location"", ""producer"", ""unit"", ""civ"", ""policy"", ""control"", ""sequence"", ""count"", ""reservePermille"", ""allowedLossPermille""],
       ""properties"": {
         ""type"": { ""type"": ""string"", ""enum"": [""policy"", ""economy""] },
-        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""PlaceBuilding"", ""Train"", ""CancelTrain"", ""RequestLine""] },
+        ""kind"": { ""type"": ""string"", ""enum"": [""Focus"", ""Defend"", ""AllowAbandon"", ""Retreat"", ""MaintainReserve"", ""Scout"", ""ReturnToAuto"", ""SetRegionControl"", ""SetEconomyPolicy"", ""AdvanceAge"", ""AdvanceNow"", ""PlaceBuilding"", ""Train"", ""CancelTrain"", ""RequestLine""] },
         ""scope"": { ""type"": [""string"", ""null""] }, ""goal"": { ""type"": [""string"", ""null""] },
         ""region"": { ""type"": [""string"", ""null""] }, ""line"": { ""type"": [""string"", ""null""] }, ""building"": { ""type"": [""string"", ""null""] },
         ""location"": { ""type"": [""string"", ""null""] }, ""producer"": { ""type"": [""string"", ""null""] },
@@ -131,7 +131,7 @@ namespace Rts.Providers
             var props = new Dictionary<string, object>
             {
                 ["type"] = EnumSchema("policy", "economy", "doctrine", "tactic"),
-                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
+                ["kind"] = EnumSchema("Focus", "Defend", "AllowAbandon", "Retreat", "MaintainReserve", "Scout", "ReturnToAuto", "SetRegionControl", "SetEconomyPolicy", "AdvanceAge", "AdvanceNow", "PlaceBuilding", "Train", "CancelTrain", "RequestLine", "SetTacticParam", "SwitchTactic", "SendTacticSignal", ""),
                 ["scope"] = NullableEnum(scopes, "全部隊"), ["goal"] = NullableEnum(goals), ["region"] = NullableEnum(regions),
                 ["line"] = NullableEnum(new[] { "CoreMetal", "Steel", "CoreWood", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Preserves", "Jewels", "TradeGoods", "Incense", "Charms", "RepairKits", "Tools", "CutStone", "Frames" }),
                 ["building"] = NullableEnum(new[] { "兵舎", "鉱山", "溶鉱炉", "農場", "住居", "資源拠点", "壁", "塔", "鍛冶場", "市場", "攻城工房", "射手育成所", "騎兵育成所", "城", "支城", "研磨所", "織物工房", "護符工房", "修繕所", "Barracks", "Mine", "Smelter", "Farm", "House", "DropSite", "Wall", "Tower", "Blacksmith", "Market", "SiegeWorkshop", "ArcheryRange", "Stable", "Castle", "Town", "Lapidary", "Weaver", "CharmWorkshop", "RepairYard" }),
@@ -221,7 +221,7 @@ sayの返事
 項目の使い分け
 - policy型のkindはFocus（攻撃・向かわせる）、Defend（守る）、AllowAbandon（放棄を許可）、Retreat（退く）、MaintainReserve（予備を残す）、Scout（偵察）、ReturnToAuto（自動方針に戻す）です。
 - Focus/Defend/Scoutには通常goalが必要です。Retreat、AllowAbandon、MaintainReserve、ReturnToAutoではgoalはnullです。
-- economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、PlaceBuilding、Train、CancelTrain、RequestLineです。区域担当を変えるときはregionとcontrolを使います。
+- economy型のkindはSetRegionControl、SetEconomyPolicy、AdvanceAge、AdvanceNow、PlaceBuilding、Train、CancelTrain、RequestLineです。区域担当を変えるときはregionとcontrolを使います。AdvanceNowはAgeClockUxの時代費用を払い、すぐ時代を完了します。
 - 全体の内政方針はregion=null、区域ごとの内政方針はregionに区域名を入れます。policyはMilitary（軍事）、Growth（経済・内政重視）、Balanced（均衡）です。入力の「兵の生産を優先」「軍事重視」はMilitary、「村人を増やす」「稼ぎを伸ばす」「内政を優先」はGrowthにします。
 - PlaceBuildingではbuildingとlocationを使います。場所を指定しない「もう一つ建てる」はlocation=お任せです。名前表の場所の近くならその場所名をlocationにします。
 - RequestLineではlineにCoreMetal、Steel、CoreWood、BowGear、Rationsのいずれか、regionに名前表の自軍区域を入れます。「北の鉱山から鋼のラインを作って」のように資源地点が指定された場合も、その資源地点を含む区域をregionにします。区域が名前表にない場合だけ、名前表の地点をlocationに入れます。RequestLineは自動内政を止めず、指定区域または地点の資源に近い順で自動配置を依頼します。
@@ -1511,8 +1511,10 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     else output.Add(EconomyCommand.SetPolicy(c.Frame.FactionId, seq, ParseEconomyPolicy(command)));
                     return;
                 case EconomyCommandKind.AdvanceAge:
+                case EconomyCommandKind.AdvanceNow:
                     if (!c.Frame.Economy.Ages) throw new AiCommandException("今のルールでは時代を進められない", kindText);
-                    output.Add(EconomyCommand.Advance(c.Frame.FactionId, seq, ParseEnum<CivKind>(command, "civ"))); return;
+                    var civ = ParseEnum<CivKind>(command, "civ");
+                    output.Add(kind == EconomyCommandKind.AdvanceNow ? EconomyCommand.AdvanceNow(c.Frame.FactionId, seq, civ) : EconomyCommand.Advance(c.Frame.FactionId, seq, civ)); return;
                 case EconomyCommandKind.PlaceBuilding:
                     var building = ParseEnum<BuildingKind>(command, "building");
                     int cell;

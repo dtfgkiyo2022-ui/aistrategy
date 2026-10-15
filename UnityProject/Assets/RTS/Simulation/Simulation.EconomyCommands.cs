@@ -47,6 +47,12 @@ namespace Rts.Simulation
                     ReturnToAuto(faction);
                     return;
                 case EconomyCommandKind.AdvanceAge:
+                    if (AgeClockUxOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
+                    {
+                        if (world.Tick >= AgeClockTickForAge(economy.Age)) CompleteAdvance(ref economy, c.Civ);
+                        else economy.ReservedCiv = c.Civ;
+                        return;
+                    }
                     if (AgeClockOn && economy.AdvanceRemaining == 0 && economy.Age < 3
                         && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
                     {
@@ -58,6 +64,9 @@ namespace Rts.Simulation
                     // the first tick advancing can start (AdvanceReserved).
                     else if (AgesOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
                         economy.ReservedCiv = c.Civ;
+                    return;
+                case EconomyCommandKind.AdvanceNow:
+                    TryAdvanceNow(faction, c.Civ);
                     return;
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2)

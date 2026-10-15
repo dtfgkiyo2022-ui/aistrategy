@@ -504,6 +504,7 @@ namespace Rts.UnityHost
         public static string Economy(EconomyCommand command)
         {
             if (command == null) return "";
+            if (command.Kind == EconomyCommandKind.AdvanceNow) return "AdvanceNow";
             switch (command.Kind)
             {
                 case EconomyCommandKind.PlaceBuilding: return "内政：" + command.Building + " を建てる";

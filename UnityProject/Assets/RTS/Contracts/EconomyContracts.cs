@@ -48,7 +48,10 @@ namespace Rts.Contracts
         /// <summary>Manual control: stops every own villager and holds the current work state.</summary>
         StopVillagers = 24,
         /// <summary>CraftTree1: upgrades an own processing building from level 1 to level 2.</summary>
-        UpgradeBuilding = 25
+        UpgradeBuilding = 25,
+        /// <summary>AgeClockUx: pays the current discounted age price and completes the advance immediately. (26 is the
+        /// craft tree's SetRecipe, merged separately.)</summary>
+        AdvanceNow = 27
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -262,6 +265,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
 
         public static EconomyCommand Advance(uint faction, ulong sequence, CivKind civ)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.AdvanceAge, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, civ);
+
+        /// <summary>AgeClockUx: pays the current age-clock price and completes the advance in this command tick.</summary>
+        public static EconomyCommand AdvanceNow(uint faction, ulong sequence, CivKind civ = CivKind.Primitive)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.AdvanceNow, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, civ);
 
         public static EconomyCommand ReturnToAuto(uint faction, ulong sequence)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.ReturnEconomyToAuto, 0, 0, 0, 0, null, EconomyTargetKind.None, 0, false);
@@ -728,6 +735,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int NextAgeGoldCost { get; }
         /// <summary>Age clock: the next scheduled age tick, or 0 when the clock is off or the last age is reached.</summary>
         public long NextAgeClockTick { get; }
+        /// <summary>AgeClockUx: the deadline for choosing a civilisation after the age clock fires, or 0 otherwise.</summary>
+        public long CivChoiceDeadlineTick { get; }
+        /// <summary>AgeClockUx: the reservation/instant-payment age-clock controls are available.</summary>
+        public bool AgeClockUx { get; }
         /// <summary>Manual control: true while the faction's built-in late assault is stopped.</summary>
         public bool AutoAssaultOff { get; }
         public bool RationsEnabled { get; }
@@ -1009,9 +1020,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              int joineryWoodCost = 0, int joinerySizeCells = 0, int joineryTicks = 0, int joineryPlankInput = 0,
              int joineryCutStoneInput = 0, int framesPerBuilding = 0, int frameWoodPermille = 0, int frameWorkPermille = 0,
              int level2FramesCost = 0,
-             int dropSiteMax = 0, int dropSiteCount = 0)
+             int dropSiteMax = 0, int dropSiteCount = 0, long civChoiceDeadlineTick = 0, bool ageClockUx = false)
         {
-            ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
+            ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
             RationsEnabled = rationsEnabled; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             MillTicks = millTicks; MillFoodInput = millFoodInput; RationsPerSoldier = rationsPerSoldier; RationsTrainPermille = rationsTrainPermille;

@@ -29,6 +29,8 @@ namespace Rts.Simulation
 
         private bool AgeClockOn => AgesOn && world.Config.Economy.AgeClock;
 
+        private bool AgeClockUxOn => AgeClockOn && world.Config.Economy.AgeClockUx;
+
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
         private bool RationsOn => AgesOn && world.Config.Economy.Rations;
         private bool ResourceFogOn => world.Config.Economy.Enabled && world.Config.Economy.ResourceFog;
@@ -372,6 +374,7 @@ namespace Rts.Simulation
             e.AdvancingTo = CivKind.Primitive;
             e.AdvanceRemaining = 0;
             e.ReservedCiv = CivKind.Primitive;
+            e.CivChoiceDeadlineTick = 0;
         }
 
         /// <summary>
@@ -382,6 +385,7 @@ namespace Rts.Simulation
         private void AdvanceReserved()
         {
             if (!AgesOn) return;
+            if (AgeClockUxOn) return;
             for (int f = 0; f < 2; f++)
             {
                 uint faction = (uint)f + 1;
@@ -421,7 +425,7 @@ namespace Rts.Simulation
                 {
                     CivKind civ = e.AdvancingTo != CivKind.Primitive ? e.AdvancingTo
                         : e.ReservedCiv != CivKind.Primitive ? e.ReservedCiv
-                        : e.AutoOff ? CivKind.Primitive : ChooseCiv((uint)f + 1);
+                        : e.AutoOff && AgeClockUxOn ? ManualClockChoice((uint)f + 1, ref e) : e.AutoOff ? CivKind.Primitive : ChooseCiv((uint)f + 1);
                     if (civ == CivKind.Primitive || !CivEnabled((uint)f + 1, civ)) continue;
                     CompleteAdvance(ref e, civ);
                     continue;
@@ -469,7 +473,35 @@ namespace Rts.Simulation
             CivKind civ = e.Civ != CivKind.Primitive ? e.Civ
                 : e.ReservedCiv != CivKind.Primitive && CivEnabled(faction, e.ReservedCiv) ? e.ReservedCiv : ChooseCiv(faction);
             if (!CanAdvance(faction, civ)) return;
-            StartAdvance(faction, civ);
+            if (AgeClockUxOn) TryAdvanceNow(faction, civ);
+            else StartAdvance(faction, civ);
+        }
+
+        private CivKind ManualClockChoice(uint faction, ref FactionEconomy economy)
+        {
+            if (economy.CivChoiceDeadlineTick == 0)
+                economy.CivChoiceDeadlineTick = checked(AgeClockTickForAge(economy.Age) + world.Config.Economy.AgeClockUxChoiceTicks);
+            if (world.Tick < economy.CivChoiceDeadlineTick) return CivKind.Primitive;
+            return ChooseCiv(faction);
+        }
+
+        private bool TryAdvanceNow(uint faction, CivKind requested)
+        {
+            if (!AgeClockUxOn) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.AdvanceRemaining != 0 || economy.Age >= 3) return false;
+            CivKind civ = economy.Civ == CivKind.Primitive
+                ? requested != CivKind.Primitive ? requested : economy.ReservedCiv
+                : economy.Civ;
+            bool legalCiv = economy.Civ == CivKind.Primitive ? CivEnabled(faction, civ) : civ == economy.Civ;
+            if (civ == CivKind.Primitive || !legalCiv) return false;
+            var price = AdvancePrice(faction, economy);
+            if (economy.Food < price.food || economy.Wood < price.wood || economy.Gold < price.gold) return false;
+            economy.Food = checked(economy.Food - price.food);
+            economy.Wood = checked(economy.Wood - price.wood);
+            economy.Gold = checked(economy.Gold - price.gold);
+            CompleteAdvance(ref economy, civ);
+            return true;
         }
 
         /// <summary>True while the automatic economy keeps food and wood for advancing (no infantry is queued then).</summary>

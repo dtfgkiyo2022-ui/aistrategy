@@ -362,6 +362,10 @@ namespace Rts.Simulation
                 for (int f = 0; f < world.Economies.Length; f++)
                     if (world.Economies[f].ReservedCiv != CivKind.Primitive)
                         w.Value("Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].ReservedCiv", (byte)world.Economies[f].ReservedCiv);
+            if (world.Config.Economy.AgeClockUx)
+                for (int f = 0; f < world.Economies.Length; f++)
+                    if (world.Economies[f].CivChoiceDeadlineTick != 0)
+                        w.Value("Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].CivChoiceDeadlineTick", world.Economies[f].CivChoiceDeadlineTick);
             // V3-2: written only with industry, so a V3-1 economy keeps its exact canonical bytes.
             if (!world.Config.Economy.Industry) return;
             for (int f = 0; f < world.Economies.Length; f++)

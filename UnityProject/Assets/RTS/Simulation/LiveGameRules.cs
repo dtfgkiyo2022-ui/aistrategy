@@ -73,6 +73,7 @@ namespace Rts.Simulation
             e.CivVarietyWindowPermille = 200;
             e.EarlyArms = true;
             e.AgeClock = true;
+            e.AgeClockUx = true;
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;

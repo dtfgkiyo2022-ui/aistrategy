@@ -132,7 +132,7 @@ namespace Rts.Replay
                 // V3-3: only a policy change carries the policy.
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
-                if(e.Kind==EconomyCommandKind.AdvanceAge) w.Write((byte)e.Civ);
+                if(e.Kind==EconomyCommandKind.AdvanceAge || e.Kind==EconomyCommandKind.AdvanceNow) w.Write((byte)e.Civ);
                 // V3-6 follow-up: only a line request carries its public line kind.
                 if(e.Kind==EconomyCommandKind.RequestLine) w.Write((byte)e.Line);
                 // V3-5: only research carries the tech.
@@ -173,7 +173,7 @@ namespace Rts.Replay
                 var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding
                     || ek==EconomyCommandKind.PlaceBeltComponent ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
-                var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
+                var civ=ek==EconomyCommandKind.AdvanceAge || ek==EconomyCommandKind.AdvanceNow ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
                 var line=ek==EconomyCommandKind.RequestLine ? ReplayBinary.Enum<ProcessingLineKind>(r) : (ProcessingLineKind)0;
                 // Bridge- and mountain-civilisation research intentionally use values just outside
                 // TechKind; keep the established enum unchanged while allowing those replay bytes.
