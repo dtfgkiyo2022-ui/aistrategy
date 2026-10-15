@@ -66,7 +66,7 @@ namespace Rts.Core.Tests
             var reserve = new[]
             {
                 new ScheduledInput(1, 0, 1, EconomyCommand.Advance(1, 1, CivKind.Cavalry)),
-                new ScheduledInput(1, 0, 2, EconomyCommand.Advance(2, 1, CivKind.Cavalry)),
+                new ScheduledInput(2, 0, 1, EconomyCommand.Advance(2, 1, CivKind.Cavalry)),
             };
             for (long tick = 1; tick <= 12000 && !sim.Capture(1).Result.HasEnded; tick++)
                 sim.Step(tick, tick == 1 ? reserve : Array.Empty<ScheduledInput>());

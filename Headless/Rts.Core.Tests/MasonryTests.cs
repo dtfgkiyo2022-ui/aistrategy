@@ -167,7 +167,7 @@ namespace Rts.Core.Tests
         {
             var wood = typeof(Battle).GetMethod("WoodOf", BindingFlags.Instance | BindingFlags.NonPublic);
             var stone = typeof(Battle).GetMethod("StoneOf", BindingFlags.Instance | BindingFlags.NonPublic);
-            var work = typeof(Battle).GetMethod("WorkOf", BindingFlags.Instance | BindingFlags.NonPublic);
+            var work = typeof(Battle).GetMethod("WorkOf", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(BuildingKind), typeof(uint) }, null);
             Assert.That(wood, Is.Not.Null);
             Assert.That(stone, Is.Not.Null);
             Assert.That(work, Is.Not.Null);
