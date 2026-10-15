@@ -104,6 +104,7 @@
     <Compile Include="TollgateTests.cs" />
     <Compile Include="CivReserveTests.cs" />
     <Compile Include="CivVarietyTests.cs" />
+    <Compile Include="CivVarietyCapsTests.cs" />
     <Compile Include="LoadMetricTests.cs" />
     <Compile Include="LargeMapTests.cs" />
     <Compile Include="CoreDefenceTests.cs" />

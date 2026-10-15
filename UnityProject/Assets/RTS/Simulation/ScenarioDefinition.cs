@@ -302,6 +302,9 @@ namespace Rts.Simulation
         public bool CivVariety;
         /// <summary>CivVariety: near-best normalised scores remain eligible for the seed-based choice.</summary>
         public int CivVarietyWindowPermille = 250;
+        /// <summary>CivVarietyCaps: use measured upper-quartile caps for agrarian and metallurgy.</summary>
+        public bool CivVarietyCaps;
+        public int CivVarietyCapMetallurgy = 5, CivVarietyCapAgrarian = 3;
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;

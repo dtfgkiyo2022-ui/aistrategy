@@ -62,6 +62,7 @@ namespace Rts.Simulation
             e.Metropolis = true;
             e.Sanctuary = true;
             e.CivVariety = true;
+            e.CivVarietyCaps = true;
             // The first 250‰ window produced one 31.25% mountain result in seeds 1..40. The measured 200‰ window
             // keeps thirteen civilisations in play while keeping every selected count below 30%.
             e.CivVarietyWindowPermille = 200;

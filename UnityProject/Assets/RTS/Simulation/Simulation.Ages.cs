@@ -510,8 +510,14 @@ namespace Rts.Simulation
             {
                 var row = CivRegistrations[i];
                 bool enabled = row.Enabled(this, faction);
+                int scoreCap = row.ScoreCap;
+                if (world.Config.Economy.CivVarietyCaps)
+                {
+                    if (row.Civ == CivKind.Metallurgy) scoreCap = world.Config.Economy.CivVarietyCapMetallurgy;
+                    else if (row.Civ == CivKind.Agrarian) scoreCap = world.Config.Economy.CivVarietyCapAgrarian;
+                }
                 candidates[i] = new EconomyDecision.CivScore(row.Civ,
-                    enabled ? row.Score(this, faction, core, ore, food) : 0, row.Priority, row.ScoreCap, enabled);
+                    enabled ? row.Score(this, faction, core, ore, food) : 0, row.Priority, scoreCap, enabled);
             }
             return CivVarietyOn
                 ? EconomyDecision.ChooseCivVariety(candidates, world.Config.Seed, faction, world.Config.Economy.CivVarietyWindowPermille)
