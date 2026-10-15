@@ -10,5 +10,12 @@ namespace Rts.Presentation
         public static bool Japanese;
 
         public static string T(string english, string japanese) { return Japanese ? japanese : english; }
+
+        public static string DropSiteLabel(int count, int max, int woodCost)
+        {
+            string countText = max > 0 ? count + "/" + max : "";
+            return Japanese ? "集積所 " + countText + "（木" + woodCost + "）"
+                : "Drop-off " + countText + " (" + woodCost + " wood)";
+        }
     }
 }

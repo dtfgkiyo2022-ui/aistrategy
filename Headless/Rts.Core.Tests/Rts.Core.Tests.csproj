@@ -98,7 +98,8 @@
     <Compile Include="RepairKitsTests.cs" />
     <Compile Include="ToolsTests.cs" />
   <Compile Include="GoodsMarketTests.cs" />
-  <Compile Include="CraftTimingTests.cs" />
+    <Compile Include="CraftTimingTests.cs" />
+    <Compile Include="DropSiteLimitTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -182,5 +183,6 @@
     <Compile Include="StaffChatTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/IStaffControl.cs" Link="Presentation/IStaffControl.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
   </ItemGroup>
 </Project>

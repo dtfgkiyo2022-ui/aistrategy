@@ -40,6 +40,9 @@ internal static class TacticMatchCommand
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
+        // LiveGameRules keeps both features on by default. These explicit measurement switches are command-line-only.
+        if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;
+        if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");
         string westName = options.GetValueOrDefault("--west-tactic") ?? "auto";
@@ -182,6 +185,20 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        for (uint faction = 1; faction <= 2; faction++)
+        {
+            var economy = simulation.Capture(faction).Economy;
+            if (economy == null) continue;
+            int dropSites = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.DropSite);
+            int resources = economy.Resources.Sum(r => r.Remaining);
+            Console.WriteLine("faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " dropSites=" + dropSites.ToString(CultureInfo.InvariantCulture)
+                + " food=" + economy.Food.ToString(CultureInfo.InvariantCulture)
+                + " wood=" + economy.Wood.ToString(CultureInfo.InvariantCulture)
+                + " villagers=" + economy.Villagers.Count(v => v.IsOwn).ToString(CultureInfo.InvariantCulture)
+                + " beltCells=" + economy.Belts.Count.ToString(CultureInfo.InvariantCulture)
+                + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
+        }
         return result.IsFault ? 4 : 0;
     }
 

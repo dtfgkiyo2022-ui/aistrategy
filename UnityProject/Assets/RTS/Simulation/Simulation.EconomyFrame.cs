@@ -254,7 +254,9 @@ namespace Rts.Simulation
                 toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0,
                 goodsMarketEnabled: GoodsMarketOn,
                 goodsTradeLot: GoodsMarketOn ? rules.GoodsTradeLot : 0,
-                goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null);
+                goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null,
+                dropSiteMax: DropSiteLimitOn ? rules.DropSiteMax : 0,
+                dropSiteCount: DropSiteLimitOn ? AliveDropSites(faction) : 0);
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

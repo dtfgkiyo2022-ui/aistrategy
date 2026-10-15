@@ -31,6 +31,8 @@ namespace Rts.Simulation
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
         private bool RationsOn => AgesOn && world.Config.Economy.Rations;
+        private bool DropSiteLimitOn => AgesOn && world.Config.Economy.DropSiteLimit;
+        private bool AiBeltsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.AiBelts;
         private bool BricksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Bricks;
         private bool TackOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tack;
         private bool PlanksOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Planks;

@@ -26,6 +26,8 @@ namespace Rts.Simulation
             // 32.28 processing chain, 32.30 belt components and the line guard (#362/#363), S-5 regions (RequestLine and
             // the region controls name them) and S-3 outpost towns. The large map had none of the belt rules.
             e.ProcessingChain = true;
+            e.DropSiteLimit = true;
+            e.AiBelts = true;
             e.Rations = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;

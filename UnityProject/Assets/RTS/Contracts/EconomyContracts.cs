@@ -643,6 +643,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int HouseWoodCost { get; }
         /// <summary>V3-5: a resource drop-off (maps with ages only; 0 otherwise).</summary>
         public int DropSiteWoodCost { get; }
+        /// <summary>V3-5: configured living/construction drop-site cap (0 when disabled).</summary>
+        public int DropSiteMax { get; }
+        /// <summary>V3-5: current living drop-site count, including construction.</summary>
+        public int DropSiteCount { get; }
         /// <summary>V3-5 stone and defences (maps with ages only; 0 otherwise).</summary>
         public int Stone { get; }
         /// <summary>V3-5 (32 #19): Gems received from a market (maps with ages only; 0 otherwise).</summary>
@@ -943,7 +947,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
              int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
              int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0,
-             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null)
+             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null,
+             int dropSiteMax = 0, int dropSiteCount = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -1025,6 +1030,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             TechGemsCosts = ContractList.Copy(techGemsCosts ?? Array.Empty<int>());
             Stone = stone; Gems = gems; WallStoneCost = wallStoneCost; TowerWoodCost = towerWoodCost; TowerStoneCost = towerStoneCost;
             DropSiteWoodCost = dropSiteWoodCost;
+            DropSiteMax = dropSiteMax; DropSiteCount = dropSiteCount;
             HouseWoodCost = houseWoodCost;
             ScoutFoodCost = scoutFoodCost;
             FarmWoodCost = farmWoodCost; FarmSizeCells = farmSizeCells;

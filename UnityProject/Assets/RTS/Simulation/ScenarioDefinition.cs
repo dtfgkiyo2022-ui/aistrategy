@@ -183,6 +183,12 @@ namespace Rts.Simulation
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
         public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
+        /// <summary>V3-5 drop-site limit: both human and automatic placement share this cap, including construction.</summary>
+        public bool DropSiteLimit;
+        public int DropSiteMax = 2;
+        /// <summary>AI raw-resource belts: the automatic economy keeps this much wood after laying a route.</summary>
+        public bool AiBelts;
+        public int AiBeltWoodReserve = 40;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;

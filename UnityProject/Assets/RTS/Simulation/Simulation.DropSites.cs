@@ -15,6 +15,17 @@ namespace Rts.Simulation
         /// <summary>Early arms: at most this many own drop-offs, and none by a point with less than this left.</summary>
         private const int EarlyDropSiteLimit = 8, EarlyDropSiteMinRemaining = 80;
 
+        private int AliveDropSites(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.DropSite) count++;
+            }
+            return count;
+        }
+
         /// <summary>Where <paramref name="v"/> unloads now, and how close it must come.</summary>
         private (SimPoint point, Fix64 reach) DropOff(VillagerState v)
         {
@@ -98,6 +109,11 @@ namespace Rts.Simulation
                 if (!b.Complete) return;
                 ownDropSites++;
             }
+            if (DropSiteLimitOn && ownDropSites >= rules.DropSiteMax)
+            {
+                DecideAiRawBelts(faction);
+                return;
+            }
             // Early arms: with gathering twice as fast the points empty quickly, and a drop-off for every next point
             // reached 21 in fifteen minutes and took the wood the houses and soldiers needed (10-10).
             if (EarlyArmsOn && ownDropSites >= EarlyDropSiteLimit) return;
@@ -127,8 +143,89 @@ namespace Rts.Simulation
                 if (!covered) bestNode = n;
             }
             if (bestNode < 0) return;
+            if (DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
             int origin = FindSiteNear(faction, rules.DropSiteSizeCells, world.Map.Cell(world.Nodes[bestNode].Definition.Position));
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+        }
+
+        /// <summary>
+        /// With the drop-site cap reached, give a distant raw point a receiver and route its output to the core.
+        /// Only existing raw-resource receivers are used; food and gold deliberately have no universal receiver here.
+        /// </summary>
+        private void DecideAiRawBelts(uint faction)
+        {
+            if (!AiBeltsOn || !DropSiteLimitOn) return;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.AutoOff || economy.Wood < world.Config.Economy.AiBeltWoodReserve) return;
+            var core = OwnCore(faction).Definition.Position;
+            var gatherers = new int[world.Nodes.Length];
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (v.Alive && v.FactionId == faction && v.NodeId > 0 && v.NodeId <= world.Nodes.Length
+                    && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff))
+                    gatherers[v.NodeId - 1]++;
+            }
+            int best = -1;
+            for (int n = 0; n < world.Nodes.Length; n++)
+            {
+                var node = world.Nodes[n];
+                if (node.Remaining <= 0 || gatherers[n] == 0 || InRange(node.Definition.Position, core, Fix64.FromInt(FarGatherMeters))) continue;
+                if (!RawReceiverAllowed(faction, node.Definition.Kind)) continue;
+                if (best >= 0 && (gatherers[n] < gatherers[best]
+                    || (gatherers[n] == gatherers[best] && node.Definition.Id >= world.Nodes[best].Definition.Id))) continue;
+                best = n;
+            }
+            if (best < 0) return;
+            var kind = RawReceiverKind(world.Nodes[best].Definition.Kind);
+            uint receiver = FindRawReceiver(faction, kind, world.Nodes[best].Definition.Id);
+            if (receiver == 0)
+            {
+                if (economy.Wood < RawReceiverWoodCost(kind) + world.Config.Economy.AiBeltWoodReserve) return;
+                int preferred = world.Map.Cell(world.Nodes[best].Definition.Position);
+                receiver = kind == BuildingKind.LumberCamp ? PlaceLumberCamp(faction, preferred)
+                    : kind == BuildingKind.Quarry ? PlaceQuarry(faction, preferred) : PlaceMine(faction, preferred);
+                if (receiver == 0) return;
+            }
+            var building = world.Buildings[receiver - 1];
+            if (!building.Alive || !building.Complete || building.Held) return;
+            var taken = TakenForOtherLines(faction, -1);
+            var route = BeltRoute(faction, OutputCell(building), taken, next => FeedsOwnCore(next, faction));
+            if (route.cells == null || !CanLayAiBelts(faction, route.cells)) return;
+            LayRoutes(faction, route);
+        }
+
+        private bool RawReceiverAllowed(uint faction, ResourceKind kind)
+            => kind == ResourceKind.Wood ? ForestryAllowed(faction)
+                : kind == ResourceKind.Stone ? MasonryAllowed(faction)
+                : kind == ResourceKind.Ore && MetalworkAllowed(faction);
+
+        private BuildingKind RawReceiverKind(ResourceKind kind)
+            => kind == ResourceKind.Wood ? BuildingKind.LumberCamp
+                : kind == ResourceKind.Stone ? BuildingKind.Quarry : BuildingKind.Mine;
+
+        private int RawReceiverWoodCost(BuildingKind kind)
+            => kind == BuildingKind.LumberCamp ? world.Config.Economy.LumberCampWoodCost
+                : kind == BuildingKind.Quarry ? world.Config.Economy.QuarryWoodCost : world.Config.Economy.MineWoodCost;
+
+        private uint FindRawReceiver(uint faction, BuildingKind kind, uint nodeId)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (b.Alive && b.FactionId == faction && b.Kind == kind && b.NodeId == nodeId) return b.Id;
+            }
+            return 0;
+        }
+
+        private bool CanLayAiBelts(uint faction, int[] route)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int missing = 0;
+            var seen = new bool[world.Belts.Length];
+            foreach (int cell in route)
+                if (!seen[cell] && world.Belts[cell].FactionId != faction) { seen[cell] = true; missing++; }
+            return economy.Wood - missing * world.Config.Economy.BeltWoodCost >= world.Config.Economy.AiBeltWoodReserve;
         }
     }
 }

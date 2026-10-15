@@ -428,7 +428,8 @@ namespace Rts.Presentation
             int size = SizeOf(kind);
             var center = Vector3.zero;
             bool shown = onMap && Footprint(cell, size, out _, out center);
-            layer.ShowGhost(shown, center, size * CellMeters, economy.Wood >= WoodOf(kind));
+            bool capped = kind == BuildingKind.DropSite && economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+            layer.ShowGhost(shown, center, size * CellMeters, economy.Wood >= WoodOf(kind) && !capped);
         }
 
         private EconomyView Economy() { var frame = view == null ? null : view.LatestFrame; return frame == null ? null : frame.Economy; }
@@ -523,7 +524,11 @@ namespace Rts.Presentation
             if (economy.Ages)
             {
                 float third = (w - 8f) / 3f;
-                ModeButton(new Rect(x, y, third, 22f), Mode.DropSite, UiText.T("Drop-off (", "資源置き場（木") + economy.DropSiteWoodCost + UiText.T("W)", "）"));
+                bool dropSiteCapped = economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+                if (dropSiteCapped && mode == Mode.DropSite) SetMode(Mode.None);
+                GUI.enabled = !dropSiteCapped;
+                ModeButton(new Rect(x, y, third, 22f), Mode.DropSite, UiText.DropSiteLabel(economy.DropSiteCount, economy.DropSiteMax, economy.DropSiteWoodCost));
+                GUI.enabled = true;
                 ModeButton(new Rect(x + third + 4f, y, third, 22f), Mode.Tower, UiText.T("Tower (", "見張り塔（石") + economy.TowerStoneCost + UiText.T("S ", " 木") + economy.TowerWoodCost + UiText.T("W)", "）"));
                 ModeButton(new Rect(x + 2f * (third + 4f), y, third, 22f), Mode.Wall, mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ")
                     : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"));
