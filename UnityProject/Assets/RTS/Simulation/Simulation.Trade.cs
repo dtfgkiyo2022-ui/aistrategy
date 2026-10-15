@@ -16,7 +16,8 @@ namespace Rts.Simulation
         private static readonly ResourceKind[] GoodsKinds =
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
-            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools
+            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
+            ResourceKind.CutStone, ResourceKind.Frames
         };
         // V3-9 #2 provisional caravan safety policy. The values are deliberately small and tick-based:
         // danger is only what the faction currently sees, and a route needs 20 clear ticks before restarting.
@@ -26,8 +27,9 @@ namespace Rts.Simulation
 
         private static bool TradeTakeable(ResourceKind kind) => Tradable(kind) || kind == ResourceKind.Gems;
 
-        private static bool GoodsTradeable(ResourceKind kind)
+        private bool GoodsTradeable(ResourceKind kind)
         {
+            if ((kind == ResourceKind.CutStone || kind == ResourceKind.Frames) && !CraftTree1On) return false;
             foreach (var goods in GoodsKinds) if (goods == kind) return true;
             return false;
         }
@@ -38,7 +40,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.BowGear ? e.BowGear : kind == ResourceKind.Rations ? e.Rations : kind == ResourceKind.Bricks ? e.Bricks
                 : kind == ResourceKind.Tack ? e.Tack : kind == ResourceKind.Planks ? e.Planks : kind == ResourceKind.Books ? e.Books
                 : kind == ResourceKind.Incense ? e.Incense : kind == ResourceKind.Charms ? e.Charms
-                : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools : 0;
+                : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools
+                : kind == ResourceKind.CutStone ? e.CutStone : kind == ResourceKind.Frames ? e.Frames : 0;
 
         private static int GoodsValue(EconomyRules rules, ResourceKind kind)
             => kind == ResourceKind.Steel ? rules.GoodsValueSteel : kind == ResourceKind.BowGear ? rules.GoodsValueBowGear
@@ -46,7 +49,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.Tack ? rules.GoodsValueTack : kind == ResourceKind.Planks ? rules.GoodsValuePlanks
                 : kind == ResourceKind.Books ? rules.GoodsValueBooks : kind == ResourceKind.Incense ? rules.GoodsValueIncense
                 : kind == ResourceKind.Charms ? rules.GoodsValueCharms : kind == ResourceKind.RepairKits ? rules.GoodsValueRepairKits
-                : kind == ResourceKind.Tools ? rules.GoodsValueTools : 0;
+                : kind == ResourceKind.Tools ? rules.GoodsValueTools : kind == ResourceKind.CutStone ? 4
+                : kind == ResourceKind.Frames ? 10 : 0;
 
         // The goods whose workshops stop at a stock limit. Selling at that limit lets the workshop run again.
         private static int GoodsCap(EconomyRules rules, ResourceKind kind)
@@ -101,7 +105,10 @@ namespace Rts.Simulation
             var prices = new List<GoodsPriceView>(GoodsKinds.Length);
             var rules = world.Config.Economy;
             foreach (var goods in GoodsKinds)
+            {
+                if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !CraftTree1On) continue;
                 prices.Add(new GoodsPriceView(goods, MarketReturnFor(faction, checked(GoodsValue(rules, goods) * rules.GoodsTradeLot))));
+            }
             return prices;
         }
 
@@ -113,6 +120,7 @@ namespace Rts.Simulation
             ResourceKind selected = 0;
             foreach (var goods in GoodsKinds)
             {
+                if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !CraftTree1On) continue;
                 int cap = GoodsCap(rules, goods);
                 int threshold = cap > 0 ? Math.Min(rules.GoodsAutoSellAt, cap) : rules.GoodsAutoSellAt;
                 int stock = StockOf(economy, goods);

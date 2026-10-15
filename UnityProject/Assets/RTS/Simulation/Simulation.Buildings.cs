@@ -348,8 +348,15 @@ namespace Rts.Simulation
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
-            int woodCost = plankBridge ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000) : WoodOf(kind, faction);
+            bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
+            int woodCost = plankBridge ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000) : WoodOfForPlacement(kind, faction, framesUsed);
             economy.Wood = checked(economy.Wood - woodCost);
+            if (framesUsed)
+            {
+                economy.Frames = checked(economy.Frames - world.Config.Economy.CraftTreeFramesPerBuilding);
+                economy.FramesConsumed = checked(economy.FramesConsumed + world.Config.Economy.CraftTreeFramesPerBuilding);
+                economy.FramesConsumedBuildings = checked(economy.FramesConsumedBuildings + world.Config.Economy.CraftTreeFramesPerBuilding);
+            }
             if (plankBridge)
             {
                 int planks = checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells.Length);
@@ -387,7 +394,7 @@ namespace Rts.Simulation
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
                 Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
-                BrickUpgraded = brickDefence, Facing = facing, NodeId = nodeId };
+                BrickUpgraded = brickDefence, Level = 1, FramesUsed = framesUsed, Facing = facing, NodeId = nodeId };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
@@ -729,8 +736,8 @@ namespace Rts.Simulation
                     var v = world.Villagers[j];
                     if (v.Alive && v.Task == VillagerTask.Building && v.BuildingId == b.Id) b.Progress++;
                 }
-                if (b.Progress < WorkOf(b.Kind, b.FactionId)) continue;
-                b.Progress = WorkOf(b.Kind, b.FactionId);
+                if (b.Progress < WorkOf(b)) continue;
+                b.Progress = WorkOf(b);
                 b.Complete = true;
                 if (b.Kind == BuildingKind.Bridge)
                 {
@@ -853,6 +860,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Tollgate ? e.TollgateLengthCells
                  : kind == BuildingKind.GrandHouse ? e.GrandHouseSizeCells
             : kind == BuildingKind.Town ? e.TownSizeCells : kind == BuildingKind.Storage ? e.StorageSizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells
+                : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells
                 : kind == BuildingKind.Bridge ? 1 : e.BarracksSizeCells;
         }
 
@@ -871,7 +879,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineHp
                 : kind == BuildingKind.Monastery ? e.MonasteryHp : kind == BuildingKind.Harbor ? e.HarborHp : kind == BuildingKind.MineShaft ? e.MountainHp
                  : kind == BuildingKind.Tollgate ? TollgateHpFor(e.TollgateHp, faction) : kind == BuildingKind.GrandHouse ? e.GrandHouseHp
-            : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.CharmWorkshop ? e.CharmHp : kind == BuildingKind.RepairYard ? e.RepairYardHp : kind == BuildingKind.ToolShop ? e.ToolShopHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
+            : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.CharmWorkshop ? e.CharmHp : kind == BuildingKind.RepairYard ? e.RepairYardHp : kind == BuildingKind.ToolShop ? e.ToolShopHp : kind == BuildingKind.Stonecutter ? e.StonecutterHp : kind == BuildingKind.Joinery ? e.JoineryHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
             return hp;
@@ -901,8 +909,16 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineWork
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
                  : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
-            : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.CharmWorkshop ? e.CharmWork : kind == BuildingKind.RepairYard ? e.RepairYardWork : kind == BuildingKind.ToolShop ? e.ToolShopWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
+            : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.CharmWorkshop ? e.CharmWork : kind == BuildingKind.RepairYard ? e.RepairYardWork : kind == BuildingKind.ToolShop ? e.ToolShopWork : kind == BuildingKind.Stonecutter ? e.StonecutterWork : kind == BuildingKind.Joinery ? e.JoineryWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
+        }
+
+        private int WorkOf(BuildingState building)
+        {
+            int work = WorkOf(building.Kind, building.FactionId);
+            if (CraftTree1On && building.FramesUsed && building.Kind != BuildingKind.Wall)
+                work = Math.Max(1, checked((work * world.Config.Economy.CraftTreeFrameWorkPermille + 999) / 1000));
+            return work;
         }
 
         private int WoodOf(BuildingKind kind, uint faction)
@@ -917,11 +933,41 @@ namespace Rts.Simulation
                 : kind == BuildingKind.ArcheryRange ? e.RangeWoodCost : kind == BuildingKind.Stable ? e.StableWoodCost
                 : kind == BuildingKind.Castle ? e.CastleWoodCost : kind == BuildingKind.Caravanserai ? e.CaravanseraiWoodCost
                  : kind == BuildingKind.EngineerCamp ? e.EngineerCampWoodCost : kind == BuildingKind.Academy ? e.AcademyWoodCost
-                 : kind == BuildingKind.Shrine ? e.ShrineWoodCost
-                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
+                : kind == BuildingKind.Shrine ? e.ShrineWoodCost
+                : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
                   : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
-            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
+        }
+
+        private int WoodOfForPlacement(BuildingKind kind, uint faction, bool framesUsed)
+        {
+            int wood = WoodOf(kind, faction);
+            if (CraftTree1On && framesUsed && kind != BuildingKind.Wall)
+                return checked((wood * world.Config.Economy.CraftTreeFrameWoodPermille + 999) / 1000);
+            return wood;
+        }
+
+        private bool IsCraftProcessingBuilding(BuildingKind kind)
+            => kind == BuildingKind.Smelter || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks
+                || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln
+                || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium
+                || kind == BuildingKind.DryingRack || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver
+                || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard
+                || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery;
+
+        private void UpgradeProcessingBuilding(uint faction, uint buildingId)
+        {
+            if (!CraftTree1On || !OwnBuilding(faction, buildingId, out int index)) return;
+            ref var building = ref world.Buildings[index];
+            if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 2) return;
+            ref var economy = ref world.Economies[faction - 1];
+            int cost = world.Config.Economy.CraftTreeLevel2FramesCost;
+            if (economy.Frames < cost) return;
+            economy.Frames -= cost;
+            economy.FramesConsumed = checked(economy.FramesConsumed + cost);
+            economy.FramesConsumedUpgrades = checked(economy.FramesConsumedUpgrades + cost);
+            building.Level = 2;
         }
 
         private bool PlankBridgeAvailable(uint faction, int cells)

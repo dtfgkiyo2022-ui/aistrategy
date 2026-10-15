@@ -16,6 +16,7 @@ namespace Rts.Simulation
             if (!EconomyOn) return null;
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
+            bool commonSawmill = CraftTreeCommonAllowed(faction);
             var villagers = new List<VillagerView>();
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -50,7 +51,7 @@ namespace Rts.Simulation
                     else caravanReason = CaravanStopReason.Normal;
                 }
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
-                    own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b.Kind, b.FactionId),
+                    own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
                     own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn || ToolsOn) ? b.InputSecondary : 0,
@@ -58,7 +59,8 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanMarketId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
-                    own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason));
+                    own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
+                    CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -165,11 +167,11 @@ namespace Rts.Simulation
                 heavyCavalryRange: TackAllowed(faction) ? rules.HeavyCavalryRange : default(Fix64),
                 heavyCavalrySpeed: TackAllowed(faction) ? rules.HeavyCavalrySpeed : default(Fix64),
                 heavyCavalryVision: TackAllowed(faction) ? rules.HeavyCavalryVision : default(Fix64),
-                planksEnabled: PlanksAllowed(faction), planks: PlanksAllowed(faction) ? economy.Planks : 0,
-                sawmillWoodCost: PlanksAllowed(faction) ? rules.SawmillWoodCost : 0,
-                sawmillSizeCells: PlanksAllowed(faction) ? rules.SawmillSizeCells : 0,
-                plankTicks: PlanksAllowed(faction) ? rules.PlankTicks : 0,
-                plankWoodInput: PlanksAllowed(faction) ? rules.PlankWoodInput : 0,
+                planksEnabled: PlanksAllowed(faction) || commonSawmill, planks: PlanksAllowed(faction) || commonSawmill ? economy.Planks : 0,
+                sawmillWoodCost: PlanksAllowed(faction) || commonSawmill ? rules.SawmillWoodCost : 0,
+                sawmillSizeCells: PlanksAllowed(faction) || commonSawmill ? rules.SawmillSizeCells : 0,
+                plankTicks: commonSawmill ? rules.CraftTreePlankTicks : PlanksAllowed(faction) ? rules.PlankTicks : 0,
+                plankWoodInput: commonSawmill ? rules.CraftTreePlankWoodInput : PlanksAllowed(faction) ? rules.PlankWoodInput : 0,
                 planksPerRam: PlanksAllowed(faction) ? rules.PlanksPerRam : 0,
                 plankRamHpPermille: PlanksAllowed(faction) ? rules.PlankRamHpPermille : 0,
                 plankRamTrainPermille: PlanksAllowed(faction) ? rules.PlankRamTrainPermille : 0,
@@ -269,7 +271,23 @@ namespace Rts.Simulation
                  buildingClearanceCells: rules.AdjacentBuildings ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells,
                  coreClearanceCells: CoreClearanceCells, nodeClearanceCells: NodeClearanceCells,
                  mapWidthCells: world.Config.Map.WidthCells, mapHeightCells: world.Config.Map.HeightCells,
-                 cellSizeMeters: world.Config.Map.CellSizeMeters, passableCells: passableCells, riverCells: riverCells);
+                 cellSizeMeters: world.Config.Map.CellSizeMeters, passableCells: passableCells, riverCells: riverCells,
+                craftTree1Enabled: CraftTree1On,
+                cutStone: CraftTree1On ? economy.CutStone : 0,
+                frames: CraftTree1On ? economy.Frames : 0,
+                stonecutterWoodCost: CraftTree1On ? rules.StonecutterWoodCost : 0,
+                stonecutterSizeCells: CraftTree1On ? rules.StonecutterSizeCells : 0,
+                stonecutterTicks: CraftTree1On ? rules.CraftTreeStonecutterTicks : 0,
+                stonecutterStoneInput: CraftTree1On ? rules.CraftTreeStoneInput : 0,
+                joineryWoodCost: JoineryAllowed(faction) ? rules.JoineryWoodCost : 0,
+                joinerySizeCells: JoineryAllowed(faction) ? rules.JoinerySizeCells : 0,
+                joineryTicks: JoineryAllowed(faction) ? rules.CraftTreeJoineryTicks : 0,
+                joineryPlankInput: JoineryAllowed(faction) ? rules.CraftTreeJoineryPlankInput : 0,
+                joineryCutStoneInput: JoineryAllowed(faction) ? rules.CraftTreeJoineryCutStoneInput : 0,
+                framesPerBuilding: CraftTree1On ? rules.CraftTreeFramesPerBuilding : 0,
+                frameWoodPermille: CraftTree1On ? rules.CraftTreeFrameWoodPermille : 0,
+                frameWorkPermille: CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0,
+                level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

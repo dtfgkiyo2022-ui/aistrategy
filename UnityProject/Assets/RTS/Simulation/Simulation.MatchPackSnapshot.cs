@@ -54,6 +54,15 @@ namespace Rts.Simulation
         public int PlanksConsumedRams { get; internal set; }
         public int PlanksConsumedBridges { get; internal set; }
         public int PlanksEnhancedRams { get; internal set; }
+        public int CutStone { get; internal set; }
+        public int CutStoneProduced { get; internal set; }
+        public int CutStoneConsumed { get; internal set; }
+        public int Frames { get; internal set; }
+        public int FramesProduced { get; internal set; }
+        public int FramesConsumed { get; internal set; }
+        public int FramesConsumedBuildings { get; internal set; }
+        public int FramesConsumedUpgrades { get; internal set; }
+        public int Level2Buildings { get; internal set; }
         public int Books { get; internal set; }
         public int BooksProduced { get; internal set; }
         public int BooksConsumed { get; internal set; }
@@ -166,6 +175,15 @@ namespace Rts.Simulation
                     PlanksConsumedRams = economy.PlanksConsumedRams,
                     PlanksConsumedBridges = economy.PlanksConsumedBridges,
                     PlanksEnhancedRams = economy.PlanksEnhancedRams,
+                    CutStone = economy.CutStone,
+                    CutStoneProduced = economy.CutStoneProduced,
+                    CutStoneConsumed = economy.CutStoneConsumed,
+                    Frames = economy.Frames,
+                    FramesProduced = economy.FramesProduced,
+                    FramesConsumed = economy.FramesConsumed,
+                    FramesConsumedBuildings = economy.FramesConsumedBuildings,
+                    FramesConsumedUpgrades = economy.FramesConsumedUpgrades,
+                    Level2Buildings = CountLevel2Buildings(world.Factions[f].Id),
                     Books = economy.Books,
                     BooksProduced = economy.BooksProduced,
                     BooksConsumed = economy.BooksConsumed,
@@ -238,6 +256,17 @@ namespace Rts.Simulation
                 if (!villager.Alive || villager.FactionId != factionId || villager.NodeId == 0
                     || villager.NodeId > world.Nodes.Length) continue;
                 if (world.Nodes[villager.NodeId - 1].Definition.Kind == kind) count++;
+            }
+            return count;
+        }
+
+        private int CountLevel2Buildings(uint factionId)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.FactionId == factionId && building.Level >= 2) count++;
             }
             return count;
         }

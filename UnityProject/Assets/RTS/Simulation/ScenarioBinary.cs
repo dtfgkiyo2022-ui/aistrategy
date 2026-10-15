@@ -149,6 +149,9 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
         private const int ResourceFogExtensionId = 39;
         private const int ResourceFogExtensionVersion = 1;
         private const int ResourceFogExtensionDataLength = sizeof(int);
+private const int CraftTree1ExtensionId = 41;
+private const int CraftTree1ExtensionVersion = 1;
+private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -195,6 +198,7 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
              ,new ExtensionRegistration(AdjacentBuildingsExtensionId, AdjacentBuildingsExtensionVersion, AdjacentBuildingsExtensionDataLength)
              ,new ExtensionRegistration(CraftBalanceExtensionId, CraftBalanceExtensionVersion, CraftBalanceExtensionDataLength)
             ,new ExtensionRegistration(ResourceFogExtensionId, ResourceFogExtensionVersion, ResourceFogExtensionDataLength)
+            ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -778,6 +782,7 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
                      else if (id == AdjacentBuildingsExtensionId) ReadAdjacentBuildingsExtension(extension, c.Economy);
                      else if (id == CraftBalanceExtensionId) ReadCraftBalanceExtension(extension, c.Economy);
                     else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
+                    else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -845,6 +850,7 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == AdjacentBuildingsExtensionId && !c.Economy.AdjacentBuildings);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftBalanceExtensionId && !c.Economy.CraftBalance);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1148,6 +1154,14 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
                         extensions[i] = CreateResourceFogExtension(c.Economy);
                     }
                 if (c.Economy.ResourceFog && !hasResourceFog) extensions.Add(CreateResourceFogExtension(c.Economy));
+                bool hasCraftTree1 = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CraftTree1ExtensionId)
+                    {
+                        hasCraftTree1 = true;
+                        extensions[i] = CreateCraftTree1Extension(c.Economy);
+                    }
+                if (c.Economy.CraftTree1 && !hasCraftTree1) extensions.Add(CreateCraftTree1Extension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1215,6 +1229,47 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid resource-fog flag.");
                 e.ResourceFog = enabled != 0;
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing resource-fog extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftTree1Extension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftTree1 ? 1 : 0);
+                writer.Write(e.CraftTreePlankWoodInput); writer.Write(e.CraftTreePlankTicks);
+                writer.Write(e.CraftTreeCharcoalWoodInput); writer.Write(e.CraftTreeCharcoalTicks);
+                writer.Write(e.StonecutterSizeCells); writer.Write(e.StonecutterWoodCost); writer.Write(e.StonecutterWork); writer.Write(e.StonecutterHp);
+                writer.Write(e.CraftTreeStoneInput); writer.Write(e.CraftTreeStonecutterTicks);
+                writer.Write(e.JoinerySizeCells); writer.Write(e.JoineryWoodCost); writer.Write(e.JoineryWork); writer.Write(e.JoineryHp);
+                writer.Write(e.CraftTreeJoineryTicks); writer.Write(e.CraftTreeJoineryPlankInput); writer.Write(e.CraftTreeJoineryCutStoneInput);
+                writer.Write(e.CraftTreeFramesPerBuilding); writer.Write(e.CraftTreeFrameWoodPermille); writer.Write(e.CraftTreeFrameWorkPermille);
+                writer.Write(e.CraftTreeLevel2FramesCost);
+                return new ScenarioExtensionData { Id = CraftTree1ExtensionId, Version = CraftTree1ExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftTree1Extension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-tree flag.");
+                e.CraftTree1 = enabled != 0;
+                e.CraftTreePlankWoodInput = reader.ReadInt32(); e.CraftTreePlankTicks = reader.ReadInt32();
+                e.CraftTreeCharcoalWoodInput = reader.ReadInt32(); e.CraftTreeCharcoalTicks = reader.ReadInt32();
+                e.StonecutterSizeCells = reader.ReadInt32(); e.StonecutterWoodCost = reader.ReadInt32();
+                e.StonecutterWork = reader.ReadInt32(); e.StonecutterHp = reader.ReadInt32();
+                e.CraftTreeStoneInput = reader.ReadInt32(); e.CraftTreeStonecutterTicks = reader.ReadInt32();
+                e.JoinerySizeCells = reader.ReadInt32(); e.JoineryWoodCost = reader.ReadInt32();
+                e.JoineryWork = reader.ReadInt32(); e.JoineryHp = reader.ReadInt32();
+                e.CraftTreeJoineryTicks = reader.ReadInt32(); e.CraftTreeJoineryPlankInput = reader.ReadInt32();
+                e.CraftTreeJoineryCutStoneInput = reader.ReadInt32(); e.CraftTreeFramesPerBuilding = reader.ReadInt32();
+                e.CraftTreeFrameWoodPermille = reader.ReadInt32(); e.CraftTreeFrameWorkPermille = reader.ReadInt32();
+                e.CraftTreeLevel2FramesCost = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree extension data.");
             }
         }
 

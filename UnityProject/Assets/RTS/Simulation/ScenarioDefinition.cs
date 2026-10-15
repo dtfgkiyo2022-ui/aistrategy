@@ -210,6 +210,16 @@ namespace Rts.Simulation
         public int PlankRamHpPermille = 1500, PlankRamTrainPermille = 700;
         public int PlanksPerBridgeCell = 1, PlankBridgeWoodPermille = 500;
         public int PlankExtraRams = 1, PlankWoodReserve = 20;
+        /// <summary>CraftTree1: shared first-stage processing, frames, and level-two processing buildings.</summary>
+        public bool CraftTree1;
+        public int CraftTreePlankWoodInput = 2, CraftTreePlankTicks = 60;
+        public int CraftTreeCharcoalWoodInput = 2, CraftTreeCharcoalTicks = 60;
+        public int StonecutterSizeCells = 2, StonecutterWoodCost = 80, StonecutterWork = 200, StonecutterHp = 400;
+        public int CraftTreeStoneInput = 2, CraftTreeStonecutterTicks = 60;
+        public int JoinerySizeCells = 2, JoineryWoodCost = 100, JoineryWork = 250, JoineryHp = 500;
+        public int CraftTreeJoineryTicks = 80, CraftTreeJoineryPlankInput = 2, CraftTreeJoineryCutStoneInput = 1;
+        public int CraftTreeFramesPerBuilding = 1, CraftTreeFrameWoodPermille = 700, CraftTreeFrameWorkPermille = 700;
+        public int CraftTreeLevel2FramesCost = 2;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;

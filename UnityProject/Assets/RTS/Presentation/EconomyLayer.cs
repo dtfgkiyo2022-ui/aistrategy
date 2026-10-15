@@ -871,6 +871,8 @@ namespace Rts.Presentation
                 case BuildingKind.CharmWorkshop: return UiText.T("Charm workshop", "護符工房");
                 case BuildingKind.RepairYard: return UiText.T("Repair yard", "修繕所");
                 case BuildingKind.ToolShop: return UiText.T("Tool shop", "工具工房");
+                case BuildingKind.Stonecutter: return UiText.T("Stonecutter", "石工場");
+                case BuildingKind.Joinery: return UiText.T("Joinery", "木工所");
                 default: return kind.ToString();
             }
         }
@@ -953,7 +955,7 @@ namespace Rts.Presentation
 
         private static bool RequiresInput(BuildingKind kind)
         {
-            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop;
+            return kind == BuildingKind.Smelter || kind == BuildingKind.Steelworks || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery;
         }
 
         /// <summary>Belt placement preview: one translucent plate per cell of the run (green or red), or none.</summary>
