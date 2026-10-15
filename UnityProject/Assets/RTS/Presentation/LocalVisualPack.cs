@@ -704,16 +704,20 @@ namespace Rts.Presentation
             {
                 if (TryCreateTieredUnit(GetInfantrySpec(civ, stage), own, parent, out instance))
                 {
+                    AddCivAccent(instance, civ);
                     tiered = true;
                     return true;
                 }
             }
             else if (TryCreateTieredUnit(GetTieredUnitSpec(kind, stage), own, parent, out instance))
             {
+                AddCivAccent(instance, civ);
                 tiered = true;
                 return true;
             }
-            return TryCreateUnit(kind, own, parent, out instance);
+            bool created = TryCreateUnit(kind, own, parent, out instance);
+            if (created) AddCivAccent(instance, civ);
+            return created;
         }
 
         public static AnimationHandle TryCreateDisplayAnimation(GameObject instance, UnitKind kind, CivKind civ,
@@ -745,6 +749,49 @@ namespace Rts.Presentation
         {
             // Taller than a soldier (2.4 m), so the banner shows above the ranks.
             return TryCreate(LoadBannerModel(index), null, parent, 4.5f, false, out instance, out _);
+        }
+
+        public static bool TryCreateBanner(int index, CivKind civ, Transform parent, out GameObject instance)
+        {
+            if (!TryCreateBanner(index, parent, out instance)) return false;
+            AddCivGlyph(instance, civ, new Vector3(0f, 1.45f, -0.04f), 0.72f);
+            return true;
+        }
+
+        public static bool TryCreateBanner(int index, CivKind civ, uint faction, Transform parent, out GameObject instance)
+        {
+            if (!TryCreateBanner(index, parent, out instance)) return false;
+            Recolor(instance, PresentationMaterials.GetUnlit(FactionUnityColor(faction)));
+            AddCivGlyph(instance, civ, new Vector3(0f, 1.45f, -0.04f), 0.72f);
+            return true;
+        }
+
+        /// <summary>Small code-drawn standard for a core or a main building; it has no per-instance material copy.</summary>
+        public static bool TryCreateCivStandard(CivKind civ, uint faction, Transform parent, float height, float width,
+            out GameObject instance)
+        {
+            instance = null;
+            if (parent == null || height <= 0f || width <= 0f) return false;
+            var root = new GameObject("CivStandard");
+            root.transform.SetParent(parent, false);
+            var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            pole.name = "Pole";
+            pole.transform.SetParent(root.transform, false);
+            pole.transform.localPosition = new Vector3(0f, height * 0.5f, 0f);
+            pole.transform.localScale = new Vector3(0.035f, height * 0.5f, 0.035f);
+            DestroyCollider(pole);
+            pole.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.48f, 0.34f, 0.19f));
+
+            var flag = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            flag.name = "Flag";
+            flag.transform.SetParent(root.transform, false);
+            flag.transform.localPosition = new Vector3(width * 0.23f, height * 0.76f, 0f);
+            flag.transform.localScale = new Vector3(width * 0.46f, height * 0.25f, 1f);
+            DestroyCollider(flag);
+            flag.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(FactionUnityColor(faction));
+            AddCivGlyph(root, civ, new Vector3(width * 0.23f, height * 0.76f, -0.02f), Mathf.Min(width * 0.26f, height * 0.18f));
+            instance = root;
+            return true;
         }
 
         /// <summary>
@@ -933,6 +980,60 @@ namespace Rts.Presentation
                 for (int i = 0; i < materials.Length; i++) materials[i] = material;
                 renderer.sharedMaterials = materials;
             }
+        }
+
+        private static void AddCivAccent(GameObject instance, CivKind civ)
+        {
+            if (instance == null || civ == CivKind.Primitive) return;
+            var accent = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            accent.name = "CivAccent";
+            accent.transform.SetParent(instance.transform, false);
+            accent.transform.localPosition = new Vector3(0.22f, 0.78f, -0.16f);
+            accent.transform.localScale = new Vector3(0.16f, 0.28f, 0.04f);
+            DestroyCollider(accent);
+            accent.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(CivUnityColor(CivPalette.Accent(civ)));
+            var primary = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            primary.name = "CivPrimaryTrim";
+            primary.transform.SetParent(instance.transform, false);
+            primary.transform.localPosition = new Vector3(-0.22f, 0.78f, -0.16f);
+            primary.transform.localScale = new Vector3(0.16f, 0.28f, 0.04f);
+            DestroyCollider(primary);
+            primary.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(CivUnityColor(CivPalette.Primary(civ)));
+        }
+
+        private static void AddCivGlyph(GameObject parent, CivKind civ, Vector3 localPosition, float size)
+        {
+            var texture = CivVisualAssets.LoadGlyph(civ);
+            var material = CivVisualAssets.GlyphMaterial(civ);
+            if (parent == null || texture == null || material == null) return;
+            var glyph = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            glyph.name = "CivGlyph";
+            glyph.transform.SetParent(parent.transform, false);
+            glyph.transform.localPosition = localPosition;
+            glyph.transform.localScale = new Vector3(size, size, 1f);
+            DestroyCollider(glyph);
+            glyph.GetComponent<Renderer>().sharedMaterial = material;
+        }
+
+        private static Color FactionUnityColor(uint faction)
+        {
+            return CivUnityColor(CivPalette.FactionSwatch(faction));
+        }
+
+        private static Color CivUnityColor(CivPalette.Swatch swatch)
+        {
+            return new Color(swatch.Red, swatch.Green, swatch.Blue, 1f);
+        }
+
+        private static void DestroyCollider(GameObject go)
+        {
+            var collider = go == null ? null : go.GetComponent<Collider>();
+            if (collider == null) return;
+#if UNITY_EDITOR
+            if (UnityEngine.Application.isPlaying) Object.Destroy(collider); else Object.DestroyImmediate(collider);
+#else
+            Object.Destroy(collider);
+#endif
         }
 
         private static void ApplyBuildingTint(GameObject instance, Color tint)

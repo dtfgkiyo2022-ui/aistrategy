@@ -26,6 +26,8 @@ namespace Rts.Presentation
         private readonly List<GameObject> enemyVillagers = new List<GameObject>();
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingHealthBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
+        private readonly Dictionary<uint, GameObject> buildingCivStandards = new Dictionary<uint, GameObject>();
         private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
         private readonly Dictionary<uint, int> packedBuildingStages = new Dictionary<uint, int>();
         private sealed class BuildingFxState
@@ -276,6 +278,8 @@ namespace Rts.Presentation
             foreach (var animation in ownVillagerAnimations.Values) animation.Dispose();
             foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
             foreach (var go in buildings.Values) Destroy(go);
+            foreach (var bar in buildingHealthBars.Values) Destroy(bar.Root);
+            foreach (var standard in buildingCivStandards.Values) Destroy(standard);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
             foreach (var go in buildingFlags.Values) Destroy(go);
@@ -288,7 +292,7 @@ namespace Rts.Presentation
             foreach (var go in buildingActivityPuffs.Values) Destroy(go);
             foreach (var go in buildingDetailOverlays.Values) Destroy(go);
             foreach (var go in buildingLineHighlights.Values) Destroy(go);
-            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); villagerTargets.Clear();
+            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); buildingHealthBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
             foreach (var fx in buildingEffects) Destroy(fx.Object);
@@ -351,6 +355,8 @@ namespace Rts.Presentation
 
         private void SyncVillagerSelection(EconomyView economy)
         {
+            Color ringFactionColor = view == null || view.LatestFrame == null ? VillagerSelectionColor
+                : FactionRingColor(view.LatestFrame.FactionId);
             var existing = new HashSet<uint>(ownVillagers.Keys);
             var present = VillagerControlRules.PruneMissing(selectedVillagers, existing);
             selectedVillagers.Clear();
@@ -364,12 +370,7 @@ namespace Rts.Presentation
                 seen.Add(id);
                 if (!villagerSelectionRings.TryGetValue(id, out var ring))
                 {
-                    ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                    ring.name = "VillagerSelectionRing " + id;
-                    Destroy(ring.GetComponent<Collider>());
-                    ring.transform.SetParent(transform, false);
-                    ring.transform.localScale = new Vector3(1.25f, 0.035f, 1.25f);
-                    ring.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(VillagerSelectionColor);
+                    ring = SelectionRingVisuals.Create(transform, "VillagerSelectionRing " + id, 0.62f, ringFactionColor);
                     villagerSelectionRings.Add(id, ring);
                 }
                 var position = villager.transform.position;
@@ -750,6 +751,30 @@ namespace Rts.Presentation
                     go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
                     go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
                 }
+                if (b.MaxHp > 0)
+                {
+                    if (!buildingHealthBars.TryGetValue(b.Id, out var healthBar))
+                    {
+                        healthBar = WorldHealthBarVisuals.Create(transform, "BuildingHp_" + b.Id, 2.7f, 0.14f);
+                        buildingHealthBars.Add(b.Id, healthBar);
+                    }
+                    WorldHealthBarVisuals.Set(healthBar, b.Hp, b.MaxHp,
+                        new Vector3(p.x, height + 0.28f, p.z), Quaternion.identity);
+                }
+                else if (buildingHealthBars.TryGetValue(b.Id, out var noHealthBar))
+                {
+                    noHealthBar.Root.SetActive(false);
+                }
+                if (own && finished && economy.Civ != CivKind.Primitive && IsCivStandardBuilding(b.Kind)
+                    && !buildingCivStandards.ContainsKey(b.Id))
+                {
+                    if (LocalVisualPack.TryCreateCivStandard(economy.Civ, b.FactionId, transform,
+                        Mathf.Max(1.8f, height + 0.9f), Mathf.Max(1.0f, b.SizeMeters * 0.55f), out var standard))
+                    {
+                        standard.transform.position = new Vector3(p.x, 0f, p.z);
+                        buildingCivStandards.Add(b.Id, standard);
+                    }
+                }
                 if (own && b.MaxHp > 0)
                     SyncBuildingFire(b.Id, b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
@@ -776,6 +801,20 @@ namespace Rts.Presentation
                 else if (buildingFlags.TryGetValue(b.Id, out var old)) { Destroy(old); buildingFlags.Remove(b.Id); }
             }
             Remove(buildings, seen);
+            var healthBarsGone = new List<uint>();
+            foreach (var id in buildingHealthBars.Keys) if (!seen.Contains(id)) healthBarsGone.Add(id);
+            foreach (var id in healthBarsGone)
+            {
+                Destroy(buildingHealthBars[id].Root);
+                buildingHealthBars.Remove(id);
+            }
+            var standardsGone = new List<uint>();
+            foreach (var id in buildingCivStandards.Keys) if (!seen.Contains(id)) standardsGone.Add(id);
+            foreach (var id in standardsGone)
+            {
+                Destroy(buildingCivStandards[id]);
+                buildingCivStandards.Remove(id);
+            }
             var packedGone = new List<uint>();
             foreach (var id in packedBuildings) if (!seen.Contains(id)) packedGone.Add(id);
             foreach (var id in packedGone) packedBuildings.Remove(id);
@@ -847,7 +886,7 @@ namespace Rts.Presentation
                 buildingDetailOverlays.Add(id, overlay);
             }
             overlay.SetActive(true);
-            overlay.transform.position = top + Vector3.up * 0.86f;
+            overlay.transform.position = top + Vector3.up * 1.46f;
             var camera = Camera.main;
             if (camera != null) overlay.transform.rotation = Quaternion.LookRotation(camera.transform.position - overlay.transform.position, Vector3.up);
             SetDetailIcon(overlay.transform.Find("Input"), recipe.Input);
@@ -928,6 +967,19 @@ namespace Rts.Presentation
             SetBuildingActivityPuff(building.Id, state == CraftBuildingState.Working, top);
         }
 
+        private static bool IsCivStandardBuilding(BuildingKind kind)
+        {
+            return kind == BuildingKind.Barracks || kind == BuildingKind.Market || kind == BuildingKind.Castle
+                || kind == BuildingKind.Academy || kind == BuildingKind.Monastery || kind == BuildingKind.Town
+                || kind == BuildingKind.Caravanserai || kind == BuildingKind.Tollgate;
+        }
+
+        private static Color FactionRingColor(uint faction)
+        {
+            var swatch = CivPalette.FactionSwatch(faction);
+            return new Color(swatch.Red, swatch.Green, swatch.Blue, 1f);
+        }
+
         private void SetBuildingStatusBubble(uint id, Texture2D icon, Vector3 top)
         {
             if (icon == null)
@@ -945,7 +997,7 @@ namespace Rts.Presentation
                 buildingStatusBubbles.Add(id, bubble);
             }
             bubble.SetActive(true);
-            bubble.transform.position = top + Vector3.up * 0.72f;
+            bubble.transform.position = top + Vector3.up * 1.02f;
             bubble.GetComponent<Renderer>().sharedMaterial = GoodsIcons.GetMaterial(icon);
         }
 
@@ -986,6 +1038,10 @@ namespace Rts.Presentation
             {
                 if (!overlay.activeSelf) continue;
                 overlay.transform.rotation = Quaternion.LookRotation(camera.transform.position - overlay.transform.position, Vector3.up);
+            }
+            foreach (var bar in buildingHealthBars.Values)
+            {
+                if (bar.Root.activeSelf) bar.Root.transform.rotation = camera.transform.rotation;
             }
         }
 

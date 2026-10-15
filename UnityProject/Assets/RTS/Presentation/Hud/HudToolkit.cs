@@ -57,6 +57,7 @@ namespace Rts.Presentation
         private StyleSheet activeTheme;
         private VisualElement hudRoot;
         private VisualElement topFrame;
+        private VisualElement civIcon;
         private Label ageLabel;
         private Label ageStageLabel;
         private VisualElement resourceRow;
@@ -187,6 +188,7 @@ namespace Rts.Presentation
         private bool hudAssetsLoaded;
         private string lastAge = "";
         private string lastAgeStage = "";
+        private CivKind lastCiv = (CivKind)255;
         private string lastPopulation = "";
         private string lastIdle = "";
         private int activeThemeIndex = -1;
@@ -398,7 +400,7 @@ namespace Rts.Presentation
 
             EnsureDocument();
             if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
-            if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
+            if (hudRoot == null || civIcon == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null) return;
             var frame = view.LatestFrame;
             var economy = frame == null ? null : frame.Economy;
@@ -573,6 +575,7 @@ namespace Rts.Presentation
             hudRoot = root.Q<VisualElement>("hud-root");
             PerfProbe.Counter("uiElements", () => CountElements(root));
             topFrame = root.Q<VisualElement>("top-frame");
+            civIcon = root.Q<VisualElement>("civ-icon");
             ageLabel = root.Q<Label>("age-label");
             ageStageLabel = root.Q<Label>("age-stage-label");
             resourceRow = root.Q<VisualElement>("resource-row");
@@ -661,7 +664,7 @@ namespace Rts.Presentation
             resultDetail = root.Q<Label>("result-detail");
             resultPack = root.Q<Label>("result-pack");
             resultRestart = root.Q<Button>("result-restart");
-            if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
+            if (hudRoot == null || civIcon == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null)
             {
                 Debug.LogWarning("UI Toolkit HUD UXML is missing one of the required top-bar elements.");
@@ -1948,6 +1951,12 @@ namespace Rts.Presentation
         private void Refresh(EconomyView economy)
         {
             string age = TopBarDisplayText.Age(economy);
+            if (lastCiv != economy.Civ)
+            {
+                civIcon.style.backgroundImage = new StyleBackground(CivVisualAssets.LoadGlyph(economy.Civ));
+                civIcon.tooltip = CivPalette.Get(economy.Civ).JapaneseName;
+                lastCiv = economy.Civ;
+            }
             if (age != lastAge)
             {
                 // The IMGUI line ends the age with a "  |  " separator; the toolkit bar separates by layout instead.

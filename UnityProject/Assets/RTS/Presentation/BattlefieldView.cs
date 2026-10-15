@@ -33,6 +33,8 @@ namespace Rts.Presentation
             public Vector3 From;
             public Vector3 To;
             public Transform HpFill;
+            public WorldHealthBarVisuals.Handle HealthBar;
+            public GameObject CivStandard;
             public int Hp;
             public bool IsEnemy;
             public LocalVisualPack.AnimationHandle Animation;
@@ -363,17 +365,13 @@ namespace Rts.Presentation
                 if (selectionRing != null) selectionRing.SetActive(false);
                 return;
             }
+            Color selectionColor = FactionColor(latestFrame == null ? 1u : latestFrame.FactionId);
             if (selectionRing == null)
-            {
-                selectionRing = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                selectionRing.name = "SelectionRing";
-                selectionRing.transform.SetParent(transform, false);
-                Discard(selectionRing.GetComponent<Collider>());
-                selectionRing.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.9f, 0.2f));
-            }
+                selectionRing = SelectionRingVisuals.Create(transform, "SelectionRing", 3f, selectionColor);
             selectionRing.SetActive(true);
             bool isCore = selected.Kind == SelectionKind.Core;
-            selectionRing.transform.localScale = isCore ? new Vector3(12f, 0.05f, 12f) : new Vector3(6f, 0.05f, 6f);
+            SelectionRingVisuals.SetRadius(selectionRing, isCore ? 6f : 3f);
+            SelectionRingVisuals.SetFactionColor(selectionRing, selectionColor);
             PlaceSelectionRing();
         }
 
@@ -394,17 +392,14 @@ namespace Rts.Presentation
             int needed = Mathf.Max(0, selectedArmies.Count - 1);
             while (extraRings.Count < needed)
             {
-                var ring = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                ring.name = "SelectionRing";
-                ring.transform.SetParent(transform, false);
-                Discard(ring.GetComponent<Collider>());
-                ring.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.9f, 0.2f));
-                ring.transform.localScale = new Vector3(6f, 0.05f, 6f);
+                var ring = SelectionRingVisuals.Create(transform, "SelectionRing", 3f,
+                    FactionColor(latestFrame == null ? 1u : latestFrame.FactionId));
                 extraRings.Add(ring);
             }
             for (int i = 0; i < extraRings.Count; i++)
             {
-                bool shown = i < needed && armies.TryGetValue(selectedArmies[i + 1], out var army);
+                bool shown = false;
+                if (i < needed) shown = armies.TryGetValue(selectedArmies[i + 1], out var army);
                 extraRings[i].SetActive(shown);
                 if (!shown) continue;
                 var position = armies[selectedArmies[i + 1]].Object.transform.position;
@@ -455,6 +450,8 @@ namespace Rts.Presentation
                     float progress = 1f - Mathf.Clamp01(visual.DeathSeconds / PresentationVisualConstants.DeathSeconds);
                     visual.Object.transform.rotation = Quaternion.Euler(90f * progress, visual.FacingY, 0f);
                 }
+                if (visual.HealthBar != null && visual.HealthBar.Root.activeSelf)
+                    visual.HealthBar.Root.transform.position = visual.Object.transform.position + Vector3.up * 2.9f;
             }
             foreach (var visual in cores.Values)
                 visual.Object.transform.position = Vector3.Lerp(visual.From, visual.To, alpha);
@@ -486,8 +483,10 @@ namespace Rts.Presentation
             PlaceSelectionRing();
             var camera = Camera.main;
             if (camera == null) return;
+            foreach (var visual in units.Values)
+                if (visual.HealthBar != null) visual.HealthBar.Root.transform.rotation = camera.transform.rotation;
             foreach (var visual in cores.Values)
-                visual.HpFill.parent.rotation = camera.transform.rotation;
+                if (visual.HealthBar != null) visual.HealthBar.Root.transform.rotation = camera.transform.rotation;
             FaceCamera(camera);
         }
 
@@ -620,6 +619,11 @@ namespace Rts.Presentation
                         UsesTieredAppearance = tiered,
                         IsRam = unit.Kind == UnitKind.Ram
                     };
+                    if (unit.HasHp)
+                    {
+                        visual.HealthBar = WorldHealthBarVisuals.Create(transform, "UnitHp_" + key, 1.7f, 0.11f);
+                        visual.HpFill = visual.HealthBar.Fill;
+                    }
                     units.Add(key, visual);
                 }
                 else
@@ -667,6 +671,16 @@ namespace Rts.Presentation
                     UnitMotionMath.SpeedVariation(key, PresentationVisualConstants.UnitWalkSpeedVariation),
                     PresentationVisualConstants.UnitWalkPlaybackMinimum, PresentationVisualConstants.UnitWalkPlaybackMaximum);
                 visual.HasAttackFacing = TryGetAttackFacing(frame, unit, visual.To, out visual.AttackFacingY);
+                if (unit.HasHp && visual.HealthBar != null)
+                {
+                    WorldHealthBarVisuals.Set(visual.HealthBar, unit.Hp,
+                        WorldHealthBarVisuals.UnitMaxHp(unit.Kind, appearanceStage),
+                        visual.To + Vector3.up * 2.9f, Quaternion.identity);
+                }
+                else if (visual.HealthBar != null)
+                {
+                    visual.HealthBar.Root.SetActive(false);
+                }
                 if (visual.Animation != null)
                 {
                     visual.Animation.SetDesired(visual.IsWalking, visual.IsAttacking, false, false);
@@ -697,6 +711,7 @@ namespace Rts.Presentation
                 else
                 {
                     if (visual.Animation != null) visual.Animation.Dispose();
+                    if (visual.HealthBar != null) Discard(visual.HealthBar.Root);
                     Discard(visual.Object);
                     units.Remove(id);
                 }
@@ -754,6 +769,7 @@ namespace Rts.Presentation
             foreach (var id in scratchUnitIds)
             {
                 if (units[id].Animation != null) units[id].Animation.Dispose();
+                if (units[id].HealthBar != null) Discard(units[id].HealthBar.Root);
                 Discard(units[id].Object);
                 units.Remove(id);
                 previousUnitPositions.Remove(id);
@@ -828,6 +844,12 @@ namespace Rts.Presentation
                 coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
                 visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
                 if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp);
+                if (visual.CivStandard == null && frame.Economy != null && objective.OwnerFactionId == frame.FactionId
+                    && frame.Economy.Civ != CivKind.Primitive)
+                {
+                    LocalVisualPack.TryCreateCivStandard(frame.Economy.Civ, objective.OwnerFactionId, visual.Object.transform,
+                        3.6f, 2.2f, out visual.CivStandard);
+                }
                 SyncCoreFire(objective.Id, objective.IsHpKnown, objective.Hp, new Vector3(target.x, target.y + 8f, target.z));
             }
 
@@ -836,8 +858,12 @@ namespace Rts.Presentation
                 if (!present.Contains(pair.Key)) missing.Add(pair.Key);
             foreach (var id in missing)
             {
-                if (coreHp[id] >= 0 && coreHp[id] <= coreMaxHp * 0.5f && cores.TryGetValue(id, out var old))
-                    SpawnBattlefieldEffect("FX_Building_Destroyed_mid.prefab", old.Object.transform.position);
+                if (coreHp[id] >= 0 && coreHp[id] <= coreMaxHp * 0.5f)
+                {
+                    Visual old;
+                    if (cores.TryGetValue(id, out old))
+                        SpawnBattlefieldEffect("FX_Building_Destroyed_mid.prefab", old.Object.transform.position);
+                }
                 RemoveCoreFire(id);
                 coreHp.Remove(id);
             }
@@ -913,7 +939,8 @@ namespace Rts.Presentation
                     armies.Add(army.Id, visual);
                     // The banner stands upright on the ground under the marker. It is not a child of the marker: the marker
                     // is a tilted diamond floating 6 m up, and a child would inherit the tilt and the height.
-                    if (LocalVisualPack.TryCreateBanner((int)(army.Id % 12u), transform, out var banner))
+                    CivKind armyCiv = frame.Economy == null ? CivKind.Primitive : frame.Economy.Civ;
+                    if (LocalVisualPack.TryCreateBanner((int)(army.Id % 12u), armyCiv, army.FactionId, transform, out var banner))
                     {
                         banner.name = "ArmyBanner_" + army.Id;
                         banner.transform.position = new Vector3(target.x, 0f, target.z);
@@ -1248,6 +1275,7 @@ namespace Rts.Presentation
             foreach (var visual in units.Values)
             {
                 if (visual.Animation != null) visual.Animation.Dispose();
+                if (visual.HealthBar != null) Discard(visual.HealthBar.Root);
                 Discard(visual.Object);
             }
             units.Clear(); previousUnitPositions.Clear();
@@ -1393,31 +1421,15 @@ namespace Rts.Presentation
                 barHeight = 4.6f;
             }
 
-            var bar = new GameObject("HpBar");
-            bar.transform.SetParent(root.transform, false);
-            bar.transform.localPosition = new Vector3(0f, barHeight, 0f);
-            var back = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            back.name = "Back";
-            back.transform.SetParent(bar.transform, false);
-            back.transform.localScale = new Vector3(8.4f, 1.9f, 1f);
-            Discard(back.GetComponent<Collider>());
-            back.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.08f, 0.08f, 0.08f));
-            var fill = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            fill.name = "Fill";
-            fill.transform.SetParent(bar.transform, false);
-            fill.transform.localPosition = new Vector3(0f, 0f, -0.01f);
-            Discard(fill.GetComponent<Collider>());
-            return new Visual { Object = root, HpFill = fill.transform };
+            var healthBar = WorldHealthBarVisuals.Create(root.transform, "HpBar", 8f, 0.18f);
+            healthBar.Root.transform.localPosition = new Vector3(0f, barHeight, 0f);
+            return new Visual { Object = root, HpFill = healthBar.Fill, HealthBar = healthBar };
         }
 
         private void UpdateHpBar(Visual visual, int hp)
         {
-            float ratio = Mathf.Clamp01(hp / (float)coreMaxHp);
-            const float width = 8f;
-            visual.HpFill.localScale = new Vector3(width * ratio, 1.5f, 1f);
-            visual.HpFill.localPosition = new Vector3(-width * (1f - ratio) / 2f, 0f, -0.01f);
-            visual.HpFill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(
-                Color.Lerp(new Color(0.9f, 0.15f, 0.1f), new Color(0.2f, 0.85f, 0.2f), ratio));
+            WorldHealthBarVisuals.Set(visual.HealthBar, hp, coreMaxHp,
+                visual.HealthBar.Root.transform.position, Quaternion.identity);
             visual.Hp = hp;
         }
     }
