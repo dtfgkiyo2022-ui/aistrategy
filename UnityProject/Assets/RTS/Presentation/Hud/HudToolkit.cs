@@ -2067,6 +2067,9 @@ namespace Rts.Presentation
             {
                 var kind = IconKinds[i];
                 var texture = Resources.Load<Texture2D>("Hud/Icons/" + IconFileName(kind));
+                // The HUD set has no picture for the later goods (incense, charms, repair kits, tack, cut stone...); the
+                // drawn goods icons cover every resource, so they stand in (10-16).
+                if (texture == null) texture = GoodsIcons.Get(kind);
                 resourceIcons[kind] = texture;
                 if (texture == null)
                     Debug.LogWarning("UI Toolkit HUD icon not found at Resources/Hud/Icons/" + IconFileName(kind) + ".");
