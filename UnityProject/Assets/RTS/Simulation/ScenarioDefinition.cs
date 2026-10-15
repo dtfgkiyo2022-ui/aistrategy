@@ -347,6 +347,9 @@ namespace Rts.Simulation
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;
+        /// <summary>AgeClockUx: separates civilisation reservation from payment and gives manual players time to choose after the clock.</summary>
+        public bool AgeClockUx;
+        public int AgeClockUxChoiceTicks = 600;
         /// <summary>S-3: enables outpost towns. Its rules are kept in extension ID 11.</summary>
         public bool Towns;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>

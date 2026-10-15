@@ -1502,6 +1502,17 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 - Storage経路は通常ベルト、Splitter左枝、Underground pairを辿る。容量・資源種別・接続性を村人搬入と加工先搬入の両方で検証し、切断Storageには搬入しない。
 - フラグOFFのシナリオバイト列とシミュレーションハッシュ一致、建設中を含む人間配置上限、AI各tick上限、接続/切断Storage、12,000tickリプレイをヘッドレス個別テストで確認した。標準seed 1–8とCavalry対Agrarian seed 1–3の `tactic-match` 測定は `dropsite_limit/report.md` に記録した。
 
+### 32.41 AgeClock の文明選択と支払いを分離する（`AgeClockUx`、拡張欄 ID 44、2026-10-16）
+
+AgeClock の時計はそのままに、文明の選択を先に行い、支払いと即時進化を別の操作にした。既定値は `AgeClockUx = false`、`AgeClockUxChoiceTicks = 600`（20 tick/秒で30秒）で、OFF のシナリオは従来のバイト列・状態ハッシュを維持する。
+
+- 原始時代の `AdvanceAge` は、旗が ON のときだけ文明を予約する。時計前は資源を減らさず、`ReservedCiv` を最新の選択で上書きする。時計後は同じ予約をその tick に即時適用する。
+- `EconomyCommandKind.AdvanceNow = 26` は、現在の `AdvancePrice`（時計による割引を含む）を食料・木材・金から払い、村人の訓練停止や待ち時間なしで `CompleteAdvance` する。不足時は無操作で、時代1・2も同じ契約を使う。
+- 自動化 OFF で時計が鳴ったとき、原始時代かつ文明未選択なら `AgeClockUxChoiceTicks` の間だけ待つ。その間に予約が届けば即時進化し、届かなければ期限 tick に `ChooseCiv` を一度だけ使う。自動化 ON の既存の選択・早払い条件は変えない。
+- シナリオ拡張は little-endian の `int32 enabled` と `int32 choiceTicks` の2語を ID 44/version 1 に保存する。ランタイムの `CivChoiceDeadlineTick` は旗が ON の場合だけ診断ハッシュへ出し、旗 OFF の正規状態には追加しない。
+- 画面は IMGUI と UI Toolkit の両方で予約時刻、期限の残り秒数、「今すぐ時代を上げる」ボタンを表示する。戦術・スタッフの kind 列挙にも `AdvanceNow` を追加し、同じ Contracts factory を通す。
+- 検証は `AgeClockUxTests` と `AgeClockUxEditModeTests` で、拡張欄の往復、予約が支払わないこと、割引価格の即時支払い、期限待ち、期限内予約を確認する。Unity の実行は行わず、Unity 依存のない EditMode テストだけをヘッドレス allowlist に加える。
+
 ## 33. 多段の加工（加工の木、2026-10-15〜）
 
 **オーナー決定（2026-10-15）**：加工の連鎖とクラフトをもっと充実させる。Factorio などを参考に、**2段にとどめず多段で作ってよい**。方向は4つとも：(1) 加工品どうしを組み合わせる上の段、(2) どの文明も使う共通の加工、(3) 加工品で研究・強化、(4) 加工の建物の強化とレシピの選択。

@@ -169,6 +169,7 @@ namespace Rts.Presentation
                 return;
             }
             if (actionId.StartsWith("make:advance:", StringComparison.Ordinal)) { SendAdvanceFromPrimitive(economy, (CivKind)ParseInt(actionId.Substring(13))); return; }
+            if (actionId == "make:advance-now") { Send(EconomyCommand.AdvanceNow(faction, ++sequence, economy.Civ == CivKind.Primitive ? economy.ReservedCiv : economy.Civ), AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost, economy.NextAgeGoldCost)); return; }
             if (actionId == "make:advance-age") { Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), UiText.T("Advance requested", "時代を進めるよう依頼しました")); return; }
             if (actionId == "research:build-blacksmith") { SetMode(Mode.Blacksmith); return; }
             if (actionId.StartsWith("research:", StringComparison.Ordinal))
@@ -530,11 +531,20 @@ namespace Rts.Presentation
             {
                 string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）")
                     + AgeClockLabel(economy, economy.AdvanceFoodCost, economy.AdvanceWoodCost);
-                if (economy.ReservedCiv != CivKind.Primitive) Add(rows, "make:reserved", UiText.T("Reserved: ", "予約中：") + CivName(economy.ReservedCiv), false, "", false, true);
+                if (economy.AgeClockUx && AgeClockUxUiText.IsChoiceWindow(economy.NextAgeClockTick, economy.CivChoiceDeadlineTick, view.LatestFrame.Tick))
+                    Add(rows, "make:civ-choice-deadline", AgeClockUxUiText.ChoiceDeadline(economy.CivChoiceDeadlineTick, view.LatestFrame.Tick), false, "", false, true);
+                if (economy.ReservedCiv != CivKind.Primitive)
+                {
+                    Add(rows, "make:reserved", economy.AgeClockUx
+                        ? AgeClockUxUiText.Reservation(CivName(economy.ReservedCiv), economy.NextAgeClockTick, view.LatestFrame.Tick)
+                        : UiText.T("Reserved: ", "予約中：") + CivName(economy.ReservedCiv), false, "", false, true);
+                    if (economy.AgeClockUx)
+                        Add(rows, "make:advance-now", AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost), economy.ReservedCiv != CivKind.Primitive);
+                }
                 if (!ExtraCivilisations)
                 {
-                    Add(rows, "make:advance:" + (int)CivKind.Agrarian, Star(economy, CivKind.Agrarian) + UiText.T("Advance: farming", "時代を進める：農耕") + cost);
-                    Add(rows, "make:advance:" + (int)CivKind.Metallurgy, Star(economy, CivKind.Metallurgy) + UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost);
+                    Add(rows, "make:advance:" + (int)CivKind.Agrarian, Star(economy, CivKind.Agrarian) + (economy.AgeClockUx ? UiText.T("Reserve: farming", "予約：農耕") : UiText.T("Advance: farming", "時代を進める：農耕")) + cost);
+                    Add(rows, "make:advance:" + (int)CivKind.Metallurgy, Star(economy, CivKind.Metallurgy) + (economy.AgeClockUx ? UiText.T("Reserve: metallurgy", "予約：冶金") : UiText.T("Advance: metallurgy", "時代を進める：冶金")) + cost);
                 }
                 else
                 {
@@ -542,7 +552,7 @@ namespace Rts.Presentation
                     for (int civIndex = 0; civIndex < AllCivs.Length; civIndex++)
                     {
                         CivKind civ = AllCivs[civIndex];
-                        Add(rows, "make:advance:" + (int)civ, Star(economy, civ) + CivShortName(civ));
+                    Add(rows, "make:advance:" + (int)civ, Star(economy, civ) + (economy.AgeClockUx ? UiText.T("Reserve: ", "予約：") : "") + CivShortName(civ));
                     }
                 }
             }
@@ -555,7 +565,7 @@ namespace Rts.Presentation
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
                     + AgeClockLabel(economy, food, wood);
                 string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない") : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない") : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない") : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : "";
-                Add(rows, "make:advance-age", next + price, string.IsNullOrEmpty(why), why);
+                Add(rows, economy.AgeClockUx ? "make:advance-now" : "make:advance-age", economy.AgeClockUx ? AgeClockUxUiText.AdvanceNow(food, wood, gold) : next + price, economy.AgeClockUx || string.IsNullOrEmpty(why), why);
             }
         }
 

@@ -94,6 +94,10 @@ namespace Rts.Simulation
             int age2Wood = AgeClockOn && economy.Age == 1 ? advancePrice.wood : rules.Age2WoodCost;
             int age3Food = AgeClockOn && economy.Age == 2 ? advancePrice.food : rules.Age3FoodCost;
             int age3Wood = AgeClockOn && economy.Age == 2 ? advancePrice.wood : rules.Age3WoodCost;
+            long nextAgeClockTick = NextAgeClockTick(faction);
+            long civChoiceDeadline = AgeClockUxOn && economy.Age == 0 && economy.Civ == CivKind.Primitive && nextAgeClockTick != 0
+                ? economy.CivChoiceDeadlineTick != 0 ? economy.CivChoiceDeadlineTick : checked(nextAgeClockTick + rules.AgeClockUxChoiceTicks)
+                : 0;
             var passableCells = PlacementPassableView();
             var riverCells = PlacementRiverView();
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
@@ -322,7 +326,9 @@ namespace Rts.Simulation
                  mechanismBuildingTimePermille: CraftTree3On ? rules.MechanismBuildingTimePermille : 0,
                  mechanismBuildingMaterialPermille: CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0,
                  mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
-                 mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0);
+                 mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0,
+                civChoiceDeadlineTick: civChoiceDeadline,
+                ageClockUx: AgeClockUxOn);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

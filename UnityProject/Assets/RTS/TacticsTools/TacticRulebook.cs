@@ -133,7 +133,7 @@ namespace Rts.Tactics
         {
             return new[] {
                 ("policy", "`kind`, `target`（省略不可）, `goal`（Focus/Defend/Scout は必須）, `priority`（既定100、0..100）, `allowedLossPermille`（既定1000、0..1000）, `reservePermille`（既定0、0..1000）, `validUntilTick`（既定 observed tick+20）, `maxObservationAgeTicks`（既定20）, `expire`。自陣の観測目標以外は捨てられます。"),
-                ("economy", "`kind`, `sequence`（既定は配列位置+1）と種類ごとの項目。現在受け付けるのは PlaceBuilding, Train, AssignVillagers, Research, AdvanceAge, SetEconomyPolicy, ReturnEconomyToAuto。建物・兵種・研究・文明・対象ID・cellの所有、範囲、費用はシミュレーションで検査され、条件不成立なら記録されず捨てられます。"),
+                ("economy", "`kind`, `sequence`（既定は配列位置+1）と種類ごとの項目。現在受け付けるのは PlaceBuilding, Train, AssignVillagers, Research, AdvanceAge, AdvanceNow, SetEconomyPolicy, ReturnEconomyToAuto。AdvanceNow は AgeClockUx の現在価格を払い、その tick に時代を完了します。建物・兵種・研究・文明・対象ID・cellの所有、範囲、費用はシミュレーションで検査され、条件不成立なら記録されず捨てられます。"),
                 ("global", "`policy`: `none` / `maintain` / `concentrate`。同じ返答で1つまで。"),
                 ("doctrine", "`preset`: `none` / `maintain` / `concentrate`。`global` の別名。")
             };

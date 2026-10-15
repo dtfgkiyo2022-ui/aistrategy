@@ -304,6 +304,8 @@ namespace Rts.Simulation
         /// Advancing starts with it on the first tick it can, and starting any advance clears it.
         /// </summary>
         internal CivKind ReservedCiv;
+        /// <summary>AgeClockUx: the manual civilisation-choice deadline after the age clock fires.</summary>
+        internal long CivChoiceDeadlineTick;
     }
 
     internal struct RegionState
@@ -675,6 +677,7 @@ namespace Rts.Simulation
                 && e.CraftBalanceTollgateTiming >= 0 && e.CraftBalanceTollgateTiming <= 1), "Invalid craft-balance rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
+            Require(!e.AgeClockUx || (e.AgeClock && e.AgeClockUxChoiceTicks > 0), "Age-clock UX requires the age clock and a positive choice window.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
                 && (!e.AgeClock || (e.AgeClockTicks1 > 0 && e.AgeClockTicks2 > e.AgeClockTicks1 && e.AgeClockTicks3 > e.AgeClockTicks2))
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
@@ -1114,6 +1117,7 @@ namespace Rts.Simulation
                    CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
+                 AgeClockUx = e.AgeClockUx, AgeClockUxChoiceTicks = e.AgeClockUxChoiceTicks,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
                 CivVariety = e.CivVariety, CivVarietyWindowPermille = e.CivVarietyWindowPermille,
                 CivVarietyCaps = e.CivVarietyCaps, CivVarietyCapMetallurgy = e.CivVarietyCapMetallurgy,

@@ -79,6 +79,9 @@ namespace Rts.Simulation
         private const int AgeClockExtensionId = 16;
         private const int AgeClockExtensionVersion = 1;
         private const int AgeClockExtensionDataLength = 4 * sizeof(int);
+        private const int AgeClockUxExtensionId = 44;
+        private const int AgeClockUxExtensionVersion = 1;
+        private const int AgeClockUxExtensionDataLength = 2 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -217,6 +220,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
             ,new ExtensionRegistration(CraftTree3ExtensionId, CraftTree3ExtensionVersion, CraftTree3ExtensionDataLength)
+            ,new ExtensionRegistration(AgeClockUxExtensionId, AgeClockUxExtensionVersion, AgeClockUxExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -778,8 +782,9 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
                  else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
                   else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
-                   else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
+                    else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
                     else if (id == AgeClockExtensionId) ReadAgeClockExtension(extension, c.Economy);
+                    else if (id == AgeClockUxExtensionId) ReadAgeClockUxExtension(extension, c.Economy);
                     else if (id == SiegeByAgeExtensionId) ReadSiegeByAgeExtension(extension, c.Economy);
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
@@ -852,6 +857,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             extensions.RemoveAll(extension => extension != null && extension.Id == LatePushExtensionId && !c.Economy.LatePush);
              extensions.RemoveAll(extension => extension != null && extension.Id == EarlyArmsExtensionId && !c.Economy.EarlyArms);
              extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockExtensionId && !c.Economy.AgeClock);
+             extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockUxExtensionId && !c.Economy.AgeClockUx);
               extensions.RemoveAll(extension => extension != null && extension.Id == SiegeByAgeExtensionId && !c.Economy.SiegeByAge);
                extensions.RemoveAll(extension => extension != null && extension.Id == PushWavesExtensionId && !c.Economy.PushWaves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
@@ -1006,6 +1012,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions[i] = CreateAgeClockExtension(c.Economy);
             }
              if (c.Economy.AgeClock && !hasAgeClock) extensions.Add(CreateAgeClockExtension(c.Economy));
+             bool hasAgeClockUx = false;
+             for (int i = 0; i < extensions.Count; i++)
+             {
+                 if (extensions[i] == null || extensions[i].Id != AgeClockUxExtensionId) continue;
+                 hasAgeClockUx = true;
+                 extensions[i] = CreateAgeClockUxExtension(c.Economy);
+             }
+             if (c.Economy.AgeClockUx && !hasAgeClockUx) extensions.Add(CreateAgeClockUxExtension(c.Economy));
              bool hasSiegeByAge = false;
              for (int i = 0; i < extensions.Count; i++)
              {
@@ -1987,6 +2001,30 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.AgeClock = enabled != 0;
                 e.AgeClockTicks1 = reader.ReadInt32(); e.AgeClockTicks2 = reader.ReadInt32(); e.AgeClockTicks3 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAgeClockUxExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AgeClockUx ? 1 : 0);
+                writer.Write(e.AgeClockUxChoiceTicks);
+                return new ScenarioExtensionData { Id = AgeClockUxExtensionId, Version = AgeClockUxExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAgeClockUxExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid age-clock UX flag.");
+                e.AgeClockUx = enabled != 0;
+                e.AgeClockUxChoiceTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock UX extension data.");
             }
         }
 
