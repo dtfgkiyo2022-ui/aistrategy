@@ -137,6 +137,9 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
 private const int CraftTimingExtensionId = 34;
 private const int CraftTimingExtensionVersion = 1;
 private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
+private const int CraftTree1ExtensionId = 41;
+private const int CraftTree1ExtensionVersion = 1;
+private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -179,6 +182,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(ToolsExtensionId, ToolsExtensionVersion, ToolsExtensionDataLength)
             ,new ExtensionRegistration(GoodsMarketExtensionId, GoodsMarketExtensionVersion, GoodsMarketExtensionDataLength)
             ,new ExtensionRegistration(CraftTimingExtensionId, CraftTimingExtensionVersion, CraftTimingExtensionDataLength)
+            ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
         };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -758,6 +762,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                     else if (id == ToolsExtensionId) ReadToolsExtension(extension, c.Economy);
                     else if (id == GoodsMarketExtensionId) ReadGoodsMarketExtension(extension, c.Economy);
                     else if (id == CraftTimingExtensionId) ReadCraftTimingExtension(extension, c.Economy);
+                    else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -821,6 +826,7 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ToolsExtensionId && !c.Economy.Tools);
                 extensions.RemoveAll(extension => extension != null && extension.Id == GoodsMarketExtensionId && !c.Economy.GoodsMarket);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTimingExtensionId && !c.Economy.CraftTiming);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1092,6 +1098,14 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                         extensions[i] = CreateCraftTimingExtension(c.Economy);
                     }
                 if (c.Economy.CraftTiming && !hasCraftTiming) extensions.Add(CreateCraftTimingExtension(c.Economy));
+                bool hasCraftTree1 = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CraftTree1ExtensionId)
+                    {
+                        hasCraftTree1 = true;
+                        extensions[i] = CreateCraftTree1Extension(c.Economy);
+                    }
+                if (c.Economy.CraftTree1 && !hasCraftTree1) extensions.Add(CreateCraftTree1Extension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1116,6 +1130,47 @@ private const int CraftTimingExtensionDataLength = 2 * sizeof(int);
                 e.CraftTiming = enabled != 0;
                 e.CraftTimingFoodPerWood = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-timing extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftTree1Extension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftTree1 ? 1 : 0);
+                writer.Write(e.CraftTreePlankWoodInput); writer.Write(e.CraftTreePlankTicks);
+                writer.Write(e.CraftTreeCharcoalWoodInput); writer.Write(e.CraftTreeCharcoalTicks);
+                writer.Write(e.StonecutterSizeCells); writer.Write(e.StonecutterWoodCost); writer.Write(e.StonecutterWork); writer.Write(e.StonecutterHp);
+                writer.Write(e.CraftTreeStoneInput); writer.Write(e.CraftTreeStonecutterTicks);
+                writer.Write(e.JoinerySizeCells); writer.Write(e.JoineryWoodCost); writer.Write(e.JoineryWork); writer.Write(e.JoineryHp);
+                writer.Write(e.CraftTreeJoineryTicks); writer.Write(e.CraftTreeJoineryPlankInput); writer.Write(e.CraftTreeJoineryCutStoneInput);
+                writer.Write(e.CraftTreeFramesPerBuilding); writer.Write(e.CraftTreeFrameWoodPermille); writer.Write(e.CraftTreeFrameWorkPermille);
+                writer.Write(e.CraftTreeLevel2FramesCost);
+                return new ScenarioExtensionData { Id = CraftTree1ExtensionId, Version = CraftTree1ExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftTree1Extension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-tree flag.");
+                e.CraftTree1 = enabled != 0;
+                e.CraftTreePlankWoodInput = reader.ReadInt32(); e.CraftTreePlankTicks = reader.ReadInt32();
+                e.CraftTreeCharcoalWoodInput = reader.ReadInt32(); e.CraftTreeCharcoalTicks = reader.ReadInt32();
+                e.StonecutterSizeCells = reader.ReadInt32(); e.StonecutterWoodCost = reader.ReadInt32();
+                e.StonecutterWork = reader.ReadInt32(); e.StonecutterHp = reader.ReadInt32();
+                e.CraftTreeStoneInput = reader.ReadInt32(); e.CraftTreeStonecutterTicks = reader.ReadInt32();
+                e.JoinerySizeCells = reader.ReadInt32(); e.JoineryWoodCost = reader.ReadInt32();
+                e.JoineryWork = reader.ReadInt32(); e.JoineryHp = reader.ReadInt32();
+                e.CraftTreeJoineryTicks = reader.ReadInt32(); e.CraftTreeJoineryPlankInput = reader.ReadInt32();
+                e.CraftTreeJoineryCutStoneInput = reader.ReadInt32(); e.CraftTreeFramesPerBuilding = reader.ReadInt32();
+                e.CraftTreeFrameWoodPermille = reader.ReadInt32(); e.CraftTreeFrameWorkPermille = reader.ReadInt32();
+                e.CraftTreeLevel2FramesCost = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree extension data.");
             }
         }
 

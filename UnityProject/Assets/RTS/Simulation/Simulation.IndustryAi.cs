@@ -30,6 +30,7 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            DecideCraftTree1(faction);
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
@@ -142,6 +143,120 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private void DecideCraftTree1(uint faction)
+        {
+            if (!CraftTreeCommonAllowed(faction)) return;
+            int houseIndex = OwnBuildingIndex(faction, BuildingKind.House);
+            if (!CompleteBarracks(faction) || houseIndex < 0 || !world.Buildings[houseIndex].Complete) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int plankIndex = GetOrCreateLine(faction, ProcessingLineKind.Planks);
+            ref var plankLine = ref world.ProcessingLines[plankIndex];
+            if (IsAutoLine(plankIndex) && !BuildingReady(plankLine.SawmillId))
+            {
+                if (!BuildingPending(plankLine.SawmillId) && economy.Wood >= rules.SawmillWoodCost + rules.CraftTreePlankWoodInput * 2)
+                {
+                    uint id = PlaceCommonSawmill(faction);
+                    if (id != 0) plankLine.SawmillId = id;
+                }
+            }
+            else if (IsAutoLine(plankIndex) && BuildingReady(plankLine.SawmillId))
+            {
+                SetLineHaulers(faction, plankLine, 0);
+                var sawmill = world.Buildings[plankLine.SawmillId - 1];
+                var route = BeltRoute(faction, OutputCell(sawmill), TakenForOtherLines(faction, plankIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(plankIndex, route); LayRoutes(faction, route); }
+            }
+
+            int stoneIndex = GetOrCreateLine(faction, ProcessingLineKind.CutStone);
+            ref var stoneLine = ref world.ProcessingLines[stoneIndex];
+            if (IsAutoLine(stoneIndex) && !BuildingReady(stoneLine.StonecutterId))
+            {
+                if (!BuildingPending(stoneLine.StonecutterId) && economy.Wood >= rules.StonecutterWoodCost)
+                {
+                    uint id = PlaceStonecutter(faction);
+                    if (id != 0) stoneLine.StonecutterId = id;
+                }
+            }
+            else if (IsAutoLine(stoneIndex) && BuildingReady(stoneLine.StonecutterId))
+            {
+                SetLineHaulers(faction, stoneLine, 0);
+                var stonecutter = world.Buildings[stoneLine.StonecutterId - 1];
+                var route = BeltRoute(faction, OutputCell(stonecutter), TakenForOtherLines(faction, stoneIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(stoneIndex, route); LayRoutes(faction, route); }
+            }
+
+            if (!JoineryAllowed(faction)) return;
+            int frameIndex = GetOrCreateLine(faction, ProcessingLineKind.Frames);
+            ref var frameLine = ref world.ProcessingLines[frameIndex];
+            if (!BuildingReady(frameLine.JoineryId))
+            {
+                if (!BuildingPending(frameLine.JoineryId) && economy.Wood >= rules.JoineryWoodCost)
+                {
+                    uint id = PlaceJoinery(faction);
+                    if (id != 0) frameLine.JoineryId = id;
+                }
+                return;
+            }
+            var joinery = world.Buildings[frameLine.JoineryId - 1];
+            var frameRoute = BeltRoute(faction, OutputCell(joinery), TakenForOtherLines(faction, frameIndex), next => FeedsOwnCore(next, faction));
+            if (frameRoute.cells != null) { SetLineBelts(frameIndex, frameRoute); LayRoutes(faction, frameRoute); }
+            if (economy.Frames >= rules.CraftTreeLevel2FramesCost)
+                for (uint buildingId = 1; buildingId < world.NextBuildingId; buildingId++)
+                {
+                    if (!OwnBuilding(faction, buildingId, out int buildingIndex)) continue;
+                    var building = world.Buildings[buildingIndex];
+                    if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 2) continue;
+                    UpgradeProcessingBuilding(faction, buildingId);
+                    break;
+                }
+        }
+
+        private uint PlaceCommonSawmill(uint faction)
+        {
+            int size = world.Config.Economy.SawmillSizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
+                    return world.NextBuildingId - 1;
+                }
+            return 0;
+        }
+
+        private uint PlaceStonecutter(uint faction)
+        {
+            int size = world.Config.Economy.StonecutterSizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    PlaceBuildingAt(faction, BuildingKind.Stonecutter, origin, side, 0);
+                    return world.NextBuildingId - 1;
+                }
+            return 0;
+        }
+
+        private uint PlaceJoinery(uint faction)
+        {
+            int size = world.Config.Economy.JoinerySizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    PlaceBuildingAt(faction, BuildingKind.Joinery, origin, side, 0);
+                    return world.NextBuildingId - 1;
+                }
+            return 0;
         }
 
         private bool EarlyFoodFarmNeeded(uint faction)

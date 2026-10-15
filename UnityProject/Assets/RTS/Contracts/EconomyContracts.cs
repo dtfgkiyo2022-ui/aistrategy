@@ -46,7 +46,9 @@ namespace Rts.Contracts
         /// <summary>Manual control: turns the built-in late assault and push waves on or off.</summary>
         SetAutoAssault = 23,
         /// <summary>Manual control: stops every own villager and holds the current work state.</summary>
-        StopVillagers = 24
+        StopVillagers = 24,
+        /// <summary>CraftTree1: upgrades an own processing building from level 1 to level 2.</summary>
+        UpgradeBuilding = 25
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -55,7 +57,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -275,6 +277,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RemoveBuilding, 0, 0, buildingId, 0, null,
                 EconomyTargetKind.None, 0, false);
 
+        public static EconomyCommand UpgradeBuilding(uint faction, ulong sequence, uint buildingId)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.UpgradeBuilding, 0, 0, buildingId, 0, null,
+                EconomyTargetKind.None, 0, false);
+
         public static EconomyCommand Research(uint faction, ulong sequence, uint blacksmith, TechKind tech)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.Research, 0, 0, blacksmith, 0, null, EconomyTargetKind.None, 0, false, null, null, Facing.North, EconomyPolicy.Balanced, CivKind.Primitive, tech);
 
@@ -384,6 +390,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int Work { get; }
         public int Queued { get; }
         public long TrainRemaining { get; }
+        /// <summary>CraftTree1: processing-building level; 1 for level-one or non-processing buildings.</summary>
+        public int Level { get; }
 
         /// <summary>V3-2: the side a mine or smelter puts its output out of.</summary>
         public Facing Facing { get; }
@@ -444,7 +452,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
-            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason)
+            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
+            int level = 1)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -452,6 +461,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             QueuedBowGear = queuedBowGear;
             CaravanMarketId = caravanMarketId; CaravanOutpostId = caravanOutpostId; CaravanDistance = caravanDistance;
             CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
+            Level = level;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
@@ -772,6 +782,23 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int PlankBridgeWoodPermille { get; }
         public int PlankExtraRams { get; }
         public int PlankWoodReserve { get; }
+        /// <summary>CraftTree1: common first-stage processing and the frames building material.</summary>
+        public bool CraftTree1Enabled { get; }
+        public int CutStone { get; }
+        public int Frames { get; }
+        public int StonecutterWoodCost { get; }
+        public int StonecutterSizeCells { get; }
+        public int StonecutterTicks { get; }
+        public int StonecutterStoneInput { get; }
+        public int JoineryWoodCost { get; }
+        public int JoinerySizeCells { get; }
+        public int JoineryTicks { get; }
+        public int JoineryPlankInput { get; }
+        public int JoineryCutStoneInput { get; }
+        public int FramesPerBuilding { get; }
+        public int FrameWoodPermille { get; }
+        public int FrameWorkPermille { get; }
+        public int Level2FramesCost { get; }
         public bool BooksEnabled { get; }
         public int Books { get; }
         public int ScriptoriumWoodCost { get; }
@@ -943,7 +970,12 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool toolsEnabled = false, int tools = 0, int toolShopWoodCost = 0, int toolShopSizeCells = 0,
              int toolTicks = 0, int toolWoodInput = 0, int toolKeepWood = 0, int toolStockLimit = 0,
              int toolMaxShops = 0, int toolWoodReserve = 0, int toolVillagerFoodPermille = 0, int toolVillagerTicksPermille = 0,
-             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null)
+             bool goodsMarketEnabled = false, int goodsTradeLot = 0, IReadOnlyList<GoodsPriceView> goodsPrices = null,
+             bool craftTree1Enabled = false, int cutStone = 0, int frames = 0,
+             int stonecutterWoodCost = 0, int stonecutterSizeCells = 0, int stonecutterTicks = 0, int stonecutterStoneInput = 0,
+             int joineryWoodCost = 0, int joinerySizeCells = 0, int joineryTicks = 0, int joineryPlankInput = 0,
+             int joineryCutStoneInput = 0, int framesPerBuilding = 0, int frameWoodPermille = 0, int frameWorkPermille = 0,
+             int level2FramesCost = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick;
             AutoAssaultOff = autoAssaultOff;
@@ -996,6 +1028,13 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             ToolMaxShops = toolMaxShops; ToolWoodReserve = toolWoodReserve; ToolVillagerFoodPermille = toolVillagerFoodPermille; ToolVillagerTicksPermille = toolVillagerTicksPermille;
             GoodsMarketEnabled = goodsMarketEnabled; GoodsTradeLot = goodsTradeLot;
             GoodsPrices = ContractList.Copy(goodsPrices ?? Array.Empty<GoodsPriceView>());
+            CraftTree1Enabled = craftTree1Enabled; CutStone = cutStone; Frames = frames;
+            StonecutterWoodCost = stonecutterWoodCost; StonecutterSizeCells = stonecutterSizeCells;
+            StonecutterTicks = stonecutterTicks; StonecutterStoneInput = stonecutterStoneInput;
+            JoineryWoodCost = joineryWoodCost; JoinerySizeCells = joinerySizeCells; JoineryTicks = joineryTicks;
+            JoineryPlankInput = joineryPlankInput; JoineryCutStoneInput = joineryCutStoneInput;
+            FramesPerBuilding = framesPerBuilding; FrameWoodPermille = frameWoodPermille; FrameWorkPermille = frameWorkPermille;
+            Level2FramesCost = level2FramesCost;
             BeltComponents = beltComponents; FastBeltWoodCost = fastBeltWoodCost; FastBeltTicksPerCell = fastBeltTicksPerCell;
             SplitterWoodCost = splitterWoodCost; SorterWoodCost = sorterWoodCost; UndergroundBeltWoodCost = undergroundBeltWoodCost;
             UndergroundBeltMaxLength = undergroundBeltMaxLength; StorageWoodCost = storageWoodCost; StorageSizeCells = storageSizeCells;

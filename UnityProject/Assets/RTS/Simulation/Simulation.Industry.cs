@@ -69,20 +69,23 @@ namespace Rts.Simulation
                 }
                 else if (CharcoalKilnAllowed(b.FactionId) && b.Kind == BuildingKind.CharcoalKiln)
                 {
-                    if (BricksAllowed(b.FactionId) && b.Input < rules.BufferLimit && world.Economies[b.FactionId - 1].Wood > 0)
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    int woodInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalWoodInput : 2;
+                    int charcoalTicks = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreeCharcoalTicks : rules.CharcoalTicks;
+                    if ((BricksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
-                        world.Economies[b.FactionId - 1].Wood--;
+                        economy.Wood--;
                         b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= 2 && b.Output < rules.BufferLimit)
+                    if (b.Timer == 0 && b.Input >= woodInput && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= 2;
-                        b.Timer = rules.CharcoalTicks;
+                        b.Input -= woodInput;
+                        b.Timer = CraftTicksFor(b, charcoalTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
                         b.Output++;
-                        if (BricksAllowed(b.FactionId)) world.Economies[b.FactionId - 1].Charcoal++;
+                        if (BricksAllowed(b.FactionId)) economy.Charcoal++;
                     }
                 }
                 else if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
@@ -94,7 +97,10 @@ namespace Rts.Simulation
                         b.InputSecondary--;
                         b.Timer = rules.SteelTicks;
                     }
-                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                    }
                 }
                 else if (ForestryOn && b.Kind == BuildingKind.Fletcher)
                 {
@@ -111,7 +117,10 @@ namespace Rts.Simulation
                         b.InputSecondary -= rules.FletcherFoodInput;
                         b.Timer = rules.FletcherTicks;
                     }
-                    if (b.Timer > 0 && --b.Timer == 0) b.Output++;
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                    }
                 }
                 else if (RationsOn && b.Kind == BuildingKind.Mill)
                 {
@@ -154,22 +163,70 @@ namespace Rts.Simulation
                         economy.TackProduced++;
                     }
                 }
-                else if (PlanksAllowed(b.FactionId) && b.Kind == BuildingKind.Sawmill)
+                else if ((PlanksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Kind == BuildingKind.Sawmill)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     if (b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--; b.Input++;
                     }
-                    if (b.Timer == 0 && b.Input >= rules.PlankWoodInput && b.Output < rules.BufferLimit)
+                    int plankInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreePlankWoodInput : rules.PlankWoodInput;
+                    if (b.Timer == 0 && b.Input >= plankInput && b.Output < rules.BufferLimit)
                     {
-                        b.Input -= rules.PlankWoodInput;
-                        b.Timer = rules.PlankTicks;
+                        b.Input -= plankInput;
+                        b.Timer = CraftTicksFor(b, CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreePlankTicks : rules.PlankTicks);
                     }
                     if (b.Timer > 0 && --b.Timer == 0)
                     {
                         b.Output++;
                         economy.PlanksProduced++;
+                    }
+                }
+                else if (StonecutterAllowed(b.FactionId) && b.Kind == BuildingKind.Stonecutter)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Stone > 0)
+                    {
+                        economy.Stone--;
+                        b.Input++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.CraftTreeStoneInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.CraftTreeStoneInput;
+                        b.Timer = CraftTicksFor(b, rules.CraftTreeStonecutterTicks);
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.CutStoneProduced++;
+                    }
+                }
+                else if (JoineryAllowed(b.FactionId) && b.Kind == BuildingKind.Joinery)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Input < rules.BufferLimit && economy.Planks > 0)
+                    {
+                        economy.Planks--;
+                        b.Input++;
+                    }
+                    if (b.InputSecondary < rules.BufferLimit && economy.CutStone > 0)
+                    {
+                        economy.CutStone--;
+                        b.InputSecondary++;
+                    }
+                    if (b.Timer == 0 && b.Input >= rules.CraftTreeJoineryPlankInput
+                        && b.InputSecondary >= rules.CraftTreeJoineryCutStoneInput && b.Output < rules.BufferLimit)
+                    {
+                        b.Input -= rules.CraftTreeJoineryPlankInput;
+                        b.InputSecondary -= rules.CraftTreeJoineryCutStoneInput;
+                        economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.CraftTreeJoineryPlankInput);
+                        economy.CutStoneConsumed = checked(economy.CutStoneConsumed + rules.CraftTreeJoineryCutStoneInput);
+                        b.Timer = CraftTicksFor(b, rules.CraftTreeJoineryTicks);
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        b.Output++;
+                        economy.FramesProduced++;
                     }
                 }
                 else if (BricksAllowed(b.FactionId) && b.Kind == BuildingKind.BrickKiln)
@@ -415,7 +472,15 @@ namespace Rts.Simulation
                 : kind == BuildingKind.DryingRack ? ResourceKind.Preserves
                 : kind == BuildingKind.Lapidary ? ResourceKind.Gems
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
+                : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
+                : kind == BuildingKind.Joinery ? ResourceKind.Frames
                 : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
+
+        private int CraftTicksFor(BuildingState building, int baseTicks)
+        {
+            if (!CraftTree1On || building.Level < 2) return baseTicks;
+            return Math.Max(1, checked((baseTicks * 2 + 2) / 3));
+        }
 
         /// <summary>The cell just outside the middle of the side the building faces, or -1 off the map.</summary>
         private int OutputCell(BuildingState b) => OutputCell(b.OriginCell, SizeOf(b.Kind), b.Facing);
@@ -470,9 +535,18 @@ namespace Rts.Simulation
                     if (item == ResourceKind.Food && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Wood && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
-                if (PlanksAllowed(faction) && b.Kind == BuildingKind.Sawmill && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
+                if ((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && b.Kind == BuildingKind.Sawmill && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone && b.Input < rules.BufferLimit)
+                {
+                    b.Input++; return true;
+                }
+                if (JoineryAllowed(faction) && b.Kind == BuildingKind.Joinery)
+                {
+                    if (item == ResourceKind.Planks && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (item == ResourceKind.CutStone && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
                 }
                 if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln)
                 {
@@ -633,9 +707,24 @@ namespace Rts.Simulation
                     int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
                 }
             }
-            if (PlanksAllowed(target.FactionId) && target.Kind == BuildingKind.Sawmill && kind == ResourceKind.Wood)
+            if ((PlanksAllowed(target.FactionId) || CraftTreeCommonAllowed(target.FactionId)) && target.Kind == BuildingKind.Sawmill && kind == ResourceKind.Wood)
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
+            if (StonecutterAllowed(target.FactionId) && target.Kind == BuildingKind.Stonecutter && kind == ResourceKind.Stone)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
+            if (JoineryAllowed(target.FactionId) && target.Kind == BuildingKind.Joinery)
+            {
+                if (kind == ResourceKind.Planks)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+                }
+                if (kind == ResourceKind.CutStone)
+                {
+                    int put = Math.Min(amount, rules.BufferLimit - target.InputSecondary); target.InputSecondary += put; return put;
+                }
             }
             if (BricksAllowed(target.FactionId) && target.Kind == BuildingKind.BrickKiln)
             {
@@ -719,7 +808,9 @@ namespace Rts.Simulation
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))
-               || (PlanksOn && destination == BuildingKind.Sawmill && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || ((PlanksOn || CraftTree1On) && destination == BuildingKind.Sawmill && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || (CraftTree1On && destination == BuildingKind.Stonecutter && source == BuildingKind.Quarry && kind == ResourceKind.Stone)
+               || (CraftTree1On && destination == BuildingKind.Joinery && (source == BuildingKind.Sawmill && kind == ResourceKind.Planks || source == BuildingKind.Stonecutter && kind == ResourceKind.CutStone))
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                || (BooksOn && destination == BuildingKind.Scriptorium

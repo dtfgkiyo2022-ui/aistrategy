@@ -26,7 +26,9 @@ namespace Rts.Presentation
             Incense,
             Charms,
             RepairKits,
-            Tools
+            Tools,
+            CutStone,
+            Frames
         }
 
         public readonly struct ResourceEntry
@@ -108,6 +110,16 @@ namespace Rts.Presentation
             return economy != null && economy.ToolsEnabled && (economy.Civ == CivKind.Metropolis || economy.Tools > 0);
         }
 
+        public static bool ShowCutStone(EconomyView economy)
+        {
+            return economy != null && economy.CraftTree1Enabled;
+        }
+
+        public static bool ShowFrames(EconomyView economy)
+        {
+            return economy != null && economy.CraftTree1Enabled;
+        }
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -143,6 +155,10 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Tack, UiText.T("Tack", "馬具"), economy.Tack));
             if (ShowPlanks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Planks, UiText.T("Planks", "板"), economy.Planks));
+            if (ShowCutStone(economy))
+                target.Add(new ResourceEntry(ResourceKind.CutStone, UiText.T("Cut stone", "切石"), economy.CutStone));
+            if (ShowFrames(economy))
+                target.Add(new ResourceEntry(ResourceKind.Frames, UiText.T("Frames", "建材"), economy.Frames));
             if (ShowBooks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Books, UiText.T("Books", "書物"), economy.Books));
             if (ShowIncense(economy))

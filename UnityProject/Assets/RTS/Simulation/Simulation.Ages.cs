@@ -44,6 +44,7 @@ namespace Rts.Simulation
         private bool ToolsOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.Tools;
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
+        private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -110,7 +111,16 @@ namespace Rts.Simulation
             => ToolsOn && world.Economies[faction - 1].Civ == CivKind.Metropolis && world.Economies[faction - 1].Age >= 1;
 
         private bool CharcoalKilnAllowed(uint faction)
-            => ProcessingAvailable(faction) || BricksAllowed(faction);
+            => CraftTreeCommonAllowed(faction) || ProcessingAvailable(faction) || BricksAllowed(faction);
+
+        private bool CraftTreeCommonAllowed(uint faction)
+            => CraftTree1On && world.Economies[faction - 1].Age >= 1;
+
+        private bool StonecutterAllowed(uint faction)
+            => CraftTreeCommonAllowed(faction);
+
+        private bool JoineryAllowed(uint faction)
+            => CraftTree1On && world.Economies[faction - 1].Age >= 2;
 
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;

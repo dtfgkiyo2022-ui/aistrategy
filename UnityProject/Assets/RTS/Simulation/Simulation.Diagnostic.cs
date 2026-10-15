@@ -145,6 +145,12 @@ namespace Rts.Simulation
                     w.Value(n + "PlanksConsumed", e.PlanksConsumed); w.Value(n + "PlanksConsumedRams", e.PlanksConsumedRams);
                     w.Value(n + "PlanksConsumedBridges", e.PlanksConsumedBridges); w.Value(n + "PlanksEnhancedRams", e.PlanksEnhancedRams);
                 }
+                if (CraftTree1On)
+                {
+                    w.Value(n + "CutStone", e.CutStone); w.Value(n + "CutStoneProduced", e.CutStoneProduced); w.Value(n + "CutStoneConsumed", e.CutStoneConsumed);
+                    w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
+                    w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
+                }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
@@ -288,7 +294,7 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
@@ -296,6 +302,11 @@ namespace Rts.Simulation
                     }
                     if (world.Config.Economy.Mountain && b.Kind == BuildingKind.MineShaft)
                         w.Value(n + "MountainOreNext", b.MountainOreNext);
+                    if (CraftTree1On)
+                    {
+                        w.Value(n + "Level", b.Level);
+                        w.Value(n + "FramesUsed", b.FramesUsed);
+                    }
                     if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                     {
                         w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
@@ -367,7 +378,7 @@ namespace Rts.Simulation
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
                 }
             }
-            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -382,6 +393,7 @@ namespace Rts.Simulation
                     if (BricksOn) { w.Value(n + "QuarryId", line.QuarryId); w.Value(n + "BrickKilnId", line.BrickKilnId); }
                     if (TackOn) w.Value(n + "SaddleryId", line.SaddleryId);
                     if (PlanksOn) { w.Value(n + "LumberCampId", line.LumberCampId); w.Value(n + "SawmillId", line.SawmillId); }
+                    if (CraftTree1On) { w.Value(n + "StonecutterId", line.StonecutterId); w.Value(n + "JoineryId", line.JoineryId); }
                     if (BooksOn) w.Value(n + "ScriptoriumId", line.ScriptoriumId);
                     if (PreservesOn) w.Value(n + "DryingRackId", line.DryingRackId);
                     if (JewelsOn) w.Value(n + "LapidaryId", line.LapidaryId);
