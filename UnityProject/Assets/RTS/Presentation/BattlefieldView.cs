@@ -126,6 +126,7 @@ namespace Rts.Presentation
 
         public void Select(SelectionTarget target)
         {
+            if (selected.Kind != target.Kind || selected.Id != target.Id) GameAudio.Ui(SoundCue.SelectionChanged);
             selected = target;
             selectedArmies.Clear();
             if (target.Kind == SelectionKind.Army) selectedArmies.Add(target.Id);

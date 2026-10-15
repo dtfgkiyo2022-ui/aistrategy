@@ -78,7 +78,8 @@ namespace Rts.Presentation
                     MarkCombat();
                 if (item.Cue == SoundCue.UnderAttackCore || item.Cue == SoundCue.UnderAttackBuilding || item.Cue == SoundCue.UnderAttackVillager)
                 { if (Time.unscaledTime - lastAttackNotice < AttackNoticeSeconds) continue; lastAttackNotice = Time.unscaledTime; }
-                Effect(item.Cue, 1f);
+                bool notice = item.Cue == SoundCue.UnderAttackCore || item.Cue == SoundCue.UnderAttackBuilding || item.Cue == SoundCue.UnderAttackVillager;
+                Effect(item.Cue, notice ? 1f : DistanceScale(item.Position));
             }
         }
         private void Play(SoundCue cue, float distanceScale, bool ui)
@@ -96,6 +97,13 @@ namespace Rts.Presentation
             source.clip = clips[index]; source.Play(); nextClip[cue] = index + 1; lastCueAt[cue] = now;
         }
         private AudioSource FindFreeSource() { for (int i = 0; i < sources.Count; i++) if (!sources[i].isPlaying) return sources[i]; return null; }
+        private static float DistanceScale(Rts.Contracts.SimPoint point)
+        {
+            var camera = Camera.main;
+            if (camera == null) return 1f;
+            float distance = Vector3.Distance(camera.transform.position, EconomyLayer.ToWorld(point));
+            return Mathf.Clamp01(1f - Mathf.Max(0f, distance - 12f) / 48f);
+        }
         public void MarkCombat() { battleSeenAt = Time.unscaledTime; }
         private void Update()
         {

@@ -16,6 +16,7 @@ namespace Rts.Editor
         [MenuItem("RTS/音素材パックの一覧を作り直す")]
         public static void RebuildFromMenu() { RebuildManifest(); }
         public void OnPreprocessBuild(BuildReport report) { RebuildManifest(); }
+        public static void RebuildForProductBuild() { RebuildManifest(); }
 
         private static void RebuildManifest()
         {

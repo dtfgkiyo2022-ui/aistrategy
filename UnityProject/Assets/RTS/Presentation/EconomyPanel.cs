@@ -78,6 +78,7 @@ namespace Rts.Presentation
 
         private void SetMode(Mode next)
         {
+            if (next != Mode.None && mode == Mode.None) GameAudio.Ui(SoundCue.Click);
             mode = next;
             dragStart = -1;
             if (layer == null) return;
@@ -89,7 +90,7 @@ namespace Rts.Presentation
         public bool TryConsumeGroundClick(Camera camera, Vector2 screenPoint)
         {
             if (mode == Mode.None || port == null) return false;
-            if (!GroundCell(camera, screenPoint, out int cell)) { Note(UiText.T("Click was outside the map.", "マップの外をクリックしました。")); return true; }
+            if (!GroundCell(camera, screenPoint, out int cell)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Click was outside the map.", "マップの外をクリックしました。")); return true; }
             switch (mode)
             {
                 case Mode.RequestLine:
@@ -97,6 +98,7 @@ namespace Rts.Presentation
                     uint region = latest != null && latest.CellRegions.Count == MapWidthCells * MapHeightCells ? latest.CellRegions[cell] : 0;
                     if (region != 0) port.SubmitEconomy(EconomyCommand.RequestLine(faction, ++sequence, requestedLine, region));
                     else port.SubmitEconomy(EconomyCommand.RequestLineAt(faction, ++sequence, requestedLine, cell));
+                    GameAudio.Ui(SoundCue.PlacementConfirmed);
                     Note(UiText.T("Processing line requested.", "ラインを依頼しました。"));
                     SetMode(Mode.None);
                     return true;
@@ -123,8 +125,9 @@ namespace Rts.Presentation
             if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
-            if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
+            if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
+            GameAudio.Ui(SoundCue.PlacementConfirmed);
             Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (the simulation checks the ground).", "（置けるかはシミュレーションが判断します）"));
             SetMode(Mode.None);
             return true;
@@ -1089,7 +1092,7 @@ namespace Rts.Presentation
             return count;
         }
 
-        private void Send(EconomyCommand command, string note) { port.SubmitEconomy(command); Note(note); }
+        private void Send(EconomyCommand command, string note) { port.SubmitEconomy(command); GameAudio.Ui(SoundCue.CommandMove); Note(note); }
 
         private void Note(string line) { notes.Add(line); if (notes.Count > 8) notes.RemoveAt(0); }
 

@@ -46,24 +46,28 @@ namespace Rts.Presentation
         {
             var current = Clock;
             if (current != null) current.Paused = !current.Paused;
+            GameAudio.Ui(SoundCue.Click);
         }
 
         public void StepOneTick()
         {
             var current = Clock;
             if (current != null) current.StepOneTick();
+            GameAudio.Ui(SoundCue.Click);
         }
 
         public void SetSpeed(int speed)
         {
             var current = Clock;
             if (current != null) current.SpeedMultiplier = speed;
+            GameAudio.Ui(SoundCue.Click);
         }
 
         public void ToggleViewFaction()
         {
             var current = Clock;
             if (current != null) current.ViewFactionId = 3 - current.ViewFactionId;
+            GameAudio.Ui(SoundCue.Click);
         }
 
         private void Update()

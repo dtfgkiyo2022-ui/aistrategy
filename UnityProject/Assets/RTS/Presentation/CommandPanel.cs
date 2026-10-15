@@ -953,6 +953,7 @@ namespace Rts.Presentation
         public void BeginAttackPick()
         {
             if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return;
+            GameAudio.Ui(SoundCue.CommandAttack);
             awaitingGround = true;
         }
 
@@ -1027,6 +1028,7 @@ namespace Rts.Presentation
                 new EndCondition(EndKind.UntilReplaced, 0), reservePermille,
                 new Expiration(long.MaxValue, 0, ExpireFlags.SubjectGone));
             ulong requestId = port.Submit(intent);
+            GameAudio.Ui(kind == PolicyKind.Focus ? SoundCue.CommandAttack : SoundCue.CommandMove);
             AddLog("#" + requestId + " " + description);
         }
 
