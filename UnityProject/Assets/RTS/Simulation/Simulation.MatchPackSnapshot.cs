@@ -54,6 +54,15 @@ namespace Rts.Simulation
         public int PlanksConsumedRams { get; internal set; }
         public int PlanksConsumedBridges { get; internal set; }
         public int PlanksEnhancedRams { get; internal set; }
+        public int CutStone { get; internal set; }
+        public int CutStoneProduced { get; internal set; }
+        public int CutStoneConsumed { get; internal set; }
+        public int Frames { get; internal set; }
+        public int FramesProduced { get; internal set; }
+        public int FramesConsumed { get; internal set; }
+        public int FramesConsumedBuildings { get; internal set; }
+        public int FramesConsumedUpgrades { get; internal set; }
+        public int Level2Buildings { get; internal set; }
         public int Books { get; internal set; }
         public int BooksProduced { get; internal set; }
         public int BooksConsumed { get; internal set; }
@@ -87,6 +96,8 @@ namespace Rts.Simulation
         public MatchPackGoodsTradeSnapshot[] GoodsMarket { get; internal set; } = Array.Empty<MatchPackGoodsTradeSnapshot>();
         public string Civ { get; internal set; }
         public int Age { get; internal set; }
+        public int BeltCells { get; internal set; }
+        public int BeltResourceAmount { get; internal set; }
         public MatchPackCount[] Soldiers { get; internal set; } = Array.Empty<MatchPackCount>();
         public MatchPackCount[] Buildings { get; internal set; } = Array.Empty<MatchPackCount>();
     }
@@ -166,6 +177,15 @@ namespace Rts.Simulation
                     PlanksConsumedRams = economy.PlanksConsumedRams,
                     PlanksConsumedBridges = economy.PlanksConsumedBridges,
                     PlanksEnhancedRams = economy.PlanksEnhancedRams,
+                    CutStone = economy.CutStone,
+                    CutStoneProduced = economy.CutStoneProduced,
+                    CutStoneConsumed = economy.CutStoneConsumed,
+                    Frames = economy.Frames,
+                    FramesProduced = economy.FramesProduced,
+                    FramesConsumed = economy.FramesConsumed,
+                    FramesConsumedBuildings = economy.FramesConsumedBuildings,
+                    FramesConsumedUpgrades = economy.FramesConsumedUpgrades,
+                    Level2Buildings = CountLevel2Buildings(world.Factions[f].Id),
                     Books = economy.Books,
                     BooksProduced = economy.BooksProduced,
                     BooksConsumed = economy.BooksConsumed,
@@ -199,6 +219,8 @@ namespace Rts.Simulation
                     GoodsMarket = GoodsMarketSnapshot(economy),
                     Civ = economy.Civ.ToString(),
                     Age = economy.Age,
+                    BeltCells = CountBelts(world.Factions[f].Id, false),
+                    BeltResourceAmount = CountBelts(world.Factions[f].Id, true),
                     Soldiers = CountSoldiers(world.Factions[f].Id),
                     Buildings = CountBuildings(world.Factions[f].Id)
                 };
@@ -242,6 +264,17 @@ namespace Rts.Simulation
             return count;
         }
 
+        private int CountLevel2Buildings(uint factionId)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.FactionId == factionId && building.Level >= 2) count++;
+            }
+            return count;
+        }
+
         private MatchPackCount[] CountSoldiers(uint factionId)
         {
             var counts = new Dictionary<UnitKind, int>();
@@ -259,6 +292,19 @@ namespace Rts.Simulation
             foreach (var pair in counts)
                 result[index++] = new MatchPackCount { Kind = pair.Key.ToString(), Count = pair.Value };
             return result;
+        }
+
+        private int CountBelts(uint factionId, bool resourcesOnly)
+        {
+            int count = 0;
+            for (int cell = 0; cell < world.Belts.Length; cell++)
+            {
+                var belt = world.Belts[cell];
+                if (belt.FactionId != factionId) continue;
+                if (resourcesOnly && (byte)belt.Item == 0) continue;
+                count++;
+            }
+            return count;
         }
 
         private MatchPackCount[] CountBuildings(uint factionId)

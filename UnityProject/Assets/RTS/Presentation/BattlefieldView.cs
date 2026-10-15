@@ -21,6 +21,11 @@ namespace Rts.Presentation
         [SerializeField] private GameObject infantryModel;
         [SerializeField] private GameObject scoutModel;
         [SerializeField] private GameObject coreModel;
+        [Header("World visual budgets")]
+        [SerializeField] private int forestTreeLimit = 600;
+        [SerializeField] private int mountainRockLimit = 300;
+        [SerializeField] private int terrainDecorationLimit = 360;
+        [SerializeField] private int terrainDecorationSeed = 41721;
 
         private sealed class Visual
         {
@@ -126,6 +131,7 @@ namespace Rts.Presentation
 
         public void Select(SelectionTarget target)
         {
+            if (selected.Kind != target.Kind || selected.Id != target.Id) GameAudio.Ui(SoundCue.SelectionChanged);
             selected = target;
             selectedArmies.Clear();
             if (target.Kind == SelectionKind.Army) selectedArmies.Add(target.Id);
@@ -408,6 +414,7 @@ namespace Rts.Presentation
 
         public void Push(FactionFrame frame)
         {
+            var previousSoundFrame = latestFrame;
             if (sinceUpdate > 0.001f)
                 measuredMatchRate = Mathf.Clamp(TickSeconds / sinceUpdate, 0.25f, 8f);
             sinceUpdate = 0f;
@@ -420,6 +427,7 @@ namespace Rts.Presentation
             SyncOutposts(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            GameAudio.FeedFrames(previousSoundFrame, frame, frame.FactionId);
             part = PerfProbe.Start();
             SyncFog(frame);
             PerfProbe.Stop("PushFog", part);
@@ -941,28 +949,16 @@ namespace Rts.Presentation
 
         public void SetTerrain(TerrainMap terrain)
         {
+            WorldVisualEffects.Ensure(gameObject);
             var existing = transform.Find("Terrain");
             if (existing != null) Discard(existing.gameObject);
-            var texture = new Texture2D(terrain.WidthCells, terrain.HeightCells, TextureFormat.RGBA32, false)
+            TerrainSurfaceBuilder.Build(transform, terrain, new TerrainVisualLimits
             {
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp
-            };
-            var open = new Color(0.42f, 0.6f, 0.36f);
-            var wall = new Color(0.16f, 0.2f, 0.16f);
-            // V3-4 terrain kinds: forest, river, mountain.
-            var forest = new Color(0.1f, 0.33f, 0.14f);
-            var river = new Color(0.2f, 0.42f, 0.78f);
-            var mountain = new Color(0.5f, 0.48f, 0.46f);
-            var pixels = new Color[terrain.WidthCells * terrain.HeightCells];
-            for (int z = 0; z < terrain.HeightCells; z++)
-                for (int x = 0; x < terrain.WidthCells; x++)
-                {
-                    byte kind = terrain.KindAt(x, z);
-                    pixels[z * terrain.WidthCells + x] = kind == 1 ? forest : kind == 2 ? river : kind == 3 ? mountain : terrain.IsBlocked(x, z) ? wall : open;
-                }
-            texture.SetPixels(pixels);
-            texture.Apply();
+                ForestTrees = forestTreeLimit,
+                MountainRocks = mountainRockLimit,
+                Decorations = terrainDecorationLimit,
+                Seed = terrainDecorationSeed
+            });
             fogCellSize = terrain.CellSizeMeters;
             fogWidth = terrain.WidthCells;
             fogHeight = terrain.HeightCells;
@@ -983,17 +979,6 @@ namespace Rts.Presentation
             var fogMaterial = new Material(Shader.Find("Sprites/Default"));
             fogMaterial.mainTexture = fogTexture;
             fogObject.GetComponent<Renderer>().sharedMaterial = fogMaterial;
-
-            var terrainObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            terrainObject.name = "Terrain";
-            terrainObject.transform.SetParent(transform, false);
-            float width = terrain.WidthCells * terrain.CellSizeMeters;
-            float height = terrain.HeightCells * terrain.CellSizeMeters;
-            terrainObject.transform.position = new Vector3(width / 2f, 0.02f, height / 2f);
-            terrainObject.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            terrainObject.transform.localScale = new Vector3(width, height, 1f);
-            Discard(terrainObject.GetComponent<Collider>());
-            terrainObject.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.NewUnlitTextured(texture);
         }
 
         private static readonly Color[] ArmyPalette =

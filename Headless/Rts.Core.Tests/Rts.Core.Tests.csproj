@@ -56,6 +56,7 @@
     <Compile Include="MonkConversionTests.cs" />
     <Compile Include="ProcessingChainTests.cs" />
     <Compile Include="RationsTests.cs" />
+    <Compile Include="ResourceFogTests.cs" />
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
     <Compile Include="MatchLengthMeasurementTests.cs" />
@@ -100,6 +101,8 @@
   <Compile Include="GoodsMarketTests.cs" />
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />
+    <Compile Include="CraftTree1Tests.cs" />
+    <Compile Include="DropSiteLimitTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -151,6 +154,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CoordinatedOffenseTests.cs" Link="Tests/CoordinatedOffenseTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AutoOffenseDecisionTests.cs" Link="Tests/AutoOffenseDecisionTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ContractsTests.cs" Link="Tests/ContractsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CraftTree1EditModeTests.cs" Link="Tests/CraftTree1EditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/JewelsEditModeTests.cs" Link="Tests/JewelsEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/RepairKitsEditModeTests.cs" Link="Tests/RepairKitsEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Fix64Tests.cs" Link="Tests/Fix64Tests.cs" />
@@ -180,6 +184,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SmokeOptions.cs" Link="UnityHost/SmokeOptions.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchTimeline.cs" Link="Presentation/MatchTimeline.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/EconomyFlowMetrics.cs" Link="Presentation/EconomyFlowMetrics.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/CraftVisualRules.cs" Link="Presentation/CraftVisualRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/BlueprintTools.cs" Link="Presentation/BlueprintTools.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
     <Compile Include="StaffChatTests.cs" />
@@ -187,5 +192,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AdjacentBuildingsEditModeTests.cs" Link="Tests/AdjacentBuildingsEditModeTests.cs" />
     <Compile Include="AdjacentBuildingsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
   </ItemGroup>
 </Project>

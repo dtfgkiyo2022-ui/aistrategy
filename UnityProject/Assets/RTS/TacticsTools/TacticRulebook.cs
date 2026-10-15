@@ -81,6 +81,8 @@ namespace Rts.Tactics
             markdown.AppendLine("|BuildingKind|費用|建設時間(tick)|");
             markdown.AppendLine("|---|---|---:|");
             foreach (var row in BuildingRows(scenario.Economy)) markdown.AppendLine("|`" + row.Name + "`|" + row.Cost + "|" + row.Work + "|");
+            if (scenario.Economy.DropSiteLimit)
+                markdown.AppendLine("集積所の上限: `" + scenario.Economy.DropSiteMax + "`（建設中を含み、壊れた建物は除外）");
             markdown.AppendLine();
             markdown.AppendLine("時代進行: `Age2` は food=" + scenario.Economy.Age2FoodCost + ", wood=" + scenario.Economy.Age2WoodCost + ", ticks=" + scenario.Economy.Age2Ticks + "。`Age3` は food=" + scenario.Economy.Age3FoodCost + ", wood=" + scenario.Economy.Age3WoodCost + ", ticks=" + scenario.Economy.Age3Ticks + "。");
             markdown.AppendLine("時代時計が有効なとき、`economy.nextAgeAutoTick` が次の自動進行tick、`economy.nextAgeCost` が今払う費用です。時計が無効または最後の時代なら自動tickは0です。");
@@ -181,6 +183,8 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.CharmWorkshop, e.CharmWoodCost, 0, e.CharmWork);
             Add(rows, BuildingKind.RepairYard, e.RepairYardWoodCost, 0, e.RepairYardWork);
             Add(rows, BuildingKind.ToolShop, e.ToolShopWoodCost, 0, e.ToolShopWork);
+            Add(rows, BuildingKind.Stonecutter, e.StonecutterWoodCost, 0, e.StonecutterWork);
+            Add(rows, BuildingKind.Joinery, e.JoineryWoodCost, 0, e.JoineryWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

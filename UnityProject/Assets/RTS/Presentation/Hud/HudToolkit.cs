@@ -93,6 +93,17 @@ namespace Rts.Presentation
         private Button commandAuto;
         private Button commandCancel;
         private EconomyPanel economyPanel;
+        private EconomyLayer economyLayer;
+        private VisualElement statsFrame;
+        private Button statsToggle;
+        private ScrollView statsScroll;
+        private bool statsOpen;
+        private float nextStatsRefresh;
+        private readonly List<ResourceKind> statisticKinds = new List<ResourceKind>();
+        private readonly Dictionary<ResourceKind, StatsRow> statisticRows = new Dictionary<ResourceKind, StatsRow>();
+        private readonly List<FlowMinuteSample> statisticHistory = new List<FlowMinuteSample>();
+        private readonly List<float> statisticGraphValues = new List<float>(10);
+        private readonly List<float> statisticConsumedValues = new List<float>(10);
         private VisualElement economyFrame;
         private VisualElement economyActions;
         private Label economyTitle;
@@ -222,6 +233,68 @@ namespace Rts.Presentation
             public Label Label;
         }
 
+        private sealed class StatsRow
+        {
+            public VisualElement Row;
+            public Label Name;
+            public Label Produced;
+            public Label Consumed;
+            public MiniLineGraph Graph;
+        }
+
+        private sealed class MiniLineGraph : VisualElement
+        {
+            private readonly List<float> values = new List<float>();
+            private readonly List<float> secondaryValues = new List<float>();
+
+            public MiniLineGraph()
+            {
+                style.height = 30f;
+                style.width = 132f;
+                generateVisualContent += Draw;
+            }
+
+            public void SetValues(IReadOnlyList<float> next)
+            {
+                SetValues(next, null);
+            }
+
+            public void SetValues(IReadOnlyList<float> next, IReadOnlyList<float> secondary)
+            {
+                values.Clear();
+                secondaryValues.Clear();
+                if (next != null) for (int i = 0; i < next.Count; i++) values.Add(next[i]);
+                if (secondary != null) for (int i = 0; i < secondary.Count; i++) secondaryValues.Add(secondary[i]);
+                MarkDirtyRepaint();
+            }
+
+            private void Draw(MeshGenerationContext context)
+            {
+                if (values.Count < 2) return;
+                float max = 1f;
+                for (int i = 0; i < values.Count; i++) if (values[i] > max) max = values[i];
+                for (int i = 0; i < secondaryValues.Count; i++) if (secondaryValues[i] > max) max = secondaryValues[i];
+                var painter = context.painter2D;
+                DrawSeries(painter, values, max, new Color(1f, 0.82f, 0.25f, 1f));
+                DrawSeries(painter, secondaryValues, max, new Color(0.35f, 0.78f, 1f, 1f));
+            }
+
+            private void DrawSeries(Painter2D painter, IReadOnlyList<float> series, float max, Color color)
+            {
+                if (series == null || series.Count < 2) return;
+                painter.lineWidth = 2f;
+                painter.strokeColor = color;
+                painter.BeginPath();
+                for (int i = 0; i < series.Count; i++)
+                {
+                    float x = (resolvedStyle.width - 4f) * i / (series.Count - 1) + 2f;
+                    float y = resolvedStyle.height - 3f - (resolvedStyle.height - 6f) * Mathf.Clamp01(series[i] / max);
+                    if (i == 0) painter.MoveTo(new Vector2(x, y)); else painter.LineTo(new Vector2(x, y));
+                }
+                painter.Stroke();
+            }
+        }
+
 
         /// <summary>
         /// The new screen is the default (owner, 10-09). The setup panel's switch can still turn it off on this PC, and
@@ -317,12 +390,14 @@ namespace Rts.Presentation
                 if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
+                if (statsFrame != null) statsFrame.style.display = DisplayStyle.None;
                 HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
             }
 
             EnsureDocument();
+            if (economyLayer == null) economyLayer = FindFirstObjectByType<EconomyLayer>();
             if (hudRoot == null || ageLabel == null || ageStageLabel == null || resourceRow == null ||
                 populationLabel == null || idleLabel == null) return;
             var frame = view.LatestFrame;
@@ -336,6 +411,7 @@ namespace Rts.Presentation
                 if (supplyFrame != null) supplyFrame.style.display = DisplayStyle.None;
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
+                if (statsFrame != null) statsFrame.style.display = DisplayStyle.None;
                 HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
@@ -346,6 +422,7 @@ namespace Rts.Presentation
             ApplySelectedTheme();
             if (topFrame != null) topFrame.style.display = economy == null ? DisplayStyle.None : DisplayStyle.Flex;
             if (economy != null) Refresh(economy);
+            RefreshStats(economy);
             RefreshEconomy(economy);
             RefreshStaff();
             RefreshCommands();
@@ -388,6 +465,12 @@ namespace Rts.Presentation
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).LogEntries);
             if (resultFrame != null && resultFrame.resolvedStyle.display != DisplayStyle.None)
                 UiHitAreas.Shared.Register(UiLayout.Calculate(Screen.width, Screen.height).Result);
+            if (statsFrame != null && statsFrame.resolvedStyle.display != DisplayStyle.None)
+            {
+                var statsBound = statsFrame.worldBound;
+                UiHitAreas.Shared.Register(new Rect(statsBound.x, statsBound.y, statsBound.width,
+                    statsOpen ? statsBound.height : 34f));
+            }
         }
 
         private float layoutLogAt = -1f;
@@ -498,6 +581,7 @@ namespace Rts.Presentation
                 populationIcon.style.backgroundImage = new StyleBackground(populationIconTexture);
             populationLabel = root.Q<Label>("population-label");
             idleLabel = root.Q<Label>("idle-label");
+            EnsureStatsPanel();
             staffFrame = root.Q<VisualElement>("staff-frame");
             staffPanel = root.Q<VisualElement>("staff-panel");
             staffScroll = root.Q<ScrollView>("staff-scroll");
@@ -623,6 +707,144 @@ namespace Rts.Presentation
             else Debug.LogWarning("UI Toolkit HUD theme USS not found at Resources/" + definition.ResourcePath + ".");
             activeThemeIndex = selected;
             ApplyFonts(root, selected, definition);
+        }
+
+        private void EnsureStatsPanel()
+        {
+            if (statsFrame != null || hudRoot == null) return;
+            statsFrame = new VisualElement { name = "economy-stats-frame" };
+            statsFrame.pickingMode = PickingMode.Position;
+            statsFrame.style.position = Position.Absolute;
+            statsFrame.style.right = 10f;
+            statsFrame.style.top = 72f;
+            statsFrame.style.width = 430f;
+            statsFrame.style.maxHeight = 620f;
+            statsFrame.style.backgroundColor = new Color(0.08f, 0.07f, 0.05f, 0.96f);
+            statsFrame.style.borderBottomWidth = 2f;
+            statsFrame.style.borderLeftWidth = 2f;
+            statsFrame.style.borderRightWidth = 2f;
+            statsFrame.style.borderTopWidth = 2f;
+            statsFrame.style.borderBottomColor = new Color(0.55f, 0.42f, 0.22f, 1f);
+            statsFrame.style.borderLeftColor = statsFrame.style.borderBottomColor;
+            statsFrame.style.borderRightColor = statsFrame.style.borderBottomColor;
+            statsFrame.style.borderTopColor = statsFrame.style.borderBottomColor;
+            statsToggle = new Button(() =>
+            {
+                statsOpen = !statsOpen;
+                UpdateStatsVisibility();
+            });
+            statsToggle.text = "生産統計  ▸";
+            statsToggle.pickingMode = PickingMode.Position;
+            statsToggle.style.height = 30f;
+            statsToggle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            statsFrame.Add(statsToggle);
+            statsScroll = new ScrollView(ScrollViewMode.Vertical);
+            statsScroll.pickingMode = PickingMode.Position;
+            statsScroll.style.maxHeight = 580f;
+            statsScroll.style.paddingLeft = 6f;
+            statsScroll.style.paddingRight = 6f;
+            statsScroll.style.paddingBottom = 6f;
+            statsFrame.Add(statsScroll);
+            hudRoot.Add(statsFrame);
+            UpdateStatsVisibility();
+        }
+
+        private void UpdateStatsVisibility()
+        {
+            if (statsToggle != null) statsToggle.text = statsOpen ? "生産統計  ▾" : "生産統計  ▸";
+            if (statsScroll != null) statsScroll.style.display = statsOpen ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void RefreshStats(EconomyView economy)
+        {
+            if (statsFrame == null || economyLayer == null || economy == null)
+            {
+                if (statsFrame != null) statsFrame.style.display = DisplayStyle.None;
+                return;
+            }
+            var metrics = economyLayer.FlowMetrics;
+            metrics.GetAvailableKinds(statisticKinds);
+            if (statisticKinds.Count == 0)
+            {
+                statsFrame.style.display = DisplayStyle.None;
+                return;
+            }
+            statsFrame.style.display = DisplayStyle.Flex;
+            UpdateStatsVisibility();
+            if (Time.unscaledTime < nextStatsRefresh) return;
+            nextStatsRefresh = Time.unscaledTime + 1f;
+            string signature = string.Join(",", statisticKinds);
+            if (statsScroll.childCount != statisticKinds.Count || statsScroll.userData as string != signature)
+            {
+                statsScroll.Clear();
+                statisticRows.Clear();
+                statsScroll.userData = signature;
+                for (int i = 0; i < statisticKinds.Count; i++)
+                {
+                    ResourceKind kind = statisticKinds[i];
+                    var row = new VisualElement { name = "stats-" + kind };
+                    row.style.flexDirection = FlexDirection.Row;
+                    row.style.alignItems = Align.Center;
+                    row.style.minHeight = 40f;
+                    row.style.marginTop = 2f;
+                    var icon = new VisualElement();
+                    icon.style.width = 28f; icon.style.height = 28f; icon.style.marginRight = 5f;
+                    var texture = GoodsIcons.Get(kind);
+                    if (texture != null) icon.style.backgroundImage = new StyleBackground(texture);
+                    var name = new Label(ResourceLabel(kind)); name.style.width = 70f;
+                    var produced = new Label(); produced.style.width = 74f;
+                    var consumed = new Label(); consumed.style.width = 74f;
+                    var graph = new MiniLineGraph(); graph.style.flexGrow = 1f;
+                    row.Add(icon); row.Add(name); row.Add(produced); row.Add(consumed); row.Add(graph);
+                    statsScroll.Add(row);
+                    statisticRows.Add(kind, new StatsRow { Row = row, Name = name, Produced = produced, Consumed = consumed, Graph = graph });
+                }
+            }
+            foreach (var kind in statisticKinds)
+            {
+                StatsRow row = statisticRows[kind];
+                FlowMinuteSample current = metrics.GetCurrentMinute(kind);
+                row.Produced.text = "作 " + current.Produced.ToString();
+                row.Consumed.text = "使 " + current.Consumed.ToString();
+                metrics.GetHistory(kind, statisticHistory);
+                statisticGraphValues.Clear();
+                statisticConsumedValues.Clear();
+                for (int i = 0; i < statisticHistory.Count; i++)
+                {
+                    statisticGraphValues.Add(statisticHistory[i].Produced);
+                    statisticConsumedValues.Add(statisticHistory[i].Consumed);
+                }
+                row.Graph.SetValues(statisticGraphValues, statisticConsumedValues);
+            }
+        }
+
+        private static string ResourceLabel(ResourceKind kind)
+        {
+            switch (kind)
+            {
+                case ResourceKind.Food: return "食料";
+                case ResourceKind.Wood: return "木材";
+                case ResourceKind.Ore: return "鉱石";
+                case ResourceKind.Metal: return "金属";
+                case ResourceKind.Stone: return "石";
+                case ResourceKind.Gems: return "宝石";
+                case ResourceKind.Gold: return "金";
+                case ResourceKind.Charcoal: return "木炭";
+                case ResourceKind.Steel: return "鋼";
+                case ResourceKind.BowGear: return "弓具";
+                case ResourceKind.Rations: return "糧食";
+                case ResourceKind.Bricks: return "煉瓦";
+                case ResourceKind.Tack: return "馬具";
+                case ResourceKind.Planks: return "板材";
+                case ResourceKind.Books: return "書物";
+                case ResourceKind.Preserves: return "保存食";
+                case ResourceKind.TradeGoods: return "交易品";
+                case ResourceKind.Incense: return "香";
+                case ResourceKind.Charms: return "護符";
+                case ResourceKind.RepairKits: return "修理キット";
+                case ResourceKind.Tools: return "工具";
+                default: return kind.ToString();
+            }
         }
 
         private void ApplyFonts(VisualElement root, int themeIndex, HudThemeCatalog.Definition definition)
@@ -860,6 +1082,12 @@ namespace Rts.Presentation
             });
             AddSetupRowWithControl(UiText.T("New screen", "新しい画面"), toolkit);
 
+            var effects = AddSetupRow(UiText.T("Screen effects", "画面効果"));
+            AddSetupButton(effects, UiText.T("High", "高"), WorldVisualEffects.IsHighQuality,
+                () => WorldVisualEffects.SetQuality(true));
+            AddSetupButton(effects, UiText.T("Low", "低"), !WorldVisualEffects.IsHighQuality,
+                () => WorldVisualEffects.SetQuality(false));
+
             var themes = AddSetupRow(UiText.T("HUD theme", "見た目の案"));
             for (int i = 0; i < HudThemeCatalog.Count; i++)
             {
@@ -868,6 +1096,11 @@ namespace Rts.Presentation
                 AddSetupButton(themes, UiText.T(theme.EnglishName, theme.JapaneseName), HudToolkit.ThemeIndex == themeIndex,
                     () => HudToolkit.SetTheme(themeIndex));
             }
+
+            AddAudioVolumeSlider(UiText.T("Master volume", "全体音量"), GameAudio.MasterVolume, value => GameAudio.MasterVolume = value);
+            AddAudioVolumeSlider(UiText.T("Music volume", "BGM音量"), GameAudio.MusicVolume, value => GameAudio.MusicVolume = value);
+            AddAudioVolumeSlider(UiText.T("Effects volume", "効果音音量"), GameAudio.EffectsVolume, value => GameAudio.EffectsVolume = value);
+            AddAudioVolumeSlider(UiText.T("UI volume", "画面音量"), GameAudio.UiVolume, value => GameAudio.UiVolume = value);
 
             var delay = commandPanel.DelayControl;
             var delayContent = AddSetupRow(UiText.T("Reply delay", "返答の遅延"));
@@ -894,6 +1127,15 @@ namespace Rts.Presentation
                 UiText.T("Asset credits: Noto Sans JP (OFL); game-icons.net by Lorc, Delapouite, Faithtoken (CC BY 3.0).",
                     "素材の出典：Noto Sans JP（OFL）、game-icons.net（Lorc・Delapouite・Faithtoken、CC BY 3.0）"),
                 "setup-credits");
+        }
+
+        private void AddAudioVolumeSlider(string title, float current, Action<float> changed)
+        {
+            var content = AddSetupRow(title);
+            var slider = new Slider(0f, 1f) { value = Mathf.Clamp01(current) };
+            slider.AddToClassList("setup-slider");
+            slider.RegisterValueChangedCallback(evt => changed(evt.newValue));
+            content.Add(slider);
         }
 
         private void AddSetupRowWithControl(string title, VisualElement control)
@@ -1768,6 +2010,8 @@ namespace Rts.Presentation
             slots.Clear();
             // Five or more resources do not fit one row of full cards; they become two rows of small chips (10-10).
             resourceRow.EnableInClassList("is-dense", resources.Count >= 5);
+            // Eleven or more (a late game with the common craft tree and a civilisation's goods) need a third row.
+            resourceRow.EnableInClassList("is-very-dense", resources.Count >= 11);
             foreach (var entry in resources)
             {
                 var card = new VisualElement { name = "resource-" + entry.Kind };

@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Tools)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Frames)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -67,7 +67,8 @@ namespace Rts.Simulation
                     return;
                 }
             }
-            if (command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(command.Line, requestedCell) < 0)
+            bool commonLine = CraftTreeCommonAllowed(faction) && (command.Line == ProcessingLineKind.Planks || command.Line == ProcessingLineKind.CutStone || command.Line == ProcessingLineKind.Frames);
+            if (!commonLine && command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(faction, command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
                 return;
@@ -76,7 +77,7 @@ namespace Rts.Simulation
             if (existing >= 0)
             {
                 var current = world.ProcessingLines[existing];
-                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0 || current.CharmWorkshopId != 0 || current.RepairYardId != 0 || current.ToolShopId != 0)
+                if (current.Manager != LineManager.Automatic || current.MineId != 0 || current.LumberCampId != 0 || current.MillId != 0 || current.SawmillId != 0 || current.StonecutterId != 0 || current.JoineryId != 0 || current.ScriptoriumId != 0 || current.DryingRackId != 0 || current.WeaverId != 0 || current.IncenseHouseId != 0 || current.CharmWorkshopId != 0 || current.RepairYardId != 0 || current.ToolShopId != 0)
                 {
                     RejectLineRequest(faction, command, ReasonCode.LineUnavailable, requestedCell);
                     return;
@@ -97,6 +98,8 @@ namespace Rts.Simulation
 
         private bool LineRequestAllowed(uint faction, ProcessingLineKind kind)
         {
+            if (kind == ProcessingLineKind.Planks || kind == ProcessingLineKind.CutStone) return CraftTreeCommonAllowed(faction);
+            if (kind == ProcessingLineKind.Frames) return JoineryAllowed(faction);
             if (kind == ProcessingLineKind.Bricks) return BricksAllowed(faction);
             if (kind == ProcessingLineKind.Rations) return RationsAllowed(faction);
             if (kind == ProcessingLineKind.Tack) return TackAllowed(faction);
@@ -128,13 +131,15 @@ namespace Rts.Simulation
             : kind == ProcessingLineKind.Incense ? world.Config.Economy.IncenseWoodCost
             : kind == ProcessingLineKind.Charms ? world.Config.Economy.CharmWoodCost
             : kind == ProcessingLineKind.RepairKits ? world.Config.Economy.RepairYardWoodCost
-            : kind == ProcessingLineKind.Tools ? world.Config.Economy.ToolShopWoodCost
+                : kind == ProcessingLineKind.Tools ? world.Config.Economy.ToolShopWoodCost
+                : kind == ProcessingLineKind.CutStone ? world.Config.Economy.StonecutterWoodCost
+                : kind == ProcessingLineKind.Frames ? world.Config.Economy.JoineryWoodCost
             : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
                 : world.Config.Economy.MineWoodCost;
         }
 
-        private int FindRequestedResourceNode(ProcessingLineKind kind, int requestedCell)
+        private int FindRequestedResourceNode(uint faction, ProcessingLineKind kind, int requestedCell)
         {
             ResourceKind resource = kind == ProcessingLineKind.Bricks ? ResourceKind.Stone
                 : kind == ProcessingLineKind.Rations || kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear || kind == ProcessingLineKind.Planks
@@ -145,7 +150,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (node.Definition.Kind != resource || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, i) || node.Definition.Kind != resource || node.Remaining <= 0) continue;
                 var distance = DistanceSquared(node.Definition.Position, point);
                 if (best < 0 || distance < DistanceSquared(world.Nodes[best].Definition.Position, point)
                     || distance == DistanceSquared(world.Nodes[best].Definition.Position, point)
@@ -186,6 +191,51 @@ namespace Rts.Simulation
         {
             ref var line = ref world.ProcessingLines[index];
             ref var economy = ref world.Economies[faction - 1];
+            if (line.Kind == ProcessingLineKind.Planks && CraftTreeCommonAllowed(faction))
+            {
+                if (!BuildingReady(line.SawmillId))
+                {
+                    if (BuildingPending(line.SawmillId)) return true;
+                    if (economy.Wood < world.Config.Economy.SawmillWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceCommonSawmill(faction);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.SawmillId = id; return true;
+                }
+                var sawmill = world.Buildings[line.SawmillId - 1];
+                var route = BeltRoute(faction, OutputCell(sawmill), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+                if (route.cells == null) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                SetLineBelts(index, route); LayRoutes(faction, route); line.RequestPending = false; return true;
+            }
+            if (line.Kind == ProcessingLineKind.CutStone && CraftTreeCommonAllowed(faction))
+            {
+                if (!BuildingReady(line.StonecutterId))
+                {
+                    if (BuildingPending(line.StonecutterId)) return true;
+                    if (economy.Wood < world.Config.Economy.StonecutterWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceStonecutter(faction);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.StonecutterId = id; return true;
+                }
+                var stonecutter = world.Buildings[line.StonecutterId - 1];
+                var route = BeltRoute(faction, OutputCell(stonecutter), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+                if (route.cells == null) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                SetLineBelts(index, route); LayRoutes(faction, route); line.RequestPending = false; return true;
+            }
+            if (line.Kind == ProcessingLineKind.Frames && JoineryAllowed(faction))
+            {
+                if (!BuildingReady(line.JoineryId))
+                {
+                    if (BuildingPending(line.JoineryId)) return true;
+                    if (economy.Wood < world.Config.Economy.JoineryWoodCost) { RejectPendingLine(faction, ref line, ReasonCode.LineWoodShortfall); return true; }
+                    uint id = PlaceJoinery(faction);
+                    if (id == 0) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                    line.JoineryId = id; return true;
+                }
+                var joinery = world.Buildings[line.JoineryId - 1];
+                var route = BeltRoute(faction, OutputCell(joinery), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+                if (route.cells == null) { RejectPendingLine(faction, ref line, ReasonCode.LinePlacementUnavailable); return true; }
+                SetLineBelts(index, route); LayRoutes(faction, route); line.RequestPending = false; return true;
+            }
             if (line.Kind == ProcessingLineKind.Bricks)
             {
                 if (!BuildingReady(line.QuarryId))
@@ -454,7 +504,8 @@ namespace Rts.Simulation
                 if (line.FactionId != faction) continue;
                 if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
                     || line.LumberCampId == buildingId || line.FletcherId == buildingId || line.MillId == buildingId
-                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.DryingRackId == buildingId || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId || line.RepairYardId == buildingId || line.ToolShopId == buildingId) return i;
+                    || line.QuarryId == buildingId || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId
+                    || line.StonecutterId == buildingId || line.JoineryId == buildingId || line.DryingRackId == buildingId || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId || line.RepairYardId == buildingId || line.ToolShopId == buildingId) return i;
             }
             return -1;
         }
@@ -579,7 +630,7 @@ namespace Rts.Simulation
 
         private void ClearLineHeld(uint faction, ProcessingLineState line)
         {
-            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId, line.CharmWorkshopId, line.RepairYardId, line.ToolShopId };
+            uint[] ids = { line.MineId, line.SmelterId, line.KilnId, line.SteelworksId, line.LumberCampId, line.FletcherId, line.MillId, line.QuarryId, line.BrickKilnId, line.SaddleryId, line.SawmillId, line.ScriptoriumId, line.DryingRackId, line.LapidaryId, line.WeaverId, line.IncenseHouseId, line.CharmWorkshopId, line.RepairYardId, line.ToolShopId, line.StonecutterId, line.JoineryId };
             foreach (uint id in ids)
                 if (id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == faction) world.Buildings[id - 1].Held = false;
             foreach (int cell in line.BeltCells)
@@ -601,7 +652,11 @@ namespace Rts.Simulation
             if (line.Kind == ProcessingLineKind.Tack)
                 return BuildingReady(line.SaddleryId);
             if (line.Kind == ProcessingLineKind.Planks)
-                return BuildingReady(line.LumberCampId) && BuildingReady(line.SawmillId);
+                return CraftTreeCommonAllowed(line.FactionId) ? BuildingReady(line.SawmillId) : BuildingReady(line.LumberCampId) && BuildingReady(line.SawmillId);
+            if (line.Kind == ProcessingLineKind.CutStone)
+                return BuildingReady(line.StonecutterId);
+            if (line.Kind == ProcessingLineKind.Frames)
+                return BuildingReady(line.JoineryId);
             if (line.Kind == ProcessingLineKind.Preserves)
                 return BuildingReady(line.DryingRackId);
             if (line.Kind == ProcessingLineKind.Jewels)
@@ -639,6 +694,8 @@ namespace Rts.Simulation
             else if (kind == BuildingKind.BrickKiln) line.BrickKilnId = id;
             else if (kind == BuildingKind.Saddlery) line.SaddleryId = id;
             else if (kind == BuildingKind.Sawmill) line.SawmillId = id;
+            else if (kind == BuildingKind.Stonecutter) line.StonecutterId = id;
+            else if (kind == BuildingKind.Joinery) line.JoineryId = id;
             else if (kind == BuildingKind.DryingRack) line.DryingRackId = id;
             else if (kind == BuildingKind.Lapidary) line.LapidaryId = id;
             else if (kind == BuildingKind.Weaver) line.WeaverId = id;
@@ -718,8 +775,18 @@ namespace Rts.Simulation
             }
             if (line.Kind == ProcessingLineKind.Planks)
             {
-                SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, wanted);
-                SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
+                if (CraftTreeCommonAllowed(faction)) SetSimpleHaulers(faction, line.SawmillId, 0, wanted);
+                else SetSimpleHaulers(faction, line.LumberCampId, line.SawmillId, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.CutStone)
+            {
+                SetSimpleHaulers(faction, line.StonecutterId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.Frames)
+            {
+                SetSimpleHaulers(faction, line.JoineryId, 0, wanted);
                 return;
             }
             if (line.Kind == ProcessingLineKind.Preserves)

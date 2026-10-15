@@ -28,6 +28,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.StopVillagers:
                     StopVillagers(faction);
                     return;
+                case EconomyCommandKind.UpgradeBuilding:
+                    UpgradeProcessingBuilding(faction, c.ProducerId);
+                    return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
@@ -131,7 +134,9 @@ namespace Rts.Simulation
                         && !(ProcessingAvailable(faction) && kind == BuildingKind.Steelworks)
                         && !(BricksAllowed(faction) && kind == BuildingKind.BrickKiln)
                         && !(TackAllowed(faction) && kind == BuildingKind.Saddlery)
-                        && !(PlanksAllowed(faction) && kind == BuildingKind.Sawmill)
+                        && !((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && kind == BuildingKind.Sawmill)
+                        && !(StonecutterAllowed(faction) && kind == BuildingKind.Stonecutter)
+                        && !(JoineryAllowed(faction) && kind == BuildingKind.Joinery)
                         && !(BooksAllowed(faction) && kind == BuildingKind.Scriptorium)
                         && !(PreservesAllowed(faction) && kind == BuildingKind.DryingRack)
                         && !(JewelsAllowed(faction) && kind == BuildingKind.Lapidary)
@@ -156,7 +161,11 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if (kind == BuildingKind.Town && TownCount(faction) >= rules.TownMaxBuildings) return;
-                    if ((byte)c.Facing > 3 || economy.Wood < WoodOf(kind, faction) || economy.Stone < StoneOf(kind, faction)) return;
+                    bool framesAvailable = CraftTree1On && kind != BuildingKind.Wall
+                        && economy.Frames >= rules.CraftTreeFramesPerBuilding;
+                    if ((byte)c.Facing > 3 || economy.Wood < WoodOfForPlacement(kind, faction, framesAvailable)
+                        || economy.Stone < StoneOf(kind, faction)) return;
+                    if (kind == BuildingKind.DropSite && DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
                     uint node = 0;
@@ -266,10 +275,12 @@ namespace Rts.Simulation
                         MarkLinesForBuilding(faction, target.Id);
                         MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery || target.Kind == BuildingKind.DryingRack || target.Kind == BuildingKind.Lapidary || target.Kind == BuildingKind.Weaver
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery || target.Kind == BuildingKind.DryingRack || target.Kind == BuildingKind.Lapidary || target.Kind == BuildingKind.Weaver || target.Kind == BuildingKind.Stonecutter || target.Kind == BuildingKind.Joinery
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
+                            || (CraftTreeCommonAllowed(faction) && (target.Kind == BuildingKind.Sawmill || target.Kind == BuildingKind.Stonecutter))
+                            || (JoineryAllowed(faction) && target.Kind == BuildingKind.Joinery)
                             || (BooksAllowed(faction) && target.Kind == BuildingKind.Scriptorium)
                             || (IncenseAllowed(faction) && target.Kind == BuildingKind.IncenseHouse)
                             || (CharmsAllowed(faction) && target.Kind == BuildingKind.CharmWorkshop)

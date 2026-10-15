@@ -13,6 +13,9 @@ namespace Rts.Editor
 
         public static void Build()
         {
+            // Keep both optional player manifests in step with the pack lists used by product builds.
+            LocalVisualPackManifestBuilder.RebuildForProductBuild();
+            LocalSoundPackManifestBuilder.RebuildForProductBuild();
             string requested = Value("-smokeOut") ?? DefaultOutput;
             string output = Path.GetExtension(requested).Equals(".exe", StringComparison.OrdinalIgnoreCase)
                 ? requested

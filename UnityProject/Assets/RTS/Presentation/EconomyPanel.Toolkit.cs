@@ -85,9 +85,21 @@ namespace Rts.Presentation
         public void ExecuteToolkitAction(string actionId)
         {
             if (port == null || string.IsNullOrEmpty(actionId)) return;
+            GameAudio.Ui(SoundCue.Click);
             var economy = Economy();
             if (economy == null) return;
+            foreach (var action in GetToolkitActions())
+                if (action.Id == actionId && !action.Enabled && !action.Message &&
+                    ((action.Reason ?? "").Contains("not enough") || (action.Reason ?? "").Contains("足り")))
+                { GameAudio.Ui(SoundCue.ResourceShortage); return; }
 
+            if (actionId.StartsWith("upgrade:", StringComparison.Ordinal))
+            {
+                uint buildingId;
+                if (uint.TryParse(actionId.Substring(8), out buildingId))
+                    Send(EconomyCommand.UpgradeBuilding(faction, ++sequence, buildingId), UiText.T("Upgrade requested", "譁ｰ繝ｬ繝吶Ν繧貞ｾ晞ｼ縺励∪縺励◆"));
+                return;
+            }
             if (actionId.StartsWith("build:", StringComparison.Ordinal))
             {
                 var buildMode = ParseMode(actionId.Substring(6));
@@ -175,7 +187,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -202,6 +214,8 @@ namespace Rts.Presentation
 
         private static ResourceKind ParseResource(string value)
         {
+            if (value == "cutstone" || value == "切石") return ResourceKind.CutStone;
+            if (value == "frames" || value == "建材") return ResourceKind.Frames;
             if (value == "preserves" || value == "保存食") return ResourceKind.Preserves;
             if (value == "tack" || value == "馬具") return ResourceKind.Tack;
             if (value == "planks" || value == "板") return ResourceKind.Planks;
@@ -242,7 +256,10 @@ namespace Rts.Presentation
             }
             if (economy.Ages)
             {
-                Add(rows, "build:drop-site", UiText.T("Drop-off (", "資源置き場（木") + economy.DropSiteWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.DropSite);
+                bool dropSiteCapped = economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+                if (dropSiteCapped && mode == Mode.DropSite) SetMode(Mode.None);
+                Add(rows, "build:drop-site", UiText.DropSiteLabel(economy.DropSiteCount, economy.DropSiteMax, economy.DropSiteWoodCost),
+                    !dropSiteCapped, dropSiteCapped ? UiText.T("Drop-site limit reached", "集積所の上限に達しています") : "", mode == Mode.DropSite);
                 Add(rows, "build:tower", UiText.T("Tower (", "見張り塔（石") + economy.TowerStoneCost + UiText.T("S ", " 木") + economy.TowerWoodCost + UiText.T("W)", "）"), true, "", mode == Mode.Tower);
                 Add(rows, "build:wall", mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ") : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"), true, "", mode == Mode.Wall);
                 if (economy.Civ != CivKind.Primitive) Add(rows, "build:market", UiText.T("Market (", "市場（木材 ") + economy.MarketWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Market);
@@ -270,10 +287,43 @@ namespace Rts.Presentation
                 Add(rows, "build:saddlery", UiText.T("Saddlery (", "馬具工房（木材 ") + economy.SaddleryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Saddlery);
                 Add(rows, "line:Tack", UiText.T("Ask for tack line", "馬具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tack);
             }
-            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1)
+            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1 && !economy.CraftTree1Enabled)
             {
                 Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
                 Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
+            }
+            if (economy.CraftTree1Enabled && economy.Age >= 1)
+            {
+                Add(rows, "build:sawmill", UiText.T("Sawmill", "製材所"), true, "", mode == Mode.Sawmill);
+                Add(rows, "build:stonecutter", UiText.T("Stonecutter", "石工場"), true, "", mode == Mode.Stonecutter);
+                Add(rows, "line:CutStone", UiText.T("Ask for cut-stone line", "切石ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CutStone);
+                if (economy.Age >= 2)
+                {
+                    Add(rows, "build:joinery", UiText.T("Joinery", "木工所"), true, "", mode == Mode.Joinery);
+                    Add(rows, "line:Frames", UiText.T("Ask for frames line", "建材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Frames);
+                }
+                Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
+            }
+            if (economy.CraftTree1Enabled && economy.Age >= 1)
+            {
+                for (int buildingIndex = 0; buildingIndex < economy.Buildings.Count; buildingIndex++)
+                {
+                    var building = economy.Buildings[buildingIndex];
+                    bool processing = building.Kind == BuildingKind.Sawmill || building.Kind == BuildingKind.CharcoalKiln
+                        || building.Kind == BuildingKind.Stonecutter || building.Kind == BuildingKind.Joinery
+                        || building.Kind == BuildingKind.Mine || building.Kind == BuildingKind.Smelter
+                        || building.Kind == BuildingKind.Steelworks || building.Kind == BuildingKind.Fletcher
+                        || building.Kind == BuildingKind.BrickKiln || building.Kind == BuildingKind.Saddlery
+                        || building.Kind == BuildingKind.Scriptorium || building.Kind == BuildingKind.DryingRack
+                        || building.Kind == BuildingKind.Lapidary || building.Kind == BuildingKind.Weaver
+                        || building.Kind == BuildingKind.IncenseHouse || building.Kind == BuildingKind.CharmWorkshop
+                        || building.Kind == BuildingKind.Mill || building.Kind == BuildingKind.RepairYard
+                        || building.Kind == BuildingKind.ToolShop;
+                    if (building.FactionId != faction || !building.Complete || building.Level >= 2 || !processing) continue;
+                    bool affordable = economy.Frames >= economy.Level2FramesCost;
+                    Add(rows, "upgrade:" + building.Id, UiText.T("Upgrade " + EconomyLayer.BuildingName(building.Kind) + " (", "Lv1→Lv2 " + EconomyLayer.BuildingName(building.Kind) + "（") + economy.Level2FramesCost + UiText.T(" frames)", "建材）"), affordable,
+                        affordable ? "" : UiText.T("Not enough frames", "建材が足りません"));
+                }
             }
             if (economy.BooksEnabled && economy.Civ == CivKind.Academy && economy.Age >= 1)
             {
@@ -345,6 +395,7 @@ namespace Rts.Presentation
                 Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石"), true, "", mode == Mode.Sorter);
                 Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト"), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
+                Add(rows, "build:storage-info", UiText.StorageDescription(), false, "", false, true);
             }
             Add(rows, "build:remove-belt", UiText.T("Remove", "ベルトを外す"), true, "", mode == Mode.RemoveBelt);
             Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);

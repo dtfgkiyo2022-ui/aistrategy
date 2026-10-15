@@ -85,6 +85,9 @@ namespace Rts.Simulation
         internal long[] CultObservedLastSeenTicks;
         internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
+        /// <summary>Resource amounts last seen by this faction. Allocated only while ResourceFog is enabled.</summary>
+        internal bool[] ResourceSeen;
+        internal int[] ResourceRemaining;
         internal ObjectiveMemory[] Objectives;
         internal bool[] RegionHuman;
         internal EconomyPolicy[] RegionEconomyPolicies;
@@ -166,6 +169,10 @@ namespace Rts.Simulation
         internal Facing Facing;
         internal int Input, InputSecondary, Output, Timer;
         internal bool BrickUpgraded;
+        /// <summary>CraftTree1: level of a processing building. Level one is the default.</summary>
+        internal byte Level;
+        /// <summary>CraftTree1: this building consumed one frames stock for its discounted construction.</summary>
+        internal bool FramesUsed;
         /// <summary>V3-4 (26): metal paid for the infantry in the queue, so a cancel never returns metal that was not paid.</summary>
         internal int QueuedMetal;
         /// <summary>V3-6: steel paid by heavy infantry still in a queue.</summary>
@@ -239,7 +246,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -248,13 +255,14 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
         internal int BricksConsumedWalls, BricksConsumedTowers, BricksConsumedCoreRepair, BricksConsumedCastles;
         internal int TackProduced, TackConsumed, TackTrainedHeavyCavalry;
         internal int PlanksProduced, PlanksConsumed, PlanksConsumedRams, PlanksConsumedBridges, PlanksEnhancedRams;
+        internal int CutStoneProduced, CutStoneConsumed, FramesProduced, FramesConsumed, FramesConsumedBuildings, FramesConsumedUpgrades;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int PreservesProduced, PreservesConvertedFood;
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
@@ -378,6 +386,8 @@ namespace Rts.Simulation
                     CultObservedContactIds = new uint[Soldiers.Length], CultObservedKinds = new UnitKind[Soldiers.Length],
                     CultObservedLastSeenTicks = new long[Soldiers.Length], CultObservedValidUntilTicks = new long[Soldiers.Length],
                     VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
+                    ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
+                    ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
                 foreach (uint id in d.ArmyIds)
                 {
@@ -414,9 +424,9 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-            for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0,
-                GoodsSoldCounts = goodsMarket ? new int[22] : null, GoodsSoldUnits = goodsMarket ? new int[22] : null,
-                GoodsReceivedFood = goodsMarket ? new int[22] : null, GoodsReceivedWood = goodsMarket ? new int[22] : null };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0,
+                GoodsSoldCounts = goodsMarket ? new int[24] : null, GoodsSoldUnits = goodsMarket ? new int[24] : null,
+                GoodsReceivedFood = goodsMarket ? new int[24] : null, GoodsReceivedWood = goodsMarket ? new int[24] : null };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -556,6 +566,9 @@ namespace Rts.Simulation
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
+            Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
+            Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
+            Require(!e.AiBelts || (e.Enabled && e.Industry && e.Ages && e.AiBeltWoodReserve >= 0), "Invalid AI-belt rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -577,6 +590,18 @@ namespace Rts.Simulation
                 && e.PlankRamHpPermille >= 1000 && e.PlankRamTrainPermille > 0 && e.PlankRamTrainPermille <= 1000
                 && e.PlanksPerBridgeCell > 0 && e.PlankBridgeWoodPermille > 0 && e.PlankBridgeWoodPermille <= 1000
                 && e.PlankExtraRams >= 0 && e.PlankWoodReserve >= 0), "Invalid planks rules.");
+            Require(!e.CraftTree1 || (e.Enabled && e.Industry && e.Ages
+                && e.CraftTreePlankWoodInput > 0 && e.CraftTreePlankWoodInput <= e.BufferLimit && e.CraftTreePlankTicks > 0
+                && e.CraftTreeCharcoalWoodInput > 0 && e.CraftTreeCharcoalWoodInput <= e.BufferLimit && e.CraftTreeCharcoalTicks > 0
+                && e.StonecutterSizeCells > 0 && e.StonecutterSizeCells <= 8 && e.StonecutterWoodCost >= 0
+                && e.StonecutterWork > 0 && e.StonecutterHp > 0 && e.CraftTreeStoneInput > 0
+                && e.CraftTreeStoneInput <= e.BufferLimit && e.CraftTreeStonecutterTicks > 0
+                && e.JoinerySizeCells > 0 && e.JoinerySizeCells <= 8 && e.JoineryWoodCost >= 0
+                && e.JoineryWork > 0 && e.JoineryHp > 0 && e.CraftTreeJoineryTicks > 0
+                && e.CraftTreeJoineryPlankInput > 0 && e.CraftTreeJoineryPlankInput <= e.BufferLimit
+                && e.CraftTreeJoineryCutStoneInput > 0 && e.CraftTreeJoineryCutStoneInput <= e.BufferLimit
+                && e.CraftTreeFramesPerBuilding > 0 && e.CraftTreeFrameWoodPermille > 0 && e.CraftTreeFrameWoodPermille <= 1000
+                && e.CraftTreeFrameWorkPermille > 0 && e.CraftTreeFrameWorkPermille <= 1000 && e.CraftTreeLevel2FramesCost > 0), "Invalid craft-tree rules.");
             Require(!e.Books || (e.Enabled && e.Industry && e.Ages && e.ScriptoriumSizeCells > 0 && e.ScriptoriumSizeCells <= 8
                 && e.ScriptoriumWoodCost >= 0 && e.ScriptoriumWork > 0 && e.ScriptoriumHp > 0 && e.BookTicks > 0
                 && e.BookGoldInput > 0 && e.BookWoodInput > 0 && e.BookGoldInput <= e.BufferLimit && e.BookWoodInput <= e.BufferLimit
@@ -970,6 +995,7 @@ namespace Rts.Simulation
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
                    RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
+                  ResourceFog = e.ResourceFog,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,
                   BrickKilnWork = e.BrickKilnWork, BrickKilnHp = e.BrickKilnHp, BrickTicks = e.BrickTicks,
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,
@@ -989,6 +1015,16 @@ namespace Rts.Simulation
                   PlankWoodInput = e.PlankWoodInput, PlanksPerRam = e.PlanksPerRam, PlankRamHpPermille = e.PlankRamHpPermille,
                   PlankRamTrainPermille = e.PlankRamTrainPermille, PlanksPerBridgeCell = e.PlanksPerBridgeCell,
                   PlankBridgeWoodPermille = e.PlankBridgeWoodPermille, PlankExtraRams = e.PlankExtraRams, PlankWoodReserve = e.PlankWoodReserve,
+                  CraftTree1 = e.CraftTree1, CraftTreePlankWoodInput = e.CraftTreePlankWoodInput, CraftTreePlankTicks = e.CraftTreePlankTicks,
+                  CraftTreeCharcoalWoodInput = e.CraftTreeCharcoalWoodInput, CraftTreeCharcoalTicks = e.CraftTreeCharcoalTicks,
+                  StonecutterSizeCells = e.StonecutterSizeCells, StonecutterWoodCost = e.StonecutterWoodCost,
+                  StonecutterWork = e.StonecutterWork, StonecutterHp = e.StonecutterHp, CraftTreeStoneInput = e.CraftTreeStoneInput,
+                  CraftTreeStonecutterTicks = e.CraftTreeStonecutterTicks, JoinerySizeCells = e.JoinerySizeCells,
+                  JoineryWoodCost = e.JoineryWoodCost, JoineryWork = e.JoineryWork, JoineryHp = e.JoineryHp,
+                  CraftTreeJoineryTicks = e.CraftTreeJoineryTicks, CraftTreeJoineryPlankInput = e.CraftTreeJoineryPlankInput,
+                  CraftTreeJoineryCutStoneInput = e.CraftTreeJoineryCutStoneInput, CraftTreeFramesPerBuilding = e.CraftTreeFramesPerBuilding,
+                  CraftTreeFrameWoodPermille = e.CraftTreeFrameWoodPermille, CraftTreeFrameWorkPermille = e.CraftTreeFrameWorkPermille,
+                  CraftTreeLevel2FramesCost = e.CraftTreeLevel2FramesCost,
                   Books = e.Books, ScriptoriumSizeCells = e.ScriptoriumSizeCells, ScriptoriumWoodCost = e.ScriptoriumWoodCost,
                   ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,
                   BookGoldInput = e.BookGoldInput, BookWoodInput = e.BookWoodInput, BooksPerResearch = e.BooksPerResearch,
@@ -1129,6 +1165,7 @@ namespace Rts.Simulation
                 BasePopulation = e.BasePopulation, HousePopulation = e.HousePopulation,
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
                 DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
+                DropSiteLimit = e.DropSiteLimit, DropSiteMax = e.DropSiteMax, AiBelts = e.AiBelts, AiBeltWoodReserve = e.AiBeltWoodReserve,
                   WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach,
                   MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,

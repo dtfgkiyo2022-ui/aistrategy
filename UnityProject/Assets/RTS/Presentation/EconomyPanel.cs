@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -42,6 +42,7 @@ namespace Rts.Presentation
         private readonly List<string> notes = new List<string>();
         private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
             new List<TopBarResourceVisibility.ResourceEntry>();
+        private readonly List<float> topBarIconOffsets = new List<float>();
 
         public bool IsPlacing { get { return mode != Mode.None; } }
 
@@ -78,6 +79,7 @@ namespace Rts.Presentation
 
         private void SetMode(Mode next)
         {
+            if (next != Mode.None && mode == Mode.None) GameAudio.Ui(SoundCue.Click);
             mode = next;
             dragStart = -1;
             if (layer == null) return;
@@ -89,7 +91,7 @@ namespace Rts.Presentation
         public bool TryConsumeGroundClick(Camera camera, Vector2 screenPoint)
         {
             if (mode == Mode.None || port == null) return false;
-            if (!GroundCell(camera, screenPoint, out int cell)) { Note(UiText.T("Click was outside the map.", "マップの外をクリックしました。")); return true; }
+            if (!GroundCell(camera, screenPoint, out int cell)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Click was outside the map.", "マップの外をクリックしました。")); return true; }
             switch (mode)
             {
                 case Mode.RequestLine:
@@ -97,6 +99,7 @@ namespace Rts.Presentation
                     uint region = latest != null && latest.CellRegions.Count == MapWidthCells * MapHeightCells ? latest.CellRegions[cell] : 0;
                     if (region != 0) port.SubmitEconomy(EconomyCommand.RequestLine(faction, ++sequence, requestedLine, region));
                     else port.SubmitEconomy(EconomyCommand.RequestLineAt(faction, ++sequence, requestedLine, cell));
+                    GameAudio.Ui(SoundCue.PlacementConfirmed);
                     Note(UiText.T("Processing line requested.", "ラインを依頼しました。"));
                     SetMode(Mode.None);
                     return true;
@@ -123,8 +126,9 @@ namespace Rts.Presentation
             if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
-            if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
+            if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
+            GameAudio.Ui(SoundCue.PlacementConfirmed);
             Note(Name(kind) + UiText.T(" requested at cell ", "を依頼しました：セル ") + origin + UiText.T(" (if rejected, no building is placed).", "（置けない場合は建物は置かれません）"));
             SetMode(Mode.None);
             return true;
@@ -156,7 +160,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -165,7 +169,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseHouseWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -183,6 +187,8 @@ namespace Rts.Presentation
 
         private static string Name(BuildingKind kind)
         {
+            if (kind == BuildingKind.Stonecutter) return UiText.T("Stonecutter", "石工場");
+            if (kind == BuildingKind.Joinery) return UiText.T("Joinery", "木工所");
             if (kind == BuildingKind.BrickKiln) return UiText.T("Brick kiln", "煉瓦窯");
             if (kind == BuildingKind.Saddlery) return UiText.T("Saddlery", "馬具工房");
             if (kind == BuildingKind.Sawmill) return UiText.T("Sawmill", "製材所");
@@ -209,6 +215,8 @@ namespace Rts.Presentation
 
         private static BuildingKind KindOf(Mode m)
         {
+            if (m == Mode.Stonecutter) return BuildingKind.Stonecutter;
+            if (m == Mode.Joinery) return BuildingKind.Joinery;
             if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
             if (m == Mode.Saddlery) return BuildingKind.Saddlery;
             if (m == Mode.Sawmill) return BuildingKind.Sawmill;
@@ -439,7 +447,8 @@ namespace Rts.Presentation
             bool shown = onMap && Footprint(cell, size, out origin, out center);
             bool legal = shown && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
                 view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind));
-            layer.ShowGhost(shown, center, size * CellMeters, legal);
+            bool capped = kind == BuildingKind.DropSite && economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+            layer.ShowGhost(shown, center, size * CellMeters, legal && !capped);
         }
 
         private EconomyView Economy() { var frame = view == null ? null : view.LatestFrame; return frame == null ? null : frame.Economy; }
@@ -493,10 +502,13 @@ namespace Rts.Presentation
             string age = TopBarDisplayText.Age(economy);
             TopBarResourceVisibility.Fill(economy, topBarResources);
             string stock = "";
+            topBarIconOffsets.Clear();
             for (int i = 0; i < topBarResources.Count; i++)
             {
                 var resource = topBarResources[i];
-                stock += (i == 0 ? "" : "  ") + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
+                string prefix = age + stock;
+                topBarIconOffsets.Add(GUI.skin.label.CalcSize(new GUIContent(prefix)).x);
+                stock += (i == 0 ? "" : "  ") + "   " + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
             }
             string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy));
             var line = new GUIContent(age + stock + people);
@@ -504,7 +516,17 @@ namespace Rts.Presentation
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
             var normal = GUI.skin.label;
             float wide = normal.CalcSize(line).x;
-            if (wide <= rect.width) { GUI.Label(rect, line); return; }
+            if (wide <= rect.width)
+            {
+                GUI.Label(rect, line);
+                for (int i = 0; i < topBarResources.Count; i++)
+                {
+                    var texture = GoodsIcons.Get(topBarResources[i].Kind);
+                    if (texture == null) continue;
+                    GUI.DrawTexture(new Rect(rect.x + topBarIconOffsets[i] + (i == 0 ? 0f : 14f), rect.y + 4f, 16f, 16f), texture, ScaleMode.ScaleToFit, true);
+                }
+                return;
+            }
             if (topBarSmall == null) topBarSmall = new GUIStyle(normal);
             int baseSize = normal.fontSize > 0 ? normal.fontSize : 13;
             topBarSmall.fontSize = Mathf.Max(9, Mathf.FloorToInt(baseSize * rect.width / wide));
@@ -534,7 +556,11 @@ namespace Rts.Presentation
             if (economy.Ages)
             {
                 float third = (w - 8f) / 3f;
-                ModeButton(new Rect(x, y, third, 22f), Mode.DropSite, UiText.T("Drop-off (", "資源置き場（木") + economy.DropSiteWoodCost + UiText.T("W)", "）"));
+                bool dropSiteCapped = economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
+                if (dropSiteCapped && mode == Mode.DropSite) SetMode(Mode.None);
+                GUI.enabled = !dropSiteCapped;
+                ModeButton(new Rect(x, y, third, 22f), Mode.DropSite, UiText.DropSiteLabel(economy.DropSiteCount, economy.DropSiteMax, economy.DropSiteWoodCost));
+                GUI.enabled = true;
                 ModeButton(new Rect(x + third + 4f, y, third, 22f), Mode.Tower, UiText.T("Tower (", "見張り塔（石") + economy.TowerStoneCost + UiText.T("S ", " 木") + economy.TowerWoodCost + UiText.T("W)", "）"));
                 ModeButton(new Rect(x + 2f * (third + 4f), y, third, 22f), Mode.Wall, mode == Mode.Wall ? UiText.T("Drag the wall", "壁をドラッグ")
                     : UiText.T("Wall (", "壁（石") + economy.WallStoneCost + UiText.T("S/cell)", "／マス）"));
@@ -568,10 +594,21 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x, y, w, 22f), Mode.Saddlery, UiText.T("Saddlery (", "馬具工房（木材 ") + economy.SaddleryWoodCost + UiText.T(" wood)", "）"));
                 y += 26f;
             }
-            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1)
+            if (economy.PlanksEnabled && economy.Civ == CivKind.Bridge && economy.Age >= 1 && !economy.CraftTree1Enabled)
             {
                 ModeButton(new Rect(x, y, w, 22f), Mode.Sawmill, UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"));
                 y += 26f;
+            }
+            if (economy.CraftTree1Enabled && economy.Age >= 1)
+            {
+                ModeButton(new Rect(x, y, half, 22f), Mode.Sawmill, UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"));
+                ModeButton(new Rect(right, y, half, 22f), Mode.Stonecutter, UiText.T("Stonecutter (", "石工場（木材 ") + economy.StonecutterWoodCost + UiText.T(" wood)", "）"));
+                y += 26f;
+                if (economy.Age >= 2)
+                {
+                    ModeButton(new Rect(x, y, w, 22f), Mode.Joinery, UiText.T("Joinery (", "木工所（木材 ") + economy.JoineryWoodCost + UiText.T(" wood)", "）"));
+                    y += 26f;
+                }
             }
             if (economy.BooksEnabled && economy.Civ == CivKind.Academy && economy.Age >= 1)
             {
@@ -638,6 +675,8 @@ namespace Rts.Presentation
                 y += 26f;
                 ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
+                y += 26f;
+                GUI.Label(new Rect(x, y, w, 22f), UiText.StorageDescription());
                 y += 26f;
             }
             ModeButton(new Rect(right, y, half - 70f, 22f), Mode.RemoveBelt, UiText.T("Remove", "ベルトを外す"));
@@ -776,6 +815,7 @@ namespace Rts.Presentation
                     {
                         foreach (var goods in GoodsKindsForDisplay)
                         {
+                            if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !economy.CraftTree1Enabled) continue;
                             if (GoodsStock(economy, goods) < economy.GoodsTradeLot) continue;
                             int price = GoodsPrice(economy, goods);
                             GUI.enabled = market.Value.Complete;
@@ -903,7 +943,8 @@ namespace Rts.Presentation
         private static readonly ResourceKind[] GoodsKindsForDisplay =
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
-            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools
+            ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
+            ResourceKind.CutStone, ResourceKind.Frames
         };
 
         public static string GoodsTradeLabel(ResourceKind goods, ResourceKind take, int lot)
@@ -915,7 +956,8 @@ namespace Rts.Presentation
                 : kind == ResourceKind.Tack ? economy.Tack : kind == ResourceKind.Planks ? economy.Planks
                 : kind == ResourceKind.Books ? economy.Books : kind == ResourceKind.Incense ? economy.Incense
                 : kind == ResourceKind.Charms ? economy.Charms : kind == ResourceKind.RepairKits ? economy.RepairKits
-                : kind == ResourceKind.Tools ? economy.Tools : 0;
+                : kind == ResourceKind.Tools ? economy.Tools : kind == ResourceKind.CutStone ? economy.CutStone
+                : kind == ResourceKind.Frames ? economy.Frames : 0;
 
         private static int GoodsPrice(EconomyView economy, ResourceKind kind)
         {
@@ -1100,7 +1142,7 @@ namespace Rts.Presentation
             return count;
         }
 
-        private void Send(EconomyCommand command, string note) { port.SubmitEconomy(command); Note(note); }
+        private void Send(EconomyCommand command, string note) { port.SubmitEconomy(command); GameAudio.Ui(SoundCue.CommandMove); Note(note); }
 
         private void Note(string line) { notes.Add(line); if (notes.Count > 8) notes.RemoveAt(0); }
 

@@ -26,7 +26,9 @@ namespace Rts.Presentation
             Incense,
             Charms,
             RepairKits,
-            Tools
+            Tools,
+            CutStone,
+            Frames
         }
 
         public readonly struct ResourceEntry
@@ -50,7 +52,29 @@ namespace Rts.Presentation
 
         public static bool ShowCharcoal(EconomyView economy)
         {
-            return economy != null && (economy.Civ == CivKind.Metallurgy || economy.Charcoal > 0);
+            return economy != null && (economy.Civ == CivKind.Metallurgy || economy.Charcoal > 0 || CommonCraftFrom(economy, 1));
+        }
+
+        /// <summary>The common craft tree (33): every civilisation makes planks, charcoal and cut stone from its first
+        /// age, and frames from its second. Before that they are only noise in the bar (10-16: it ran over three rows).</summary>
+        private static bool CommonCraftFrom(EconomyView economy, int age)
+        {
+            return economy.CraftTree1Enabled && economy.Age >= age;
+        }
+
+        /// <summary>Ore and metal belong to the civilisations that dig (metallurgy, mountain); others see them once they
+        /// hold some (trade, caravans).</summary>
+        public static bool ShowOreAndMetal(EconomyView economy)
+        {
+            return economy != null && economy.Industry
+                && (economy.Civ == CivKind.Metallurgy || economy.Civ == CivKind.Mountain || economy.Ore > 0 || economy.Metal > 0);
+        }
+
+        /// <summary>Gems: the mountain and caravan civilisations make them; others see them once they hold some.</summary>
+        public static bool ShowGems(EconomyView economy)
+        {
+            return economy != null && economy.Ages
+                && (economy.Civ == CivKind.Mountain || economy.Civ == CivKind.Caravan || economy.Gems > 0);
         }
 
         public static bool ShowSteel(EconomyView economy)
@@ -80,7 +104,8 @@ namespace Rts.Presentation
 
         public static bool ShowPlanks(EconomyView economy)
         {
-            return economy != null && economy.PlanksEnabled && (economy.Civ == CivKind.Bridge || economy.Planks > 0);
+            return economy != null && ((economy.PlanksEnabled && (economy.Civ == CivKind.Bridge || economy.Planks > 0))
+                || CommonCraftFrom(economy, 1) || economy.Planks > 0);
         }
 
         public static bool ShowBooks(EconomyView economy)
@@ -108,6 +133,16 @@ namespace Rts.Presentation
             return economy != null && economy.ToolsEnabled && (economy.Civ == CivKind.Metropolis || economy.Tools > 0);
         }
 
+        public static bool ShowCutStone(EconomyView economy)
+        {
+            return economy != null && (CommonCraftFrom(economy, 1) || economy.CutStone > 0);
+        }
+
+        public static bool ShowFrames(EconomyView economy)
+        {
+            return economy != null && (CommonCraftFrom(economy, 2) || economy.Frames > 0);
+        }
+
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
         /// visibility rules and number source; the caller owns and reuses the list.
@@ -119,16 +154,15 @@ namespace Rts.Presentation
 
             target.Add(new ResourceEntry(ResourceKind.Food, UiText.T("Food", "食料"), economy.Food));
             target.Add(new ResourceEntry(ResourceKind.Wood, UiText.T("Wood", "木材"), economy.Wood));
-            if (economy.Industry)
+            if (ShowOreAndMetal(economy))
             {
                 target.Add(new ResourceEntry(ResourceKind.Ore, UiText.T("Ore", "鉱石"), economy.Ore));
                 target.Add(new ResourceEntry(ResourceKind.Metal, UiText.T("Metal", "金属"), economy.Metal));
             }
             if (economy.Ages)
-            {
                 target.Add(new ResourceEntry(ResourceKind.Stone, UiText.T("Stone", "石"), economy.Stone));
+            if (ShowGems(economy))
                 target.Add(new ResourceEntry(ResourceKind.Gems, UiText.T("Gems", "宝石"), economy.Gems));
-            }
             if (ShowGold(economy))
                 target.Add(new ResourceEntry(ResourceKind.Gold, UiText.T("Gold", "金"), economy.Gold));
             if (ShowCharcoal(economy))
@@ -143,6 +177,10 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Tack, UiText.T("Tack", "馬具"), economy.Tack));
             if (ShowPlanks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Planks, UiText.T("Planks", "板"), economy.Planks));
+            if (ShowCutStone(economy))
+                target.Add(new ResourceEntry(ResourceKind.CutStone, UiText.T("Cut stone", "切石"), economy.CutStone));
+            if (ShowFrames(economy))
+                target.Add(new ResourceEntry(ResourceKind.Frames, UiText.T("Frames", "建材"), economy.Frames));
             if (ShowBooks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Books, UiText.T("Books", "書物"), economy.Books));
             if (ShowIncense(economy))

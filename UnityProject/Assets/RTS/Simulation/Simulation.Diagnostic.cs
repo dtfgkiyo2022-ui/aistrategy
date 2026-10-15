@@ -64,6 +64,13 @@ namespace Rts.Simulation
                 w.Value("Factions.Count",(uint)world.Factions.Length);
                 foreach(var f in world.Factions) { string n="Factions["+f.Id.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(n+"Id",f.Id); w.Value(n+"CoreId",f.CoreId); w.Value(n+"AliveCount",f.AliveCount); w.Ids(n+"ArmyIds",f.ArmyIds);
                     w.Bools(n+"VisibleCells", f.VisibleCells); w.Bools(n+"ExploredCells", f.ExploredCells);
+                    if (ResourceFogOn)
+                    {
+                        w.Bools(n+"ResourceSeen", f.ResourceSeen);
+                        w.Value(n+"ResourceRemaining.Count", (uint)f.ResourceRemaining.Length);
+                        for (int i = 0; i < f.ResourceRemaining.Length; i++)
+                            w.Value(n+"ResourceRemaining[" + i.ToString(CultureInfo.InvariantCulture) + "]", f.ResourceRemaining[i]);
+                    }
                     for(int i=0;i<f.Objectives.Length;i++) { var m=f.Objectives[i]; string o=n+"Objectives["+i.ToString(CultureInfo.InvariantCulture)+"]."; w.Value(o+"OwnerKnown",m.OwnerKnown); w.Value(o+"Owner",m.OwnerFactionId); w.Value(o+"HpKnown",m.HpKnown); w.Value(o+"Hp",m.Hp); w.Value(o+"LastSeenTick",m.LastSeenTick); }
                 }
                 w.Value("Inputs.Cursor",world.InputCursor);
@@ -149,6 +156,12 @@ namespace Rts.Simulation
                     w.Value(n + "Planks", e.Planks); w.Value(n + "PlanksProduced", e.PlanksProduced);
                     w.Value(n + "PlanksConsumed", e.PlanksConsumed); w.Value(n + "PlanksConsumedRams", e.PlanksConsumedRams);
                     w.Value(n + "PlanksConsumedBridges", e.PlanksConsumedBridges); w.Value(n + "PlanksEnhancedRams", e.PlanksEnhancedRams);
+                }
+                if (CraftTree1On)
+                {
+                    w.Value(n + "CutStone", e.CutStone); w.Value(n + "CutStoneProduced", e.CutStoneProduced); w.Value(n + "CutStoneConsumed", e.CutStoneConsumed);
+                    w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
+                    w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
                 }
                 if (BooksOn)
                 {
@@ -293,7 +306,7 @@ namespace Rts.Simulation
                         for (int j = 0; j < bridgeCells.Length; j++)
                             w.Value(n + "BridgeCells[" + j.ToString(CultureInfo.InvariantCulture) + "]", bridgeCells[j]);
                     }
-                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
+                    if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || world.Config.Economy.Forestry && world.Economies[b.FactionId - 1].Age >= 2)
                     {
                         w.Value(n + "InputSecondary", b.InputSecondary); w.Value(n + "QueuedSteel", b.QueuedSteel);
                         if (BricksOn) w.Value(n + "BrickUpgraded", b.BrickUpgraded);
@@ -301,6 +314,11 @@ namespace Rts.Simulation
                     }
                     if (world.Config.Economy.Mountain && b.Kind == BuildingKind.MineShaft)
                         w.Value(n + "MountainOreNext", b.MountainOreNext);
+                    if (CraftTree1On)
+                    {
+                        w.Value(n + "Level", b.Level);
+                        w.Value(n + "FramesUsed", b.FramesUsed);
+                    }
                     if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                     {
                         w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
@@ -372,7 +390,7 @@ namespace Rts.Simulation
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
                 }
             }
-            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -387,6 +405,7 @@ namespace Rts.Simulation
                     if (BricksOn) { w.Value(n + "QuarryId", line.QuarryId); w.Value(n + "BrickKilnId", line.BrickKilnId); }
                     if (TackOn) w.Value(n + "SaddleryId", line.SaddleryId);
                     if (PlanksOn) { w.Value(n + "LumberCampId", line.LumberCampId); w.Value(n + "SawmillId", line.SawmillId); }
+                    if (CraftTree1On) { w.Value(n + "StonecutterId", line.StonecutterId); w.Value(n + "JoineryId", line.JoineryId); }
                     if (BooksOn) w.Value(n + "ScriptoriumId", line.ScriptoriumId);
                     if (PreservesOn) w.Value(n + "DryingRackId", line.DryingRackId);
                     if (JewelsOn) w.Value(n + "LapidaryId", line.LapidaryId);
