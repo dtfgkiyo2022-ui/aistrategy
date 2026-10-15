@@ -34,8 +34,8 @@ namespace Rts.Tests.EditMode
         [Test]
         public void BuildingCompletionIsReported()
         {
-            var beforeBuilding = new BuildingView(4, 1, BuildingKind.House, default(SimPoint), 2, 1, 10, false, 5, 5, 0);
-            var afterBuilding = new BuildingView(4, 1, BuildingKind.House, default(SimPoint), 2, 10, 10, true, 10, 10, 0);
+            var beforeBuilding = new BuildingView(4, 1, BuildingKind.House, default(SimPoint), 2, 1, 10, false, 5, 5, 0, 0);
+            var afterBuilding = new BuildingView(4, 1, BuildingKind.House, default(SimPoint), 2, 10, 10, true, 10, 10, 0, 0);
             var before = EconomyFrame(beforeBuilding);
             var after = EconomyFrame(afterBuilding);
             var events = new List<FrameSoundEvent>();
