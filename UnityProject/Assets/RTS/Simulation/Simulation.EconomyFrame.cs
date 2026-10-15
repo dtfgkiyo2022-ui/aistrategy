@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Rts.Contracts;
 
@@ -83,6 +84,8 @@ namespace Rts.Simulation
             int age2Wood = AgeClockOn && economy.Age == 1 ? advancePrice.wood : rules.Age2WoodCost;
             int age3Food = AgeClockOn && economy.Age == 2 ? advancePrice.food : rules.Age3FoodCost;
             int age3Wood = AgeClockOn && economy.Age == 2 ? advancePrice.wood : rules.Age3WoodCost;
+            var passableCells = PlacementPassableView();
+            var riverCells = PlacementRiverView();
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
                 !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), InfantryFoodFor(faction),
                 InfantryWoodFor(faction), villagers, buildings, resources,
@@ -251,10 +254,42 @@ namespace Rts.Simulation
                 toolMaxShops: ToolsAllowed(faction) ? rules.ToolMaxShops : 0,
                 toolWoodReserve: ToolsAllowed(faction) ? rules.ToolWoodReserve : 0,
                 toolVillagerFoodPermille: ToolsAllowed(faction) ? rules.ToolVillagerFoodPermille : 0,
-                toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0,
-                goodsMarketEnabled: GoodsMarketOn,
-                goodsTradeLot: GoodsMarketOn ? rules.GoodsTradeLot : 0,
-                goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null);
+                 toolVillagerTicksPermille: ToolsAllowed(faction) ? rules.ToolVillagerTicksPermille : 0,
+                 goodsMarketEnabled: GoodsMarketOn,
+                 goodsTradeLot: GoodsMarketOn ? rules.GoodsTradeLot : 0,
+                 goodsPrices: GoodsMarketOn ? GoodsPriceViews(faction) : null,
+                 adjacentBuildings: rules.AdjacentBuildings,
+                 buildingClearanceCells: rules.AdjacentBuildings ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells,
+                 coreClearanceCells: CoreClearanceCells, nodeClearanceCells: NodeClearanceCells,
+                 mapWidthCells: world.Config.Map.WidthCells, mapHeightCells: world.Config.Map.HeightCells,
+                 cellSizeMeters: world.Config.Map.CellSizeMeters, passableCells: passableCells, riverCells: riverCells);
+        }
+
+        // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)
+        // every tick for each side, so the views are kept and rebuilt only when a building opens or closes a cell.
+        // SharedPrefixList with no replacements is a read-only view that ContractList keeps without copying.
+        private SharedPrefixList<bool> placementPassableView, placementRiverView;
+        private int placementPassableVersion = -1;
+
+        private IReadOnlyList<bool> PlacementPassableView()
+        {
+            if (placementPassableView != null && placementPassableVersion == world.Map.PassableVersion) return placementPassableView;
+            int cells = checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells);
+            var passable = new bool[cells];
+            for (int cell = 0; cell < cells; cell++) passable[cell] = world.Map.IsPassable(cell);
+            placementPassableView = new SharedPrefixList<bool>(passable, cells, Array.Empty<int>(), Array.Empty<bool>());
+            placementPassableVersion = world.Map.PassableVersion;
+            return placementPassableView;
+        }
+
+        private IReadOnlyList<bool> PlacementRiverView()
+        {
+            if (placementRiverView != null) return placementRiverView; // the terrain never changes
+            int cells = checked(world.Config.Map.WidthCells * world.Config.Map.HeightCells);
+            var river = new bool[cells];
+            for (int cell = 0; cell < cells; cell++) river[cell] = IsRiverCell(cell);
+            placementRiverView = new SharedPrefixList<bool>(river, cells, Array.Empty<int>(), Array.Empty<bool>());
+            return placementRiverView;
         }
 
         private CavalryMissionView CavalryMissionFor(uint faction)

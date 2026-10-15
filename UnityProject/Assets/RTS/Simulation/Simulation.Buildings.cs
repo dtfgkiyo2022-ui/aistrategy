@@ -507,7 +507,7 @@ namespace Rts.Simulation
             return -1;
         }
 
-        private bool SiteIsClear(int origin, int coreCell, int size)
+        private bool SiteIsClear(int origin, int coreCell, int size, int buildingClearanceCells = BuildingClearanceCells)
         {
             foreach (int cell in Footprint(origin, size))
             {
@@ -519,11 +519,39 @@ namespace Rts.Simulation
                 {
                     if (!world.Buildings[i].Alive) continue;
                     foreach (int other in Footprint(world.Buildings[i]))
-                        if (Chebyshev(cell, other) < BuildingClearanceCells) return false;
+                        if (Chebyshev(cell, other) < buildingClearanceCells) return false;
                 }
             }
             return true;
         }
+
+        private bool ManualPlacementPortsAreClear(BuildingKind kind, int origin, int size, Facing facing)
+        {
+            var candidate = Footprint(origin, size);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!building.Alive || !HasIndustryOutput(building.Kind)) continue;
+                if (Array.IndexOf(candidate, OutputCell(building)) >= 0) return false;
+            }
+            if (!HasIndustryOutput(kind)) return true;
+            int candidateOutput = OutputCell(origin, size, facing);
+            if (candidateOutput < 0 || !world.Map.IsPassable(candidateOutput) || IsRiverCell(candidateOutput)
+                || world.Belts.Length != 0 && world.Belts[candidateOutput].FactionId != 0
+                || IsNodeCell(candidateOutput) || InsideAnyCore(candidateOutput)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && Array.IndexOf(Footprint(world.Buildings[i]), candidateOutput) >= 0) return false;
+            return true;
+        }
+
+        private static bool HasIndustryOutput(BuildingKind kind)
+            => kind == BuildingKind.Mine || kind == BuildingKind.Smelter || kind == BuildingKind.LumberCamp
+                || kind == BuildingKind.Quarry || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.Steelworks
+                || kind == BuildingKind.Fletcher || kind == BuildingKind.Mill || kind == BuildingKind.BrickKiln
+                || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium
+                || kind == BuildingKind.DryingRack || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver
+                || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard
+                || kind == BuildingKind.ToolShop;
 
         private bool TownSiteIsClear(uint faction, int origin, int size)
         {

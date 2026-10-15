@@ -487,6 +487,8 @@ namespace Rts.Simulation
             Require(e.CivVarietyWindowPermille >= 0 && e.CivVarietyWindowPermille <= 1000,
                 "Invalid civ variety window.");
             Require(!e.CivVariety || (e.Enabled && e.Ages), "Civ variety requires ages and an economy.");
+            Require(!e.CivVarietyCaps || (e.Enabled && e.Ages && e.CivVarietyCapMetallurgy > 0 && e.CivVarietyCapAgrarian > 0),
+                "Civ variety caps require ages, an economy, and positive caps.");
             Require(e.LineRebuildDelayTicks >= 0 && e.RaidLinePriority >= 0, "Invalid line-raid rules.");
             if (e.Enabled)
                 Require(e.StartFood >= 0 && e.StartWood >= 0 && e.PopulationCap > 0 && e.VillagerHp > 0
@@ -552,6 +554,8 @@ namespace Rts.Simulation
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+            Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
+                "Invalid adjacent-building rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -619,6 +623,8 @@ namespace Rts.Simulation
                 && e.GoodsValueTack > 0 && e.GoodsValuePlanks > 0 && e.GoodsValueBooks > 0 && e.GoodsValueIncense > 0
                 && e.GoodsValueCharms > 0 && e.GoodsValueRepairKits > 0 && e.GoodsValueTools > 0), "Invalid goods market rules.");
             Require(!e.CraftTiming || (e.Enabled && e.Industry && e.Ages && e.CraftTimingFoodPerWood > 0), "Invalid craft-timing rules.");
+            Require(!e.CraftBalance || (e.Enabled && e.Industry && e.Ages
+                && e.CraftBalanceTollgateTiming >= 0 && e.CraftBalanceTollgateTiming <= 1), "Invalid craft-balance rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
@@ -961,8 +967,9 @@ namespace Rts.Simulation
                   MillTicks = e.MillTicks, MillFoodInput = e.MillFoodInput, RationsPerSoldier = e.RationsPerSoldier,
                   RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
-                  RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
-                  RationsFoodReserve = e.RationsFoodReserve,
+                   RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
+                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
+                   AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,
                   BrickKilnWork = e.BrickKilnWork, BrickKilnHp = e.BrickKilnHp, BrickTicks = e.BrickTicks,
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,
@@ -1027,10 +1034,13 @@ namespace Rts.Simulation
                    GoodsValueBooks = e.GoodsValueBooks, GoodsValueIncense = e.GoodsValueIncense, GoodsValueCharms = e.GoodsValueCharms,
                    GoodsValueRepairKits = e.GoodsValueRepairKits, GoodsValueTools = e.GoodsValueTools,
                    CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
+                   CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
                 CivVariety = e.CivVariety, CivVarietyWindowPermille = e.CivVarietyWindowPermille,
+                CivVarietyCaps = e.CivVarietyCaps, CivVarietyCapMetallurgy = e.CivVarietyCapMetallurgy,
+                CivVarietyCapAgrarian = e.CivVarietyCapAgrarian,
                 EarlyAdvanceFoodCost = e.EarlyAdvanceFoodCost, EarlyAdvanceWoodCost = e.EarlyAdvanceWoodCost, EarlyAdvanceTicks = e.EarlyAdvanceTicks,
                 EarlyAge2FoodCost = e.EarlyAge2FoodCost, EarlyAge2WoodCost = e.EarlyAge2WoodCost, EarlyAge2Ticks = e.EarlyAge2Ticks,
                 EarlyAdvanceVillagers = e.EarlyAdvanceVillagers, EarlyAge2Villagers = e.EarlyAge2Villagers,

@@ -166,14 +166,20 @@ namespace Rts.Simulation
                     uint sanctuaryOutpost = 0;
                     if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
                     if (kind == BuildingKind.Shrine && !TrySanctuaryPlacement(faction, c.Cell, out sanctuaryOutpost)) return;
+                     bool genericPlacement = kind != BuildingKind.Town && kind != BuildingKind.Mine && kind != BuildingKind.LumberCamp
+                         && kind != BuildingKind.Quarry && kind != BuildingKind.MineShaft && kind != BuildingKind.Harbor
+                         && kind != BuildingKind.Caravanserai && kind != BuildingKind.Shrine;
+                     int manualBuildingClearance = genericPlacement && rules.AdjacentBuildings
+                         ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells;
                      bool clear = kind == BuildingKind.Town ? TownSiteIsClear(faction, c.Cell, size)
                          : kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
                          : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
-                        : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size);
-                    if (!clear || !KeepsMapConnected(faction, c.Cell, size)) return;
+                         : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size, manualBuildingClearance);
+                     if (!clear || rules.AdjacentBuildings && genericPlacement && !ManualPlacementPortsAreClear(kind, c.Cell, size, c.Facing)
+                         || !KeepsMapConnected(faction, c.Cell, size)) return;
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
                     if (kind == BuildingKind.Caravanserai)
                     {

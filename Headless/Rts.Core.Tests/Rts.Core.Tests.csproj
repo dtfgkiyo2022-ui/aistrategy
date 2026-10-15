@@ -99,11 +99,13 @@
     <Compile Include="ToolsTests.cs" />
   <Compile Include="GoodsMarketTests.cs" />
   <Compile Include="CraftTimingTests.cs" />
+  <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
     <Compile Include="CivReserveTests.cs" />
     <Compile Include="CivVarietyTests.cs" />
+    <Compile Include="CivVarietyCapsTests.cs" />
     <Compile Include="LoadMetricTests.cs" />
     <Compile Include="LargeMapTests.cs" />
     <Compile Include="CoreDefenceTests.cs" />
@@ -129,6 +131,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/GoodsMarketUiText.cs" Link="Presentation/GoodsMarketUiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/AdjacentBuildingPlacementRules.cs" Link="Presentation/AdjacentBuildingPlacementRules.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
@@ -182,5 +185,7 @@
     <Compile Include="StaffChatTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/IStaffControl.cs" Link="Presentation/IStaffControl.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AdjacentBuildingsEditModeTests.cs" Link="Tests/AdjacentBuildingsEditModeTests.cs" />
+    <Compile Include="AdjacentBuildingsTests.cs" />
   </ItemGroup>
 </Project>

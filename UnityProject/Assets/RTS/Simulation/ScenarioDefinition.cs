@@ -183,6 +183,9 @@ namespace Rts.Simulation
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
         public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
+        /// <summary>Allows human building commands to touch an existing building without changing automatic site searches.</summary>
+        public bool AdjacentBuildings;
+        public int AdjacentBuildingClearanceCells = 1;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;
@@ -256,6 +259,9 @@ namespace Rts.Simulation
         /// <summary>Craft timing: automatic economies gather more wood until their civilisation's first processing building is complete.</summary>
         public bool CraftTiming;
         public int CraftTimingFoodPerWood = 1;
+        /// <summary>Craft balance: keeps the tollgate outside CraftTiming when set to 0.</summary>
+        public bool CraftBalance;
+        public int CraftBalanceTollgateTiming;
         // Measured 2026-10-13: the mountain piles up stone and ore but is short of food, so the hire costs no food.
         public int JewelMercenaryGems = 10, JewelMercenaryFood = 0, JewelMercenaryInfantryRatio = 2;
         /// <summary>V3-7 provisional lumber camp values. The camp gathers wood from one covered wood point.</summary>
@@ -299,6 +305,9 @@ namespace Rts.Simulation
         public bool CivVariety;
         /// <summary>CivVariety: near-best normalised scores remain eligible for the seed-based choice.</summary>
         public int CivVarietyWindowPermille = 250;
+        /// <summary>CivVarietyCaps: use measured upper-quartile caps for agrarian and metallurgy.</summary>
+        public bool CivVarietyCaps;
+        public int CivVarietyCapMetallurgy = 5, CivVarietyCapAgrarian = 3;
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;

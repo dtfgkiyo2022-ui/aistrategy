@@ -40,11 +40,13 @@ namespace Rts.Simulation
             e.Tools = allCivilisations;
             e.GoodsMarket = allCivilisations;
             e.CraftTiming = allCivilisations;
+            e.CraftBalance = allCivilisations;
             e.BeltComponents = true;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
             e.Regions = true;
             e.Towns = true;
+            e.AdjacentBuildings = true;
             if (!allCivilisations) return;
             e.Forestry = true;
             e.Masonry = true;
@@ -61,6 +63,7 @@ namespace Rts.Simulation
             e.Metropolis = true;
             e.Sanctuary = true;
             e.CivVariety = true;
+            e.CivVarietyCaps = true;
             // The first 250‰ window produced one 31.25% mountain result in seeds 1..40. The measured 200‰ window
             // keeps thirteen civilisations in play while keeping every selected count below 30%.
             e.CivVarietyWindowPermille = 200;
