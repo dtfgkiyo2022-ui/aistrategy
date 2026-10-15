@@ -48,7 +48,7 @@ namespace Rts.Presentation
         private static GameAudio EnsureInstance()
         {
             if (instance != null) return instance;
-            if (!Application.isPlaying) return null;
+            if (!UnityEngine.Application.isPlaying) return null;
             var go = new GameObject("GameAudio"); instance = go.AddComponent<GameAudio>(); DontDestroyOnLoad(go); return instance;
         }
         public static void Ui(SoundCue cue) { var audio = EnsureInstance(); if (audio != null) audio.Play(cue, 1f, true); }

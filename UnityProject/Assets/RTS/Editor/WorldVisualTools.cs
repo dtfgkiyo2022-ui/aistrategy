@@ -122,7 +122,7 @@ namespace Rts.Editor
 
         private static string ToProjectPath(string assetPath)
         {
-            string project = Directory.GetParent(Application.dataPath).FullName;
+            string project = Directory.GetParent(UnityEngine.Application.dataPath).FullName;
             return Path.Combine(project, assetPath.Replace('/', Path.DirectorySeparatorChar));
         }
 
