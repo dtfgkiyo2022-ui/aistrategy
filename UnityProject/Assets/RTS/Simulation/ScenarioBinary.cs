@@ -144,8 +144,10 @@ private const int CraftTree2ExtensionId = 42;
 private const int CraftTree2ExtensionVersion = 1;
 private const int CraftTree2ExtensionDataLength = 23 * sizeof(int);
 private const int CraftTree3ExtensionId = 43;
-private const int CraftTree3ExtensionVersion = 1;
-private const int CraftTree3ExtensionDataLength = 18 * sizeof(int);
+private const int CraftTree3ExtensionV1 = 1;
+private const int CraftTree3ExtensionVersion = 2;
+private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
+private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -728,7 +730,9 @@ private const int CraftTree3ExtensionDataLength = 18 * sizeof(int);
                     && dataLength == BricksExtensionV1DataLength;
                 bool oldTack = id == TackExtensionId && featureVersion == TackExtensionV1
                     && dataLength == TackExtensionV1DataLength;
-                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack;
+                bool oldCraftTree3 = id == CraftTree3ExtensionId && featureVersion == CraftTree3ExtensionV1
+                    && dataLength == CraftTree3ExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -1252,6 +1256,7 @@ private const int CraftTree3ExtensionDataLength = 18 * sizeof(int);
                 writer.Write(e.SiegePartsHpPermille); writer.Write(e.SiegePartsDamagePermille); writer.Write(e.SiegePartsPerCastle); writer.Write(e.SiegePartsCastleStonePermille);
                 writer.Write(e.MechanismBuildingTimePermille); writer.Write(e.MechanismBuildingMaterialPermille);
                 writer.Write(e.MechanismResearchCostPermille); writer.Write(e.MechanismResearchTimePermille);
+                writer.Write(e.SiegePartsStockLimit);
                 writer.Write(e.GoodsValueSiegeParts); writer.Write(e.GoodsValueMechanism);
                 return new ScenarioExtensionData { Id = CraftTree3ExtensionId, Version = CraftTree3ExtensionVersion, Data = stream.ToArray() };
             }
@@ -1270,6 +1275,7 @@ private const int CraftTree3ExtensionDataLength = 18 * sizeof(int);
                 e.SiegePartsHpPermille = reader.ReadInt32(); e.SiegePartsDamagePermille = reader.ReadInt32(); e.SiegePartsPerCastle = reader.ReadInt32(); e.SiegePartsCastleStonePermille = reader.ReadInt32();
                 e.MechanismBuildingTimePermille = reader.ReadInt32(); e.MechanismBuildingMaterialPermille = reader.ReadInt32();
                 e.MechanismResearchCostPermille = reader.ReadInt32(); e.MechanismResearchTimePermille = reader.ReadInt32();
+                if (extension.Version >= CraftTree3ExtensionVersion) e.SiegePartsStockLimit = reader.ReadInt32();
                 e.GoodsValueSiegeParts = reader.ReadInt32(); e.GoodsValueMechanism = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree3 extension data.");
             }

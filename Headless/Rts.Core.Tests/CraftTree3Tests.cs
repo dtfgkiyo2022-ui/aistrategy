@@ -27,12 +27,14 @@ namespace Rts.Core.Tests
         {
             var source = Scenario(true);
             source.Economy.SiegePartsTicks = 121; source.Economy.MechanismResearchTimePermille = 499;
+            source.Economy.SiegePartsStockLimit = 7;
             var bytes = ScenarioBinary.Encode(source);
             var decoded = ScenarioBinary.Decode(bytes);
-            Assert.That(decoded.Extensions.Single(x => x.Id == 43).Version, Is.EqualTo(1));
+            Assert.That(decoded.Extensions.Single(x => x.Id == 43).Version, Is.EqualTo(2));
             Assert.That(decoded.Economy.CraftTree3, Is.True);
             Assert.That(decoded.Economy.SiegePartsTicks, Is.EqualTo(121));
             Assert.That(decoded.Economy.MechanismResearchTimePermille, Is.EqualTo(499));
+            Assert.That(decoded.Economy.SiegePartsStockLimit, Is.EqualTo(7));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
             var off = Scenario(false);
@@ -138,6 +140,49 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AutomaticSiegePartsRaiseRamLimitAndAreConsumedWhenTraining()
+        {
+            var simulation = new Battle(Scenario(true));
+            InstallBuilding(simulation, BuildingKind.SiegeWorkshop, 1, 1);
+            SetEconomy(simulation, 0, "Age", (byte)3);
+            SetEconomy(simulation, 0, "Food", 10000); SetEconomy(simulation, 0, "Wood", 10000);
+            SetEconomy(simulation, 0, "SiegeParts", 1);
+            var limit = typeof(Battle).GetMethod("AutoRamLimitFor", PrivateInstance);
+            Assert.That(limit.Invoke(simulation, new object[] { 1u }), Is.EqualTo(3));
+            var decide = typeof(Battle).GetMethod("DecideSiege", PrivateInstance);
+            decide.Invoke(simulation, new object[] { 1u });
+            Assert.That(GetEconomy(simulation, 0, "SiegeParts"), Is.EqualTo(0));
+            Assert.That(GetEconomy(simulation, 0, "SiegePartsConsumed"), Is.EqualTo(1));
+            Assert.That(GetBuilding(simulation, 0, "Queued"), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AutomaticThirdAgeRecipeMakesScholarlyThenMechanismForOpenResearch()
+        {
+            var simulation = new Battle(Scenario(true));
+            InstallBuildings(simulation, (BuildingKind.Assembler, (byte)1, 1u), (BuildingKind.Blacksmith, (byte)1, 2u));
+            SetEconomy(simulation, 0, "Age", (byte)3); SetEconomy(simulation, 0, "Civ", CivKind.Agrarian);
+            SetEconomy(simulation, 0, "Food", 10000); SetEconomy(simulation, 0, "Wood", 10000);
+            var preferred = typeof(Battle).GetMethod("PreferredAssemblerRecipe", PrivateInstance);
+            Assert.That(preferred.Invoke(simulation, new object[] { 1u }), Is.EqualTo(RecipeKind.Scholarly));
+            SetEconomy(simulation, 0, "Scholarly", 1);
+            Assert.That(preferred.Invoke(simulation, new object[] { 1u }), Is.EqualTo(RecipeKind.Mechanism));
+        }
+
+        [Test]
+        public void AutomaticThirdAgeUpgradeUsesTheLowestBuildingId()
+        {
+            var simulation = new Battle(Scenario(true));
+            InstallBuildings(simulation, (BuildingKind.Assembler, (byte)2, 1u), (BuildingKind.Stonecutter, (byte)2, 2u));
+            SetEconomy(simulation, 0, "Age", (byte)3); SetEconomy(simulation, 0, "Mechanism", 1);
+            var decide = typeof(Battle).GetMethod("DecideCraftTree3", PrivateInstance);
+            decide.Invoke(simulation, new object[] { 1u });
+            Assert.That(GetBuilding(simulation, 0, "Level"), Is.EqualTo(3));
+            Assert.That(GetBuilding(simulation, 1, "Level"), Is.EqualTo(2));
+            Assert.That(GetEconomy(simulation, 0, "MechanismConsumed"), Is.EqualTo(1));
+        }
+
+        [Test]
         public void MechanismResearchDiscountIsThirdAgeOnlyAndPrecedesScholarly()
         {
             var scenario = Scenario(true); var simulation = new Battle(scenario);
@@ -196,14 +241,23 @@ namespace Rts.Core.Tests
 
         private static void InstallBuilding(Battle simulation, BuildingKind kind, byte level, uint id)
         {
+            InstallBuildings(simulation, (kind, level, id));
+        }
+
+        private static void InstallBuildings(Battle simulation, params (BuildingKind kind, byte level, uint id)[] definitions)
+        {
             var world = typeof(Battle).GetField("world", PrivateInstance).GetValue(simulation);
             var buildingType = typeof(Battle).Assembly.GetType("Rts.Simulation.BuildingState");
-            var buildings = Array.CreateInstance(buildingType, 4);
-            var building = Activator.CreateInstance(buildingType);
-            Set(building, "Id", id); Set(building, "FactionId", 1u); Set(building, "Kind", kind);
-            Set(building, "Alive", true); Set(building, "Complete", true); Set(building, "Level", level);
-            buildings.SetValue(building, 0);
-            Set(world, "Buildings", buildings); Set(world, "NextBuildingId", id + 1u);
+            uint maxId = definitions.Max(x => x.id);
+            var buildings = Array.CreateInstance(buildingType, Math.Max(4, (int)maxId));
+            foreach (var definition in definitions)
+            {
+                var building = Activator.CreateInstance(buildingType);
+                Set(building, "Id", definition.id); Set(building, "FactionId", 1u); Set(building, "Kind", definition.kind);
+                Set(building, "Alive", true); Set(building, "Complete", true); Set(building, "Level", definition.level);
+                buildings.SetValue(building, (int)definition.id - 1);
+            }
+            Set(world, "Buildings", buildings); Set(world, "NextBuildingId", maxId + 1u);
         }
 
         private static object GetBuilding(Battle simulation, int index, string name)

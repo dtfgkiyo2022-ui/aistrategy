@@ -230,6 +230,8 @@ namespace Rts.Simulation
         public int SiegePartsHpPermille = 1500, SiegePartsDamagePermille = 1300, SiegePartsPerCastle = 3, SiegePartsCastleStonePermille = 700;
         public int MechanismBuildingTimePermille = 500, MechanismBuildingMaterialPermille = 900;
         public int MechanismResearchCostPermille = 500, MechanismResearchTimePermille = 500;
+        /// <summary>Automatic CraftTree3 keeps this many siege parts before changing back to the next useful recipe.</summary>
+        public int SiegePartsStockLimit = 8;
         public int GoodsValueSiegeParts = 20, GoodsValueMechanism = 22;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;

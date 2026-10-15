@@ -26,6 +26,13 @@ namespace Rts.Simulation
         // was tried and rejected, so the same line falls back to the dedicated mine/smelter path deterministically.
         private const uint SharedMetalFallbackMarker = uint.MaxValue;
         private static readonly Facing[] Sides = { Facing.North, Facing.East, Facing.South, Facing.West };
+        private static readonly TechKind[] CraftTree3Researches =
+        {
+            TechKind.Siegecraft, TechKind.Masonry, TechKind.Banking, TechKind.GemArmor,
+            BridgeTech.SiegeDeployment, MountainTech.MountainFort, FishingTech.DriedFish,
+            CultTech.MartyrBlessing, TollgateTech.GateNetwork, MetropolisTech.CitizenMilitia,
+            SanctuaryTech.HolyRelic
+        };
 
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
@@ -205,8 +212,7 @@ namespace Rts.Simulation
             if (assemblerIndex < 0) return;
             ref var assembler = ref world.Buildings[assemblerIndex];
             if (!assembler.Alive || !assembler.Complete) return;
-            bool hasRamBuilding = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0;
-            RecipeKind wanted = hasRamBuilding ? RecipeKind.SiegeParts : (ShouldResearchWithAssembler(faction) ? RecipeKind.Mechanism : RecipeKind.SiegeParts);
+            RecipeKind wanted = PreferredCraftTree3Recipe(faction);
             if (assembler.Recipe != wanted && assembler.Timer == 0)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
             if (economy.Mechanism < 1) return;
@@ -221,20 +227,81 @@ namespace Rts.Simulation
         }
 
         private RecipeKind PreferredAssemblerRecipe(uint faction)
-            => ShouldResearchWithAssembler(faction) ? RecipeKind.Scholarly : RecipeKind.ArmsKit;
+            => PreferredCraftTree3Recipe(faction);
+
+        private RecipeKind PreferredCraftTree3Recipe(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            bool research = CraftTree3Allowed(faction) && ShouldResearchWithAssembler(faction);
+            if (research)
+            {
+                // Mechanism needs Scholarly as an input.  With one assembler, make the intermediate
+                // first, then switch to Mechanism on the next allocation cycle.
+                RecipeKind researchRecipe = economy.Scholarly < 1 ? RecipeKind.Scholarly : RecipeKind.Mechanism;
+                if (RecipeInputsAvailable(economy, researchRecipe)) return researchRecipe;
+                // A research recipe can be blocked by a missing charcoal/plank/stone line.  Keep
+                // the single assembler useful when the siege recipe has fewer missing inputs.
+                if (OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0
+                    && economy.SiegeParts < world.Config.Economy.SiegePartsStockLimit
+                    && RecipeInputsAvailable(economy, RecipeKind.SiegeParts)) return RecipeKind.SiegeParts;
+                return researchRecipe;
+            }
+
+            bool hasSiegeWorkshop = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0;
+            if (CraftTree3Allowed(faction) && hasSiegeWorkshop
+                && economy.SiegeParts < world.Config.Economy.SiegePartsStockLimit)
+                return RecipeKind.SiegeParts;
+            return RecipeKind.ArmsKit;
+        }
+
+        private bool RecipeInputsAvailable(FactionEconomy economy, RecipeKind recipe)
+        {
+            var rules = world.Config.Economy;
+            if (recipe == RecipeKind.Scholarly)
+                return economy.Planks >= rules.ScholarlyPlankInput && economy.Charcoal >= rules.ScholarlyCharcoalInput
+                    && economy.Food >= rules.ScholarlyFoodInput;
+            if (recipe == RecipeKind.Mechanism)
+                return economy.ArmsKit >= rules.MechanismArmsKitInput && economy.Scholarly >= rules.MechanismScholarlyInput
+                    && economy.CutStone >= rules.MechanismCutStoneInput;
+            if (recipe == RecipeKind.SiegeParts)
+                return economy.Frames >= rules.SiegePartsFramesInput && economy.ArmsKit >= rules.SiegePartsArmsKitInput;
+            return false;
+        }
 
         private bool ShouldResearchWithAssembler(uint faction)
         {
+            if (!CraftTree3Allowed(faction)) return false;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
                 if (b.Alive && b.Complete && b.FactionId == faction
-                    && (b.Kind == BuildingKind.Blacksmith || b.Kind == BuildingKind.Academy) && b.Researching != 0) return true;
+                    && b.Researching != 0 && IsThirdAgeResearch(b.Researching)) return true;
             }
-            // A completed blacksmith is not evidence that a research will start soon.  Choosing
-            // Scholarly on that guess left the stock unused in auto matches; ArmsKit is the
-            // useful default until a real research queue is visible.
+            // A finished research building with an open third-age research is a real demand even
+            // when the raw-resource budget has not started it yet.  That lets the assembler make
+            // the discount item before StartResearch is retried on the next allocation cycle.
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Researching != 0) continue;
+                for (int r = 0; r < CraftTree3Researches.Length; r++)
+                    if (ResearchBuildingAccepts(faction, b.Kind, CraftTree3Researches[r])
+                        && TechOpen(faction, CraftTree3Researches[r]) && !BeingResearched(faction, CraftTree3Researches[r])) return true;
+            }
             return false;
+        }
+
+        private bool ResearchBuildingAccepts(uint faction, BuildingKind building, TechKind tech)
+        {
+            if (building == BuildingKind.Academy) return AcademyTechOpen(faction, tech);
+            if (building == BuildingKind.MineShaft) return IsMountainTech(tech);
+            if (building == BuildingKind.Harbor) return IsFishingTech(tech);
+            if (building == BuildingKind.Monastery) return IsCultTech(tech);
+            if (building == BuildingKind.Tollgate) return IsTollgateTech(tech);
+            if (building == BuildingKind.GrandHouse) return IsMetropolisTech(tech);
+            if (building == BuildingKind.Shrine) return IsSanctuaryTech(tech);
+            return building == BuildingKind.Blacksmith && !IsMountainTech(tech) && !IsTollgateTech(tech)
+                && !IsMetropolisTech(tech) && !IsSanctuaryTech(tech);
         }
 
         private void DecideCraftTree1(uint faction)

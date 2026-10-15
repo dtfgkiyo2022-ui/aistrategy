@@ -1531,3 +1531,40 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 | on | 19456.625 | 7/8 | 5/8 |
 
 オンの5/8は目安（半分以上）を満たした。オン平均はオフより174.375 tick遅く、種8だけ勝者が変わったため、旗オンで弱くならないことはこの8seedだけでは断定しない。auto-vs-autoでは最終的に学術品による研究割引と鋼代替は発火せず、学術品と近道の実戦バランスは専用テストと追加測定に残す。
+
+### 33.7 段階3その2の決定と測定（2026-10-16）
+
+#### 中盤の数値からの原因
+
+終端だけでなく、CraftTree3オンの `measurements_20261016e` の tick 15,600・18,000・20,400を読む。seed 3では、tick 15,600のBridgeがFrames 0 / ArmsKit 0 / CutStone 22、CaravanがFrames 32 / ArmsKit 0 / Charcoal 0で、組立所も無かった。tick 18,000でもCaravanはFrames 69 / ArmsKit 6 / Charcoal 0、tick 20,400でもScholarly 0 / SiegeParts 0 / Mechanism 0であり、研究・加工の入力不足が原因だった。
+
+一方、seed 1のMountainはtick 18,000にAssembler・Blacksmith、Frames 69、Scholarly 4、Charcoal 47を持ち、終端までにScholarly 10/5（生産/消費）、Mechanism 1/1、Scholarly研究使用4になった。seed 2のBridgeはtick 18,000にSiegeWorkshop・Assembler、Frames 75、ArmsKit 9、Scholarly 9、Charcoal 26を持ち、SiegeParts 8、Mechanism 4、Scholarly 14を生産した。seed 8のMetropolisもtick 18,000にSiegeParts 8、Mechanism 1、Scholarly 2を持ち、終端でSiegeParts 9/1、Mechanism 1/1、Scholarly 2/2になった。研究開始イベント自体は既存パックに無いため、研究への投入は `scholarlyUsedResearch` / `mechanismUsedResearch` で読む。
+
+#### 今回の決定
+
+- `ScenarioEconomy.SiegePartsStockLimit` を追加し、既定値を8とする。AssemblerのSiegePartsは在庫8で止める。
+- CraftTree3のお任せ破城槌上限を「基礎上限＋SiegeParts在庫」とし、在庫があれば次の破城槌へ使えるようにする。
+- レシピ選択は、時代3研究の有無、Scholarly / Mechanismの不足、SiegeWorkshopの有無、SiegeParts在庫上限を数値条件にする。研究が開いているときはScholarly不足ならScholarly、ScholarlyがあればMechanismを選ぶ。研究が無いときは研究用商品を選ばない。
+- ScholarlyがありMechanismが無い状態で研究を開始できる場合は、Mechanismを先に作るため研究投入を保留する。Lv2加工建物は建物ID順に1つを選び、Mechanism 1個でLv3へ上げる。
+- ID 43の拡張欄はVersion 2・19整数へ更新する。Version 1・18整数は読み込み、`SiegePartsStockLimit` は既定値8で補う。
+
+#### 追加テスト
+
+`CraftTree3Tests` に、(1) SiegeParts在庫で自動破城槌上限が上がり訓練時に消費される、(2) 開いた研究に対してScholarlyの後にMechanismを作る、(3) 時代3・Lv2加工建物をMechanismでLv3にする、の3テストを追加した。CraftTree3フィルターは11件合格・0失敗、Release Headlessビルドは警告0・エラー0だった。
+
+#### 8seed測定結果
+
+`craft_tree3/measurements_20261016e/` でCraftTree3オンをseed 1〜8、tick 30,000上限で各1回測定した。終端の「生産/消費/研究使用」は次のとおり。
+
+| seed | 西 / 東 | 西：Siege・Mechanism・Scholarly | 東：Siege・Mechanism・Scholarly | Lv3 西/東 |
+|---:|---|---|---|---:|
+| 1 | Sanctuary / Mountain | 0/0/0・0/0/0・0/0/0 | 0/0/0・1/1/0・10/5/4 | 0/1 |
+| 2 | Bridge / Academy | 8/0/0・12/5/0・15/13/1 | 0/0/0・0/0/0・3/0/0 | 5/0 |
+| 3 | Bridge / Caravan | 0/0/0・0/0/0・0/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 4 | Fishing / Sanctuary | 0/0/0・0/0/0・2/0/0 | 0/0/0・0/0/0・2/0/0 | 0/0 |
+| 5 | Masonry / Caravan | 0/0/0・0/0/0・4/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 6 | Fishing / Cavalry | 0/0/0・0/0/0・0/0/0 | 0/0/0・2/2/0・7/4/1 | 0/1 |
+| 7 | Academy / Metropolis | 0/0/0・0/0/0・0/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 8 | Cavalry / Metropolis | 0/0/0・0/0/0・0/0/0 | 9/1/1・1/1/0・2/2/1 | 0/1 |
+
+「いずれかを5個以上消費」は seed 1・2 の2/8で、要求された半数以上には未達だった。レシピの誤選択は解消したが、Assembler建設、木炭供給、研究施設、試合決着時刻が支配的で、次の調整候補はこれらの建設優先度または測定tick延長とする。Unity EditorのPlayMode、実機UIコンパイル、研究開始イベントを個別に収集する計測は未確認である。

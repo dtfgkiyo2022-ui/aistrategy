@@ -611,6 +611,7 @@ namespace Rts.Simulation
                 && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000
                 && e.MechanismBuildingTimePermille > 0 && e.MechanismBuildingTimePermille <= 1000 && e.MechanismBuildingMaterialPermille > 0 && e.MechanismBuildingMaterialPermille <= 1000
                 && e.MechanismResearchCostPermille > 0 && e.MechanismResearchCostPermille <= 1000 && e.MechanismResearchTimePermille > 0 && e.MechanismResearchTimePermille <= 1000
+                && e.SiegePartsStockLimit > 0 && e.SiegePartsStockLimit <= e.BufferLimit
                 && e.GoodsValueSiegeParts > 0 && e.GoodsValueMechanism > 0), "Invalid craft-tree3 rules.");
             Require(!e.Books || (e.Enabled && e.Industry && e.Ages && e.ScriptoriumSizeCells > 0 && e.ScriptoriumSizeCells <= 8
                 && e.ScriptoriumWoodCost >= 0 && e.ScriptoriumWork > 0 && e.ScriptoriumHp > 0 && e.BookTicks > 0
@@ -1047,6 +1048,7 @@ namespace Rts.Simulation
                   SiegePartsPerCastle = e.SiegePartsPerCastle, SiegePartsCastleStonePermille = e.SiegePartsCastleStonePermille,
                   MechanismBuildingTimePermille = e.MechanismBuildingTimePermille, MechanismBuildingMaterialPermille = e.MechanismBuildingMaterialPermille,
                   MechanismResearchCostPermille = e.MechanismResearchCostPermille, MechanismResearchTimePermille = e.MechanismResearchTimePermille,
+                  SiegePartsStockLimit = e.SiegePartsStockLimit,
                   GoodsValueSiegeParts = e.GoodsValueSiegeParts, GoodsValueMechanism = e.GoodsValueMechanism,
                   Books = e.Books, ScriptoriumSizeCells = e.ScriptoriumSizeCells, ScriptoriumWoodCost = e.ScriptoriumWoodCost,
                   ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,

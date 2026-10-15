@@ -580,6 +580,7 @@ namespace Rts.Simulation
             }
             if (building.Recipe == RecipeKind.SiegeParts)
             {
+                if (economy.SiegeParts >= rules.SiegePartsStockLimit) return;
                 int frames = CraftInputFor(building, rules.SiegePartsFramesInput), arms = CraftInputFor(building, rules.SiegePartsArmsKitInput);
                 Fill(ref economy.Frames, ref building.Input, frames);
                 Fill(ref economy.ArmsKit, ref building.InputSecondary, arms);

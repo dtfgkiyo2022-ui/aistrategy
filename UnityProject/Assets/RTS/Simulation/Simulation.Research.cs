@@ -267,6 +267,10 @@ namespace Rts.Simulation
             if (PlanksAllowed(faction) && world.Economies[faction - 1].Planks >= world.Config.Economy.PlanksPerRam
                 && OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop) >= 0)
                 bonus += world.Config.Economy.PlankExtraRams;
+            if (CraftTree3On)
+                // Stored siege parts are a reservation for additional rams.  This makes the
+                // stock visible to the same numeric cap that gates automatic training.
+                bonus += world.Economies[faction - 1].SiegeParts;
             return AutoRams + bonus;
         }
 
@@ -322,6 +326,13 @@ namespace Rts.Simulation
             }
             else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || IsTollgateTech(tech) || IsMetropolisTech(tech) || IsSanctuaryTech(tech) || !TechOpen(faction, tech)) return false;
             ref var economy = ref world.Economies[faction - 1];
+            if (CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech)
+                && economy.Mechanism < 1 && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch
+                && OwnBuildingIndex(faction, BuildingKind.Assembler) >= 0)
+                // Let the single assembler turn Scholarly into Mechanism first.  Without this
+                // one-cycle reservation, DecideResearch runs before DecideIndustry and consumes
+                // the intermediate directly, so Mechanism can never reach a third-age research.
+                return false;
             int food = academy ? AcademyFoodCost(tech) : mountain ? MountainFoodCost(tech) : fishing ? FishingFoodCost(tech) : tollgate ? TollgateFoodCost(tech) : metropolis ? MetropolisFoodCost(tech) : sanctuary ? SanctuaryFoodCost(tech) : TechFoodCost(tech);
             int wood = academy ? AcademyWoodCost(tech) : mountain ? MountainWoodCost(tech) : fishing ? FishingWoodCost(tech) : tollgate ? TollgateWoodCost(tech) : metropolis ? MetropolisWoodCost(tech) : sanctuary ? SanctuaryWoodCost(tech) : TechWoodCost(tech);
             int gold = academy ? AcademyGoldCost(tech) : 0;
