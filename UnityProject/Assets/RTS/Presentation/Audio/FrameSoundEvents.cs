@@ -32,7 +32,9 @@ namespace Rts.Presentation
             if (previous == null) return;
             Index(previous.Units, current.Units, beforeUnits, afterUnits);
             CompareUnits(current.Units, output);
-            CompareObjectives(previous.Objectives, current.Objectives, ownFactionId, output);
+            // Objectives come from the observation, which a frame may not carry (tests, the first frame).
+            CompareObjectives(previous.Observation == null ? null : previous.Objectives,
+                current.Observation == null ? null : current.Objectives, ownFactionId, output);
             if (previous.Economy != null && current.Economy != null)
             {
                 if (current.Economy.Age > previous.Economy.Age) output.Add(new FrameSoundEvent(
