@@ -18,7 +18,7 @@ namespace Rts.Presentation
         private static readonly Color Trunk = new Color(0.36f, 0.25f, 0.15f);
         private static readonly Color LeafDark = new Color(0.13f, 0.40f, 0.17f);
         private static readonly Color LeafLight = new Color(0.25f, 0.55f, 0.22f);
-        private static readonly Color LeafWarm = new Color(0.42f, 0.58f, 0.20f);
+        private static readonly Color LeafWarm = new Color(0.46f, 0.62f, 0.22f);
         private static readonly Color RockLight = new Color(0.60f, 0.60f, 0.57f);
         private static readonly Color RockMid = new Color(0.46f, 0.46f, 0.45f);
         private static readonly Color RockDark = new Color(0.30f, 0.29f, 0.32f);
@@ -61,7 +61,10 @@ namespace Rts.Presentation
                 var part = new GameObject("Part");
                 part.transform.SetParent(root.transform, false);
                 part.AddComponent<MeshFilter>().sharedMesh = mesh;
-                part.AddComponent<MeshRenderer>().sharedMaterial = PresentationMaterials.Get(pair.Key);
+                var material = kind == ResourceKind.Wood ? PresentationMaterials.GetNature(pair.Key)
+                    : kind == ResourceKind.Gold || kind == ResourceKind.Ore && pair.Key == Rust
+                        ? PresentationMaterials.GetGlow(pair.Key) : PresentationMaterials.Get(pair.Key);
+                part.AddComponent<MeshRenderer>().sharedMaterial = material;
             }
         }
 
@@ -98,11 +101,13 @@ namespace Rts.Presentation
                 {
                     Add(parts, leaf, Cone, at + Vector3.up * height * 0.22f, turn, new Vector3(1.45f, height * 0.5f, 1.45f));
                     Add(parts, leaf, Cone, at + Vector3.up * height * 0.5f, turn + 30f, new Vector3(1.05f, height * 0.5f, 1.05f));
+                    Add(parts, leaf == LeafDark ? LeafLight : LeafDark, Cone, at + Vector3.up * height * 0.76f, turn + 60f, new Vector3(0.68f, height * 0.34f, 0.68f));
                 }
                 else
                 {
                     Add(parts, leaf, Blob, at + Vector3.up * height * 0.58f, turn, new Vector3(1.6f, height * 0.42f, 1.6f));
                     Add(parts, leaf == LeafDark ? LeafLight : LeafDark, Blob, at + new Vector3(0.45f, height * 0.44f, 0.25f), turn + 50f, new Vector3(1.0f, height * 0.28f, 1.0f));
+                    Add(parts, LeafWarm, Blob, at + new Vector3(-0.30f, height * 0.73f, -0.18f), turn + 20f, new Vector3(0.65f, height * 0.20f, 0.65f));
                 }
             }
         }

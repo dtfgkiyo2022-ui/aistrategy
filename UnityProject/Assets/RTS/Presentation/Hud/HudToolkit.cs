@@ -860,6 +860,12 @@ namespace Rts.Presentation
             });
             AddSetupRowWithControl(UiText.T("New screen", "新しい画面"), toolkit);
 
+            var effects = AddSetupRow(UiText.T("Screen effects", "画面効果"));
+            AddSetupButton(effects, UiText.T("High", "高"), WorldVisualEffects.IsHighQuality,
+                () => WorldVisualEffects.SetQuality(true));
+            AddSetupButton(effects, UiText.T("Low", "低"), !WorldVisualEffects.IsHighQuality,
+                () => WorldVisualEffects.SetQuality(false));
+
             var themes = AddSetupRow(UiText.T("HUD theme", "見た目の案"));
             for (int i = 0; i < HudThemeCatalog.Count; i++)
             {
