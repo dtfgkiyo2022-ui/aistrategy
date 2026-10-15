@@ -27,6 +27,11 @@ namespace Rts.Editor
             RebuildManifest();
         }
 
+        public static void RebuildForProductBuild()
+        {
+            RebuildManifest();
+        }
+
         private static void RebuildManifest()
         {
             if (!HasAnyPackAsset())

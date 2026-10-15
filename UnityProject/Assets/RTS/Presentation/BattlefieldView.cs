@@ -126,6 +126,7 @@ namespace Rts.Presentation
 
         public void Select(SelectionTarget target)
         {
+            if (selected.Kind != target.Kind || selected.Id != target.Id) GameAudio.Ui(SoundCue.SelectionChanged);
             selected = target;
             selectedArmies.Clear();
             if (target.Kind == SelectionKind.Army) selectedArmies.Add(target.Id);
@@ -408,6 +409,7 @@ namespace Rts.Presentation
 
         public void Push(FactionFrame frame)
         {
+            var previousSoundFrame = latestFrame;
             if (sinceUpdate > 0.001f)
                 measuredMatchRate = Mathf.Clamp(TickSeconds / sinceUpdate, 0.25f, 8f);
             sinceUpdate = 0f;
@@ -420,6 +422,7 @@ namespace Rts.Presentation
             SyncOutposts(frame);
             PerfProbe.Stop("PushMarks", part);
             latestFrame = frame;
+            GameAudio.FeedFrames(previousSoundFrame, frame, frame.FactionId);
             part = PerfProbe.Start();
             SyncFog(frame);
             PerfProbe.Stop("PushFog", part);

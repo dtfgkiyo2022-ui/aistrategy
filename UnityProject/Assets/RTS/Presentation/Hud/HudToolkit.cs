@@ -869,6 +869,11 @@ namespace Rts.Presentation
                     () => HudToolkit.SetTheme(themeIndex));
             }
 
+            AddAudioVolumeSlider(UiText.T("Master volume", "全体音量"), GameAudio.MasterVolume, value => GameAudio.MasterVolume = value);
+            AddAudioVolumeSlider(UiText.T("Music volume", "BGM音量"), GameAudio.MusicVolume, value => GameAudio.MusicVolume = value);
+            AddAudioVolumeSlider(UiText.T("Effects volume", "効果音音量"), GameAudio.EffectsVolume, value => GameAudio.EffectsVolume = value);
+            AddAudioVolumeSlider(UiText.T("UI volume", "画面音量"), GameAudio.UiVolume, value => GameAudio.UiVolume = value);
+
             var delay = commandPanel.DelayControl;
             var delayContent = AddSetupRow(UiText.T("Reply delay", "返答の遅延"));
             int[] delayOptions = { 0, 60, 200, 400 };
@@ -894,6 +899,15 @@ namespace Rts.Presentation
                 UiText.T("Asset credits: Noto Sans JP (OFL); game-icons.net by Lorc, Delapouite, Faithtoken (CC BY 3.0).",
                     "素材の出典：Noto Sans JP（OFL）、game-icons.net（Lorc・Delapouite・Faithtoken、CC BY 3.0）"),
                 "setup-credits");
+        }
+
+        private void AddAudioVolumeSlider(string title, float current, Action<float> changed)
+        {
+            var content = AddSetupRow(title);
+            var slider = new Slider(0f, 1f) { value = Mathf.Clamp01(current) };
+            slider.AddToClassList("setup-slider");
+            slider.RegisterValueChangedCallback(evt => changed(evt.newValue));
+            content.Add(slider);
         }
 
         private void AddSetupRowWithControl(string title, VisualElement control)

@@ -85,8 +85,13 @@ namespace Rts.Presentation
         public void ExecuteToolkitAction(string actionId)
         {
             if (port == null || string.IsNullOrEmpty(actionId)) return;
+            GameAudio.Ui(SoundCue.Click);
             var economy = Economy();
             if (economy == null) return;
+            foreach (var action in GetToolkitActions())
+                if (action.Id == actionId && !action.Enabled && !action.Message &&
+                    ((action.Reason ?? "").Contains("not enough") || (action.Reason ?? "").Contains("足り")))
+                { GameAudio.Ui(SoundCue.ResourceShortage); return; }
 
             if (actionId.StartsWith("upgrade:", StringComparison.Ordinal))
             {
