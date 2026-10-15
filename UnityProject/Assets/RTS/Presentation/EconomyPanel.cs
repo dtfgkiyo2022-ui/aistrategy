@@ -435,7 +435,8 @@ namespace Rts.Presentation
             var kind = KindOf(mode);
             int size = SizeOf(kind);
             var center = Vector3.zero;
-            bool shown = onMap && Footprint(cell, size, out int origin, out center);
+            int origin = -1;
+            bool shown = onMap && Footprint(cell, size, out origin, out center);
             bool legal = shown && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
                 view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind));
             layer.ShowGhost(shown, center, size * CellMeters, legal);
