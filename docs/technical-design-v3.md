@@ -1502,6 +1502,17 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 - Storage経路は通常ベルト、Splitter左枝、Underground pairを辿る。容量・資源種別・接続性を村人搬入と加工先搬入の両方で検証し、切断Storageには搬入しない。
 - フラグOFFのシナリオバイト列とシミュレーションハッシュ一致、建設中を含む人間配置上限、AI各tick上限、接続/切断Storage、12,000tickリプレイをヘッドレス個別テストで確認した。標準seed 1–8とCavalry対Agrarian seed 1–3の `tactic-match` 測定は `dropsite_limit/report.md` に記録した。
 
+### 32.41 AgeClock の文明選択と支払いを分離する（`AgeClockUx`、拡張欄 ID 44、2026-10-16）
+
+AgeClock の時計はそのままに、文明の選択を先に行い、支払いと即時進化を別の操作にした。既定値は `AgeClockUx = false`、`AgeClockUxChoiceTicks = 600`（20 tick/秒で30秒）で、OFF のシナリオは従来のバイト列・状態ハッシュを維持する。
+
+- 原始時代の `AdvanceAge` は、旗が ON のときだけ文明を予約する。時計前は資源を減らさず、`ReservedCiv` を最新の選択で上書きする。時計後は同じ予約をその tick に即時適用する。
+- `EconomyCommandKind.AdvanceNow = 26` は、現在の `AdvancePrice`（時計による割引を含む）を食料・木材・金から払い、村人の訓練停止や待ち時間なしで `CompleteAdvance` する。不足時は無操作で、時代1・2も同じ契約を使う。
+- 自動化 OFF で時計が鳴ったとき、原始時代かつ文明未選択なら `AgeClockUxChoiceTicks` の間だけ待つ。その間に予約が届けば即時進化し、届かなければ期限 tick に `ChooseCiv` を一度だけ使う。自動化 ON の既存の選択・早払い条件は変えない。
+- シナリオ拡張は little-endian の `int32 enabled` と `int32 choiceTicks` の2語を ID 44/version 1 に保存する。ランタイムの `CivChoiceDeadlineTick` は旗が ON の場合だけ診断ハッシュへ出し、旗 OFF の正規状態には追加しない。
+- 画面は IMGUI と UI Toolkit の両方で予約時刻、期限の残り秒数、「今すぐ時代を上げる」ボタンを表示する。戦術・スタッフの kind 列挙にも `AdvanceNow` を追加し、同じ Contracts factory を通す。
+- 検証は `AgeClockUxTests` と `AgeClockUxEditModeTests` で、拡張欄の往復、予約が支払わないこと、割引価格の即時支払い、期限待ち、期限内予約を確認する。Unity の実行は行わず、Unity 依存のない EditMode テストだけをヘッドレス allowlist に加える。
+
 ## 33. 多段の加工（加工の木、2026-10-15〜）
 
 **オーナー決定（2026-10-15）**：加工の連鎖とクラフトをもっと充実させる。Factorio などを参考に、**2段にとどめず多段で作ってよい**。方向は4つとも：(1) 加工品どうしを組み合わせる上の段、(2) どの文明も使う共通の加工、(3) 加工品で研究・強化、(4) 加工の建物の強化とレシピの選択。
@@ -1549,3 +1560,55 @@ Contracts の enum・view・イベント型は増やさない。ライン切断�
 2. **段階2（旗 `CraftTree2`）**：組立所とレシピの選択（`SetRecipe`）、武具・学術品、研究に加工品、文明の近道（煉瓦→切石、鋼→木炭、書物→学術品）
 3. **段階3（旗 `CraftTree3`）**：3段目（攻城部品・精密部品）、Lv3、時代3の研究
 - どの段階も：旗オフの一致、拡張欄の往復、記録と再生、お任せが実際に使うかの測定（お任せどうし種1〜8）、表示（建てるボタン・上の帯・警告・参謀と戦術から見える名前）
+
+### 33.6 段階2の決定と測定（2026-10-15）
+
+- 建材は初期案どおり **板2＋切石1 → 建材1（80 tick）** とする。前回の板1はテスト用シナリオの上書きによる不整合だったため採用しない。
+- 組立所は時代2・全文明。完成直後はレシピなし。お任せは研究中の鍛冶場・学府があれば学術品、それ以外は武具を選ぶ。学術品を選ぶには「鍛冶場がある」だけでは足りず、実際の研究中を条件にする。
+- お任せの組立所材料は、板を段階1の製材所からコアへ、木炭を組立所用の木炭窯からコアへ運ぶ。木炭窯への木材は村人が運ぶ。組立所はコアの蓄えを複数入力へ移し、材料が揃えば作る。鋼代替・研究の書物優先は既存の文明の近道を維持する。
+- 前回の原因は、レシピ選択だけあって材料ラインがなく、全文明向け木炭窯もお任せが建てていなかったこと。修正後は初組立所が最終オン測定の陣営別で `17400/14400, 12000/18000, 18000/16800, 13200/16800, 12600/15600, -/15000, 11400/-, 17400/12000` tickに見えた。
+- `tactic-match --map-seed N --terrain --ticks 30000 --pack-out <dir>` を種1〜8、CraftTree2オン・オフで各1回実施した。全16試合が決着し、終了コードは0。`replay.rpl` は数字確認後に0バイト化した。
+
+| mode | 平均決着tick | 勝者一致 | 武具または学術品を10個以上使った試合 |
+|---|---:|---:|---:|
+| off | 19282.250 | 基準 | 0/8 |
+| on | 19456.625 | 7/8 | 5/8 |
+
+オンの5/8は目安（半分以上）を満たした。オン平均はオフより174.375 tick遅く、種8だけ勝者が変わったため、旗オンで弱くならないことはこの8seedだけでは断定しない。auto-vs-autoでは最終的に学術品による研究割引と鋼代替は発火せず、学術品と近道の実戦バランスは専用テストと追加測定に残す。
+
+### 33.7 段階3その2の決定と測定（2026-10-16）
+
+#### 中盤の数値からの原因
+
+終端だけでなく、CraftTree3オンの `measurements_20261016e` の tick 15,600・18,000・20,400を読む。seed 3では、tick 15,600のBridgeがFrames 0 / ArmsKit 0 / CutStone 22、CaravanがFrames 32 / ArmsKit 0 / Charcoal 0で、組立所も無かった。tick 18,000でもCaravanはFrames 69 / ArmsKit 6 / Charcoal 0、tick 20,400でもScholarly 0 / SiegeParts 0 / Mechanism 0であり、研究・加工の入力不足が原因だった。
+
+一方、seed 1のMountainはtick 18,000にAssembler・Blacksmith、Frames 69、Scholarly 4、Charcoal 47を持ち、終端までにScholarly 10/5（生産/消費）、Mechanism 1/1、Scholarly研究使用4になった。seed 2のBridgeはtick 18,000にSiegeWorkshop・Assembler、Frames 75、ArmsKit 9、Scholarly 9、Charcoal 26を持ち、SiegeParts 8、Mechanism 4、Scholarly 14を生産した。seed 8のMetropolisもtick 18,000にSiegeParts 8、Mechanism 1、Scholarly 2を持ち、終端でSiegeParts 9/1、Mechanism 1/1、Scholarly 2/2になった。研究開始イベント自体は既存パックに無いため、研究への投入は `scholarlyUsedResearch` / `mechanismUsedResearch` で読む。
+
+#### 今回の決定
+
+- `ScenarioEconomy.SiegePartsStockLimit` を追加し、既定値を8とする。AssemblerのSiegePartsは在庫8で止める。
+- CraftTree3のお任せ破城槌上限を「基礎上限＋SiegeParts在庫」とし、在庫があれば次の破城槌へ使えるようにする。
+- レシピ選択は、時代3研究の有無、Scholarly / Mechanismの不足、SiegeWorkshopの有無、SiegeParts在庫上限を数値条件にする。研究が開いているときはScholarly不足ならScholarly、ScholarlyがあればMechanismを選ぶ。研究が無いときは研究用商品を選ばない。
+- ScholarlyがありMechanismが無い状態で研究を開始できる場合は、Mechanismを先に作るため研究投入を保留する。Lv2加工建物は建物ID順に1つを選び、Mechanism 1個でLv3へ上げる。
+- ID 43の拡張欄はVersion 2・19整数へ更新する。Version 1・18整数は読み込み、`SiegePartsStockLimit` は既定値8で補う。
+
+#### 追加テスト
+
+`CraftTree3Tests` に、(1) SiegeParts在庫で自動破城槌上限が上がり訓練時に消費される、(2) 開いた研究に対してScholarlyの後にMechanismを作る、(3) 時代3・Lv2加工建物をMechanismでLv3にする、の3テストを追加した。CraftTree3フィルターは11件合格・0失敗、Release Headlessビルドは警告0・エラー0だった。
+
+#### 8seed測定結果
+
+`craft_tree3/measurements_20261016e/` でCraftTree3オンをseed 1〜8、tick 30,000上限で各1回測定した。終端の「生産/消費/研究使用」は次のとおり。
+
+| seed | 西 / 東 | 西：Siege・Mechanism・Scholarly | 東：Siege・Mechanism・Scholarly | Lv3 西/東 |
+|---:|---|---|---|---:|
+| 1 | Sanctuary / Mountain | 0/0/0・0/0/0・0/0/0 | 0/0/0・1/1/0・10/5/4 | 0/1 |
+| 2 | Bridge / Academy | 8/0/0・12/5/0・15/13/1 | 0/0/0・0/0/0・3/0/0 | 5/0 |
+| 3 | Bridge / Caravan | 0/0/0・0/0/0・0/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 4 | Fishing / Sanctuary | 0/0/0・0/0/0・2/0/0 | 0/0/0・0/0/0・2/0/0 | 0/0 |
+| 5 | Masonry / Caravan | 0/0/0・0/0/0・4/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 6 | Fishing / Cavalry | 0/0/0・0/0/0・0/0/0 | 0/0/0・2/2/0・7/4/1 | 0/1 |
+| 7 | Academy / Metropolis | 0/0/0・0/0/0・0/0/0 | 0/0/0・0/0/0・0/0/0 | 0/0 |
+| 8 | Cavalry / Metropolis | 0/0/0・0/0/0・0/0/0 | 9/1/1・1/1/0・2/2/1 | 0/1 |
+
+「いずれかを5個以上消費」は seed 1・2 の2/8で、要求された半数以上には未達だった。レシピの誤選択は解消したが、Assembler建設、木炭供給、研究施設、試合決着時刻が支配的で、次の調整候補はこれらの建設優先度または測定tick延長とする。Unity EditorのPlayMode、実機UIコンパイル、研究開始イベントを個別に収集する計測は未確認である。

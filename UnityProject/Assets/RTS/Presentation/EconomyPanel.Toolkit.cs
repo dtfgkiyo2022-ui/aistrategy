@@ -100,6 +100,15 @@ namespace Rts.Presentation
                     Send(EconomyCommand.UpgradeBuilding(faction, ++sequence, buildingId), UiText.T("Upgrade requested", "譁ｰ繝ｬ繝吶Ν繧貞ｾ晞ｼ縺励∪縺励◆"));
                 return;
             }
+            if (actionId.StartsWith("recipe:", StringComparison.Ordinal))
+            {
+                var parts = actionId.Substring(7).Split(':');
+                uint assemblerId;
+                RecipeKind recipe;
+                if (parts.Length == 2 && uint.TryParse(parts[0], out assemblerId) && Enum.TryParse(parts[1], true, out recipe))
+                    Send(EconomyCommand.SetRecipe(faction, ++sequence, assemblerId, recipe), UiText.T("Assembler recipe requested", "邱上せ繝ｳ繝悶Ν縺ｮ繝ｬ繧ｷ繝斐・繧貞ｾ晞ｼ縺励∪縺励◆"));
+                return;
+            }
             if (actionId.StartsWith("build:", StringComparison.Ordinal))
             {
                 var buildMode = ParseMode(actionId.Substring(6));
@@ -160,6 +169,7 @@ namespace Rts.Presentation
                 return;
             }
             if (actionId.StartsWith("make:advance:", StringComparison.Ordinal)) { SendAdvanceFromPrimitive(economy, (CivKind)ParseInt(actionId.Substring(13))); return; }
+            if (actionId == "make:advance-now") { Send(EconomyCommand.AdvanceNow(faction, ++sequence, economy.Civ == CivKind.Primitive ? economy.ReservedCiv : economy.Civ), AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost, economy.NextAgeGoldCost)); return; }
             if (actionId == "make:advance-age") { Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), UiText.T("Advance requested", "時代を進めるよう依頼しました")); return; }
             if (actionId == "research:build-blacksmith") { SetMode(Mode.Blacksmith); return; }
             if (actionId.StartsWith("research:", StringComparison.Ordinal))
@@ -187,7 +197,7 @@ namespace Rts.Presentation
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
-                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
+                case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
@@ -214,6 +224,11 @@ namespace Rts.Presentation
 
         private static ResourceKind ParseResource(string value)
         {
+            if (string.Equals(value, "armskit", StringComparison.OrdinalIgnoreCase)) return ResourceKind.ArmsKit;
+            if (string.Equals(value, "scholarly", StringComparison.OrdinalIgnoreCase)) return ResourceKind.Scholarly;
+            if (string.Equals(value, "finearmskit", StringComparison.OrdinalIgnoreCase)) return ResourceKind.FineArmsKit;
+            if (string.Equals(value, "siegeparts", StringComparison.OrdinalIgnoreCase)) return ResourceKind.SiegeParts;
+            if (string.Equals(value, "mechanism", StringComparison.OrdinalIgnoreCase)) return ResourceKind.Mechanism;
             if (value == "cutstone" || value == "切石") return ResourceKind.CutStone;
             if (value == "frames" || value == "建材") return ResourceKind.Frames;
             if (value == "preserves" || value == "保存食") return ResourceKind.Preserves;
@@ -329,6 +344,25 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:scriptorium", UiText.T("Scriptorium (", "写本所（木材 ") + economy.ScriptoriumWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Scriptorium);
                 Add(rows, "line:Books", UiText.T("Ask for books line", "書物ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Books);
+            }
+            if (economy.CraftTree2Enabled && economy.Age >= 2)
+            {
+                Add(rows, "build:assembler", UiText.T("Assembler (" + economy.AssemblerWoodCost + " wood)", "Assembler (" + economy.AssemblerWoodCost + " wood)"), true, "", mode == Mode.Assembler);
+                for (int i = 0; i < economy.Buildings.Count; i++)
+                {
+                    var assembler = economy.Buildings[i];
+                    if (assembler.FactionId != faction || assembler.Kind != BuildingKind.Assembler || !assembler.Complete) continue;
+                    Add(rows, "recipe:" + assembler.Id + ":Frames", UiText.T("Assembler " + assembler.Id + ": Frames (plank 1 + cut stone/brick 1, 80t)", "Assembler " + assembler.Id + ": Frames（板1＋切石/煉瓦1、80t）"), true, "", assembler.Recipe == RecipeKind.Frames);
+                    bool armsMaterial = economy.Planks >= economy.ArmsKitPlankInput && (economy.Charcoal >= economy.ArmsKitCharcoalInput || economy.Steel >= economy.ArmsKitSteelInput);
+                    Add(rows, "recipe:" + assembler.Id + ":ArmsKit", UiText.T("Assembler " + assembler.Id + ": Arms kit (plank 1 + charcoal 2 or steel 1, " + economy.ArmsKitTicks + "t)", "Assembler " + assembler.Id + ": 武具キット（板1＋木炭2または鋼1、" + economy.ArmsKitTicks + "t）"), true, armsMaterial ? "" : UiText.T("Missing planks and charcoal/steel", "板材と木炭/鋼が不足"), assembler.Recipe == RecipeKind.ArmsKit);
+                    bool scholarlyMaterial = economy.Planks >= economy.ScholarlyPlankInput && economy.Charcoal >= economy.ScholarlyCharcoalInput && economy.Food >= economy.ScholarlyFoodInput;
+                    Add(rows, "recipe:" + assembler.Id + ":Scholarly", UiText.T("Assembler " + assembler.Id + ": Scholarly (plank 1 + charcoal 1 + food 2, " + economy.ScholarlyTicks + "t)", "Assembler " + assembler.Id + ": 学術資材（板1＋木炭1＋食料2、" + economy.ScholarlyTicks + "t）"), true, scholarlyMaterial ? "" : UiText.T("Missing planks, charcoal, or food", "板材・木炭・食料が不足"), assembler.Recipe == RecipeKind.Scholarly);
+                    if (economy.CraftTree3Enabled)
+                    {
+                        Add(rows, "recipe:" + assembler.Id + ":SiegeParts", UiText.T("Assembler " + assembler.Id + ": Siege parts (frames 1 + arms kit 1, " + economy.SiegePartsTicks + "t)", "Assembler " + assembler.Id + ": 攻城部品（建材1＋武具1、" + economy.SiegePartsTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeParts);
+                        Add(rows, "recipe:" + assembler.Id + ":Mechanism", UiText.T("Assembler " + assembler.Id + ": Mechanism (arms kit 1 + scholarly 1 + cut stone 1, " + economy.MechanismTicks + "t)", "Assembler " + assembler.Id + ": 精密部品（武具1＋学術品1＋切石1、" + economy.MechanismTicks + "t）"), true, "", assembler.Recipe == RecipeKind.Mechanism);
+                    }
+                }
             }
             if (economy.PreservesEnabled && economy.Civ == CivKind.Fishing && economy.Age >= 1)
             {
@@ -497,11 +531,20 @@ namespace Rts.Presentation
             {
                 string cost = UiText.T(" (", "（食") + economy.AdvanceFoodCost + UiText.T("F ", " 木") + economy.AdvanceWoodCost + UiText.T("W)", "）")
                     + AgeClockLabel(economy, economy.AdvanceFoodCost, economy.AdvanceWoodCost);
-                if (economy.ReservedCiv != CivKind.Primitive) Add(rows, "make:reserved", UiText.T("Reserved: ", "予約中：") + CivName(economy.ReservedCiv), false, "", false, true);
+                if (economy.AgeClockUx && AgeClockUxUiText.IsChoiceWindow(economy.NextAgeClockTick, economy.CivChoiceDeadlineTick, view.LatestFrame.Tick))
+                    Add(rows, "make:civ-choice-deadline", AgeClockUxUiText.ChoiceDeadline(economy.CivChoiceDeadlineTick, view.LatestFrame.Tick), false, "", false, true);
+                if (economy.ReservedCiv != CivKind.Primitive)
+                {
+                    Add(rows, "make:reserved", economy.AgeClockUx
+                        ? AgeClockUxUiText.Reservation(CivName(economy.ReservedCiv), economy.NextAgeClockTick, view.LatestFrame.Tick)
+                        : UiText.T("Reserved: ", "予約中：") + CivName(economy.ReservedCiv), false, "", false, true);
+                    if (economy.AgeClockUx)
+                        Add(rows, "make:advance-now", AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost), economy.ReservedCiv != CivKind.Primitive);
+                }
                 if (!ExtraCivilisations)
                 {
-                    Add(rows, "make:advance:" + (int)CivKind.Agrarian, Star(economy, CivKind.Agrarian) + UiText.T("Advance: farming", "時代を進める：農耕") + cost);
-                    Add(rows, "make:advance:" + (int)CivKind.Metallurgy, Star(economy, CivKind.Metallurgy) + UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost);
+                    Add(rows, "make:advance:" + (int)CivKind.Agrarian, Star(economy, CivKind.Agrarian) + (economy.AgeClockUx ? UiText.T("Reserve: farming", "予約：農耕") : UiText.T("Advance: farming", "時代を進める：農耕")) + cost);
+                    Add(rows, "make:advance:" + (int)CivKind.Metallurgy, Star(economy, CivKind.Metallurgy) + (economy.AgeClockUx ? UiText.T("Reserve: metallurgy", "予約：冶金") : UiText.T("Advance: metallurgy", "時代を進める：冶金")) + cost);
                 }
                 else
                 {
@@ -509,7 +552,7 @@ namespace Rts.Presentation
                     for (int civIndex = 0; civIndex < AllCivs.Length; civIndex++)
                     {
                         CivKind civ = AllCivs[civIndex];
-                        Add(rows, "make:advance:" + (int)civ, Star(economy, civ) + CivShortName(civ));
+                    Add(rows, "make:advance:" + (int)civ, Star(economy, civ) + (economy.AgeClockUx ? UiText.T("Reserve: ", "予約：") : "") + CivShortName(civ));
                     }
                 }
             }
@@ -522,7 +565,7 @@ namespace Rts.Presentation
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
                     + AgeClockLabel(economy, food, wood);
                 string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない") : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない") : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない") : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : "";
-                Add(rows, "make:advance-age", next + price, string.IsNullOrEmpty(why), why);
+                Add(rows, economy.AgeClockUx ? "make:advance-now" : "make:advance-age", economy.AgeClockUx ? AgeClockUxUiText.AdvanceNow(food, wood, gold) : next + price, economy.AgeClockUx || string.IsNullOrEmpty(why), why);
             }
         }
 

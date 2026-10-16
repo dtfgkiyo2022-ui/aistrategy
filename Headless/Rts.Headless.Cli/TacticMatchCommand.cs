@@ -42,6 +42,9 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-balance-off")) scenario.Economy.CraftBalance = false;
         if (options.ContainsKey("--resource-fog-off")) scenario.Economy.ResourceFog = false;
         if (options.ContainsKey("--craft-tree1-off")) scenario.Economy.CraftTree1 = false;
+        if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
+        if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
+        if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         // LiveGameRules keeps both features on by default. These explicit measurement switches are command-line-only.
         if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;

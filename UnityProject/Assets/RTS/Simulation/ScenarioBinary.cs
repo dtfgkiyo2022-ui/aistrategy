@@ -79,6 +79,9 @@ namespace Rts.Simulation
         private const int AgeClockExtensionId = 16;
         private const int AgeClockExtensionVersion = 1;
         private const int AgeClockExtensionDataLength = 4 * sizeof(int);
+        private const int AgeClockUxExtensionId = 44;
+        private const int AgeClockUxExtensionVersion = 1;
+        private const int AgeClockUxExtensionDataLength = 2 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -158,6 +161,14 @@ private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
 private const int AiBeltsExtensionId = 40;
 private const int AiBeltsExtensionVersion = 1;
 private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
+private const int CraftTree2ExtensionId = 42;
+private const int CraftTree2ExtensionVersion = 1;
+private const int CraftTree2ExtensionDataLength = 23 * sizeof(int);
+private const int CraftTree3ExtensionId = 43;
+private const int CraftTree3ExtensionV1 = 1;
+private const int CraftTree3ExtensionVersion = 2;
+private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
+private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -207,6 +218,9 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
+            ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
+            ,new ExtensionRegistration(CraftTree3ExtensionId, CraftTree3ExtensionVersion, CraftTree3ExtensionDataLength)
+            ,new ExtensionRegistration(AgeClockUxExtensionId, AgeClockUxExtensionVersion, AgeClockUxExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -744,7 +758,9 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                     && dataLength == BricksExtensionV1DataLength;
                 bool oldTack = id == TackExtensionId && featureVersion == TackExtensionV1
                     && dataLength == TackExtensionV1DataLength;
-                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack;
+                bool oldCraftTree3 = id == CraftTree3ExtensionId && featureVersion == CraftTree3ExtensionV1
+                    && dataLength == CraftTree3ExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -766,8 +782,9 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                 else if (id == EconomyScaleExtensionId) ReadEconomyScaleExtension(extension, c.Economy);
                  else if (id == RegionExtensionId) ReadRegionExtension(extension, c.Economy);
                   else if (id == LatePushExtensionId) ReadLatePushExtension(extension, c.Economy);
-                   else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
+                    else if (id == EarlyArmsExtensionId) ReadEarlyArmsExtension(extension, c.Economy);
                     else if (id == AgeClockExtensionId) ReadAgeClockExtension(extension, c.Economy);
+                    else if (id == AgeClockUxExtensionId) ReadAgeClockUxExtension(extension, c.Economy);
                     else if (id == SiegeByAgeExtensionId) ReadSiegeByAgeExtension(extension, c.Economy);
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
@@ -793,6 +810,8 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
+                     else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
+                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -838,6 +857,7 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
             extensions.RemoveAll(extension => extension != null && extension.Id == LatePushExtensionId && !c.Economy.LatePush);
              extensions.RemoveAll(extension => extension != null && extension.Id == EarlyArmsExtensionId && !c.Economy.EarlyArms);
              extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockExtensionId && !c.Economy.AgeClock);
+             extensions.RemoveAll(extension => extension != null && extension.Id == AgeClockUxExtensionId && !c.Economy.AgeClockUx);
               extensions.RemoveAll(extension => extension != null && extension.Id == SiegeByAgeExtensionId && !c.Economy.SiegeByAge);
                extensions.RemoveAll(extension => extension != null && extension.Id == PushWavesExtensionId && !c.Economy.PushWaves);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ManualControlExtensionId && !c.Economy.ManualControl);
@@ -863,6 +883,8 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree2ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2));
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -990,6 +1012,14 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                 extensions[i] = CreateAgeClockExtension(c.Economy);
             }
              if (c.Economy.AgeClock && !hasAgeClock) extensions.Add(CreateAgeClockExtension(c.Economy));
+             bool hasAgeClockUx = false;
+             for (int i = 0; i < extensions.Count; i++)
+             {
+                 if (extensions[i] == null || extensions[i].Id != AgeClockUxExtensionId) continue;
+                 hasAgeClockUx = true;
+                 extensions[i] = CreateAgeClockUxExtension(c.Economy);
+             }
+             if (c.Economy.AgeClockUx && !hasAgeClockUx) extensions.Add(CreateAgeClockUxExtension(c.Economy));
              bool hasSiegeByAge = false;
              for (int i = 0; i < extensions.Count; i++)
              {
@@ -1190,6 +1220,22 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                         extensions[i] = CreateAiBeltsExtension(c.Economy);
                     }
                 if (c.Economy.AiBelts && !hasAiBelts) extensions.Add(CreateAiBeltsExtension(c.Economy));
+                bool hasCraftTree2 = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CraftTree2ExtensionId)
+                    {
+                        hasCraftTree2 = true;
+                        extensions[i] = CreateCraftTree2Extension(c.Economy);
+                    }
+                if (c.Economy.CraftTree1 && c.Economy.CraftTree2 && !hasCraftTree2) extensions.Add(CreateCraftTree2Extension(c.Economy));
+                bool hasCraftTree3 = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CraftTree3ExtensionId)
+                    {
+                        hasCraftTree3 = true;
+                        extensions[i] = CreateCraftTree3Extension(c.Economy);
+                    }
+                if (c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && !hasCraftTree3) extensions.Add(CreateCraftTree3Extension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1348,6 +1394,81 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                 e.CraftTreeFrameWoodPermille = reader.ReadInt32(); e.CraftTreeFrameWorkPermille = reader.ReadInt32();
                 e.CraftTreeLevel2FramesCost = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftTree2Extension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftTree2 ? 1 : 0);
+                writer.Write(e.AssemblerSizeCells); writer.Write(e.AssemblerWoodCost); writer.Write(e.AssemblerWork); writer.Write(e.AssemblerHp);
+                writer.Write(e.ArmsKitTicks); writer.Write(e.ArmsKitPlankInput); writer.Write(e.ArmsKitCharcoalInput); writer.Write(e.ArmsKitSteelInput);
+                writer.Write(e.ScholarlyTicks); writer.Write(e.ScholarlyPlankInput); writer.Write(e.ScholarlyCharcoalInput); writer.Write(e.ScholarlyFoodInput);
+                writer.Write(e.ArmsKitAttack); writer.Write(e.ArmsKitHpPermille); writer.Write(e.FineArmsKitAttack); writer.Write(e.FineArmsKitHpPermille);
+                writer.Write(e.ScholarlyPerResearch); writer.Write(e.ScholarlyCostPermille); writer.Write(e.ScholarlyTimePermille);
+                writer.Write(e.GoodsValueArmsKit); writer.Write(e.GoodsValueScholarly); writer.Write(e.GoodsValueFineArmsKit);
+                return new ScenarioExtensionData { Id = CraftTree2ExtensionId, Version = CraftTree2ExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftTree2Extension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-tree2 flag.");
+                e.CraftTree2 = enabled != 0 && e.CraftTree1;
+                e.AssemblerSizeCells = reader.ReadInt32(); e.AssemblerWoodCost = reader.ReadInt32();
+                e.AssemblerWork = reader.ReadInt32(); e.AssemblerHp = reader.ReadInt32();
+                e.ArmsKitTicks = reader.ReadInt32(); e.ArmsKitPlankInput = reader.ReadInt32();
+                e.ArmsKitCharcoalInput = reader.ReadInt32(); e.ArmsKitSteelInput = reader.ReadInt32();
+                e.ScholarlyTicks = reader.ReadInt32(); e.ScholarlyPlankInput = reader.ReadInt32();
+                e.ScholarlyCharcoalInput = reader.ReadInt32(); e.ScholarlyFoodInput = reader.ReadInt32();
+                e.ArmsKitAttack = reader.ReadInt32(); e.ArmsKitHpPermille = reader.ReadInt32();
+                e.FineArmsKitAttack = reader.ReadInt32(); e.FineArmsKitHpPermille = reader.ReadInt32();
+                e.ScholarlyPerResearch = reader.ReadInt32(); e.ScholarlyCostPermille = reader.ReadInt32();
+                e.ScholarlyTimePermille = reader.ReadInt32();
+                e.GoodsValueArmsKit = reader.ReadInt32(); e.GoodsValueScholarly = reader.ReadInt32(); e.GoodsValueFineArmsKit = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree2 extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftTree3Extension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftTree3 ? 1 : 0);
+                writer.Write(e.SiegePartsTicks); writer.Write(e.SiegePartsFramesInput); writer.Write(e.SiegePartsArmsKitInput);
+                writer.Write(e.MechanismTicks); writer.Write(e.MechanismArmsKitInput); writer.Write(e.MechanismScholarlyInput); writer.Write(e.MechanismCutStoneInput);
+                writer.Write(e.SiegePartsHpPermille); writer.Write(e.SiegePartsDamagePermille); writer.Write(e.SiegePartsPerCastle); writer.Write(e.SiegePartsCastleStonePermille);
+                writer.Write(e.MechanismBuildingTimePermille); writer.Write(e.MechanismBuildingMaterialPermille);
+                writer.Write(e.MechanismResearchCostPermille); writer.Write(e.MechanismResearchTimePermille);
+                writer.Write(e.SiegePartsStockLimit);
+                writer.Write(e.GoodsValueSiegeParts); writer.Write(e.GoodsValueMechanism);
+                return new ScenarioExtensionData { Id = CraftTree3ExtensionId, Version = CraftTree3ExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftTree3Extension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-tree3 flag.");
+                e.CraftTree3 = enabled != 0 && e.CraftTree1 && e.CraftTree2;
+                e.SiegePartsTicks = reader.ReadInt32(); e.SiegePartsFramesInput = reader.ReadInt32(); e.SiegePartsArmsKitInput = reader.ReadInt32();
+                e.MechanismTicks = reader.ReadInt32(); e.MechanismArmsKitInput = reader.ReadInt32(); e.MechanismScholarlyInput = reader.ReadInt32(); e.MechanismCutStoneInput = reader.ReadInt32();
+                e.SiegePartsHpPermille = reader.ReadInt32(); e.SiegePartsDamagePermille = reader.ReadInt32(); e.SiegePartsPerCastle = reader.ReadInt32(); e.SiegePartsCastleStonePermille = reader.ReadInt32();
+                e.MechanismBuildingTimePermille = reader.ReadInt32(); e.MechanismBuildingMaterialPermille = reader.ReadInt32();
+                e.MechanismResearchCostPermille = reader.ReadInt32(); e.MechanismResearchTimePermille = reader.ReadInt32();
+                if (extension.Version >= CraftTree3ExtensionVersion) e.SiegePartsStockLimit = reader.ReadInt32();
+                e.GoodsValueSiegeParts = reader.ReadInt32(); e.GoodsValueMechanism = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree3 extension data.");
             }
         }
 
@@ -1880,6 +2001,30 @@ private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
                 e.AgeClock = enabled != 0;
                 e.AgeClockTicks1 = reader.ReadInt32(); e.AgeClockTicks2 = reader.ReadInt32(); e.AgeClockTicks3 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAgeClockUxExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AgeClockUx ? 1 : 0);
+                writer.Write(e.AgeClockUxChoiceTicks);
+                return new ScenarioExtensionData { Id = AgeClockUxExtensionId, Version = AgeClockUxExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAgeClockUxExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid age-clock UX flag.");
+                e.AgeClockUx = enabled != 0;
+                e.AgeClockUxChoiceTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock UX extension data.");
             }
         }
 

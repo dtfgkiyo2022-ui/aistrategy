@@ -31,6 +31,9 @@ namespace Rts.Simulation
                 case EconomyCommandKind.UpgradeBuilding:
                     UpgradeProcessingBuilding(faction, c.ProducerId);
                     return;
+                case EconomyCommandKind.SetRecipe:
+                    SetAssemblerRecipe(faction, c.ProducerId, c.Recipe);
+                    return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
                     return;
@@ -47,6 +50,12 @@ namespace Rts.Simulation
                     ReturnToAuto(faction);
                     return;
                 case EconomyCommandKind.AdvanceAge:
+                    if (AgeClockUxOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
+                    {
+                        if (world.Tick >= AgeClockTickForAge(economy.Age)) CompleteAdvance(ref economy, c.Civ);
+                        else economy.ReservedCiv = c.Civ;
+                        return;
+                    }
                     if (AgeClockOn && economy.AdvanceRemaining == 0 && economy.Age < 3
                         && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
                     {
@@ -58,6 +67,9 @@ namespace Rts.Simulation
                     // the first tick advancing can start (AdvanceReserved).
                     else if (AgesOn && economy.Civ == CivKind.Primitive && economy.AdvanceRemaining == 0 && CivEnabled(faction, c.Civ))
                         economy.ReservedCiv = c.Civ;
+                    return;
+                case EconomyCommandKind.AdvanceNow:
+                    TryAdvanceNow(faction, c.Civ);
                     return;
                 case EconomyCommandKind.SetEconomyPolicy:
                     if (IndustryOn && (byte)c.Policy <= 2)
@@ -145,6 +157,7 @@ namespace Rts.Simulation
                         && !(CharmsAllowed(faction) && kind == BuildingKind.CharmWorkshop)
                         && !(RepairKitsAllowed(faction) && kind == BuildingKind.RepairYard)
                         && !(ToolsAllowed(faction) && kind == BuildingKind.ToolShop)
+                        && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
                         && !(kind == BuildingKind.SiegeWorkshop && AgesOn && world.Economies[faction - 1].Age >= 2)

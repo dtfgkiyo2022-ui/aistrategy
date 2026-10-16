@@ -150,7 +150,7 @@ namespace Rts.Core.Tests
             scenario.Economy.Ages = true; scenario.Economy.Industry = true; scenario.Economy.ProcessingChain = true; scenario.Economy.GoodsMarket = true;
             var sim = new Battle(scenario);
             var snapshot = sim.CaptureMatchPackSnapshot();
-            Assert.That(snapshot.Factions[0].GoodsMarket.Select(x => x.Goods), Is.EqualTo(new[] { "Steel", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Incense", "Charms", "RepairKits", "Tools", "CutStone", "Frames" }));
+            Assert.That(snapshot.Factions[0].GoodsMarket.Select(x => x.Goods), Is.EqualTo(new[] { "Steel", "BowGear", "Rations", "Bricks", "Tack", "Planks", "Books", "Incense", "Charms", "RepairKits", "Tools", "CutStone", "Frames", "ArmsKit", "Scholarly", "FineArmsKit", "SiegeParts", "Mechanism" }));
 
             scenario.Economy.GoodsMarket = false;
             var off = new Battle(scenario);

@@ -226,6 +226,24 @@ namespace Rts.Simulation
         public int CraftTreeJoineryTicks = 80, CraftTreeJoineryPlankInput = 2, CraftTreeJoineryCutStoneInput = 1;
         public int CraftTreeFramesPerBuilding = 1, CraftTreeFrameWoodPermille = 700, CraftTreeFrameWorkPermille = 700;
         public int CraftTreeLevel2FramesCost = 2;
+        /// <summary>CraftTree2: the shared second-stage assembler and its effects.</summary>
+        public bool CraftTree2;
+        public int AssemblerSizeCells = 2, AssemblerWoodCost = 120, AssemblerWork = 300, AssemblerHp = 600;
+        public int ArmsKitTicks = 80, ArmsKitPlankInput = 1, ArmsKitCharcoalInput = 2, ArmsKitSteelInput = 1;
+        public int ScholarlyTicks = 100, ScholarlyPlankInput = 1, ScholarlyCharcoalInput = 1, ScholarlyFoodInput = 2;
+        public int ArmsKitAttack = 2, ArmsKitHpPermille = 1100, FineArmsKitAttack = 3, FineArmsKitHpPermille = 1150;
+        public int ScholarlyPerResearch = 1, ScholarlyCostPermille = 600, ScholarlyTimePermille = 700;
+        public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
+        /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
+        public bool CraftTree3;
+        public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;
+        public int MechanismTicks = 150, MechanismArmsKitInput = 1, MechanismScholarlyInput = 1, MechanismCutStoneInput = 1;
+        public int SiegePartsHpPermille = 1500, SiegePartsDamagePermille = 1300, SiegePartsPerCastle = 3, SiegePartsCastleStonePermille = 700;
+        public int MechanismBuildingTimePermille = 500, MechanismBuildingMaterialPermille = 900;
+        public int MechanismResearchCostPermille = 500, MechanismResearchTimePermille = 500;
+        /// <summary>Automatic CraftTree3 keeps this many siege parts before changing back to the next useful recipe.</summary>
+        public int SiegePartsStockLimit = 8;
+        public int GoodsValueSiegeParts = 20, GoodsValueMechanism = 22;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;
@@ -329,6 +347,9 @@ namespace Rts.Simulation
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;
+        /// <summary>AgeClockUx: separates civilisation reservation from payment and gives manual players time to choose after the clock.</summary>
+        public bool AgeClockUx;
+        public int AgeClockUxChoiceTicks = 600;
         /// <summary>S-3: enables outpost towns. Its rules are kept in extension ID 11.</summary>
         public bool Towns;
         /// <summary>V3-13 #1 provisional monastery and cult-only monk training values. The monastery costs wood; its monk costs food and wood.</summary>

@@ -60,7 +60,8 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanOutpostId : 0,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
-                    CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1));
+                    CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
+                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -93,6 +94,10 @@ namespace Rts.Simulation
             int age2Wood = AgeClockOn && economy.Age == 1 ? advancePrice.wood : rules.Age2WoodCost;
             int age3Food = AgeClockOn && economy.Age == 2 ? advancePrice.food : rules.Age3FoodCost;
             int age3Wood = AgeClockOn && economy.Age == 2 ? advancePrice.wood : rules.Age3WoodCost;
+            long nextAgeClockTick = NextAgeClockTick(faction);
+            long civChoiceDeadline = AgeClockUxOn && economy.Age == 0 && economy.Civ == CivKind.Primitive && nextAgeClockTick != 0
+                ? economy.CivChoiceDeadlineTick != 0 ? economy.CivChoiceDeadlineTick : checked(nextAgeClockTick + rules.AgeClockUxChoiceTicks)
+                : 0;
             var passableCells = PlacementPassableView();
             var riverCells = PlacementRiverView();
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
@@ -289,7 +294,41 @@ namespace Rts.Simulation
                 frameWorkPermille: CraftTree1On ? rules.CraftTreeFrameWorkPermille : 0,
                 level2FramesCost: CraftTree1On ? rules.CraftTreeLevel2FramesCost : 0,
                 dropSiteMax: DropSiteLimitOn ? rules.DropSiteMax : 0,
-                dropSiteCount: DropSiteLimitOn ? AliveDropSites(faction) : 0);
+                dropSiteCount: DropSiteLimitOn ? AliveDropSites(faction) : 0,
+                craftTree2Enabled: CraftTree2On,
+                armsKit: CraftTree2On ? economy.ArmsKit : 0,
+                scholarly: CraftTree2On ? economy.Scholarly : 0,
+                fineArmsKit: CraftTree2On ? economy.FineArmsKit : 0,
+                assemblerWoodCost: AssemblerAllowed(faction) ? rules.AssemblerWoodCost : 0,
+                assemblerSizeCells: AssemblerAllowed(faction) ? rules.AssemblerSizeCells : 0,
+                armsKitAttack: CraftTree2On ? rules.ArmsKitAttack : 0,
+                armsKitHpPermille: CraftTree2On ? rules.ArmsKitHpPermille : 0,
+                scholarlyPerResearch: CraftTree2On ? rules.ScholarlyPerResearch : 0,
+                scholarlyCostPermille: CraftTree2On ? rules.ScholarlyCostPermille : 0,
+                scholarlyTimePermille: CraftTree2On ? rules.ScholarlyTimePermille : 0,
+                armsKitTicks: CraftTree2On ? rules.ArmsKitTicks : 0,
+                armsKitPlankInput: CraftTree2On ? rules.ArmsKitPlankInput : 0,
+                armsKitCharcoalInput: CraftTree2On ? rules.ArmsKitCharcoalInput : 0,
+                armsKitSteelInput: CraftTree2On ? rules.ArmsKitSteelInput : 0,
+                scholarlyTicks: CraftTree2On ? rules.ScholarlyTicks : 0,
+                scholarlyPlankInput: CraftTree2On ? rules.ScholarlyPlankInput : 0,
+                scholarlyCharcoalInput: CraftTree2On ? rules.ScholarlyCharcoalInput : 0,
+                 scholarlyFoodInput: CraftTree2On ? rules.ScholarlyFoodInput : 0,
+                 craftTree3Enabled: CraftTree3On,
+                 siegeParts: CraftTree3On ? economy.SiegeParts : 0,
+                 mechanism: CraftTree3On ? economy.Mechanism : 0,
+                 siegePartsTicks: CraftTree3On ? rules.SiegePartsTicks : 0,
+                 mechanismTicks: CraftTree3On ? rules.MechanismTicks : 0,
+                 siegePartsHpPermille: CraftTree3On ? rules.SiegePartsHpPermille : 0,
+                 siegePartsDamagePermille: CraftTree3On ? rules.SiegePartsDamagePermille : 0,
+                 siegePartsPerCastle: CraftTree3On ? rules.SiegePartsPerCastle : 0,
+                 siegePartsCastleStonePermille: CraftTree3On ? rules.SiegePartsCastleStonePermille : 0,
+                 mechanismBuildingTimePermille: CraftTree3On ? rules.MechanismBuildingTimePermille : 0,
+                 mechanismBuildingMaterialPermille: CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0,
+                 mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
+                 mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0,
+                civChoiceDeadlineTick: civChoiceDeadline,
+                ageClockUx: AgeClockUxOn);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

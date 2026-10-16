@@ -25,6 +25,8 @@ GOODS_COLORS = {
     "Preserves": (220, 107, 83), "TradeGoods": (67, 143, 104), "Incense": (161, 92, 177),
     "Charms": (218, 111, 179), "RepairKits": (74, 106, 128), "Tools": (80, 133, 142),
     "CutStone": (168, 170, 176), "Frames": (196, 150, 92),
+    "ArmsKit": (150, 92, 64), "FineArmsKit": (96, 128, 170), "Scholarly": (112, 86, 150),
+    "SiegeParts": (120, 96, 70), "Mechanism": (176, 150, 70),
 }
 
 
@@ -86,6 +88,34 @@ def draw_goods(name, color):
         draw.rectangle((15, 16, 49, 48), outline=dark, width=5)
         draw.line((17, 46, 47, 18), fill=dark, width=5)
         draw.rectangle((15, 16, 49, 48), outline=light, width=1)
+    elif name in ("ArmsKit", "FineArmsKit"):
+        # A sword over a small shield; the fine kit (steel) has a lighter blade.
+        draw.ellipse((14, 22, 40, 50), fill=dark, outline=light, width=2)
+        blade = (230, 236, 244) if name == "FineArmsKit" else light
+        draw.line((24, 46, 48, 14), fill=blade, width=5)
+        draw.line((28, 34, 38, 44), fill=dark, width=3)
+    elif name == "Scholarly":
+        # A scroll with a seal.
+        draw.rounded_rectangle((15, 20, 49, 44), radius=6, fill=light, outline=dark, width=2)
+        draw.line((20, 28, 44, 28), fill=dark, width=2)
+        draw.line((20, 34, 40, 34), fill=dark, width=2)
+        draw.ellipse((38, 36, 50, 48), fill=(170, 40, 40), outline=dark)
+    elif name == "SiegeParts":
+        # A wheel and a beam.
+        draw.ellipse((14, 24, 38, 48), fill=dark, outline=light, width=3)
+        draw.line((26, 26, 26, 46), fill=light, width=2)
+        draw.line((16, 36, 36, 36), fill=light, width=2)
+        draw.rectangle((30, 16, 52, 24), fill=light, outline=dark, width=2)
+    elif name == "Mechanism":
+        # A gear.
+        cx, cy, r = 32, 32, 13
+        for k in range(8):
+            import math
+            a = k * math.pi / 4
+            x, y = cx + math.cos(a) * (r + 4), cy + math.sin(a) * (r + 4)
+            draw.rectangle((x - 3, y - 3, x + 3, y + 3), fill=dark)
+        draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=dark, outline=light, width=2)
+        draw.ellipse((cx - 5, cy - 5, cx + 5, cy + 5), fill=light)
     elif name == "Tools":
         draw.line((18, 43, 43, 18), fill=light, width=6)
         draw.ellipse((13, 36, 27, 50), fill=dark, outline=light, width=2)

@@ -44,6 +44,7 @@
     <Compile Include="TerrainTests.cs" />
     <Compile Include="AgeTests.cs" />
     <Compile Include="AgeClockTests.cs" />
+    <Compile Include="AgeClockUxTests.cs" />
     <Compile Include="CivTests.cs" />
     <Compile Include="TrainingTests.cs" />
     <Compile Include="DefenceTests.cs" />
@@ -103,6 +104,8 @@
   <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="CraftTree1Tests.cs" />
     <Compile Include="DropSiteLimitTests.cs" />
+    <Compile Include="CraftTree2Tests.cs" />
+    <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />
@@ -131,6 +134,7 @@
     <Compile Include="TacticGymTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchOutcome.cs" Link="Presentation/MatchOutcome.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiText.cs" Link="Presentation/UiText.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/AgeClockUxUiText.cs" Link="Presentation/AgeClockUxUiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/GoodsMarketUiText.cs" Link="Presentation/GoodsMarketUiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
@@ -154,7 +158,9 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CoordinatedOffenseTests.cs" Link="Tests/CoordinatedOffenseTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AutoOffenseDecisionTests.cs" Link="Tests/AutoOffenseDecisionTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ContractsTests.cs" Link="Tests/ContractsTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AgeClockUxEditModeTests.cs" Link="Tests/AgeClockUxEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CraftTree1EditModeTests.cs" Link="Tests/CraftTree1EditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/CraftTree3EditModeTests.cs" Link="Tests/CraftTree3EditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/JewelsEditModeTests.cs" Link="Tests/JewelsEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/RepairKitsEditModeTests.cs" Link="Tests/RepairKitsEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Fix64Tests.cs" Link="Tests/Fix64Tests.cs" />

@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -160,7 +160,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells
+            return kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -169,7 +169,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost
+            return kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseHouseWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -217,6 +217,7 @@ namespace Rts.Presentation
         {
             if (m == Mode.Stonecutter) return BuildingKind.Stonecutter;
             if (m == Mode.Joinery) return BuildingKind.Joinery;
+            if (m == Mode.Assembler) return BuildingKind.Assembler;
             if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
             if (m == Mode.Saddlery) return BuildingKind.Saddlery;
             if (m == Mode.Sawmill) return BuildingKind.Sawmill;
@@ -228,7 +229,7 @@ namespace Rts.Presentation
             return m == Mode.CharmWorkshop ? BuildingKind.CharmWorkshop : m == Mode.RepairYard ? BuildingKind.RepairYard : m == Mode.Mine ? BuildingKind.Mine : m == Mode.Smelter ? BuildingKind.Smelter : m == Mode.Farm ? BuildingKind.Farm : m == Mode.Mill ? BuildingKind.Mill
                 : m == Mode.House ? BuildingKind.House : m == Mode.DropSite ? BuildingKind.DropSite : m == Mode.Tower ? BuildingKind.Tower
                 : m == Mode.Blacksmith ? BuildingKind.Blacksmith
-                : m == Mode.ToolShop ? BuildingKind.ToolShop : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
+                : m == Mode.ToolShop ? BuildingKind.ToolShop : m == Mode.Assembler ? BuildingKind.Assembler : m == Mode.Market ? BuildingKind.Market : m == Mode.SiegeWorkshop ? BuildingKind.SiegeWorkshop
                 : m == Mode.ArcheryRange ? BuildingKind.ArcheryRange : m == Mode.Stable ? BuildingKind.Stable
                 : m == Mode.Castle ? BuildingKind.Castle : m == Mode.Storage ? BuildingKind.Storage : BuildingKind.Barracks;
         }
@@ -307,8 +308,9 @@ namespace Rts.Presentation
         /// </summary>
         private void SendAdvanceFromPrimitive(EconomyView economy, CivKind civ)
         {
-            bool now = economy.Food >= economy.AdvanceFoodCost && economy.Wood >= economy.AdvanceWoodCost && economy.VillagerQueued == 0;
-            string message = now
+            string message = economy.AgeClockUx
+                ? AgeClockUxUiText.Reservation(CivName(civ), economy.NextAgeClockTick, view.LatestFrame.Tick)
+                : economy.Food >= economy.AdvanceFoodCost && economy.Wood >= economy.AdvanceWoodCost && economy.VillagerQueued == 0
                 ? UiText.T("Advancing into ", "") + CivName(civ) + UiText.T(" requested", "へ進めるよう依頼しました")
                 : UiText.T("Reserved ", "") + CivName(civ) + UiText.T(" (advances once food and wood are in and villager training is done)",
                     "を予約しました（食料と木材が貯まり、村人の訓練が終わったら進みます）");
@@ -816,6 +818,8 @@ namespace Rts.Presentation
                         foreach (var goods in GoodsKindsForDisplay)
                         {
                             if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !economy.CraftTree1Enabled) continue;
+                            if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !economy.CraftTree2Enabled) continue;
+                            if ((goods == ResourceKind.SiegeParts || goods == ResourceKind.Mechanism) && !economy.CraftTree3Enabled) continue;
                             if (GoodsStock(economy, goods) < economy.GoodsTradeLot) continue;
                             int price = GoodsPrice(economy, goods);
                             GUI.enabled = market.Value.Complete;
@@ -848,7 +852,14 @@ namespace Rts.Presentation
                     + AgeClockLabel(economy, economy.AdvanceFoodCost, economy.AdvanceWoodCost);
                 // A button can always be pressed: when advancing is not possible yet, the choice is kept as a reservation.
                 string reserved = economy.ReservedCiv != CivKind.Primitive
-                    ? UiText.T("  Reserved: ", "  予約中：") + CivName(economy.ReservedCiv) : "";
+                    ? economy.AgeClockUx
+                        ? "  " + AgeClockUxUiText.Reservation(CivName(economy.ReservedCiv), economy.NextAgeClockTick, view.LatestFrame.Tick)
+                        : UiText.T("  Reserved: ", "  予約中：") + CivName(economy.ReservedCiv) : "";
+                if (economy.AgeClockUx && AgeClockUxUiText.IsChoiceWindow(economy.NextAgeClockTick, economy.CivChoiceDeadlineTick, view.LatestFrame.Tick))
+                {
+                    GUI.Label(new Rect(x, y, w, 22f), AgeClockUxUiText.ChoiceDeadline(economy.CivChoiceDeadlineTick, view.LatestFrame.Tick));
+                    y += 22f;
+                }
                 if (!ExtraCivilisations)
                 {
                     if (economy.ReservedCiv != CivKind.Primitive)
@@ -856,16 +867,16 @@ namespace Rts.Presentation
                         GUI.Label(new Rect(x, y, w, 22f), reserved.TrimStart());
                         y += 22f;
                     }
-                    if (GUI.Button(new Rect(x, y, half, 22f), Star(economy, CivKind.Agrarian) + UiText.T("Advance: farming", "時代を進める：農耕") + cost))
+                    if (GUI.Button(new Rect(x, y, half, 22f), Star(economy, CivKind.Agrarian) + (economy.AgeClockUx ? UiText.T("Reserve: farming", "予約：農耕") : UiText.T("Advance: farming", "時代を進める：農耕")) + cost))
                         SendAdvanceFromPrimitive(economy, CivKind.Agrarian);
-                    if (GUI.Button(new Rect(right, y, half, 22f), Star(economy, CivKind.Metallurgy) + UiText.T("Advance: metallurgy", "時代を進める：冶金") + cost))
+                    if (GUI.Button(new Rect(right, y, half, 22f), Star(economy, CivKind.Metallurgy) + (economy.AgeClockUx ? UiText.T("Reserve: metallurgy", "予約：冶金") : UiText.T("Advance: metallurgy", "時代を進める：冶金")) + cost))
                         SendAdvanceFromPrimitive(economy, CivKind.Metallurgy);
                     y += 26f;
                 }
                 else
                 {
                     // All civilisations: one label with the cost, then the choices four to a row.
-                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Advance into", "時代を進める：") + cost + reserved);
+                    GUI.Label(new Rect(x, y, w, 22f), (economy.AgeClockUx ? UiText.T("Reserve into", "文明を予約：") : UiText.T("Advance into", "時代を進める：")) + cost + reserved);
                     y += 22f;
                     float quarterWidth = (w - 12f) / 4f;
                     var civs = AllCivs;
@@ -877,6 +888,12 @@ namespace Rts.Presentation
                             SendAdvanceFromPrimitive(economy, civ);
                     }
                     y += ((civs.Length + 3) / 4) * 26f;
+                }
+                if (economy.AgeClockUx && economy.ReservedCiv != CivKind.Primitive)
+                {
+                    if (GUI.Button(new Rect(x, y, w, 22f), AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost)))
+                        Send(EconomyCommand.AdvanceNow(faction, ++sequence, economy.ReservedCiv), AgeClockUxUiText.AdvanceNow(economy.AdvanceFoodCost, economy.AdvanceWoodCost));
+                    y += 26f;
                 }
             }
             else if (economy.Ages && (economy.Age == 1 || economy.Age == 2) && economy.AdvanceRemaining == 0)
@@ -894,7 +911,12 @@ namespace Rts.Presentation
                     : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない")
                     : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない")
                     : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : null;
-                if (why == null)
+                if (economy.AgeClockUx)
+                {
+                    if (GUI.Button(new Rect(x, y, w, 22f), AgeClockUxUiText.AdvanceNow(food, wood, gold)))
+                        Send(EconomyCommand.AdvanceNow(faction, ++sequence, economy.Civ), AgeClockUxUiText.AdvanceNow(food, wood, gold));
+                }
+                else if (why == null)
                 {
                     if (GUI.Button(new Rect(x, y, w, 22f), next + price))
                         Send(EconomyCommand.Advance(faction, ++sequence, economy.Civ), next);
@@ -944,7 +966,7 @@ namespace Rts.Presentation
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
             ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
-            ResourceKind.CutStone, ResourceKind.Frames
+            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit, ResourceKind.SiegeParts, ResourceKind.Mechanism
         };
 
         public static string GoodsTradeLabel(ResourceKind goods, ResourceKind take, int lot)
@@ -957,7 +979,9 @@ namespace Rts.Presentation
                 : kind == ResourceKind.Books ? economy.Books : kind == ResourceKind.Incense ? economy.Incense
                 : kind == ResourceKind.Charms ? economy.Charms : kind == ResourceKind.RepairKits ? economy.RepairKits
                 : kind == ResourceKind.Tools ? economy.Tools : kind == ResourceKind.CutStone ? economy.CutStone
-                : kind == ResourceKind.Frames ? economy.Frames : 0;
+                : kind == ResourceKind.Frames ? economy.Frames : kind == ResourceKind.ArmsKit ? economy.ArmsKit
+                 : kind == ResourceKind.Scholarly ? economy.Scholarly : kind == ResourceKind.FineArmsKit ? economy.FineArmsKit
+                 : kind == ResourceKind.SiegeParts ? economy.SiegeParts : kind == ResourceKind.Mechanism ? economy.Mechanism : 0;
 
         private static int GoodsPrice(EconomyView economy, ResourceKind kind)
         {
