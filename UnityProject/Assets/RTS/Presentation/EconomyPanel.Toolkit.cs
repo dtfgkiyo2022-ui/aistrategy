@@ -347,7 +347,7 @@ namespace Rts.Presentation
             }
             if (economy.CraftTree2Enabled && economy.Age >= 2)
             {
-                Add(rows, "build:assembler", UiText.T("Assembler (" + economy.AssemblerWoodCost + " wood)", "Assembler (" + economy.AssemblerWoodCost + " wood)"), true, "", mode == Mode.Assembler);
+                Add(rows, "build:assembler", UiText.T("Assembler (" + economy.AssemblerWoodCost + " wood)", "組立所（木材 " + economy.AssemblerWoodCost + "）"), true, "", mode == Mode.Assembler);
                 for (int i = 0; i < economy.Buildings.Count; i++)
                 {
                     var assembler = economy.Buildings[i];

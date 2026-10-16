@@ -204,9 +204,9 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.CutStone, UiText.T("Cut stone", "切石"), economy.CutStone));
             if (ShowFrames(economy))
                 target.Add(new ResourceEntry(ResourceKind.Frames, UiText.T("Frames", "建材"), economy.Frames));
-            if (ShowArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.ArmsKit, UiText.T("Arms kit", "Arms kit"), economy.ArmsKit));
-            if (ShowScholarly(economy)) target.Add(new ResourceEntry(ResourceKind.Scholarly, UiText.T("Scholarly", "Scholarly"), economy.Scholarly));
-            if (ShowFineArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.FineArmsKit, UiText.T("Fine arms kit", "Fine arms kit"), economy.FineArmsKit));
+            if (ShowArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.ArmsKit, UiText.T("Arms kit", "武具"), economy.ArmsKit));
+            if (ShowScholarly(economy)) target.Add(new ResourceEntry(ResourceKind.Scholarly, UiText.T("Scholarly", "学術品"), economy.Scholarly));
+            if (ShowFineArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.FineArmsKit, UiText.T("Fine arms kit", "良い武具"), economy.FineArmsKit));
             if (ShowSiegeParts(economy)) target.Add(new ResourceEntry(ResourceKind.SiegeParts, UiText.T("Siege parts", "攻城部品"), economy.SiegeParts));
             if (ShowMechanism(economy)) target.Add(new ResourceEntry(ResourceKind.Mechanism, UiText.T("Mechanism", "精密部品"), economy.Mechanism));
             if (ShowBooks(economy))

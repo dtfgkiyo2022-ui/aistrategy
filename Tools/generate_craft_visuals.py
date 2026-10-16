@@ -151,10 +151,11 @@ def draw_status(name):
 
 
 def draw_belt():
-    image = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    # Opaque dark rubber with two light chevrons pointing up (+v), tiling seamlessly along v.
+    image = Image.new("RGBA", (64, 64), (46, 44, 48, 255))
     draw = ImageDraw.Draw(image)
-    draw.polygon((4, 12, 22, 12, 38, 28, 54, 12, 60, 12, 38, 36, 60, 52, 54, 52, 38, 36, 22, 52, 4, 52, 26, 28), fill=(244, 218, 112, 255))
-    draw.polygon((12, 17, 20, 17, 38, 35, 55, 17, 55, 25, 38, 43, 12, 25), fill=(86, 62, 38, 255))
+    for top in (2, 34):
+        draw.polygon((8, top + 22, 32, top, 56, top + 22, 56, top + 30, 32, top + 9, 8, top + 30), fill=(236, 200, 92, 255))
     return image
 
 
