@@ -27,7 +27,9 @@ internal static class JsonInput
         o.Converters.Add(new ValueConverter<EconomyCommand>(e => new EconomyCommand(Get<uint>(e,"factionId",o), Get<ulong>(e,"issuerSequence",o),
             Get<EconomyCommandKind>(e,"kind",o), Get<BuildingKind>(e,"building",o), Get<int>(e,"cell",o), Get<uint>(e,"producerId",o),
             Get<UnitKind>(e,"unit",o), Get<uint[]>(e,"villagerIds",o), Get<EconomyTargetKind>(e,"targetKind",o), Get<uint>(e,"targetId",o), Get<bool>(e,"enabled",o),
-            Get<int[]>(e,"cells",o), Get<Facing[]>(e,"facings",o), Get<Facing>(e,"facing",o), Get<EconomyPolicy>(e,"policy",o), Get<CivKind>(e,"civ",o))));
+            Get<int[]>(e,"cells",o), Get<Facing[]>(e,"facings",o), Get<Facing>(e,"facing",o), Get<EconomyPolicy>(e,"policy",o), Get<CivKind>(e,"civ",o),
+            Get<TechKind>(e,"tech",o), Get<ResourceKind>(e,"give",o), Get<ResourceKind>(e,"take",o),
+            Get<ProcessingLineKind>(e,"line",o), Get<RecipeKind>(e,"recipe",o))));
         // An input with an "economy" object is a Ver.3 direct economy operation; everything else is read as before.
         o.Converters.Add(new ValueConverter<ScheduledInput>(e => e.TryGetProperty("economy", out var economy)
             ? new ScheduledInput(Get<ulong>(e,"logIndex",o), Get<long>(e,"acceptedTick",o), Get<long>(e,"applyTick",o), economy.Deserialize<EconomyCommand>(o))
@@ -175,7 +177,7 @@ if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-param","--east-
             {
                 if (options.ContainsKey("--scenario") == options.ContainsKey("--map-seed")) throw new InvalidDataException("Give exactly one of --scenario or --map-seed.");
                 // A generated map is recorded like any other scenario: the replay holds the map itself, not the seed.
-                var scenario=options.TryGetValue("--map-seed",out var mapSeed)&&options.ContainsKey("--terrain")?MapGenerator.GenerateTerrain(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture)):options.TryGetValue("--map-seed",out mapSeed)?MapGenerator.Generate(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture),options.ContainsKey("--economy")||options.ContainsKey("--industry"),options.ContainsKey("--industry")):JsonInput.Scenario(Required("--scenario"));
+                var scenario=options.TryGetValue("--map-seed",out var mapSeed)&&options.ContainsKey("--terrain")?MapGenerator.GenerateTerrain(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture)):options.TryGetValue("--map-seed",out mapSeed)?MapGenerator.Generate(ulong.Parse(mapSeed,System.Globalization.CultureInfo.InvariantCulture),options.ContainsKey("--economy")||options.ContainsKey("--industry"),options.ContainsKey("--industry")):ScenarioFile(Required("--scenario"));
                 var inputs=options.TryGetValue("--inputs",out var path)?JsonSerializer.Deserialize<ScheduledInput[]>(File.ReadAllText(path),JsonInput.Options) ?? throw new InvalidDataException("Null inputs."):Array.Empty<ScheduledInput>();
                 if (options.ContainsKey("--enemy-preset") && options.ContainsKey("--east-preset")) throw new InvalidDataException("--enemy-preset is an alias for --east-preset; use only one.");
                 string eastPreset = options.TryGetValue("--east-preset", out var east) ? east : options.GetValueOrDefault("--enemy-preset");
@@ -203,6 +205,12 @@ if(args[0]=="tactic-match") allowed=allowed.Concat(new[]{"--west-param","--east-
         catch(Exception e) when(e is InvalidDataException || e is EndOfStreamException || e is JsonException || e is ArgumentException || e is FormatException || e is OverflowException)
         { Console.Error.WriteLine("Format/version: "+e.Message); return 3; }
         catch(Exception e) { Console.Error.WriteLine("Fault: "+e.Message); return 4; }
+    }
+    private static ScenarioDefinition ScenarioFile(string path)
+    {
+        return path.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)
+            ? ScenarioBinary.Decode(File.ReadAllBytes(path))
+            : JsonInput.Scenario(path);
     }
     private static string FileHash(string path)
     { using var s=File.OpenRead(path); return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(s)); }

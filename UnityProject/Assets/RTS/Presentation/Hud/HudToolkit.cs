@@ -167,6 +167,9 @@ namespace Rts.Presentation
         private Label resultDetail;
         private Label resultPack;
         private Button resultRestart;
+        private VisualElement selectionInfoFrame;
+        private Label selectionInfoTitle;
+        private Label selectionInfoDetail;
         private bool staffInputFocused;
         private bool staffAiListOpen;
         private string staffAiSignature = "";
@@ -412,6 +415,7 @@ namespace Rts.Presentation
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
                 if (statsFrame != null) statsFrame.style.display = DisplayStyle.None;
+                if (selectionInfoFrame != null) selectionInfoFrame.style.display = DisplayStyle.None;
                 HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
@@ -433,6 +437,7 @@ namespace Rts.Presentation
                 if (timelineFrame != null) timelineFrame.style.display = DisplayStyle.None;
                 if (clockFrame != null) clockFrame.style.display = DisplayStyle.None;
                 if (statsFrame != null) statsFrame.style.display = DisplayStyle.None;
+                if (selectionInfoFrame != null) selectionInfoFrame.style.display = DisplayStyle.None;
                 HideCommandOverlays();
                 SetStaffInputFocus(false);
                 return;
@@ -453,6 +458,7 @@ namespace Rts.Presentation
             RefreshSetup();
             RefreshLog();
             RefreshResult();
+            RefreshSelectionInfo(economy);
 
             // Register the same screen-pixel rectangle used by the IMGUI top bar. The next input frame therefore
             // treats this Toolkit panel as occupied and does not let map selection or orders leak underneath it.
@@ -604,6 +610,7 @@ namespace Rts.Presentation
             populationLabel = root.Q<Label>("population-label");
             idleLabel = root.Q<Label>("idle-label");
             EnsureStatsPanel();
+            EnsureSelectionInfoPanel();
             staffFrame = root.Q<VisualElement>("staff-frame");
             staffPanel = root.Q<VisualElement>("staff-panel");
             staffScroll = root.Q<ScrollView>("staff-scroll");
@@ -769,6 +776,273 @@ namespace Rts.Presentation
             statsFrame.Add(statsScroll);
             hudRoot.Add(statsFrame);
             UpdateStatsVisibility();
+        }
+
+        private void EnsureSelectionInfoPanel()
+        {
+            if (selectionInfoFrame != null || hudRoot == null) return;
+            selectionInfoFrame = new VisualElement { name = "selection-info-frame" };
+            selectionInfoFrame.pickingMode = PickingMode.Position;
+            selectionInfoFrame.style.position = Position.Absolute;
+            selectionInfoFrame.style.left = 12f;
+            selectionInfoFrame.style.bottom = 12f;
+            selectionInfoFrame.style.width = 390f;
+            selectionInfoFrame.style.maxHeight = 270f;
+            selectionInfoFrame.style.paddingLeft = 10f;
+            selectionInfoFrame.style.paddingRight = 10f;
+            selectionInfoFrame.style.paddingTop = 7f;
+            selectionInfoFrame.style.paddingBottom = 7f;
+            selectionInfoFrame.style.backgroundColor = new Color(0.10f, 0.085f, 0.065f, 0.96f);
+            selectionInfoFrame.style.borderBottomWidth = 2f;
+            selectionInfoFrame.style.borderLeftWidth = 2f;
+            selectionInfoFrame.style.borderRightWidth = 2f;
+            selectionInfoFrame.style.borderTopWidth = 2f;
+            selectionInfoFrame.style.borderBottomColor = new Color(0.62f, 0.46f, 0.22f, 1f);
+            selectionInfoFrame.style.borderLeftColor = selectionInfoFrame.style.borderBottomColor;
+            selectionInfoFrame.style.borderRightColor = selectionInfoFrame.style.borderBottomColor;
+            selectionInfoFrame.style.borderTopColor = selectionInfoFrame.style.borderBottomColor;
+            selectionInfoTitle = new Label { name = "selection-info-title" };
+            selectionInfoTitle.style.unityFontStyleAndWeight = FontStyle.Bold;
+            selectionInfoTitle.style.color = new Color(0.95f, 0.78f, 0.38f, 1f);
+            selectionInfoDetail = new Label { name = "selection-info-detail" };
+            selectionInfoDetail.style.whiteSpace = WhiteSpace.Normal;
+            selectionInfoDetail.style.color = new Color(0.86f, 0.84f, 0.76f, 1f);
+            selectionInfoFrame.Add(selectionInfoTitle);
+            selectionInfoFrame.Add(selectionInfoDetail);
+            hudRoot.Add(selectionInfoFrame);
+            selectionInfoFrame.style.display = DisplayStyle.None;
+        }
+
+        private void RefreshSelectionInfo(EconomyView economy)
+        {
+            if (selectionInfoFrame == null || view == null || view.LatestFrame == null)
+                return;
+
+            var frame = view.LatestFrame;
+            if (economyLayer != null && economy != null && economyLayer.SelectedBuildingId != 0)
+            {
+                BuildingView selectedBuilding = default(BuildingView);
+                bool foundBuilding = false;
+                foreach (var building in economy.Buildings)
+                {
+                    if (building.Id == economyLayer.SelectedBuildingId && building.FactionId == frame.FactionId)
+                    {
+                        selectedBuilding = building;
+                        foundBuilding = true;
+                        break;
+                    }
+                }
+
+                if (foundBuilding)
+                {
+                    SetSelectionInfo(
+                        EconomyLayer.BuildingName(selectedBuilding.Kind),
+                        BuildingSelectionDetail(selectedBuilding, economy));
+                    return;
+                }
+            }
+
+            if (economyLayer != null && economy != null && economyLayer.HasVillagerSelection)
+            {
+                var selectedVillagers = new List<VillagerView>();
+                foreach (var villager in economy.Villagers)
+                {
+                    if (!villager.IsOwn || !ContainsId(economyLayer.SelectedVillagers, villager.Id)) continue;
+                    selectedVillagers.Add(villager);
+                }
+                if (selectedVillagers.Count > 0)
+                {
+                    SetSelectionInfo(
+                        UiText.T("Villager", "村人"),
+                        VillagerSelectionDetail(selectedVillagers));
+                    return;
+                }
+            }
+
+            if (view.Selected.Kind == SelectionKind.Army && view.SelectedArmies.Count > 0)
+            {
+                SetSelectionInfo(
+                    UiText.T("Army", "軍団") + " " + view.Selected.Id,
+                    ArmySelectionDetail(frame, view.SelectedArmies));
+                return;
+            }
+
+            selectionInfoFrame.style.display = DisplayStyle.None;
+        }
+
+        private void SetSelectionInfo(string title, string detail)
+        {
+            if (selectionInfoFrame == null) return;
+            selectionInfoTitle.text = title ?? "";
+            selectionInfoDetail.text = detail ?? "";
+            selectionInfoFrame.style.display = DisplayStyle.Flex;
+        }
+
+        private static string BuildingSelectionDetail(BuildingView building, EconomyView economy)
+        {
+            var lines = new List<string>();
+            lines.Add(SelectionInfoText.BuildingDescription(building.Kind));
+
+            CraftRecipe recipe;
+            if (CraftVisualRules.TryGetRecipe(building.Kind, out recipe))
+            {
+                string recipeText = ResourceName(recipe.Input);
+                if (recipe.HasSecondaryInput) recipeText += " + " + ResourceName(recipe.InputSecondary);
+                if (recipe.HasOutput) recipeText += " → " + ResourceName(recipe.Output);
+                if (!string.IsNullOrEmpty(recipeText))
+                    lines.Add(UiText.T("Recipe: ", "レシピ：") + recipeText);
+            }
+            else if (building.Recipe != RecipeKind.None)
+            {
+                lines.Add(UiText.T("Recipe: ", "レシピ：") + building.Recipe);
+            }
+
+            CraftBuildingState state = CraftVisualRules.Evaluate(building, economy);
+            lines.Add(UiText.T("Status: ", "状態：") + CraftStateName(state));
+            lines.Add(UiText.T("Input: ", "入力：") + ResourceCount(building.Input, building.InputSecondary, building.InputTertiary));
+            lines.Add(UiText.T("Output: ", "出力：") + building.Output);
+            lines.Add(UiText.T("HP: ", "HP：") + building.Hp + "/" + building.MaxHp);
+            if (!building.Complete)
+            {
+                lines.Add(UiText.T("Construction: ", "建設：")
+                    + UiInfoRules.ConstructionRatio(building.Progress, building.Work).ToString("P0")
+                    + " (" + building.Progress + "/" + building.Work + ")");
+            }
+            return string.Join("\n", lines);
+        }
+
+        private static string VillagerSelectionDetail(IReadOnlyList<VillagerView> villagers)
+        {
+            var lines = new List<string>();
+            lines.Add(UiText.T("Selected: ", "選択数：") + villagers.Count);
+            for (int i = 0; i < villagers.Count; i++)
+            {
+                var villager = villagers[i];
+                string carry = villager.Carry > 0
+                    ? UiText.T("; carry ", "；運搬 ") + ResourceName(villager.CarryKind) + " " + villager.Carry
+                    : "";
+                lines.Add(UiText.T("Activity: ", "活動：") + VillagerActivityName(villager.Activity) + carry);
+            }
+            return string.Join("\n", lines);
+        }
+
+        private static string ArmySelectionDetail(FactionFrame frame, IReadOnlyList<uint> armyIds)
+        {
+            var lines = new List<string>();
+            var counts = new Dictionary<UnitKind, int>();
+            var hpTotals = new Dictionary<UnitKind, int>();
+            var hpCounts = new Dictionary<UnitKind, int>();
+            for (int i = 0; i < frame.Units.Count; i++)
+            {
+                var unit = frame.Units[i];
+                if (!unit.IsOwn || !ContainsId(armyIds, unit.ArmyId)) continue;
+                int count;
+                counts.TryGetValue(unit.Kind, out count);
+                counts[unit.Kind] = count + 1;
+                if (unit.HasHp)
+                {
+                    int total;
+                    hpTotals.TryGetValue(unit.Kind, out total);
+                    hpTotals[unit.Kind] = total + unit.Hp;
+                    hpCounts.TryGetValue(unit.Kind, out count);
+                    hpCounts[unit.Kind] = count + 1;
+                }
+            }
+
+            foreach (var pair in counts)
+            {
+                string hp = "";
+                int total;
+                int hpCount;
+                bool hasHpTotal = hpTotals.TryGetValue(pair.Key, out total);
+                bool hasHpCount = hpCounts.TryGetValue(pair.Key, out hpCount);
+                if (hasHpTotal && hasHpCount && hpCount > 0)
+                    hp = UiText.T("; HP avg ", "；平均HP ") + (total / (float)hpCount).ToString("0");
+                lines.Add(BattlefieldView.UnitName(pair.Key) + " x" + pair.Value + hp
+                    + UiText.T("; ", "；") + SelectionInfoText.UnitStrength(pair.Key));
+            }
+
+            for (int i = 0; i < frame.Commands.Count; i++)
+            {
+                var command = frame.Commands[i];
+                if (command.Target.Kind != ScopeKind.Army || !ContainsId(armyIds, command.Target.Id)) continue;
+                lines.Add(UiText.T("Command: ", "指令：") + command.Kind + " / " + command.Status);
+                break;
+            }
+            if (lines.Count == 0)
+                lines.Add(UiText.T("No visible unit data.", "表示できる兵情報がありません。"));
+            return string.Join("\n", lines);
+        }
+
+        private static bool ContainsId(IReadOnlyList<uint> ids, uint id)
+        {
+            if (ids == null) return false;
+            for (int i = 0; i < ids.Count; i++) if (ids[i] == id) return true;
+            return false;
+        }
+
+        private static string ResourceCount(int primary, int secondary, int tertiary)
+        {
+            string text = primary.ToString();
+            if (secondary != 0) text += " + " + secondary;
+            if (tertiary != 0) text += " + " + tertiary;
+            return text;
+        }
+
+        private static string ResourceName(ResourceKind kind)
+        {
+            switch (kind)
+            {
+                case ResourceKind.Food: return UiText.T("Food", "食料");
+                case ResourceKind.Wood: return UiText.T("Wood", "木材");
+                case ResourceKind.Ore: return UiText.T("Ore", "鉱石");
+                case ResourceKind.Metal: return UiText.T("Metal", "金属");
+                case ResourceKind.Stone: return UiText.T("Stone", "石材");
+                case ResourceKind.Charcoal: return UiText.T("Charcoal", "木炭");
+                case ResourceKind.Steel: return UiText.T("Steel", "鋼");
+                case ResourceKind.BowGear: return UiText.T("Bow gear", "弓具");
+                case ResourceKind.Rations: return UiText.T("Rations", "糧食");
+                case ResourceKind.Gold: return UiText.T("Gold", "金");
+                case ResourceKind.Gems: return UiText.T("Gems", "宝石");
+                case ResourceKind.Bricks: return UiText.T("Bricks", "煉瓦");
+                case ResourceKind.Planks: return UiText.T("Planks", "板材");
+                case ResourceKind.CutStone: return UiText.T("Cut stone", "加工石");
+                case ResourceKind.Frames: return UiText.T("Frames", "建材枠");
+                case ResourceKind.Books: return UiText.T("Books", "書物");
+                case ResourceKind.Incense: return UiText.T("Incense", "香");
+                case ResourceKind.Charms: return UiText.T("Charms", "護符");
+                case ResourceKind.RepairKits: return UiText.T("Repair kits", "修理キット");
+                case ResourceKind.Tools: return UiText.T("Tools", "工具");
+                default: return kind.ToString();
+            }
+        }
+
+        private static string CraftStateName(CraftBuildingState state)
+        {
+            switch (state)
+            {
+                case CraftBuildingState.Constructing: return UiText.T("Constructing", "建設中");
+                case CraftBuildingState.Working: return UiText.T("Working", "稼働中");
+                case CraftBuildingState.WaitingForMaterial: return UiText.T("Waiting for material", "材料待ち");
+                case CraftBuildingState.OutputBlocked: return UiText.T("Output blocked", "出力詰まり");
+                case CraftBuildingState.StockFull: return UiText.T("Stock full", "在庫満杯");
+                default: return UiText.T("Idle", "待機");
+            }
+        }
+
+        private static string VillagerActivityName(VillagerActivity activity)
+        {
+            switch (activity)
+            {
+                case VillagerActivity.ToResouce: return UiText.T("Going to resource", "資源へ移動");
+                case VillagerActivity.Gathering: return UiText.T("Gathering", "採集");
+                case VillagerActivity.Returning: return UiText.T("Returning", "帰還");
+                case VillagerActivity.ToBuild: return UiText.T("Going to build", "建設へ移動");
+                case VillagerActivity.Building: return UiText.T("Building", "建設");
+                case VillagerActivity.Hauling: return UiText.T("Hauling", "運搬");
+                case VillagerActivity.Trading: return UiText.T("Trading", "交易");
+                default: return UiText.T("Idle", "待機");
+            }
         }
 
         private void UpdateStatsVisibility()

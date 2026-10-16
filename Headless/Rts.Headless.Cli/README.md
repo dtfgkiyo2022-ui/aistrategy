@@ -10,6 +10,8 @@ dotnet run --project Headless/Rts.Headless.Cli -c Release --no-build -- replay -
 dotnet run --project Headless/Rts.Headless.Cli -c Release --no-build -- compare --left a.hashes --right b.hashes --replay run.rtsreplay
 ```
 
+`record --scenario` accepts both JSON scenarios and the binary `scenario.bin` emitted by a live match pack. A live pack's `inputs.json` can be converted later with `record --scenario <pack>/scenario.bin --inputs <pack>/inputs.json --out replay.rpl --ticks <endTick>`.
+
 `--inputs` を省くとお任せ（入力なし）。`--ticks` は 0〜シナリオの verificationTickLimit（最大10000000）。S0を含み、勝敗・Faultが先に確定したらそのtickで終了します。打切りは勝利や引分けに変換しません。
 終了コードは **0: 正常・一致、2: 状態/EventHash/欠落tickの不一致、3: 形式・版・引数の不一致、4: Fault・I/O障害**。
 
@@ -174,4 +176,3 @@ dotnet Headless/Rts.Headless.Cli/bin/Release/net10.0/Rts.Headless.Cli.dll snapsh
 - `--every N`（既定500）tickごとに1行、`--faction` は1（西）か2（東）、プリセットは `--west-preset`（既定maintain）／`--east-preset`（既定concentrate）
 - 1行 = `{tick, phase, faction, observation}`。座標などのFix64は**メートル単位の小数**に変換して書きます（人やモデルが読むためで、再生には使いません）。`phase` は `--ticks` を3等分した early／mid／late
 - 試合が決着した時点で書き出しは止まります
-

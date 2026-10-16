@@ -10,6 +10,7 @@ using Rts.Replay;
 using Rts.Simulation;
 using Rts.Tactics;
 using Rts.TacticsJs;
+using Rts.Headless.Cli;
 using Battle = Rts.Simulation.Simulation;
 
 namespace Rts.Core.Tests
@@ -92,6 +93,44 @@ namespace Rts.Core.Tests
             Assert.That(line, Does.Contain("\"name\":\"threshold\""));
             Assert.That(line, Does.Contain("\"from\":30"));
             Assert.That(line, Does.Contain("\"to\":50"));
+        }
+
+        [Test]
+        public void LiveMatchPackScenarioAndInputsCanBeRecordedAndReplayed()
+        {
+            const int ticks = 80;
+            var scenario = MapGenerator.Generate(4125, true);
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            string path = Path.Combine(TestContext.CurrentContext.WorkDirectory, "live-pack-" + Guid.NewGuid().ToString("N"));
+            var pack = new MatchPackWriter(path, scenario, "human", "auto");
+            pack.RecordInitial(simulation);
+            for (int i = 0; i < ticks; i++)
+            {
+                gateway.Step();
+                pack.RecordAfterStep(simulation);
+            }
+            pack.CompleteLive(simulation, gateway.Inputs, ticks);
+
+            Assert.That(File.Exists(Path.Combine(path, "scenario.bin")), Is.True);
+            Assert.That(File.Exists(Path.Combine(path, "inputs.json")), Is.True);
+            Assert.That(File.Exists(Path.Combine(path, "replay.rpl")), Is.False);
+            string packJson = File.ReadAllText(Path.Combine(path, "pack.json"));
+            Assert.That(packJson, Does.Contain("scenario.bin"));
+            Assert.That(packJson, Does.Contain("inputs.json"));
+            Assert.That(packJson, Does.Not.Contain("replay.rpl"));
+            var decodedScenario = ScenarioBinary.Decode(File.ReadAllBytes(Path.Combine(path, "scenario.bin")));
+            var decodedInputs = JsonSerializer.Deserialize<ScheduledInput[]>(
+                File.ReadAllText(Path.Combine(path, "inputs.json")), JsonInput.Options);
+            Assert.That(decodedInputs, Is.Not.Null);
+            using (var replay = new MemoryStream())
+            {
+                ReplayRunner.Record(replay, decodedScenario, decodedInputs, ticks, new BuildIdentity(), null, "human", "auto");
+                replay.Position = 0;
+                var outcome = ReplayRunner.Replay(replay, new BuildIdentity());
+                Assert.That(outcome.FirstMismatchTick, Is.Null);
+                Assert.That(outcome.LastTick, Is.EqualTo(ticks));
+            }
         }
 
         [Test]

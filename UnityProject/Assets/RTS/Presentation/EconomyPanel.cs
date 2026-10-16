@@ -83,6 +83,7 @@ namespace Rts.Presentation
             mode = next;
             dragStart = -1;
             if (layer == null) return;
+            layer.SetCoreClearanceVisible(next != Mode.None);
             layer.ShowGhost(false, Vector3.zero, 0f, false);
             layer.ShowBeltPreview(null, false);
         }
