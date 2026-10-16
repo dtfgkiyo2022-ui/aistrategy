@@ -36,7 +36,8 @@ namespace Rts.Presentation
             foreach (var material in Cache)
             {
                 bool isFast = material.Key / 2 == (int)BeltSpeed.Fast;
-                material.Value.mainTextureOffset = new Vector2(isFast ? fast : normal, 0f);
+                // The chevrons point along +v (the belt's facing); a falling v offset carries them forward.
+                material.Value.mainTextureOffset = new Vector2(0f, 1f - (isFast ? fast : normal));
             }
         }
     }
