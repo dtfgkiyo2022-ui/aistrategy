@@ -5,6 +5,13 @@ namespace Rts.Presentation
     /// <summary>One display-only table for selected building descriptions.</summary>
     public static class SelectionInfoText
     {
+        public static string BeltComponentDescription(BeltComponentKind kind)
+        {
+            return kind == BeltComponentKind.Inserter
+                ? UiText.T("Takes a selected resource from behind and feeds a belt, building, storage, or the core.", "選択資源を後ろから取り、ベルト・建物・倉庫・コアへ投入する。")
+                : "";
+        }
+
         public static string BuildingDescription(BuildingKind kind)
         {
             switch (kind)
