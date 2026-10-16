@@ -391,6 +391,21 @@ namespace Rts.Presentation
         /// UI Toolkit event: the next hotkeys were typed into the staff chat (10-16, owner's test play). A click anywhere
         /// outside the field, or Escape, gives the keyboard back.
         /// </summary>
+        private static void IgnoreNavigation(NavigationMoveEvent evt)
+        {
+            var target = evt.target as VisualElement;
+            if (target != null && target.focusController != null) target.focusController.IgnoreEvent(evt);
+            evt.StopImmediatePropagation();
+        }
+
+        private static void ExcludeFromNavigation(TextField field)
+        {
+            if (field == null) return;
+            field.tabIndex = -1;
+            var input = field.Q(className: TextField.inputUssClassName);
+            if (input != null) input.tabIndex = -1;
+        }
+
         private static void ReleaseTextFieldOnOutsideClick(TextField field)
         {
             if (field == null || field.panel == null || field.panel.focusController == null) return;
@@ -624,6 +639,11 @@ namespace Rts.Presentation
             staffSendButton = root.Q<Button>("staff-send-button");
             staffCancelButton = root.Q<Button>("staff-cancel-button");
             staffInput = root.Q<TextField>("staff-input");
+            // 10-17: WASD and the arrow keys are also UI Toolkit's navigation keys, so moving the camera stepped the
+            // keyboard focus into the staff chat without a click and the next keys were typed there. Navigation never
+            // moves focus in this HUD, and the text fields are reached only by clicking them.
+            root.RegisterCallback<NavigationMoveEvent>(IgnoreNavigation, TrickleDown.TrickleDown);
+            ExcludeFromNavigation(staffInput);
             commandsFrame = root.Q<VisualElement>("commands-frame");
             commandsPanel = root.Q<VisualElement>("commands-panel");
             commandsTitle = root.Q<Label>("commands-title");
@@ -652,6 +672,7 @@ namespace Rts.Presentation
             economyTabBlueprints = root.Q<Button>("economy-tab-blueprints");
             blueprintTools = root.Q<VisualElement>("blueprint-tools");
             blueprintName = root.Q<TextField>("blueprint-name");
+            ExcludeFromNavigation(blueprintName);
             blueprintSave = root.Q<Button>("blueprint-save");
             blueprintList = root.Q<ScrollView>("blueprint-list");
             supplyFrame = root.Q<VisualElement>("supply-frame");
@@ -876,6 +897,14 @@ namespace Rts.Presentation
             selectionInfoTitle.text = title ?? "";
             selectionInfoDetail.text = detail ?? "";
             selectionInfoFrame.style.display = DisplayStyle.Flex;
+            // 10-17 test play: the box sat behind the economy panel at the bottom. Stand it on top of that panel and
+            // draw it after every other HUD element.
+            float above = 12f;
+            if (economyFrame != null && economyFrame.resolvedStyle.display != DisplayStyle.None && hudRoot != null
+                && !float.IsNaN(economyFrame.worldBound.height) && economyFrame.worldBound.height > 0f)
+                above = Mathf.Max(12f, hudRoot.worldBound.yMax - economyFrame.worldBound.yMin + 8f);
+            selectionInfoFrame.style.bottom = above;
+            selectionInfoFrame.BringToFront();
         }
 
         private static string BuildingSelectionDetail(BuildingView building, EconomyView economy)

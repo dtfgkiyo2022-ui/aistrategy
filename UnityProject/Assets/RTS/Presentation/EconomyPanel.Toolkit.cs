@@ -309,12 +309,12 @@ namespace Rts.Presentation
             }
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
-                Add(rows, "build:sawmill", UiText.T("Sawmill", "製材所"), true, "", mode == Mode.Sawmill);
-                Add(rows, "build:stonecutter", UiText.T("Stonecutter", "石工場"), true, "", mode == Mode.Stonecutter);
+                Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
+                Add(rows, "build:stonecutter", UiText.T("Stonecutter (", "石工場（木材 ") + economy.StonecutterWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Stonecutter);
                 Add(rows, "line:CutStone", UiText.T("Ask for cut-stone line", "切石ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CutStone);
                 if (economy.Age >= 2)
                 {
-                    Add(rows, "build:joinery", UiText.T("Joinery", "木工所"), true, "", mode == Mode.Joinery);
+                    Add(rows, "build:joinery", UiText.T("Joinery (", "木工所（木材 ") + economy.JoineryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Joinery);
                     Add(rows, "line:Frames", UiText.T("Ask for frames line", "建材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Frames);
                 }
                 Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
@@ -381,22 +381,22 @@ namespace Rts.Presentation
             }
             if (economy.IncenseEnabled && economy.Civ == CivKind.Cult && economy.Age >= 1)
             {
-                Add(rows, "build:incense-house", UiText.T("Incense house", "香房"), true, "", mode == Mode.IncenseHouse);
+                Add(rows, "build:incense-house", UiText.T("Incense house (", "香房（木材 ") + economy.IncenseHouseWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.IncenseHouse);
                 Add(rows, "line:Incense", UiText.T("Ask for incense line", "香ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Incense);
             }
             if (economy.CharmsEnabled && economy.Civ == CivKind.Sanctuary && economy.Age >= 1)
             {
-                Add(rows, "build:charm-workshop", UiText.T("Charm workshop", "護符工房"), true, "", mode == Mode.CharmWorkshop);
+                Add(rows, "build:charm-workshop", UiText.T("Charm workshop (", "護符工房（木材 ") + economy.CharmWorkshopWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.CharmWorkshop);
                 Add(rows, "line:Charms", UiText.T("Ask for charms line", "護符ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Charms);
             }
             if (economy.RepairKitsEnabled && economy.Civ == CivKind.Tollgate && economy.Age >= 1)
             {
-                Add(rows, "build:repair-yard", UiText.T("Repair yard", "修繕所"), true, "", mode == Mode.RepairYard);
+                Add(rows, "build:repair-yard", UiText.T("Repair yard (", "修繕所（木材 ") + economy.RepairYardWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.RepairYard);
                 Add(rows, "line:RepairKits", UiText.T("Ask for repair kits line", "補修材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.RepairKits);
             }
             if (economy.ToolsEnabled && economy.Civ == CivKind.Metropolis && economy.Age >= 1)
             {
-                Add(rows, "build:tool-shop", UiText.T("Tool shop", "工具工房"), true, "", mode == Mode.ToolShop);
+                Add(rows, "build:tool-shop", UiText.T("Tool shop (", "工具工房（木材 ") + economy.ToolShopWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.ToolShop);
                 Add(rows, "line:Tools", UiText.T("Ask for tools line", "工具ラインを指定"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tools);
             }
             if (!economy.Industry) return;
