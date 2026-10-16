@@ -61,6 +61,36 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void HumanFocusMovesAnArmyTheAutomaticDecisionMarksAsReturning()
+        {
+            // 10-17 test play: an army that had fallen back to the castle ignored the right-click.
+            var scenario = Peace(1, true);
+            scenario.Economy.DirectPathMovement = true;
+            var simulation = new Battle(scenario);
+            var goal = P(128, 32);
+            var before = simulation.Capture(1).Units.Where(u => u.IsOwn).Select(u => u.Position).ToArray();
+            CommandTestInput.Step(simulation, 1, new[] { Focus(1, 1, goal) });
+            for (int tick = 2; tick <= 2000; tick++)
+            {
+                MarkReturning(simulation, 0);
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+            }
+            var after = simulation.Capture(1).Units.Where(u => u.IsOwn).ToArray();
+            Assert.That(after.Min(u => DistanceSquared(u.Position, goal)), Is.LessThan(DistanceSquared(before[0], goal)));
+        }
+
+        private static void MarkReturning(Battle simulation, int armyIndex)
+        {
+            var armies = WorldArray(simulation, "Armies");
+            object army = armies.GetValue(armyIndex);
+            var decisionField = army.GetType().GetField("Decision", Hidden);
+            object decision = decisionField.GetValue(army);
+            decision.GetType().GetField("Returning", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).SetValue(decision, true);
+            decisionField.SetValue(army, decision);
+            armies.SetValue(army, armyIndex);
+        }
+
+        [Test]
         public void DirectPathMovementRoundTripsAsExtension45()
         {
             var scenario = Peace(1, false);
