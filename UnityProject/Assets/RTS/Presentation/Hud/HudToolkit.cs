@@ -1034,7 +1034,7 @@ namespace Rts.Presentation
         {
             switch (activity)
             {
-                case VillagerActivity.ToResouce: return UiText.T("Going to resource", "資源へ移動");
+                case VillagerActivity.ToResource: return UiText.T("Going to resource", "資源へ移動");
                 case VillagerActivity.Gathering: return UiText.T("Gathering", "採集");
                 case VillagerActivity.Returning: return UiText.T("Returning", "帰還");
                 case VillagerActivity.ToBuild: return UiText.T("Going to build", "建設へ移動");
