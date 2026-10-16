@@ -196,6 +196,8 @@ namespace Rts.Simulation
         /// <summary>AI raw-resource belts: the automatic economy keeps this much wood after laying a route.</summary>
         public bool AiBelts;
         public int AiBeltWoodReserve = 40;
+        /// <summary>Allows a storage output belt to feed an own receiving building without first reaching the core.</summary>
+        public bool StorageFeedsProcessing;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;

@@ -19,7 +19,7 @@ namespace Rts.Presentation
         }
 
         public static string StorageDescription()
-            => T("Villagers can unload here; the exit belt sends it to the core",
-                "村人が荷を下ろせる（出口からベルトで送る）");
+            => T("Villagers can unload here; the exit belt sends it to the core or, when enabled, to a processing building",
+                "村人が荷を下ろせる（出口からベルトで送る。旗が有効なら加工の建物へも送る）");
     }
 }
