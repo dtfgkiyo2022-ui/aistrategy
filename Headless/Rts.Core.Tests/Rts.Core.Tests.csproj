@@ -39,6 +39,7 @@
     <Compile Include="LiveGameRulesTests.cs" />
     <Compile Include="SharedPrefixListTests.cs" />
     <Compile Include="IndustryTests.cs" />
+    <Compile Include="DrillTests.cs" />
     <Compile Include="HumanHoldTests.cs" />
     <Compile Include="EconomyPolicyTests.cs" />
     <Compile Include="TerrainTests.cs" />
@@ -103,7 +104,8 @@
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="CraftTree1Tests.cs" />
-    <Compile Include="DropSiteLimitTests.cs" />
+  <Compile Include="DropSiteLimitTests.cs" />
+  <Compile Include="StorageFeedsTests.cs" />
     <Compile Include="CraftTree2Tests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="MetropolisTests.cs" />
@@ -138,7 +140,10 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/GoodsMarketUiText.cs" Link="Presentation/GoodsMarketUiText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/PlayerControlModeCommands.cs" Link="Presentation/PlayerControlModeCommands.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SoldierControlRules.cs" Link="Presentation/SoldierControlRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/BattlefieldArrowRules.cs" Link="Presentation/BattlefieldArrowRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/AdjacentBuildingPlacementRules.cs" Link="Presentation/AdjacentBuildingPlacementRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiInfoRules.cs" Link="Presentation/UiInfoRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/SelectionInfoText.cs" Link="Presentation/SelectionInfoText.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
@@ -149,6 +154,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ScaleTests.cs" Link="Tests/ScaleTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/FogObservationTests.cs" Link="Tests/FogObservationTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/MovementTests.cs" Link="Tests/MovementTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/MoveFixTests.cs" Link="Tests/MoveFixTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/ReinforcementTests.cs" Link="Tests/ReinforcementTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DeterminismSourceTests.cs" Link="Tests/DeterminismSourceTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/GoodsMarketEditModeTests.cs" Link="Tests/GoodsMarketEditModeTests.cs" />
@@ -197,6 +203,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/IStaffControl.cs" Link="Presentation/IStaffControl.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/AdjacentBuildingsEditModeTests.cs" Link="Tests/AdjacentBuildingsEditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/UiInfoEditModeTests.cs" Link="Tests/UiInfoEditModeTests.cs" />
     <Compile Include="AdjacentBuildingsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
   </ItemGroup>

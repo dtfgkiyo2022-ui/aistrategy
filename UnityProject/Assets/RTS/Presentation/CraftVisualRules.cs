@@ -120,7 +120,25 @@ namespace Rts.Presentation
 
         private static bool ProducesWithoutInput(BuildingKind kind)
         {
-            return kind == BuildingKind.Mine || kind == BuildingKind.LumberCamp || kind == BuildingKind.Quarry || kind == BuildingKind.Farm;
+            return kind == BuildingKind.Mine || kind == BuildingKind.Drill || kind == BuildingKind.LumberCamp || kind == BuildingKind.Quarry || kind == BuildingKind.Farm;
+        }
+
+        public static ResourceKind DrillResource(BuildingView building, EconomyView economy)
+        {
+            if (economy == null || !economy.CommonDrill || economy.CellSizeMeters <= 0) return (ResourceKind)0;
+            int size = economy.DrillSizeCells;
+            long cellRaw = (long)economy.CellSizeMeters * 65536L;
+            int x0 = (int)((building.Center.X.Raw - (long)size * cellRaw / 2) / cellRaw);
+            int z0 = (int)((building.Center.Z.Raw - (long)size * cellRaw / 2) / cellRaw);
+            for (int i = 0; i < economy.Resources.Count; i++)
+            {
+                var resource = economy.Resources[i];
+                int x = (int)(resource.Position.X.Raw / cellRaw), z = (int)(resource.Position.Z.Raw / cellRaw);
+                if (x >= x0 && x < x0 + size && z >= z0 && z < z0 + size
+                    && (resource.Kind == ResourceKind.Wood || resource.Kind == ResourceKind.Stone || resource.Kind == ResourceKind.Ore || resource.Kind == ResourceKind.Gold))
+                    return resource.Kind;
+            }
+            return (ResourceKind)0;
         }
 
         private static bool IsStockFull(BuildingView building, EconomyView economy)

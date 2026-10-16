@@ -82,6 +82,12 @@ namespace Rts.Simulation
         private const int AgeClockUxExtensionId = 44;
         private const int AgeClockUxExtensionVersion = 1;
         private const int AgeClockUxExtensionDataLength = 2 * sizeof(int);
+        private const int DirectPathMovementExtensionId = 45;
+        private const int DirectPathMovementExtensionVersion = 1;
+        private const int DirectPathMovementExtensionDataLength = sizeof(int);
+        private const int CommonDrillExtensionId = 47;
+        private const int CommonDrillExtensionVersion = 1;
+        private const int CommonDrillExtensionDataLength = 7 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -161,6 +167,9 @@ private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
 private const int AiBeltsExtensionId = 40;
 private const int AiBeltsExtensionVersion = 1;
 private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
+private const int StorageFeedsProcessingExtensionId = 46;
+private const int StorageFeedsProcessingExtensionVersion = 1;
+private const int StorageFeedsProcessingExtensionDataLength = sizeof(int);
 private const int CraftTree2ExtensionId = 42;
 private const int CraftTree2ExtensionVersion = 1;
 private const int CraftTree2ExtensionDataLength = 23 * sizeof(int);
@@ -221,6 +230,9 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
             ,new ExtensionRegistration(CraftTree3ExtensionId, CraftTree3ExtensionVersion, CraftTree3ExtensionDataLength)
             ,new ExtensionRegistration(AgeClockUxExtensionId, AgeClockUxExtensionVersion, AgeClockUxExtensionDataLength)
+            ,new ExtensionRegistration(DirectPathMovementExtensionId, DirectPathMovementExtensionVersion, DirectPathMovementExtensionDataLength)
+            ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
+            ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -789,6 +801,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
+                    else if (id == StorageFeedsProcessingExtensionId) ReadStorageFeedsProcessingExtension(extension, c.Economy);
+                    else if (id == CommonDrillExtensionId) ReadCommonDrillExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     else if (id == PlanksExtensionId) ReadPlanksExtension(extension, c.Economy);
@@ -811,7 +825,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
-                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
+                    else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
+                    else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -883,8 +898,11 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
+                extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree2ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2));
-                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
+                extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
+                extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
+                extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1052,6 +1070,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateRationsExtension(c.Economy);
                     }
                 if (c.Economy.Rations && !hasRations) extensions.Add(CreateRationsExtension(c.Economy));
+                bool hasCommonDrill = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == CommonDrillExtensionId)
+                    {
+                        hasCommonDrill = true;
+                        extensions[i] = CreateCommonDrillExtension(c.Economy);
+                    }
+                if (c.Economy.CommonDrill && !hasCommonDrill) extensions.Add(CreateCommonDrillExtension(c.Economy));
                 bool hasBricks = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == BricksExtensionId)
@@ -1220,6 +1246,15 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateAiBeltsExtension(c.Economy);
                     }
                 if (c.Economy.AiBelts && !hasAiBelts) extensions.Add(CreateAiBeltsExtension(c.Economy));
+                bool hasStorageFeedsProcessing = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == StorageFeedsProcessingExtensionId)
+                    {
+                        hasStorageFeedsProcessing = true;
+                        extensions[i] = CreateStorageFeedsProcessingExtension(c.Economy);
+                    }
+                if (c.Economy.StorageFeedsProcessing && !hasStorageFeedsProcessing)
+                    extensions.Add(CreateStorageFeedsProcessingExtension(c.Economy));
                 bool hasCraftTree2 = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CraftTree2ExtensionId)
@@ -1236,7 +1271,37 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateCraftTree3Extension(c.Economy);
                     }
                 if (c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && !hasCraftTree3) extensions.Add(CreateCraftTree3Extension(c.Economy));
+                bool hasDirectPathMovement = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == DirectPathMovementExtensionId)
+                    {
+                        hasDirectPathMovement = true;
+                        extensions[i] = CreateDirectPathMovementExtension(c.Economy);
+                    }
+                if (c.Economy.DirectPathMovement && !hasDirectPathMovement) extensions.Add(CreateDirectPathMovementExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateDirectPathMovementExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.DirectPathMovement ? 1 : 0);
+                return new ScenarioExtensionData { Id = DirectPathMovementExtensionId, Version = DirectPathMovementExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadDirectPathMovementExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid direct path movement flag.");
+                e.DirectPathMovement = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing direct path movement extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateDropSiteLimitExtension(EconomyRules e)
@@ -1286,6 +1351,29 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.AiBeltWoodReserve = reader.ReadInt32();
                 if (e.AiBeltWoodReserve < 0) throw new InvalidDataException("Invalid AI-belt wood reserve.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-belts extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateStorageFeedsProcessingExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.StorageFeedsProcessing ? 1 : 0);
+                return new ScenarioExtensionData { Id = StorageFeedsProcessingExtensionId,
+                    Version = StorageFeedsProcessingExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadStorageFeedsProcessingExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid storage-feeds-processing flag.");
+                e.StorageFeedsProcessing = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing storage-feeds-processing extension data.");
             }
         }
 
@@ -1761,6 +1849,32 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.RationsHealIntervalTicks = reader.ReadInt32(); e.RationsHealQuietTicks = reader.ReadInt32(); e.RationsHealHp = reader.ReadInt32();
                 e.RationsHealMaxPerInterval = reader.ReadInt32(); e.RationsFarmMinimum = reader.ReadInt32(); e.RationsFoodReserve = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing rations extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCommonDrillExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CommonDrill ? 1 : 0);
+                writer.Write(e.DrillSizeCells); writer.Write(e.DrillWoodCost); writer.Write(e.DrillStoneCost);
+                writer.Write(e.DrillWork); writer.Write(e.DrillHp); writer.Write(e.DrillIntervalTicks);
+                return new ScenarioExtensionData { Id = CommonDrillExtensionId, Version = CommonDrillExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCommonDrillExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid common-drill flag.");
+                e.CommonDrill = enabled != 0;
+                e.DrillSizeCells = reader.ReadInt32(); e.DrillWoodCost = reader.ReadInt32(); e.DrillStoneCost = reader.ReadInt32();
+                e.DrillWork = reader.ReadInt32(); e.DrillHp = reader.ReadInt32(); e.DrillIntervalTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing common-drill extension data.");
             }
         }
 

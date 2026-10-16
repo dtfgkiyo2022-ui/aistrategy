@@ -1280,7 +1280,9 @@ namespace Rts.UnityHost
             if (matchPack == null) return;
             try
             {
-                matchPack.Complete(simulation, gateway.Inputs, simulation.Capture(1).Tick);
+                // The live match must never replay S0..end on Unity's main thread. The pack contains the
+                // scenario and accepted inputs; Headless CLI can create replay.rpl later when it is requested.
+                matchPack.CompleteLive(simulation, gateway.Inputs, simulation.Capture(1).Tick);
             }
             catch (Exception e) when (e is IOException || e is UnauthorizedAccessException || e is ArgumentException || e is InvalidOperationException)
             {

@@ -11,6 +11,8 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private bool CommonDrillOn => IndustryOn && world.Config.Economy.CommonDrill;
+
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
         {
@@ -43,6 +45,16 @@ namespace Rts.Simulation
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
                     if (++b.Timer < rules.QuarryIntervalTicks) continue;
+                    b.Timer = 0;
+                    node.Remaining--;
+                    b.Output++;
+                }
+                else if (CommonDrillOn && b.Kind == BuildingKind.Drill)
+                {
+                    if (b.NodeId == 0 || b.NodeId > world.Nodes.Length) continue;
+                    ref var node = ref world.Nodes[b.NodeId - 1];
+                    if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
+                    if (++b.Timer < rules.DrillIntervalTicks) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -477,7 +489,8 @@ namespace Rts.Simulation
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
                 if (belt.FactionId != b.FactionId || belt.Item != 0) continue;
-                belt.Item = b.Kind == BuildingKind.Storage ? b.StorageKind : OutputKind(b.Kind);
+                belt.Item = b.Kind == BuildingKind.Storage ? b.StorageKind : b.Kind == BuildingKind.Drill
+                    ? world.Nodes[b.NodeId - 1].Definition.Kind : OutputKind(b.Kind);
                 belt.Progress = 0;
                 if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
                 else b.Output--;
@@ -793,16 +806,67 @@ namespace Rts.Simulation
         }
 
         /// <summary>
+        /// Checks the same belt-input combinations as TryFeedBuilding without looking at BufferLimit. Storage route
+        /// discovery uses this predicate so a full receiver still makes the storage a valid waiting point.
+        /// </summary>
+        private bool BeltCanFeedBuilding(int cell, uint faction, ResourceKind item)
+        {
+            int width = world.Config.Map.WidthCells, x = cell % width, z = cell / width;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive) continue;
+                int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
+                if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
+                if (b.FactionId != faction || !b.Complete) return false;
+                if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore) return true;
+                if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood) return true;
+                if (ProcessingOn && b.Kind == BuildingKind.Steelworks
+                    && (item == ResourceKind.Metal || item == ResourceKind.Charcoal)) return true;
+                if (ForestryOn && b.Kind == BuildingKind.Fletcher
+                    && (item == ResourceKind.Wood || item == ResourceKind.Food)) return true;
+                if (RationsOn && b.Kind == BuildingKind.Mill && item == ResourceKind.Food) return true;
+                if (TackAllowed(faction) && b.Kind == BuildingKind.Saddlery
+                    && (item == ResourceKind.Food || item == ResourceKind.Wood)) return true;
+                if ((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && b.Kind == BuildingKind.Sawmill
+                    && item == ResourceKind.Wood) return true;
+                if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None
+                    && item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly) return true;
+                if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone) return true;
+                if (JoineryAllowed(faction) && b.Kind == BuildingKind.Joinery
+                    && (item == ResourceKind.Planks || item == ResourceKind.CutStone)) return true;
+                if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln
+                    && (item == ResourceKind.Stone || item == ResourceKind.Charcoal)) return true;
+                if (BooksAllowed(faction) && b.Kind == BuildingKind.Scriptorium
+                    && (item == ResourceKind.Gold || item == ResourceKind.Wood)) return true;
+                if (PreservesAllowed(faction) && b.Kind == BuildingKind.DryingRack && item == ResourceKind.Food) return true;
+                if (JewelsAllowed(faction) && b.Kind == BuildingKind.Lapidary
+                    && (item == ResourceKind.Stone || item == ResourceKind.Ore)) return true;
+                if (TradeGoodsAllowed(faction) && b.Kind == BuildingKind.Weaver && item == ResourceKind.Wood) return true;
+                if (IncenseAllowed(faction) && b.Kind == BuildingKind.IncenseHouse
+                    && (item == ResourceKind.Wood || item == ResourceKind.Food)) return true;
+                if (CharmsAllowed(faction) && b.Kind == BuildingKind.CharmWorkshop && item == ResourceKind.Wood) return true;
+                if (RepairKitsAllowed(faction) && b.Kind == BuildingKind.RepairYard && item == ResourceKind.Wood) return true;
+                if (ToolsAllowed(faction) && b.Kind == BuildingKind.ToolShop && item == ResourceKind.Wood) return true;
+                if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage
+                    && b.StorageCount < world.Config.Economy.StorageCapacity
+                    && (b.StorageCount == 0 || b.StorageKind == item)) return true;
+                return false;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// A mine's footprint must cover exactly one resource point, an ore point with ore left, and otherwise be open
         /// ground with no belt and outside every core.
         /// </summary>
-        private bool MineSiteIsClear(int origin, out uint nodeId)
+        private bool MineSiteIsClear(uint faction, int origin, out uint nodeId)
             => ResourceBuildingSiteIsClear(origin, world.Config.Economy.MineSizeCells, ResourceKind.Ore, out nodeId);
 
-        private bool LumberCampSiteIsClear(int origin, out uint nodeId)
+        private bool LumberCampSiteIsClear(uint faction, int origin, out uint nodeId)
             => ResourceBuildingSiteIsClear(origin, world.Config.Economy.LumberCampSizeCells, ResourceKind.Wood, out nodeId);
 
-        private bool QuarrySiteIsClear(int origin, out uint nodeId)
+        private bool QuarrySiteIsClear(uint faction, int origin, out uint nodeId)
             => ResourceBuildingSiteIsClear(origin, world.Config.Economy.QuarrySizeCells, ResourceKind.Stone, out nodeId);
 
         private bool ResourceBuildingSiteIsClear(int origin, int size, ResourceKind required, out uint nodeId)
@@ -811,7 +875,6 @@ namespace Rts.Simulation
             var footprint = Footprint(origin, size);
             foreach (int cell in footprint)
             {
-                if (!world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
                 foreach (var node in world.Nodes)
                 {
                     if (world.Map.Cell(node.Definition.Position) != cell) continue;
@@ -819,8 +882,55 @@ namespace Rts.Simulation
                     nodeId = node.Definition.Id;
                 }
             }
-            return nodeId != 0;
+            if (nodeId == 0) return false;
+            if (NodeCoveredByMiningBuilding(nodeId)) return false;
+            foreach (int cell in footprint)
+            {
+                if (!world.Map.IsPassable(cell)
+                    || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
+            }
+            return true;
         }
+
+        /// <summary>Common drills cover exactly one remaining wood, stone, ore, or usable gold point.</summary>
+        private bool DrillSiteIsClear(uint faction, int origin, out uint nodeId, bool goldAlreadyUsable = false)
+        {
+            nodeId = 0;
+            var footprint = Footprint(origin, world.Config.Economy.DrillSizeCells);
+            foreach (int cell in footprint)
+            {
+                foreach (var node in world.Nodes)
+                {
+                    if (world.Map.Cell(node.Definition.Position) != cell) continue;
+                    if (node.Remaining <= 0 || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
+                        && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold) || nodeId != 0) return false;
+                    nodeId = node.Definition.Id;
+                }
+            }
+            if (nodeId == 0) return false;
+            if (NodeCoveredByMiningBuilding(nodeId)) return false;
+            if (world.Nodes[nodeId - 1].Definition.Kind == ResourceKind.Gold && !goldAlreadyUsable
+                && !GoldTargetUsable(faction, nodeId, world.Map.Cell(OwnCore(faction).Definition.Position))) return false;
+            foreach (int cell in footprint)
+            {
+                if (!world.Map.IsPassable(cell)
+                    || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
+            }
+            return true;
+        }
+
+        private bool NodeCoveredByMiningBuilding(uint nodeId)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && building.NodeId == nodeId
+                    && (building.Kind == BuildingKind.Drill || building.Kind == BuildingKind.LumberCamp
+                        || building.Kind == BuildingKind.Quarry || building.Kind == BuildingKind.Mine)) return true;
+            }
+            return false;
+        }
+
 
         /// <summary>
         /// Carrying by hand (12.3), economy step. At the source's work cell the villager takes what the output holds, up to
@@ -841,7 +951,8 @@ namespace Rts.Simulation
             if (v.Task == VillagerTask.ToPickup)
             {
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
-                var kind = source.Kind == BuildingKind.Storage ? source.StorageKind : OutputKind(source.Kind);
+                var kind = source.Kind == BuildingKind.Storage ? source.StorageKind
+                    : source.Kind == BuildingKind.Drill ? world.Nodes[source.NodeId - 1].Definition.Kind : OutputKind(source.Kind);
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
                 int available = source.Kind == BuildingKind.Storage ? source.StorageCount : source.Output;
                 int take = Math.Min(available, CarryFor(v.FactionId) - v.Carry);
@@ -984,7 +1095,7 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
-            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsCore(target, target.FactionId)
+            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsResource(target, target.FactionId, kind)
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
                 int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
@@ -996,7 +1107,7 @@ namespace Rts.Simulation
         private int PutIntoStorage(ref BuildingState target, ResourceKind kind, int amount)
         {
             var rules = world.Config.Economy;
-            if (!rules.BeltComponents || !StorageFeedsCore(target, target.FactionId) || !StorageCanAccept(target, kind)) return 0;
+            if (!rules.BeltComponents || !StorageFeedsResource(target, target.FactionId, kind) || !StorageCanAccept(target, kind)) return 0;
             int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
             target.StorageKind = kind;
             target.StorageCount += put;
@@ -1064,5 +1175,6 @@ namespace Rts.Simulation
                 v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
             }
         }
+
     }
 }

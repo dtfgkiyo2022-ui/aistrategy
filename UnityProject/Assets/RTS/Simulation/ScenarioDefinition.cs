@@ -73,6 +73,8 @@ namespace Rts.Simulation
         public bool Enabled;
         /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
         public bool Regions;
+        /// <summary>MoveFix1: allows a deterministic straight-line move when the exact line of sight is clear.</summary>
+        public bool DirectPathMovement;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
@@ -114,6 +116,9 @@ namespace Rts.Simulation
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
+        /// <summary>Common drill: an age-one, all-civilisation extractor for one wood, stone, ore, or gold point.</summary>
+        public bool CommonDrill;
+        public int DrillSizeCells = 2, DrillWoodCost = 60, DrillStoneCost = 30, DrillWork = 200, DrillHp = 400, DrillIntervalTicks = 40;
         /// <summary>Smelter (12.2): footprint, wood, work, HP, ticks per metal, and ore per metal.</summary>
         public int SmelterSizeCells = 3, SmelterWoodCost = 120, SmelterWork = 300, SmelterHp = 600, SmeltTicks = 60, OrePerMetal = 2;
         /// <summary>Items a mine or smelter holds at its input and at its output; a full output stops the work.</summary>
@@ -194,6 +199,8 @@ namespace Rts.Simulation
         /// <summary>AI raw-resource belts: the automatic economy keeps this much wood after laying a route.</summary>
         public bool AiBelts;
         public int AiBeltWoodReserve = 40;
+        /// <summary>Allows a storage output belt to feed an own receiving building without first reaching the core.</summary>
+        public bool StorageFeedsProcessing;
         /// <summary>Bricks: the masonry civilisation turns stone and charcoal into defensive stock.</summary>
         public bool Bricks;
         public int BrickKilnSizeCells = 2, BrickKilnWoodCost = 80, BrickKilnWork = 200, BrickKilnHp = 400;

@@ -27,6 +27,7 @@ namespace Rts.Presentation
         private readonly List<LocalVisualPack.AnimationHandle> enemyVillagerAnimations = new List<LocalVisualPack.AnimationHandle>();
         private readonly Dictionary<uint, GameObject> buildings = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingHealthBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
+        private readonly Dictionary<uint, WorldHealthBarVisuals.Handle> buildingConstructionBars = new Dictionary<uint, WorldHealthBarVisuals.Handle>();
         private readonly Dictionary<uint, GameObject> buildingCivStandards = new Dictionary<uint, GameObject>();
         private readonly HashSet<uint> packedBuildings = new HashSet<uint>();
         private readonly Dictionary<uint, int> packedBuildingStages = new Dictionary<uint, int>();
@@ -94,7 +95,6 @@ namespace Rts.Presentation
 
         private static readonly Color BeltColor = new Color(0.18f, 0.18f, 0.2f);
         private static readonly Color EnemyBeltColor = new Color(0.3f, 0.2f, 0.2f);
-        private static readonly Color StripeColor = new Color(0.75f, 0.75f, 0.8f);
         private static readonly Color PortColor = new Color(1f, 0.85f, 0.2f);
         // V3-3: what the player holds (the automatic economy leaves it alone) carries a small white flag, and a held belt
         // is a lighter plate.
@@ -110,6 +110,8 @@ namespace Rts.Presentation
         private const float CargoIconDistance = 18f;
         private uint selectedBuildingId;
         private bool detailModeEnabled;
+        private readonly List<GameObject> coreClearanceEdges = new List<GameObject>();
+        private bool coreClearanceVisible;
         private long lastLineTraversalTick = long.MinValue;
         private uint lastLineTraversalBuilding;
 
@@ -144,6 +146,69 @@ namespace Rts.Presentation
         {
             selectedVillagers.Clear();
             ClearVillagerSelectionRings();
+        }
+
+        public void SetCoreClearanceVisible(bool visible)
+        {
+            coreClearanceVisible = visible;
+            UpdateCoreClearance();
+        }
+
+        private void UpdateCoreClearance()
+        {
+            if (!coreClearanceVisible || view == null || view.LatestFrame == null || view.LatestFrame.Economy == null)
+            {
+                for (int i = 0; i < coreClearanceEdges.Count; i++) coreClearanceEdges[i].SetActive(false);
+                return;
+            }
+            var frame = view.LatestFrame;
+            var economy = frame.Economy;
+            if (economy.CoreClearanceCells <= 0 || economy.MapWidthCells <= 0 || economy.CellSizeMeters <= 0)
+            {
+                for (int i = 0; i < coreClearanceEdges.Count; i++) coreClearanceEdges[i].SetActive(false);
+                return;
+            }
+            int centerCell = -1;
+            foreach (var objective in frame.Objectives)
+            {
+                if (objective.Kind != GoalKind.Core || !objective.IsOwnerKnown || objective.OwnerFactionId != frame.FactionId) continue;
+                long cellRaw = (long)economy.CellSizeMeters * 65536L;
+                int x = (int)(objective.Position.X.Raw / cellRaw);
+                int z = (int)(objective.Position.Z.Raw / cellRaw);
+                centerCell = z * economy.MapWidthCells + x;
+                break;
+            }
+            var corners = CoreClearanceGeometry.CalculateCorners(centerCell, economy.CoreClearanceCells, economy.MapWidthCells);
+            if (corners.Length != 4) return;
+            while (coreClearanceEdges.Count < 4)
+            {
+                var edge = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                edge.name = "Core clearance";
+                Destroy(edge.GetComponent<Collider>());
+                edge.transform.SetParent(transform, false);
+                edge.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.86f, 0.64f, 0.25f, 0.42f));
+                coreClearanceEdges.Add(edge);
+            }
+            float minX = corners[0].X * CellMeters, maxX = (corners[1].X + 1) * CellMeters;
+            float minZ = corners[0].Z * CellMeters, maxZ = (corners[2].Z + 1) * CellMeters;
+            float width = Mathf.Max(0.1f, maxX - minX), depth = Mathf.Max(0.1f, maxZ - minZ);
+            Vector3[] positions =
+            {
+                new Vector3((minX + maxX) * 0.5f, 0.12f, minZ), new Vector3(maxX, 0.12f, (minZ + maxZ) * 0.5f),
+                new Vector3((minX + maxX) * 0.5f, 0.12f, maxZ), new Vector3(minX, 0.12f, (minZ + maxZ) * 0.5f)
+            };
+            Vector3[] scales = { new Vector3(width, 0.08f, 0.08f), new Vector3(0.08f, 0.08f, depth), new Vector3(width, 0.08f, 0.08f), new Vector3(0.08f, 0.08f, depth) };
+            Vector3 parentScale = transform.lossyScale;
+            if (Mathf.Abs(parentScale.x) < 0.0001f) parentScale.x = 1f;
+            if (Mathf.Abs(parentScale.y) < 0.0001f) parentScale.y = 1f;
+            if (Mathf.Abs(parentScale.z) < 0.0001f) parentScale.z = 1f;
+            for (int i = 0; i < coreClearanceEdges.Count; i++)
+            {
+                coreClearanceEdges[i].SetActive(true);
+                coreClearanceEdges[i].transform.position = positions[i];
+                coreClearanceEdges[i].transform.localScale = new Vector3(
+                    scales[i].x / parentScale.x, scales[i].y / parentScale.y, scales[i].z / parentScale.z);
+            }
         }
 
         public void SelectVillager(uint id, bool additive)
@@ -279,6 +344,7 @@ namespace Rts.Presentation
             foreach (var animation in enemyVillagerAnimations) if (animation != null) animation.Dispose();
             foreach (var go in buildings.Values) Destroy(go);
             foreach (var bar in buildingHealthBars.Values) Destroy(bar.Root);
+            foreach (var bar in buildingConstructionBars.Values) Destroy(bar.Root);
             foreach (var standard in buildingCivStandards.Values) Destroy(standard);
             foreach (var go in ports.Values) Destroy(go);
             ports.Clear();
@@ -292,7 +358,8 @@ namespace Rts.Presentation
             foreach (var go in buildingActivityPuffs.Values) Destroy(go);
             foreach (var go in buildingDetailOverlays.Values) Destroy(go);
             foreach (var go in buildingLineHighlights.Values) Destroy(go);
-            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); buildingHealthBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
+            foreach (var go in coreClearanceEdges) Destroy(go);
+            resources.Clear(); resourceLevels.Clear(); ownVillagers.Clear(); enemyVillagers.Clear(); buildings.Clear(); buildingHealthBars.Clear(); buildingConstructionBars.Clear(); buildingCivStandards.Clear(); villagerTargets.Clear();
             selectedVillagers.Clear();
             packedBuildings.Clear(); packedBuildingStages.Clear(); buildingFxStates.Clear();
             foreach (var fx in buildingEffects) Destroy(fx.Object);
@@ -308,6 +375,8 @@ namespace Rts.Presentation
             buildingStatusBubbles.Clear(); buildingActivityPuffs.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
             buildingDetailOverlays.Clear(); buildingLineHighlights.Clear(); highlightedBuildingIds.Clear(); highlightedBeltCells.Clear();
             selectedBuildingId = 0; detailModeEnabled = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
+            coreClearanceVisible = false;
+            coreClearanceEdges.Clear();
         }
 
         private void Update()
@@ -335,6 +404,7 @@ namespace Rts.Presentation
             PerfProbe.Stop("EcoVil", part);
             part = PerfProbe.Start();
             SyncBuildings(economy);
+            UpdateCoreClearance();
             UpdateBuildingEffects(Time.deltaTime);
             UpdateBuildingStatusBillboards();
             PerfProbe.Stop("EcoBld", part);
@@ -714,7 +784,7 @@ namespace Rts.Presentation
                         packedBuildings.Add(b.Id);
                     }
                 }
-                float full = b.Kind == BuildingKind.Mine ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
+                float full = b.Kind == BuildingKind.Mine || b.Kind == BuildingKind.Drill ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
                     : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f
                     : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : b.Kind == BuildingKind.Blacksmith ? 2.0f
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
@@ -765,6 +835,20 @@ namespace Rts.Presentation
                 {
                     noHealthBar.Root.SetActive(false);
                 }
+                if (!b.Complete)
+                {
+                    if (!buildingConstructionBars.TryGetValue(b.Id, out var constructionBar))
+                    {
+                        constructionBar = WorldHealthBarVisuals.Create(transform, "BuildingConstruction_" + b.Id, 2.7f, 0.14f);
+                        buildingConstructionBars.Add(b.Id, constructionBar);
+                    }
+                    WorldHealthBarVisuals.SetConstruction(constructionBar, UiInfoRules.ConstructionRatio(b.Progress, b.Work),
+                        new Vector3(p.x, height + 0.58f, p.z), Quaternion.identity);
+                }
+                else if (buildingConstructionBars.TryGetValue(b.Id, out var finishedConstructionBar))
+                {
+                    finishedConstructionBar.Root.SetActive(false);
+                }
                 if (own && finished && economy.Civ != CivKind.Primitive && IsCivStandardBuilding(b.Kind)
                     && !buildingCivStandards.ContainsKey(b.Id))
                 {
@@ -807,6 +891,13 @@ namespace Rts.Presentation
             {
                 Destroy(buildingHealthBars[id].Root);
                 buildingHealthBars.Remove(id);
+            }
+            var constructionBarsGone = new List<uint>();
+            foreach (var id in buildingConstructionBars.Keys) if (!seen.Contains(id)) constructionBarsGone.Add(id);
+            foreach (var id in constructionBarsGone)
+            {
+                Destroy(buildingConstructionBars[id].Root);
+                buildingConstructionBars.Remove(id);
             }
             var standardsGone = new List<uint>();
             foreach (var id in buildingCivStandards.Keys) if (!seen.Contains(id)) standardsGone.Add(id);
@@ -960,9 +1051,17 @@ namespace Rts.Presentation
                 return;
             }
             var state = CraftVisualRules.Evaluate(building, economy);
-            Texture2D icon = state == CraftBuildingState.WaitingForMaterial
-                ? GoodsIcons.Get(CraftVisualRules.MissingInputKind(building.Kind))
-                : GoodsIcons.GetStatus(state);
+            Texture2D icon;
+            if (building.Kind == BuildingKind.Drill)
+            {
+                ResourceKind resource = CraftVisualRules.DrillResource(building, economy);
+                icon = building.Output >= CraftVisualRules.OutputBufferLimit || resource == 0
+                    ? GoodsIcons.GetStatus(CraftBuildingState.OutputBlocked) : GoodsIcons.Get(resource);
+            }
+            else
+                icon = state == CraftBuildingState.WaitingForMaterial
+                    ? GoodsIcons.Get(CraftVisualRules.MissingInputKind(building.Kind))
+                    : GoodsIcons.GetStatus(state);
             SetBuildingStatusBubble(building.Id, icon, top);
             SetBuildingActivityPuff(building.Id, state == CraftBuildingState.Working, top);
         }
@@ -1040,6 +1139,10 @@ namespace Rts.Presentation
                 overlay.transform.rotation = Quaternion.LookRotation(camera.transform.position - overlay.transform.position, Vector3.up);
             }
             foreach (var bar in buildingHealthBars.Values)
+            {
+                if (bar.Root.activeSelf) bar.Root.transform.rotation = camera.transform.rotation;
+            }
+            foreach (var bar in buildingConstructionBars.Values)
             {
                 if (bar.Root.activeSelf) bar.Root.transform.rotation = camera.transform.rotation;
             }
@@ -1122,6 +1225,7 @@ namespace Rts.Presentation
             {
                 case BuildingKind.Barracks: return UiText.T("Barracks", "兵舎");
                 case BuildingKind.Mine: return UiText.T("Mine", "鉱山");
+                case BuildingKind.Drill: return UiText.T("Drill", "採掘機");
                 case BuildingKind.Smelter: return UiText.T("Smelter", "製錬所");
                 case BuildingKind.Mill: return UiText.T("Mill", "製粉所");
                 case BuildingKind.BrickKiln: return UiText.T("Brick kiln", "煉瓦窯");
@@ -1191,20 +1295,24 @@ namespace Rts.Presentation
                     Destroy(plate.GetComponent<Collider>());
                     plate.transform.SetParent(transform, false);
                     plate.transform.localScale = new Vector3(1.8f, 0.1f, 1.8f);
-                    var stripe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    plate.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(Color.white);
+                    // The moving chevrons lie on a quad: its v axis runs along the plate's forward (the belt's facing),
+                    // which a cube's top face does not guarantee. Child sizes are in the plate's scaled units.
+                    var stripe = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     stripe.name = "Stripe";
                     Destroy(stripe.GetComponent<Collider>());
-                    stripe.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(StripeColor);
                     stripe.transform.SetParent(plate.transform, false);
-                    stripe.transform.localScale = new Vector3(0.18f, 1.2f, 0.45f);
-                    stripe.transform.localPosition = new Vector3(0f, 0.1f, 0.25f);
+                    stripe.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    stripe.transform.localScale = new Vector3(0.72f, 1f, 1f);
+                    stripe.transform.localPosition = new Vector3(0f, 0.55f, 0f);
                     belts.Add(b.Cell, plate);
                 }
                 bool stalled = b.FactionId == ownFaction && b.Item != 0 && b.Progress >= ticks * 2;
                 bool lineHighlighted = highlightedBeltCells.Contains(b.Cell);
                 Color baseColor = lineHighlighted ? LineHighlightColor : b.FactionId != ownFaction ? EnemyBeltColor : b.PlayerHeld ? HeldBeltColor : BeltColor;
                 var plateRenderer = plate.GetComponent<Renderer>();
-                plateRenderer.sharedMaterial = BeltVisualMaterials.Get(b.Speed, stalled);
+                var stripeTransform = plate.transform.Find("Stripe");
+                if (stripeTransform != null) stripeTransform.GetComponent<Renderer>().sharedMaterial = BeltVisualMaterials.Get(b.Speed, stalled);
                 if (beltPropertyBlock == null) beltPropertyBlock = new MaterialPropertyBlock();
                 beltPropertyBlock.Clear();
                 Color beltColor = stalled ? new Color(1f, 0.24f, 0.18f) : baseColor;
@@ -1256,16 +1364,17 @@ namespace Rts.Presentation
             }
             foreach (Transform child in plate.transform)
                 if (child.name != "Stripe") Destroy(child.gameObject);
-            CreateBeltEdge(plate.transform, "Belt edge L", -0.82f);
-            CreateBeltEdge(plate.transform, "Belt edge R", 0.82f);
+            CreateBeltEdge(plate.transform, "Belt edge L", -0.48f);
+            CreateBeltEdge(plate.transform, "Belt edge R", 0.48f);
             if (component != BeltComponentKind.None)
             {
                 var part = GameObject.CreatePrimitive(component == BeltComponentKind.Splitter ? PrimitiveType.Cylinder : PrimitiveType.Cube);
                 part.name = "Belt component";
                 Destroy(part.GetComponent<Collider>());
                 part.transform.SetParent(plate.transform, false);
-                part.transform.localPosition = new Vector3(0f, 0.2f, 0f);
-                part.transform.localScale = component == BeltComponentKind.Splitter ? new Vector3(0.5f, 0.35f, 0.5f) : new Vector3(0.5f, 0.28f, 0.5f);
+                // In the plate's scaled units (y is 0.1): stands 0.35 m / 0.28 m on top of the plate.
+                part.transform.localPosition = new Vector3(0f, component == BeltComponentKind.Splitter ? 2.25f : 1.9f, 0f);
+                part.transform.localScale = component == BeltComponentKind.Splitter ? new Vector3(0.5f, 3.5f, 0.5f) : new Vector3(0.5f, 2.8f, 0.5f);
                 part.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(
                     component == BeltComponentKind.Sorter ? new Color(0.75f, 0.35f, 0.95f)
                     : component == BeltComponentKind.Splitter ? new Color(0.95f, 0.75f, 0.2f)
@@ -1280,8 +1389,9 @@ namespace Rts.Presentation
             edge.name = name;
             Destroy(edge.GetComponent<Collider>());
             edge.transform.SetParent(parent, false);
-            edge.transform.localPosition = new Vector3(x, 0.12f, 0f);
-            edge.transform.localScale = new Vector3(0.08f, 0.18f, 1.78f);
+            // In the plate's scaled units (1.8 x 0.1 x 1.8): the rails sit on the plate's sides, one cell long.
+            edge.transform.localPosition = new Vector3(x, 0.9f, 0f);
+            edge.transform.localScale = new Vector3(0.04f, 1.8f, 1f);
             edge.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.08f, 0.08f, 0.1f));
         }
 

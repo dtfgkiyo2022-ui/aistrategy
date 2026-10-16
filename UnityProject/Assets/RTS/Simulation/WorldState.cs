@@ -526,6 +526,9 @@ namespace Rts.Simulation
                     && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0,
                     "Invalid industry rules.");
             else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0 && !e.ProcessingChain, "Belts and metal costs need industry.");
+            Require(!e.CommonDrill || (e.Enabled && e.Industry && e.DrillSizeCells > 0 && e.DrillSizeCells <= 8
+                && e.DrillWoodCost >= 0 && e.DrillStoneCost >= 0 && e.DrillWork > 0 && e.DrillHp > 0 && e.DrillIntervalTicks > 0),
+                "Common drill requires valid industry rules.");
             if (e.BeltComponents)
             {
                 Require(e.Industry && e.SplitterWoodCost >= 0 && e.SorterWoodCost >= 0 && e.UndergroundBeltWoodCost >= 0
@@ -981,7 +984,7 @@ namespace Rts.Simulation
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
             return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, LatePush = e.LatePush,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,
@@ -1003,6 +1006,8 @@ namespace Rts.Simulation
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
+                 CommonDrill = e.CommonDrill, DrillSizeCells = e.DrillSizeCells, DrillWoodCost = e.DrillWoodCost, DrillStoneCost = e.DrillStoneCost,
+                 DrillWork = e.DrillWork, DrillHp = e.DrillHp, DrillIntervalTicks = e.DrillIntervalTicks,
                  SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
                  SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
                   ProcessingChain = e.ProcessingChain, CharcoalKilnSizeCells = e.CharcoalKilnSizeCells, CharcoalKilnWoodCost = e.CharcoalKilnWoodCost,
@@ -1211,6 +1216,7 @@ namespace Rts.Simulation
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
                 DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
                 DropSiteLimit = e.DropSiteLimit, DropSiteMax = e.DropSiteMax, AiBelts = e.AiBelts, AiBeltWoodReserve = e.AiBeltWoodReserve,
+                StorageFeedsProcessing = e.StorageFeedsProcessing,
                   WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach,
                   MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,

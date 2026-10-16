@@ -29,7 +29,9 @@ namespace Rts.Simulation
             e.ResourceFog = true;
             e.DropSiteLimit = true;
             e.AiBelts = true;
+            e.StorageFeedsProcessing = allCivilisations;
             e.Rations = allCivilisations;
+            e.CommonDrill = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;
             e.Planks = allCivilisations;
@@ -51,6 +53,7 @@ namespace Rts.Simulation
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
             e.Regions = true;
+            e.DirectPathMovement = true;
             e.Towns = true;
             e.AdjacentBuildings = true;
             if (!allCivilisations) return;

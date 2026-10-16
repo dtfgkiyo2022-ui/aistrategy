@@ -196,7 +196,7 @@ namespace Rts.Presentation
                 case "barracks": return Mode.Barracks; case "house": return Mode.House; case "drop-site": return Mode.DropSite;
                 case "tower": return Mode.Tower; case "wall": return Mode.Wall; case "market": return Mode.Market;
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
-                case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "smelter": return Mode.Smelter;
+                case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter;
                 case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
                 case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
@@ -347,7 +347,7 @@ namespace Rts.Presentation
             }
             if (economy.CraftTree2Enabled && economy.Age >= 2)
             {
-                Add(rows, "build:assembler", UiText.T("Assembler (" + economy.AssemblerWoodCost + " wood)", "Assembler (" + economy.AssemblerWoodCost + " wood)"), true, "", mode == Mode.Assembler);
+                Add(rows, "build:assembler", UiText.T("Assembler (" + economy.AssemblerWoodCost + " wood)", "組立所（木材 " + economy.AssemblerWoodCost + "）"), true, "", mode == Mode.Assembler);
                 for (int i = 0; i < economy.Buildings.Count; i++)
                 {
                     var assembler = economy.Buildings[i];
@@ -400,6 +400,8 @@ namespace Rts.Presentation
                 Add(rows, "line:Tools", UiText.T("Ask for tools line", "工具ラインを指定"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tools);
             }
             if (!economy.Industry) return;
+            if (economy.CommonDrill)
+                Add(rows, "build:drill", UiText.T("Drill (wood " + economy.DrillWoodCost + ", stone " + economy.DrillStoneCost + ")", "採掘機（木材 " + economy.DrillWoodCost + "、石 " + economy.DrillStoneCost + "）"), true, "", mode == Mode.Drill);
             if (economy.ProcessingChain)
             {
                 Add(rows, "line:CoreMetal", UiText.T("Ask for core metal line", "コア金属ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CoreMetal);

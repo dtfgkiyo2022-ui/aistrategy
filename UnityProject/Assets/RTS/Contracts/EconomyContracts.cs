@@ -656,6 +656,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         /// <summary>V3-2 costs and footprints for the placement buttons.</summary>
         public int InfantryMetalCost { get; }
         public int MineWoodCost { get; }
+        public bool CommonDrill { get; }
+        public int DrillWoodCost { get; }
+        public int DrillStoneCost { get; }
+        public int DrillSizeCells { get; }
         public int SmelterWoodCost { get; }
         public int MineSizeCells { get; }
         public int SmelterSizeCells { get; }
@@ -1082,7 +1086,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               int siegePartsHpPermille = 0, int siegePartsDamagePermille = 0, int siegePartsPerCastle = 0, int siegePartsCastleStonePermille = 0,
               int mechanismBuildingTimePermille = 0, int mechanismBuildingMaterialPermille = 0,
               int mechanismResearchCostPermille = 0, int mechanismResearchTimePermille = 0,
-             long civChoiceDeadlineTick = 0, bool ageClockUx = false)
+             long civChoiceDeadlineTick = 0, bool ageClockUx = false,
+             bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1196,6 +1201,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CorePlayerHeld = corePlayerHeld;
             Policy = policy;
             InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;
+            CommonDrill = commonDrill; DrillWoodCost = drillWoodCost; DrillStoneCost = drillStoneCost; DrillSizeCells = drillSizeCells;
             MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; Charcoal = charcoal; Steel = steel; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;
             Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());

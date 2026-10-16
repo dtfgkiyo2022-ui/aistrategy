@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -20,6 +21,10 @@ namespace Rts.Simulation
             if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
             if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
             if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
+            var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+            if (world.Config.Economy.DirectPathMovement && a.Policy == PolicyKind.Focus && command != null
+                && command.Order.Source == CommandSource.Human)
+                return GoalPosition(a.Goal);
             if (a.Decision.Assignment != AssignmentKind.Advance && a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);
             if (a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
@@ -35,6 +40,8 @@ namespace Rts.Simulation
                 foreach (uint id in a.SoldierIds) if (world.Soldiers[id - 1].Alive) { first = (int)id - 1; break; }
                 if (first < 0) continue;
                 var goal = ArmyGoal(a);
+                var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
+                bool humanFocus = a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human;
                 if (!a.HasPathGoal || !SamePoint(a.PathGoal, goal))
                 {
                     a.PathGoal = goal; a.HasPathGoal = true; a.PathCursor = 0;
@@ -44,11 +51,19 @@ namespace Rts.Simulation
                         world.Soldiers[id - 1].SlotWaitSinceTick = 0; world.Soldiers[id - 1].SlotWaitTarget = default;
                         world.Soldiers[id - 1].TacticalRoute = false; world.Soldiers[id - 1].LocalPath = null;
                     }
-                    a.Path = world.Map.FindPath(world.Map.Cell(world.Soldiers[first].Position), goal, a.Definition.FactionId);
+                    int startCell = world.Map.Cell(world.Soldiers[first].Position);
+                    var soldierIds = a.SoldierIds;
+                    uint factionId = a.Definition.FactionId;
+                    bool direct = world.Config.Economy.DirectPathMovement && humanFocus && soldierIds
+                        .Where(id => world.Soldiers[id - 1].Alive)
+                        .All(id => world.Soldiers[id - 1].Initial.Kind == UnitKind.Scout
+                            && Clear(world.Soldiers[id - 1].Position, goal, factionId));
+                    a.Path = direct ? new[] { startCell, world.Map.Cell(goal) }
+                        : world.Map.FindPath(startCell, goal, a.Definition.FactionId);
                     var radius = a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Outpost ? world.Config.Rules.CaptureRadius
                         : a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core ? world.Config.Rules.CoreRadius + world.Soldiers[first].Parameters.Range
                         : Fix64.FromInt(4);
-                    a.PathImpossible = a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius);
+                    a.PathImpossible = !direct && (a.Path.Length == 0 || !InRange(world.Map.Center(a.Path[a.Path.Length - 1]), goal, radius));
                 }
                 bool arrived = true, participants = false;
                 bool directAssault = IsLatePushAttack(a.Definition.Id);
@@ -91,6 +106,16 @@ namespace Rts.Simulation
                             continue;
                         }
                         soldier.Joining = false; soldier.LocalPath = null;
+                    }
+                    if (world.Config.Economy.DirectPathMovement && humanFocus && soldier.Initial.Kind == UnitKind.Scout && !a.PathImpossible
+                        && Clear(soldier.Position, goal, a.Definition.FactionId))
+                    {
+                        participants = true;
+                        soldier.Joining = false;
+                        soldier.LocalPath = null;
+                        soldier.MoveGoal = goal;
+                        if (!InRange(soldier.Position, goal, Fix64.FromRatio(1, 10))) arrived = false;
+                        continue;
                     }
                     participants = true;
                     // Collapse at bends; keep slots only when the next center is reachable from the slot.

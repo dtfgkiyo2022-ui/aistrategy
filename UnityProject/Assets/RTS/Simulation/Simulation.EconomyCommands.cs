@@ -101,20 +101,21 @@ namespace Rts.Simulation
                     RemoveBelt(faction, c.Cell);
                     return;
                 case EconomyCommandKind.RotateBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn) || (byte)c.Facing > 3 || !OwnBuilding(faction, c.ProducerId, out int rotateIndex)) return;
                     ref var rotating = ref world.Buildings[rotateIndex];
                     if (!rotating.Alive || rotating.Kind == BuildingKind.Barracks || rotating.Kind == BuildingKind.Farm) return;
                     MarkLinesForBuilding(faction, rotating.Id);
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     removed.Alive = false;
                     RemoveRegionCenter(removed);
-                    foreach (int cell in Footprint(removed)) world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
+                    foreach (int cell in Footprint(removed))
+                        world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
                     TerrainChanged();
                     return;
                 case EconomyCommandKind.PlaceBuilding:
@@ -130,7 +131,7 @@ namespace Rts.Simulation
                         TryPlaceTollgate(faction, c);
                         return;
                     }
-                    if (kind != BuildingKind.Barracks && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                    if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
@@ -188,15 +189,16 @@ namespace Rts.Simulation
                     uint sanctuaryOutpost = 0;
                     if (kind == BuildingKind.Caravanserai && !TryCaravanseraiPlacement(faction, c.Cell, out caravanOutpost, out caravanMarket, out caravanDistance, out caravanReward)) return;
                     if (kind == BuildingKind.Shrine && !TrySanctuaryPlacement(faction, c.Cell, out sanctuaryOutpost)) return;
-                     bool genericPlacement = kind != BuildingKind.Town && kind != BuildingKind.Mine && kind != BuildingKind.LumberCamp
+                     bool genericPlacement = kind != BuildingKind.Town && kind != BuildingKind.Mine && kind != BuildingKind.Drill && kind != BuildingKind.LumberCamp
                          && kind != BuildingKind.Quarry && kind != BuildingKind.MineShaft && kind != BuildingKind.Harbor
                          && kind != BuildingKind.Caravanserai && kind != BuildingKind.Shrine;
                      int manualBuildingClearance = genericPlacement && rules.AdjacentBuildings
                          ? rules.AdjacentBuildingClearanceCells : BuildingClearanceCells;
-                     bool clear = kind == BuildingKind.Town ? TownSiteIsClear(faction, c.Cell, size)
-                         : kind == BuildingKind.Mine ? MineSiteIsClear(c.Cell, out node)
-                        : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(c.Cell, out node)
-                        : kind == BuildingKind.Quarry ? QuarrySiteIsClear(c.Cell, out node)
+                    bool clear = kind == BuildingKind.Town ? TownSiteIsClear(faction, c.Cell, size)
+                         : kind == BuildingKind.Mine ? MineSiteIsClear(faction, c.Cell, out node)
+                        : kind == BuildingKind.Drill ? DrillSiteIsClear(faction, c.Cell, out node)
+                        : kind == BuildingKind.LumberCamp ? LumberCampSiteIsClear(faction, c.Cell, out node)
+                        : kind == BuildingKind.Quarry ? QuarrySiteIsClear(faction, c.Cell, out node)
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
                          : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
                          : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size, manualBuildingClearance);
@@ -288,7 +290,7 @@ namespace Rts.Simulation
                         MarkLinesForBuilding(faction, target.Id);
                         MarkLinesForBuilding(faction, c.HaulToId);
                         // V3-2: a finished mine or smelter is a place to carry from by hand (12.3).
-                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery || target.Kind == BuildingKind.DryingRack || target.Kind == BuildingKind.Lapidary || target.Kind == BuildingKind.Weaver || target.Kind == BuildingKind.Stonecutter || target.Kind == BuildingKind.Joinery
+                        haul = target.Complete && (target.Kind == BuildingKind.Mine || target.Kind == BuildingKind.Drill || target.Kind == BuildingKind.LumberCamp || target.Kind == BuildingKind.Quarry || target.Kind == BuildingKind.Smelter || target.Kind == BuildingKind.Fletcher || target.Kind == BuildingKind.Farm || target.Kind == BuildingKind.Mill || target.Kind == BuildingKind.Saddlery || target.Kind == BuildingKind.DryingRack || target.Kind == BuildingKind.Lapidary || target.Kind == BuildingKind.Weaver || target.Kind == BuildingKind.Stonecutter || target.Kind == BuildingKind.Joinery
                             || (CharcoalKilnAllowed(faction) && target.Kind == BuildingKind.CharcoalKiln)
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
