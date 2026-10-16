@@ -11,6 +11,7 @@ namespace Rts.Presentation
             BuildingKind kind, int origin, int size, Facing facing, int woodCost, int stoneCost)
         {
             if (economy == null || economy.Wood < woodCost || economy.Stone < stoneCost || size <= 0) return false;
+            if (kind == BuildingKind.Drill) return DrillSiteIsLegal(economy, origin, size);
             // These have their own site rules in the simulation (on a resource node, by the water, far from the core, in a
             // pass...). The general rule below would paint them red where they belong, so they keep the old cost-only colour.
             if (HasOwnSiteRule(kind)) return true;
@@ -74,6 +75,29 @@ namespace Rts.Presentation
             for (int i = 0; i < e.Resources.Count; i++)
                 if (Chebyshev(cell, CellOf(e, e.Resources[i].Position), e.MapWidthCells) < e.NodeClearanceCells) return true;
             return false;
+        }
+
+        private static bool DrillSiteIsLegal(EconomyView e, int origin, int size)
+        {
+            if (!e.CommonDrill || size != e.DrillSizeCells) return false;
+            int width = e.MapWidthCells, height = e.MapHeightCells;
+            if (width <= 0 || height <= 0 || origin < 0 || origin >= width * height
+                || origin % width + size > width || origin / width + size > height) return false;
+            var footprint = Footprint(origin, size, width);
+            int points = 0;
+            ResourceKind kind = ResourceKind.Food;
+            for (int i = 0; i < footprint.Length; i++)
+            {
+                int cell = footprint[i];
+                if (!Passable(e, cell) || River(e, cell) || Belt(e, cell)) return false;
+                for (int j = 0; j < e.Resources.Count; j++)
+                    if (CellOf(e, e.Resources[j].Position) == cell)
+                    {
+                        points++;
+                        kind = e.Resources[j].Kind;
+                    }
+            }
+            return points == 1 && (kind == ResourceKind.Wood || kind == ResourceKind.Stone || kind == ResourceKind.Ore || kind == ResourceKind.Gold);
         }
 
         private static bool NearCore(EconomyView e, IReadOnlyList<KnownObjective> objectives, uint factionId, int cell)

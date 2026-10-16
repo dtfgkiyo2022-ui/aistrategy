@@ -396,16 +396,20 @@ namespace Rts.Simulation
             && v.NodeId <= world.Nodes.Length && world.Nodes[v.NodeId - 1].Definition.Kind == ResourceKind.Gold;
 
         private bool GoldTargetUsable(VillagerState v)
+            => GoldTargetUsable(v.FactionId, v.NodeId, world.Map.Cell(v.Position));
+
+        private bool GoldTargetUsable(uint factionId, uint nodeId, int routeStartCell)
         {
-            var node = world.Nodes[v.NodeId - 1];
-            if (node.Remaining <= 0 || world.Map.SharedRoute(world.Map.Cell(v.Position), node.Definition.Position, v.FactionId).Length == 0) return false;
+            if (nodeId == 0 || nodeId > world.Nodes.Length) return false;
+            var node = world.Nodes[nodeId - 1];
+            if (node.Remaining <= 0 || world.Map.SharedRoute(routeStartCell, node.Definition.Position, factionId).Length == 0) return false;
             int danger = world.Config.Economy.GoldDangerMeters;
             long limit = checked(Fix64.FromInt(danger).Raw * Fix64.FromInt(danger).Raw);
-            var faction = world.Factions[v.FactionId - 1];
+            var faction = world.Factions[factionId - 1];
             foreach (int i in world.SoldierTraversal)
             {
                 var enemy = world.Soldiers[i];
-                if (!enemy.Alive || enemy.Initial.FactionId == v.FactionId) continue;
+                if (!enemy.Alive || enemy.Initial.FactionId == factionId) continue;
                 int cell = world.Map.Cell(enemy.Position);
                 if (cell < 0 || !faction.VisibleCells[cell]) continue;
                 long dx = enemy.Position.X.Raw - node.Definition.Position.X.Raw, dz = enemy.Position.Z.Raw - node.Definition.Position.Z.Raw;

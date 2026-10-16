@@ -1605,7 +1605,7 @@ namespace Rts.Simulation
                         int x0 = nx - dx, z0 = nz - dz;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
-                        if (!LumberCampSiteIsClear(origin, out uint nodeId) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (!LumberCampSiteIsClear(faction, origin, out uint nodeId) || !KeepsMapConnected(faction, origin, size)) continue;
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
@@ -1640,7 +1640,7 @@ namespace Rts.Simulation
                         int x0 = nx - dx, z0 = nz - dz;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
-                        if (!QuarrySiteIsClear(origin, out uint nodeId) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (!QuarrySiteIsClear(faction, origin, out uint nodeId) || !KeepsMapConnected(faction, origin, size)) continue;
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
@@ -1685,7 +1685,7 @@ namespace Rts.Simulation
                         int x0 = nx - dx, z0 = nz - dz;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
-                        if (!MineSiteIsClear(origin, out uint id) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (!MineSiteIsClear(faction, origin, out uint id) || !KeepsMapConnected(faction, origin, size)) continue;
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;

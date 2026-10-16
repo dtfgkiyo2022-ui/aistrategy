@@ -171,7 +171,7 @@ namespace Rts.Presentation
 
         public static bool IsHaulSource(BuildingKind kind)
         {
-            return kind == BuildingKind.Mine || kind == BuildingKind.LumberCamp || kind == BuildingKind.Quarry
+            return kind == BuildingKind.Mine || kind == BuildingKind.Drill || kind == BuildingKind.LumberCamp || kind == BuildingKind.Quarry
                 || kind == BuildingKind.Smelter || kind == BuildingKind.Fletcher || kind == BuildingKind.Farm
                 || kind == BuildingKind.CharcoalKiln || kind == BuildingKind.BrickKiln || kind == BuildingKind.Mill || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Storage;
         }

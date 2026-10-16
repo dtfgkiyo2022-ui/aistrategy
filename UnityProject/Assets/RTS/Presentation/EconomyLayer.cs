@@ -713,7 +713,7 @@ namespace Rts.Presentation
                         packedBuildings.Add(b.Id);
                     }
                 }
-                float full = b.Kind == BuildingKind.Mine ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
+                float full = b.Kind == BuildingKind.Mine || b.Kind == BuildingKind.Drill ? 1.6f : b.Kind == BuildingKind.Smelter ? 2.4f : b.Kind == BuildingKind.Farm ? 0.8f
                     : b.Kind == BuildingKind.House ? 1.4f : b.Kind == BuildingKind.DropSite ? 1.0f
                     : b.Kind == BuildingKind.Wall ? 2.2f : b.Kind == BuildingKind.Tower ? 4.5f : b.Kind == BuildingKind.Blacksmith ? 2.0f
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
@@ -959,9 +959,17 @@ namespace Rts.Presentation
                 return;
             }
             var state = CraftVisualRules.Evaluate(building, economy);
-            Texture2D icon = state == CraftBuildingState.WaitingForMaterial
-                ? GoodsIcons.Get(CraftVisualRules.MissingInputKind(building.Kind))
-                : GoodsIcons.GetStatus(state);
+            Texture2D icon;
+            if (building.Kind == BuildingKind.Drill)
+            {
+                ResourceKind resource = CraftVisualRules.DrillResource(building, economy);
+                icon = building.Output >= CraftVisualRules.OutputBufferLimit || resource == 0
+                    ? GoodsIcons.GetStatus(CraftBuildingState.OutputBlocked) : GoodsIcons.Get(resource);
+            }
+            else
+                icon = state == CraftBuildingState.WaitingForMaterial
+                    ? GoodsIcons.Get(CraftVisualRules.MissingInputKind(building.Kind))
+                    : GoodsIcons.GetStatus(state);
             SetBuildingStatusBubble(building.Id, icon, top);
             SetBuildingActivityPuff(building.Id, state == CraftBuildingState.Working, top);
         }
@@ -1121,6 +1129,7 @@ namespace Rts.Presentation
             {
                 case BuildingKind.Barracks: return UiText.T("Barracks", "兵舎");
                 case BuildingKind.Mine: return UiText.T("Mine", "鉱山");
+                case BuildingKind.Drill: return UiText.T("Drill", "採掘機");
                 case BuildingKind.Smelter: return UiText.T("Smelter", "製錬所");
                 case BuildingKind.Mill: return UiText.T("Mill", "製粉所");
                 case BuildingKind.BrickKiln: return UiText.T("Brick kiln", "煉瓦窯");

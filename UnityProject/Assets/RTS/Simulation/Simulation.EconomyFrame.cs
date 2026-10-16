@@ -328,7 +328,9 @@ namespace Rts.Simulation
                  mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
                  mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0,
                 civChoiceDeadlineTick: civChoiceDeadline,
-                ageClockUx: AgeClockUxOn);
+                ageClockUx: AgeClockUxOn,
+                commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
+                drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

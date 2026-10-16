@@ -315,7 +315,7 @@ namespace Rts.Simulation
             for (int n = 0; n < world.Nodes.Length; n++)
             {
                 var node = world.Nodes[n];
-                if (node.Remaining <= 0 || gatherers[n] == 0 || InRange(node.Definition.Position, core, Fix64.FromInt(FarGatherMeters))) continue;
+                if (node.Remaining <= 0 || gatherers[n] == 0 && !CommonDrillOn || InRange(node.Definition.Position, core, Fix64.FromInt(FarGatherMeters))) continue;
                 if (!RawReceiverAllowed(faction, node.Definition.Kind)) continue;
                 if (best >= 0 && (gatherers[n] < gatherers[best]
                     || (gatherers[n] == gatherers[best] && node.Definition.Id >= world.Nodes[best].Definition.Id))) continue;
@@ -328,7 +328,8 @@ namespace Rts.Simulation
             {
                 if (economy.Wood < RawReceiverWoodCost(kind) + world.Config.Economy.AiBeltWoodReserve) return;
                 int preferred = world.Map.Cell(world.Nodes[best].Definition.Position);
-                receiver = kind == BuildingKind.LumberCamp ? PlaceLumberCamp(faction, preferred)
+                receiver = kind == BuildingKind.Drill ? PlaceDrill(faction, preferred)
+                    : kind == BuildingKind.LumberCamp ? PlaceLumberCamp(faction, preferred)
                     : kind == BuildingKind.Quarry ? PlaceQuarry(faction, preferred)
                     : kind == BuildingKind.Mine ? PlaceMine(faction, preferred) : PlaceStorage(faction, preferred, world.Nodes[best].Definition.Id);
                 if (receiver == 0) return;
@@ -342,16 +343,19 @@ namespace Rts.Simulation
         }
 
         private bool RawReceiverAllowed(uint faction, ResourceKind kind)
-            => world.Config.Economy.BeltComponents && IsRawResource(kind);
+            => world.Config.Economy.BeltComponents && (CommonDrillOn ? kind == ResourceKind.Wood || kind == ResourceKind.Stone
+                || kind == ResourceKind.Ore || kind == ResourceKind.Gold : IsRawResource(kind));
 
         private BuildingKind RawReceiverKind(uint faction, ResourceKind kind)
-            => kind == ResourceKind.Wood && ForestryAllowed(faction) ? BuildingKind.LumberCamp
+            => CommonDrillOn && (kind == ResourceKind.Wood || kind == ResourceKind.Stone || kind == ResourceKind.Ore || kind == ResourceKind.Gold) ? BuildingKind.Drill
+                : kind == ResourceKind.Wood && ForestryAllowed(faction) ? BuildingKind.LumberCamp
                 : kind == ResourceKind.Stone && MasonryAllowed(faction) ? BuildingKind.Quarry
                 : kind == ResourceKind.Ore && MetalworkAllowed(faction) ? BuildingKind.Mine
                 : BuildingKind.Storage;
 
         private int RawReceiverWoodCost(BuildingKind kind)
-            => kind == BuildingKind.LumberCamp ? world.Config.Economy.LumberCampWoodCost
+            => kind == BuildingKind.Drill ? world.Config.Economy.DrillWoodCost
+                : kind == BuildingKind.LumberCamp ? world.Config.Economy.LumberCampWoodCost
                 : kind == BuildingKind.Quarry ? world.Config.Economy.QuarryWoodCost
                 : kind == BuildingKind.Mine ? world.Config.Economy.MineWoodCost : world.Config.Economy.StorageWoodCost;
 
@@ -379,6 +383,45 @@ namespace Rts.Simulation
                 PlaceBuildingAt(faction, BuildingKind.Storage, origin, side, 0);
                 world.Buildings[world.BuildingCount - 1].NodeId = nodeId;
                 return world.NextBuildingId - 1;
+            }
+            return 0;
+        }
+
+        private uint PlaceDrill(uint faction, int preferredCell = -1)
+        {
+            var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
+            int size = world.Config.Economy.DrillSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            var order = new int[world.Nodes.Length];
+            for (int i = 0; i < order.Length; i++) order[i] = i;
+            Array.Sort(order, (a, b) =>
+            {
+                int c = DistanceSquared(world.Nodes[a].Definition.Position, core).CompareTo(DistanceSquared(world.Nodes[b].Definition.Position, core));
+                return c != 0 ? c : world.Nodes[a].Definition.Id.CompareTo(world.Nodes[b].Definition.Id);
+            });
+            foreach (int n in order)
+            {
+                var node = world.Nodes[n];
+                if (!ResourceKnownToFaction(faction, n) || node.Remaining <= 0
+                    || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
+                        && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold)) continue;
+                bool goldUsable = node.Definition.Kind != ResourceKind.Gold
+                    || GoldTargetUsable(faction, node.Definition.Id, world.Map.Cell(OwnCore(faction).Definition.Position));
+                if (!goldUsable) continue;
+                int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
+                for (int dz = 0; dz < size; dz++)
+                    for (int dx = 0; dx < size; dx++)
+                    {
+                        int x0 = nx - dx, z0 = nz - dz;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (!DrillSiteIsClear(faction, origin, out uint nodeId, true) || !KeepsMapConnected(faction, origin, size)) continue;
+                        foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                        {
+                            if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            PlaceBuildingAt(faction, BuildingKind.Drill, origin, side, nodeId);
+                            return world.NextBuildingId - 1;
+                        }
+                    }
             }
             return 0;
         }

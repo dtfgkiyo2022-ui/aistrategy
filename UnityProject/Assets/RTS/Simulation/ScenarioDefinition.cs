@@ -116,6 +116,9 @@ namespace Rts.Simulation
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
+        /// <summary>Common drill: an age-one, all-civilisation extractor for one wood, stone, ore, or gold point.</summary>
+        public bool CommonDrill;
+        public int DrillSizeCells = 2, DrillWoodCost = 60, DrillStoneCost = 30, DrillWork = 200, DrillHp = 400, DrillIntervalTicks = 40;
         /// <summary>Smelter (12.2): footprint, wood, work, HP, ticks per metal, and ore per metal.</summary>
         public int SmelterSizeCells = 3, SmelterWoodCost = 120, SmelterWork = 300, SmelterHp = 600, SmeltTicks = 60, OrePerMetal = 2;
         /// <summary>Items a mine or smelter holds at its input and at its output; a full output stops the work.</summary>

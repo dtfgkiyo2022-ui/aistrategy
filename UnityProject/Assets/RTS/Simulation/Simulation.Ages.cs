@@ -646,7 +646,7 @@ namespace Rts.Simulation
                     int x0 = nx - dx, z0 = nz - dz;
                     if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                     int origin = z0 * width + x0;
-                    if (!LumberCampSiteIsClear(origin, out uint covered) || covered != nodeId
+                    if (!LumberCampSiteIsClear(faction, origin, out uint covered) || covered != nodeId
                         || !KeepsMapConnected(faction, origin, size)) continue;
                     foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         if (PortIsOpen(OutputCell(origin, size, side), faction)) return true;
@@ -754,7 +754,7 @@ namespace Rts.Simulation
                     int x0 = nx - dx, z0 = nz - dz;
                     if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                     int origin = z0 * width + x0;
-                    if (!QuarrySiteIsClear(origin, out uint covered) || covered != nodeId
+                    if (!QuarrySiteIsClear(faction, origin, out uint covered) || covered != nodeId
                         || !KeepsMapConnected(faction, origin, size)) continue;
                     foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         if (PortIsOpen(OutputCell(origin, size, side), faction)) return true;
