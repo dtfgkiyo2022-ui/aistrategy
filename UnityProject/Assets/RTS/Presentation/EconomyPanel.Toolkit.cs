@@ -309,12 +309,12 @@ namespace Rts.Presentation
             }
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
-                Add(rows, "build:sawmill", UiText.T("Sawmill", "製材所"), true, "", mode == Mode.Sawmill);
-                Add(rows, "build:stonecutter", UiText.T("Stonecutter", "石工場"), true, "", mode == Mode.Stonecutter);
+                Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
+                Add(rows, "build:stonecutter", UiText.T("Stonecutter (", "石工場（木材 ") + economy.StonecutterWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Stonecutter);
                 Add(rows, "line:CutStone", UiText.T("Ask for cut-stone line", "切石ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.CutStone);
                 if (economy.Age >= 2)
                 {
-                    Add(rows, "build:joinery", UiText.T("Joinery", "木工所"), true, "", mode == Mode.Joinery);
+                    Add(rows, "build:joinery", UiText.T("Joinery (", "木工所（木材 ") + economy.JoineryWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Joinery);
                     Add(rows, "line:Frames", UiText.T("Ask for frames line", "建材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Frames);
                 }
                 Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
