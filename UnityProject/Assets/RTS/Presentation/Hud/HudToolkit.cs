@@ -377,8 +377,27 @@ namespace Rts.Presentation
         private void Update()
         {
             long probe = PerfProbe.Start();
+            ReleaseTextFieldOnOutsideClick(staffInput);
+            ReleaseTextFieldOnOutsideClick(blueprintName);
             UpdateMeasured();
             PerfProbe.Stop("Hud", probe);
+        }
+
+        /// <summary>
+        /// A text field keeps the keyboard after the player clicks the map, because a click outside the panel is not a
+        /// UI Toolkit event: the next hotkeys were typed into the staff chat (10-16, owner's test play). A click anywhere
+        /// outside the field, or Escape, gives the keyboard back.
+        /// </summary>
+        private static void ReleaseTextFieldOnOutsideClick(TextField field)
+        {
+            if (field == null || field.panel == null || field.panel.focusController == null) return;
+            var focused = field.panel.focusController.focusedElement as VisualElement;
+            if (focused == null || (focused != field && !field.Contains(focused))) return;
+            if (Input.GetKeyDown(KeyCode.Escape)) { field.Blur(); return; }
+            if (!Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1) && !Input.GetMouseButtonDown(2)) return;
+            var mouse = Input.mousePosition;
+            var point = RuntimePanelUtils.ScreenToPanel(field.panel, new Vector2(mouse.x, Screen.height - mouse.y));
+            if (!field.worldBound.Contains(point)) field.Blur();
         }
 
         private void UpdateMeasured()
