@@ -119,6 +119,9 @@ namespace Rts.Simulation
         /// <summary>Common drill: an age-one, all-civilisation extractor for one wood, stone, ore, or gold point.</summary>
         public bool CommonDrill;
         public int DrillSizeCells = 2, DrillWoodCost = 60, DrillStoneCost = 30, DrillWork = 200, DrillHp = 400, DrillIntervalTicks = 40;
+        /// <summary>V3-34.3: one-cell inserters; the selector uses BeltDefinition.SorterKind.</summary>
+        public bool Inserters;
+        public int InserterWoodCost = 15, InserterIntervalTicks = 10, AiInserterCoreReserve = 100;
         /// <summary>Smelter (12.2): footprint, wood, work, HP, ticks per metal, and ore per metal.</summary>
         public int SmelterSizeCells = 3, SmelterWoodCost = 120, SmelterWork = 300, SmelterHp = 600, SmeltTicks = 60, OrePerMetal = 2;
         /// <summary>Items a mine or smelter holds at its input and at its output; a full output stops the work.</summary>

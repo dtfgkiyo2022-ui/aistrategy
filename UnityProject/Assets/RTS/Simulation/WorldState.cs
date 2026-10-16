@@ -529,6 +529,9 @@ namespace Rts.Simulation
             Require(!e.CommonDrill || (e.Enabled && e.Industry && e.DrillSizeCells > 0 && e.DrillSizeCells <= 8
                 && e.DrillWoodCost >= 0 && e.DrillStoneCost >= 0 && e.DrillWork > 0 && e.DrillHp > 0 && e.DrillIntervalTicks > 0),
                 "Common drill requires valid industry rules.");
+            Require(!e.Inserters || (e.Enabled && e.Industry && e.BeltComponents && e.InserterWoodCost >= 0
+                && e.InserterIntervalTicks > 0 && e.AiInserterCoreReserve >= 0),
+                "Inserters require valid belt-component rules.");
             if (e.BeltComponents)
             {
                 Require(e.Industry && e.SplitterWoodCost >= 0 && e.SorterWoodCost >= 0 && e.UndergroundBeltWoodCost >= 0
@@ -538,10 +541,13 @@ namespace Rts.Simulation
                     && e.StorageHp > 0 && e.StorageCapacity > 0, "Invalid belt-component rules.");
                 foreach (var b in c.Belts)
                 {
-                    Require((byte)b.Component <= (byte)BeltComponentKind.UndergroundExit && (byte)b.Speed <= (byte)BeltSpeed.Fast,
+                    Require((byte)b.Component <= (byte)BeltComponentKind.Inserter && (byte)b.Speed <= (byte)BeltSpeed.Fast,
                         "Invalid belt component.");
+                    Require(b.Component != BeltComponentKind.Inserter || e.Inserters, "Inserters are disabled.");
                     if (b.Component == BeltComponentKind.Sorter)
             Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
+                    if (b.Component == BeltComponentKind.Inserter)
+                        Require(b.SorterKind == 0 || (byte)b.SorterKind <= (byte)ResourceKind.Mechanism, "An inserter needs a valid selector.");
                     if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
@@ -1008,6 +1014,8 @@ namespace Rts.Simulation
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
                  CommonDrill = e.CommonDrill, DrillSizeCells = e.DrillSizeCells, DrillWoodCost = e.DrillWoodCost, DrillStoneCost = e.DrillStoneCost,
                  DrillWork = e.DrillWork, DrillHp = e.DrillHp, DrillIntervalTicks = e.DrillIntervalTicks,
+                 Inserters = e.Inserters, InserterWoodCost = e.InserterWoodCost, InserterIntervalTicks = e.InserterIntervalTicks,
+                 AiInserterCoreReserve = e.AiInserterCoreReserve,
                  SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
                  SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
                   ProcessingChain = e.ProcessingChain, CharcoalKilnSizeCells = e.CharcoalKilnSizeCells, CharcoalKilnWoodCost = e.CharcoalKilnWoodCost,

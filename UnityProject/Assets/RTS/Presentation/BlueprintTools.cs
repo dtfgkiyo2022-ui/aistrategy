@@ -9,7 +9,7 @@ namespace Rts.Presentation
 {
     public sealed class BlueprintDocument
     {
-        public const int CurrentVersion = 2;
+        public const int CurrentVersion = 3;
         public int Version = CurrentVersion;
         public string Name = "設計図";
         public int Width = 1;
@@ -90,8 +90,8 @@ namespace Rts.Presentation
                 Width = Number(json, "width", 1),
                 Height = Number(json, "height", 1)
             };
-            if (result.Version != 1 && result.Version != BlueprintDocument.CurrentVersion) throw new FormatException("未対応の設計図版です。");
-            if (result.Version == 1) result.Version = BlueprintDocument.CurrentVersion;
+            if (result.Version < 1 || result.Version > BlueprintDocument.CurrentVersion) throw new FormatException("未対応の設計図版です。");
+            int sourceVersion = result.Version;
             foreach (Match match in Objects(json, "buildings"))
             {
                 result.Buildings.Add(new BlueprintBuilding((BuildingKind)Number(match.Value, "kind", 0), Number(match.Value, "x", 0), Number(match.Value, "z", 0),
@@ -101,6 +101,12 @@ namespace Rts.Presentation
                 result.Belts.Add(new BlueprintBelt(Number(match.Value, "x", 0), Number(match.Value, "z", 0), (Facing)Number(match.Value, "facing", 0),
                     (BeltComponentKind)Number(match.Value, "component", 0), (ResourceKind)Number(match.Value, "sorterKind", 0),
                     Number(match.Value, "pairCell", -1), (BeltSpeed)Number(match.Value, "speed", 0)));
+            if (sourceVersion < 3)
+                for (int i = 0; i < result.Belts.Count; i++)
+                    if (result.Belts[i].Component == BeltComponentKind.Inserter)
+                        result.Belts[i] = new BlueprintBelt(result.Belts[i].X, result.Belts[i].Z, result.Belts[i].Facing,
+                            BeltComponentKind.None, 0, result.Belts[i].PairCell, result.Belts[i].Speed);
+            result.Version = BlueprintDocument.CurrentVersion;
             return result;
         }
 

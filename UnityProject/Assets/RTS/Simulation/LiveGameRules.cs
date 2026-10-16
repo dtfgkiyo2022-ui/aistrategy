@@ -32,6 +32,7 @@ namespace Rts.Simulation
             e.StorageFeedsProcessing = allCivilisations;
             e.Rations = allCivilisations;
             e.CommonDrill = allCivilisations;
+            e.Inserters = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;
             e.Planks = allCivilisations;
