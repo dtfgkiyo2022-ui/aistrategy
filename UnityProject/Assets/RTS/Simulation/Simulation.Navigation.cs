@@ -22,7 +22,8 @@ namespace Rts.Simulation
             if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
             if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
             var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
-            if (a.Policy == PolicyKind.Focus && command != null && command.Order.Source == CommandSource.Human)
+            if (world.Config.Economy.DirectPathMovement && a.Policy == PolicyKind.Focus && command != null
+                && command.Order.Source == CommandSource.Human)
                 return GoalPosition(a.Goal);
             if (a.Decision.Assignment != AssignmentKind.Advance && a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);

@@ -46,7 +46,9 @@ namespace Rts.Tests.EditMode
         [TestCase(true)]
         public void HumanFocusMovesTheSelectedArmyWhenEconomyIsOnOrOff(bool economy)
         {
-            var simulation = new Battle(Peace(1, economy));
+            var scenario = Peace(1, economy);
+            scenario.Economy.DirectPathMovement = true;
+            var simulation = new Battle(scenario);
             var goal = P(128, 32);
             var before = simulation.Capture(1).Units.Where(u => u.IsOwn).Select(u => u.Position).ToArray();
             CommandTestInput.Step(simulation, 1, new[] { Focus(1, 1, goal) });
