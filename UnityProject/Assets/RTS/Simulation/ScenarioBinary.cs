@@ -161,6 +161,9 @@ private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
 private const int AiBeltsExtensionId = 40;
 private const int AiBeltsExtensionVersion = 1;
 private const int AiBeltsExtensionDataLength = 2 * sizeof(int);
+private const int StorageFeedsProcessingExtensionId = 46;
+private const int StorageFeedsProcessingExtensionVersion = 1;
+private const int StorageFeedsProcessingExtensionDataLength = sizeof(int);
 private const int CraftTree2ExtensionId = 42;
 private const int CraftTree2ExtensionVersion = 1;
 private const int CraftTree2ExtensionDataLength = 23 * sizeof(int);
@@ -221,6 +224,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
             ,new ExtensionRegistration(CraftTree3ExtensionId, CraftTree3ExtensionVersion, CraftTree3ExtensionDataLength)
             ,new ExtensionRegistration(AgeClockUxExtensionId, AgeClockUxExtensionVersion, AgeClockUxExtensionDataLength)
+            ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -789,6 +793,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                      else if (id == PushWavesExtensionId) ReadPushWavesExtension(extension, c.Economy);
                       else if (id == ManualControlExtensionId) ReadManualControlExtension(extension, c.Economy);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
+                    else if (id == StorageFeedsProcessingExtensionId) ReadStorageFeedsProcessingExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     else if (id == PlanksExtensionId) ReadPlanksExtension(extension, c.Economy);
@@ -883,6 +888,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
+                extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree2ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2));
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
             bool hasAcademy = false, hasFishingCiv = false;
@@ -1220,6 +1226,15 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateAiBeltsExtension(c.Economy);
                     }
                 if (c.Economy.AiBelts && !hasAiBelts) extensions.Add(CreateAiBeltsExtension(c.Economy));
+                bool hasStorageFeedsProcessing = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == StorageFeedsProcessingExtensionId)
+                    {
+                        hasStorageFeedsProcessing = true;
+                        extensions[i] = CreateStorageFeedsProcessingExtension(c.Economy);
+                    }
+                if (c.Economy.StorageFeedsProcessing && !hasStorageFeedsProcessing)
+                    extensions.Add(CreateStorageFeedsProcessingExtension(c.Economy));
                 bool hasCraftTree2 = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CraftTree2ExtensionId)
@@ -1286,6 +1301,29 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.AiBeltWoodReserve = reader.ReadInt32();
                 if (e.AiBeltWoodReserve < 0) throw new InvalidDataException("Invalid AI-belt wood reserve.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-belts extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateStorageFeedsProcessingExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.StorageFeedsProcessing ? 1 : 0);
+                return new ScenarioExtensionData { Id = StorageFeedsProcessingExtensionId,
+                    Version = StorageFeedsProcessingExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadStorageFeedsProcessingExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid storage-feeds-processing flag.");
+                e.StorageFeedsProcessing = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing storage-feeds-processing extension data.");
             }
         }
 

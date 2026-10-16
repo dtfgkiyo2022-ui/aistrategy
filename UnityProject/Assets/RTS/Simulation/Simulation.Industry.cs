@@ -793,6 +793,57 @@ namespace Rts.Simulation
         }
 
         /// <summary>
+        /// Checks the same belt-input combinations as TryFeedBuilding without looking at BufferLimit. Storage route
+        /// discovery uses this predicate so a full receiver still makes the storage a valid waiting point.
+        /// </summary>
+        private bool BeltCanFeedBuilding(int cell, uint faction, ResourceKind item)
+        {
+            int width = world.Config.Map.WidthCells, x = cell % width, z = cell / width;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive) continue;
+                int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
+                if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
+                if (b.FactionId != faction || !b.Complete) return false;
+                if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore) return true;
+                if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood) return true;
+                if (ProcessingOn && b.Kind == BuildingKind.Steelworks
+                    && (item == ResourceKind.Metal || item == ResourceKind.Charcoal)) return true;
+                if (ForestryOn && b.Kind == BuildingKind.Fletcher
+                    && (item == ResourceKind.Wood || item == ResourceKind.Food)) return true;
+                if (RationsOn && b.Kind == BuildingKind.Mill && item == ResourceKind.Food) return true;
+                if (TackAllowed(faction) && b.Kind == BuildingKind.Saddlery
+                    && (item == ResourceKind.Food || item == ResourceKind.Wood)) return true;
+                if ((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && b.Kind == BuildingKind.Sawmill
+                    && item == ResourceKind.Wood) return true;
+                if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None
+                    && item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly) return true;
+                if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone) return true;
+                if (JoineryAllowed(faction) && b.Kind == BuildingKind.Joinery
+                    && (item == ResourceKind.Planks || item == ResourceKind.CutStone)) return true;
+                if (BricksAllowed(faction) && b.Kind == BuildingKind.BrickKiln
+                    && (item == ResourceKind.Stone || item == ResourceKind.Charcoal)) return true;
+                if (BooksAllowed(faction) && b.Kind == BuildingKind.Scriptorium
+                    && (item == ResourceKind.Gold || item == ResourceKind.Wood)) return true;
+                if (PreservesAllowed(faction) && b.Kind == BuildingKind.DryingRack && item == ResourceKind.Food) return true;
+                if (JewelsAllowed(faction) && b.Kind == BuildingKind.Lapidary
+                    && (item == ResourceKind.Stone || item == ResourceKind.Ore)) return true;
+                if (TradeGoodsAllowed(faction) && b.Kind == BuildingKind.Weaver && item == ResourceKind.Wood) return true;
+                if (IncenseAllowed(faction) && b.Kind == BuildingKind.IncenseHouse
+                    && (item == ResourceKind.Wood || item == ResourceKind.Food)) return true;
+                if (CharmsAllowed(faction) && b.Kind == BuildingKind.CharmWorkshop && item == ResourceKind.Wood) return true;
+                if (RepairKitsAllowed(faction) && b.Kind == BuildingKind.RepairYard && item == ResourceKind.Wood) return true;
+                if (ToolsAllowed(faction) && b.Kind == BuildingKind.ToolShop && item == ResourceKind.Wood) return true;
+                if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage
+                    && b.StorageCount < world.Config.Economy.StorageCapacity
+                    && (b.StorageCount == 0 || b.StorageKind == item)) return true;
+                return false;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// A mine's footprint must cover exactly one resource point, an ore point with ore left, and otherwise be open
         /// ground with no belt and outside every core.
         /// </summary>
@@ -984,7 +1035,7 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
-            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsCore(target, target.FactionId)
+            if (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage && StorageFeedsResource(target, target.FactionId, kind)
                 && target.StorageCount < rules.StorageCapacity && (target.StorageCount == 0 || target.StorageKind == kind))
             {
                 int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
@@ -996,7 +1047,7 @@ namespace Rts.Simulation
         private int PutIntoStorage(ref BuildingState target, ResourceKind kind, int amount)
         {
             var rules = world.Config.Economy;
-            if (!rules.BeltComponents || !StorageFeedsCore(target, target.FactionId) || !StorageCanAccept(target, kind)) return 0;
+            if (!rules.BeltComponents || !StorageFeedsResource(target, target.FactionId, kind) || !StorageCanAccept(target, kind)) return 0;
             int put = Math.Min(amount, rules.StorageCapacity - target.StorageCount);
             target.StorageKind = kind;
             target.StorageCount += put;

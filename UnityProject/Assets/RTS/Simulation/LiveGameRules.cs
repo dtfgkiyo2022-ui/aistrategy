@@ -29,6 +29,7 @@ namespace Rts.Simulation
             e.ResourceFog = true;
             e.DropSiteLimit = true;
             e.AiBelts = true;
+            e.StorageFeedsProcessing = allCivilisations;
             e.Rations = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;

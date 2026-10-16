@@ -126,6 +126,7 @@ namespace Rts.Simulation
                     w.Value(n + "AdjacentBuildings", true);
                     w.Value(n + "AdjacentBuildingClearanceCells", world.Config.Economy.AdjacentBuildingClearanceCells);
                 }
+                if (StorageFeedsProcessingOn) w.Value(n + "StorageFeedsProcessing", true);
                 if (RationsOn)
                 {
                     w.Value(n + "Rations", e.Rations);

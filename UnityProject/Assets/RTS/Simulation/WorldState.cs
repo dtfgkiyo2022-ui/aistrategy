@@ -1211,6 +1211,7 @@ namespace Rts.Simulation
                 HouseSizeCells = e.HouseSizeCells, HouseWoodCost = e.HouseWoodCost, HouseWork = e.HouseWork, HouseHp = e.HouseHp,
                 DropSiteSizeCells = e.DropSiteSizeCells, DropSiteWoodCost = e.DropSiteWoodCost, DropSiteWork = e.DropSiteWork, DropSiteHp = e.DropSiteHp,
                 DropSiteLimit = e.DropSiteLimit, DropSiteMax = e.DropSiteMax, AiBelts = e.AiBelts, AiBeltWoodReserve = e.AiBeltWoodReserve,
+                StorageFeedsProcessing = e.StorageFeedsProcessing,
                   WallStoneCost = e.WallStoneCost, WallHp = e.WallHp, WallReach = e.WallReach,
                   MasonryDefenceCostPermille = e.MasonryDefenceCostPermille, MasonryDefenceWorkPermille = e.MasonryDefenceWorkPermille,
                   CoreDefence = e.CoreDefence, CoreDefenceRange = e.CoreDefenceRange, CoreDefenceDamage = e.CoreDefenceDamage,
