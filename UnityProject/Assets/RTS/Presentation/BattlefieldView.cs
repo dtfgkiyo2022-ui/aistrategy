@@ -1215,11 +1215,17 @@ namespace Rts.Presentation
 
         private void SyncArrows(FactionFrame frame)
         {
-            var live = new HashSet<ulong>();
+            var latestByArmy = new Dictionary<uint, CommandView>();
             foreach (var command in frame.Commands)
             {
                 bool active = command.Status == CommandStatus.Executing || command.Status == CommandStatus.Pending;
                 if (!active || command.Target.Kind != ScopeKind.Army) continue;
+                if (!latestByArmy.TryGetValue(command.Target.Id, out var current)
+                    || BattlefieldArrowRules.IsNewer(command, current)) latestByArmy[command.Target.Id] = command;
+            }
+            var live = new HashSet<ulong>();
+            foreach (var command in latestByArmy.Values)
+            {
                 if (!TryGoalPosition(command.Goal, frame, out var goal)) continue;
                 live.Add(command.CommandId);
                 if (!arrows.TryGetValue(command.CommandId, out var arrow))

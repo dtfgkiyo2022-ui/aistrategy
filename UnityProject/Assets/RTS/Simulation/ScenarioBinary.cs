@@ -79,9 +79,12 @@ namespace Rts.Simulation
         private const int AgeClockExtensionId = 16;
         private const int AgeClockExtensionVersion = 1;
         private const int AgeClockExtensionDataLength = 4 * sizeof(int);
-        private const int AgeClockUxExtensionId = 44;
-        private const int AgeClockUxExtensionVersion = 1;
-        private const int AgeClockUxExtensionDataLength = 2 * sizeof(int);
+private const int AgeClockUxExtensionId = 44;
+private const int AgeClockUxExtensionVersion = 1;
+private const int AgeClockUxExtensionDataLength = 2 * sizeof(int);
+private const int DirectPathMovementExtensionId = 45;
+private const int DirectPathMovementExtensionVersion = 1;
+private const int DirectPathMovementExtensionDataLength = sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -221,6 +224,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
             ,new ExtensionRegistration(CraftTree3ExtensionId, CraftTree3ExtensionVersion, CraftTree3ExtensionDataLength)
             ,new ExtensionRegistration(AgeClockUxExtensionId, AgeClockUxExtensionVersion, AgeClockUxExtensionDataLength)
+            ,new ExtensionRegistration(DirectPathMovementExtensionId, DirectPathMovementExtensionVersion, DirectPathMovementExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -811,7 +815,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
-                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
+                    else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
+                    else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -884,7 +889,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree2ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2));
-                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
+                extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
+                extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1236,7 +1242,37 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateCraftTree3Extension(c.Economy);
                     }
                 if (c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && !hasCraftTree3) extensions.Add(CreateCraftTree3Extension(c.Economy));
+                bool hasDirectPathMovement = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == DirectPathMovementExtensionId)
+                    {
+                        hasDirectPathMovement = true;
+                        extensions[i] = CreateDirectPathMovementExtension(c.Economy);
+                    }
+                if (c.Economy.DirectPathMovement && !hasDirectPathMovement) extensions.Add(CreateDirectPathMovementExtension(c.Economy));
                 return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateDirectPathMovementExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.DirectPathMovement ? 1 : 0);
+                return new ScenarioExtensionData { Id = DirectPathMovementExtensionId, Version = DirectPathMovementExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadDirectPathMovementExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid direct path movement flag.");
+                e.DirectPathMovement = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing direct path movement extension data.");
+            }
         }
 
         private static ScenarioExtensionData CreateDropSiteLimitExtension(EconomyRules e)

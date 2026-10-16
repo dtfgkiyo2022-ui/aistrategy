@@ -105,7 +105,8 @@ namespace Rts.Simulation
                 s.TargetId = 0;
                 if (!s.Alive) continue;
                 var a = world.Armies[s.Initial.ArmyId - 1];
-                bool regionBlocksMovement = RegionBlocksAiArmy(a);
+                bool hasHumanCommand = a.CommandId != 0 && CommandById(a.CommandId)?.Order.Source == CommandSource.Human;
+                bool regionBlocksMovement = !hasHumanCommand && RegionBlocksAiArmy(a);
                 uint faction = s.Initial.FactionId;
                 var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;

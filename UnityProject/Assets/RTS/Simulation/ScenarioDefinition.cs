@@ -73,6 +73,8 @@ namespace Rts.Simulation
         public bool Enabled;
         /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
         public bool Regions;
+        /// <summary>MoveFix1: allows a deterministic straight-line move when the exact line of sight is clear.</summary>
+        public bool DirectPathMovement;
         /// <summary>S-4: allow full armies to create a new field army for later reinforcements.</summary>
         public bool ArmyGrowth;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
