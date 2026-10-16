@@ -297,6 +297,7 @@ namespace Rts.Presentation
             { BuildingKind.Wall, new BuildingSpec("Wall_A_1x1.FBX", 1.8f) },
             { BuildingKind.Tollgate, new BuildingSpec("Wall_A_gate.FBX", 2.6f) },
             { BuildingKind.Mine, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.62f, 0.70f, 0.78f, 1f)) },
+            { BuildingKind.Drill, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.56f, 0.64f, 0.78f, 1f)) },
             { BuildingKind.MineShaft, new BuildingSpec("Keep.FBX", 3.8f) },
             { BuildingKind.Quarry, new BuildingSpec("Granary.FBX", 2.0f, 1f, new Color(0.76f, 0.72f, 0.64f, 1f)) },
             { BuildingKind.Caravanserai, new BuildingSpec("Market.FBX", 2.0f, 1.15f) },

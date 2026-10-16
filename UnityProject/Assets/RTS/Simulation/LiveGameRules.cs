@@ -30,6 +30,7 @@ namespace Rts.Simulation
             e.DropSiteLimit = true;
             e.AiBelts = true;
             e.Rations = allCivilisations;
+            e.CommonDrill = allCivilisations;
             e.Bricks = allCivilisations;
             e.Tack = allCivilisations;
             e.Planks = allCivilisations;

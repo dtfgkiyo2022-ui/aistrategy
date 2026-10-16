@@ -526,6 +526,9 @@ namespace Rts.Simulation
                     && e.SmeltTicks > 0 && e.OrePerMetal > 0 && e.BufferLimit > 0 && e.OrePerMetal <= e.BufferLimit && e.InfantryMetalCost >= 0,
                     "Invalid industry rules.");
             else Require(c.Belts.Length == 0 && e.InfantryMetalCost == 0 && !e.ProcessingChain, "Belts and metal costs need industry.");
+            Require(!e.CommonDrill || (e.Enabled && e.Industry && e.DrillSizeCells > 0 && e.DrillSizeCells <= 8
+                && e.DrillWoodCost >= 0 && e.DrillStoneCost >= 0 && e.DrillWork > 0 && e.DrillHp > 0 && e.DrillIntervalTicks > 0),
+                "Common drill requires valid industry rules.");
             if (e.BeltComponents)
             {
                 Require(e.Industry && e.SplitterWoodCost >= 0 && e.SorterWoodCost >= 0 && e.UndergroundBeltWoodCost >= 0
@@ -1003,6 +1006,8 @@ namespace Rts.Simulation
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
+                 CommonDrill = e.CommonDrill, DrillSizeCells = e.DrillSizeCells, DrillWoodCost = e.DrillWoodCost, DrillStoneCost = e.DrillStoneCost,
+                 DrillWork = e.DrillWork, DrillHp = e.DrillHp, DrillIntervalTicks = e.DrillIntervalTicks,
                  SmelterSizeCells = e.SmelterSizeCells, SmelterWoodCost = e.SmelterWoodCost, SmelterWork = e.SmelterWork, SmelterHp = e.SmelterHp,
                  SmeltTicks = e.SmeltTicks, OrePerMetal = e.OrePerMetal, BufferLimit = e.BufferLimit, InfantryMetalCost = e.InfantryMetalCost,
                   ProcessingChain = e.ProcessingChain, CharcoalKilnSizeCells = e.CharcoalKilnSizeCells, CharcoalKilnWoodCost = e.CharcoalKilnWoodCost,
