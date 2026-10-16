@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 4b2f7a0c8e4d4f5aa3c63ce0e3a4b117
+TextureImporter:
+  serializedVersion: 12
+  mipmaps: {mipMapMode: 0, enableMipMap: 0}
+  isReadable: 0
+  textureType: 0
+  sRGBTexture: 1
+  alphaIsTransparency: 1
+  spriteMode: 0
+  textureShape: 1
+  maxTextureSize: 2048
+  textureSettings: {filterMode: 1, aniso: 1, wrapU: 1, wrapV: 1, wrapW: 1}
+  platformSettings: []
+  spriteSheet: {serializedVersion: 2, sprites: []}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

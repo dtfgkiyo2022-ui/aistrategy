@@ -6,8 +6,11 @@
             <ui:VisualElement class="hud-panel-inner-border" />
             <ui:VisualElement class="hud-top-line">
                 <ui:VisualElement class="hud-age-block">
-                    <ui:Label name="age-label" class="hud-age hud-heading" />
-                    <ui:Label name="age-stage-label" class="hud-age-stage" />
+                    <ui:VisualElement name="civ-icon" class="hud-civ-icon" />
+                    <ui:VisualElement class="hud-age-text">
+                        <ui:Label name="age-label" class="hud-age hud-heading" />
+                        <ui:Label name="age-stage-label" class="hud-age-stage" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
                 <ui:VisualElement name="resource-row" class="hud-resource-row" />
                 <ui:VisualElement class="hud-status-block">
