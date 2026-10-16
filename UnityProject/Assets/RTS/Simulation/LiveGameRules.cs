@@ -45,6 +45,8 @@ namespace Rts.Simulation
             e.CraftTiming = allCivilisations;
             e.CraftBalance = allCivilisations;
             e.CraftTree1 = allCivilisations;
+            e.CraftTree2 = allCivilisations && e.CraftTree1;
+            e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.BeltComponents = true;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
@@ -73,6 +75,7 @@ namespace Rts.Simulation
             e.CivVarietyWindowPermille = 200;
             e.EarlyArms = true;
             e.AgeClock = true;
+            e.AgeClockUx = true;
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;

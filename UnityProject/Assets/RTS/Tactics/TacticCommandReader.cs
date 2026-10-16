@@ -122,12 +122,15 @@ namespace Rts.Tactics
                     if (tech < 1 || tech > 27) throw new InvalidOperationException("研究項目が範囲外です。");
                     return EconomyCommand.Research(frame.FactionId, sequence, blacksmith, (TechKind)tech);
                 case EconomyCommandKind.AdvanceAge:
+                case EconomyCommandKind.AdvanceNow:
                     if (!e.Ages) throw new InvalidOperationException("agesEnabled が false の試合では時代を進められません（戦況 economy.agesEnabled を確認してください）。");
                     if (e.AdvancingTo != CivKind.Primitive) throw new InvalidOperationException("時代進行中です（戦況 economy.advancingTo と economy.advanceRemainingTicks を確認してください）。");
                     var ageCost = e.Civ == CivKind.Primitive ? (e.AdvanceFoodCost, e.AdvanceWoodCost, 0) : e.Age == 1 ? (e.Age2FoodCost, e.Age2WoodCost, 0) : (e.Age3FoodCost, e.Age3WoodCost, e.NextAgeGoldCost);
                     if (e.Age >= 3 || e.Food < ageCost.Item1 || e.Wood < ageCost.Item2 || e.Gold < ageCost.Item3) throw new InvalidOperationException("時代進行の費用が不足しています（戦況 economy.nextAgeCost と economy.canAdvanceNow を確認してください）。");
                     CivKind civ = EnumRequired<CivKind>(TacticJson.String(c, "civ", true), "文明"); if (civ == CivKind.Primitive) throw new InvalidOperationException("原始文明へは進めません。");
-                    return EconomyCommand.Advance(frame.FactionId, sequence, civ);
+                    return kind == EconomyCommandKind.AdvanceNow
+                        ? EconomyCommand.AdvanceNow(frame.FactionId, sequence, civ)
+                        : EconomyCommand.Advance(frame.FactionId, sequence, civ);
                 case EconomyCommandKind.SetEconomyPolicy:
                     EconomyPolicy policy = EnumRequired<EconomyPolicy>(TacticJson.String(c, "policy", true), "内政方針"); return EconomyCommand.SetPolicy(frame.FactionId, sequence, policy);
                 case EconomyCommandKind.RequestLine:

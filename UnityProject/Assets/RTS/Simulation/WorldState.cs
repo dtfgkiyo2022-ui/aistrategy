@@ -26,6 +26,7 @@ namespace Rts.Simulation
         internal SimPoint LocalGoal;
         /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
         internal UnitKind Class;
+        internal bool SiegePartsEnhanced;
         /// <summary>V3-5 #22: transient conversion progress; never serialized into a scenario or replay state.</summary>
         internal int ConversionProgress;
         internal uint ConversionByFaction;
@@ -167,7 +168,10 @@ namespace Rts.Simulation
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
         internal Facing Facing;
-        internal int Input, InputSecondary, Output, Timer;
+        internal int Input, InputSecondary, InputTertiary, Output, Timer;
+        /// <summary>CraftTree2: selected assembler recipe and the kind held in its second slot.</summary>
+        internal RecipeKind Recipe;
+        internal ResourceKind InputSecondaryKind;
         internal bool BrickUpgraded;
         /// <summary>CraftTree1: level of a processing building. Level one is the default.</summary>
         internal byte Level;
@@ -189,6 +193,7 @@ namespace Rts.Simulation
         internal bool[] QueuePlanks;
         internal bool[] QueueCharms;
         internal bool[] QueueTools;
+        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts;
         /// <summary>V3-5 tower: shots fired so far.</summary>
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
@@ -246,7 +251,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -255,7 +260,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -264,6 +269,8 @@ namespace Rts.Simulation
         internal int PlanksProduced, PlanksConsumed, PlanksConsumedRams, PlanksConsumedBridges, PlanksEnhancedRams;
         internal int CutStoneProduced, CutStoneConsumed, FramesProduced, FramesConsumed, FramesConsumedBuildings, FramesConsumedUpgrades;
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
+        internal int ArmsKitProduced, ArmsKitConsumed, FineArmsKitProduced, FineArmsKitConsumed, ScholarlyProduced, ScholarlyConsumed, ScholarlyUsedResearch;
+        internal int SiegePartsProduced, SiegePartsConsumed, SiegePartsEnhancedRams, MechanismProduced, MechanismConsumed, MechanismUsedResearch;
         internal int PreservesProduced, PreservesConvertedFood;
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
         internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
@@ -297,6 +304,8 @@ namespace Rts.Simulation
         /// Advancing starts with it on the first tick it can, and starting any advance clears it.
         /// </summary>
         internal CivKind ReservedCiv;
+        /// <summary>AgeClockUx: the manual civilisation-choice deadline after the age clock fires.</summary>
+        internal long CivChoiceDeadlineTick;
     }
 
     internal struct RegionState
@@ -424,9 +433,9 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0,
-                GoodsSoldCounts = goodsMarket ? new int[24] : null, GoodsSoldUnits = goodsMarket ? new int[24] : null,
-                GoodsReceivedFood = goodsMarket ? new int[24] : null, GoodsReceivedWood = goodsMarket ? new int[24] : null };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0,
+                GoodsSoldCounts = goodsMarket ? new int[29] : null, GoodsSoldUnits = goodsMarket ? new int[29] : null,
+                GoodsReceivedFood = goodsMarket ? new int[29] : null, GoodsReceivedWood = goodsMarket ? new int[29] : null };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -602,6 +611,22 @@ namespace Rts.Simulation
                 && e.CraftTreeJoineryCutStoneInput > 0 && e.CraftTreeJoineryCutStoneInput <= e.BufferLimit
                 && e.CraftTreeFramesPerBuilding > 0 && e.CraftTreeFrameWoodPermille > 0 && e.CraftTreeFrameWoodPermille <= 1000
                 && e.CraftTreeFrameWorkPermille > 0 && e.CraftTreeFrameWorkPermille <= 1000 && e.CraftTreeLevel2FramesCost > 0), "Invalid craft-tree rules.");
+            Require(!e.CraftTree2 || (e.Enabled && e.Industry && e.Ages && e.AssemblerSizeCells > 0 && e.AssemblerSizeCells <= 8
+                && e.AssemblerWoodCost >= 0 && e.AssemblerWork > 0 && e.AssemblerHp > 0
+                && e.ArmsKitTicks > 0 && e.ArmsKitPlankInput > 0 && e.ArmsKitCharcoalInput > 0 && e.ArmsKitSteelInput > 0
+                && e.ScholarlyTicks > 0 && e.ScholarlyPlankInput > 0 && e.ScholarlyCharcoalInput > 0 && e.ScholarlyFoodInput > 0
+                && e.ArmsKitAttack >= 0 && e.ArmsKitHpPermille >= 1000 && e.FineArmsKitAttack >= e.ArmsKitAttack
+                && e.FineArmsKitHpPermille >= e.ArmsKitHpPermille && e.ScholarlyPerResearch > 0
+                && e.ScholarlyCostPermille > 0 && e.ScholarlyCostPermille <= 1000
+                && e.ScholarlyTimePermille > 0 && e.ScholarlyTimePermille <= 1000), "Invalid craft-tree2 rules.");
+            Require(!e.CraftTree2 || (e.GoodsValueArmsKit > 0 && e.GoodsValueScholarly > 0 && e.GoodsValueFineArmsKit > 0), "Invalid craft-tree2 market values.");
+            Require(!e.CraftTree3 || (e.CraftTree2 && e.SiegePartsTicks > 0 && e.SiegePartsFramesInput > 0 && e.SiegePartsArmsKitInput > 0
+                && e.MechanismTicks > 0 && e.MechanismArmsKitInput > 0 && e.MechanismScholarlyInput > 0 && e.MechanismCutStoneInput > 0
+                && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000
+                && e.MechanismBuildingTimePermille > 0 && e.MechanismBuildingTimePermille <= 1000 && e.MechanismBuildingMaterialPermille > 0 && e.MechanismBuildingMaterialPermille <= 1000
+                && e.MechanismResearchCostPermille > 0 && e.MechanismResearchCostPermille <= 1000 && e.MechanismResearchTimePermille > 0 && e.MechanismResearchTimePermille <= 1000
+                && e.SiegePartsStockLimit > 0 && e.SiegePartsStockLimit <= e.BufferLimit
+                && e.GoodsValueSiegeParts > 0 && e.GoodsValueMechanism > 0), "Invalid craft-tree3 rules.");
             Require(!e.Books || (e.Enabled && e.Industry && e.Ages && e.ScriptoriumSizeCells > 0 && e.ScriptoriumSizeCells <= 8
                 && e.ScriptoriumWoodCost >= 0 && e.ScriptoriumWork > 0 && e.ScriptoriumHp > 0 && e.BookTicks > 0
                 && e.BookGoldInput > 0 && e.BookWoodInput > 0 && e.BookGoldInput <= e.BufferLimit && e.BookWoodInput <= e.BufferLimit
@@ -652,6 +677,7 @@ namespace Rts.Simulation
                 && e.CraftBalanceTollgateTiming >= 0 && e.CraftBalanceTollgateTiming <= 1), "Invalid craft-balance rules.");
             // V3-4: ages come with the terrain map.
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
+            Require(!e.AgeClockUx || (e.AgeClock && e.AgeClockUxChoiceTicks > 0), "Age-clock UX requires the age clock and a positive choice window.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
                 && (!e.AgeClock || (e.AgeClockTicks1 > 0 && e.AgeClockTicks2 > e.AgeClockTicks1 && e.AgeClockTicks3 > e.AgeClockTicks2))
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
@@ -1025,6 +1051,24 @@ namespace Rts.Simulation
                   CraftTreeJoineryCutStoneInput = e.CraftTreeJoineryCutStoneInput, CraftTreeFramesPerBuilding = e.CraftTreeFramesPerBuilding,
                   CraftTreeFrameWoodPermille = e.CraftTreeFrameWoodPermille, CraftTreeFrameWorkPermille = e.CraftTreeFrameWorkPermille,
                   CraftTreeLevel2FramesCost = e.CraftTreeLevel2FramesCost,
+                  CraftTree2 = e.CraftTree2, AssemblerSizeCells = e.AssemblerSizeCells, AssemblerWoodCost = e.AssemblerWoodCost,
+                  AssemblerWork = e.AssemblerWork, AssemblerHp = e.AssemblerHp, ArmsKitTicks = e.ArmsKitTicks,
+                  ArmsKitPlankInput = e.ArmsKitPlankInput, ArmsKitCharcoalInput = e.ArmsKitCharcoalInput, ArmsKitSteelInput = e.ArmsKitSteelInput,
+                  ScholarlyTicks = e.ScholarlyTicks, ScholarlyPlankInput = e.ScholarlyPlankInput, ScholarlyCharcoalInput = e.ScholarlyCharcoalInput,
+                  ScholarlyFoodInput = e.ScholarlyFoodInput, ArmsKitAttack = e.ArmsKitAttack, ArmsKitHpPermille = e.ArmsKitHpPermille,
+                  FineArmsKitAttack = e.FineArmsKitAttack, FineArmsKitHpPermille = e.FineArmsKitHpPermille,
+                  ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
+                  ScholarlyTimePermille = e.ScholarlyTimePermille,
+                  GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
+                  CraftTree3 = e.CraftTree3, SiegePartsTicks = e.SiegePartsTicks, SiegePartsFramesInput = e.SiegePartsFramesInput,
+                  SiegePartsArmsKitInput = e.SiegePartsArmsKitInput, MechanismTicks = e.MechanismTicks, MechanismArmsKitInput = e.MechanismArmsKitInput,
+                  MechanismScholarlyInput = e.MechanismScholarlyInput, MechanismCutStoneInput = e.MechanismCutStoneInput,
+                  SiegePartsHpPermille = e.SiegePartsHpPermille, SiegePartsDamagePermille = e.SiegePartsDamagePermille,
+                  SiegePartsPerCastle = e.SiegePartsPerCastle, SiegePartsCastleStonePermille = e.SiegePartsCastleStonePermille,
+                  MechanismBuildingTimePermille = e.MechanismBuildingTimePermille, MechanismBuildingMaterialPermille = e.MechanismBuildingMaterialPermille,
+                  MechanismResearchCostPermille = e.MechanismResearchCostPermille, MechanismResearchTimePermille = e.MechanismResearchTimePermille,
+                  SiegePartsStockLimit = e.SiegePartsStockLimit,
+                  GoodsValueSiegeParts = e.GoodsValueSiegeParts, GoodsValueMechanism = e.GoodsValueMechanism,
                   Books = e.Books, ScriptoriumSizeCells = e.ScriptoriumSizeCells, ScriptoriumWoodCost = e.ScriptoriumWoodCost,
                   ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,
                   BookGoldInput = e.BookGoldInput, BookWoodInput = e.BookWoodInput, BooksPerResearch = e.BooksPerResearch,
@@ -1073,6 +1117,7 @@ namespace Rts.Simulation
                    CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
+                 AgeClockUx = e.AgeClockUx, AgeClockUxChoiceTicks = e.AgeClockUxChoiceTicks,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
                 CivVariety = e.CivVariety, CivVarietyWindowPermille = e.CivVarietyWindowPermille,
                 CivVarietyCaps = e.CivVarietyCaps, CivVarietyCapMetallurgy = e.CivVarietyCapMetallurgy,

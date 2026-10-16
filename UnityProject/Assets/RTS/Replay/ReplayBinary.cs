@@ -132,13 +132,15 @@ namespace Rts.Replay
                 // V3-3: only a policy change carries the policy.
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
-                if(e.Kind==EconomyCommandKind.AdvanceAge) w.Write((byte)e.Civ);
+                if(e.Kind==EconomyCommandKind.AdvanceAge || e.Kind==EconomyCommandKind.AdvanceNow) w.Write((byte)e.Civ);
                 // V3-6 follow-up: only a line request carries its public line kind.
                 if(e.Kind==EconomyCommandKind.RequestLine) w.Write((byte)e.Line);
                 // V3-5: only research carries the tech.
                 if(e.Kind==EconomyCommandKind.Research) w.Write((byte)e.Tech);
                 // V3-5: only a trade carries what it gives and takes.
                 if(e.Kind==EconomyCommandKind.Trade) { w.Write((byte)e.Give); w.Write((byte)e.Take); }
+                // CraftTree2: only an assembler recipe change carries the selected recipe.
+                if(e.Kind==EconomyCommandKind.SetRecipe) w.Write((byte)e.Recipe);
             }
         });
         public static ScheduledInput Decode(byte[] b)=>ReplayBinary.Unpack(b,r=>
@@ -173,7 +175,7 @@ namespace Rts.Replay
                 var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding
                     || ek==EconomyCommandKind.PlaceBeltComponent ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
-                var civ=ek==EconomyCommandKind.AdvanceAge ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
+                var civ=ek==EconomyCommandKind.AdvanceAge || ek==EconomyCommandKind.AdvanceNow ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;
                 var line=ek==EconomyCommandKind.RequestLine ? ReplayBinary.Enum<ProcessingLineKind>(r) : (ProcessingLineKind)0;
                 // Bridge- and mountain-civilisation research intentionally use values just outside
                 // TechKind; keep the established enum unchanged while allowing those replay bytes.
@@ -181,7 +183,7 @@ namespace Rts.Replay
                 var give=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 var take=ek==EconomyCommandKind.Trade ? ReplayBinary.Enum<ResourceKind>(r) : (ResourceKind)0;
                 return new ScheduledInput(index,accepted,apply,new EconomyCommand(faction,issuer,ek,building,cell,producer,unit,villagers,target,targetId,enabled,cells,facings,facing,policy,civ,tech,give,take,
-                    line));
+                    line, ek==EconomyCommandKind.SetRecipe ? ReplayBinary.Enum<RecipeKind>(r) : RecipeKind.None));
             }
             return new ScheduledInput(index,kind,accepted,apply,request,sequence,orders,deadline,resolution);
         });
