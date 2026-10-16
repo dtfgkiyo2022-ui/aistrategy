@@ -27,6 +27,7 @@ namespace Rts.Tactics
         private readonly List<MatchPackSnapshot> snapshots = new List<MatchPackSnapshot>();
         private readonly HashSet<string> seenEvents = new HashSet<string>(StringComparer.Ordinal);
         private string rulebookMarkdown;
+        private bool lastCompletionIncludedReplay;
 
         public MatchPackWriter(string outputDirectory, ScenarioDefinition scenario, string westTactic, string eastTactic)
         {
@@ -94,15 +95,40 @@ namespace Rts.Tactics
 
         public void Complete(IEnumerable<ScheduledInput> inputs, long tickLimit)
         {
+            CompleteCore(inputs, tickLimit, true, null);
+        }
+
+        /// <summary>Finishes a live-game pack without replaying the match on Unity's main thread.</summary>
+        public void CompleteLive(Battle simulation, IEnumerable<ScheduledInput> inputs, long tickLimit)
+        {
+            if (simulation == null) throw new ArgumentNullException(nameof(simulation));
+            var finalSnapshot = simulation.CaptureMatchPackSnapshot();
+            if (snapshots.All(x => x.Tick != finalSnapshot.Tick)) snapshots.Add(finalSnapshot);
+            RecordCredit(simulation, true);
+            CompleteCore(inputs, tickLimit, false, simulation);
+        }
+
+        private void CompleteCore(IEnumerable<ScheduledInput> inputs, long tickLimit, bool includeReplay, Battle simulation)
+        {
             Directory.CreateDirectory(directory);
-            var replayPath = Path.Combine(directory, "replay.rpl");
-            using (var stream = File.Create(replayPath))
-                ReplayRunner.Record(stream, scenario, inputs ?? Array.Empty<ScheduledInput>(), tickLimit, new BuildIdentity(), null, westTactic, eastTactic);
+            lastCompletionIncludedReplay = includeReplay;
+            var recordedInputs = inputs ?? Array.Empty<ScheduledInput>();
+            if (includeReplay)
+            {
+                var replayPath = Path.Combine(directory, "replay.rpl");
+                using (var stream = File.Create(replayPath))
+                    ReplayRunner.Record(stream, scenario, recordedInputs, tickLimit, new BuildIdentity(), null, westTactic, eastTactic);
+            }
+            else
+            {
+                File.WriteAllBytes(Path.Combine(directory, "scenario.bin"), ScenarioBinary.Encode(scenario));
+                File.WriteAllText(Path.Combine(directory, "inputs.json"), InputsJson(recordedInputs), new UTF8Encoding(false));
+            }
             File.WriteAllText(Path.Combine(directory, "rulebook.md"), rulebookMarkdown, new UTF8Encoding(false));
             File.WriteAllLines(Path.Combine(directory, "tactic-log.jsonl"), tacticLines, new UTF8Encoding(false));
             File.WriteAllLines(Path.Combine(directory, "timeline.jsonl"), timelineLines, new UTF8Encoding(false));
             File.WriteAllLines(Path.Combine(directory, "snapshots.jsonl"), snapshots.Select(SnapshotJson), new UTF8Encoding(false));
-            File.WriteAllText(Path.Combine(directory, "summary.json"), SummaryJson(), new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "summary.json"), SummaryJson(simulation), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "README.md"), Readme(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "pack.json"), PackJson(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "credit.json"), CreditJson(), new UTF8Encoding(false));
@@ -114,7 +140,7 @@ namespace Rts.Tactics
             var finalSnapshot = simulation.CaptureMatchPackSnapshot();
             if (snapshots.All(x => x.Tick != finalSnapshot.Tick)) snapshots.Add(finalSnapshot);
             RecordCredit(simulation, true);
-            Complete(inputs, tickLimit);
+            CompleteCore(inputs, tickLimit, true, simulation);
             // Summary is written from the final simulation state, so replace the placeholder written by the overload.
             File.WriteAllText(Path.Combine(directory, "summary.json"), SummaryJson(simulation), new UTF8Encoding(false));
         }
@@ -153,22 +179,110 @@ namespace Rts.Tactics
             Field(b, "rulebookVersion", Version.ToString(CultureInfo.InvariantCulture)); b.Append('}'); return b.ToString();
         }
 
-        private string PackJson() => "{\"packVersion\":1,\"files\":[\"summary.json\",\"replay.rpl\",\"tactic-log.jsonl\",\"timeline.jsonl\",\"snapshots.jsonl\",\"credit.json\",\"README.md\",\"rulebook.md\"]}";
+        private string PackJson()
+        {
+            string replayFiles = lastCompletionIncludedReplay
+                ? "\"replay.rpl\""
+                : "\"scenario.bin\",\"inputs.json\"";
+            return "{\"packVersion\":1,\"files\":[\"summary.json\"," + replayFiles
+                + ",\"tactic-log.jsonl\",\"timeline.jsonl\",\"snapshots.jsonl\",\"credit.json\",\"README.md\",\"rulebook.md\"]}";
+        }
 
         private string Readme()
         {
+            string replaySection = lastCompletionIncludedReplay
+                ? "- `replay.rpl`: そのまま再生できる決定論リプレイ。\n"
+                : "- `scenario.bin`: 決着時点の試合を再現するシナリオ。\n"
+                    + "- `inputs.json`: 受け付けた命令の一覧。Headless CLI の `record --scenario <pack>/scenario.bin --inputs <pack>/inputs.json --out replay.rpl --ticks <決着tick>` でリプレイを作れます。\n";
             return "# 試合の記録パック\n\n"
                 + "このフォルダは AI や人が試合を振り返り、戦術を直すための資料です。`pack.json` の `packVersion` は1です。\n\n"
                 + "- `summary.json`: 勝者、決着 tick・分、両陣営の戦術名、地図の種、ルールブックの版。\n"
-                + "- `replay.rpl`: 命令を再生できるリプレイ。\n"
+                + replaySection
                 + "- `tactic-log.jsonl`: 戦術を呼んだ各回の tick、命令 JSON、送った数、捨てた命令と理由、失敗、`console.log`、つまみの変更（`paramChanges`）、戦術へ渡した合図（`signals`）。読み直しは `kind=reload` として時刻、戦術、成功・失敗、理由を記録します。\n"
                 + "- `snapshots.jsonl`: 600tick（30秒）ごとの霧なし集計。兵種別の兵数、村人数、資源、建物数、拠点の持ち主、時代と文明。\n"
                 + "- `timeline.jsonl`: 両陣営から見えた `GameEvent` の時系列。\n"
                 + "- `credit.json`: 部隊が従っていた命令の出どころ別の時間、損害、見えていた敵の撃破、拠点の出来事、命令の結果。\n"
                 + "- `rulebook.md`: この試合で使ったルールブック。\n\n"
                 + CreditReadmeTable()
-                + "\n戦術を直すときは、まず `summary.json` と `tactic-log.jsonl` の失敗・捨てた命令を確認します。次に `credit.json` で人・お任せ・戦術のどの部隊がその場面にいたかを探し、`snapshots.jsonl` と `timeline.jsonl` で前後を見ます。必要なら `replay.rpl` を再生して確かめます。\n";
+                + "\n戦術を直すときは、まず `summary.json` と `tactic-log.jsonl` の失敗・捨てた命令を確認します。次に `credit.json` で人・お任せ・戦術のどの部隊がその場面にいたかを探し、`snapshots.jsonl` と `timeline.jsonl` で前後を見ます。必要なら上記の `record` で `replay.rpl` を作ってから再生して確かめます。\n";
         }
+
+        private static string InputsJson(IEnumerable<ScheduledInput> inputs)
+        {
+            var values = inputs == null ? Array.Empty<ScheduledInput>() : inputs.ToArray();
+            return "[" + string.Join(",", values.Select(InputJson)) + "]";
+        }
+
+        private static string InputJson(ScheduledInput input)
+        {
+            var b = new StringBuilder(); b.Append('{');
+            Field(b, "logIndex", input.LogIndex.ToString(CultureInfo.InvariantCulture));
+            Field(b, "acceptedTick", input.AcceptedTick.ToString(CultureInfo.InvariantCulture));
+            Field(b, "applyTick", input.ApplyTick.ToString(CultureInfo.InvariantCulture));
+            if (input.Economy != null) Field(b, "economy", EconomyCommandJson(input.Economy));
+            else
+            {
+                Field(b, "kind", ((int)input.Kind).ToString(CultureInfo.InvariantCulture));
+                Field(b, "requestId", input.RequestId.ToString(CultureInfo.InvariantCulture));
+                Field(b, "issuerSequence", input.IssuerSequence.ToString(CultureInfo.InvariantCulture));
+                Field(b, "orders", "[" + string.Join(",", (input.Orders ?? Array.Empty<PolicyOrder>()).Select(PolicyOrderJson)) + "]");
+                Field(b, "deadlineTick", input.DeadlineTick.ToString(CultureInfo.InvariantCulture));
+                Field(b, "resolutionReason", ((int)input.ResolutionReason).ToString(CultureInfo.InvariantCulture));
+            }
+            b.Append('}'); return b.ToString();
+        }
+
+        private static string EconomyCommandJson(EconomyCommand c)
+        {
+            var b = new StringBuilder(); b.Append('{');
+            Field(b, "factionId", c.FactionId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "issuerSequence", c.IssuerSequence.ToString(CultureInfo.InvariantCulture));
+            Field(b, "kind", ((int)c.Kind).ToString(CultureInfo.InvariantCulture));
+            Field(b, "building", ((int)c.Building).ToString(CultureInfo.InvariantCulture));
+            Field(b, "cell", c.Cell.ToString(CultureInfo.InvariantCulture));
+            Field(b, "producerId", c.ProducerId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "unit", ((int)c.Unit).ToString(CultureInfo.InvariantCulture));
+            Field(b, "villagerIds", UIntArrayJson(c.VillagerIds));
+            Field(b, "targetKind", ((int)c.TargetKind).ToString(CultureInfo.InvariantCulture));
+            Field(b, "targetId", c.TargetId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "enabled", c.Enabled ? "true" : "false");
+            Field(b, "cells", IntArrayJson(c.Cells));
+            Field(b, "facings", EnumArrayJson(c.Facings));
+            Field(b, "facing", ((int)c.Facing).ToString(CultureInfo.InvariantCulture));
+            Field(b, "policy", ((int)c.Policy).ToString(CultureInfo.InvariantCulture));
+            Field(b, "civ", ((int)c.Civ).ToString(CultureInfo.InvariantCulture));
+            Field(b, "tech", ((int)c.Tech).ToString(CultureInfo.InvariantCulture));
+            Field(b, "give", ((int)c.Give).ToString(CultureInfo.InvariantCulture));
+            Field(b, "take", ((int)c.Take).ToString(CultureInfo.InvariantCulture));
+            Field(b, "line", ((int)c.Line).ToString(CultureInfo.InvariantCulture));
+            Field(b, "recipe", ((int)c.Recipe).ToString(CultureInfo.InvariantCulture));
+            b.Append('}'); return b.ToString();
+        }
+
+        private static string PolicyOrderJson(PolicyOrder o)
+        {
+            var b = new StringBuilder(); b.Append('{');
+            Field(b, "commandId", o.CommandId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "batchId", o.BatchId.ToString(CultureInfo.InvariantCulture));
+            Field(b, "source", ((int)o.Source).ToString(CultureInfo.InvariantCulture));
+            Field(b, "target", ScopeJson(o.Target)); Field(b, "kind", ((int)o.Kind).ToString(CultureInfo.InvariantCulture));
+            Field(b, "goal", GoalJson(o.Goal)); Field(b, "priority", o.Priority.ToString(CultureInfo.InvariantCulture));
+            Field(b, "allowedLoss", "{\"permille\":" + o.AllowedLoss.Permille.ToString(CultureInfo.InvariantCulture) + "}");
+            Field(b, "end", "{\"kind\":" + ((int)o.End.Kind).ToString(CultureInfo.InvariantCulture) + ",\"tick\":" + o.End.Tick.ToString(CultureInfo.InvariantCulture) + "}");
+            Field(b, "reservePermille", o.ReservePermille.ToString(CultureInfo.InvariantCulture));
+            Field(b, "targetRevision", o.TargetRevision.ToString(CultureInfo.InvariantCulture));
+            Field(b, "parents", "[" + string.Join(",", (o.Parents ?? Array.Empty<PolicyVersion>()).Select(PolicyVersionJson)) + "]");
+            Field(b, "observedTick", o.ObservedTick.ToString(CultureInfo.InvariantCulture));
+            Field(b, "expiration", "{\"validUntilTick\":" + o.Expiration.ValidUntilTick.ToString(CultureInfo.InvariantCulture) + ",\"maxObservationAgeTicks\":" + o.Expiration.MaxObservationAgeTicks.ToString(CultureInfo.InvariantCulture) + ",\"flags\":" + ((int)o.Expiration.Flags).ToString(CultureInfo.InvariantCulture) + "}");
+            b.Append('}'); return b.ToString();
+        }
+
+        private static string PolicyVersionJson(PolicyVersion v) => "{\"scope\":" + ScopeJson(v.Scope) + ",\"revision\":" + v.Revision.ToString(CultureInfo.InvariantCulture) + "}";
+        private static string ScopeJson(ScopeKey s) => "{\"factionId\":" + s.FactionId.ToString(CultureInfo.InvariantCulture) + ",\"kind\":" + ((int)s.Kind).ToString(CultureInfo.InvariantCulture) + ",\"id\":" + s.Id.ToString(CultureInfo.InvariantCulture) + "}";
+        private static string GoalJson(PolicyGoal g) => "{\"kind\":" + ((int)g.Kind).ToString(CultureInfo.InvariantCulture) + ",\"id\":" + g.Id.ToString(CultureInfo.InvariantCulture) + ",\"point\":{\"x\":{\"raw\":" + g.Point.X.Raw.ToString(CultureInfo.InvariantCulture) + "},\"z\":{\"raw\":" + g.Point.Z.Raw.ToString(CultureInfo.InvariantCulture) + "}}}";
+        private static string UIntArrayJson(IEnumerable<uint> values) => "[" + string.Join(",", (values ?? Array.Empty<uint>()).Select(x => x.ToString(CultureInfo.InvariantCulture))) + "]";
+        private static string IntArrayJson(IEnumerable<int> values) => "[" + string.Join(",", (values ?? Array.Empty<int>()).Select(x => x.ToString(CultureInfo.InvariantCulture))) + "]";
+        private static string EnumArrayJson(IEnumerable<Facing> values) => "[" + string.Join(",", (values ?? Array.Empty<Facing>()).Select(x => ((int)x).ToString(CultureInfo.InvariantCulture))) + "]";
 
         private static string SnapshotJson(MatchPackSnapshot s)
         {

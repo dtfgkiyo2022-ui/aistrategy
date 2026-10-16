@@ -56,6 +56,18 @@ namespace Rts.Presentation
             bar.Fill.GetComponent<Renderer>().sharedMaterial = HealthMaterial(ratio);
         }
 
+        public static void SetConstruction(Handle bar, float progress, Vector3 position, Quaternion rotation)
+        {
+            if (bar == null || bar.Fill == null) return;
+            float ratio = Mathf.Clamp01(progress);
+            bar.Root.transform.position = position;
+            bar.Root.transform.rotation = rotation;
+            bar.Root.SetActive(true);
+            bar.Fill.localScale = new Vector3(bar.Width * ratio, 0.16f, 1f);
+            bar.Fill.localPosition = new Vector3(-bar.Width * (1f - ratio) / 2f, 0f, -0.01f);
+            bar.Fill.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.96f, 0.72f, 0.2f, 1f));
+        }
+
         public static Color HealthColor(float ratio)
         {
             var color = CivPalette.HealthFill(ratio);
