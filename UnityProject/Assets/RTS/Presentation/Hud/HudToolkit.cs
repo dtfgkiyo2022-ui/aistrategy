@@ -173,6 +173,7 @@ namespace Rts.Presentation
         private Label selectionInfoDetail;
         private bool staffInputFocused;
         private bool staffAiListOpen;
+        private int staffSentFrame = -1;
         private string staffAiSignature = "";
         private string blueprintSignature;
         private int renderedStaffLineCount;
@@ -397,14 +398,6 @@ namespace Rts.Presentation
             var target = evt.target as VisualElement;
             if (target != null && target.focusController != null) target.focusController.IgnoreEvent(evt);
             evt.StopImmediatePropagation();
-        }
-
-        private static void ExcludeFromNavigation(TextField field)
-        {
-            if (field == null) return;
-            field.tabIndex = -1;
-            var input = field.Q(className: TextField.inputUssClassName);
-            if (input != null) input.tabIndex = -1;
         }
 
         private static void ReleaseTextFieldOnOutsideClick(TextField field)
@@ -643,8 +636,9 @@ namespace Rts.Presentation
             // 10-17: WASD and the arrow keys are also UI Toolkit's navigation keys, so moving the camera stepped the
             // keyboard focus into the staff chat without a click and the next keys were typed there. Navigation never
             // moves focus in this HUD, and the text fields are reached only by clicking them.
+            // 10-18: the fields themselves keep their tab index. Taking it away (-1) also stopped Enter from reaching the
+            // staff chat, and ignoring the navigation moves above is already enough to keep the focus where it is.
             root.RegisterCallback<NavigationMoveEvent>(IgnoreNavigation, TrickleDown.TrickleDown);
-            ExcludeFromNavigation(staffInput);
             commandsFrame = root.Q<VisualElement>("commands-frame");
             commandsPanel = root.Q<VisualElement>("commands-panel");
             commandsTitle = root.Q<Label>("commands-title");
@@ -674,7 +668,6 @@ namespace Rts.Presentation
             economyTabBlueprints = root.Q<Button>("economy-tab-blueprints");
             blueprintTools = root.Q<VisualElement>("blueprint-tools");
             blueprintName = root.Q<TextField>("blueprint-name");
-            ExcludeFromNavigation(blueprintName);
             blueprintSave = root.Q<Button>("blueprint-save");
             blueprintList = root.Q<ScrollView>("blueprint-list");
             supplyFrame = root.Q<VisualElement>("supply-frame");
@@ -832,7 +825,10 @@ namespace Rts.Presentation
             selectionInfoDetail.style.color = new Color(0.86f, 0.84f, 0.76f, 1f);
             selectionInfoFrame.Add(selectionInfoTitle);
             selectionInfoFrame.Add(selectionInfoDetail);
-            hudRoot.Add(selectionInfoFrame);
+            // 10-18 test play: the economy panel is a later sibling of hud-root in the document, so anything inside
+            // hud-root stays behind it whatever its order there. The box is a direct child of the document root.
+            var layer = document != null && document.rootVisualElement != null ? document.rootVisualElement : hudRoot;
+            layer.Add(selectionInfoFrame);
             selectionInfoFrame.style.display = DisplayStyle.None;
         }
 
@@ -1229,7 +1225,9 @@ namespace Rts.Presentation
             staffCancelButton.clicked += CancelStaff;
             staffInput.RegisterCallback<FocusInEvent>(_ => SetStaffInputFocus(true));
             staffInput.RegisterCallback<FocusOutEvent>(_ => SetStaffInputFocus(false));
-            staffInput.RegisterCallback<KeyDownEvent>(OnStaffKeyDown);
+            // Trickle down: the field's own text editing sees Enter first and may keep it from bubbling up to the field.
+            staffInput.RegisterCallback<KeyDownEvent>(OnStaffKeyDown, TrickleDown.TrickleDown);
+            staffInput.RegisterCallback<NavigationSubmitEvent>(OnStaffSubmit, TrickleDown.TrickleDown);
         }
 
         private void BindCommandEvents()
@@ -2124,6 +2122,21 @@ namespace Rts.Presentation
             if (!enter || !string.IsNullOrEmpty(Input.compositionString)) return;
             evt.StopPropagation();
             evt.PreventDefault();
+            SendStaffOncePerFrame();
+        }
+
+        /// <summary>The same Enter can also arrive as a navigation submit; either one sends, but only once.</summary>
+        private void OnStaffSubmit(NavigationSubmitEvent evt)
+        {
+            if (!string.IsNullOrEmpty(Input.compositionString)) return;
+            evt.StopPropagation();
+            SendStaffOncePerFrame();
+        }
+
+        private void SendStaffOncePerFrame()
+        {
+            if (staffSentFrame == Time.frameCount) return;
+            staffSentFrame = Time.frameCount;
             SendStaff();
         }
 
@@ -2206,6 +2219,10 @@ namespace Rts.Presentation
                 if (choices[i].Name == selectedName) { selectedLabel = choices[i].DisplayName; break; }
             staffAiButton.text = string.IsNullOrEmpty(selectedLabel) ? "AI を選ぶ  ▼" : selectedLabel + "  ▼";
             staffOptions.style.display = staffAiListOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            // 10-18 test play: the list ran past the bottom of the panel and the last choice (Jev) could not be
+            // reached. The list scrolls and never grows past the panel below the button.
+            if (staffAiListOpen && staffPanel != null && !float.IsNaN(staffPanel.layout.height) && staffPanel.layout.height > 0f)
+                staffOptions.style.maxHeight = Mathf.Max(80f, staffPanel.layout.height - 46f);
         }
 
         private void RefreshStaffConversation(IReadOnlyList<StaffChatLine> lines)
