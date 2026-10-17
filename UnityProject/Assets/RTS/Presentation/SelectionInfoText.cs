@@ -5,6 +5,20 @@ namespace Rts.Presentation
     /// <summary>One display-only table for selected building descriptions.</summary>
     public static class SelectionInfoText
     {
+        public static string BuildingReservationStatus(BuildingView building, EconomyView economy)
+        {
+            if (!building.Reserved) return "";
+            int wood = economy == null ? 0 : economy.BarracksWoodCost;
+            int stone = 0;
+            if (building.Kind == BuildingKind.Tower) { wood = economy.TowerWoodCost; stone = economy.TowerStoneCost; }
+            else if (building.Kind == BuildingKind.Castle) { wood = economy.CastleWoodCost; stone = economy.CastleStoneCost; }
+            else if (building.Kind == BuildingKind.Drill) { wood = economy.DrillWoodCost; stone = economy.DrillStoneCost; }
+            int missingWood = System.Math.Max(0, wood - (economy == null ? 0 : economy.Wood));
+            int missingStone = System.Math.Max(0, stone - (economy == null ? 0 : economy.Stone));
+            return UiText.T("Reserved: waiting for resources (", "予約中：資源待ち（") +
+                UiText.T("wood ", "木材 ") + missingWood + UiText.T(", stone ", "、石 ") + missingStone +
+                UiText.T(", queue ", "、順番 ") + building.ReservationOrder + UiText.T(")", "）");
+        }
         public static string BeltComponentDescription(BeltComponentKind kind)
         {
             return kind == BeltComponentKind.Inserter

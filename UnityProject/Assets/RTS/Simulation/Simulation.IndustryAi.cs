@@ -166,7 +166,7 @@ namespace Rts.Simulation
             {
                 ref var current = ref world.Buildings[existing];
                 line.AssemblerId = current.Id;
-                if (current.Alive && current.Complete && current.Recipe == RecipeKind.None)
+                if (IsActualBuilding(current) && current.Complete && current.Recipe == RecipeKind.None)
                     current.Recipe = PreferredAssemblerRecipe(faction);
             }
             else
@@ -211,7 +211,7 @@ namespace Rts.Simulation
             int assemblerIndex = OwnBuildingIndex(faction, BuildingKind.Assembler);
             if (assemblerIndex < 0) return;
             ref var assembler = ref world.Buildings[assemblerIndex];
-            if (!assembler.Alive || !assembler.Complete) return;
+            if (!IsActualBuilding(assembler) || !assembler.Complete) return;
             RecipeKind wanted = PreferredCraftTree3Recipe(faction);
             if (assembler.Recipe != wanted && assembler.Timer == 0)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
@@ -220,7 +220,7 @@ namespace Rts.Simulation
             {
                 if (!OwnBuilding(faction, buildingId, out int buildingIndex)) continue;
                 var building = world.Buildings[buildingIndex];
-                if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level != 2) continue;
+                if (!IsActualBuilding(building) || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level != 2) continue;
                 UpgradeProcessingBuilding(faction, buildingId);
                 return;
             }
@@ -274,7 +274,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction
                     && b.Researching != 0 && IsThirdAgeResearch(b.Researching)) return true;
             }
             // A finished research building with an open third-age research is a real demand even
@@ -283,7 +283,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Researching != 0) continue;
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction || b.Researching != 0) continue;
                 for (int r = 0; r < CraftTree3Researches.Length; r++)
                     if (ResearchBuildingAccepts(faction, b.Kind, CraftTree3Researches[r])
                         && TechOpen(faction, CraftTree3Researches[r]) && !BeingResearched(faction, CraftTree3Researches[r])) return true;
@@ -367,7 +367,7 @@ namespace Rts.Simulation
                 {
                     if (!OwnBuilding(faction, buildingId, out int buildingIndex)) continue;
                     var building = world.Buildings[buildingIndex];
-                    if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 2) continue;
+                    if (!IsActualBuilding(building) || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 2) continue;
                     UpgradeProcessingBuilding(faction, buildingId);
                     break;
                 }
@@ -438,7 +438,7 @@ namespace Rts.Simulation
             var economy = world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             int target = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + 1;
             int ageFood = AgeClockOn ? world.Config.Economy.Age2FoodCost : world.Config.Economy.EarlyAge2FoodCost;
             return farms < target && economy.Food < ageFood + VillagerFoodCostFor(faction);
@@ -458,7 +458,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction
                     && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)) return true;
             }
             return false;
@@ -471,7 +471,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int racks = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
             if (racks >= rules.PreserveMaxRacks || economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Preserves);
             ref var line = ref world.ProcessingLines[index];
@@ -495,7 +495,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int weavers = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
             int index = GetOrCreateLine(faction, ProcessingLineKind.TradeGoods);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
@@ -546,12 +546,12 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.House && b.Kind != BuildingKind.GrandHouse) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction || b.Kind != BuildingKind.House && b.Kind != BuildingKind.GrandHouse) continue;
                 if (b.Complete) hasHouse = true;
             }
             if (!hasHouse) return;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.IncenseHouse) houses++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.IncenseHouse) houses++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.Incense);
@@ -575,7 +575,7 @@ namespace Rts.Simulation
             if (!CharmsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             int workshops = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.CharmWorkshop) workshops++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.CharmWorkshop) workshops++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.Charms);
@@ -602,7 +602,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction) continue;
                 if (b.Complete && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)) hasHouse = true;
                 if (b.Kind == BuildingKind.ToolShop) shops++;
             }
@@ -682,7 +682,7 @@ namespace Rts.Simulation
             if (!RepairKitsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             int yards = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.RepairKits);
@@ -952,7 +952,7 @@ namespace Rts.Simulation
             {
                 var b = world.Buildings[i];
                 if (b.FactionId != faction || b.Kind != BuildingKind.Bridge || b.Held) continue;
-                if (b.Alive) hasActive = true;
+                if (IsActualBuilding(b)) hasActive = true;
                 else if (b.DestroyedTick > 0 && world.Tick - b.DestroyedTick < BridgeRebuildWaitTicks) hasCooldown = true;
             }
             return hasCooldown && !hasActive;
@@ -1238,12 +1238,12 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.LumberCamp && b.Id != exclude) return b.Id;
+                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.LumberCamp && b.Id != exclude) return b.Id;
             }
             return 0;
         }
 
-        private bool BuildingAlive(uint id) => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive;
+        private bool BuildingAlive(uint id) => IsActualBuilding(id);
 
         private uint PlaceFletcher(uint faction, BuildingState camp)
         {
@@ -1266,7 +1266,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             var rules = world.Config.Economy;
             if (farms < rules.RationsFarmMinimum || economy.Food < rules.RationsFoodReserve) return;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Rations);
@@ -1318,7 +1318,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction) continue;
                 if (b.Kind == BuildingKind.MineShaft && b.Complete) shafts++;
                 if (b.Kind == BuildingKind.Lapidary) lapidaries++;
             }
@@ -1657,7 +1657,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == kind) return i;
+                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == kind) return i;
             }
             return -1;
         }
@@ -2120,14 +2120,14 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             int farmTarget = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
             if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Farm || !b.Complete || b.Held) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction || b.Kind != BuildingKind.Farm || !b.Complete || b.Held) continue;
                 var route = BeltRoute(faction, OutputCell(b), taken, next => FeedsOwnCore(next, faction));
                 bool whole = false;
                 if (route.cells != null)

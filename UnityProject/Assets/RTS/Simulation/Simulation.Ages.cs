@@ -533,7 +533,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) { barracks = true; break; }
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) { barracks = true; break; }
             }
             int requiredVillagers = e.Civ == CivKind.Primitive
                 ? (EarlyArmsOn ? world.Config.Economy.EarlyAdvanceVillagers : AdvanceVillagers)
@@ -812,7 +812,7 @@ namespace Rts.Simulation
                         for (int b = 0; b < world.BuildingCount; b++)
                         {
                             var existing = world.Buildings[b];
-                            if (existing.Alive && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
+                            if (IsActualBuilding(existing) && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
                                 && existing.CaravanOutpostId == outpostId) { occupied = true; break; }
                         }
                         if (!occupied) return true;

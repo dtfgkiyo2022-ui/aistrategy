@@ -417,6 +417,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int Hp { get; }
         public int MaxHp { get; }
         public bool Complete { get; }
+        public bool Reserved { get; }
+        public int ReservationOrder { get; }
         public int Progress { get; }
         public int Work { get; }
         public int Queued { get; }
@@ -445,6 +447,14 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
             : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining, Facing.North, 0, 0)
+        {
+        }
+
+        public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
+            bool complete, int progress, int work, int queued, long trainRemaining, bool reserved, int reservationOrder)
+            : this(id, factionId, kind, center, sizeMeters, hp, maxHp, complete, progress, work, queued, trainRemaining,
+                Facing.North, 0, 0, false, 0, 0, 0, 0, 0, 0, default(Fix64), 0, CaravanStopReason.None,
+                1, 0, RecipeKind.None, reserved, reservationOrder)
         {
         }
 
@@ -486,7 +496,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
             uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
-            int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None)
+            int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
+            bool reserved = false, int reservationOrder = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -495,6 +506,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CaravanMarketId = caravanMarketId; CaravanOutpostId = caravanOutpostId; CaravanDistance = caravanDistance;
             CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Level = level;
+            Reserved = reserved; ReservationOrder = reservationOrder;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
@@ -621,6 +633,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int VillagerQueued { get; }
         public long VillagerTrainRemaining { get; }
         public bool AutoEconomy { get; }
+        public bool BuildingReservations { get; }
+        public int ReservationLimit { get; }
+        public int ReservationCount { get; }
+        public int ReservationCheckTicks { get; }
         public int BuildingSizeCells { get; }
         public int BarracksWoodCost { get; }
         public int VillagerFoodCost { get; }
@@ -1097,10 +1113,13 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               int mechanismResearchCostPermille = 0, int mechanismResearchTimePermille = 0,
              long civChoiceDeadlineTick = 0, bool ageClockUx = false,
              bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0,
-             bool inserters = false, int inserterWoodCost = 0, int inserterIntervalTicks = 0)
+             bool inserters = false, int inserterWoodCost = 0, int inserterIntervalTicks = 0,
+             bool buildingReservations = false, int reservationLimit = 0, int reservationCount = 0, int reservationCheckTicks = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
+            BuildingReservations = buildingReservations; ReservationLimit = reservationLimit;
+            ReservationCount = reservationCount; ReservationCheckTicks = reservationCheckTicks;
             RationsEnabled = rationsEnabled; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             MillTicks = millTicks; MillFoodInput = millFoodInput; RationsPerSoldier = rationsPerSoldier; RationsTrainPermille = rationsTrainPermille;
             RationsHealIntervalTicks = rationsHealIntervalTicks; RationsHealQuietTicks = rationsHealQuietTicks; RationsHealHp = rationsHealHp;

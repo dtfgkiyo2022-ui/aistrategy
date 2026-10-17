@@ -399,7 +399,11 @@ namespace Rts.Presentation
                 Add(rows, "build:tool-shop", UiText.T("Tool shop (", "工具工房（木材 ") + economy.ToolShopWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.ToolShop);
                 Add(rows, "line:Tools", UiText.T("Ask for tools line", "工具ラインを指定"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Tools);
             }
-            if (!economy.Industry) return;
+            if (!economy.Industry)
+            {
+                ApplyReservationLabels(rows, economy);
+                return;
+            }
             if (economy.CommonDrill)
                 Add(rows, "build:drill", UiText.T("Drill (wood " + economy.DrillWoodCost + ", stone " + economy.DrillStoneCost + ")", "採掘機（木材 " + economy.DrillWoodCost + "、石 " + economy.DrillStoneCost + "）"), true, "", mode == Mode.Drill);
             if (economy.ProcessingChain)
@@ -437,6 +441,67 @@ namespace Rts.Presentation
             Add(rows, "build:remove-area", UiText.T("Remove rectangle", "四角く撤去"), true, "", mode == Mode.RemoveArea);
             Add(rows, "build:facing", UiText.T("R: ", "R：") + FacingName(facing), false, "", false, true);
             AddFlowActions(rows, economy);
+            ApplyReservationLabels(rows, economy);
+        }
+
+        private void ApplyReservationLabels(List<EconomyAction> rows, EconomyView economy)
+        {
+            for (int i = 0; i < rows.Count; i++)
+            {
+                BuildingKind kind;
+                if (!TryReservationKind(rows[i].Id, out kind) || !ReservationLabel(economy, kind)) continue;
+                var row = rows[i];
+                rows[i] = new EconomyAction(row.Id, row.Label + UiText.T(" [reserve]", "【予約可】"), row.Enabled,
+                    row.Reason, row.Selected, row.Message);
+            }
+        }
+
+        private static bool TryReservationKind(string id, out BuildingKind kind)
+        {
+            kind = BuildingKind.Barracks;
+            switch (id)
+            {
+                case "build:barracks": kind = BuildingKind.Barracks; return true;
+                case "build:house": kind = BuildingKind.House; return true;
+                case "build:drop-site": kind = BuildingKind.DropSite; return true;
+                case "build:tower": kind = BuildingKind.Tower; return true;
+                case "build:market": kind = BuildingKind.Market; return true;
+                case "build:siege": kind = BuildingKind.SiegeWorkshop; return true;
+                case "build:range": kind = BuildingKind.ArcheryRange; return true;
+                case "build:stable": kind = BuildingKind.Stable; return true;
+                case "build:castle": kind = BuildingKind.Castle; return true;
+                case "build:mine": kind = BuildingKind.Mine; return true;
+                case "build:smelter": kind = BuildingKind.Smelter; return true;
+                case "build:farm": kind = BuildingKind.Farm; return true;
+                case "build:drill": kind = BuildingKind.Drill; return true;
+                case "build:saddlery": kind = BuildingKind.Saddlery; return true;
+                case "build:sawmill": kind = BuildingKind.Sawmill; return true;
+                case "build:stonecutter": kind = BuildingKind.Stonecutter; return true;
+                case "build:joinery": kind = BuildingKind.Joinery; return true;
+                case "build:scriptorium": kind = BuildingKind.Scriptorium; return true;
+                case "build:drying-rack": kind = BuildingKind.DryingRack; return true;
+                case "build:lapidary": kind = BuildingKind.Lapidary; return true;
+                case "build:weaver": kind = BuildingKind.Weaver; return true;
+                case "build:incense-house": kind = BuildingKind.IncenseHouse; return true;
+                case "build:charm-workshop": kind = BuildingKind.CharmWorkshop; return true;
+                case "build:repair-yard": kind = BuildingKind.RepairYard; return true;
+                case "build:tool-shop": kind = BuildingKind.ToolShop; return true;
+                case "build:storage": kind = BuildingKind.Storage; return true;
+                default: return false;
+            }
+        }
+
+        private bool ReservationLabel(EconomyView economy, BuildingKind kind)
+        {
+            if (!economy.BuildingReservations) return false;
+            int wood = kind == BuildingKind.Barracks ? economy.BarracksWoodCost : kind == BuildingKind.House ? economy.HouseWoodCost
+                : kind == BuildingKind.Tower ? economy.TowerWoodCost : kind == BuildingKind.Castle ? economy.CastleWoodCost
+                : kind == BuildingKind.Mine ? economy.MineWoodCost : kind == BuildingKind.Drill ? economy.DrillWoodCost
+                : kind == BuildingKind.Farm ? economy.FarmWoodCost : kind == BuildingKind.Smelter ? economy.SmelterWoodCost
+                : kind == BuildingKind.Storage ? economy.StorageWoodCost : 0;
+            int stone = kind == BuildingKind.Tower ? economy.TowerStoneCost : kind == BuildingKind.Castle ? economy.CastleStoneCost
+                : kind == BuildingKind.Drill ? economy.DrillStoneCost : 0;
+            return economy.Wood < wood || economy.Stone < stone;
         }
 
         private void AddFlowActions(List<EconomyAction> rows, EconomyView economy)

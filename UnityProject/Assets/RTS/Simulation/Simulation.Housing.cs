@@ -41,8 +41,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.House) houses++;
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.GrandHouse) grandHouses++;
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.House) houses++;
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.GrandHouse) grandHouses++;
             }
             // Early arms: a house holds twice as many. One house at a time at 5 each could not keep up with several
             // barracks, and the army stopped at the cap (66 of 70 in a test play, 10-11).
@@ -74,7 +74,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
+                if (IsActualBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
             }
             int searchRadius = EconomyScaleOn ? Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells) : SiteSearchRadiusCells;
             int origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius);

@@ -14,6 +14,7 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
@@ -124,6 +125,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            AdvanceBuildingReservations();
             RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();
@@ -288,13 +290,13 @@ namespace Rts.Simulation
 
         private bool ProcessingKilnTarget(VillagerState v)
             => ProcessingOn && (v.Carry == 0 || v.CarryKind == ResourceKind.Wood) && v.HaulTo > 0 && v.HaulTo <= world.BuildingCount
-               && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.CharcoalKiln;
+               && IsActualBuilding(world.Buildings[v.HaulTo - 1]) && world.Buildings[v.HaulTo - 1].Kind == BuildingKind.CharcoalKiln;
 
         private bool AssignKilnWood(ref VillagerState v, uint kilnId)
         {
             if (!ProcessingOn || kilnId == 0 || kilnId > world.BuildingCount) return false;
             var kiln = world.Buildings[kilnId - 1];
-            if (!kiln.Alive || !kiln.Complete || kiln.FactionId != v.FactionId) return false;
+            if (!IsActualBuilding(kiln) || !kiln.Complete || kiln.FactionId != v.FactionId) return false;
             int index = NearestWorkNode(v.Position, ResourceKind.Wood, v.FactionId);
             if (index < 0) return false;
             v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
@@ -307,7 +309,7 @@ namespace Rts.Simulation
         {
             if (!ProcessingKilnTarget(v)) return false;
             ref var kiln = ref world.Buildings[v.HaulTo - 1];
-            if (!kiln.Alive || !kiln.Complete)
+            if (!IsActualBuilding(kiln) || !kiln.Complete)
             {
                 v.HaulTo = 0;
                 AddStock(v.FactionId, v.CarryKind, v.Carry);
@@ -490,7 +492,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) return true;
+            if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Barracks) return true;
             }
             return false;
         }
@@ -555,7 +557,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Harbor) continue;
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Harbor) continue;
                 if (InRange(BuildingCenter(b), fish, reach)) return true;
             }
             return false;

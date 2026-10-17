@@ -8,9 +8,9 @@ namespace Rts.Presentation
     public static class AdjacentBuildingPlacementRules
     {
         public static bool CanPlace(EconomyView economy, IReadOnlyList<KnownObjective> objectives, uint factionId,
-            BuildingKind kind, int origin, int size, Facing facing, int woodCost, int stoneCost)
+            BuildingKind kind, int origin, int size, Facing facing, int woodCost, int stoneCost, bool ignoreCosts = false)
         {
-            if (economy == null || economy.Wood < woodCost || economy.Stone < stoneCost || size <= 0) return false;
+            if (economy == null || !ignoreCosts && (economy.Wood < woodCost || economy.Stone < stoneCost) || size <= 0) return false;
             if (kind == BuildingKind.Drill) return DrillSiteIsLegal(economy, origin, size);
             // These have their own site rules in the simulation (on a resource node, by the water, far from the core, in a
             // pass...). The general rule below would paint them red where they belong, so they keep the old cost-only colour.

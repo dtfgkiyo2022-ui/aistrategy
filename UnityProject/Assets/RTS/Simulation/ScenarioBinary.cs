@@ -94,6 +94,9 @@ namespace Rts.Simulation
         private const int ExploreScoutingExtensionId = 50;
         private const int ExploreScoutingExtensionVersion = 1;
         private const int ExploreScoutingExtensionDataLength = 7 * sizeof(int);
+        private const int BuildingReservationsExtensionId = 51;
+        private const int BuildingReservationsExtensionVersion = 1;
+        private const int BuildingReservationsExtensionDataLength = 3 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -241,6 +244,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
             ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
             ,new ExtensionRegistration(ExploreScoutingExtensionId, ExploreScoutingExtensionVersion, ExploreScoutingExtensionDataLength)
+            ,new ExtensionRegistration(BuildingReservationsExtensionId, BuildingReservationsExtensionVersion, BuildingReservationsExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -837,6 +841,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                     else if (id == ExploreScoutingExtensionId) ReadExploreScoutingExtension(extension, c.Economy);
+                    else if (id == BuildingReservationsExtensionId) ReadBuildingReservationsExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -915,6 +920,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
                 extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ExploreScoutingExtensionId && !c.Economy.ExploreScouting);
+                extensions.RemoveAll(extension => extension != null && extension.Id == BuildingReservationsExtensionId && !c.Economy.BuildingReservations);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1226,6 +1232,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                          extensions[i] = CreateAdjacentBuildingsExtension(c.Economy);
                      }
                  if (c.Economy.AdjacentBuildings && !hasAdjacentBuildings) extensions.Add(CreateAdjacentBuildingsExtension(c.Economy));
+                 bool hasBuildingReservations = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == BuildingReservationsExtensionId)
+                     {
+                         hasBuildingReservations = true;
+                         extensions[i] = CreateBuildingReservationsExtension(c.Economy);
+                     }
+                 if (c.Economy.BuildingReservations && !hasBuildingReservations) extensions.Add(CreateBuildingReservationsExtension(c.Economy));
                 bool hasCraftBalance = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CraftBalanceExtensionId)
@@ -1955,6 +1969,32 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.AdjacentBuildings = enabled != 0;
                 e.AdjacentBuildingClearanceCells = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing adjacent-buildings extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateBuildingReservationsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.BuildingReservations ? 1 : 0);
+                writer.Write(e.ReservationLimit);
+                writer.Write(e.ReservationCheckTicks);
+                return new ScenarioExtensionData { Id = BuildingReservationsExtensionId, Version = BuildingReservationsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBuildingReservationsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid building-reservations flag.");
+                e.BuildingReservations = enabled != 0;
+                e.ReservationLimit = reader.ReadInt32();
+                e.ReservationCheckTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing building-reservations extension data.");
             }
         }
 
