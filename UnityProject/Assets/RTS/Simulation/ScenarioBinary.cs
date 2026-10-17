@@ -91,6 +91,9 @@ namespace Rts.Simulation
         private const int InserterExtensionId = 48;
         private const int InserterExtensionVersion = 1;
         private const int InserterExtensionDataLength = 4 * sizeof(int);
+        private const int ExploreScoutingExtensionId = 50;
+        private const int ExploreScoutingExtensionVersion = 1;
+        private const int ExploreScoutingExtensionDataLength = 7 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -237,6 +240,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
             ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
+            ,new ExtensionRegistration(ExploreScoutingExtensionId, ExploreScoutingExtensionVersion, ExploreScoutingExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -832,6 +836,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
+                    else if (id == ExploreScoutingExtensionId) ReadExploreScoutingExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -908,7 +913,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
-                 extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
+                extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
+                extensions.RemoveAll(extension => extension != null && extension.Id == ExploreScoutingExtensionId && !c.Economy.ExploreScouting);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1293,6 +1299,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateDirectPathMovementExtension(c.Economy);
                     }
                 if (c.Economy.DirectPathMovement && !hasDirectPathMovement) extensions.Add(CreateDirectPathMovementExtension(c.Economy));
+                bool hasExploreScouting = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == ExploreScoutingExtensionId)
+                    {
+                        hasExploreScouting = true;
+                        extensions[i] = CreateExploreScoutingExtension(c.Economy);
+                    }
+                if (c.Economy.ExploreScouting && !hasExploreScouting) extensions.Add(CreateExploreScoutingExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -2676,6 +2690,32 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             e.LightCavalryRange = Fix(r); e.LightCavalrySpeed = Fix(r); e.LightCavalryVision = Fix(r);
             e.CavalryDrillFood = r.ReadInt32(); e.CavalryDrillWood = r.ReadInt32(); e.CavalryDrillTicks = r.ReadInt32();
             e.CavalryDrillSpeed = Fix(r);
+        }
+        private static ScenarioExtensionData CreateExploreScoutingExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.ExploreScouting ? 1 : 0);
+                writer.Write(e.ExploreChunkCells); writer.Write(e.ExploreMinUnexploredPermille);
+                writer.Write(e.ExploreRetargetTicks); writer.Write(e.ExploreAvoidChunks);
+                writer.Write(e.ExploreAvoidTicks); writer.Write(e.ExploreAutoUntilTick);
+                return new ScenarioExtensionData { Id = ExploreScoutingExtensionId, Version = ExploreScoutingExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadExploreScoutingExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid exploration flag.");
+                e.ExploreScouting = enabled != 0;
+                e.ExploreChunkCells = reader.ReadInt32(); e.ExploreMinUnexploredPermille = reader.ReadInt32();
+                e.ExploreRetargetTicks = reader.ReadInt32(); e.ExploreAvoidChunks = reader.ReadInt32();
+                e.ExploreAvoidTicks = reader.ReadInt32(); e.ExploreAutoUntilTick = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing exploration extension data.");
+            }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
         private static void Goal(BinaryWriter w,PolicyGoal g) { w.Write((byte)g.Kind); w.Write(g.Id); Point(w,g.Point); }
