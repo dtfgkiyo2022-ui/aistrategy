@@ -1227,6 +1227,11 @@ namespace Rts.Presentation
             foreach (var command in latestByArmy.Values)
             {
                 if (!TryGoalPosition(command.Goal, frame, out var goal)) continue;
+                OwnArmyView army = default(OwnArmyView);
+                bool foundArmy = false;
+                foreach (var value in frame.Observation.OwnArmies)
+                    if (value.Id == command.Target.Id) { army = value; foundArmy = true; break; }
+                if (foundArmy && !BattlefieldArrowRules.ShouldShowMovementArrow(command, army.Position)) continue;
                 live.Add(command.CommandId);
                 if (!arrows.TryGetValue(command.CommandId, out var arrow))
                 {
