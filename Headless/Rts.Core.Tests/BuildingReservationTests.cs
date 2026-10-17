@@ -1,8 +1,10 @@
 using System;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
 using Rts.Contracts;
+using Rts.Replay;
 using Rts.Simulation;
 using Battle = Rts.Simulation.Simulation;
 
@@ -99,20 +101,212 @@ namespace Rts.Core.Tests
             Assert.That(fixture.Simulation.Capture(1).Economy.ReservationCheckTicks, Is.EqualTo(1));
         }
 
+        [Test]
+        public void FlagOffKeepsTheHistoricalBytesAndEveryTickHash()
+        {
+            var leftScenario = MapGenerator.Generate(711, true);
+            leftScenario.Economy.StartWood = 0;
+            leftScenario.Economy.BarracksWoodCost = 100000;
+            leftScenario.Economy.BuildingReservations = false;
+            var rightScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(leftScenario));
+            Assert.That(ScenarioBinary.Encode(leftScenario), Is.EqualTo(ScenarioBinary.Encode(rightScenario)));
+            var left = new Battle(leftScenario);
+            var right = new Battle(rightScenario);
+            var leftGateway = new CommandGateway(left);
+            var rightGateway = new CommandGateway(right);
+            ulong sequence = 0;
+            leftGateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            rightGateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            leftGateway.Step();
+            rightGateway.Step();
+            int cell = FindPlaceableCell(leftScenario, BuildingKind.Barracks);
+            leftGateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, BuildingKind.Barracks, cell));
+            rightGateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, BuildingKind.Barracks, cell));
+            for (int tick = 0; tick < 30000; tick++)
+            {
+                leftGateway.Step();
+                rightGateway.Step();
+                Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
+                    Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
+                if (left.Capture(1).Tick >= 30000 || left.Capture(1).Result.HasEnded) break;
+            }
+            Assert.That(left.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Barracks), Is.False);
+        }
+
+        [Test]
+        public void ReservationStartsConstructionAndEventuallyCompletesAfterWoodArrives()
+        {
+            var scenario = MapGenerator.Generate(712, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 0;
+            scenario.Economy.BarracksWoodCost = 40;
+            var fixture = NewFixture(scenario);
+            int cell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            var reservation = fixture.Simulation.Capture(1).Economy.Buildings.Single(b => b.Reserved);
+            Assert.That(fixture.Simulation.Capture(1).Economy.Wood, Is.EqualTo(0));
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++fixture.Sequence, true));
+            fixture.Gateway.Step();
+            for (int i = 0; i < 5000; i++)
+            {
+                fixture.Gateway.Step();
+                var current = fixture.Simulation.Capture(1).Economy.Buildings.FirstOrDefault(b => b.Id == reservation.Id);
+                if (current.Id == reservation.Id && !current.Reserved && current.Complete) return;
+            }
+            var after = fixture.Simulation.Capture(1).Economy;
+            var observed = after.Buildings.FirstOrDefault(b => b.Id == reservation.Id);
+            Assert.Fail("予約が建設開始後に完成しませんでした。wood=" + after.Wood + " id=" + observed.Id
+                + " reserved=" + observed.Reserved + " complete=" + observed.Complete + " progress=" + observed.Progress
+                + " villagers=" + string.Join(",", after.Villagers.Select(v => v.Id + ":" + v.Activity)));
+        }
+
+        [Test]
+        public void ReservationQueueKeepsACheaperLaterReservationWaitingForTheHead()
+        {
+            var scenario = MapGenerator.GenerateTerrain(713, processingChain: true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 1;
+            scenario.Economy.BarracksWoodCost = 40;
+            scenario.Economy.HouseWoodCost = 5;
+            var fixture = NewFixture(scenario);
+            int barracksCell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            int houseCell = FindPlaceableCellAfter(scenario, BuildingKind.Barracks, barracksCell, BuildingKind.House);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, barracksCell));
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.House, houseCell));
+            fixture.Gateway.Step();
+            fixture.Gateway.Step();
+            var waiting = fixture.Simulation.Capture(1).Economy.Buildings.Where(b => b.Reserved).OrderBy(b => b.ReservationOrder).ToArray();
+            Assert.That(waiting.Select(b => b.ReservationOrder), Is.EqualTo(new[] { 1, 2 }));
+            Assert.That(fixture.Simulation.Capture(1).Economy.Wood, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ReservationCellRejectsBuildingsAndBeltsButDoesNotCloseTheMap()
+        {
+            var scenario = MapGenerator.Generate(715, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 0;
+            scenario.Economy.BarracksWoodCost = 100000;
+            var fixture = NewFixture(scenario);
+            int cell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            var reservation = fixture.Simulation.Capture(1).Economy.Buildings.Single(b => b.Reserved);
+            int before = fixture.Simulation.Capture(1).Economy.Buildings.Count;
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            Assert.That(fixture.Simulation.Capture(1).Economy.Buildings.Count, Is.EqualTo(before));
+            Assert.That(fixture.Simulation.Capture(1).Economy.ReservationCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void InvalidReservationIsCancelledWithoutChargingAndEmitsAnEvent()
+        {
+            var scenario = MapGenerator.Generate(716, true, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 1;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 0;
+            scenario.Economy.MineWoodCost = 100000;
+            var ore = scenario.ResourceNodes.First(n => n.Kind == ResourceKind.Ore);
+            for (int i = 0; i < scenario.ResourceNodes.Length; i++)
+            {
+                var node = scenario.ResourceNodes[i];
+                if (node.Id == ore.Id) node.Amount = 1;
+                scenario.ResourceNodes[i] = node;
+            }
+            var fixture = NewFixture(scenario);
+            int cell = FindMineCellForNode(scenario, ore.Id);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Mine, cell));
+            fixture.Gateway.Step();
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Assign(1, ++fixture.Sequence, new[] { 1U, 2U, 3U }, EconomyTargetKind.ResourceNode, ore.Id));
+            fixture.Gateway.Step();
+            for (int i = 0; i < 1000 && fixture.Simulation.Capture(1).Economy.ReservationCount != 0; i++) fixture.Gateway.Step();
+            var frame = fixture.Simulation.Capture(1);
+            var observedOre = frame.Economy.Resources.FirstOrDefault(r => r.Id == ore.Id);
+            Assert.That(frame.Economy.ReservationCount, Is.Zero,
+                "ore=" + observedOre.Remaining + " villagers=" + string.Join(",", frame.Economy.Villagers.Select(v => v.Id + ":" + v.Activity)));
+            Assert.That(frame.Economy.Wood, Is.EqualTo(0));
+            Assert.That(frame.Events.Any(e => e.Kind == EventKind.BuildingReservationCancelled), Is.True);
+        }
+
+        [Test]
+        public void UnsupportedBuildingsIncludingBridgesAndTollgatesAreNotReserved()
+        {
+            var fixture = NewFixture(3);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.House, 0));
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Bridge, 0));
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Tollgate, 0));
+            fixture.Gateway.Step();
+            Assert.That(fixture.Simulation.Capture(1).Economy.ReservationCount, Is.Zero);
+            Assert.That(fixture.Simulation.Capture(1).Economy.Buildings.Any(b => b.Reserved), Is.False);
+        }
+
+        [Test]
+        public void AutomaticEconomyDoesNotCreateReservationsOrUseAHumanReservationAsABarracks()
+        {
+            var scenario = MapGenerator.Generate(718, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 0;
+            scenario.Economy.BarracksWoodCost = 100000;
+            var fixture = NewFixture(scenario);
+            int cell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++fixture.Sequence, true));
+            fixture.Gateway.Step();
+            for (int i = 0; i < 200; i++) fixture.Gateway.Step();
+            var frame = fixture.Simulation.Capture(1).Economy;
+            Assert.That(frame.ReservationCount, Is.EqualTo(1));
+            Assert.That(frame.Buildings.Count(b => b.Reserved), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ARecordedReservationReplaysWithTheSameTickHashes()
+        {
+            var scenario = MapGenerator.Generate(719, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 1;
+            scenario.Economy.StartWood = 0;
+            scenario.Economy.BarracksWoodCost = 100000;
+            var fixture = NewFixture(scenario);
+            int cell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            using (var stream = new MemoryStream())
+            {
+                var identity = new BuildIdentity();
+                ReplayRunner.Record(stream, scenario, fixture.Gateway.Inputs, 300, identity);
+                stream.Position = 0;
+                var outcome = ReplayRunner.Replay(stream, identity);
+                Assert.That(outcome.FirstMismatchTick, Is.Null);
+                Assert.That(outcome.IsFault, Is.False);
+            }
+        }
+
         private sealed class Fixture
         {
             internal readonly Battle Simulation;
             internal readonly CommandGateway Gateway;
+            internal readonly ScenarioDefinition Scenario;
             internal readonly ulong Seed;
             internal ulong Sequence;
-            internal Fixture(Battle simulation, ulong seed)
+            internal Fixture(ScenarioDefinition scenario)
             {
-                Simulation = simulation;
-                Seed = seed;
-                Gateway = new CommandGateway(simulation);
-                Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++Sequence, false));
-                Gateway.SubmitEconomy(EconomyCommand.Auto(2, ++Sequence, false));
-                Gateway.Step();
+                Scenario = scenario;
+                Seed = scenario.Seed;
+                Simulation = new Battle(scenario);
+                Gateway = new CommandGateway(Simulation);
             }
         }
 
@@ -124,7 +318,99 @@ namespace Rts.Core.Tests
             scenario.Economy.ReservationCheckTicks = 1;
             scenario.Economy.StartWood = 0;
             scenario.Economy.BarracksWoodCost = 100000;
-            return new Fixture(new Battle(scenario), 705 + (ulong)limit);
+            return NewFixture(scenario);
+        }
+
+        private static Fixture NewFixture(ScenarioDefinition scenario)
+        {
+            var fixture = new Fixture(scenario);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++fixture.Sequence, false));
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Auto(2, ++fixture.Sequence, false));
+            fixture.Gateway.Step();
+            return fixture;
+        }
+
+        private static int FindPlaceableCell(ScenarioDefinition source, BuildingKind kind)
+        {
+            var probeScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
+            probeScenario.Economy.StartWood = 100000;
+            probeScenario.Economy.BarracksWoodCost = 1;
+            probeScenario.Economy.HouseWoodCost = 1;
+            probeScenario.Economy.MineWoodCost = 1;
+            var probe = new Battle(probeScenario);
+            var gateway = new CommandGateway(probe);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.Step();
+            for (int cell = 0; cell < probeScenario.Map.WidthCells * probeScenario.Map.HeightCells; cell++)
+            {
+                gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, kind, cell));
+                gateway.Step();
+                if (probe.Capture(1).Economy.Buildings.Any(b => b.Kind == kind && !b.Reserved)) return cell;
+            }
+            Assert.Fail("配置可能な検証地点が見つかりませんでした。");
+            return -1;
+        }
+
+        private static int FindPlaceableCellAfter(ScenarioDefinition source, BuildingKind firstKind, int firstCell, BuildingKind secondKind)
+        {
+            var probeScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
+            probeScenario.Economy.StartWood = 100000;
+            probeScenario.Economy.BarracksWoodCost = 1;
+            probeScenario.Economy.HouseWoodCost = 1;
+            probeScenario.Economy.MineWoodCost = 1;
+            var probe = new Battle(probeScenario);
+            var gateway = new CommandGateway(probe);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.Step();
+            gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, firstKind, firstCell));
+            gateway.Step();
+            int firstCount = probe.Capture(1).Economy.Buildings.Count(b => b.Kind == firstKind && !b.Reserved);
+            int cells = probeScenario.Map.WidthCells * probeScenario.Map.HeightCells;
+            for (int cell = 0; cell < cells; cell++)
+            {
+                if (cell == firstCell) continue;
+                gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, secondKind, cell));
+                gateway.Step();
+                if (probe.Capture(1).Economy.Buildings.Count(b => b.Kind == firstKind && !b.Reserved) == firstCount
+                    && probe.Capture(1).Economy.Buildings.Any(b => b.Kind == secondKind && !b.Reserved)) return cell;
+            }
+            Assert.Fail("既存建物の後に配置可能なセルが見つかりませんでした。");
+            return -1;
+        }
+
+        private static int FindMineCellForNode(ScenarioDefinition source, uint nodeId)
+        {
+            var node = source.ResourceNodes.Single(n => n.Id == nodeId);
+            int width = source.Map.WidthCells;
+            int nodeCell = (int)(node.Position.Z.Raw / 65536 / source.Map.CellSizeMeters) * width
+                + (int)(node.Position.X.Raw / 65536 / source.Map.CellSizeMeters);
+            int size = source.Economy.MineSizeCells;
+            var probeScenario = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
+            probeScenario.Economy.StartWood = 100000;
+            probeScenario.Economy.MineWoodCost = 1;
+            var probe = new Battle(probeScenario);
+            var gateway = new CommandGateway(probe);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.Step();
+            int nodeX = nodeCell % width, nodeZ = nodeCell / width;
+            for (int dz = 0; dz < size; dz++)
+                for (int dx = 0; dx < size; dx++)
+                {
+                    int originX = nodeX - dx, originZ = nodeZ - dz;
+                    if (originX < 0 || originZ < 0 || originX + size > width || originZ + size > source.Map.HeightCells) continue;
+                    int origin = originZ * width + originX;
+                    gateway.SubmitEconomy(EconomyCommand.Place(1, ++sequence, BuildingKind.Mine, origin));
+                    gateway.Step();
+                    if (probe.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Mine && !b.Reserved)) return origin;
+                }
+            Assert.Fail("指定した資源ノードを覆う配置可能な鉱山セルが見つかりませんでした。");
+            return -1;
         }
 
         private static BuildingView PlaceUntilReserved(Fixture fixture)

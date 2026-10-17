@@ -80,15 +80,15 @@ namespace Rts.Simulation
                 int index = HeadReservationIndex(faction);
                 if (index < 0) continue;
                 ref var reservation = ref world.Buildings[index];
-                bool framesAvailable = CraftTree1On && reservation.Kind != BuildingKind.Wall
-                    && world.Economies[faction - 1].Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
-                if (world.Economies[faction - 1].Wood < WoodOfForPlacement(reservation.Kind, faction, framesAvailable)
-                    || world.Economies[faction - 1].Stone < StoneOf(reservation.Kind, faction)) continue;
                 if (!ReservationStillLegal(faction, index))
                 {
                     CancelBuildingReservation(index, faction);
                     continue;
                 }
+                bool framesAvailable = CraftTree1On && reservation.Kind != BuildingKind.Wall
+                    && world.Economies[faction - 1].Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
+                if (world.Economies[faction - 1].Wood < WoodOfForPlacement(reservation.Kind, faction, framesAvailable)
+                    || world.Economies[faction - 1].Stone < StoneOf(reservation.Kind, faction)) continue;
                 BuildingKind kind = reservation.Kind;
                 int origin = reservation.OriginCell;
                 Facing facing = reservation.Facing;
@@ -97,7 +97,9 @@ namespace Rts.Simulation
                 Fix64 caravanDistance = reservation.CaravanDistance;
                 int caravanReward = reservation.CaravanWoodReward;
                 uint sanctuaryOutpost = reservation.SanctuaryOutpostId;
-                PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, reservation.WorkCell, index);
+                // The reservation was passable while it was queued. Recompute the work cell
+                // after PlaceBuildingAt closes the footprint, just as a direct placement does.
+                PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, -1, index);
                 ref var started = ref world.Buildings[index];
                 started.Held = IndustryOn;
                 started.CaravanOutpostId = caravanOutpost; started.CaravanMarketId = caravanMarket;

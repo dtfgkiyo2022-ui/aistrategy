@@ -42,7 +42,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Caravanserai && own)
                 {
                     if (b.CaravanMarketId == 0 || b.CaravanMarketId > world.BuildingCount
-                        || !world.Buildings[b.CaravanMarketId - 1].Alive || !world.Buildings[b.CaravanMarketId - 1].Complete
+                        || !IsActualBuilding(world.Buildings[b.CaravanMarketId - 1]) || !world.Buildings[b.CaravanMarketId - 1].Complete
                         || world.Buildings[b.CaravanMarketId - 1].FactionId != faction
                         || world.Buildings[b.CaravanMarketId - 1].Kind != BuildingKind.Market)
                         caravanReason = CaravanStopReason.MarketLost;
@@ -415,11 +415,11 @@ namespace Rts.Simulation
             if (v.CaravanDangerStopped) return CaravanStopReason.Danger;
             if (v.CaravanMarketId == 0 || v.CaravanMarketId > world.BuildingCount) return CaravanStopReason.MarketLost;
             var market = world.Buildings[v.CaravanMarketId - 1];
-            if (!market.Alive || !market.Complete || market.FactionId != v.FactionId || market.Kind != BuildingKind.Market)
+            if (!IsActualBuilding(market) || !market.Complete || market.FactionId != v.FactionId || market.Kind != BuildingKind.Market)
                 return CaravanStopReason.MarketLost;
             if (v.CaravanseraiId == 0 || v.CaravanseraiId > world.BuildingCount) return CaravanStopReason.HostLost;
             var host = world.Buildings[v.CaravanseraiId - 1];
-            if (!host.Alive || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai)
+            if (!IsActualBuilding(host) || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai)
                 return CaravanStopReason.HostLost;
             if (v.CaravanOutpostId == 0 || v.CaravanOutpostId > world.Outposts.Length
                 || world.Outposts[v.CaravanOutpostId - 1].OwnerFactionId != v.FactionId) return CaravanStopReason.OutpostLost;

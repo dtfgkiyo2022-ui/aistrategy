@@ -438,7 +438,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.Complete && building.FactionId == faction && building.Kind == processing)
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction && building.Kind == processing)
                     return false;
             }
             return true;

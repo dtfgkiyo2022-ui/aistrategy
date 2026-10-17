@@ -40,7 +40,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) continue;
+                if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) continue;
                 BigInteger d = DistanceSquared(s.Position, NearestFootprintPoint(b, s.Position));
                 if (best < 0 || d < bestDistance) { best = i; bestDistance = d; }
             }
@@ -58,7 +58,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
+                if (!IsActualBuilding(b) || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
                     || !BuildingVisibleTo(faction, b)) continue;
                 var point = NearestFootprintPoint(b, from);
                 if (!InRange(from, point, range)) continue;
@@ -132,7 +132,7 @@ namespace Rts.Simulation
             {
                 int i = checked((int)s.TargetId - 1);
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
+                if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
                 buildingDamage[i] = checked(buildingDamage[i] + SanctuaryDamage(faction, SiegeDamage(s)));
             }
             s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
