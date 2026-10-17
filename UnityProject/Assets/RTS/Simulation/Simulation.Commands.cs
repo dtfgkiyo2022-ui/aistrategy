@@ -170,7 +170,7 @@ namespace Rts.Simulation
                 o.Kind == PolicyKind.Defend && (o.Target.Kind == ScopeKind.All || o.Goal.Kind != GoalKind.Outpost && o.Goal.Kind != GoalKind.Core ||
                     o.Goal.Kind == GoalKind.Core && world.Cores[o.Goal.Id - 1].Definition.FactionId != o.Target.FactionId) ||
                 o.Kind == PolicyKind.Scout && (o.Target.Kind != ScopeKind.Army && o.Target.Kind != ScopeKind.Region || o.Target.Kind == ScopeKind.Army && world.Armies[o.Target.Id - 1].Definition.Role != "scout" ||
-                    o.Goal.Kind != GoalKind.Point && o.Goal.Kind != GoalKind.Outpost)) return ReasonCode.InvalidPayload;
+                    o.Goal.Kind != GoalKind.Point && o.Goal.Kind != GoalKind.Outpost && !(world.Config.Economy.ExploreScouting && o.Goal.Kind == GoalKind.None && o.Target.Kind == ScopeKind.Army))) return ReasonCode.InvalidPayload;
             if ((o.Source == CommandSource.Ai || o.Source == CommandSource.Tactic) &&
                 ((o.Expiration.Flags & ExpireFlags.ObservationTooOld) == 0 || o.Expiration.MaxObservationAgeTicks < 0)) return ReasonCode.InvalidPayload;
             if (o.Parents.Any(p => !ValidScope(p.Scope) || p.Scope.FactionId != o.Target.FactionId) ||

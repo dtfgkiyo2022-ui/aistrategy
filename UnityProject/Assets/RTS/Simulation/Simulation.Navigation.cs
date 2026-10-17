@@ -26,6 +26,7 @@ namespace Rts.Simulation
             if (IsPushWaveStagingPathArmy(a.Definition.Id)) return pushWaveStates[faction - 1].StagingPoint;
             if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
             if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
+            if (a.ExplorePatrolActive) return a.ExploreHasGoal ? a.ExploreGoal : own;
             if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
             if (a.Decision.Assignment != AssignmentKind.Advance && a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);
