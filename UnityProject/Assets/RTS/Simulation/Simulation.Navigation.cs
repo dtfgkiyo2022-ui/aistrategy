@@ -110,14 +110,18 @@ namespace Rts.Simulation
                         }
                         soldier.Joining = false; soldier.LocalPath = null;
                     }
-                    if (world.Config.Economy.DirectPathMovement && humanFocus && soldier.Initial.Kind == UnitKind.Scout && !a.PathImpossible
-                        && Clear(soldier.Position, goal, a.Definition.FactionId))
+                    // Once a human scout was given a clear two-cell direct route, do not re-evaluate the line from the
+                    // clipped position every tick.  Re-evaluation can reject the same route at a cell boundary and send
+                    // the scout back to the route's start centre, producing a small loop around an obstacle corner.
+                    bool directScoutPath = world.Config.Economy.DirectPathMovement && humanFocus
+                        && soldier.Initial.Kind == UnitKind.Scout && !a.PathImpossible && a.Path.Length == 2;
+                    if (directScoutPath)
                     {
                         participants = true;
                         soldier.Joining = false;
                         soldier.LocalPath = null;
                         soldier.MoveGoal = goal;
-                        if (!InRange(soldier.Position, goal, Fix64.FromRatio(1, 10))) arrived = false;
+                        if (!InRange(soldier.Position, goal, soldier.StepDistance)) arrived = false;
                         continue;
                     }
                     participants = true;
@@ -133,7 +137,8 @@ namespace Rts.Simulation
                     {
                         soldier.SlotWaitTarget = target; soldier.SlotWaitSinceTick = world.Tick; soldier.SlotWaitTimedOut = false;
                     }
-                    if (!InRange(soldier.Position, target, Fix64.FromRatio(1, 10)))
+                    var arrivalRadius = world.Config.Economy.DirectPathMovement ? soldier.StepDistance : Fix64.FromRatio(1, 10);
+                    if (!InRange(soldier.Position, target, arrivalRadius))
                     {
                         if (!soldier.SlotWaitTimedOut && world.Tick - soldier.SlotWaitSinceTick >= FormationWaitTicks)
                             soldier.SlotWaitTimedOut = true;

@@ -88,6 +88,7 @@
     <Compile Include="GoldTests.cs" />
     <Compile Include="MovementStallProbeTests.cs" />
     <Compile Include="MovementStallTests.cs" />
+    <Compile Include="MoveFix2Tests.cs" />
     <Compile Include="GridMapCacheTests.cs" />
     <Compile Include="BridgeTests.cs" />
     <Compile Include="CivRegistryTests.cs" />
