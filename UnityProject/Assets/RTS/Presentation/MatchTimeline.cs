@@ -71,7 +71,7 @@ namespace Rts.Presentation
                 if (!known)
                 {
                     Add(command.AcceptedTick, Source(command.Source) + UiText.T(" order #", "の命令 #") + command.CommandId + "：" + Target(command.Target)
-                        + UiText.T(" ", "に") + Policy(command.Kind));
+                        + UiText.T(" ", "に") + Policy(command.Kind, command.Goal));
                 }
                 if (known && previous == command.Status) continue;
                 commandStatus[command.CommandId] = command.Status;
@@ -162,7 +162,7 @@ namespace Rts.Presentation
             }
         }
 
-        private static string Policy(PolicyKind kind)
+        private static string Policy(PolicyKind kind, PolicyGoal goal)
         {
             switch (kind)
             {
@@ -171,7 +171,7 @@ namespace Rts.Presentation
                 case PolicyKind.Retreat: return UiText.T("retreat", "撤退");
                 case PolicyKind.MaintainReserve: return UiText.T("keep a reserve", "予備を保つ");
                 case PolicyKind.Defend: return UiText.T("defend", "防衛");
-                case PolicyKind.Scout: return UiText.T("scout", "偵察");
+                case PolicyKind.Scout: return goal.Kind == GoalKind.None ? UiText.T("scout (patrol)", "偵察（巡回）") : UiText.T("scout", "偵察");
                 case PolicyKind.ReturnToAuto: return UiText.T("back to auto", "お任せに戻す");
                 default: return kind.ToString();
             }

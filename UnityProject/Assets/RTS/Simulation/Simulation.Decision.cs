@@ -17,6 +17,92 @@ namespace Rts.Simulation
         // One state per faction: unlike the old per-army target timer this describes a shared attack.
         private readonly FactionOffenseMemory[] offenseMemory = { new FactionOffenseMemory(), new FactionOffenseMemory() };
 
+        private bool ExploreScoutingOn => world.Config.Economy.ExploreScouting;
+
+        private bool IsScoutArmy(ArmyState army)
+        {
+            bool any = false;
+            foreach (uint id in army.SoldierIds)
+            {
+                var soldier = world.Soldiers[id - 1];
+                if (soldier.Initial.Kind != UnitKind.Scout) return false;
+                if (soldier.Alive) any = true;
+            }
+            return any;
+        }
+
+        private bool ExploreAnyReturning(ArmyState army)
+        {
+            foreach (uint id in army.SoldierIds)
+                if (world.Soldiers[id - 1].Alive && world.Soldiers[id - 1].Pursuit.Returning) return true;
+            return false;
+        }
+
+        private bool ExploreArrived(ArmyState army)
+        {
+            if (!army.ExploreHasGoal) return false;
+            var live = army.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
+            return live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, army.ExploreGoal, Fix64.FromInt(4)));
+        }
+
+        private void UpdateExplorePatrol(uint faction, ref ArmyState army)
+        {
+            if (!ExploreScoutingOn || !IsScoutArmy(army))
+            {
+                army.ExplorePatrolActive = false; army.ExplorePatrolAuto = false; army.ExploreHasGoal = false;
+                return;
+            }
+            bool manualPatrol = army.Policy == PolicyKind.Scout && army.Goal.Kind == GoalKind.None;
+            bool autoPatrol = army.Policy == 0 && (world.Tick <= world.Config.Economy.ExploreAutoUntilTick
+                || army.ExplorePatrolActive && ExploreAnyReturning(army));
+            if (!manualPatrol && !autoPatrol)
+            {
+                army.ExplorePatrolActive = false; army.ExplorePatrolAuto = false; army.ExploreHasGoal = false;
+                army.HasPathGoal = false;
+                return;
+            }
+            if (ExploreAnyReturning(army))
+            {
+                if (HomeArrived(army))
+                {
+                    foreach (uint id in army.SoldierIds) world.Soldiers[id - 1].Pursuit = default;
+                    army.ExploreRetargetTick = world.Tick;
+                    army.ExploreHasGoal = false;
+                    army.HasPathGoal = false;
+                }
+                army.ExplorePatrolActive = true;
+                army.ExplorePatrolAuto = autoPatrol && !manualPatrol;
+                return;
+            }
+            if (!army.ExplorePatrolActive || army.ExplorePatrolAuto != (autoPatrol && !manualPatrol))
+            {
+                army.ExplorePatrolActive = true;
+                army.ExplorePatrolAuto = autoPatrol && !manualPatrol;
+                army.ExploreRetargetTick = world.Tick;
+                army.ExploreHasGoal = false;
+                army.HasPathGoal = false;
+            }
+            if (world.Tick < army.ExploreRetargetTick && !ExploreArrived(army)) return;
+
+            var passable = new bool[world.Config.Map.WidthCells * world.Config.Map.HeightCells];
+            for (int cell = 0; cell < passable.Length; cell++) passable[cell] = world.Map.IsPassableFor(cell, faction);
+            var avoid = army.ExploreAvoidUntilTick >= world.Tick
+                ? new[] { new ExploreAvoidChunk(army.ExploreAvoidChunkX, army.ExploreAvoidChunkZ, army.ExploreAvoidUntilTick) }
+                : Array.Empty<ExploreAvoidChunk>();
+            var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            var target = ExploreDecision.NextTarget(world.Factions[faction - 1].ExploredCells,
+                world.Config.Map.WidthCells, world.Config.Map.HeightCells, world.Config.Map.CellSizeMeters,
+                world.Config.Economy.ExploreChunkCells, world.Config.Economy.ExploreMinUnexploredPermille,
+                core, passable, avoid, world.Tick, world.Config.Economy.ExploreAvoidChunks);
+            bool changed = army.ExploreHasGoal != target.HasTarget || target.HasTarget && !SamePoint(army.ExploreGoal, target.Position);
+            army.ExplorePatrolActive = true;
+            army.ExploreHasGoal = target.HasTarget;
+            army.ExploreGoal = target.Position;
+            army.ExploreGoalChunkX = target.ChunkX; army.ExploreGoalChunkZ = target.ChunkZ;
+            army.ExploreRetargetTick = checked(world.Tick + world.Config.Economy.ExploreRetargetTicks);
+            if (changed) army.HasPathGoal = false;
+        }
+
         private PolicyView ArmyPolicy(uint id)
         {
             var a = world.Armies[id - 1];
@@ -149,8 +235,10 @@ namespace Rts.Simulation
                     if (old.Goal.Kind != a.Decision.Goal.Kind || old.Goal.Id != a.Decision.Goal.Id || !SamePoint(old.Goal.Point, a.Decision.Goal.Point) || old.Returning != a.Decision.Returning || old.Assignment != a.Decision.Assignment)
                     {
                         a.HasPathGoal = false;
-                    }
                 }
+                foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
+                    UpdateExplorePatrol(f, ref world.Armies[view.Id - 1]);
+            }
             }
             if (world.Tick % 20 == 0) lastAllocationTick = world.Tick;
         }
@@ -225,6 +313,15 @@ namespace Rts.Simulation
                 w.Value(n + "InferiorTicks", a.Decision.InferiorTicks); w.Value(n + "Returning", a.Decision.Returning); w.Value(n + "InferiorSince", a.Decision.InferiorSince);
                 w.Value(n + "HoldUntilTick", a.Decision.HoldUntilTick); w.Ids(n + "StartIds", a.AutoStartIds ?? Array.Empty<uint>());
                 w.Value(n + "OffensiveSince", a.Decision.OffensiveSince); w.Value(n + "SuppressUntilTick", a.Decision.SuppressUntilTick); w.Goal(n + "SuppressedGoal", a.Decision.SuppressedGoal);
+                if (ExploreScoutingOn)
+                {
+                    w.Value(n + "ExplorePatrolActive", a.ExplorePatrolActive); w.Value(n + "ExplorePatrolAuto", a.ExplorePatrolAuto);
+                    w.Value(n + "ExploreHasGoal", a.ExploreHasGoal); w.Point(n + "ExploreGoal", a.ExploreGoal);
+                    w.Value(n + "ExploreGoalChunkX", a.ExploreGoalChunkX); w.Value(n + "ExploreGoalChunkZ", a.ExploreGoalChunkZ);
+                    w.Value(n + "ExploreRetargetTick", a.ExploreRetargetTick);
+                    w.Value(n + "ExploreAvoidChunkX", a.ExploreAvoidChunkX); w.Value(n + "ExploreAvoidChunkZ", a.ExploreAvoidChunkZ);
+                    w.Value(n + "ExploreAvoidUntilTick", a.ExploreAvoidUntilTick);
+                }
             }
             for (int i = 0; i < world.SoldierCount; i++)
             {

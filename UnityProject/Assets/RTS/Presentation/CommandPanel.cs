@@ -283,7 +283,10 @@ namespace Rts.Presentation
                 wait = UiText.T(" waiting for the reply (", " 返答待ち（") + Seconds(frame.Tick - command.AcceptedTick) + ")";
             else if (command.Status == CommandStatus.Pending)
                 wait = UiText.T(" applies in ", " 適用まで ") + Seconds(command.ApplyTick - frame.Tick);
-            return "#" + command.CommandId + " " + command.Kind + " " + command.Target.Kind + " " + command.Target.Id
+            string kind = command.Kind == PolicyKind.Scout && command.Goal.Kind == GoalKind.None
+                ? UiText.T("Scout (patrol)", "偵察（巡回）")
+                : command.Kind.ToString();
+            return "#" + command.CommandId + " " + kind + " " + command.Target.Kind + " " + command.Target.Id
                 + " [" + command.Status + "]" + wait + reason;
         }
 
@@ -320,6 +323,9 @@ namespace Rts.Presentation
                 GUI.enabled = armySelected;
                 if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), awaitingGround ? UiText.T("Attack: click ground", "攻撃：地面をクリック") : UiText.T("Attack (pick ground)", "攻撃（地点を選ぶ）")))
                     BeginAttackPick();
+                y += ButtonHeight + 4f;
+                if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Scout (patrol)", "偵察（巡回）")))
+                    IssueScoutPatrol();
                 y += ButtonHeight + 4f;
                 if (GUI.Button(new Rect(buttons.x + 4f, y, ButtonWidth, ButtonHeight), UiText.T("Retreat", "撤退")))
                     IssueRetreat();
@@ -964,6 +970,15 @@ namespace Rts.Presentation
             foreach (uint army in SelectedArmies())
                 Send(PolicyKind.Retreat, ArmyScope(army), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0,
                     UiText.T("Retreat Army ", "撤退 軍団 ") + army);
+        }
+
+        /// <summary>Sends a destination-free scout order; the simulation chooses the next unexplored chunk.</summary>
+        public void IssueScoutPatrol()
+        {
+            if (port == null || view == null || view.Selected.Kind != SelectionKind.Army) return;
+            foreach (uint army in SelectedArmies())
+                Send(PolicyKind.Scout, ArmyScope(army), new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 0,
+                    UiText.T("Scout (patrol) Army ", "偵察（巡回） 軍団 ") + army);
         }
 
         /// <summary>Sends defend-own-core for every currently selected army through ICommandPort.</summary>

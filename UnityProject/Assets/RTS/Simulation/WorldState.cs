@@ -45,6 +45,10 @@ namespace Rts.Simulation
         internal int PathCursor, AutoStage;
         internal SimPoint PathGoal;
         internal bool HasPathGoal, PathImpossible;
+        internal bool ExplorePatrolActive, ExplorePatrolAuto, ExploreHasGoal;
+        internal int ExploreGoalChunkX, ExploreGoalChunkZ, ExploreAvoidChunkX, ExploreAvoidChunkZ;
+        internal SimPoint ExploreGoal;
+        internal long ExploreRetargetTick, ExploreAvoidUntilTick;
         internal PolicyKind Policy;
         internal PolicyGoal Goal;
         internal ulong CommandId, LogIndex;
@@ -589,6 +593,10 @@ namespace Rts.Simulation
             Require(!e.BuildingReservations || (e.Enabled && e.ReservationLimit > 0 && e.ReservationCheckTicks > 0),
                 "Invalid building-reservation rules.");
             Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
+            Require(!e.ExploreScouting || e.ExploreChunkCells > 0 && e.ExploreChunkCells <= 64
+                && e.ExploreMinUnexploredPermille >= 0 && e.ExploreMinUnexploredPermille <= 1000
+                && e.ExploreRetargetTicks > 0 && e.ExploreAvoidChunks >= 0 && e.ExploreAvoidTicks >= 0
+                && e.ExploreAutoUntilTick >= 0, "Invalid exploration rules.");
             Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
             Require(!e.AiBelts || (e.Enabled && e.Industry && e.Ages && e.AiBeltWoodReserve >= 0), "Invalid AI-belt rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
@@ -1040,7 +1048,10 @@ namespace Rts.Simulation
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
-                  ResourceFog = e.ResourceFog,
+                  ResourceFog = e.ResourceFog, ExploreScouting = e.ExploreScouting,
+                  ExploreChunkCells = e.ExploreChunkCells, ExploreMinUnexploredPermille = e.ExploreMinUnexploredPermille,
+                  ExploreRetargetTicks = e.ExploreRetargetTicks, ExploreAvoidChunks = e.ExploreAvoidChunks,
+                  ExploreAvoidTicks = e.ExploreAvoidTicks, ExploreAutoUntilTick = e.ExploreAutoUntilTick,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,
                   BrickKilnWork = e.BrickKilnWork, BrickKilnHp = e.BrickKilnHp, BrickTicks = e.BrickTicks,
                   BrickStoneInput = e.BrickStoneInput, BrickCharcoalInput = e.BrickCharcoalInput, BricksPerWall = e.BricksPerWall,

@@ -19,6 +19,10 @@
                         <ui:Label class="command-key-hint" />
                     </ui:VisualElement>
                     <ui:VisualElement class="command-cell">
+                        <ui:Button name="command-scout" class="command-button" />
+                        <ui:Label class="command-key-hint" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="command-cell">
                         <ui:Button name="command-retreat" class="command-button" />
                         <ui:Label class="command-key-hint" />
                     </ui:VisualElement>

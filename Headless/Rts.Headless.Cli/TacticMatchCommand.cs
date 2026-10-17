@@ -41,6 +41,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--craft-balance-off")) scenario.Economy.CraftBalance = false;
         if (options.ContainsKey("--resource-fog-off")) scenario.Economy.ResourceFog = false;
+        if (options.ContainsKey("--explore-scouting-off")) scenario.Economy.ExploreScouting = false;
         if (options.ContainsKey("--craft-tree1-off")) scenario.Economy.CraftTree1 = false;
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
@@ -113,6 +114,14 @@ internal static class TacticMatchCommand
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             resourceFogTrace = new StreamWriter(resourceFogTracePath, false, new UTF8Encoding(false));
         }
+        StreamWriter exploreTrace = null;
+        int[] firstEnemyCoreSeen = { -1, -1 };
+        if (options.TryGetValue("--explore-trace-out", out var exploreTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(exploreTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            exploreTrace = new StreamWriter(exploreTracePath, false, new UTF8Encoding(false));
+        }
         // --timing-out: average milliseconds of one gateway step per 1000 ticks (tick,ms), to see a match slow down.
         var timing = options.ContainsKey("--timing-out") ? new List<string> { "tick,stepMs" } : null;
         double stepMs = 0;
@@ -135,6 +144,20 @@ internal static class TacticMatchCommand
             pack?.RecordTactic(eastResult, 2, eastName);
             long stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
+            if (exploreTrace != null)
+            {
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var frame = simulation.Capture(faction);
+                    uint enemyCore = faction == 1 ? 2U : 1U;
+                    var core = frame.Objectives.FirstOrDefault(o => o.Kind == GoalKind.Core && o.Id == enemyCore);
+                    if (firstEnemyCoreSeen[faction - 1] < 0 && core.LastSeenTick > 0)
+                        firstEnemyCoreSeen[faction - 1] = checked((int)core.LastSeenTick);
+                }
+                long traceTick = simulation.Capture(1).Tick;
+                if (traceTick == 2400 || traceTick == 4800 || traceTick == 7200)
+                    WriteExploreTrace(exploreTrace, scenario, simulation.Capture(1), simulation.Capture(2), firstEnemyCoreSeen);
+            }
             if (resourceFogTrace != null)
             {
                 var frame = simulation.Capture(1);
@@ -202,6 +225,18 @@ internal static class TacticMatchCommand
             factions = new[] { simulation.Capture(1).Economy?.Civ.ToString(), simulation.Capture(2).Economy?.Civ.ToString() }
         }));
         resourceFogTrace?.Dispose();
+        if (exploreTrace != null)
+        {
+            exploreTrace.WriteLine(JsonSerializer.Serialize(new
+            {
+                @event = "summary",
+                tick = simulation.Capture(1).Tick,
+                ended = simulation.Capture(1).Result.HasEnded,
+                winner = simulation.Capture(1).Result.WinnerFactionId,
+                firstEnemyCoreSeen
+            }));
+            exploreTrace.Dispose();
+        }
         researchTrace?.WriteLine("{\"event\":\"summary\",\"thresholdTick\":" + firstBooksThresholdTick + ",\"researchStarts\":" + researchStarts + ",\"researchCompletions\":" + researchCompletions + ",\"finalBooks\":" + (simulation.Capture(1).Economy?.Books ?? 0) + "}");
         researchTrace?.Dispose();
         if (timing != null) File.WriteAllLines(options["--timing-out"], timing, new UTF8Encoding(false));
@@ -247,6 +282,26 @@ internal static class TacticMatchCommand
                     ? scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)])
                     : scenario.ResourceNodes.Length,
                 shownResourcePoints = frame.Economy?.Resources?.Count ?? 0
+            })
+        }));
+        writer.Flush();
+    }
+
+    private static void WriteExploreTrace(StreamWriter writer, ScenarioDefinition scenario,
+        FactionFrame west, FactionFrame east, int[] firstEnemyCoreSeen)
+    {
+        writer.WriteLine(JsonSerializer.Serialize(new
+        {
+            @event = "checkpoint",
+            tick = west.Tick,
+            exploreScouting = scenario.Economy.ExploreScouting,
+            factions = new[] { west, east }.Select((frame, index) => new
+            {
+                factionId = frame.FactionId,
+                exploredPermille = frame.Fog.ExploredCells.Count(value => value) * 1000 / Math.Max(1, frame.Fog.ExploredCells.Count),
+                scoutAlive = frame.Observation.OwnArmies.Any(army => army.Kind == UnitKind.Scout && army.AliveCount > 0),
+                firstEnemyCoreSeenTick = firstEnemyCoreSeen[index],
+                knownResourcePoints = scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)])
             })
         }));
         writer.Flush();
