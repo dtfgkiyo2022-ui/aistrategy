@@ -63,6 +63,7 @@ namespace Rts.Simulation
                     DecideBuildings(faction);
                     DecideTownVillagers(faction);
                     DecideIndustry(faction);
+                    DecideInserters(faction);
                     DecideTollgate(faction);
                     DecideCavalryStable(faction);
                 }
@@ -129,6 +130,7 @@ namespace Rts.Simulation
             RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();
+            AdvanceInserters();
             ApplyBrickUpgrades();
             RepairMasonryCoresWithBricks();
             ApplyRationsHealing();

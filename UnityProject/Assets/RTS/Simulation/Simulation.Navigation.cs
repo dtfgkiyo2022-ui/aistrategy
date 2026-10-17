@@ -17,14 +17,16 @@ namespace Rts.Simulation
         {
             uint faction = a.Definition.FactionId;
             var own = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-            if (IsPushWaveStagingPathArmy(a.Definition.Id)) return pushWaveStates[faction - 1].StagingPoint;
-            if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
-            if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
-            if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
+            // A player's right-click comes first: the automatic decision may still mark the army as returning to the
+            // core after losses, which kept a selected army standing by the castle (10-17 test play).
             var command = a.CommandId == 0 ? null : CommandById(a.CommandId);
             if (world.Config.Economy.DirectPathMovement && a.Policy == PolicyKind.Focus && command != null
                 && command.Order.Source == CommandSource.Human)
                 return GoalPosition(a.Goal);
+            if (IsPushWaveStagingPathArmy(a.Definition.Id)) return pushWaveStates[faction - 1].StagingPoint;
+            if (a.Policy == PolicyKind.Retreat) return a.Goal.Kind == GoalKind.None ? own : GoalPosition(a.Goal);
+            if (a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick) return own;
+            if (a.Policy == PolicyKind.Defend || a.Policy == PolicyKind.Scout) return GoalPosition(a.Goal);
             if (a.Decision.Assignment != AssignmentKind.Advance && a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
             if (a.Policy == PolicyKind.Focus) return GoalPosition(a.Goal);
             if (a.Decision.Goal.Kind != GoalKind.None) return GoalPosition(a.Decision.Goal);
@@ -72,7 +74,8 @@ namespace Rts.Simulation
                     ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
                     if (!soldier.Alive) continue;
                     var intended = soldier.MoveGoal;
-                    bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning;
+                    bool returning = !(world.Config.Economy.DirectPathMovement && humanFocus)
+                        && (a.Policy == PolicyKind.Retreat || a.Decision.Returning);
                     bool atPosition = SamePoint(intended, soldier.Position);
                     if (atPosition && !returning) continue;
                     if (!SamePoint(intended, goal) && !(returning && atPosition))

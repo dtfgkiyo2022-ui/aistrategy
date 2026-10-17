@@ -110,7 +110,8 @@ namespace Rts.Simulation
                 uint faction = s.Initial.FactionId;
                 var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
                 var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-                bool returning = a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick;
+                bool returning = !(hasHumanCommand && a.Policy == PolicyKind.Focus)
+                    && (a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick);
                 var mission = IsPushWaveAssaultSoldier(s.Initial.Id) ? ArmyGoal(a)
                     : PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
                         ? pushWaveStates[faction - 1].StagingPoint : ArmyGoal(a);

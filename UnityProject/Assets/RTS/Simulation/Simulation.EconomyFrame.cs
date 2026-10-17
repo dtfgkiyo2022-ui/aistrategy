@@ -331,6 +331,8 @@ namespace Rts.Simulation
                 ageClockUx: AgeClockUxOn,
                 commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
                 drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0,
+                inserters: InsertersOn, inserterWoodCost: InsertersOn ? rules.InserterWoodCost : 0,
+                inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0,
                 easyRebuild: EasyRebuildOn);
         }
 

@@ -147,7 +147,7 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>V3-20 belt cell variants. None is the original straight belt.</summary>
-    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4 }
+    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4, Inserter = 5 }
 
     /// <summary>V3-20 belt speed. Normal is the existing BeltTicksPerCell rule.</summary>
     public enum BeltSpeed : byte { Normal = 0, Fast = 1 }

@@ -88,6 +88,9 @@ namespace Rts.Simulation
         private const int CommonDrillExtensionId = 47;
         private const int CommonDrillExtensionVersion = 1;
         private const int CommonDrillExtensionDataLength = 7 * sizeof(int);
+        private const int InserterExtensionId = 48;
+        private const int InserterExtensionVersion = 1;
+        private const int InserterExtensionDataLength = 4 * sizeof(int);
         private const int EasyRebuildExtensionId = 49;
         private const int EasyRebuildExtensionVersion = 1;
         private const int EasyRebuildExtensionDataLength = 2 * sizeof(int);
@@ -236,6 +239,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(DirectPathMovementExtensionId, DirectPathMovementExtensionVersion, DirectPathMovementExtensionDataLength)
             ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
+            ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
             ,new ExtensionRegistration(EasyRebuildExtensionId, EasyRebuildExtensionVersion, EasyRebuildExtensionDataLength)
          };
 
@@ -807,6 +811,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
                     else if (id == StorageFeedsProcessingExtensionId) ReadStorageFeedsProcessingExtension(extension, c.Economy);
                     else if (id == CommonDrillExtensionId) ReadCommonDrillExtension(extension, c.Economy);
+                    else if (id == InserterExtensionId) ReadInserterExtension(extension, c.Economy);
                     else if (id == EasyRebuildExtensionId) ReadEasyRebuildExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
@@ -907,7 +912,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree2ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2));
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
-                extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
                 extensions.RemoveAll(extension => extension != null && extension.Id == EasyRebuildExtensionId && !c.Economy.EasyRebuild);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1092,6 +1098,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateCommonDrillExtension(c.Economy);
                     }
                 if (c.Economy.CommonDrill && !hasCommonDrill) extensions.Add(CreateCommonDrillExtension(c.Economy));
+                bool hasInserters = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == InserterExtensionId)
+                    {
+                        hasInserters = true;
+                        extensions[i] = CreateInserterExtension(c.Economy);
+                    }
+                if (c.Economy.Inserters && !hasInserters) extensions.Add(CreateInserterExtension(c.Economy));
                 bool hasBricks = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == BricksExtensionId)
@@ -1914,6 +1928,34 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.DrillSizeCells = reader.ReadInt32(); e.DrillWoodCost = reader.ReadInt32(); e.DrillStoneCost = reader.ReadInt32();
                 e.DrillWork = reader.ReadInt32(); e.DrillHp = reader.ReadInt32(); e.DrillIntervalTicks = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing common-drill extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateInserterExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.Inserters ? 1 : 0);
+                writer.Write(e.InserterWoodCost);
+                writer.Write(e.InserterIntervalTicks);
+                writer.Write(e.AiInserterCoreReserve);
+                return new ScenarioExtensionData { Id = InserterExtensionId, Version = InserterExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadInserterExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid inserter flag.");
+                e.Inserters = enabled != 0;
+                e.InserterWoodCost = reader.ReadInt32();
+                e.InserterIntervalTicks = reader.ReadInt32();
+                e.AiInserterCoreReserve = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing inserter extension data.");
             }
         }
 

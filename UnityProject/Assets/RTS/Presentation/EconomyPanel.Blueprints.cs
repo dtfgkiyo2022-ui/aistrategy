@@ -134,6 +134,8 @@ namespace Rts.Presentation
                     port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, absolute, belt.Facing));
                 else if (belt.Component == BeltComponentKind.Sorter)
                     port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, absolute, belt.Facing, belt.SorterKind));
+                else if (belt.Component == BeltComponentKind.Inserter)
+                    port.SubmitEconomy(EconomyCommand.PlaceInserter(faction, ++sequence, absolute, belt.Facing, belt.SorterKind));
                 else if (belt.Component == BeltComponentKind.UndergroundEntrance && belt.PairCell >= 0)
                     port.SubmitEconomy(EconomyCommand.PlaceUnderground(faction, ++sequence, absolute,
                         cell + belt.PairCell % activeBlueprint.Width + (belt.PairCell / activeBlueprint.Width) * MapWidthCells, belt.Facing));

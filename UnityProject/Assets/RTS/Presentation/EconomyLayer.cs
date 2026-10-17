@@ -1368,6 +1368,33 @@ namespace Rts.Presentation
             CreateBeltEdge(plate.transform, "Belt edge R", 0.48f);
             if (component != BeltComponentKind.None)
             {
+                if (component == BeltComponentKind.Inserter)
+                {
+                    var basePart = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    basePart.name = "Inserter base";
+                    Destroy(basePart.GetComponent<Collider>());
+                    basePart.transform.SetParent(plate.transform, false);
+                    basePart.transform.localPosition = new Vector3(0f, 1.2f, 0f);
+                    basePart.transform.localScale = new Vector3(0.9f, 0.45f, 0.9f);
+                    basePart.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.95f, 0.65f, 0.15f));
+                    var arm = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    arm.name = "Inserter arm";
+                    Destroy(arm.GetComponent<Collider>());
+                    arm.transform.SetParent(plate.transform, false);
+                    arm.transform.localPosition = new Vector3(0f, 2.05f, 0f);
+                    arm.transform.localScale = new Vector3(0.18f, 0.9f, 0.18f);
+                    arm.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(0.85f, 0.45f, 0.08f));
+                    var arrow = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    arrow.name = "Inserter arrow";
+                    Destroy(arrow.GetComponent<Collider>());
+                    arrow.transform.SetParent(plate.transform, false);
+                    arrow.transform.localPosition = new Vector3(0f, 2.65f, 0.18f);
+                    arrow.transform.localRotation = Quaternion.Euler(35f, 0f, 0f);
+                    arrow.transform.localScale = new Vector3(0.28f, 0.12f, 0.45f);
+                    arrow.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(new Color(1f, 0.85f, 0.2f));
+                }
+                else
+                {
                 var part = GameObject.CreatePrimitive(component == BeltComponentKind.Splitter ? PrimitiveType.Cylinder : PrimitiveType.Cube);
                 part.name = "Belt component";
                 Destroy(part.GetComponent<Collider>());
@@ -1379,6 +1406,7 @@ namespace Rts.Presentation
                     component == BeltComponentKind.Sorter ? new Color(0.75f, 0.35f, 0.95f)
                     : component == BeltComponentKind.Splitter ? new Color(0.95f, 0.75f, 0.2f)
                     : new Color(0.3f, 0.35f, 0.45f));
+                }
             }
             beltComponents[cell] = component;
         }

@@ -21,6 +21,7 @@ namespace Rts.Simulation
             foreach (int cell in world.BeltOrder)
             {
                 ref var belt = ref world.Belts[cell];
+                if (belt.Component == BeltComponentKind.Inserter) continue;
                 if (belt.Item == 0) continue;
                 int ticksPerCell = BeltTicksFor(belt);
                 if (belt.Progress < ticksPerCell) belt.Progress++;
@@ -35,6 +36,7 @@ namespace Rts.Simulation
                 ref var target = ref world.Belts[next];
                 if (target.FactionId == belt.FactionId)
                 {
+                    if (target.Component == BeltComponentKind.Inserter) continue;
                     if (target.Item != 0) continue; // jammed until the cell ahead moves
                     target.Item = belt.Item;
                     target.Progress = 0;
@@ -69,6 +71,7 @@ namespace Rts.Simulation
         {
             if (!world.Config.Economy.BeltComponents || belt.Component == BeltComponentKind.None)
                 return BeltNext(cell, belt.Facing);
+            if (belt.Component == BeltComponentKind.Inserter) return -1;
             if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
             Facing direction = belt.Facing;
             if (belt.Component == BeltComponentKind.Splitter)
@@ -86,7 +89,8 @@ namespace Rts.Simulation
         }
 
         private bool BeltCanReceive(int cell, uint faction)
-            => cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == faction && world.Belts[cell].Item == 0;
+            => cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == faction
+                && world.Belts[cell].Component != BeltComponentKind.Inserter && world.Belts[cell].Item == 0;
 
         private static Facing TurnLeft(Facing facing)
             => (Facing)(((int)facing + 3) % 4);
@@ -133,6 +137,7 @@ namespace Rts.Simulation
         private int BeltPrimaryNext(int cell, BeltState belt)
         {
             if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
+            if (belt.Component == BeltComponentKind.Inserter) return -1;
             return BeltNext(cell, belt.Facing);
         }
 
@@ -268,8 +273,11 @@ namespace Rts.Simulation
             if (owned >= rules.BeltLimit) return;
             if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
-            BeltComponentKind component = c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
-            int cost = component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
+            BeltComponentKind component = c.IsInserter ? BeltComponentKind.Inserter
+                : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
+            if (component == BeltComponentKind.Inserter && !rules.Inserters) return;
+            int cost = component == BeltComponentKind.Inserter ? rules.InserterWoodCost
+                : component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
             if (economy.Wood < cost) return;
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };

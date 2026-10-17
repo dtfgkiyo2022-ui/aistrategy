@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Inserter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -132,6 +132,7 @@ namespace Rts.Presentation
             if (mode == Mode.MoveBuilding && TrySelectedBuilding(out BuildingView selectedBuilding)) kind = selectedBuilding.Kind;
             if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.Inserter) { port.SubmitEconomy(EconomyCommand.PlaceInserter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
@@ -406,7 +407,7 @@ namespace Rts.Presentation
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
-            if (mode == Mode.Sorter && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
+            if ((mode == Mode.Sorter || mode == Mode.Inserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
@@ -502,7 +503,7 @@ namespace Rts.Presentation
             float notesY = rect.yMax - 24f;
             string hint = mode == Mode.None ? null : mode == Mode.Wall ? UiText.T("Drag near your base; a wall never shuts the way to the enemy.", "自陣の近くをドラッグ。敵への道を完全には塞げない")
                 : mode == Mode.Belt || mode == Mode.FastBelt ? UiText.T("Belts carry toward the stripe. R sets a single cell's direction.", "ベルトは白い線の向きに運ぶ。1マスだけなら R で向き")
-                : mode == Mode.Sorter ? UiText.T("T changes the resource sent left; click to place.", "Tで左へ送る資源を変更。クリックで配置")
+                 : mode == Mode.Sorter || mode == Mode.Inserter ? UiText.T("T changes the selected resource; click to place.", "Tで選択資源を変更。クリックで配置")
                 : mode == Mode.RemoveBelt ? UiText.T("Click a belt of yours.", "外す自分のベルトをクリック")
                 : UiText.T("Click the ground (Esc cancels). R turns the output: ", "地面をクリック（Escで取消）。R で出口の向き：") + FacingName(facing);
             if (hint != null) GUI.Label(new Rect(x, notesY, w, 22f), hint);
@@ -702,6 +703,13 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x, y, half, 22f), Mode.Splitter, UiText.T("Splitter", "分岐"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Sorter, UiText.T("Sorter: ", "仕分け：") + SorterKindName(sorterKind));
                 y += 26f;
+                if (economy.Inserters)
+                {
+                    ModeButton(new Rect(x, y, half, 22f), Mode.Inserter,
+                        UiText.T("Inserter (wood ", "投入機（木材 ") + economy.InserterWoodCost + UiText.T(")", "）")
+                        + " / " + SorterKindName(sorterKind));
+                    y += 26f;
+                }
                 ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
                 y += 26f;

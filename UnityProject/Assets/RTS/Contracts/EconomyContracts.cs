@@ -90,8 +90,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public uint TargetId { get; }
         /// <summary>V3-20: the paired exit cell for an underground entrance.</summary>
         public int PairCell => unchecked((int)ProducerId);
-        /// <summary>V3-20: the resource selected by a sorter.</summary>
-        public ResourceKind SorterKind => (ResourceKind)TargetId;
+        /// <summary>V3-20/V3-34.3: the resource selected by a sorter or inserter.</summary>
+        public ResourceKind SorterKind => (ResourceKind)(TargetId & 0x7fffffffU);
+        /// <summary>V3-34.3: true for an inserter placement using the shared component command.</summary>
+        public bool IsInserter => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x80000000U) != 0;
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
         /// <summary>V3-20: true on a fast-belt placement command.</summary>
@@ -257,6 +259,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public static EconomyCommand PlaceSorter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
                 EconomyTargetKind.None, (uint)kind, false, null, null, facing);
+
+        public static EconomyCommand PlaceInserter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0x80000000U | (uint)kind, false, null, null, facing);
 
         /// <summary>Places an entrance and its exit together. The simulation validates the ray and range.</summary>
         public static EconomyCommand PlaceUnderground(uint faction, ulong sequence, int entrance, int exit, Facing facing)
@@ -666,6 +672,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int DrillWoodCost { get; }
         public int DrillStoneCost { get; }
         public int DrillSizeCells { get; }
+        public bool Inserters { get; }
+        public int InserterWoodCost { get; }
+        public int InserterIntervalTicks { get; }
         public int SmelterWoodCost { get; }
         public int MineSizeCells { get; }
         public int SmelterSizeCells { get; }
@@ -1094,7 +1103,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               int mechanismBuildingTimePermille = 0, int mechanismBuildingMaterialPermille = 0,
               int mechanismResearchCostPermille = 0, int mechanismResearchTimePermille = 0,
              long civChoiceDeadlineTick = 0, bool ageClockUx = false,
-             bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0, bool easyRebuild = false)
+             bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0,
+             bool inserters = false, int inserterWoodCost = 0, int inserterIntervalTicks = 0, bool easyRebuild = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1209,6 +1219,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             Policy = policy;
             InfantryMetalCost = infantryMetalCost; MineWoodCost = mineWoodCost; SmelterWoodCost = smelterWoodCost;
             CommonDrill = commonDrill; DrillWoodCost = drillWoodCost; DrillStoneCost = drillStoneCost; DrillSizeCells = drillSizeCells;
+            Inserters = inserters; InserterWoodCost = inserterWoodCost; InserterIntervalTicks = inserterIntervalTicks;
             MineSizeCells = mineSizeCells; SmelterSizeCells = smelterSizeCells;
             Industry = industry; Ore = ore; Metal = metal; Charcoal = charcoal; Steel = steel; BeltWoodCost = beltWoodCost; BeltTicksPerCell = beltTicksPerCell;
             Belts = ContractList.Copy(belts ?? Array.Empty<BeltView>());

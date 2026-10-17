@@ -128,7 +128,8 @@ namespace Rts.Replay
                     w.Write((uint)e.Cells.Count); for(int i=0;i<e.Cells.Count;i++) { w.Write(e.Cells[i]); w.Write((byte)e.Facings[i]); }
                 }
                 // V3-2: a mine or smelter carries the side of its output; a barracks keeps its V3-1 bytes.
-                if((e.Kind==EconomyCommandKind.PlaceBuilding && e.Building!=BuildingKind.Barracks) || e.Kind==EconomyCommandKind.RotateBuilding || e.Kind==EconomyCommandKind.MoveBuilding) w.Write((byte)e.Facing);
+                if((e.Kind==EconomyCommandKind.PlaceBuilding && e.Building!=BuildingKind.Barracks) || e.Kind==EconomyCommandKind.RotateBuilding
+                    || e.Kind==EconomyCommandKind.PlaceBeltComponent || e.Kind==EconomyCommandKind.MoveBuilding) w.Write((byte)e.Facing);
                 // V3-3: only a policy change carries the policy.
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
