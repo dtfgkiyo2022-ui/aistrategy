@@ -35,6 +35,7 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 if (!b.Alive) continue;
                 bool own = b.FactionId == faction;
+                if (!own && b.Reserved) continue;
                 if (!own && !BuildingVisibleTo(faction, b)) continue;
                 int size = SizeOf(b.Kind);
                 CaravanStopReason caravanReason = CaravanStopReason.None;
@@ -61,7 +62,8 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
                     CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
-                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
+                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None,
+                    b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -331,8 +333,11 @@ namespace Rts.Simulation
                 ageClockUx: AgeClockUxOn,
                 commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
                 drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0,
-                inserters: InsertersOn, inserterWoodCost: InsertersOn ? rules.InserterWoodCost : 0,
-                inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0);
+                  inserters: InsertersOn, inserterWoodCost: InsertersOn ? rules.InserterWoodCost : 0,
+                  inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0,
+                  buildingReservations: BuildingReservationsOn, reservationLimit: BuildingReservationsOn ? rules.ReservationLimit : 0,
+                  reservationCount: BuildingReservationsOn ? ReservationCount(faction) : 0,
+                  reservationCheckTicks: BuildingReservationsOn ? rules.ReservationCheckTicks : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

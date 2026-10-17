@@ -907,6 +907,7 @@ namespace Rts.Presentation
         {
             var lines = new List<string>();
             lines.Add(SelectionInfoText.BuildingDescription(building.Kind));
+            if (building.Reserved) lines.Add(SelectionInfoText.BuildingReservationStatus(building, economy));
 
             CraftRecipe recipe;
             if (CraftVisualRules.TryGetRecipe(building.Kind, out recipe))

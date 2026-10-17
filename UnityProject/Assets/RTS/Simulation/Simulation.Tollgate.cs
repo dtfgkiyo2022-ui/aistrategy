@@ -40,10 +40,14 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= TollgateMaxBuildingsFor(faction)
-                || (byte)command.Facing > 3 || world.Economies[faction - 1].Wood < rules.TollgateWoodCost
-                || world.Economies[faction - 1].Stone < rules.TollgateStoneCost) return;
+                || (byte)command.Facing > 3) return;
             int[] cells = TollgateFootprint(command.Cell, command.Facing);
             if (!TollgateSiteIsClear(faction, cells) || !KeepsMapConnected(faction, cells)) return;
+            if (world.Economies[faction - 1].Wood < rules.TollgateWoodCost || world.Economies[faction - 1].Stone < rules.TollgateStoneCost)
+            {
+                if (BuildingReservationsOn) CreateBuildingReservation(faction, BuildingKind.Tollgate, command.Cell, command.Facing, 0);
+                return;
+            }
             PlaceBuildingAt(faction, BuildingKind.Tollgate, command.Cell, command.Facing, 0);
             world.Buildings[world.BuildingCount - 1].Held = true;
         }

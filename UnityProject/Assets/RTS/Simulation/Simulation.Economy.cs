@@ -14,6 +14,7 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
@@ -124,6 +125,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            AdvanceBuildingReservations();
             RegrowFishing();
             AdvanceBelts();
             AdvanceIndustry();

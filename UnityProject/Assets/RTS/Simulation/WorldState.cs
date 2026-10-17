@@ -161,6 +161,8 @@ namespace Rts.Simulation
         /// <summary>Nearest passable cell outside the footprint, where builders stand and new soldiers appear.</summary>
         internal int WorkCell;
         internal bool Alive, Complete;
+        /// <summary>BuildingReservations: a legal human placement waiting for its first payment.</summary>
+        internal bool Reserved;
         internal int Hp, Progress, Queued;
         /// <summary>V3-11 #2: tick at which an automatic bridge was destroyed; 0 means it has not been destroyed.</summary>
         internal long DestroyedTick;
@@ -584,6 +586,8 @@ namespace Rts.Simulation
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
+            Require(!e.BuildingReservations || (e.Enabled && e.ReservationLimit > 0 && e.ReservationCheckTicks > 0),
+                "Invalid building-reservation rules.");
             Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
             Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
             Require(!e.AiBelts || (e.Enabled && e.Industry && e.Ages && e.AiBeltWoodReserve >= 0), "Invalid AI-belt rules.");
@@ -989,7 +993,9 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
+            return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations,
+                ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
+                StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
@@ -1032,7 +1038,7 @@ namespace Rts.Simulation
                   RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
-                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
+                  RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   ResourceFog = e.ResourceFog,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,

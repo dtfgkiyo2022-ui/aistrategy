@@ -50,6 +50,7 @@ namespace Rts.Presentation
         private const int MaxBuildingEffects = 6;
         // Name tags over the building boxes: until each building has its own look, the boxes are told apart by name.
         private readonly Dictionary<uint, KeyValuePair<BuildingKind, Vector3>> buildingTags = new Dictionary<uint, KeyValuePair<BuildingKind, Vector3>>();
+        private readonly Dictionary<uint, int> buildingReservationOrders = new Dictionary<uint, int>();
         private GUIStyle tagStyle;
         private readonly Dictionary<uint, GameObject> ports = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, Vector3> villagerTargets = new Dictionary<uint, Vector3>();
@@ -310,7 +311,7 @@ namespace Rts.Presentation
         public int BeltDeliveriesPerMinute(int cell) { return flowMetrics.BeltDeliveriesPerMinute(cell); }
 
         /// <summary>Placement preview: a translucent box over the footprint the next click would ask for, or hidden.</summary>
-        public void ShowGhost(bool show, Vector3 center, float size, bool legalLooking)
+        public void ShowGhost(bool show, Vector3 center, float size, bool legalLooking, bool reservation = false)
         {
             if (ghost == null)
             {
@@ -323,7 +324,8 @@ namespace Rts.Presentation
             if (!show) return;
             ghost.transform.position = new Vector3(center.x, 0.5f, center.z);
             ghost.transform.localScale = new Vector3(size, 1f, size);
-            ghost.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(legalLooking ? new Color(0.4f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f));
+            ghost.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.GetUnlit(reservation ? new Color(1f, 0.78f, 0.2f, 0.55f)
+                : legalLooking ? new Color(0.4f, 1f, 0.4f) : new Color(1f, 0.3f, 0.3f));
         }
 
         // Leaving Play mode destroys the villagers without going through Clear; their animation graphs must still go.
@@ -793,6 +795,7 @@ namespace Rts.Presentation
                 float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
+                if (b.Reserved) color = new Color(1f, 0.72f, 0.18f, 0.45f);
                 var p = ToWorld(b.Center);
                 if (packedBuildings.Contains(b.Id))
                 {
@@ -863,6 +866,8 @@ namespace Rts.Presentation
                     SyncBuildingFire(b.Id, b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
+                if (b.Reserved) buildingReservationOrders[b.Id] = b.ReservationOrder;
+                else buildingReservationOrders.Remove(b.Id);
                 SyncBuildingState(b, economy, own, new Vector3(p.x, height, p.z));
                 CraftRecipe recipe = default(CraftRecipe);
                 bool hasRecipe = own && CraftVisualRules.TryGetRecipe(b.Kind, out recipe);
@@ -928,6 +933,7 @@ namespace Rts.Presentation
             var untagged = new List<uint>();
             foreach (var id in buildingTags.Keys) if (!seen.Contains(id)) untagged.Add(id);
             foreach (var id in untagged) buildingTags.Remove(id);
+            foreach (var id in untagged) buildingReservationOrders.Remove(id);
         }
 
         private void RefreshLineHighlights(EconomyView economy, uint ownFaction)
@@ -1214,7 +1220,11 @@ namespace Rts.Presentation
                 if (screen.z <= 0f) continue;
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
-                GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), BuildingName(tag.Key), tagStyle);
+                string label = BuildingName(tag.Key);
+                int order;
+                if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
+                    label += order == 1 ? "【予約・次】" : "【予約" + order + "】";
+                GUI.Label(new Rect(screen.x - 50f, Screen.height - screen.y - 10f, 100f, 20f), label, tagStyle);
             }
         }
 

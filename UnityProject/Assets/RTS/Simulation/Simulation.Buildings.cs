@@ -30,7 +30,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
+                if (!b.Alive || b.Reserved || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
                 hasBarracks = true;
                 barracksCount++;
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
@@ -341,9 +341,9 @@ namespace Rts.Simulation
 
         /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId)
-            => PlaceBuildingAt(faction, kind, origin, facing, nodeId, null, -1);
+            => PlaceBuildingAt(faction, kind, origin, facing, nodeId, null, -1, -1);
 
-        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1)
+        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -387,8 +387,8 @@ namespace Rts.Simulation
                 if (kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
                 else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
             }
-            int index = world.BuildingCount;
-            if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
+            int index = existingIndex >= 0 ? existingIndex : world.BuildingCount;
+            if (existingIndex < 0 && index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
             var footprint = kind == BuildingKind.Bridge ? bridgeCells
                 : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
             if (footprint == null || footprint.Length == 0) return;
@@ -396,12 +396,13 @@ namespace Rts.Simulation
             int workCell = requestedWorkCell >= 0 ? requestedWorkCell
                 : kind == BuildingKind.Town ? NearestReachablePassableCell(FootprintCenter(origin, SizeOf(kind)), faction)
                 : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind)));
-            world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
+            uint buildingId = existingIndex >= 0 ? world.Buildings[index].Id : world.NextBuildingId;
+            world.Buildings[index] = new BuildingState { Id = buildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
                 Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
                 BrickUpgraded = brickDefence, Level = 1, FramesUsed = framesUsed, Facing = facing, NodeId = nodeId };
-            world.NextBuildingId = checked(world.NextBuildingId + 1);
+            if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
@@ -414,7 +415,11 @@ namespace Rts.Simulation
         private bool TryPlaceBridge(uint faction, EconomyCommand command)
         {
             if (!TryValidateBridge(faction, command.Cells, command.Facing, out int[] cells, out int workCell)) return false;
-            if (world.Economies[faction - 1].Wood < BridgeWoodCostFor(faction, cells.Length)) return false;
+            if (world.Economies[faction - 1].Wood < BridgeWoodCostFor(faction, cells.Length))
+            {
+                if (BuildingReservationsOn) CreateBuildingReservation(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
+                return false;
+            }
             PlaceBuildingAt(faction, BuildingKind.Bridge, cells[0], command.Facing, 0, cells, workCell);
             world.Buildings[world.BuildingCount - 1].Held = true;
             return true;
@@ -681,7 +686,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.Complete || b.Held || b.FactionId != faction || HumanRegionAt(faction, BuildingCenter(b))) continue;
+                if (!b.Alive || b.Reserved || b.Complete || b.Held || b.FactionId != faction || HumanRegionAt(faction, BuildingCenter(b))) continue;
                 bool staffed = false;
                 for (int j = 0; j < world.VillagerCount && !staffed; j++)
                 {
@@ -736,7 +741,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || b.Complete) continue;
+                if (!b.Alive || b.Reserved || b.Complete) continue;
                 for (int j = 0; j < world.VillagerCount; j++)
                 {
                     var v = world.Villagers[j];

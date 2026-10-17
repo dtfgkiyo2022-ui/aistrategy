@@ -451,8 +451,12 @@ namespace Rts.Presentation
             bool shown = onMap && Footprint(cell, size, out origin, out center);
             bool legal = shown && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
                 view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind));
+            bool reservation = shown && economy.BuildingReservations
+                && (economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind))
+                && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
+                    view.LatestFrame.FactionId, kind, origin, size, facing, 0, 0, true);
             bool capped = kind == BuildingKind.DropSite && economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
-            layer.ShowGhost(shown, center, size * CellMeters, legal && !capped);
+            layer.ShowGhost(shown, center, size * CellMeters, (legal || reservation) && !capped, reservation && !capped);
         }
 
         private EconomyView Economy() { var frame = view == null ? null : view.LatestFrame; return frame == null ? null : frame.Economy; }
@@ -1107,9 +1111,19 @@ namespace Rts.Presentation
 
         private void ModeButton(Rect r, Mode target, string label)
         {
+            if (ReservationLabel(target)) label += UiText.T(" [reserve]", "【予約可】");
             bool on = GUI.Toggle(r, mode == target, mode == target && target != Mode.Belt && target != Mode.Wall ? UiText.T("Click ground (Esc cancels)", "地面をクリック（Escで取消）") : label, GUI.skin.button);
             if (on && mode != target) SetMode(target);
             else if (!on && mode == target) SetMode(Mode.None);
+        }
+
+        private bool ReservationLabel(Mode target)
+        {
+            var economy = Economy();
+            if (economy == null || !economy.BuildingReservations || target == Mode.Belt || target == Mode.FastBelt
+                || target == Mode.Wall || target == Mode.None || target == Mode.RemoveBelt || target == Mode.RemoveArea) return false;
+            var kind = KindOf(target);
+            return economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind);
         }
 
         private void DrawNotes(Rect rect)

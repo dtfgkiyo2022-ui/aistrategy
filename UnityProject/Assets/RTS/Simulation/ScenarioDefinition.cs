@@ -71,6 +71,9 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>Human building placement may reserve a legal site until the required resources are available.</summary>
+        public bool BuildingReservations;
+        public int ReservationLimit = 10, ReservationCheckTicks = 10;
         /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
         public bool Regions;
         /// <summary>MoveFix1: allows a deterministic straight-line move when the exact line of sight is clear.</summary>

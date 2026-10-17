@@ -238,7 +238,7 @@ namespace Rts.Simulation
                 int cost = fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
                 if (owned >= rules.BeltLimit || economy.Wood < cost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
-                    || !world.Map.IsPassable(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
+                    || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - cost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
@@ -271,7 +271,7 @@ namespace Rts.Simulation
             }
             int cell = c.Cell;
             if (owned >= rules.BeltLimit) return;
-            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell)
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
             BeltComponentKind component = c.IsInserter ? BeltComponentKind.Inserter
                 : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
@@ -291,6 +291,7 @@ namespace Rts.Simulation
             if (entrance < 0 || exit < 0 || entrance >= cells || exit >= cells || entrance == exit
                 || world.Belts[entrance].FactionId != 0 || world.Belts[exit].FactionId != 0
                 || !world.Map.IsPassable(entrance) || !world.Map.IsPassable(exit)
+                || IsReservedBuildingCell(entrance) || IsReservedBuildingCell(exit)
                 || IsRiverCell(entrance) || IsRiverCell(exit) || IsNodeCell(entrance) || IsNodeCell(exit)
                 || InsideAnyCore(entrance) || InsideAnyCore(exit)) return false;
             int width = world.Config.Map.WidthCells, ex = entrance % width, ez = entrance / width;

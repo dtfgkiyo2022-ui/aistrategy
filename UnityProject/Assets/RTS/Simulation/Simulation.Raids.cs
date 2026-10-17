@@ -176,7 +176,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || b.Hp != 0) continue;
+                if (!b.Alive || b.Reserved || b.Hp != 0) continue;
                 b.Alive = false;
                 RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
@@ -203,6 +203,7 @@ namespace Rts.Simulation
 
         private bool BuildingVisibleTo(uint faction, BuildingState b)
         {
+            if (b.Reserved) return false;
             foreach (int cell in Footprint(b))
                 if (world.Factions[faction - 1].VisibleCells[cell]) return true;
             return false;
