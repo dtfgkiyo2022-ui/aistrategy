@@ -508,6 +508,7 @@
     right: var(--hud-padding);
     top: 38px;
     width: 190px;
+    max-height: 260px;
     padding: 4px;
     display: none;
     flex-direction: column;

@@ -22,7 +22,7 @@
                 </ui:VisualElement>
                 <ui:Label name="staff-notice-label" class="staff-notice-label" />
             </ui:VisualElement>
-            <ui:VisualElement name="staff-ai-options" class="staff-ai-options" />
+            <ui:ScrollView name="staff-ai-options" class="staff-ai-options" />
         </ui:VisualElement>
     </ui:VisualElement>
 </ui:UXML>
