@@ -163,7 +163,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var shaft = ref world.Buildings[i];
-                if (!shaft.Alive || !shaft.Complete || shaft.Kind != BuildingKind.MineShaft || shaft.Researching != 0) continue;
+                if (!shaft.Alive || !shaft.Complete || BuildingPaused(shaft) || shaft.Kind != BuildingKind.MineShaft || shaft.Researching != 0) continue;
                 int interval = MountainInterval(shaft);
                 if (++shaft.Timer < interval) continue;
                 shaft.Timer = 0;

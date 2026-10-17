@@ -295,12 +295,36 @@ namespace Rts.Simulation
             return distance <= world.Config.Economy.UndergroundBeltMaxLength;
         }
 
-        /// <summary>RemoveBelt: only the own belt; the item on it is lost and the wood is not returned.</summary>
+        /// <summary>RemoveBelt: removes an own belt and, with EasyRebuild, refunds its placement wood and item.</summary>
         private void RemoveBelt(uint faction, int cell)
         {
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
+            var belt = world.Belts[cell];
+            int pair = belt.PairCell;
+            bool paired = pair >= 0 && pair < world.Belts.Length && world.Belts[pair].FactionId == faction
+                && world.Belts[pair].PairCell == cell
+                && (belt.Component == BeltComponentKind.UndergroundEntrance && world.Belts[pair].Component == BeltComponentKind.UndergroundExit
+                    || belt.Component == BeltComponentKind.UndergroundExit && world.Belts[pair].Component == BeltComponentKind.UndergroundEntrance);
+            if (paired && belt.Component == BeltComponentKind.UndergroundExit)
+            {
+                int entrance = pair;
+                pair = cell;
+                cell = entrance;
+                belt = world.Belts[cell];
+            }
             MarkLinesForBelt(faction, cell);
+            if (paired) MarkLinesForBelt(faction, pair);
+            if (world.Config.Economy.EasyRebuild)
+            {
+                if (belt.Item != 0) AddStock(faction, belt.Item, 1);
+                AddStock(faction, ResourceKind.Wood, paired ? world.Config.Economy.UndergroundBeltWoodCost
+                    : belt.Component == BeltComponentKind.Splitter ? world.Config.Economy.SplitterWoodCost
+                    : belt.Component == BeltComponentKind.Sorter ? world.Config.Economy.SorterWoodCost
+                    : belt.Fast ? world.Config.Economy.FastBeltWoodCost : world.Config.Economy.BeltWoodCost);
+                if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, 1);
+            }
             world.Belts[cell] = default;
+            if (paired) world.Belts[pair] = default;
             world.BeltOrder = null;
         }
 

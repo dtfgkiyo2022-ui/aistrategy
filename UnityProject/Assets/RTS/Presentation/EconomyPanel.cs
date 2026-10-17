@@ -27,7 +27,7 @@ namespace Rts.Presentation
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
         private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -119,11 +119,17 @@ namespace Rts.Presentation
                     port.SubmitEconomy(EconomyCommand.RemoveBelt(faction, ++sequence, cell));
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
                     return true;
+                case Mode.MoveBuilding:
+                    if (TrySelectedBuilding(out BuildingView selected) && Footprint(cell, SizeOf(selected.Kind), out int moveOrigin, out _))
+                        port.SubmitEconomy(EconomyCommand.MoveBuilding(faction, ++sequence, selected.Id, moveOrigin, facing));
+                    SetMode(Mode.None);
+                    return true;
                 case Mode.BlueprintPaste:
                     PasteBlueprintAt(cell);
                     return true;
             }
             var kind = KindOf(mode);
+            if (mode == Mode.MoveBuilding && TrySelectedBuilding(out BuildingView selectedBuilding)) kind = selectedBuilding.Kind;
             if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
@@ -377,7 +383,14 @@ namespace Rts.Presentation
 
         private void UpdateMeasured()
         {
-            if (mode == Mode.None || layer == null) return;
+            if (layer == null) return;
+            if (mode == Mode.None)
+            {
+                if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out BuildingView selected) && Input.GetKeyDown(KeyCode.M)) SetMode(Mode.MoveBuilding);
+                else if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out selected) && Input.GetKeyDown(KeyCode.Delete))
+                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "蟒ｺ迚ｩ縺ｮ蜿悶ｊ螟悶＠繧偵萓晞ｼ縺励∪縺励◆"));
+                else return;
+            }
             var camera = Camera.main;
             if (camera == null) return;
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1))
@@ -444,12 +457,13 @@ namespace Rts.Presentation
             }
             if (mode == Mode.RemoveBelt) { layer.ShowBeltPreview(onMap ? new List<int> { cell } : null, false); return; }
             var kind = KindOf(mode);
+            if (mode == Mode.MoveBuilding && TrySelectedBuilding(out BuildingView selectedBuilding)) kind = selectedBuilding.Kind;
             int size = SizeOf(kind);
             var center = Vector3.zero;
             int origin = -1;
             bool shown = onMap && Footprint(cell, size, out origin, out center);
-            bool legal = shown && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
-                view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind));
+            bool legal = shown && (mode == Mode.MoveBuilding || AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
+                view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind)));
             bool capped = kind == BuildingKind.DropSite && economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
             layer.ShowGhost(shown, center, size * CellMeters, legal && !capped);
         }
@@ -556,6 +570,15 @@ namespace Rts.Presentation
                     GUI.Label(new Rect(right, y, half, 22f), UiText.T("Barracks: building ", "兵舎：建設中 ") + Percent(barracks.Value));
             }
             y += 26f;
+            if (economy.EasyRebuild && TrySelectedBuilding(out BuildingView selected) && selected.Complete)
+            {
+                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("移動（M）", "Move (M)"));
+                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("取り壊し（Del）", "Remove (Del)")))
+                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("取り壊しを依頼しました", "Building removal requested"));
+                y += 26f;
+                GUI.Label(new Rect(x, y, w, 22f), UiText.T("撤去時は支払済み材料と中身が返還されます。", "Removal refunds paid materials and contents."));
+                y += 26f;
+            }
             if (economy.Ages)
             {
                 float third = (w - 8f) / 3f;
@@ -1161,6 +1184,20 @@ namespace Rts.Presentation
                 if (!found.HasValue) found = b;
             }
             return found;
+        }
+
+        private bool TrySelectedBuilding(out BuildingView selected)
+        {
+            selected = default(BuildingView);
+            var economy = Economy();
+            if (economy == null || layer == null || layer.SelectedBuildingId == 0) return false;
+            foreach (var building in economy.Buildings)
+                if (building.Id == layer.SelectedBuildingId && building.FactionId == faction)
+                {
+                    selected = building;
+                    return true;
+                }
+            return false;
         }
 
         private static int CountIdle(EconomyView economy)

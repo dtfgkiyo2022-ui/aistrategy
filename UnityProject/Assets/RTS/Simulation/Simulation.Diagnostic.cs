@@ -348,10 +348,17 @@ namespace Rts.Simulation
                         w.Value(n + "QueueSiegeParts.Count", (uint)siegeQueue.Length);
                         for (int q = 0; q < siegeQueue.Length; q++) w.Value(n + "QueueSiegeParts[" + q.ToString(CultureInfo.InvariantCulture) + "]", siegeQueue[q]);
                     }
-                    if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
-                    {
-                        w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
-                    }
+                if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
+                {
+                    w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
+                }
+                if (EasyRebuildOn)
+                {
+                    w.Value(n + "ConstructionWood", b.ConstructionWood); w.Value(n + "ConstructionStone", b.ConstructionStone);
+                    w.Value(n + "ConstructionPlanks", b.ConstructionPlanks); w.Value(n + "ConstructionBricks", b.ConstructionBricks);
+                    w.Value(n + "ConstructionSiegeParts", b.ConstructionSiegeParts); w.Value(n + "ConstructionFrames", b.ConstructionFrames);
+                    w.Value(n + "MovePauseUntilTick", b.MovePauseUntilTick);
+                }
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
                 {

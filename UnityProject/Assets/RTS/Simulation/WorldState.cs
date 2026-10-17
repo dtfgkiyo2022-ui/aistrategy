@@ -213,6 +213,10 @@ namespace Rts.Simulation
         /// <summary>V3-20: a storage keeps one resource kind at a time so mixed items never lose their type.</summary>
         internal ResourceKind StorageKind;
         internal int StorageCount;
+        /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
+        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames;
+        /// <summary>EasyRebuild: the last tick covered by the post-move pause.</summary>
+        internal long MovePauseUntilTick;
     }
 
     internal struct ResourceNodeState
@@ -576,6 +580,7 @@ namespace Rts.Simulation
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+            Require(!e.EasyRebuild || (e.Enabled && e.MoveBuildingPauseTicks > 0), "Invalid easy-rebuild rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
             Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
@@ -1024,7 +1029,8 @@ namespace Rts.Simulation
                   RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
-                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
+                  RationsFoodReserve = e.RationsFoodReserve, EasyRebuild = e.EasyRebuild, MoveBuildingPauseTicks = e.MoveBuildingPauseTicks,
+                  AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   ResourceFog = e.ResourceFog,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,

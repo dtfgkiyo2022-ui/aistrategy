@@ -21,7 +21,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete) continue;
+                if (!b.Alive || !b.Complete || BuildingPaused(b)) continue;
                 if (b.Kind == BuildingKind.Mine)
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
@@ -484,7 +484,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
+                if (!b.Alive || !b.Complete || BuildingPaused(b) || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
                 int port = OutputCell(b);
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
@@ -699,7 +699,7 @@ namespace Rts.Simulation
                 if (!b.Alive) continue;
                 int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
-                if (b.FactionId != faction || !b.Complete) return false;
+                if (b.FactionId != faction || !b.Complete || BuildingPaused(b)) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
@@ -942,7 +942,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var source = ref world.Buildings[v.HaulFrom - 1];
-            if (!source.Alive || !source.Complete)
+            if (!source.Alive || !source.Complete || BuildingPaused(source))
             {
                 v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                 v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
@@ -968,7 +968,7 @@ namespace Rts.Simulation
                 return;
             }
             ref var target = ref world.Buildings[v.HaulTo - 1];
-            if (!target.Alive || !target.Complete) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
+            if (!target.Alive || !target.Complete || BuildingPaused(target)) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
             if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
             int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
             v.Carry -= put;
@@ -977,6 +977,7 @@ namespace Rts.Simulation
 
         private int PutIntoProcessingTarget(ref BuildingState target, ResourceKind kind, int amount)
         {
+            if (BuildingPaused(target)) return 0;
             var rules = world.Config.Economy;
             if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
             {

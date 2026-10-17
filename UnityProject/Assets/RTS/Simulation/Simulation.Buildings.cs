@@ -400,7 +400,13 @@ namespace Rts.Simulation
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
                 Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
-                BrickUpgraded = brickDefence, Level = 1, FramesUsed = framesUsed, Facing = facing, NodeId = nodeId };
+                BrickUpgraded = brickDefence, Level = 1, FramesUsed = framesUsed, Facing = facing, NodeId = nodeId,
+                ConstructionWood = woodCost, ConstructionStone = StoneOf(kind, faction),
+                ConstructionPlanks = plankBridge ? checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells.Length) : 0,
+                ConstructionBricks = brickCastle ? world.Config.Economy.BricksPerCastle
+                    : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0,
+                ConstructionSiegeParts = siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0,
+                ConstructionFrames = framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0 };
             world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
@@ -409,6 +415,146 @@ namespace Rts.Simulation
             EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
+        }
+
+        private void RefundBuilding(uint faction, ref BuildingState building)
+        {
+            int maxHp = Math.Max(1, MaxHpOf(building));
+            bool complete = building.Complete;
+            int ratioHp = complete ? Math.Max(0, Math.Min(building.Hp, maxHp)) : maxHp;
+            int Refund(int paid) => complete ? checked(paid * ratioHp / maxHp) : paid;
+            AddStock(faction, ResourceKind.Wood, Refund(building.ConstructionWood));
+            AddStock(faction, ResourceKind.Stone, Refund(building.ConstructionStone));
+            AddStock(faction, ResourceKind.Planks, Refund(building.ConstructionPlanks));
+            AddStock(faction, ResourceKind.Bricks, Refund(building.ConstructionBricks));
+            AddStock(faction, ResourceKind.SiegeParts, Refund(building.ConstructionSiegeParts));
+            AddStock(faction, ResourceKind.Frames, Refund(building.ConstructionFrames));
+            RefundBuildingContents(ref building);
+        }
+
+        private void RefundBuildingContents(ref BuildingState building)
+        {
+            if (building.Kind == BuildingKind.Storage)
+            {
+                if (building.StorageKind != 0 && building.StorageCount > 0) AddStock(building.FactionId, building.StorageKind, building.StorageCount);
+                return;
+            }
+            if (building.Kind == BuildingKind.Assembler)
+            {
+                RefundAssemblerInputs(building.FactionId, ref building);
+                return;
+            }
+            ResourceKind first = building.Kind == BuildingKind.Smelter ? ResourceKind.Ore
+                : building.Kind == BuildingKind.CharcoalKiln ? ResourceKind.Wood
+                : building.Kind == BuildingKind.Steelworks ? ResourceKind.Metal
+                : building.Kind == BuildingKind.Fletcher ? ResourceKind.Wood
+                : building.Kind == BuildingKind.Mill ? ResourceKind.Food
+                : building.Kind == BuildingKind.Saddlery ? ResourceKind.Food
+                : building.Kind == BuildingKind.Sawmill ? ResourceKind.Wood
+                : building.Kind == BuildingKind.Stonecutter ? ResourceKind.Stone
+                : building.Kind == BuildingKind.Joinery ? ResourceKind.Planks
+                : building.Kind == BuildingKind.IncenseHouse ? ResourceKind.Wood
+                : building.Kind == BuildingKind.CharmWorkshop ? ResourceKind.Wood
+                : building.Kind == BuildingKind.RepairYard ? ResourceKind.Wood
+                : building.Kind == BuildingKind.ToolShop ? ResourceKind.Wood : 0;
+            if (first != 0) AddStock(building.FactionId, first, building.Input);
+            if (building.InputSecondary > 0)
+            {
+                ResourceKind second = building.InputSecondaryKind != 0 ? building.InputSecondaryKind
+                    : building.Kind == BuildingKind.Steelworks ? ResourceKind.Charcoal
+                    : building.Kind == BuildingKind.Fletcher ? ResourceKind.Food
+                    : building.Kind == BuildingKind.Saddlery ? ResourceKind.Wood
+                    : building.Kind == BuildingKind.IncenseHouse ? ResourceKind.Food : 0;
+                if (second != 0) AddStock(building.FactionId, second, building.InputSecondary);
+            }
+            if (building.InputTertiary > 0 && building.Kind == BuildingKind.IncenseHouse) AddStock(building.FactionId, ResourceKind.Food, building.InputTertiary);
+            if (building.Output > 0)
+            {
+                ResourceKind outputKind = building.Kind == BuildingKind.Drill && building.NodeId != 0 && building.NodeId <= world.Nodes.Length
+                    ? world.Nodes[building.NodeId - 1].Definition.Kind : OutputKind(building.Kind);
+                if (outputKind != 0) AddStock(building.FactionId, outputKind, building.Output);
+            }
+        }
+
+        private bool TryMoveBuilding(uint faction, uint buildingId, int newOrigin, Facing facing)
+        {
+            if (faction == 0 || faction > world.Factions.Length || (byte)facing > 3 || !OwnBuilding(faction, buildingId, out int index)) return false;
+            var building = world.Buildings[index];
+            if (!building.Alive || !building.Complete || building.Kind == BuildingKind.Farm
+                || building.Kind == BuildingKind.Bridge || building.Kind == BuildingKind.Tollgate || building.Kind == BuildingKind.Town
+                || building.Kind == BuildingKind.Castle || building.Kind == BuildingKind.Shrine || building.Kind == BuildingKind.Caravanserai
+                || building.Kind == BuildingKind.MineShaft || building.Kind == BuildingKind.GrandHouse || building.Kind == BuildingKind.EngineerCamp
+                || building.Kind == BuildingKind.Academy || building.Kind == BuildingKind.Monastery || building.Kind == BuildingKind.Harbor) return false;
+            int size = SizeOf(building.Kind);
+            var oldFootprint = Footprint(building);
+            var candidate = Footprint(newOrigin, size);
+            if (candidate.Length == 0 || !MoveSiteIsClear(faction, index, oldFootprint, candidate)) return false;
+            if (HasIndustryOutput(building.Kind) && !MovePortsAreClear(index, newOrigin, candidate, oldFootprint, facing)) return false;
+
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            var saved = new bool[cells];
+            var touched = new bool[cells];
+            foreach (int cell in oldFootprint) if (cell >= 0 && cell < cells) { touched[cell] = true; saved[cell] = world.Map.IsPassable(cell); }
+            foreach (int cell in candidate) if (cell >= 0 && cell < cells && !touched[cell]) { touched[cell] = true; saved[cell] = world.Map.IsPassable(cell); }
+            foreach (int cell in oldFootprint) world.Map.SetPassable(cell, true);
+            foreach (int cell in candidate) world.Map.SetPassable(cell, false);
+            bool connected = KeepsMapConnected(faction, newOrigin, size);
+            for (int cell = 0; cell < cells; cell++) if (touched[cell]) world.Map.SetPassable(cell, saved[cell]);
+            if (!connected) return false;
+
+            MarkLinesForBuilding(faction, building.Id);
+            foreach (int cell in oldFootprint) world.Map.SetPassable(cell, true);
+            foreach (int cell in candidate) world.Map.SetPassable(cell, false);
+            building.OriginCell = newOrigin;
+            building.Facing = facing;
+            building.WorkCell = NearestPassableCell(FootprintCenter(newOrigin, size));
+            building.MovePauseUntilTick = checked(world.Tick + world.Config.Economy.MoveBuildingPauseTicks);
+            world.Buildings[index] = building;
+            TerrainChanged();
+            return true;
+        }
+
+        private bool MoveSiteIsClear(uint faction, int sourceIndex, int[] oldFootprint, int[] candidate)
+        {
+            int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
+            var source = world.Buildings[sourceIndex];
+            int sourceNodeCell = source.NodeId == 0 || source.NodeId > world.Nodes.Length ? -1
+                : world.Map.Cell(world.Nodes[source.NodeId - 1].Definition.Position);
+            if ((source.Kind == BuildingKind.Mine || source.Kind == BuildingKind.Drill) && Array.IndexOf(candidate, sourceNodeCell) < 0) return false;
+            foreach (int cell in candidate)
+            {
+                bool wasSource = Array.IndexOf(oldFootprint, cell) >= 0;
+                if ((!wasSource && !world.Map.IsPassable(cell)) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
+                foreach (var node in world.Nodes)
+                {
+                    int nodeCell = world.Map.Cell(node.Definition.Position);
+                    if (nodeCell == sourceNodeCell && (source.Kind == BuildingKind.Mine || source.Kind == BuildingKind.Drill)) continue;
+                    if (Chebyshev(cell, nodeCell) < NodeClearanceCells) return false;
+                }
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    if (i == sourceIndex || !world.Buildings[i].Alive) continue;
+                    foreach (int other in Footprint(world.Buildings[i])) if (Chebyshev(cell, other) < BuildingClearanceCells) return false;
+                }
+            }
+            return true;
+        }
+
+        private bool MovePortsAreClear(int sourceIndex, int newOrigin, int[] candidate, int[] oldFootprint, Facing facing)
+        {
+            var moved = world.Buildings[sourceIndex];
+            int newPort = OutputCell(newOrigin, SizeOf(moved.Kind), facing);
+            if (newPort < 0 || Array.IndexOf(oldFootprint, newPort) < 0 && !world.Map.IsPassable(newPort)
+                || IsRiverCell(newPort) || world.Belts.Length != 0 && world.Belts[newPort].FactionId != 0
+                || IsNodeCell(newPort) || InsideAnyCore(newPort)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                if (i == sourceIndex || !world.Buildings[i].Alive || !HasIndustryOutput(world.Buildings[i].Kind)) continue;
+                if (Array.IndexOf(candidate, OutputCell(world.Buildings[i])) >= 0) return false;
+                if (Array.IndexOf(oldFootprint, newPort) < 0 && Array.IndexOf(Footprint(world.Buildings[i]), newPort) >= 0) return false;
+            }
+            return true;
         }
 
         private bool TryPlaceBridge(uint faction, EconomyCommand command)
@@ -764,7 +910,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.Queued == 0) continue;
+                if (!b.Alive || !b.Complete || BuildingPaused(b) || b.Queued == 0) continue;
                 if (b.TrainRemaining > 0) b.TrainRemaining--;
                 if (b.TrainRemaining > 0) continue;
                 if (b.Kind == BuildingKind.Town)

@@ -52,7 +52,9 @@ namespace Rts.Contracts
         /// <summary>CraftTree2: selects the recipe of an assembler.</summary>
         SetRecipe = 26,
         /// <summary>AgeClockUx: pays the current discounted age price and completes the advance immediately.</summary>
-        AdvanceNow = 27
+        AdvanceNow = 27,
+        /// <summary>EasyRebuild: moves an own completed building without changing its production state.</summary>
+        MoveBuilding = 28
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -291,6 +293,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
 
         public static EconomyCommand RotateBuilding(uint faction, ulong sequence, uint buildingId, Facing facing)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.RotateBuilding, 0, 0, buildingId, 0, null,
+                EconomyTargetKind.None, 0, false, null, null, facing);
+
+        public static EconomyCommand MoveBuilding(uint faction, ulong sequence, uint buildingId, int cell, Facing facing)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.MoveBuilding, 0, cell, buildingId, 0, null,
                 EconomyTargetKind.None, 0, false, null, null, facing);
 
         public static EconomyCommand RemoveBuilding(uint faction, ulong sequence, uint buildingId)
@@ -766,6 +772,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         /// <summary>Manual control: true while the faction's built-in late assault is stopped.</summary>
         public bool AutoAssaultOff { get; }
         public bool RationsEnabled { get; }
+        public bool EasyRebuild { get; }
         public int Rations { get; }
         public int MillWoodCost { get; }
         public int MillSizeCells { get; }
@@ -1087,11 +1094,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               int mechanismBuildingTimePermille = 0, int mechanismBuildingMaterialPermille = 0,
               int mechanismResearchCostPermille = 0, int mechanismResearchTimePermille = 0,
              long civChoiceDeadlineTick = 0, bool ageClockUx = false,
-             bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0)
+             bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0, bool easyRebuild = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
-            RationsEnabled = rationsEnabled; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
+            RationsEnabled = rationsEnabled; EasyRebuild = easyRebuild; Rations = rations; MillWoodCost = millWoodCost; MillSizeCells = millSizeCells;
             MillTicks = millTicks; MillFoodInput = millFoodInput; RationsPerSoldier = rationsPerSoldier; RationsTrainPermille = rationsTrainPermille;
             RationsHealIntervalTicks = rationsHealIntervalTicks; RationsHealQuietTicks = rationsHealQuietTicks; RationsHealHp = rationsHealHp;
             RationsHealMaxPerInterval = rationsHealMaxPerInterval; RationsFarmMinimum = rationsFarmMinimum; RationsFoodReserve = rationsFoodReserve;

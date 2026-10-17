@@ -88,6 +88,9 @@ namespace Rts.Simulation
         private const int CommonDrillExtensionId = 47;
         private const int CommonDrillExtensionVersion = 1;
         private const int CommonDrillExtensionDataLength = 7 * sizeof(int);
+        private const int EasyRebuildExtensionId = 49;
+        private const int EasyRebuildExtensionVersion = 1;
+        private const int EasyRebuildExtensionDataLength = 2 * sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -233,6 +236,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(DirectPathMovementExtensionId, DirectPathMovementExtensionVersion, DirectPathMovementExtensionDataLength)
             ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
+            ,new ExtensionRegistration(EasyRebuildExtensionId, EasyRebuildExtensionVersion, EasyRebuildExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -803,6 +807,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == RationsExtensionId) ReadRationsExtension(extension, c.Economy);
                     else if (id == StorageFeedsProcessingExtensionId) ReadStorageFeedsProcessingExtension(extension, c.Economy);
                     else if (id == CommonDrillExtensionId) ReadCommonDrillExtension(extension, c.Economy);
+                    else if (id == EasyRebuildExtensionId) ReadEasyRebuildExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     else if (id == PlanksExtensionId) ReadPlanksExtension(extension, c.Economy);
@@ -903,6 +908,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
+                extensions.RemoveAll(extension => extension != null && extension.Id == EasyRebuildExtensionId && !c.Economy.EasyRebuild);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1070,6 +1076,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateRationsExtension(c.Economy);
                     }
                 if (c.Economy.Rations && !hasRations) extensions.Add(CreateRationsExtension(c.Economy));
+                bool hasEasyRebuild = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == EasyRebuildExtensionId)
+                    {
+                        hasEasyRebuild = true;
+                        extensions[i] = CreateEasyRebuildExtension(c.Economy);
+                    }
+                if (c.Economy.EasyRebuild && !hasEasyRebuild) extensions.Add(CreateEasyRebuildExtension(c.Economy));
                 bool hasCommonDrill = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CommonDrillExtensionId)
@@ -1849,6 +1863,31 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.RationsHealIntervalTicks = reader.ReadInt32(); e.RationsHealQuietTicks = reader.ReadInt32(); e.RationsHealHp = reader.ReadInt32();
                 e.RationsHealMaxPerInterval = reader.ReadInt32(); e.RationsFarmMinimum = reader.ReadInt32(); e.RationsFoodReserve = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing rations extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateEasyRebuildExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.EasyRebuild ? 1 : 0);
+                writer.Write(e.MoveBuildingPauseTicks);
+                return new ScenarioExtensionData { Id = EasyRebuildExtensionId, Version = EasyRebuildExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadEasyRebuildExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid easy rebuild flag.");
+                e.EasyRebuild = enabled != 0;
+                e.MoveBuildingPauseTicks = reader.ReadInt32();
+                if (e.MoveBuildingPauseTicks <= 0) throw new InvalidDataException("Invalid easy rebuild pause.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing easy rebuild extension data.");
             }
         }
 

@@ -294,7 +294,7 @@ namespace Rts.Simulation
             bool tollgate = smith.Kind == BuildingKind.Tollgate;
             bool metropolis = smith.Kind == BuildingKind.GrandHouse;
             bool sanctuary = smith.Kind == BuildingKind.Shrine;
-            if (!AgesOn || !smith.Complete || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
+            if (!AgesOn || !smith.Complete || BuildingPaused(smith) || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
             if (academy)
             {
                 if (!AcademyAllowed(faction) || !AcademyTechOpen(faction, tech) || !AcademyGoldAvailable(faction, tech)
@@ -417,7 +417,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy && b.Kind != BuildingKind.MineShaft && b.Kind != BuildingKind.Harbor && b.Kind != BuildingKind.Monastery && b.Kind != BuildingKind.Tollgate && b.Kind != BuildingKind.GrandHouse && b.Kind != BuildingKind.Shrine) || b.Researching == 0) continue;
+                if (!b.Alive || BuildingPaused(b) || (b.Kind != BuildingKind.Blacksmith && b.Kind != BuildingKind.Academy && b.Kind != BuildingKind.MineShaft && b.Kind != BuildingKind.Harbor && b.Kind != BuildingKind.Monastery && b.Kind != BuildingKind.Tollgate && b.Kind != BuildingKind.GrandHouse && b.Kind != BuildingKind.Shrine) || b.Researching == 0) continue;
                 if (--b.TrainRemaining > 0) continue;
                 var tech = b.Researching;
                 b.Researching = 0;

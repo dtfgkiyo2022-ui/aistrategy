@@ -111,12 +111,16 @@ namespace Rts.Simulation
                     if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
+                    if (world.Config.Economy.EasyRebuild) RefundBuilding(faction, ref removed);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     removed.Alive = false;
                     RemoveRegionCenter(removed);
                     foreach (int cell in Footprint(removed))
                         world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
                     TerrainChanged();
+                    return;
+                case EconomyCommandKind.MoveBuilding:
+                    if (world.Config.Economy.EasyRebuild) TryMoveBuilding(faction, c.ProducerId, c.Cell, c.Facing);
                     return;
                 case EconomyCommandKind.PlaceBuilding:
                 {

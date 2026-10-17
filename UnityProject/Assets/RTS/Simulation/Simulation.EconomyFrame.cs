@@ -330,7 +330,8 @@ namespace Rts.Simulation
                 civChoiceDeadlineTick: civChoiceDeadline,
                 ageClockUx: AgeClockUxOn,
                 commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
-                drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0);
+                drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0,
+                easyRebuild: EasyRebuildOn);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)
