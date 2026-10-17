@@ -23,7 +23,16 @@ namespace Rts.Tests.EditMode
             var economy = new EconomyView(0, 0, false, 2, 4, 2, 12, 12, 2,
                 new[] { building }, System.Array.Empty<ResourceView>(), System.Array.Empty<BeltView>(),
                 new bool[144], new bool[144]);
-            StringAssert.Contains("予約中", SelectionInfoText.BuildingReservationStatus(building, economy));
+            bool japanese = UiText.Japanese;
+            UiText.Japanese = true;
+            try
+            {
+                StringAssert.Contains("予約中", SelectionInfoText.BuildingReservationStatus(building, economy));
+            }
+            finally
+            {
+                UiText.Japanese = japanese;
+            }
         }
     }
 }
