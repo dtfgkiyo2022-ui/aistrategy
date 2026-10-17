@@ -301,7 +301,8 @@ namespace Rts.Simulation
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
             var belt = world.Belts[cell];
             int pair = belt.PairCell;
-            bool paired = pair >= 0 && pair < world.Belts.Length && world.Belts[pair].FactionId == faction
+            // Removing both ends of an underground pair is part of EasyRebuild; without it one end stays, as before.
+            bool paired = world.Config.Economy.EasyRebuild && pair >= 0 && pair < world.Belts.Length && world.Belts[pair].FactionId == faction
                 && world.Belts[pair].PairCell == cell
                 && (belt.Component == BeltComponentKind.UndergroundEntrance && world.Belts[pair].Component == BeltComponentKind.UndergroundExit
                     || belt.Component == BeltComponentKind.UndergroundExit && world.Belts[pair].Component == BeltComponentKind.UndergroundEntrance);
