@@ -53,7 +53,8 @@ namespace Rts.Presentation
             float bottom = screenHeight - pad;
             float contentTop = pad + topHeight + gap;
 
-            float commandHeight = 300f;
+            // 10-18 test play: with the patrol button the command grid has one more row and the last row was cut off.
+            float commandHeight = Mathf.Clamp(screenHeight * 0.42f, 300f, 420f);
             float supplyHeight = 104f;
             // The buttons sit four to a row (UI Toolkit), so the panel needs far less height than one button per row did.
             float economyHeight = Mathf.Min(260f, Mathf.Max(200f, screenHeight - topHeight - 2f * pad));
