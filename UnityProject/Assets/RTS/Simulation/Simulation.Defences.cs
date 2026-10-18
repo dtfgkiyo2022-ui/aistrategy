@@ -31,7 +31,7 @@ namespace Rts.Simulation
             {
                 if (economy.Stone < StoneOf(BuildingKind.Wall, faction)) break;
                 bool brick = BrickDefenceAvailable(faction, BuildingKind.Wall);
-                if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || world.Belts[cell].FactionId != 0
+                if (cell < 0 || cell >= world.Belts.Length || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || world.Belts[cell].FactionId != 0
                     || IsNodeCell(cell) || InsideAnyCore(cell) || !NearOwnBase(faction, cell, rules.WallReach) || !KeepsMapConnected(faction, cell, 1)) continue;
                 economy.Stone = checked(economy.Stone - StoneOf(BuildingKind.Wall, faction));
                 if (brick)
@@ -45,7 +45,8 @@ namespace Rts.Simulation
                 world.Map.SetPassable(cell, false);
                 world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Wall, OriginCell = cell,
                     WorkCell = cell, Alive = true, Complete = true, Hp = brick ? BrickHpOf(BuildingKind.Wall, faction, cell) : HpOf(BuildingKind.Wall, faction, cell),
-                    BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North };
+                    BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North,
+                    ConstructionStone = StoneOf(BuildingKind.Wall, faction), ConstructionBricks = brick ? rules.BricksPerWall : 0 };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 changed = true;
@@ -60,7 +61,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.BrickUpgraded || !MasonryAllowed(b.FactionId)
+                if (!IsActualBuilding(b) || !b.Complete || b.BrickUpgraded || !MasonryAllowed(b.FactionId)
                     || (b.Kind != BuildingKind.Wall && b.Kind != BuildingKind.Tower)) continue;
                 int cost = b.Kind == BuildingKind.Wall ? rules.BricksPerWall : rules.BricksPerTower;
                 ref var economy = ref world.Economies[b.FactionId - 1];
@@ -70,6 +71,7 @@ namespace Rts.Simulation
                 int oldHp = b.Hp;
                 economy.Bricks -= cost;
                 economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+                if (EasyRebuildOn) b.ConstructionBricks = checked(b.ConstructionBricks + cost);
                 if (b.Kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
                 else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
                 b.BrickUpgraded = true;
@@ -107,7 +109,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind != BuildingKind.Wall
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind != BuildingKind.Wall
                     && InRange(at, FootprintCenter(b.OriginCell, SizeOf(b.Kind)), Fix64.FromInt(reach))) return true;
             }
             return false;
@@ -160,7 +162,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || !Shoots(b.Kind)) continue;
+                if (!IsActualBuilding(b) || !b.Complete || !Shoots(b.Kind)) continue;
                 if (b.Timer > 0) { b.Timer--; continue; }
                 var range = b.Kind == BuildingKind.Castle ? Fix64.FromInt(rules.CastleRange)
                     : Fix64.FromInt(MountainTowerRange(b.FactionId, b.OriginCell, SizeOf(b.Kind)));
@@ -214,7 +216,7 @@ namespace Rts.Simulation
             if (soldier.TargetKind == TargetBuilding)
             {
                 uint id = soldier.TargetId;
-                return id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].FactionId == defendedFaction
+            return id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && world.Buildings[id - 1].FactionId == defendedFaction
                     && LineForBuilding(defendedFaction, id) >= 0;
             }
             return false;
@@ -306,7 +308,7 @@ namespace Rts.Simulation
             {
                 var b = world.Buildings[i];
                 // V3-5 (32 #17): a castle watches further than a tower.
-                if (b.Alive && b.Complete && b.FactionId == faction.Id && Shoots(b.Kind))
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction.Id && Shoots(b.Kind))
                     Reveal(faction.VisibleCells, FootprintCenter(b.OriginCell, SizeOf(b.Kind)),
                         Fix64.FromInt(b.Kind == BuildingKind.Castle ? rules.CastleVision : rules.TowerVision));
             }
@@ -344,7 +346,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Tower) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction || b.Kind != BuildingKind.Tower) continue;
                 if (!b.Complete) return; // one at a time
                 towers++;
             }

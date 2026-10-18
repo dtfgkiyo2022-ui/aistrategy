@@ -59,6 +59,7 @@
     <Compile Include="MonkConversionTests.cs" />
     <Compile Include="ProcessingChainTests.cs" />
     <Compile Include="RationsTests.cs" />
+    <Compile Include="EasyRebuildTests.cs" />
     <Compile Include="ResourceFogTests.cs" />
     <Compile Include="ThirdAgeTests.cs" />
     <Compile Include="AutoPlayTests.cs" />
@@ -103,6 +104,7 @@
     <Compile Include="CharmsTests.cs" />
     <Compile Include="RepairKitsTests.cs" />
     <Compile Include="ToolsTests.cs" />
+    <Compile Include="BuildingReservationTests.cs" />
   <Compile Include="GoodsMarketTests.cs" />
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />

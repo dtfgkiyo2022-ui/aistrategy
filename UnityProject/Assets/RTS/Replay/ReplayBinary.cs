@@ -129,7 +129,7 @@ namespace Rts.Replay
                 }
                 // V3-2: a mine or smelter carries the side of its output; a barracks keeps its V3-1 bytes.
                 if((e.Kind==EconomyCommandKind.PlaceBuilding && e.Building!=BuildingKind.Barracks) || e.Kind==EconomyCommandKind.RotateBuilding
-                    || e.Kind==EconomyCommandKind.PlaceBeltComponent) w.Write((byte)e.Facing);
+                    || e.Kind==EconomyCommandKind.PlaceBeltComponent || e.Kind==EconomyCommandKind.MoveBuilding) w.Write((byte)e.Facing);
                 // V3-3: only a policy change carries the policy.
                 if(e.Kind==EconomyCommandKind.SetEconomyPolicy) w.Write((byte)e.Policy);
                 // V3-4: only advancing carries the civilisation.
@@ -173,7 +173,7 @@ namespace Rts.Replay
                     cells=new int[n]; facings=new Facing[n];
                     for(int i=0;i<n;i++) { cells[i]=r.ReadInt32(); facings[i]=ReplayBinary.Enum<Facing>(r); }
                 }
-                var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding
+                var facing=(ek==EconomyCommandKind.PlaceBuilding && building!=BuildingKind.Barracks) || ek==EconomyCommandKind.RotateBuilding || ek==EconomyCommandKind.MoveBuilding
                     || ek==EconomyCommandKind.PlaceBeltComponent ? ReplayBinary.Enum<Facing>(r) : Facing.North;
                 var policy=ek==EconomyCommandKind.SetEconomyPolicy ? ReplayBinary.Enum<EconomyPolicy>(r) : EconomyPolicy.Balanced;
                 var civ=ek==EconomyCommandKind.AdvanceAge || ek==EconomyCommandKind.AdvanceNow ? ReplayBinary.Enum<CivKind>(r) : CivKind.Primitive;

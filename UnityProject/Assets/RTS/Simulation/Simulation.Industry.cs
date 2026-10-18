@@ -21,7 +21,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete) continue;
+                if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b)) continue;
                 // Recovery keeps raw extraction and metallurgy alive while pausing optional input-consuming lines.
                 if (ArmyRecoveryNeedsInfantry(b.FactionId) && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
                     && b.Kind != BuildingKind.LumberCamp && b.Kind != BuildingKind.Quarry && b.Kind != BuildingKind.Drill
@@ -275,7 +275,7 @@ namespace Rts.Simulation
                         for (int sourceIndex = 0; sourceIndex < world.BuildingCount; sourceIndex++)
                         {
                             ref var source = ref world.Buildings[sourceIndex];
-                            if (!source.Alive || !source.Complete || source.FactionId != b.FactionId || source.Kind != BuildingKind.CharcoalKiln || source.Output <= 0) continue;
+                if (!IsActualBuilding(source) || !source.Complete || source.FactionId != b.FactionId || source.Kind != BuildingKind.CharcoalKiln || source.Output <= 0) continue;
                             source.Output--;
                             b.InputSecondary++;
                             break;
@@ -488,7 +488,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
+                if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b) || b.Output == 0 && !(b.Kind == BuildingKind.Storage && b.StorageCount > 0)) continue;
                 int port = OutputCell(b);
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
@@ -634,7 +634,7 @@ namespace Rts.Simulation
         {
             if (!AssemblerAllowed(faction) || !OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-            if (!building.Alive || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Mechanism
+                if (!IsActualBuilding(building) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Mechanism
                 || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
             building.Recipe = recipe;
@@ -700,10 +700,10 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive) continue;
+                if (!IsActualBuilding(b)) continue;
                 int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
-                if (b.FactionId != faction || !b.Complete) return false;
+                if (b.FactionId != faction || !b.Complete || BuildingPaused(b)) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
@@ -819,7 +819,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive) continue;
+                if (!IsActualBuilding(b)) continue;
                 int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.FactionId != faction || !b.Complete) return false;
@@ -890,7 +890,7 @@ namespace Rts.Simulation
             if (NodeCoveredByMiningBuilding(nodeId)) return false;
             foreach (int cell in footprint)
             {
-                if (!world.Map.IsPassable(cell)
+                if (!world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                     || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
             }
             return true;
@@ -917,7 +917,7 @@ namespace Rts.Simulation
                 && !GoldTargetUsable(faction, nodeId, world.Map.Cell(OwnCore(faction).Definition.Position))) return false;
             foreach (int cell in footprint)
             {
-                if (!world.Map.IsPassable(cell)
+                if (!world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                     || world.Belts[cell].FactionId != 0 || InsideAnyCore(cell)) return false;
             }
             return true;
@@ -928,7 +928,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.NodeId == nodeId
+                if (IsActualBuilding(building) && building.NodeId == nodeId
                     && (building.Kind == BuildingKind.Drill || building.Kind == BuildingKind.LumberCamp
                         || building.Kind == BuildingKind.Quarry || building.Kind == BuildingKind.Mine)) return true;
             }
@@ -946,7 +946,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var source = ref world.Buildings[v.HaulFrom - 1];
-            if (!source.Alive || !source.Complete)
+            if (!IsActualBuilding(source) || !source.Complete || BuildingPaused(source))
             {
                 v.HaulFrom = 0; v.HaulTo = 0; v.HaulNodeId = 0;
                 v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
@@ -972,7 +972,7 @@ namespace Rts.Simulation
                 return;
             }
             ref var target = ref world.Buildings[v.HaulTo - 1];
-            if (!target.Alive || !target.Complete) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
+            if (!IsActualBuilding(target) || !target.Complete || BuildingPaused(target)) { v.HaulTo = 0; v.Task = VillagerTask.ToDropOff; return; }
             if (!InRange(v.Position, world.Map.Center(target.WorkCell), GatherReach)) return;
             int put = PutIntoProcessingTarget(ref target, v.CarryKind, v.Carry);
             v.Carry -= put;
@@ -981,6 +981,7 @@ namespace Rts.Simulation
 
         private int PutIntoProcessingTarget(ref BuildingState target, ResourceKind kind, int amount)
         {
+            if (BuildingPaused(target)) return 0;
             var rules = world.Config.Economy;
             if (target.Kind == BuildingKind.Smelter && kind == ResourceKind.Ore)
             {
@@ -1156,7 +1157,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Smelter) return b.Id;
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Smelter) return b.Id;
             }
             return 0;
         }

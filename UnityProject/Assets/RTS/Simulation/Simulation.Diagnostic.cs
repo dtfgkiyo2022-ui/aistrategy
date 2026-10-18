@@ -276,6 +276,11 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (world.Config.Economy.BuildingReservations)
+                {
+                    w.Value(n + "Reserved", b.Reserved);
+                    w.Value(n + "ReservationOrder", b.Reserved ? ReservationOrderFor(b) : 0);
+                }
                 // V3-2: only with industry, so a V3-1 building keeps its exact canonical bytes.
                 if (world.Config.Economy.Industry)
                 {
@@ -348,10 +353,17 @@ namespace Rts.Simulation
                         w.Value(n + "QueueSiegeParts.Count", (uint)siegeQueue.Length);
                         for (int q = 0; q < siegeQueue.Length; q++) w.Value(n + "QueueSiegeParts[" + q.ToString(CultureInfo.InvariantCulture) + "]", siegeQueue[q]);
                     }
-                    if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
-                    {
-                        w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
-                    }
+                if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
+                {
+                    w.Value(n + "StorageKind", (byte)b.StorageKind); w.Value(n + "StorageCount", b.StorageCount);
+                }
+                if (EasyRebuildOn)
+                {
+                    w.Value(n + "ConstructionWood", b.ConstructionWood); w.Value(n + "ConstructionStone", b.ConstructionStone);
+                    w.Value(n + "ConstructionPlanks", b.ConstructionPlanks); w.Value(n + "ConstructionBricks", b.ConstructionBricks);
+                    w.Value(n + "ConstructionSiegeParts", b.ConstructionSiegeParts); w.Value(n + "ConstructionFrames", b.ConstructionFrames);
+                    w.Value(n + "MovePauseUntilTick", b.MovePauseUntilTick);
+                }
                 }
                 if (world.Config.Economy.Caravan && b.Kind == BuildingKind.Caravanserai)
                 {

@@ -19,7 +19,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!building.Alive || !building.Complete || building.Kind != BuildingKind.Tollgate) continue;
+                if (!IsActualBuilding(building) || !building.Complete || building.Kind != BuildingKind.Tollgate) continue;
                 foreach (int cell in Footprint(building)) if (cell >= 0 && cell < cells) next[cell] = building.FactionId;
             }
             bool changed = tollgateOwners == null || tollgateOwners.Length != cells;
@@ -40,10 +40,10 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             if (!TollgateAllowed(faction) || ActiveTollgateCount(faction) >= TollgateMaxBuildingsFor(faction)
-                || (byte)command.Facing > 3 || world.Economies[faction - 1].Wood < rules.TollgateWoodCost
-                || world.Economies[faction - 1].Stone < rules.TollgateStoneCost) return;
+                || (byte)command.Facing > 3) return;
             int[] cells = TollgateFootprint(command.Cell, command.Facing);
             if (!TollgateSiteIsClear(faction, cells) || !KeepsMapConnected(faction, cells)) return;
+            if (world.Economies[faction - 1].Wood < rules.TollgateWoodCost || world.Economies[faction - 1].Stone < rules.TollgateStoneCost) return;
             PlaceBuildingAt(faction, BuildingKind.Tollgate, command.Cell, command.Facing, 0);
             world.Buildings[world.BuildingCount - 1].Held = true;
         }
@@ -52,7 +52,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Tollgate) count++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Tollgate) count++;
             return count;
         }
 
@@ -76,7 +76,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var gate = world.Buildings[i];
-                if (!gate.Alive || !gate.Complete || gate.Kind != BuildingKind.Tollgate) continue;
+                if (!IsActualBuilding(gate) || !gate.Complete || gate.Kind != BuildingKind.Tollgate) continue;
                 int enemyCount = 0;
                 var gateCenter = BuildingCenter(gate);
                 foreach (int soldierIndex in world.SoldierTraversal)
@@ -90,7 +90,7 @@ namespace Rts.Simulation
                 for (int j = 0; j < world.BuildingCount; j++)
                 {
                     var other = world.Buildings[j];
-                    if (i == j || !other.Alive || !other.Complete || other.FactionId != gate.FactionId || other.Kind != BuildingKind.Tollgate
+                if (i == j || !IsActualBuilding(other) || !other.Complete || other.FactionId != gate.FactionId || other.Kind != BuildingKind.Tollgate
                         || !WithinSquared(BuildingCenter(other), gateCenter, networkRadiusSquared)) continue;
                     nearbyGates++;
                 }
@@ -116,7 +116,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var gate = world.Buildings[i];
-                if (!gate.Alive || !gate.Complete || gate.FactionId != defenderFaction || gate.Kind != BuildingKind.Tollgate) continue;
+                if (!IsActualBuilding(gate) || !gate.Complete || gate.FactionId != defenderFaction || gate.Kind != BuildingKind.Tollgate) continue;
                 foreach (int gateCell in Footprint(gate))
                     if (Chebyshev(cell, gateCell) <= 1)
                         return checked(damage * (1000 - world.Config.Economy.TollgateGateDefenceDamageReductionPermille) / 1000);

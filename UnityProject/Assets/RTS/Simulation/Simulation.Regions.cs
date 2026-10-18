@@ -184,7 +184,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.VillagerCount; i++)
                 if (world.Villagers[i].FactionId == faction && RegionForPoint(world.Villagers[i].Position) == regionId) world.Villagers[i].Held = false;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].FactionId == faction && RegionForBuilding(world.Buildings[i]) == regionId) world.Buildings[i].Held = false;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && RegionForBuilding(world.Buildings[i]) == regionId) world.Buildings[i].Held = false;
             for (int i = 0; i < world.Belts.Length; i++)
                 if (world.Belts[i].FactionId == faction && RegionForCell(i) == regionId) world.Belts[i].Held = false;
             var core = world.Factions[faction - 1].CoreId;
@@ -196,7 +196,8 @@ namespace Rts.Simulation
                 uint building = line.MineId != 0 ? line.MineId : line.SmelterId != 0 ? line.SmelterId
                     : line.KilnId != 0 ? line.KilnId : line.SteelworksId != 0 ? line.SteelworksId
                     : line.LumberCampId != 0 ? line.LumberCampId : line.FletcherId != 0 ? line.FletcherId : line.MillId;
-                if (building != 0 && building <= world.BuildingCount && RegionForBuilding(world.Buildings[building - 1]) == regionId)
+                if (building != 0 && building <= world.BuildingCount && IsActualBuilding(world.Buildings[building - 1])
+                    && RegionForBuilding(world.Buildings[building - 1]) == regionId)
                 { line.Manager = LineManager.Automatic; world.ProcessingLines[i] = line; }
             }
         }

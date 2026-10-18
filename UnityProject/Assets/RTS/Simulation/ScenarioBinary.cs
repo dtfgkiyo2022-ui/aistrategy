@@ -91,9 +91,15 @@ namespace Rts.Simulation
         private const int InserterExtensionId = 48;
         private const int InserterExtensionVersion = 1;
         private const int InserterExtensionDataLength = 4 * sizeof(int);
+        private const int EasyRebuildExtensionId = 49;
+        private const int EasyRebuildExtensionVersion = 1;
+        private const int EasyRebuildExtensionDataLength = 2 * sizeof(int);
         private const int ExploreScoutingExtensionId = 50;
         private const int ExploreScoutingExtensionVersion = 1;
         private const int ExploreScoutingExtensionDataLength = 7 * sizeof(int);
+        private const int BuildingReservationsExtensionId = 51;
+        private const int BuildingReservationsExtensionVersion = 1;
+        private const int BuildingReservationsExtensionDataLength = 3 * sizeof(int);
         private const int AiArmyRecoveryExtensionId = 52;
         private const int AiArmyRecoveryExtensionVersion = 1;
         private const int AiArmyRecoveryExtensionDataLength = sizeof(int);
@@ -243,7 +249,9 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(StorageFeedsProcessingExtensionId, StorageFeedsProcessingExtensionVersion, StorageFeedsProcessingExtensionDataLength)
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
             ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
+            ,new ExtensionRegistration(EasyRebuildExtensionId, EasyRebuildExtensionVersion, EasyRebuildExtensionDataLength)
             ,new ExtensionRegistration(ExploreScoutingExtensionId, ExploreScoutingExtensionVersion, ExploreScoutingExtensionDataLength)
+            ,new ExtensionRegistration(BuildingReservationsExtensionId, BuildingReservationsExtensionVersion, BuildingReservationsExtensionDataLength)
             ,new ExtensionRegistration(AiArmyRecoveryExtensionId, AiArmyRecoveryExtensionVersion, AiArmyRecoveryExtensionDataLength)
          };
 
@@ -816,6 +824,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == StorageFeedsProcessingExtensionId) ReadStorageFeedsProcessingExtension(extension, c.Economy);
                     else if (id == CommonDrillExtensionId) ReadCommonDrillExtension(extension, c.Economy);
                     else if (id == InserterExtensionId) ReadInserterExtension(extension, c.Economy);
+                    else if (id == EasyRebuildExtensionId) ReadEasyRebuildExtension(extension, c.Economy);
                     else if (id == BricksExtensionId) ReadBricksExtension(extension, c.Economy);
                     else if (id == TackExtensionId) ReadTackExtension(extension, c.Economy);
                     else if (id == PlanksExtensionId) ReadPlanksExtension(extension, c.Economy);
@@ -841,6 +850,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                     else if (id == ExploreScoutingExtensionId) ReadExploreScoutingExtension(extension, c.Economy);
+                    else if (id == BuildingReservationsExtensionId) ReadBuildingReservationsExtension(extension, c.Economy);
                     else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
@@ -918,8 +928,10 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree3ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DirectPathMovementExtensionId && !c.Economy.DirectPathMovement);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
-                extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
+                extensions.RemoveAll(extension => extension != null && extension.Id == EasyRebuildExtensionId && !c.Economy.EasyRebuild);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ExploreScoutingExtensionId && !c.Economy.ExploreScouting);
+                extensions.RemoveAll(extension => extension != null && extension.Id == BuildingReservationsExtensionId && !c.Economy.BuildingReservations);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1088,6 +1100,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateRationsExtension(c.Economy);
                     }
                 if (c.Economy.Rations && !hasRations) extensions.Add(CreateRationsExtension(c.Economy));
+                bool hasEasyRebuild = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == EasyRebuildExtensionId)
+                    {
+                        hasEasyRebuild = true;
+                        extensions[i] = CreateEasyRebuildExtension(c.Economy);
+                    }
+                if (c.Economy.EasyRebuild && !hasEasyRebuild) extensions.Add(CreateEasyRebuildExtension(c.Economy));
                 bool hasCommonDrill = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CommonDrillExtensionId)
@@ -1232,6 +1252,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                          extensions[i] = CreateAdjacentBuildingsExtension(c.Economy);
                      }
                  if (c.Economy.AdjacentBuildings && !hasAdjacentBuildings) extensions.Add(CreateAdjacentBuildingsExtension(c.Economy));
+                 bool hasBuildingReservations = false;
+                 for (int i = 0; i < extensions.Count; i++)
+                     if (extensions[i] != null && extensions[i].Id == BuildingReservationsExtensionId)
+                     {
+                         hasBuildingReservations = true;
+                         extensions[i] = CreateBuildingReservationsExtension(c.Economy);
+                     }
+                 if (c.Economy.BuildingReservations && !hasBuildingReservations) extensions.Add(CreateBuildingReservationsExtension(c.Economy));
                 bool hasCraftBalance = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CraftBalanceExtensionId)
@@ -1894,6 +1922,31 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             }
         }
 
+        private static ScenarioExtensionData CreateEasyRebuildExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.EasyRebuild ? 1 : 0);
+                writer.Write(e.MoveBuildingPauseTicks);
+                return new ScenarioExtensionData { Id = EasyRebuildExtensionId, Version = EasyRebuildExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadEasyRebuildExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid easy rebuild flag.");
+                e.EasyRebuild = enabled != 0;
+                e.MoveBuildingPauseTicks = reader.ReadInt32();
+                if (e.MoveBuildingPauseTicks <= 0) throw new InvalidDataException("Invalid easy rebuild pause.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing easy rebuild extension data.");
+            }
+        }
+
         private static ScenarioExtensionData CreateCommonDrillExtension(EconomyRules e)
         {
             using (var stream = new MemoryStream())
@@ -1969,6 +2022,32 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.AdjacentBuildings = enabled != 0;
                 e.AdjacentBuildingClearanceCells = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing adjacent-buildings extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateBuildingReservationsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.BuildingReservations ? 1 : 0);
+                writer.Write(e.ReservationLimit);
+                writer.Write(e.ReservationCheckTicks);
+                return new ScenarioExtensionData { Id = BuildingReservationsExtensionId, Version = BuildingReservationsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBuildingReservationsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid building-reservations flag.");
+                e.BuildingReservations = enabled != 0;
+                e.ReservationLimit = reader.ReadInt32();
+                e.ReservationCheckTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing building-reservations extension data.");
             }
         }
 

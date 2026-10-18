@@ -703,10 +703,10 @@ namespace Rts.Simulation
         }
 
         private bool BuildingReady(uint id)
-            => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive && world.Buildings[id - 1].Complete;
+        => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && world.Buildings[id - 1].Complete;
 
         private bool BuildingPending(uint id)
-            => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive && !world.Buildings[id - 1].Complete;
+        => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && !world.Buildings[id - 1].Complete;
 
         private void SetLineBuilding(int index, BuildingKind kind, uint id)
         {

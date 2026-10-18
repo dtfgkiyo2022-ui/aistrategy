@@ -385,7 +385,7 @@ namespace Rts.Simulation
         }
 
         private bool CanTrainTownVillager(uint faction, BuildingState b)
-            => TownsAllowed(faction) && b.Alive && b.Complete && b.Kind == BuildingKind.Town
+        => TownsAllowed(faction) && IsActualBuilding(b) && b.Complete && b.Kind == BuildingKind.Town
                 && b.Queued < world.Config.Economy.QueueLimit
                 && LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued
                     + QueuedInfantry(faction) + QueuedTownVillagers(faction) < PopCapFor(faction)
@@ -571,7 +571,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind == BuildingKind.Town) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction || b.Kind == BuildingKind.Town) continue;
                 for (int q = 0; q < b.Queued; q++) if (QueueAt(b, q) == kind) count++;
             }
             return count;

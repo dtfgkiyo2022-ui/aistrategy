@@ -11,7 +11,7 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         /// <summary>A finished building of this faction below this share of its HP is worth sending villagers to.</summary>
-        private bool NeedsRepair(BuildingState b) => AgesOn && b.Alive && b.Complete && b.Kind != BuildingKind.Wall && b.Hp < HpOf(b.Kind, b.FactionId, b.OriginCell);
+        private bool NeedsRepair(BuildingState b) => AgesOn && IsActualBuilding(b) && b.Complete && b.Kind != BuildingKind.Wall && b.Hp < HpOf(b.Kind, b.FactionId, b.OriginCell);
 
         /// <summary>Economy step, before the building work: every villager repairing adds its HP, never past the top.</summary>
         private void RepairBuildings()
@@ -79,7 +79,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var b = world.Buildings[i];
-                    if (!b.Alive || !b.Complete || b.FactionId != faction) continue;
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction) continue;
                     int max = HpOf(b.Kind, faction, b.OriginCell);
                     if (b.Hp >= max) continue;
                     int rank = b.Kind == BuildingKind.Tollgate ? 0 : b.Kind == BuildingKind.Tower ? 1 : b.Kind == BuildingKind.Wall ? 2 : 4;

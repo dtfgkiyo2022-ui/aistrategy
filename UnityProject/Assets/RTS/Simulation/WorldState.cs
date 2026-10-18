@@ -165,6 +165,8 @@ namespace Rts.Simulation
         /// <summary>Nearest passable cell outside the footprint, where builders stand and new soldiers appear.</summary>
         internal int WorkCell;
         internal bool Alive, Complete;
+        /// <summary>BuildingReservations: a legal human placement waiting for its first payment.</summary>
+        internal bool Reserved;
         internal int Hp, Progress, Queued;
         /// <summary>V3-11 #2: tick at which an automatic bridge was destroyed; 0 means it has not been destroyed.</summary>
         internal long DestroyedTick;
@@ -217,6 +219,10 @@ namespace Rts.Simulation
         /// <summary>V3-20: a storage keeps one resource kind at a time so mixed items never lose their type.</summary>
         internal ResourceKind StorageKind;
         internal int StorageCount;
+        /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
+        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames;
+        /// <summary>EasyRebuild: the last tick covered by the post-move pause.</summary>
+        internal long MovePauseUntilTick;
     }
 
     internal struct ResourceNodeState
@@ -587,8 +593,11 @@ namespace Rts.Simulation
                 && e.MillFoodInput <= e.BufferLimit && e.RationsPerSoldier > 0 && e.RationsTrainPermille > 0 && e.RationsTrainPermille <= 1000
                 && e.RationsHealIntervalTicks > 0 && e.RationsHealQuietTicks >= 0 && e.RationsHealHp > 0 && e.RationsHealMaxPerInterval > 0
                 && e.RationsFarmMinimum >= 0 && e.RationsFoodReserve >= 0), "Invalid rations rules.");
+            Require(!e.EasyRebuild || (e.Enabled && e.MoveBuildingPauseTicks > 0), "Invalid easy-rebuild rules.");
             Require(!e.AdjacentBuildings || (e.Enabled && e.AdjacentBuildingClearanceCells > 0 && e.AdjacentBuildingClearanceCells <= 2),
                 "Invalid adjacent-building rules.");
+            Require(!e.BuildingReservations || (e.Enabled && e.ReservationLimit > 0 && e.ReservationCheckTicks > 0),
+                "Invalid building-reservation rules.");
             Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
             Require(!e.ExploreScouting || e.ExploreChunkCells > 0 && e.ExploreChunkCells <= 64
                 && e.ExploreMinUnexploredPermille >= 0 && e.ExploreMinUnexploredPermille <= 1000
@@ -998,7 +1007,9 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, StartFood = e.StartFood, StartWood = e.StartWood,
+            return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations,
+                ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
+                StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, AiArmyRecovery = e.AiArmyRecovery, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
@@ -1041,7 +1052,8 @@ namespace Rts.Simulation
                   RationsTrainPermille = e.RationsTrainPermille, RationsHealIntervalTicks = e.RationsHealIntervalTicks,
                   RationsHealQuietTicks = e.RationsHealQuietTicks, RationsHealHp = e.RationsHealHp,
                    RationsHealMaxPerInterval = e.RationsHealMaxPerInterval, RationsFarmMinimum = e.RationsFarmMinimum,
-                   RationsFoodReserve = e.RationsFoodReserve, AdjacentBuildings = e.AdjacentBuildings,
+                  RationsFoodReserve = e.RationsFoodReserve, EasyRebuild = e.EasyRebuild, MoveBuildingPauseTicks = e.MoveBuildingPauseTicks,
+                  AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   ResourceFog = e.ResourceFog, ExploreScouting = e.ExploreScouting,
                   ExploreChunkCells = e.ExploreChunkCells, ExploreMinUnexploredPermille = e.ExploreMinUnexploredPermille,

@@ -308,7 +308,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.FactionId == factionId && building.Level >= 2) count++;
+                if (IsActualBuilding(building) && building.FactionId == factionId && building.Level >= 2) count++;
             }
             return count;
         }
@@ -319,7 +319,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.FactionId == factionId && building.Level >= 3) count++;
+                if (IsActualBuilding(building) && building.FactionId == factionId && building.Level >= 3) count++;
             }
             return count;
         }
@@ -361,7 +361,7 @@ namespace Rts.Simulation
             var counts = new Dictionary<BuildingKind, int>();
             foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind))) counts[kind] = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == factionId) counts[world.Buildings[i].Kind]++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == factionId) counts[world.Buildings[i].Kind]++;
             var result = new MatchPackCount[counts.Count];
             int index = 0;
             foreach (var pair in counts)

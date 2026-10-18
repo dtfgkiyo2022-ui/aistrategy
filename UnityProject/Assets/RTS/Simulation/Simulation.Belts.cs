@@ -238,7 +238,7 @@ namespace Rts.Simulation
                 int cost = fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
                 if (owned >= rules.BeltLimit || economy.Wood < cost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
-                    || !world.Map.IsPassable(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
+                    || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - cost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
@@ -271,7 +271,7 @@ namespace Rts.Simulation
             }
             int cell = c.Cell;
             if (owned >= rules.BeltLimit) return;
-            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell)
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
             BeltComponentKind component = c.IsInserter ? BeltComponentKind.Inserter
                 : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
@@ -291,6 +291,7 @@ namespace Rts.Simulation
             if (entrance < 0 || exit < 0 || entrance >= cells || exit >= cells || entrance == exit
                 || world.Belts[entrance].FactionId != 0 || world.Belts[exit].FactionId != 0
                 || !world.Map.IsPassable(entrance) || !world.Map.IsPassable(exit)
+                || IsReservedBuildingCell(entrance) || IsReservedBuildingCell(exit)
                 || IsRiverCell(entrance) || IsRiverCell(exit) || IsNodeCell(entrance) || IsNodeCell(exit)
                 || InsideAnyCore(entrance) || InsideAnyCore(exit)) return false;
             int width = world.Config.Map.WidthCells, ex = entrance % width, ez = entrance / width;
@@ -303,12 +304,37 @@ namespace Rts.Simulation
             return distance <= world.Config.Economy.UndergroundBeltMaxLength;
         }
 
-        /// <summary>RemoveBelt: only the own belt; the item on it is lost and the wood is not returned.</summary>
+        /// <summary>RemoveBelt: removes an own belt and, with EasyRebuild, refunds its placement wood and item.</summary>
         private void RemoveBelt(uint faction, int cell)
         {
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
+            var belt = world.Belts[cell];
+            int pair = belt.PairCell;
+            // Removing both ends of an underground pair is part of EasyRebuild; without it one end stays, as before.
+            bool paired = world.Config.Economy.EasyRebuild && pair >= 0 && pair < world.Belts.Length && world.Belts[pair].FactionId == faction
+                && world.Belts[pair].PairCell == cell
+                && (belt.Component == BeltComponentKind.UndergroundEntrance && world.Belts[pair].Component == BeltComponentKind.UndergroundExit
+                    || belt.Component == BeltComponentKind.UndergroundExit && world.Belts[pair].Component == BeltComponentKind.UndergroundEntrance);
+            if (paired && belt.Component == BeltComponentKind.UndergroundExit)
+            {
+                int entrance = pair;
+                pair = cell;
+                cell = entrance;
+                belt = world.Belts[cell];
+            }
             MarkLinesForBelt(faction, cell);
+            if (paired) MarkLinesForBelt(faction, pair);
+            if (world.Config.Economy.EasyRebuild)
+            {
+                if (belt.Item != 0) AddStock(faction, belt.Item, 1);
+                AddStock(faction, ResourceKind.Wood, paired ? world.Config.Economy.UndergroundBeltWoodCost
+                    : belt.Component == BeltComponentKind.Splitter ? world.Config.Economy.SplitterWoodCost
+                    : belt.Component == BeltComponentKind.Sorter ? world.Config.Economy.SorterWoodCost
+                    : belt.Fast ? world.Config.Economy.FastBeltWoodCost : world.Config.Economy.BeltWoodCost);
+                if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, 1);
+            }
             world.Belts[cell] = default;
+            if (paired) world.Belts[pair] = default;
             world.BeltOrder = null;
         }
 

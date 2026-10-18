@@ -35,13 +35,14 @@ namespace Rts.Simulation
                 var b = world.Buildings[i];
                 if (!b.Alive) continue;
                 bool own = b.FactionId == faction;
+                if (!own && b.Reserved) continue;
                 if (!own && !BuildingVisibleTo(faction, b)) continue;
                 int size = SizeOf(b.Kind);
                 CaravanStopReason caravanReason = CaravanStopReason.None;
                 if (b.Kind == BuildingKind.Caravanserai && own)
                 {
                     if (b.CaravanMarketId == 0 || b.CaravanMarketId > world.BuildingCount
-                        || !world.Buildings[b.CaravanMarketId - 1].Alive || !world.Buildings[b.CaravanMarketId - 1].Complete
+                        || !IsActualBuilding(world.Buildings[b.CaravanMarketId - 1]) || !world.Buildings[b.CaravanMarketId - 1].Complete
                         || world.Buildings[b.CaravanMarketId - 1].FactionId != faction
                         || world.Buildings[b.CaravanMarketId - 1].Kind != BuildingKind.Market)
                         caravanReason = CaravanStopReason.MarketLost;
@@ -61,7 +62,8 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
                     CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
-                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None));
+                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None,
+                    b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -332,7 +334,11 @@ namespace Rts.Simulation
                 commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
                 drillStoneCost: CommonDrillOn ? rules.DrillStoneCost : 0, drillSizeCells: CommonDrillOn ? rules.DrillSizeCells : 0,
                 inserters: InsertersOn, inserterWoodCost: InsertersOn ? rules.InserterWoodCost : 0,
-                inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0);
+                inserterIntervalTicks: InsertersOn ? rules.InserterIntervalTicks : 0,
+                easyRebuild: EasyRebuildOn,
+                  buildingReservations: BuildingReservationsOn, reservationLimit: BuildingReservationsOn ? rules.ReservationLimit : 0,
+                  reservationCount: BuildingReservationsOn ? ReservationCount(faction) : 0,
+                  reservationCheckTicks: BuildingReservationsOn ? rules.ReservationCheckTicks : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)
@@ -410,11 +416,11 @@ namespace Rts.Simulation
             if (v.CaravanDangerStopped) return CaravanStopReason.Danger;
             if (v.CaravanMarketId == 0 || v.CaravanMarketId > world.BuildingCount) return CaravanStopReason.MarketLost;
             var market = world.Buildings[v.CaravanMarketId - 1];
-            if (!market.Alive || !market.Complete || market.FactionId != v.FactionId || market.Kind != BuildingKind.Market)
+            if (!IsActualBuilding(market) || !market.Complete || market.FactionId != v.FactionId || market.Kind != BuildingKind.Market)
                 return CaravanStopReason.MarketLost;
             if (v.CaravanseraiId == 0 || v.CaravanseraiId > world.BuildingCount) return CaravanStopReason.HostLost;
             var host = world.Buildings[v.CaravanseraiId - 1];
-            if (!host.Alive || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai)
+            if (!IsActualBuilding(host) || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai)
                 return CaravanStopReason.HostLost;
             if (v.CaravanOutpostId == 0 || v.CaravanOutpostId > world.Outposts.Length
                 || world.Outposts[v.CaravanOutpostId - 1].OwnerFactionId != v.FactionId) return CaravanStopReason.OutpostLost;
