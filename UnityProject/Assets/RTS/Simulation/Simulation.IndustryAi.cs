@@ -38,6 +38,13 @@ namespace Rts.Simulation
         private void DecideIndustry(uint faction)
         {
             if (LineBuildingCheckOn) ValidateLineBuildingReferences(faction);
+            if (BuildingReservationsOn)
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    if (world.ProcessingLines[i].FactionId == faction && IsAutoLine(i))
+                    {
+                        ref var pendingLine = ref world.ProcessingLines[i];
+                        BindReservedLineBuildings(faction, ref pendingLine);
+                    }
             DecideCraftTree1(faction);
             DecideCraftTree2(faction);
             DecideCraftTree3(faction);
@@ -558,7 +565,7 @@ namespace Rts.Simulation
             var economy = world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             int target = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + 1;
             int ageFood = AgeClockOn ? world.Config.Economy.Age2FoodCost : world.Config.Economy.EarlyAge2FoodCost;
             return farms < target && economy.Food < ageFood + VillagerFoodCostFor(faction);
@@ -591,7 +598,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int racks = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.DryingRack) racks++;
             if (racks >= rules.PreserveMaxRacks || economy.Wood < rules.DryingRackWoodCost + rules.PreserveWoodReserve) return;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Preserves);
             ref var line = ref world.ProcessingLines[index];
@@ -615,7 +622,7 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int weavers = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Weaver) weavers++;
             int index = GetOrCreateLine(faction, ProcessingLineKind.TradeGoods);
             ref var line = ref world.ProcessingLines[index];
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
@@ -672,7 +679,7 @@ namespace Rts.Simulation
             }
             if (!hasHouse) return;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.IncenseHouse) houses++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.IncenseHouse) houses++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.Incense);
@@ -696,7 +703,7 @@ namespace Rts.Simulation
             if (!CharmsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             int workshops = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.CharmWorkshop) workshops++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.CharmWorkshop) workshops++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.Charms);
@@ -723,7 +730,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!IsActualBuilding(b) || b.FactionId != faction) continue;
+                if (!b.Alive || (b.Reserved && !BuildingReservationsOn) || b.FactionId != faction) continue;
                 if (b.Complete && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)) hasHouse = true;
                 if (b.Kind == BuildingKind.ToolShop) shops++;
             }
@@ -732,11 +739,13 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.Tools);
             ref var line = ref world.ProcessingLines[index];
+            BindReservedLineBuildings(faction, ref line);
             if (!IsAutoLine(index) || LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
             if (!BuildingReady(line.ToolShopId))
             {
                 if (BuildingPending(line.ToolShopId)) return;
-                if (shops >= rules.ToolMaxShops || economy.Wood < rules.ToolShopWoodCost + rules.ToolWoodReserve) return;
+                int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
+                if (shops >= rules.ToolMaxShops || availableWood < rules.ToolShopWoodCost + rules.ToolWoodReserve) return;
                 uint id = PlaceToolShop(faction);
                 if (id != 0) line.ToolShopId = id;
                 return;
@@ -805,7 +814,7 @@ namespace Rts.Simulation
             if (!RepairKitsAllowed(faction) || !FishingIndustryPrerequisites(faction)) return;
             int yards = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.RepairYard) yards++;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
             int index = GetOrCreateLine(faction, ProcessingLineKind.RepairKits);
@@ -1392,7 +1401,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             var rules = world.Config.Economy;
             if (farms < rules.RationsFarmMinimum || economy.Food < rules.RationsFoodReserve) return;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Rations);

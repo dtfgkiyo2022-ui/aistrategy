@@ -26,7 +26,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.DropSite) count++;
+                if (IsPlannedBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.DropSite) count++;
             }
             return count;
         }

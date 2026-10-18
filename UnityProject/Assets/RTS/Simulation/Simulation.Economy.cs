@@ -18,6 +18,7 @@ namespace Rts.Simulation
         // Zero is the canonical "never moved" sentinel; a >= comparison would pause every building on tick zero.
         private bool BuildingPaused(BuildingState building) => EasyRebuildOn && building.MovePauseUntilTick > world.Tick;
         private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
+        private bool NoNegativeStockOn => EconomyOn && world.Config.Economy.NoNegativeStock;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>

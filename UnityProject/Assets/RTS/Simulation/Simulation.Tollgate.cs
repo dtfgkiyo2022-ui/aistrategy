@@ -52,7 +52,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Tollgate) count++;
+                if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Tollgate) count++;
             return count;
         }
 

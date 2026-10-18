@@ -1014,7 +1014,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations,
+            return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,

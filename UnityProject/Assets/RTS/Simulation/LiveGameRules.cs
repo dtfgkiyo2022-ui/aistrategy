@@ -92,6 +92,7 @@ namespace Rts.Simulation
             e.ManualControl = true;
             e.AutoReturnAfterHuman = true;
             e.BuildingReservations = true;
+            e.NoNegativeStock = true;
             // The late push is now a real assault under SiegeByAge. Keep the core defence meaningful, but do not let
             // the old 16-cell/30-damage setting delete every attacker before the ordinary core attack envelope.
             e.CoreDefenceRange = 9;
