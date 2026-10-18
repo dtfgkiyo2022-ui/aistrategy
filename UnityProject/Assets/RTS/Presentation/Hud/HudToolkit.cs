@@ -2128,6 +2128,10 @@ namespace Rts.Presentation
         {
             if (staff == null || staffInput == null) return;
             staff.Speak(staffInput.value ?? "");
+            // 10-18 test play: the sent text stayed in the field. Clear it now, and once more on the next frame,
+            // because a focused field's own text editing can put the old text back after this key event.
+            staffInput.value = "";
+            staffInput.schedule.Execute(() => { if (staffInput != null) staffInput.value = ""; });
         }
 
         private void CancelStaff()
