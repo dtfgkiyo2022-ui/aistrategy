@@ -29,20 +29,24 @@ namespace Rts.Simulation
             {
                 s.TargetKind = lineTargetKind; s.TargetId = lineTargetId; return;
             }
-            for (int i = 0; i < world.VillagerCount; i++)
+            int villagerCandidates = QueryRaidVillagers(s.Position, s.Parameters.Range);
+            for (int n = 0; n < villagerCandidates; n++)
             {
+                int i = spatialVillagerCandidates[n];
                 var v = world.Villagers[i];
                 if (!v.Alive || v.FactionId == faction || !IsVisibleTo(faction, v.Position) || !InRange(s.Position, v.Position, s.Parameters.Range)) continue;
                 BigInteger d = DistanceSquared(s.Position, v.Position);
-                if (best < 0 || d < bestDistance) { best = i; bestDistance = d; }
+                if (best < 0 || d < bestDistance || d == bestDistance && i < best) { best = i; bestDistance = d; }
             }
             if (best >= 0) { s.TargetKind = TargetVillager; s.TargetId = world.Villagers[best].Id; return; }
-            for (int i = 0; i < world.BuildingCount; i++)
+            int buildingCandidates = QueryRaidBuildings(s.Position, s.Parameters.Range);
+            for (int n = 0; n < buildingCandidates; n++)
             {
+                int i = spatialBuildingCandidates[n];
                 var b = world.Buildings[i];
                 if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) continue;
                 BigInteger d = DistanceSquared(s.Position, NearestFootprintPoint(b, s.Position));
-                if (best < 0 || d < bestDistance) { best = i; bestDistance = d; }
+                if (best < 0 || d < bestDistance || d == bestDistance && i < best) { best = i; bestDistance = d; }
             }
             if (best >= 0) { s.TargetKind = TargetBuilding; s.TargetId = world.Buildings[best].Id; return; }
             // V3-5 (32 #4): last, an enemy belt cell in range - cutting the enemy's lines. Maps with ages only.
@@ -55,8 +59,10 @@ namespace Rts.Simulation
         {
             targetKind = 0; targetId = 0;
             int bestType = int.MaxValue; uint bestId = 0; BigInteger bestDistance = 0;
-            for (int i = 0; i < world.BuildingCount; i++)
+            int buildingCandidates = QueryRaidBuildings(from, range);
+            for (int n = 0; n < buildingCandidates; n++)
             {
+                int i = spatialBuildingCandidates[n];
                 var b = world.Buildings[i];
                 if (!IsActualBuilding(b) || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
                     || !BuildingVisibleTo(faction, b)) continue;
@@ -69,8 +75,10 @@ namespace Rts.Simulation
                     bestType = TargetBuilding; bestId = b.Id; bestDistance = distance;
                 }
             }
-            for (int cell = 0; cell < world.Belts.Length; cell++)
+            int beltCandidates = QueryRaidBelts(from, range);
+            for (int n = 0; n < beltCandidates; n++)
             {
+                int cell = spatialBeltCandidates[n];
                 var belt = world.Belts[cell];
                 if (belt.FactionId == 0 || belt.FactionId == faction || LineForBelt(belt.FactionId, cell) < 0
                     || !world.Factions[faction - 1].VisibleCells[cell]) continue;
@@ -91,20 +99,18 @@ namespace Rts.Simulation
         /// <summary>The visible enemy belt cell nearest <paramref name="from"/> within <paramref name="range"/> (then the lower cell), or -1.</summary>
         private int NearestEnemyBelt(uint faction, SimPoint from, Fix64 range)
         {
-            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, cellSize = world.Config.Map.CellSizeMeters;
-            int reach = (int)(range.Raw / 65536 / cellSize) + 1, here = world.Map.Cell(from), hx = here % width, hz = here / width;
+            int beltCandidates = QueryRaidBelts(from, range);
             int best = -1; BigInteger bestDistance = 0;
-            for (int z = Math.Max(0, hz - reach); z <= Math.Min(height - 1, hz + reach); z++)
-                for (int x = Math.Max(0, hx - reach); x <= Math.Min(width - 1, hx + reach); x++)
-                {
-                    int cell = z * width + x;
-                    var belt = world.Belts[cell];
-                    if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]) continue;
-                    var centre = world.Map.Center(cell);
-                    if (!InRange(from, centre, range)) continue;
-                    BigInteger d = DistanceSquared(from, centre);
-                    if (best < 0 || d < bestDistance) { best = cell; bestDistance = d; }
-                }
+            for (int n = 0; n < beltCandidates; n++)
+            {
+                int cell = spatialBeltCandidates[n];
+                var belt = world.Belts[cell];
+                if (belt.FactionId == 0 || belt.FactionId == faction || !world.Factions[faction - 1].VisibleCells[cell]) continue;
+                var centre = world.Map.Center(cell);
+                if (!InRange(from, centre, range)) continue;
+                BigInteger d = DistanceSquared(from, centre);
+                if (best < 0 || d < bestDistance || d == bestDistance && cell < best) { best = cell; bestDistance = d; }
+            }
             return best;
         }
 

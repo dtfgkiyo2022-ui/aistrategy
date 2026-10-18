@@ -323,6 +323,22 @@ namespace Rts.Decision
         }
         public static ArmyIntent Tactics(FactionObservation o, TacticalInput input, ref PursuitMemory pursuit)
         {
+            return TacticsCore(o, input, o.VisibleEnemies, o.VisibleEnemies.Count, ref pursuit);
+        }
+
+        /// <summary>
+        /// The simulation supplies only the spatially nearby visible enemies.  The caller must include every enemy
+        /// that can pass the 24 metre tactical leash; the exact leash and range tests remain here unchanged.
+        /// </summary>
+        public static ArmyIntent Tactics(FactionObservation o, TacticalInput input, VisibleEnemy[] candidates, int candidateCount,
+            ref PursuitMemory pursuit)
+        {
+            return TacticsCore(o, input, candidates, candidateCount, ref pursuit);
+        }
+
+        private static ArmyIntent TacticsCore(FactionObservation o, TacticalInput input, IReadOnlyList<VisibleEnemy> candidates,
+            int candidateCount, ref PursuitMemory pursuit)
+        {
             var position = input.Position; var mission = input.Mission;
             if (pursuit.Active || pursuit.Returning) pursuit.Mission = mission;
             if (input.Returning || input.Policy == PolicyKind.Retreat)
@@ -345,19 +361,25 @@ namespace Rts.Decision
             // A defender outside its hold area first returns; no opportunistic attack extends its leash.
             if ((defend || reserve) && !Within(position, anchor, leash))
                 return new ArmyIntent(input.ArmyId, anchor, 0, default, false);
-            var visible = o.VisibleEnemies.Where(e => (defend || reserve) ? Within(e.Position, anchor, leash) : Within(e.Position, position, 24))
-                .OrderBy(e => DistanceSquared(position, e.Position)).ThenBy(e => e.ContactId).ToArray();
-            foreach (var enemy in visible)
-                if (Within(position, enemy.Position, input.Range))
-                    return new ArmyIntent(input.ArmyId, defend && Within(position, anchor, 8) || reserve && Within(position, anchor, 8) ? position : mission, enemy.ContactId, default, false);
+            VisibleEnemy nearest = default; Wide nearestDistance = default; bool hasVisible = false;
+            for (int i = 0; i < candidateCount; i++)
+            {
+                var enemy = candidates[i];
+                if ((defend || reserve) ? !Within(enemy.Position, anchor, leash) : !Within(enemy.Position, position, 24)) continue;
+                var distance = DistanceSquared(position, enemy.Position);
+                if (!hasVisible || distance < nearestDistance || distance.CompareTo(nearestDistance) == 0 && enemy.ContactId < nearest.ContactId)
+                { nearest = enemy; nearestDistance = distance; hasVisible = true; }
+            }
+            if (hasVisible && Within(position, nearest.Position, input.Range))
+                return new ArmyIntent(input.ArmyId, defend && Within(position, anchor, 8) || reserve && Within(position, anchor, 8) ? position : mission, nearest.ContactId, default, false);
             var core = o.Objectives.Where(c => c.Kind == GoalKind.Core && c.OwnerFactionId != o.FactionId && c.IsHpKnown && c.Hp > 0 &&
                 Within(position, c.Position, input.Range + input.CoreRadius) && (!defend && !reserve || Within(c.Position, anchor, leash)))
                 .OrderBy(c => DistanceSquared(position, c.Position)).ThenBy(c => c.Id).ToArray();
             if (core.Length > 0) return new ArmyIntent(input.ArmyId, mission, 0, new PolicyGoal(GoalKind.Core, core[0].Id, default), false);
-            if (visible.Length > 0)
+            if (hasVisible)
             {
                 if (!pursuit.Active) { pursuit.Active = true; pursuit.Start = position; pursuit.StartTick = input.Tick; pursuit.Mission = mission; }
-                return new ArmyIntent(input.ArmyId, FixMath.MoveTowards(pursuit.Start, visible[0].Position, Fix64.FromInt(12)), 0, default, false);
+                return new ArmyIntent(input.ArmyId, FixMath.MoveTowards(pursuit.Start, nearest.Position, Fix64.FromInt(12)), 0, default, false);
             }
             if (pursuit.Active) { pursuit.Active = false; pursuit.Returning = true; return new ArmyIntent(input.ArmyId, pursuit.Mission, 0, default, false); }
             return new ArmyIntent(input.ArmyId, (defend || reserve) && Within(position, anchor, 8) ? position : mission, 0, default, false);
@@ -371,6 +393,18 @@ namespace Rts.Decision
             long dx = checked(position.X.Raw - e.X.Raw), dz = checked(position.Z.Raw - e.Z.Raw);
             if (dx == 0 && dz == 0) dx = home.X.Raw >= position.X.Raw ? 1 : -1;
             // A destination on the visible-enemy-to-scout ray; normal movement speed still applies.
+            return new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
+        }
+
+        public static SimPoint ScoutReturn(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance,
+            VisibleEnemy[] candidates, int candidateCount)
+        {
+            Fix64 radius = Fix64.FromInt(12) + stepDistance;
+            int nearest = NearestWithin(position, radius, candidates, candidateCount);
+            if (nearest < 0) return home;
+            var enemy = candidates[nearest].Position;
+            long dx = checked(position.X.Raw - enemy.X.Raw), dz = checked(position.Z.Raw - enemy.Z.Raw);
+            if (dx == 0 && dz == 0) dx = home.X.Raw >= position.X.Raw ? 1 : -1;
             return new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
         }
 
@@ -402,6 +436,55 @@ namespace Rts.Decision
             return SamePoint(best, position) ? FixMath.MoveTowards(position, away, stepDistance) : best;
         }
 
+        public static SimPoint ScoutRetreatHome(FactionObservation o, SimPoint position, SimPoint home, Fix64 stepDistance,
+            VisibleEnemy[] candidates, int candidateCount)
+        {
+            Fix64 radius = Fix64.FromInt(12) + stepDistance;
+            int nearest = NearestWithin(position, radius, candidates, candidateCount);
+            if (nearest < 0) return home;
+            var enemy = candidates[nearest].Position;
+            long dx = checked(position.X.Raw - enemy.X.Raw), dz = checked(position.Z.Raw - enemy.Z.Raw);
+            if (dx == 0 && dz == 0) dx = home.X.Raw >= position.X.Raw ? 1 : -1;
+            SimPoint away = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dx)), Fix64.FromRaw(checked(position.Z.Raw + dz)));
+            SimPoint left = new SimPoint(Fix64.FromRaw(checked(position.X.Raw - dz)), Fix64.FromRaw(checked(position.Z.Raw + dx)));
+            SimPoint right = new SimPoint(Fix64.FromRaw(checked(position.X.Raw + dz)), Fix64.FromRaw(checked(position.Z.Raw - dx)));
+            SimPoint homeward = FixMath.MoveTowards(position, home, stepDistance);
+            if (SafeFromEnemies(position, homeward, candidates, candidateCount, radius)) return home;
+            Wide bestDistance = DistanceSquared(position, home); SimPoint best = position;
+            SimPoint candidate = FixMath.MoveTowards(position, away, stepDistance);
+            if (SafeFromEnemies(position, candidate, candidates, candidateCount, radius))
+            { var distance = DistanceSquared(candidate, home); if (distance < bestDistance) { best = candidate; bestDistance = distance; } }
+            candidate = FixMath.MoveTowards(position, left, stepDistance);
+            if (SafeFromEnemies(position, candidate, candidates, candidateCount, radius))
+            { var distance = DistanceSquared(candidate, home); if (distance < bestDistance) { best = candidate; bestDistance = distance; } }
+            candidate = FixMath.MoveTowards(position, right, stepDistance);
+            if (SafeFromEnemies(position, candidate, candidates, candidateCount, radius))
+            { var distance = DistanceSquared(candidate, home); if (distance < bestDistance) { best = candidate; bestDistance = distance; } }
+            return SamePoint(best, position) ? FixMath.MoveTowards(position, away, stepDistance) : best;
+        }
+
+        private static int NearestWithin(SimPoint position, Fix64 radius, VisibleEnemy[] candidates, int candidateCount)
+        {
+            int best = -1; Wide bestDistance = default;
+            for (int i = 0; i < candidateCount; i++)
+            {
+                var enemy = candidates[i];
+                if (!Within(enemy.Position, position, radius)) continue;
+                var distance = DistanceSquared(enemy.Position, position);
+                if (best < 0 || distance < bestDistance || distance.CompareTo(bestDistance) == 0 && enemy.ContactId < candidates[best].ContactId)
+                { best = i; bestDistance = distance; }
+            }
+            return best;
+        }
+
+        private static bool SafeFromEnemies(SimPoint current, SimPoint candidate, VisibleEnemy[] enemies, int count, Fix64 radius)
+        {
+            for (int i = 0; i < count; i++)
+                if (Within(enemies[i].Position, current, radius)
+                    && DistanceSquared(candidate, enemies[i].Position) < DistanceSquared(current, enemies[i].Position)) return false;
+            return true;
+        }
+
         private static bool SafeFromEnemies(SimPoint current, SimPoint candidate, IReadOnlyList<VisibleEnemy> enemies)
         {
             foreach (var enemy in enemies)
@@ -412,6 +495,13 @@ namespace Rts.Decision
         private static bool SamePoint(SimPoint a, SimPoint b) => a.X.Raw == b.X.Raw && a.Z.Raw == b.Z.Raw;
         public static bool ScoutSeesEnemy(FactionObservation o, SimPoint position, Fix64 vision)
             => o.VisibleEnemies.Any(e => Within(e.Position, position, vision));
+        public static bool ScoutSeesEnemy(FactionObservation o, SimPoint position, Fix64 vision,
+            VisibleEnemy[] candidates, int candidateCount)
+        {
+            for (int i = 0; i < candidateCount; i++)
+                if (Within(candidates[i].Position, position, vision)) return true;
+            return false;
+        }
         public static bool ScoutReturnComplete(FactionObservation o, OwnArmyView army)
             => army.AliveCount > 0 && army.Kind == UnitKind.Scout
                 && !ScoutSeesEnemy(o, army.Position, Fix64.FromInt(32));
