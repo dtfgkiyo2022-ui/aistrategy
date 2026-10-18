@@ -194,6 +194,7 @@ namespace Rts.Simulation
         {
             ref var line = ref world.ProcessingLines[index];
             ref var economy = ref world.Economies[faction - 1];
+            BindReservedLineBuildings(faction, ref line);
             if (line.Kind == ProcessingLineKind.Planks && CraftTreeCommonAllowed(faction))
             {
                 if (!BuildingReady(line.SawmillId))
@@ -788,7 +789,73 @@ namespace Rts.Simulation
         => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && world.Buildings[id - 1].Complete;
 
         private bool BuildingPending(uint id)
-        => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && !world.Buildings[id - 1].Complete;
+        => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive && !world.Buildings[id - 1].Complete;
+
+        private bool IsProcessingLineBuildingReferenced(uint buildingId)
+        {
+            if (buildingId == 0) return false;
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.MineId == buildingId || line.SmelterId == buildingId || line.KilnId == buildingId || line.SteelworksId == buildingId
+                    || line.LumberCampId == buildingId || line.FletcherId == buildingId || line.MillId == buildingId || line.QuarryId == buildingId
+                    || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.StonecutterId == buildingId
+                    || line.JoineryId == buildingId || line.AssemblerId == buildingId || line.ScriptoriumId == buildingId || line.DryingRackId == buildingId
+                    || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId
+                    || line.RepairYardId == buildingId || line.ToolShopId == buildingId) return true;
+            }
+            return false;
+        }
+
+        private void BindReservedLineBuilding(uint faction, ref uint id, BuildingKind kind)
+        {
+            if (BuildingReservationsOn && id == 0) id = FindReservedBuilding(faction, kind);
+        }
+
+        private void BindReservedLineBuildings(uint faction, ref ProcessingLineState line)
+        {
+            if (!BuildingReservationsOn) return;
+            if (line.Kind == ProcessingLineKind.Assembler) BindReservedLineBuilding(faction, ref line.AssemblerId, BuildingKind.Assembler);
+            else if (line.Kind == ProcessingLineKind.Bricks)
+            {
+                BindReservedLineBuilding(faction, ref line.QuarryId, BuildingKind.Quarry);
+                BindReservedLineBuilding(faction, ref line.KilnId, BuildingKind.CharcoalKiln);
+                BindReservedLineBuilding(faction, ref line.BrickKilnId, BuildingKind.BrickKiln);
+            }
+            else if (line.Kind == ProcessingLineKind.Rations) BindReservedLineBuilding(faction, ref line.MillId, BuildingKind.Mill);
+            else if (line.Kind == ProcessingLineKind.Tack) BindReservedLineBuilding(faction, ref line.SaddleryId, BuildingKind.Saddlery);
+            else if (line.Kind == ProcessingLineKind.Planks)
+            {
+                BindReservedLineBuilding(faction, ref line.LumberCampId, BuildingKind.LumberCamp);
+                BindReservedLineBuilding(faction, ref line.SawmillId, BuildingKind.Sawmill);
+            }
+            else if (line.Kind == ProcessingLineKind.Books) BindReservedLineBuilding(faction, ref line.ScriptoriumId, BuildingKind.Scriptorium);
+            else if (line.Kind == ProcessingLineKind.Preserves) BindReservedLineBuilding(faction, ref line.DryingRackId, BuildingKind.DryingRack);
+            else if (line.Kind == ProcessingLineKind.Jewels) BindReservedLineBuilding(faction, ref line.LapidaryId, BuildingKind.Lapidary);
+            else if (line.Kind == ProcessingLineKind.TradeGoods) BindReservedLineBuilding(faction, ref line.WeaverId, BuildingKind.Weaver);
+            else if (line.Kind == ProcessingLineKind.Incense) BindReservedLineBuilding(faction, ref line.IncenseHouseId, BuildingKind.IncenseHouse);
+            else if (line.Kind == ProcessingLineKind.Charms) BindReservedLineBuilding(faction, ref line.CharmWorkshopId, BuildingKind.CharmWorkshop);
+            else if (line.Kind == ProcessingLineKind.RepairKits) BindReservedLineBuilding(faction, ref line.RepairYardId, BuildingKind.RepairYard);
+            else if (line.Kind == ProcessingLineKind.Tools) BindReservedLineBuilding(faction, ref line.ToolShopId, BuildingKind.ToolShop);
+            else if (line.Kind == ProcessingLineKind.CutStone) BindReservedLineBuilding(faction, ref line.StonecutterId, BuildingKind.Stonecutter);
+            else if (line.Kind == ProcessingLineKind.Frames) BindReservedLineBuilding(faction, ref line.JoineryId, BuildingKind.Joinery);
+            else if (line.Kind == ProcessingLineKind.CoreWood) BindReservedLineBuilding(faction, ref line.LumberCampId, BuildingKind.LumberCamp);
+            else if (line.Kind == ProcessingLineKind.BowGear)
+            {
+                BindReservedLineBuilding(faction, ref line.LumberCampId, BuildingKind.LumberCamp);
+                BindReservedLineBuilding(faction, ref line.FletcherId, BuildingKind.Fletcher);
+            }
+            else if (line.Kind == ProcessingLineKind.CoreMetal || line.Kind == ProcessingLineKind.Steel)
+            {
+                BindReservedLineBuilding(faction, ref line.MineId, BuildingKind.Mine);
+                BindReservedLineBuilding(faction, ref line.SmelterId, BuildingKind.Smelter);
+                if (line.Kind == ProcessingLineKind.Steel)
+                {
+                    BindReservedLineBuilding(faction, ref line.KilnId, BuildingKind.CharcoalKiln);
+                    BindReservedLineBuilding(faction, ref line.SteelworksId, BuildingKind.Steelworks);
+                }
+            }
+        }
 
         private void SetLineBuilding(int index, BuildingKind kind, uint id)
         {

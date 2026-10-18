@@ -293,7 +293,8 @@ namespace Rts.Simulation
             var e = world.Economies[faction - 1];
             if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
             var (food, wood, gold, _) = AdvancePrice(faction, e);
-            return e.Food >= food && e.Wood >= wood && e.Gold >= gold;
+            int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            return e.Food >= food && e.Wood - heldWood >= wood && e.Gold >= gold;
         }
 
         private (int food, int wood, int gold, int ticks) BaseAdvancePrice(uint faction, FactionEconomy e)
@@ -505,7 +506,8 @@ namespace Rts.Simulation
             bool legalCiv = economy.Civ == CivKind.Primitive ? CivEnabled(faction, civ) : civ == economy.Civ;
             if (civ == CivKind.Primitive || !legalCiv) return false;
             var price = AdvancePrice(faction, economy);
-            if (economy.Food < price.food || economy.Wood < price.wood || economy.Gold < price.gold) return false;
+            int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            if (economy.Food < price.food || economy.Wood - heldWood < price.wood || economy.Gold < price.gold) return false;
             economy.Food = checked(economy.Food - price.food);
             economy.Wood = checked(economy.Wood - price.wood);
             economy.Gold = checked(economy.Gold - price.gold);

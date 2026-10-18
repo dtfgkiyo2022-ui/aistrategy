@@ -46,6 +46,44 @@ namespace Rts.Simulation
             return best;
         }
 
+        private uint FindReservedBuilding(uint faction, BuildingKind kind)
+        {
+            int best = -1;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!b.Alive || !b.Reserved || b.FactionId != faction || b.Kind != kind || IsProcessingLineBuildingReferenced(b.Id)) continue;
+                if (best < 0 || b.Id < world.Buildings[best].Id) best = i;
+            }
+            return best < 0 ? 0u : world.Buildings[best].Id;
+        }
+
+        private int ReservedConstructionWood(uint faction)
+        {
+            int index = HeadReservationIndex(faction);
+            if (index < 0) return 0;
+            var reservation = world.Buildings[index];
+            bool framesAvailable = CraftTree1On && reservation.Kind != BuildingKind.Wall
+                && world.Economies[faction - 1].Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
+            return WoodOfForPlacement(reservation.Kind, faction, framesAvailable);
+        }
+
+        private int ReservedConstructionStone(uint faction)
+        {
+            int index = HeadReservationIndex(faction);
+            return index < 0 ? 0 : StoneOf(world.Buildings[index].Kind, faction);
+        }
+
+        private bool CanPayAutomaticConstruction(uint faction, int wood, int stone)
+        {
+            var economy = world.Economies[faction - 1];
+            int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            int heldStone = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionStone(faction) : 0;
+            if (automaticEconomyAction && BuildingReservationsOn
+                && (economy.Wood - heldWood < wood || economy.Stone - heldStone < stone)) return false;
+            return !NoNegativeStockOn || (economy.Wood >= wood && economy.Stone >= stone);
+        }
+
         private void CreateBuildingReservation(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId,
             int[] bridgeCells = null, int requestedWorkCell = -1,
             uint caravanOutpost = 0, uint caravanMarket = 0, Fix64 caravanDistance = default(Fix64), int caravanReward = 0,
