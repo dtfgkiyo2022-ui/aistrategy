@@ -152,6 +152,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/AdjacentBuildingPlacementRules.cs" Link="Presentation/AdjacentBuildingPlacementRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/UiInfoRules.cs" Link="Presentation/UiInfoRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/SelectionInfoText.cs" Link="Presentation/SelectionInfoText.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/BuildingRelocationUiRules.cs" Link="Presentation/BuildingRelocationUiRules.cs" />
   </ItemGroup>
   <!-- Allowlist: add only tests that do not depend on UnityEngine or UnityEditor. -->
   <ItemGroup>
@@ -215,5 +216,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/UiInfoEditModeTests.cs" Link="Tests/UiInfoEditModeTests.cs" />
     <Compile Include="AdjacentBuildingsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/BuildingRelocationUiRulesEditModeTests.cs" Link="Tests/BuildingRelocationUiRulesEditModeTests.cs" />
   </ItemGroup>
 </Project>
