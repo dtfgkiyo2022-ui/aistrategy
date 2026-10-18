@@ -108,6 +108,9 @@ namespace Rts.Simulation
         private const int LineBuildingCheckExtensionId = 54;
         private const int LineBuildingCheckExtensionVersion = 1;
         private const int LineBuildingCheckExtensionDataLength = sizeof(int);
+        private const int NoNegativeStockExtensionId = 55;
+        private const int NoNegativeStockExtensionVersion = 1;
+        private const int NoNegativeStockExtensionDataLength = sizeof(int);
         private const int AutoReturnAfterHumanExtensionId = 53;
         private const int AutoReturnAfterHumanExtensionVersion = 1;
         private const int AutoReturnAfterHumanExtensionDataLength = 3 * sizeof(int);
@@ -263,6 +266,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
              ,new ExtensionRegistration(AiArmyRecoveryExtensionId, AiArmyRecoveryExtensionVersion, AiArmyRecoveryExtensionDataLength)
              ,new ExtensionRegistration(AutoReturnAfterHumanExtensionId, AutoReturnAfterHumanExtensionVersion, AutoReturnAfterHumanExtensionDataLength)
              ,new ExtensionRegistration(LineBuildingCheckExtensionId, LineBuildingCheckExtensionVersion, LineBuildingCheckExtensionDataLength)
+             ,new ExtensionRegistration(NoNegativeStockExtensionId, NoNegativeStockExtensionVersion, NoNegativeStockExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -866,6 +870,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                      else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
                      else if (id == LineBuildingCheckExtensionId) ReadLineBuildingCheckExtension(extension, c.Economy);
                      else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
+                     else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -949,6 +954,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
                 extensions.RemoveAll(extension => extension != null && extension.Id == LineBuildingCheckExtensionId && !c.Economy.LineBuildingCheck);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
+                extensions.RemoveAll(extension => extension != null && extension.Id == NoNegativeStockExtensionId && !c.Economy.NoNegativeStock);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1275,7 +1281,15 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                          hasBuildingReservations = true;
                          extensions[i] = CreateBuildingReservationsExtension(c.Economy);
                      }
-                 if (c.Economy.BuildingReservations && !hasBuildingReservations) extensions.Add(CreateBuildingReservationsExtension(c.Economy));
+                if (c.Economy.BuildingReservations && !hasBuildingReservations) extensions.Add(CreateBuildingReservationsExtension(c.Economy));
+                bool hasNoNegativeStock = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == NoNegativeStockExtensionId)
+                    {
+                        hasNoNegativeStock = true;
+                        extensions[i] = CreateNoNegativeStockExtension(c.Economy);
+                    }
+                if (c.Economy.NoNegativeStock && !hasNoNegativeStock) extensions.Add(CreateNoNegativeStockExtension(c.Economy));
                 bool hasCraftBalance = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == CraftBalanceExtensionId)
@@ -2895,6 +2909,26 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid line building check flag.");
                 e.LineBuildingCheck = enabled != 0;
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing line building check extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateNoNegativeStockExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.NoNegativeStock ? 1 : 0);
+                return new ScenarioExtensionData { Id = NoNegativeStockExtensionId, Version = NoNegativeStockExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadNoNegativeStockExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid no-negative-stock flag.");
+                e.NoNegativeStock = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing no-negative-stock extension data.");
             }
         }
         private static ScenarioExtensionData CreateAutoReturnAfterHumanExtension(EconomyRules e)

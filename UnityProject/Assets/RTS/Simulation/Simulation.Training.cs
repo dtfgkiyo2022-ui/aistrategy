@@ -228,6 +228,7 @@ namespace Rts.Simulation
             bool tool = CanUseToolForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
+            if (NoNegativeStockOn && economy.Food < food) return;
             economy.Food = checked(economy.Food - food);
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction, tool);
@@ -277,7 +278,8 @@ namespace Rts.Simulation
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
-            return e.Food >= c.food && e.Wood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
+            int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
                 && (kind != UnitKind.HeavyCavalry || TackAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost);
         }
 
@@ -397,6 +399,7 @@ namespace Rts.Simulation
             bool tool = CanUseToolForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
+            if (NoNegativeStockOn && economy.Food < food) return;
             economy.Food = checked(economy.Food - food);
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction, tool);

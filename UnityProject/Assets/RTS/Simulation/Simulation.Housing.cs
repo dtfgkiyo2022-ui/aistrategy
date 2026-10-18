@@ -74,7 +74,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (IsActualBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
+                if (IsPlannedBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
             }
             int searchRadius = EconomyScaleOn ? Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells) : SiteSearchRadiusCells;
             int origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius);

@@ -26,14 +26,17 @@ namespace Rts.Core.Tests
         {
             var source = MapGenerator.Generate(702, true);
             source.Economy.BuildingReservations = true;
+            source.Economy.NoNegativeStock = true;
             source.Economy.ReservationLimit = 7;
             source.Economy.ReservationCheckTicks = 13;
             var bytes = ScenarioBinary.Encode(source);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Economy.BuildingReservations, Is.True);
+            Assert.That(decoded.Economy.NoNegativeStock, Is.True);
             Assert.That(decoded.Economy.ReservationLimit, Is.EqualTo(7));
             Assert.That(decoded.Economy.ReservationCheckTicks, Is.EqualTo(13));
             Assert.That(decoded.Extensions.Any(x => x.Id == 51), Is.True);
+            Assert.That(decoded.Extensions.Any(x => x.Id == 55), Is.True);
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
@@ -41,7 +44,47 @@ namespace Rts.Core.Tests
         public void LiveRulesEnableReservationsOnlyForTheFullCivilisationSet()
         {
             Assert.That(LiveGameRules.Create(703, false, true, true, false).Economy.BuildingReservations, Is.True);
+            Assert.That(LiveGameRules.Create(703, false, true, true, false).Economy.NoNegativeStock, Is.True);
             Assert.That(LiveGameRules.Create(704, false, false, false, false).Economy.BuildingReservations, Is.False);
+        }
+
+        [Test]
+        public void LiveRuleSeedsNeverProduceNegativeResourceStock()
+        {
+            for (int seed = 1; seed <= 8; seed++)
+            {
+                var battle = new Battle(LiveGameRules.Create((uint)seed, false, true, false, false));
+                var gateway = new CommandGateway(battle);
+                gateway.SubmitEconomy(EconomyCommand.Auto(1, 1, true));
+                gateway.SubmitEconomy(EconomyCommand.Auto(2, 2, true));
+                for (int tick = 0; tick < 10488; tick++)
+                {
+                    gateway.Step();
+                    for (uint faction = 1; faction <= 2; faction++)
+                    {
+                        var economy = battle.Capture(faction).Economy;
+                        Assert.That(economy.Food, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, food");
+                        Assert.That(economy.Wood, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, wood");
+                        Assert.That(economy.Stone, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, stone");
+                        Assert.That(economy.Ore, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, ore");
+                        Assert.That(economy.Metal, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, metal");
+                        Assert.That(economy.Gems, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, gems");
+                        Assert.That(economy.Gold, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, gold");
+                        Assert.That(economy.Rations, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, rations");
+                        Assert.That(economy.Bricks, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, bricks");
+                        Assert.That(economy.Tack, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, tack");
+                        Assert.That(economy.Planks, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, planks");
+                        Assert.That(economy.Frames, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, frames");
+                        Assert.That(economy.ArmsKit, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, arms");
+                        Assert.That(economy.FineArmsKit, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, fine arms");
+                        Assert.That(economy.SiegeParts, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, siege parts");
+                        Assert.That(economy.Books, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, books");
+                        Assert.That(economy.BowGear, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, bow gear");
+                        Assert.That(economy.Tools, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, tools");
+                        Assert.That(economy.Charms, Is.GreaterThanOrEqualTo(0), $"seed {seed}, tick {tick}, faction {faction}, charms");
+                    }
+                }
+            }
         }
 
         [Test]
@@ -268,6 +311,27 @@ namespace Rts.Core.Tests
             var frame = fixture.Simulation.Capture(1).Economy;
             Assert.That(frame.ReservationCount, Is.EqualTo(1));
             Assert.That(frame.Buildings.Count(b => b.Reserved), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void AutomaticEconomyDoesNotPlaceAnotherBarracksWhileTheHeadReservationWaits()
+        {
+            var scenario = MapGenerator.Generate(720, true);
+            scenario.Economy.BuildingReservations = true;
+            scenario.Economy.ReservationLimit = 2;
+            scenario.Economy.ReservationCheckTicks = 100;
+            scenario.Economy.StartWood = 90;
+            scenario.Economy.BarracksWoodCost = 100;
+            var fixture = NewFixture(scenario);
+            int cell = FindPlaceableCell(scenario, BuildingKind.Barracks);
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Place(1, ++fixture.Sequence, BuildingKind.Barracks, cell));
+            fixture.Gateway.Step();
+            fixture.Gateway.SubmitEconomy(EconomyCommand.Auto(1, ++fixture.Sequence, true));
+            for (int i = 0; i < 60; i++) fixture.Gateway.Step();
+
+            var frame = fixture.Simulation.Capture(1).Economy;
+            Assert.That(frame.Buildings.Count(b => b.Kind == BuildingKind.Barracks), Is.EqualTo(1));
+            Assert.That(frame.Buildings.Count(b => b.Kind == BuildingKind.Barracks && b.Reserved), Is.EqualTo(1));
         }
 
         [Test]

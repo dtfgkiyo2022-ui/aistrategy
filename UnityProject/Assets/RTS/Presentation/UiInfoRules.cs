@@ -10,6 +10,12 @@ namespace Rts.Presentation
             if (work <= 0) return 0f;
             return Math.Max(0f, Math.Min(1f, progress / (float)work));
         }
+
+        public static float BuildingDisplayHeight(float fullHeight, bool finished, bool reserved, int progress, int work)
+        {
+            if (reserved || finished) return fullHeight;
+            return 0.6f + (fullHeight - 0.6f) * ConstructionRatio(progress, work);
+        }
     }
 
     public readonly struct ClearanceCorner

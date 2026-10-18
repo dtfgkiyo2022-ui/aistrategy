@@ -75,6 +75,8 @@ namespace Rts.Simulation
         public bool MeasurementScale;
         /// <summary>Human building placement may reserve a legal site until the required resources are available.</summary>
         public bool BuildingReservations;
+        /// <summary>AI/resource deductions must never make a stock negative.</summary>
+        public bool NoNegativeStock;
         public int ReservationLimit = 10, ReservationCheckTicks = 10;
         /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
         public bool Regions;

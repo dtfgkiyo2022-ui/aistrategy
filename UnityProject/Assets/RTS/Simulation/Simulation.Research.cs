@@ -376,7 +376,8 @@ namespace Rts.Simulation
             }
             // Research must not consume the metal reserved for the first recovery infantry.
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Metal, metal)) return false;
-            if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
+            int heldWood = !byPlayer && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            if (economy.Food < food || economy.Wood - heldWood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
             if (cult && !CultBudgetAllows(faction, food, wood)) return false;
             economy.Food = checked(economy.Food - food);

@@ -792,7 +792,7 @@ namespace Rts.Presentation
                     : b.Kind == BuildingKind.Market ? 1.8f : b.Kind == BuildingKind.SiegeWorkshop ? 2.6f
                     : b.Kind == BuildingKind.ArcheryRange ? 2.2f : b.Kind == BuildingKind.Stable ? 2.4f
                     : b.Kind == BuildingKind.Castle ? 6f : b.Kind == BuildingKind.DryingRack ? 1.8f : 3f;
-                float height = finished ? full : 0.6f + (full - 0.6f) * (b.Work == 0 ? 0f : (float)b.Progress / b.Work);
+                float height = UiInfoRules.BuildingDisplayHeight(full, finished, b.Reserved, b.Progress, b.Work);
                 var color = b.FactionId == 1 ? WestColor : EastColor;
                 if (!finished) color *= 0.55f;
                 if (b.Reserved) color = new Color(1f, 0.72f, 0.18f, 0.45f);
@@ -823,6 +823,11 @@ namespace Rts.Presentation
                     go.transform.position = new Vector3(p.x, height / 2f, p.z);
                     go.transform.localScale = new Vector3(b.SizeMeters, height, b.SizeMeters);
                     go.GetComponent<Renderer>().sharedMaterial = PresentationMaterials.Get(color);
+                }
+                if (b.Reserved)
+                {
+                    var reservationMaterial = PresentationMaterials.GetUnlit(color);
+                    foreach (var renderer in go.GetComponentsInChildren<Renderer>(true)) renderer.sharedMaterial = reservationMaterial;
                 }
                 if (b.MaxHp > 0)
                 {
