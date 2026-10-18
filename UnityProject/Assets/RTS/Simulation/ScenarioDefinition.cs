@@ -204,6 +204,10 @@ namespace Rts.Simulation
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;
         public int RationsFarmMinimum = 2, RationsFoodReserve = 120;
+        /// <summary>EasyRebuild: refunds paid materials on destruction and permits moving completed own buildings.</summary>
+        public bool EasyRebuild;
+        /// <summary>EasyRebuild: ticks for which a moved building remains paused.</summary>
+        public int MoveBuildingPauseTicks = 60;
         /// <summary>Allows human building commands to touch an existing building without changing automatic site searches.</summary>
         public bool AdjacentBuildings;
         public int AdjacentBuildingClearanceCells = 1;

@@ -45,7 +45,8 @@ namespace Rts.Simulation
                 world.Map.SetPassable(cell, false);
                 world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = BuildingKind.Wall, OriginCell = cell,
                     WorkCell = cell, Alive = true, Complete = true, Hp = brick ? BrickHpOf(BuildingKind.Wall, faction, cell) : HpOf(BuildingKind.Wall, faction, cell),
-                    BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North };
+                    BrickUpgraded = brick, Progress = 1, Held = IndustryOn, Facing = Facing.North,
+                    ConstructionStone = StoneOf(BuildingKind.Wall, faction), ConstructionBricks = brick ? rules.BricksPerWall : 0 };
                 world.NextBuildingId = checked(world.NextBuildingId + 1);
                 EvacuateFootprint(new[] { cell });
                 changed = true;
@@ -70,6 +71,7 @@ namespace Rts.Simulation
                 int oldHp = b.Hp;
                 economy.Bricks -= cost;
                 economy.BricksConsumed = checked(economy.BricksConsumed + cost);
+                if (EasyRebuildOn) b.ConstructionBricks = checked(b.ConstructionBricks + cost);
                 if (b.Kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
                 else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
                 b.BrickUpgraded = true;
