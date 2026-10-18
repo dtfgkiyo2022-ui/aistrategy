@@ -8,7 +8,8 @@ namespace Rts.Presentation
     public static class AdjacentBuildingPlacementRules
     {
         public static bool CanPlace(EconomyView economy, IReadOnlyList<KnownObjective> objectives, uint factionId,
-            BuildingKind kind, int origin, int size, Facing facing, int woodCost, int stoneCost, bool ignoreCosts = false)
+            BuildingKind kind, int origin, int size, Facing facing, int woodCost, int stoneCost, bool ignoreCosts = false,
+            uint ignoredBuildingId = 0)
         {
             if (economy == null || !ignoreCosts && (economy.Wood < woodCost || economy.Stone < stoneCost) || size <= 0) return false;
             if (kind == BuildingKind.Drill) return DrillSiteIsLegal(economy, origin, size);
@@ -28,6 +29,7 @@ namespace Rts.Presentation
                 for (int j = 0; j < economy.Buildings.Count; j++)
                 {
                     var other = economy.Buildings[j];
+                    if (other.Id == ignoredBuildingId) continue;
                     int otherSize = CellSize(economy, other.SizeMeters);
                     int otherOrigin = OriginOf(economy, other.Center, otherSize);
                     foreach (int otherCell in Footprint(otherOrigin, otherSize, width))
@@ -39,6 +41,7 @@ namespace Rts.Presentation
             for (int i = 0; i < economy.Buildings.Count; i++)
             {
                 var other = economy.Buildings[i];
+                if (other.Id == ignoredBuildingId) continue;
                 int otherSize = CellSize(economy, other.SizeMeters);
                 int otherOrigin = OriginOf(economy, other.Center, otherSize);
                 int output = OutputCell(economy, otherOrigin, otherSize, other.Facing);
@@ -52,6 +55,7 @@ namespace Rts.Presentation
             for (int i = 0; i < economy.Buildings.Count; i++)
             {
                 var other = economy.Buildings[i];
+                if (other.Id == ignoredBuildingId) continue;
                 int otherSize = CellSize(economy, other.SizeMeters);
                 if (Contains(Footprint(OriginOf(economy, other.Center, otherSize), otherSize, width), candidateOutput)) return false;
             }
