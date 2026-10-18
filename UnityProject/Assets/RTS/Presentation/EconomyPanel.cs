@@ -483,7 +483,8 @@ namespace Rts.Presentation
                 return;
             }
             if (mode == Mode.RemoveBelt) { layer.ShowBeltPreview(onMap ? new List<int> { cell } : null, false); return; }
-            if (mode == Mode.MoveBuilding && !TrySelectedBuilding(out BuildingView movingBuilding))
+            BuildingView movingBuilding = default(BuildingView);
+            if (mode == Mode.MoveBuilding && !TrySelectedBuilding(out movingBuilding))
             {
                 SetMode(Mode.None);
                 return;
