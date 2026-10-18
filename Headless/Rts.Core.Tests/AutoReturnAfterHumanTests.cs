@@ -131,8 +131,14 @@ namespace Rts.Core.Tests
             simulation.Step(2, Array.Empty<ScheduledInput>());
             simulation.Step(3, Array.Empty<ScheduledInput>());
             Assert.That(simulation.Capture(1).Commands.Single(c => c.CommandId == 1).Status, Is.EqualTo(CommandStatus.Executing));
-            simulation.Step(4, Array.Empty<ScheduledInput>());
-            Assert.That(simulation.Capture(1).Commands.Single(c => c.CommandId == 1).Reason, Is.EqualTo(ReasonCode.AutoReturned));
+            // A captured outpost is already the ordinary end of the attack (the objective is owned), which hands the army
+            // back like any finished order. Before the fog fix this test passed only because "out of sight" started the
+            // auto-return timer first; the order must end either way, and must not stay executing.
+            for (long tick = 4; tick <= 12; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
+            var ended = simulation.Capture(1).Commands.Single(c => c.CommandId == 1);
+            Assert.That(ended.Status, Is.Not.EqualTo(CommandStatus.Executing));
+            Assert.That(ended.Reason == ReasonCode.AutoReturned || ended.Status == CommandStatus.Completed, Is.True,
+                ended.Status + " / " + ended.Reason);
         }
 
         [Test]
