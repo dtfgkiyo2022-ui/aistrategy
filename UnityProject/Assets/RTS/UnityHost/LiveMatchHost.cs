@@ -19,7 +19,7 @@ namespace Rts.UnityHost
     /// Drives a real match: Simulation + CommandGateway stepped at the scenario tick rate, with the
     /// player on faction 1 and a doctrine preset on faction 2. Display reads captured frames only.
     /// </summary>
-    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl, IStaffControl, IPlayerControlMode
+    public sealed class LiveMatchHost : MonoBehaviour, IExternalAiControl, IFineJudgementControl, IMatchClock, IMatchRestart, IOpponentControl, IMapChoice, IMatchRuleChoice, IFrameSource, IPlayerFilesControl, IStaffControl, IPlayerControlMode
     {
         /// <summary>Set by the command-line bootstrap so scene hosts do not start a second match.</summary>
         public static bool SmokeMode { get; set; }
@@ -403,9 +403,13 @@ namespace Rts.UnityHost
         private string developmentAiMessage = "";
         private bool developmentAiModelListOpen;
         private const string StrategistModelKey = "rts.strategist.model";
+        private const string FineJudgementKey = "rts.match.fineJudgement";
         private const string AiInstructionControl = "AiInstruction";
         private bool aiFieldFocused;
         private Rect aiFieldRect;
+
+        /// <summary>Test hook for the fine-judgement key. The default reads the key only from the environment.</summary>
+        public static Func<string> FineJudgementKeyReader = () => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY");
 
         /// <summary>細かい判断を試し遊びの陣営1で使うか。変更は次の試合から有効です。</summary>
         public bool FineJudgementEnabled
@@ -421,7 +425,35 @@ namespace Rts.UnityHost
             set { int normalized = Math.Max(20, value); if (normalized == fineJudgementIntervalTicks) return; fineJudgementIntervalTicks = normalized; matchRestartRequested = true; }
         }
 
-        public string FineJudgementModel { get { return fineJudgementLocal ? "local-llm" : "jev"; } }
+        public string[] Options { get { return new[] { FineJudgementOption.Off, FineJudgementOption.Jev, FineJudgementOption.LocalLlm }; } }
+
+        public string Mode
+        {
+            get { return !fineJudgementEnabled ? FineJudgementOption.Off : fineJudgementLocal ? FineJudgementOption.LocalLlm : FineJudgementOption.Jev; }
+            set
+            {
+                string normalized = NormalizeFineJudgementMode(value);
+                if (normalized == null || normalized == Mode) return;
+                if (normalized == FineJudgementOption.Jev && !JevKeyAvailable) return;
+                fineJudgementEnabled = normalized != FineJudgementOption.Off;
+                fineJudgementLocal = normalized == FineJudgementOption.LocalLlm;
+                PlayerPrefs.SetString(FineJudgementKey, normalized);
+                PlayerPrefs.Save();
+                matchRestartRequested = true;
+            }
+        }
+
+        public bool JevKeyAvailable
+        {
+            get { return !string.IsNullOrEmpty(ReadFineJudgementKey()); }
+        }
+
+        public string Description
+        {
+            get { return UiText.T("The AI helps with small hands-off decisions (for example, attack or wait).", "お任せが細かい場面（攻めるか待つか など）で AI に判断を聞きます。"); }
+        }
+
+        public string FineJudgementModel { get { return Mode == FineJudgementOption.Off ? "" : Mode; } }
 
         /// <summary>Set while a match is running with an external provider, for the display to read.</summary>
         public JevPolicyProvider ExternalProvider { get { return jev; } }
@@ -844,7 +876,7 @@ namespace Rts.UnityHost
                 }
                 else if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TYPESAFE_API_KEY")))
                 {
-                    jevTransport = new HttpJevTransport(() => Environment.GetEnvironmentVariable("TYPESAFE_API_KEY"));
+                    jevTransport = new HttpJevTransport(ReadFineJudgementKey);
                     judgementTransport = null; // HttpJevTransport is not IDisposable: there is nothing to release
                     jev = new JevPolicyProvider(jevTransport);
                     external = jev;
@@ -893,6 +925,7 @@ namespace Rts.UnityHost
                 panel.Bind(port, viewFactionId, viewFactionId, view);
                 panel.PlayerControlMode = this;
                 panel.ExternalAi = this;
+                panel.FineJudgement = this;
                 panel.MatchRestart = this;
                 panel.Opponent = this;
                 if (ownDoctrine == null) ownDoctrine = new OwnDoctrineChoice(this);
@@ -1303,6 +1336,7 @@ namespace Rts.UnityHost
             }
             // Japanese by default for play-testing; the choice is remembered on this PC (display only, never simulated).
             UiText.Japanese = PlayerPrefs.GetInt(LanguageKey, 1) == 1;
+            RestoreFineJudgement();
             manualControl = PlayerPrefs.GetInt(ManualControlKey, 0) == 1;
             if (!manualControl) rememberedOwnPreset = ownPreset;
             if (!smokeRunner) allCivilisations = PlayerPrefs.GetInt(AllCivilisationsKey, allCivilisations ? 1 : 0) == 1;
@@ -1500,8 +1534,48 @@ namespace Rts.UnityHost
         private void RestoreStrategistModel()
         {
             var available = AiModels.Where(option => option.Available).Select(option => option.Model);
-            string restored = StrategistUiRules.RestoreModel(PlayerPrefs.GetString(StrategistModelKey, developmentAiModel), available);
-            if (!string.IsNullOrEmpty(restored)) developmentAiModel = restored;
+            string saved = PlayerPrefs.GetString(StrategistModelKey, developmentAiModel);
+            string restored = StrategistUiRules.RestoreModel(saved, available);
+            if (string.IsNullOrEmpty(restored) && string.Equals(saved, "jev", StringComparison.OrdinalIgnoreCase))
+                restored = StrategistUiRules.IsStrategistModel(developmentAiModel) ? developmentAiModel : "local-llm";
+            if (string.IsNullOrEmpty(restored)) return;
+            developmentAiModel = restored;
+            if (!string.Equals(saved, restored, StringComparison.OrdinalIgnoreCase))
+            {
+                PlayerPrefs.SetString(StrategistModelKey, restored);
+                PlayerPrefs.Save();
+            }
+        }
+
+        private static string NormalizeFineJudgementMode(string value)
+        {
+            if (string.Equals(value, FineJudgementOption.Off, StringComparison.OrdinalIgnoreCase)) return FineJudgementOption.Off;
+            if (string.Equals(value, FineJudgementOption.LocalLlm, StringComparison.OrdinalIgnoreCase)) return FineJudgementOption.LocalLlm;
+            if (string.Equals(value, FineJudgementOption.Jev, StringComparison.OrdinalIgnoreCase)) return FineJudgementOption.Jev;
+            return null;
+        }
+
+        private static string ReadFineJudgementKey()
+        {
+            var reader = FineJudgementKeyReader;
+            return reader == null ? null : reader();
+        }
+
+        private void RestoreFineJudgement()
+        {
+            string saved = PlayerPrefs.GetString(FineJudgementKey, "");
+            string mode = string.IsNullOrEmpty(saved)
+                ? Mode
+                : NormalizeFineJudgementMode(saved);
+            if (mode == FineJudgementOption.Jev && !JevKeyAvailable) mode = FineJudgementOption.Off;
+            if (mode == null) mode = FineJudgementOption.Off;
+            fineJudgementEnabled = mode != FineJudgementOption.Off;
+            fineJudgementLocal = mode == FineJudgementOption.LocalLlm;
+            if (!string.Equals(saved, mode, StringComparison.OrdinalIgnoreCase))
+            {
+                PlayerPrefs.SetString(FineJudgementKey, mode);
+                PlayerPrefs.Save();
+            }
         }
 
         /// <summary>
