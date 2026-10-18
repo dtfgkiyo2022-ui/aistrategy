@@ -79,6 +79,8 @@ namespace Rts.Simulation
         public bool ArmyGrowth;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
+        /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
+        public bool AiArmyRecovery;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;

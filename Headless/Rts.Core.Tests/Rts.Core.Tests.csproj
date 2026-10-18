@@ -129,6 +129,7 @@
     <Compile Include="ManualControlTests.cs" />
     <Compile Include="SiegeByAgeTests.cs" />
     <Compile Include="LiveStallMeasurementTests.cs" />
+    <Compile Include="ArmyRecoveryMeasurementTests.cs" />
     <Compile Include="PushWavesMeasurementTests.cs" />
     <Compile Include="TacticJsTests.cs" />
     <Compile Include="TacticPyodideTests.cs" />

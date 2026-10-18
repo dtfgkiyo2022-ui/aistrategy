@@ -94,6 +94,9 @@ namespace Rts.Simulation
         private const int ExploreScoutingExtensionId = 50;
         private const int ExploreScoutingExtensionVersion = 1;
         private const int ExploreScoutingExtensionDataLength = 7 * sizeof(int);
+        private const int AiArmyRecoveryExtensionId = 52;
+        private const int AiArmyRecoveryExtensionVersion = 1;
+        private const int AiArmyRecoveryExtensionDataLength = sizeof(int);
         private const int SiegeByAgeExtensionId = 17;
         private const int SiegeByAgeExtensionVersion = 1;
         private const int SiegeByAgeExtensionDataLength = 5 * sizeof(int);
@@ -241,6 +244,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(CommonDrillExtensionId, CommonDrillExtensionVersion, CommonDrillExtensionDataLength)
             ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
             ,new ExtensionRegistration(ExploreScoutingExtensionId, ExploreScoutingExtensionVersion, ExploreScoutingExtensionDataLength)
+            ,new ExtensionRegistration(AiArmyRecoveryExtensionId, AiArmyRecoveryExtensionVersion, AiArmyRecoveryExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -837,6 +841,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                     else if (id == ExploreScoutingExtensionId) ReadExploreScoutingExtension(extension, c.Economy);
+                    else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -915,6 +920,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CommonDrillExtensionId && !c.Economy.CommonDrill);
                 extensions.RemoveAll(extension => extension != null && extension.Id == InserterExtensionId && !c.Economy.Inserters);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ExploreScoutingExtensionId && !c.Economy.ExploreScouting);
+                extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1307,6 +1313,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateExploreScoutingExtension(c.Economy);
                     }
                 if (c.Economy.ExploreScouting && !hasExploreScouting) extensions.Add(CreateExploreScoutingExtension(c.Economy));
+                bool hasAiArmyRecovery = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == AiArmyRecoveryExtensionId)
+                    {
+                        hasAiArmyRecovery = true;
+                        extensions[i] = CreateAiArmyRecoveryExtension(c.Economy);
+                    }
+                if (c.Economy.AiArmyRecovery && !hasAiArmyRecovery) extensions.Add(CreateAiArmyRecoveryExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -2715,6 +2729,26 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 e.ExploreRetargetTicks = reader.ReadInt32(); e.ExploreAvoidChunks = reader.ReadInt32();
                 e.ExploreAvoidTicks = reader.ReadInt32(); e.ExploreAutoUntilTick = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing exploration extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateAiArmyRecoveryExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiArmyRecovery ? 1 : 0);
+                return new ScenarioExtensionData { Id = AiArmyRecoveryExtensionId, Version = AiArmyRecoveryExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadAiArmyRecoveryExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI army recovery flag.");
+                e.AiArmyRecovery = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI army recovery extension data.");
             }
         }
         private static void Point(BinaryWriter w,SimPoint p) { w.Write(p.X.Raw); w.Write(p.Z.Raw); }
