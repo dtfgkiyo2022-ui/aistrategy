@@ -26,6 +26,7 @@ namespace Rts.Presentation
         private ICommandPort port;
         private ICommandDelayControl delayControl;
         private IExternalAiControl externalAi;
+        private IFineJudgementControl fineJudgement;
         private IMatchRestart matchRestart;
         private IOpponentControl opponent;
         private ITacticControl opponentTactic;
@@ -77,6 +78,21 @@ namespace Rts.Presentation
 
         /// <summary>The optional outside AI. Null hides the panel, which is what the mock scene wants.</summary>
         public IExternalAiControl ExternalAi { get { return externalAi; } set { externalAi = value; } }
+
+        /// <summary>Lets the Unity host expose the optional fine judgement choices in match setup.</summary>
+        public IFineJudgementControl FineJudgement { get { return fineJudgement; } set { fineJudgement = value; } }
+
+        /// <summary>Applies a setup choice through the host boundary; returns false for unknown or unavailable choices.</summary>
+        public bool TrySelectFineJudgement(string option)
+        {
+            if (fineJudgement == null || string.IsNullOrEmpty(option)) return false;
+            var options = fineJudgement.Options ?? Array.Empty<string>();
+            if (Array.IndexOf(options, option) < 0) return false;
+            if (string.Equals(option, FineJudgementOption.Jev, StringComparison.OrdinalIgnoreCase)
+                && !fineJudgement.JevKeyAvailable) return false;
+            fineJudgement.Mode = option;
+            return string.Equals(fineJudgement.Mode, option, StringComparison.OrdinalIgnoreCase);
+        }
 
         /// <summary>Lets the result overlay start the next match. Null hides the button, which is what the mock scene wants.</summary>
         public IMatchRestart MatchRestart { get { return matchRestart; } set { matchRestart = value; } }
@@ -647,6 +663,29 @@ namespace Rts.Presentation
             }
             y += SetupRow;
 
+            if (fineJudgement != null)
+            {
+                GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Fine judgement", "お任せの細かい判断"));
+                var options = fineJudgement.Options ?? Array.Empty<string>();
+                float width = options.Length == 0 ? 0f : (rect.width - 16f - labelWidth) / options.Length;
+                for (int i = 0; i < options.Length; i++)
+                {
+                    string option = options[i];
+                    bool available = !string.Equals(option, FineJudgementOption.Jev, StringComparison.OrdinalIgnoreCase)
+                        || fineJudgement.JevKeyAvailable;
+                    bool on = fineJudgement.Mode == option;
+                    bool previous = GUI.enabled;
+                    GUI.enabled = available;
+                    if (GUI.Toggle(new Rect(x + labelWidth + i * width, y, width - 4f, 24f), on,
+                            FineJudgementLabel(option, fineJudgement.JevKeyAvailable), GUI.skin.button) && !on)
+                        TrySelectFineJudgement(option);
+                    GUI.enabled = previous;
+                }
+                GUI.Label(new Rect(x + labelWidth, y + 26f, rect.width - 16f - labelWidth, 34f),
+                    fineJudgement.Description ?? "", UiStyles.Tiny);
+                y += 64f;
+            }
+
             GUI.Label(new Rect(x, y, labelWidth, 24f), UiText.T("Outside AI", "外部AI"));
             if (externalAi == null) return DrawAssetCredits(x, y + SetupRow, rect.width - 16f);
             var line = new Rect(x + labelWidth, y, rect.width - 16f - labelWidth, 24f);
@@ -662,6 +701,17 @@ namespace Rts.Presentation
             GUI.Label(new Rect(x, y + 26f, rect.width - 16f, 34f), ai ? externalAi.Status.Replace("\n", "   ")
                 : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"));
             return DrawAssetCredits(x, y + 64f, rect.width - 16f);
+        }
+
+        public static string FineJudgementLabel(string option, bool jevKeyAvailable)
+        {
+            if (string.Equals(option, FineJudgementOption.Off, StringComparison.OrdinalIgnoreCase))
+                return UiText.T("Off", "使わない");
+            if (string.Equals(option, FineJudgementOption.Jev, StringComparison.OrdinalIgnoreCase))
+                return UiText.T("Jev", "Jev") + (jevKeyAvailable ? "" : UiText.T(" (key not set)", "（キー未設定）"));
+            if (string.Equals(option, FineJudgementOption.LocalLlm, StringComparison.OrdinalIgnoreCase))
+                return UiText.T("Local LLM", "ローカルLLM");
+            return option ?? "";
         }
 
         private static float DrawAssetCredits(float x, float y, float width)

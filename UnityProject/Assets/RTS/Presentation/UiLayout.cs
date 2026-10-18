@@ -48,7 +48,8 @@ namespace Rts.Presentation
             float rightWidth = 420f;
 
             float centerX = leftWidth + gap;
-            float rightX = screenWidth - rightWidth;
+            // The right column keeps the same margin as the left one, so its border is not cut by the screen edge.
+            float rightX = screenWidth - rightWidth - pad;
             float centerWidth = Mathf.Max(300f, rightX - centerX - gap);
             float bottom = screenHeight - pad;
             float contentTop = pad + topHeight + gap;

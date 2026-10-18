@@ -1448,6 +1448,7 @@ namespace Rts.Presentation
             AddFileSection();
             AddMapSection();
             AddRuleSection();
+            AddFineJudgementSection();
             AddExternalAiSection();
 
             AddSetupText(setupContent,
@@ -1719,6 +1720,24 @@ namespace Rts.Presentation
             content.Add(toggle);
             AddSetupText(content, ai.Enabled ? ai.Status.Replace("\n", "   ")
                 : UiText.T("Turning it on sends what your side can see (positions, counts, outposts) to an outside service.", "入れると、自陣営に見えている情報（位置・人数・拠点）を外部のサービスに送ります。"), "setup-status");
+        }
+
+        private void AddFineJudgementSection()
+        {
+            var fine = commandPanel.FineJudgement;
+            if (fine == null) return;
+            var content = AddSetupRow(UiText.T("Fine judgement", "お任せの細かい判断"));
+            var options = fine.Options ?? Array.Empty<string>();
+            for (int i = 0; i < options.Length; i++)
+            {
+                string option = options[i];
+                bool available = !string.Equals(option, FineJudgementOption.Jev, StringComparison.OrdinalIgnoreCase)
+                    || fine.JevKeyAvailable;
+                var button = AddSetupButton(content, CommandPanel.FineJudgementLabel(option, fine.JevKeyAvailable),
+                    fine.Mode == option, () => commandPanel.TrySelectFineJudgement(option));
+                button.SetEnabled(available);
+            }
+            AddSetupText(content, fine.Description ?? "", "setup-hint");
         }
 
         private void RefreshLog()
@@ -2109,6 +2128,10 @@ namespace Rts.Presentation
         {
             if (staff == null || staffInput == null) return;
             staff.Speak(staffInput.value ?? "");
+            // 10-18 test play: the sent text stayed in the field. Clear it now, and once more on the next frame,
+            // because a focused field's own text editing can put the old text back after this key event.
+            staffInput.value = "";
+            staffInput.schedule.Execute(() => { if (staffInput != null) staffInput.value = ""; });
         }
 
         private void CancelStaff()
@@ -2215,13 +2238,14 @@ namespace Rts.Presentation
             }
 
             string selectedName = staff.SelectedAiName ?? "";
+            if (string.Equals(selectedName, "jev", StringComparison.OrdinalIgnoreCase)) selectedName = "";
             string selectedLabel = selectedName;
             for (int i = 0; i < choices.Count; i++)
                 if (choices[i].Name == selectedName) { selectedLabel = choices[i].DisplayName; break; }
             staffAiButton.text = string.IsNullOrEmpty(selectedLabel) ? "AI を選ぶ  ▼" : selectedLabel + "  ▼";
             staffOptions.style.display = staffAiListOpen ? DisplayStyle.Flex : DisplayStyle.None;
-            // 10-18 test play: the list ran past the bottom of the panel and the last choice (Jev) could not be
-            // reached. The list scrolls and never grows past the panel below the button.
+            // 10-18 test play: the list ran past the bottom of the panel and its last choice could not be reached.
+            // The list scrolls and never grows past the panel below the button.
             if (staffAiListOpen && staffPanel != null && !float.IsNaN(staffPanel.layout.height) && staffPanel.layout.height > 0f)
                 staffOptions.style.maxHeight = Mathf.Max(80f, staffPanel.layout.height - 46f);
         }
