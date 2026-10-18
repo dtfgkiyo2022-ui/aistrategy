@@ -38,6 +38,13 @@ internal static class TacticMatchCommand
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), false, true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        int commonScale = ParseScale(options, "--scale", 1);
+        int villagerScale = ParseScale(options, "--villager-scale", commonScale);
+        int armyScale = ParseScale(options, "--army-scale", commonScale);
+        if (options.ContainsKey("--scale") && (options.ContainsKey("--villager-scale") || options.ContainsKey("--army-scale")))
+            throw new InvalidDataException("--scale と --villager-scale/--army-scale は同時に指定できません。");
+        if (villagerScale != 1 || armyScale != 1)
+            ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
         if (options.ContainsKey("--craft-timing-off")) scenario.Economy.CraftTiming = false;
         if (options.ContainsKey("--craft-balance-off")) scenario.Economy.CraftBalance = false;
         if (options.ContainsKey("--resource-fog-off")) scenario.Economy.ResourceFog = false;
@@ -123,9 +130,16 @@ internal static class TacticMatchCommand
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             exploreTrace = new StreamWriter(exploreTracePath, false, new UTF8Encoding(false));
         }
-        // --timing-out: average milliseconds of one gateway step per 1000 ticks (tick,ms), to see a match slow down.
-        var timing = options.ContainsKey("--timing-out") ? new List<string> { "tick,stepMs" } : null;
-        double stepMs = 0;
+        // --timing-out writes one row per completed simulation tick so the caller can calculate nearest-rank
+        // statistics without changing the deterministic simulation. Tactic execution is outside stepMs.
+        StreamWriter timingWriter = null;
+        if (options.TryGetValue("--timing-out", out var timingPath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,totalUnits,phases");
+        }
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
             long tick = simulation.Capture(1).Tick;
@@ -143,7 +157,12 @@ internal static class TacticMatchCommand
             WriteHostLog(lines, eastResult, 2, eastName);
             pack?.RecordTactic(westResult, 1, westName);
             pack?.RecordTactic(eastResult, 2, eastName);
+            if (timingWriter != null) phaseMs.Clear();
             long stepStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+            long allocatedBefore = timingWriter == null ? 0 : GC.GetAllocatedBytesForCurrentThread();
+            int gc0Before = timingWriter == null ? 0 : GC.CollectionCount(0);
+            int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
+            int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
             if (exploreTrace != null)
             {
@@ -201,19 +220,37 @@ internal static class TacticMatchCommand
                     priorBooks = economy.Books;
                 }
             }
-            stepMs += (System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-            if (timing != null && (i + 1) % 1000 == 0)
+            if (timingWriter != null)
             {
-                timing.Add(string.Format(CultureInfo.InvariantCulture, "{0},{1:0.000}", simulation.Capture(1).Tick, stepMs / 1000)
-                    + string.Concat(phaseMs.Select(p => string.Format(CultureInfo.InvariantCulture, ",{0}={1:0.000}", p.Key, p.Value / 1000))));
-                phaseMs.Clear();
-                stepMs = 0;
+                var westFrame = simulation.Capture(1);
+                var eastFrame = simulation.Capture(2);
+                int westVillagers = CountOwnVillagers(westFrame.Economy);
+                int eastVillagers = CountOwnVillagers(eastFrame.Economy);
+                int westSoldiers = westFrame.Observation.OwnArmies.Sum(a => a.AliveCount);
+                int eastSoldiers = eastFrame.Observation.OwnArmies.Sum(a => a.AliveCount);
+                int westBarracks = westFrame.Economy?.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Barracks) ?? 0;
+                int eastBarracks = eastFrame.Economy?.Buildings.Count(b => b.FactionId == 2 && b.Kind == BuildingKind.Barracks) ?? 0;
+                var phases = phaseMs.Where(p => !p.Key.StartsWith("alloc:", StringComparison.Ordinal)
+                    && !p.Key.StartsWith("allocKB:", StringComparison.Ordinal));
+                string phaseText = string.Join(";", phases.Select(p => p.Key + "=" + p.Value.ToString("0.000", CultureInfo.InvariantCulture)));
+                timingWriter.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
+                    ((System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency).ToString("0.000", CultureInfo.InvariantCulture),
+                    (GC.GetAllocatedBytesForCurrentThread() - allocatedBefore).ToString(CultureInfo.InvariantCulture),
+                    (GC.CollectionCount(0) - gc0Before).ToString(CultureInfo.InvariantCulture),
+                    (GC.CollectionCount(1) - gc1Before).ToString(CultureInfo.InvariantCulture),
+                    (GC.CollectionCount(2) - gc2Before).ToString(CultureInfo.InvariantCulture),
+                    westVillagers.ToString(CultureInfo.InvariantCulture), westSoldiers.ToString(CultureInfo.InvariantCulture),
+                    eastVillagers.ToString(CultureInfo.InvariantCulture), eastSoldiers.ToString(CultureInfo.InvariantCulture),
+                    westBarracks.ToString(CultureInfo.InvariantCulture), eastBarracks.ToString(CultureInfo.InvariantCulture),
+                    (westVillagers + westSoldiers + eastVillagers + eastSoldiers).ToString(CultureInfo.InvariantCulture), phaseText));
+                if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
             pack?.RecordAfterStep(simulation);
         }
+        timingWriter?.Dispose();
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
@@ -240,7 +277,6 @@ internal static class TacticMatchCommand
         }
         researchTrace?.WriteLine("{\"event\":\"summary\",\"thresholdTick\":" + firstBooksThresholdTick + ",\"researchStarts\":" + researchStarts + ",\"researchCompletions\":" + researchCompletions + ",\"finalBooks\":" + (simulation.Capture(1).Economy?.Books ?? 0) + "}");
         researchTrace?.Dispose();
-        if (timing != null) File.WriteAllLines(options["--timing-out"], timing, new UTF8Encoding(false));
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))
         {
@@ -259,11 +295,28 @@ internal static class TacticMatchCommand
                 + " dropSites=" + dropSites.ToString(CultureInfo.InvariantCulture)
                 + " food=" + economy.Food.ToString(CultureInfo.InvariantCulture)
                 + " wood=" + economy.Wood.ToString(CultureInfo.InvariantCulture)
-                + " villagers=" + economy.Villagers.Count(v => v.IsOwn).ToString(CultureInfo.InvariantCulture)
+                + " villagers=" + CountOwnVillagers(economy).ToString(CultureInfo.InvariantCulture)
                 + " beltCells=" + economy.Belts.Count.ToString(CultureInfo.InvariantCulture)
                 + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
         }
         return result.IsFault ? 4 : 0;
+    }
+
+    private static int ParseScale(Dictionary<string, string> options, string key, int fallback)
+    {
+        if (!options.TryGetValue(key, out var text)) return fallback;
+        int value = int.Parse(text, CultureInfo.InvariantCulture);
+        if (value < 1 || value > 64) throw new InvalidDataException(key + " は1〜64の整数で指定してください。");
+        return value;
+    }
+
+    private static int CountOwnVillagers(EconomyView economy)
+    {
+        if (economy == null) return 0;
+        int count = 0;
+        for (int i = 0; i < economy.Villagers.Count; i++)
+            if (economy.Villagers[i].IsOwn) count++;
+        return count;
     }
 
     private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)

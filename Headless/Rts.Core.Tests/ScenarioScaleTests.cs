@@ -17,6 +17,25 @@ namespace Rts.Tests.Headless
             Assert.That(scaled.Soldiers.Length, Is.EqualTo(40));
         }
 
+        [Test]
+        public void MeasurementFactorsAreIndependentAndFlagOffIsUntouched()
+        {
+            var baseline = MapGenerator.GenerateTerrain(1, true, true);
+            var unchanged = ScenarioScale.MultiplyForMeasurement(baseline, 1, 1);
+            Assert.That(unchanged, Is.SameAs(baseline));
+            Assert.That(unchanged.Economy.MeasurementScale, Is.False);
+
+            var scaled = MapGenerator.GenerateTerrain(1, true, true);
+            ScenarioScale.MultiplyForMeasurement(scaled, 4, 2);
+            Assert.That(scaled.Economy.AutoVillagerTarget, Is.EqualTo(80));
+            Assert.That(scaled.Economy.PopulationCap, Is.EqualTo(240));
+            Assert.That(scaled.Soldiers.Length, Is.EqualTo(80));
+            Assert.That(scaled.Soldiers.Count(d => d.FactionId == 1), Is.EqualTo(40));
+            Assert.That(scaled.Armies[0].Capacity, Is.EqualTo(32));
+            Assert.That(scaled.Rules.FactionCap, Is.EqualTo(120));
+            Assert.That(scaled.Economy.MeasurementScale, Is.True);
+        }
+
         [TestCase(2, 80)]
         [TestCase(6, 240)]
         [TestCase(12, 480)]
