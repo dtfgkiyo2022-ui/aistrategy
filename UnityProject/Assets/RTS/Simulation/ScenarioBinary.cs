@@ -2826,7 +2826,6 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             }
         }
         private static ScenarioExtensionData CreateAiArmyRecoveryExtension(EconomyRules e)
-        private static ScenarioExtensionData CreateAutoReturnAfterHumanExtension(EconomyRules e)
         {
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
@@ -2836,6 +2835,21 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             }
         }
         private static void ReadAiArmyRecoveryExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI army recovery flag.");
+                e.AiArmyRecovery = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI army recovery extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateAutoReturnAfterHumanExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
                 writer.Write(e.AutoReturnAfterHuman ? 1 : 0);
                 writer.Write(e.AutoReturnArriveMeters);
                 writer.Write(e.AutoReturnHoldTicks);
@@ -2849,9 +2863,6 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             using (var reader = new BinaryReader(stream))
             {
                 int enabled = reader.ReadInt32();
-                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI army recovery flag.");
-                e.AiArmyRecovery = enabled != 0;
-                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI army recovery extension data.");
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid automatic human-order return flag.");
                 e.AutoReturnAfterHuman = enabled != 0;
                 e.AutoReturnArriveMeters = reader.ReadInt32();
