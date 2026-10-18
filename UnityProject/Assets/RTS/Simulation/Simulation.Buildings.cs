@@ -355,6 +355,9 @@ namespace Rts.Simulation
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
             int woodCost = plankBridge ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000) : WoodOfForPlacement(kind, faction, framesUsed);
+            // A smelter is allowed through so an age-three infantry metal reserve can be replenished.
+            if (automaticEconomyAction && kind != BuildingKind.Smelter
+                && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
             if (framesUsed)
             {
