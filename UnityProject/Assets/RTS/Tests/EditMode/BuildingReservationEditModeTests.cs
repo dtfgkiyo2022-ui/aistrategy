@@ -34,5 +34,12 @@ namespace Rts.Tests.EditMode
                 UiText.Japanese = japanese;
             }
         }
+
+        [Test]
+        public void WaitingReservationUsesTheFullBuildingHeight()
+        {
+            Assert.That(UiInfoRules.BuildingDisplayHeight(3f, false, true, 0, 400), Is.EqualTo(3f));
+            Assert.That(UiInfoRules.BuildingDisplayHeight(3f, false, false, 0, 400), Is.EqualTo(0.6f));
+        }
     }
 }
