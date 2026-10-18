@@ -460,7 +460,9 @@
 
 .staff-input {
     flex-grow: 0;
-    height: 32px;
+    flex-shrink: 0;
+    /* 10-19 test play: a fixed 32px cut the lower half of the typed text. The field grows to its text. */
+    min-height: 34px;
     margin-top: 4px;
     margin-bottom: 4px;
     background-color: var(--hud-staff-input);
@@ -473,6 +475,10 @@
 .staff-input .unity-base-text-field__input {
     background-color: var(--hud-staff-input);
     color: var(--hud-staff-input-text);
+    margin: 0;
+    padding: 4px 8px;
+    min-height: 32px;
+    -unity-text-align: middle-left;
 }
 
 .staff-send-button {
