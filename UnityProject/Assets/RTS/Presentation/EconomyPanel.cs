@@ -566,15 +566,6 @@ namespace Rts.Presentation
         private void DrawBuild(EconomyView economy, float x, float y, float w, float half, float right)
         {
             ModeButton(new Rect(x, y, half, 22f), Mode.Barracks, UiText.T("Barracks (", "兵舎（木材 ") + economy.BarracksWoodCost + UiText.T(" wood)", "）"));
-#if false
-                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
-                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し (Del)")))
-                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "建物の取り壊しを依頼しました"));
-                y += 26f;
-                GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
-                y += 26f;
-            }
-            #endif
             if (economy.Ages)
                 ModeButton(new Rect(right, y, half, 22f), Mode.House, UiText.T("House +pop (", "住居・人口+（木材 ") + economy.HouseWoodCost + UiText.T(" wood)", "）"));
             else
@@ -592,15 +583,7 @@ namespace Rts.Presentation
                 y += 26f;
                 GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
                 y += 26f;
-#if false
-                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
-                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("取り壊し（Del）", "Remove (Del)")))
-                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("取り壊しを依頼しました", "Building removal requested"));
-                y += 26f;
-                GUI.Label(new Rect(x, y, w, 22f), UiText.T("撤去時は支払済み材料と中身が返還されます。", "Removal refunds paid materials and contents."));
-                y += 26f;
             }
-            #endif
             if (economy.Ages)
             {
                 float third = (w - 8f) / 3f;
