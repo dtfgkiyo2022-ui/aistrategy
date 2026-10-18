@@ -32,6 +32,7 @@ namespace Rts.Simulation
         {
             this.measure = measure;
             world = new WorldState(scenario);
+            InitializeSpatialCombatIndex();
             InitializeRegions();
             world.Map.Measure = measure;
             // Only a map with the tollgate rules gets the faction overlay; every other map keeps the plain terrain path.
@@ -59,7 +60,7 @@ namespace Rts.Simulation
                 Phase("Commands", () => { ApplyInputs(inputs); GenerateLatePushCommands(); ApplyPendingCommands(); ComposePolicies(); });
                 Phase("AI", () => { DecideArmies(); DecideEconomy(); });
                 Phase("Commands", ComposePolicies);
-                Phase("EnemySearchCombat", GenerateIntents);
+                Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); });
                 Phase("Movement", () => { Move(); MoveVillagers(); });
                 Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
@@ -121,18 +122,24 @@ namespace Rts.Simulation
                 ArmyIntent intent;
                 if (s.Initial.Kind == UnitKind.Scout && (a.ExplorePatrolActive || a.Policy == PolicyKind.Scout) && !returning)
                 {
-                    bool seesEnemy = PolicyDecision.ScoutSeesEnemy(observation, s.Position, s.Parameters.Vision);
+                    int nearbyEnemies = QueryVisibleEnemies(faction, s.Position, s.Parameters.Vision);
+                    bool seesEnemy = PolicyDecision.ScoutSeesEnemy(observation, s.Position, s.Parameters.Vision,
+                        spatialEnemyBuffer, nearbyEnemies);
                     if (seesEnemy)
                     {
                         if (a.ExplorePatrolActive)
                         {
-                            var scoutPosition = s.Position;
-                            var scoutVision = s.Parameters.Vision;
-                            var enemy = observation.VisibleEnemies.Where(e => PolicyDecision.SegmentLength(e.Position, scoutPosition) <= scoutVision.Raw)
-                                .OrderBy(e => e.ContactId).FirstOrDefault();
-                            if (enemy.ContactId != 0)
+                            uint lowestContact = 0; SimPoint enemyPosition = default;
+                            for (int enemyIndex = 0; enemyIndex < nearbyEnemies; enemyIndex++)
                             {
-                                int cell = world.Map.Cell(enemy.Position);
+                                var enemy = spatialEnemyBuffer[enemyIndex];
+                                if (PolicyDecision.SegmentLength(enemy.Position, s.Position) > s.Parameters.Vision.Raw
+                                    || lowestContact != 0 && enemy.ContactId >= lowestContact) continue;
+                                lowestContact = enemy.ContactId; enemyPosition = enemy.Position;
+                            }
+                            if (lowestContact != 0)
+                            {
+                                int cell = world.Map.Cell(enemyPosition);
                                 if (cell >= 0)
                                 {
                                     a.ExploreAvoidChunkX = cell % world.Config.Map.WidthCells / world.Config.Economy.ExploreChunkCells;
@@ -146,7 +153,9 @@ namespace Rts.Simulation
 
                     if (s.Pursuit.Returning)
                     {
-                        var away = PolicyDecision.ScoutReturn(observation, s.Position, home, s.StepDistance);
+                        int returnEnemies = QueryVisibleEnemies(faction, s.Position, Fix64.FromInt(12) + s.StepDistance);
+                        var away = PolicyDecision.ScoutReturn(observation, s.Position, home, s.StepDistance,
+                            spatialEnemyBuffer, returnEnemies);
                         intent = new ArmyIntent(a.Definition.Id, away, 0, default, true);
                     }
                     else intent = new ArmyIntent(a.Definition.Id, mission, 0, default, false);
@@ -166,7 +175,19 @@ namespace Rts.Simulation
                         intent = new ArmyIntent(a.Definition.Id, controlled.MoveGoal, 0, default, controlled.IsRetreating);
                     }
                 }
-                else intent = PolicyDecision.Tactics(observation, input, ref s.Pursuit);
+                else
+                {
+                    bool allocated = a.Policy == 0 || a.Policy == PolicyKind.Focus;
+                    bool reserve = allocated && (a.Decision.Assignment == AssignmentKind.Reserve || a.Decision.Assignment == AssignmentKind.CoreDefense);
+                    bool defend = a.Policy == PolicyKind.Defend || allocated && a.Decision.Assignment == AssignmentKind.Guard;
+                    SimPoint searchCenter = reserve ? home : defend ? mission : s.Position;
+                    Fix64 searchRange = Fix64.FromInt(reserve ? 24 : defend ? 12 : 24);
+                    // Tactics clears a completed return order before evaluating enemies.  Keep the
+                    // same query available on the arrival tick; suppressing it unconditionally
+                    // changes the decision at the exact tick the soldier reaches its mission.
+                    int nearbyEnemies = QueryVisibleEnemies(faction, searchCenter, searchRange);
+                    intent = PolicyDecision.Tactics(observation, input, spatialEnemyBuffer, nearbyEnemies, ref s.Pursuit);
+                }
                 bool waveStaging = PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
                     && !IsPushWaveAssaultSoldier(s.Initial.Id);
                 if (waveStaging && intent.TargetContactId == 0 && intent.TargetObjective.Kind == GoalKind.None)
@@ -193,7 +214,11 @@ namespace Rts.Simulation
                 s.MoveGoal = regionBlocksMovement ? s.Position : humanFocusMovement ? mission : intent.MoveGoal;
                 s.IsRetreating = regionBlocksMovement || humanFocusMovement ? false : intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
-                    s.MoveGoal = PolicyDecision.ScoutRetreatHome(observation, s.Position, s.MoveGoal, s.StepDistance);
+                {
+                    int returnEnemies = QueryVisibleEnemies(faction, s.Position, Fix64.FromInt(12) + s.StepDistance);
+                    s.MoveGoal = PolicyDecision.ScoutRetreatHome(observation, s.Position, s.MoveGoal, s.StepDistance,
+                        spatialEnemyBuffer, returnEnemies);
+                }
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
                 else if (intent.TargetObjective.Kind == GoalKind.Core) { s.TargetKind = 2; s.TargetId = intent.TargetObjective.Id; }
                 PickRaidTarget(ref s);
@@ -337,6 +362,7 @@ namespace Rts.Simulation
 
         private uint InternalSoldierId(uint faction, uint contactId)
         {
+            if (TryCombatContact(faction, contactId, out int mapped)) return checked((uint)mapped + 1);
             foreach (int i in world.SoldierTraversal)
                 if (world.Factions[faction - 1].ContactIds[i] == contactId) return (uint)i + 1;
             throw new InvalidOperationException("Observation contact has no internal mapping.");
@@ -344,6 +370,7 @@ namespace Rts.Simulation
 
         private bool TryInternalSoldierId(uint faction, uint contactId, out int index)
         {
+            if (TryCombatContact(faction, contactId, out index)) return true;
             foreach (int i in world.SoldierTraversal)
                 if (world.Factions[faction - 1].ContactIds[i] == contactId)
                 { index = i; return true; }
@@ -550,7 +577,7 @@ namespace Rts.Simulation
                     bool visible = IsVisibleTo(faction.Id, s.Position);
                     if (s.Alive && visible)
                     {
-                        if (faction.ContactIds[i] == 0) { faction.ContactIds[i] = faction.NextContactId; faction.NextContactId = checked(faction.NextContactId + 1); }
+                        if (faction.ContactIds[i] == 0) { faction.ContactIds[i] = faction.NextContactId; RememberCombatContact(faction.Id, faction.ContactIds[i], i); faction.NextContactId = checked(faction.NextContactId + 1); }
                         faction.ContactPositions[i] = s.Position;
                         faction.ContactLastSeenTicks[i] = world.Tick;
                         faction.ContactAbsent[i] = false;
