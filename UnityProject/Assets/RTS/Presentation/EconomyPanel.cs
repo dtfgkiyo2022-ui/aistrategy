@@ -387,7 +387,7 @@ namespace Rts.Presentation
             if (layer == null) return;
             if (mode == Mode.None)
             {
-                if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out BuildingView selected) && Input.GetKeyDown(KeyCode.M)) SetMode(Mode.MoveBuilding);
+                if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out BuildingView selected) && Input.GetKeyDown(KeyCode.V)) SetMode(Mode.MoveBuilding);
                 else if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out selected) && Input.GetKeyDown(KeyCode.Delete))
                     Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "蟒ｺ迚ｩ縺ｮ蜿悶ｊ螟悶＠繧偵萓晞ｼ縺励∪縺励◆"));
                 else return;
@@ -465,8 +465,12 @@ namespace Rts.Presentation
             bool shown = onMap && Footprint(cell, size, out origin, out center);
             bool legal = shown && (mode == Mode.MoveBuilding || AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
                 view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind)));
+            bool reservation = shown && economy.BuildingReservations
+                && (economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind))
+                && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
+                    view.LatestFrame.FactionId, kind, origin, size, facing, 0, 0, true);
             bool capped = kind == BuildingKind.DropSite && economy.DropSiteMax > 0 && economy.DropSiteCount >= economy.DropSiteMax;
-            layer.ShowGhost(shown, center, size * CellMeters, legal && !capped);
+            layer.ShowGhost(shown, center, size * CellMeters, (legal || reservation) && !capped, reservation && !capped);
         }
 
         private EconomyView Economy() { var frame = view == null ? null : view.LatestFrame; return frame == null ? null : frame.Economy; }
@@ -562,6 +566,15 @@ namespace Rts.Presentation
         private void DrawBuild(EconomyView economy, float x, float y, float w, float half, float right)
         {
             ModeButton(new Rect(x, y, half, 22f), Mode.Barracks, UiText.T("Barracks (", "兵舎（木材 ") + economy.BarracksWoodCost + UiText.T(" wood)", "）"));
+#if false
+                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
+                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し (Del)")))
+                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "建物の取り壊しを依頼しました"));
+                y += 26f;
+                GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
+                y += 26f;
+            }
+            #endif
             if (economy.Ages)
                 ModeButton(new Rect(right, y, half, 22f), Mode.House, UiText.T("House +pop (", "住居・人口+（木材 ") + economy.HouseWoodCost + UiText.T(" wood)", "）"));
             else
@@ -573,13 +586,21 @@ namespace Rts.Presentation
             y += 26f;
             if (economy.EasyRebuild && TrySelectedBuilding(out BuildingView selected) && selected.Complete)
             {
-                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("移動（M）", "Move (M)"));
+                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
+                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し (Del)")))
+                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "建物の取り壊しを依頼しました"));
+                y += 26f;
+                GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
+                y += 26f;
+#if false
+                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
                 if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("取り壊し（Del）", "Remove (Del)")))
                     Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("取り壊しを依頼しました", "Building removal requested"));
                 y += 26f;
                 GUI.Label(new Rect(x, y, w, 22f), UiText.T("撤去時は支払済み材料と中身が返還されます。", "Removal refunds paid materials and contents."));
                 y += 26f;
             }
+            #endif
             if (economy.Ages)
             {
                 float third = (w - 8f) / 3f;
@@ -1130,9 +1151,19 @@ namespace Rts.Presentation
 
         private void ModeButton(Rect r, Mode target, string label)
         {
+            if (ReservationLabel(target)) label += UiText.T(" [reserve]", "【予約可】");
             bool on = GUI.Toggle(r, mode == target, mode == target && target != Mode.Belt && target != Mode.Wall ? UiText.T("Click ground (Esc cancels)", "地面をクリック（Escで取消）") : label, GUI.skin.button);
             if (on && mode != target) SetMode(target);
             else if (!on && mode == target) SetMode(Mode.None);
+        }
+
+        private bool ReservationLabel(Mode target)
+        {
+            var economy = Economy();
+            if (economy == null || !economy.BuildingReservations || target == Mode.Belt || target == Mode.FastBelt
+                || target == Mode.Wall || target == Mode.None || target == Mode.RemoveBelt || target == Mode.RemoveArea) return false;
+            var kind = KindOf(target);
+            return economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind);
         }
 
         private void DrawNotes(Rect rect)

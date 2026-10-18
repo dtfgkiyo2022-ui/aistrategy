@@ -125,6 +125,8 @@ namespace Rts.Contracts
         public SimPoint Position { get; }
         public int AliveCount { get; }
         public PolicyGoal HomeObjective { get; }
+        /// <summary>Current simulation-owned exploration target; None when no patrol target is active.</summary>
+        public PolicyGoal PatrolObjective { get; }
 
         public OwnArmyView(
             uint id,
@@ -132,7 +134,8 @@ namespace Rts.Contracts
             UnitKind kind,
             SimPoint position,
             int aliveCount,
-            PolicyGoal homeObjective)
+            PolicyGoal homeObjective,
+            PolicyGoal patrolObjective = default(PolicyGoal))
         {
             Id = id;
             FactionId = factionId;
@@ -140,6 +143,7 @@ namespace Rts.Contracts
             Position = position;
             AliveCount = aliveCount;
             HomeObjective = homeObjective;
+            PatrolObjective = patrolObjective;
         }
     }
     /// <summary>Known map location and observed asset information. Unknown owner/HP values are zero.</summary>

@@ -87,6 +87,7 @@ namespace Rts.Presentation
         private Label commandsSelectionDetail;
         private Label commandsSelectionHint;
         private Button commandAttack;
+        private Button commandScout;
         private Button commandRetreat;
         private Button commandDefend;
         private Button commandAbandon;
@@ -646,6 +647,7 @@ namespace Rts.Presentation
             commandsSelectionDetail = root.Q<Label>("commands-selection-detail");
             commandsSelectionHint = root.Q<Label>("commands-selection-hint");
             commandAttack = root.Q<Button>("command-attack");
+            commandScout = root.Q<Button>("command-scout");
             commandRetreat = root.Q<Button>("command-retreat");
             commandDefend = root.Q<Button>("command-defend");
             commandAbandon = root.Q<Button>("command-abandon");
@@ -907,6 +909,7 @@ namespace Rts.Presentation
         {
             var lines = new List<string>();
             lines.Add(SelectionInfoText.BuildingDescription(building.Kind));
+            if (building.Reserved) lines.Add(SelectionInfoText.BuildingReservationStatus(building, economy));
 
             CraftRecipe recipe;
             if (CraftVisualRules.TryGetRecipe(building.Kind, out recipe))
@@ -1230,9 +1233,10 @@ namespace Rts.Presentation
 
         private void BindCommandEvents()
         {
-            if (commandAttack == null || commandRetreat == null || commandDefend == null || commandAbandon == null ||
+            if (commandAttack == null || commandScout == null || commandRetreat == null || commandDefend == null || commandAbandon == null ||
                 commandReserve == null || commandAuto == null || commandCancel == null) return;
             commandAttack.clicked += () => { if (commandPanel != null) commandPanel.BeginAttackPick(); };
+            commandScout.clicked += () => { if (commandPanel != null) commandPanel.IssueScoutPatrol(); };
             commandRetreat.clicked += () => { if (commandPanel != null) commandPanel.IssueRetreat(); };
             commandDefend.clicked += () => { if (commandPanel != null) commandPanel.IssueDefendOwnCore(); };
             commandAbandon.clicked += () => { if (commandPanel != null) commandPanel.IssueAllowAbandon(); };
@@ -2060,6 +2064,7 @@ namespace Rts.Presentation
             ConfigureCommandButton(commandAttack, commandPanel.IsAwaitingGround
                 ? UiText.T("Attack: click ground", "攻撃：地面をクリック")
                 : UiText.T("Attack", "攻撃"), armySelected);
+            ConfigureCommandButton(commandScout, UiText.T("Scout (patrol)", "偵察（巡回）"), armySelected);
             ConfigureCommandButton(commandRetreat, UiText.T("Retreat", "撤退"), armySelected);
             ConfigureCommandButton(commandDefend, UiText.T("Defend core", "コアを守る"), armySelected);
             ConfigureCommandButton(commandAbandon, UiText.T("Abandon outpost", "拠点を放棄"), outpostSelected);

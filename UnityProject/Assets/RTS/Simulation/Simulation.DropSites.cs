@@ -26,7 +26,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == BuildingKind.DropSite) count++;
+                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.DropSite) count++;
             }
             return count;
         }
@@ -40,7 +40,7 @@ namespace Rts.Simulation
             if (ProcessingOn && v.HaulTo > 0 && v.HaulTo <= world.BuildingCount)
             {
                 var target = world.Buildings[v.HaulTo - 1];
-                if (target.Alive && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
+                if (IsActualBuilding(target) && target.Complete && target.FactionId == v.FactionId && target.Kind == BuildingKind.CharcoalKiln)
                     return (world.Map.Center(target.WorkCell), GatherReach, 0);
             }
             if (FishingAllowed(v.FactionId) && v.CarryKind == ResourceKind.Food && v.NodeId > 0 && v.NodeId <= world.Nodes.Length
@@ -52,7 +52,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var harbor = world.Buildings[i];
-                    if (!harbor.Alive || !harbor.Complete || harbor.FactionId != v.FactionId || harbor.Kind != BuildingKind.Harbor) continue;
+                if (!IsActualBuilding(harbor) || !harbor.Complete || harbor.FactionId != v.FactionId || harbor.Kind != BuildingKind.Harbor) continue;
                     var spot = world.Map.Center(harbor.WorkCell);
                     var distance = DistanceSquared(v.Position, spot);
                     if (distance < fishBest) { fishBest = distance; fishDrop = spot; fishReach = rules.DropOffMargin; }
@@ -65,7 +65,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var town = world.Buildings[i];
-                    if (!town.Alive || !town.Complete || town.FactionId != v.FactionId || town.Kind != BuildingKind.Town) continue;
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != v.FactionId || town.Kind != BuildingKind.Town) continue;
                     var spot = world.Map.Center(town.WorkCell);
                     var distance = DistanceSquared(v.Position, spot);
                     if (distance < townBest)
@@ -82,7 +82,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.FactionId != v.FactionId
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != v.FactionId
                     || (b.Kind != BuildingKind.DropSite && !(TownsOn && b.Kind == BuildingKind.Town))) continue;
                 var spot = world.Map.Center(b.WorkCell);
                 var d = DistanceSquared(v.Position, spot);
@@ -96,7 +96,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var storage = world.Buildings[i];
-                    if (!storage.Alive || !storage.Complete || storage.FactionId != v.FactionId || storage.Kind != BuildingKind.Storage
+                if (!IsActualBuilding(storage) || !storage.Complete || storage.FactionId != v.FactionId || storage.Kind != BuildingKind.Storage
                         || !StorageCanAccept(storage, v.CarryKind) || !StorageFeedsResource(storage, v.FactionId, v.CarryKind)) continue;
                     var spot = world.Map.Center(storage.WorkCell);
                     var distance = DistanceSquared(v.Position, spot);
@@ -117,7 +117,7 @@ namespace Rts.Simulation
         /// <summary>Returns true only when the storage output already has a directed belt path into this faction's core.</summary>
         private bool StorageFeedsCore(BuildingState storage, uint faction)
         {
-            if (!storage.Alive || !storage.Complete || storage.FactionId != faction || storage.Kind != BuildingKind.Storage) return false;
+                if (!IsActualBuilding(storage) || !storage.Complete || storage.FactionId != faction || storage.Kind != BuildingKind.Storage) return false;
             RefreshStorageConnectivity();
             return storage.Id < storageConnectivity.Length && storageConnectivity[storage.Id];
         }
@@ -146,7 +146,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var storage = world.Buildings[i];
-                if (storage.Alive && storage.Complete && storage.Kind == BuildingKind.Storage)
+                    if (IsActualBuilding(storage) && storage.Complete && storage.Kind == BuildingKind.Storage)
                 {
                     storageConnectivity[storage.Id] = StorageHasBeltPathToCore(storage, storage.FactionId);
                     if (StorageFeedsProcessingOn) storageProcessingConnectivity[storage.Id] = new byte[29];
@@ -249,7 +249,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.DropSite) continue;
+                if (!IsActualBuilding(b) || b.FactionId != faction || b.Kind != BuildingKind.DropSite) continue;
                 if (!b.Complete) return;
                 ownDropSites++;
             }
@@ -282,7 +282,7 @@ namespace Rts.Simulation
                 for (int i = 0; i < world.BuildingCount && !covered; i++)
                 {
                     var b = world.Buildings[i];
-                    covered = b.Alive && b.FactionId == faction && b.Kind == BuildingKind.DropSite
+                covered = IsActualBuilding(b) && b.FactionId == faction && b.Kind == BuildingKind.DropSite
                         && InRange(world.Map.Center(b.WorkCell), at, Fix64.FromInt(DropSiteCoverMeters));
                 }
                 if (!covered) bestNode = n;
@@ -335,7 +335,7 @@ namespace Rts.Simulation
                 if (receiver == 0) return;
             }
             var building = world.Buildings[receiver - 1];
-            if (!building.Alive || !building.Complete || building.Held) return;
+                if (!IsActualBuilding(building) || !building.Complete || building.Held) return;
             var taken = TakenForOtherLines(faction, -1);
             var route = BeltRoute(faction, OutputCell(building), taken, next => FeedsOwnCore(next, faction));
             if (route.cells == null || !CanLayAiBelts(faction, route.cells)) return;
@@ -364,7 +364,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.FactionId == faction && b.Kind == kind && b.NodeId == nodeId) return b.Id;
+                if (IsActualBuilding(b) && b.FactionId == faction && b.Kind == kind && b.NodeId == nodeId) return b.Id;
             }
             return 0;
         }

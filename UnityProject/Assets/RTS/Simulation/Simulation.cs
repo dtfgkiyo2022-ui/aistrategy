@@ -104,8 +104,9 @@ namespace Rts.Simulation
                 s.TargetKind = 0;
                 s.TargetId = 0;
                 if (!s.Alive) continue;
-                var a = world.Armies[s.Initial.ArmyId - 1];
+                ref var a = ref world.Armies[s.Initial.ArmyId - 1];
                 bool hasHumanCommand = world.Config.Economy.DirectPathMovement && a.CommandId != 0 && CommandById(a.CommandId)?.Order.Source == CommandSource.Human;
+                bool humanFocusMovement = world.Config.Economy.DirectPathMovement && hasHumanCommand && a.Policy == PolicyKind.Focus;
                 bool regionBlocksMovement = !hasHumanCommand && RegionBlocksAiArmy(a);
                 uint faction = s.Initial.FactionId;
                 var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
@@ -118,10 +119,30 @@ namespace Rts.Simulation
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
                     s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
                 ArmyIntent intent;
-                if (s.Initial.Kind == UnitKind.Scout && a.Policy == PolicyKind.Scout && !returning)
+                if (s.Initial.Kind == UnitKind.Scout && (a.ExplorePatrolActive || a.Policy == PolicyKind.Scout) && !returning)
                 {
                     bool seesEnemy = PolicyDecision.ScoutSeesEnemy(observation, s.Position, s.Parameters.Vision);
-                    if (seesEnemy) s.Pursuit.Returning = true;
+                    if (seesEnemy)
+                    {
+                        if (a.ExplorePatrolActive)
+                        {
+                            var scoutPosition = s.Position;
+                            var scoutVision = s.Parameters.Vision;
+                            var enemy = observation.VisibleEnemies.Where(e => PolicyDecision.SegmentLength(e.Position, scoutPosition) <= scoutVision.Raw)
+                                .OrderBy(e => e.ContactId).FirstOrDefault();
+                            if (enemy.ContactId != 0)
+                            {
+                                int cell = world.Map.Cell(enemy.Position);
+                                if (cell >= 0)
+                                {
+                                    a.ExploreAvoidChunkX = cell % world.Config.Map.WidthCells / world.Config.Economy.ExploreChunkCells;
+                                    a.ExploreAvoidChunkZ = cell / world.Config.Map.WidthCells / world.Config.Economy.ExploreChunkCells;
+                                    a.ExploreAvoidUntilTick = checked(world.Tick + world.Config.Economy.ExploreAvoidTicks);
+                                }
+                            }
+                        }
+                        s.Pursuit.Returning = true;
+                    }
 
                     if (s.Pursuit.Returning)
                     {
@@ -166,8 +187,11 @@ namespace Rts.Simulation
                 }
                 // A human-owned region suppresses only autonomous movement.  Tactics still runs so an enemy already
                 // in range (or an enemy core in range) gets a target and can be attacked while the soldier stays put.
-                s.MoveGoal = regionBlocksMovement ? s.Position : intent.MoveGoal;
-                s.IsRetreating = regionBlocksMovement ? false : intent.IsRetreating;
+                // A human Focus owns the route while DirectPathMovement is on.  Tactical contact selection still
+                // supplies an attack target, but its pursuit/retreat point must not replace the clicked destination.
+                if (humanFocusMovement) s.Pursuit = default;
+                s.MoveGoal = regionBlocksMovement ? s.Position : humanFocusMovement ? mission : intent.MoveGoal;
+                s.IsRetreating = regionBlocksMovement || humanFocusMovement ? false : intent.IsRetreating;
                 if (s.IsRetreating && s.Initial.Kind == UnitKind.Scout && a.Policy != PolicyKind.Scout)
                     s.MoveGoal = PolicyDecision.ScoutRetreatHome(observation, s.Position, s.MoveGoal, s.StepDistance);
                 if (intent.TargetContactId != 0) { s.TargetKind = 1; s.TargetId = InternalSoldierId(faction, intent.TargetContactId); }
@@ -761,7 +785,10 @@ namespace Rts.Simulation
                         if (!s.Alive) continue;
                         if (count++ == 0) position = s.Position;
                     }
-                    armies.Add(new OwnArmyView(id, f, kind, position, count, a.Definition.HomeObjective));
+                    var patrolObjective = a.ExplorePatrolActive && a.ExploreHasGoal
+                        ? new PolicyGoal(GoalKind.Point, 0, a.ExploreGoal)
+                        : default(PolicyGoal);
+                    armies.Add(new OwnArmyView(id, f, kind, position, count, a.Definition.HomeObjective, patrolObjective));
 
                 }
                 foreach (var faction in world.Factions)

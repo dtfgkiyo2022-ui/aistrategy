@@ -14,7 +14,7 @@ namespace Rts.Simulation
 
         /// <summary>A completed own shrine whose outpost this faction still owns: that outpost is a sanctuary.</summary>
         private bool ActiveSanctuaryShrine(uint faction, BuildingState shrine)
-            => shrine.Alive && shrine.Complete && shrine.FactionId == faction && shrine.Kind == BuildingKind.Shrine
+        => IsActualBuilding(shrine) && shrine.Complete && shrine.FactionId == faction && shrine.Kind == BuildingKind.Shrine
                 && shrine.SanctuaryOutpostId != 0 && shrine.SanctuaryOutpostId <= world.Outposts.Length
                 && world.Outposts[shrine.SanctuaryOutpostId - 1].OwnerFactionId == faction;
 
@@ -97,7 +97,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var shrine = ref world.Buildings[i];
-                if (!shrine.Alive || shrine.FactionId != faction || shrine.Kind != BuildingKind.Shrine
+                if (!IsActualBuilding(shrine) || shrine.FactionId != faction || shrine.Kind != BuildingKind.Shrine
                     || !shrine.Complete || shrine.Held || shrine.Researching != 0) continue;
                 foreach (var tech in SanctuaryResearchOrder)
                     if (TechOpen(faction, tech) && !BeingResearched(faction, tech))

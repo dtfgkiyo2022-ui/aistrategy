@@ -71,7 +71,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.Complete && building.FactionId == faction && building.Kind == BuildingKind.Sawmill)
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction && building.Kind == BuildingKind.Sawmill)
                     return true;
             }
             return false;
@@ -84,7 +84,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!building.Alive || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Sawmill) continue;
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Sawmill) continue;
                 int size = SizeOf(building.Kind), x0 = building.OriginCell % width, z0 = building.OriginCell / width;
                 if (x >= x0 && x < x0 + size && z >= z0 && z < z0 + size
                     && building.Input < world.Config.Economy.BufferLimit)
@@ -113,7 +113,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!building.Alive || !building.Complete || building.FactionId != faction || !CellInBuilding(building, rear)) continue;
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !CellInBuilding(building, rear)) continue;
                 ResourceKind kind = building.Kind == BuildingKind.Storage ? building.StorageKind
                     : building.Kind == BuildingKind.Drill && building.NodeId > 0 && building.NodeId <= world.Nodes.Length
                         ? world.Nodes[building.NodeId - 1].Definition.Kind
@@ -165,7 +165,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var building = ref world.Buildings[i];
-                if (!building.Alive || !building.Complete || building.FactionId != faction || !CellInBuilding(building, front)) continue;
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || !CellInBuilding(building, front)) continue;
                 if (building.Kind == BuildingKind.Smelter && item == ResourceKind.Ore
                     && building.Input < world.Config.Economy.BufferLimit)
                 {

@@ -40,7 +40,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) continue;
+                if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) continue;
                 BigInteger d = DistanceSquared(s.Position, NearestFootprintPoint(b, s.Position));
                 if (best < 0 || d < bestDistance) { best = i; bestDistance = d; }
             }
@@ -58,7 +58,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
+                if (!IsActualBuilding(b) || b.FactionId == faction || LineForBuilding(b.FactionId, b.Id) < 0
                     || !BuildingVisibleTo(faction, b)) continue;
                 var point = NearestFootprintPoint(b, from);
                 if (!InRange(from, point, range)) continue;
@@ -132,7 +132,7 @@ namespace Rts.Simulation
             {
                 int i = checked((int)s.TargetId - 1);
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
+                if (!IsActualBuilding(b) || b.FactionId == faction || !BuildingVisibleTo(faction, b) || !InRange(s.Position, NearestFootprintPoint(b, s.Position), s.Parameters.Range)) return;
                 buildingDamage[i] = checked(buildingDamage[i] + SanctuaryDamage(faction, SiegeDamage(s)));
             }
             s.NextAttackTick = checked(world.Tick + s.Parameters.AttackIntervalTicks);
@@ -176,7 +176,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || b.Hp != 0) continue;
+                if (!b.Alive || b.Reserved || b.Hp != 0) continue;
                 b.Alive = false;
                 RemoveRegionCenter(b);
                 if (b.Kind == BuildingKind.Bridge)
@@ -203,6 +203,7 @@ namespace Rts.Simulation
 
         private bool BuildingVisibleTo(uint faction, BuildingState b)
         {
+            if (b.Reserved) return false;
             foreach (int cell in Footprint(b))
                 if (world.Factions[faction - 1].VisibleCells[cell]) return true;
             return false;

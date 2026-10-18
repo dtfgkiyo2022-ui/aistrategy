@@ -85,7 +85,7 @@ namespace Rts.Simulation
             bool goodsTrade = GoodsMarketOn && GoodsTradeable(give) && Tradable(take);
             if (!AgesOn || give == take || (!mountainOreTrade && !goodsTrade && (!Tradable(give) || !TradeTakeable(take)))) return;
             int market = OwnBuildingIndex(faction, BuildingKind.Market);
-            if (market < 0 || !world.Buildings[market].Complete) return;
+            if (market < 0 || !IsActualBuilding(world.Buildings[market]) || !world.Buildings[market].Complete) return;
             var rules = world.Config.Economy;
             int lot = goodsTrade ? rules.GoodsTradeLot : rules.TradeLot;
             if (StockOf(world.Economies[faction - 1], give) < lot) return;
@@ -146,7 +146,7 @@ namespace Rts.Simulation
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Market, origin, Facing.North, 0);
                 return;
             }
-            if (!world.Buildings[market].Complete || world.Buildings[market].Held) return;
+            if (!IsActualBuilding(world.Buildings[market]) || !world.Buildings[market].Complete || world.Buildings[market].Held) return;
             ResourceKind take = economy.Food < economy.Wood ? ResourceKind.Food : ResourceKind.Wood;
             TradeAtMarket(faction, selected, take);
         }
@@ -156,7 +156,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Market) return i;
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Market) return i;
             }
             return -1;
         }
@@ -191,7 +191,7 @@ namespace Rts.Simulation
         {
             if (!AgesOn || !v.Alive || v.BuildingId == 0 || v.BuildingId > world.BuildingCount) return false;
             var market = world.Buildings[v.BuildingId - 1];
-            return market.Alive && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market
+            return IsActualBuilding(market) && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market
                 && OwnCore(v.FactionId).Hp > 0;
         }
 
@@ -218,14 +218,14 @@ namespace Rts.Simulation
         {
             if (!CaravanOn || v.CaravanMarketId == 0 || v.CaravanMarketId > world.BuildingCount) return false;
             var market = world.Buildings[v.CaravanMarketId - 1];
-            return market.Alive && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market;
+            return IsActualBuilding(market) && market.Complete && market.FactionId == v.FactionId && market.Kind == BuildingKind.Market;
         }
 
         private bool CaravanPairValid(VillagerState v)
         {
             if (!CaravanMarketValid(v) || v.CaravanseraiId == 0 || v.CaravanseraiId > world.BuildingCount) return false;
             var host = world.Buildings[v.CaravanseraiId - 1];
-            if (!host.Alive || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai
+            if (!IsActualBuilding(host) || !host.Complete || host.FactionId != v.FactionId || host.Kind != BuildingKind.Caravanserai
                 || host.CaravanMarketId != v.CaravanMarketId || host.CaravanOutpostId != v.CaravanOutpostId) return false;
             if (v.CaravanOutpostId == 0 || v.CaravanOutpostId > world.Outposts.Length) return false;
             return world.Outposts[v.CaravanOutpostId - 1].OwnerFactionId == v.FactionId;
@@ -256,8 +256,8 @@ namespace Rts.Simulation
             var market = world.Buildings[v.CaravanMarketId - 1];
             var host = world.Buildings[v.CaravanseraiId - 1];
             if (ObservedEnemyNear(v.FactionId, v.Position)) return true;
-            if (market.Alive && ObservedEnemyNear(v.FactionId, world.Map.Center(market.WorkCell))) return true;
-            return host.Alive && ObservedEnemyNear(v.FactionId, world.Map.Center(host.WorkCell));
+            if (IsActualBuilding(market) && ObservedEnemyNear(v.FactionId, world.Map.Center(market.WorkCell))) return true;
+            return IsActualBuilding(host) && ObservedEnemyNear(v.FactionId, world.Map.Center(host.WorkCell));
         }
 
         private bool HoldCaravanAtMarket(ref VillagerState v)
@@ -307,12 +307,12 @@ namespace Rts.Simulation
         {
             if (!CaravanAllowed(faction) || caravanseraiId == 0 || caravanseraiId > world.BuildingCount) return;
             var host = world.Buildings[caravanseraiId - 1];
-            if (!host.Alive || !host.Complete || host.FactionId != faction || host.Kind != BuildingKind.Caravanserai) return;
+            if (!IsActualBuilding(host) || !host.Complete || host.FactionId != faction || host.Kind != BuildingKind.Caravanserai) return;
             uint marketId = host.CaravanMarketId;
             uint outpostId = host.CaravanOutpostId;
             if (marketId == 0 || marketId > world.BuildingCount || outpostId == 0 || outpostId > world.Outposts.Length) return;
             var market = world.Buildings[marketId - 1];
-            if (!market.Alive || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
+            if (!IsActualBuilding(market) || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
                 || world.Outposts[outpostId - 1].OwnerFactionId != faction) return;
             foreach (uint id in villagers)
             {
@@ -350,7 +350,7 @@ namespace Rts.Simulation
                 for (int b = 0; b < world.BuildingCount; b++)
                 {
                     var existing = world.Buildings[b];
-                    if (existing.Alive && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
+                if (IsActualBuilding(existing) && existing.FactionId == faction && existing.Kind == BuildingKind.Caravanserai
                         && existing.CaravanOutpostId == post.Definition.Id) { occupied = true; break; }
                 }
                 if (occupied) continue;
@@ -412,7 +412,7 @@ namespace Rts.Simulation
                 if (post.OwnerFactionId != faction) continue;
                 bool exists = false;
                 for (int b = 0; b < world.BuildingCount; b++)
-                    if (world.Buildings[b].Alive && world.Buildings[b].FactionId == faction && world.Buildings[b].Kind == BuildingKind.Caravanserai
+                if (IsActualBuilding(world.Buildings[b]) && world.Buildings[b].FactionId == faction && world.Buildings[b].Kind == BuildingKind.Caravanserai
                         && world.Buildings[b].CaravanOutpostId == post.Definition.Id) { exists = true; break; }
                 if (exists) continue;
                 int origin = FindCaravanseraiSite(faction, post.Definition.Id);
@@ -580,11 +580,11 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Caravanserai || b.Held) continue;
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction || b.Kind != BuildingKind.Caravanserai || b.Held) continue;
                 if (b.CaravanMarketId == 0 || b.CaravanMarketId > world.BuildingCount || b.CaravanOutpostId == 0
                     || b.CaravanOutpostId > world.Outposts.Length) continue;
                 var market = world.Buildings[b.CaravanMarketId - 1];
-                if (!market.Alive || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
+                if (!IsActualBuilding(market) || !market.Complete || market.FactionId != faction || market.Kind != BuildingKind.Market
                     || world.Outposts[b.CaravanOutpostId - 1].OwnerFactionId != faction) continue;
                 int active = ActiveCaravanRoutes(faction, b.Id);
                 if (active < world.Config.Economy.CaravanAutoVillagers && active < least)
@@ -676,7 +676,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (b.Alive && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Harbor) { harbor = true; break; }
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.Harbor) { harbor = true; break; }
             }
             if (!harbor) return false;
             foreach (var node in world.Nodes)

@@ -28,7 +28,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.MineShaft) count++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.MineShaft) count++;
             return count;
         }
 
@@ -163,7 +163,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var shaft = ref world.Buildings[i];
-                if (!shaft.Alive || !shaft.Complete || BuildingPaused(shaft) || shaft.Kind != BuildingKind.MineShaft || shaft.Researching != 0) continue;
+                if (!IsActualBuilding(shaft) || !shaft.Complete || BuildingPaused(shaft) || shaft.Kind != BuildingKind.MineShaft || shaft.Researching != 0) continue;
                 int interval = MountainInterval(shaft);
                 if (++shaft.Timer < interval) continue;
                 shaft.Timer = 0;

@@ -71,6 +71,9 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>Human building placement may reserve a legal site until the required resources are available.</summary>
+        public bool BuildingReservations;
+        public int ReservationLimit = 10, ReservationCheckTicks = 10;
         /// <summary>S-5: enables deterministic geographic regions and regional controls.</summary>
         public bool Regions;
         /// <summary>MoveFix1: allows a deterministic straight-line move when the exact line of sight is clear.</summary>
@@ -189,6 +192,14 @@ namespace Rts.Simulation
         public bool Rations;
         /// <summary>Resource fog: resources are shown and used by the automatic economy only after their cell was explored.</summary>
         public bool ResourceFog;
+        /// <summary>ExploreScouting: scouts visit unexplored chunks in deterministic core-distance order.</summary>
+        public bool ExploreScouting;
+        public int ExploreChunkCells = 8;
+        public int ExploreMinUnexploredPermille = 500;
+        public int ExploreRetargetTicks = 20;
+        public int ExploreAvoidChunks = 1;
+        public int ExploreAvoidTicks = 1200;
+        public int ExploreAutoUntilTick = 7200;
         public int MillSizeCells = 2, MillWoodCost = 80, MillWork = 200, MillHp = 400, MillTicks = 80, MillFoodInput = 3;
         public int RationsPerSoldier = 1, RationsTrainPermille = 700;
         public int RationsHealIntervalTicks = 200, RationsHealQuietTicks = 200, RationsHealHp = 10, RationsHealMaxPerInterval = 10;

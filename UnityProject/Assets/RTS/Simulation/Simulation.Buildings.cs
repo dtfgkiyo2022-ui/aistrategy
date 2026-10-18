@@ -20,6 +20,11 @@ namespace Rts.Simulation
         // contract field, so enabling bridges does not alter the old scenario bytes.
         private const int MaxActiveBridges = 3;
 
+        private static bool IsActualBuilding(BuildingState building) => building.Alive && !building.Reserved;
+
+        private bool IsActualBuilding(uint id)
+            => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]);
+
         /// <summary>AI phase, after villager training (5.4 steps 2 and 3).</summary>
         private void DecideBuildings(uint faction)
         {
@@ -30,7 +35,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
+                if (!b.Alive || b.Reserved || b.FactionId != faction || b.Kind != BuildingKind.Barracks) continue;
                 hasBarracks = true;
                 barracksCount++;
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
@@ -64,7 +69,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var building = ref world.Buildings[i];
-                if (!building.Alive || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Barracks || building.Held) continue;
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || building.Kind != BuildingKind.Barracks || building.Held) continue;
                 if (!DecideMountainMercenary(faction, ref building)) DecideInfantry(faction, ref building, true);
             }
         }
@@ -134,7 +139,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood < rules.TownWoodCost || economy.Stone < rules.TownStoneCost || TownCount(faction) >= rules.TownMaxBuildings) return;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
                     return;
             int resourceCell = BestTownResourceCell(faction);
             if (resourceCell < 0) return;
@@ -153,7 +158,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var town = ref world.Buildings[i];
-                if (!town.Alive || !town.Complete || town.Held || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (!IsActualBuilding(town) || !town.Complete || town.Held || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
                 if (villagers >= PlanOf(faction).VillagerTarget || !CanTrainTownVillager(faction, town)) return;
                 EnqueueTownVillager(faction, ref town);
                 villagers++;
@@ -164,7 +169,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count++;
             return count;
         }
 
@@ -252,7 +257,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (building.Alive && building.FactionId == faction && building.Kind == BuildingKind.Shrine
+                if (IsActualBuilding(building) && building.FactionId == faction && building.Kind == BuildingKind.Shrine
                     && building.SanctuaryOutpostId == outpostId) return true;
             }
             return false;
@@ -341,9 +346,9 @@ namespace Rts.Simulation
 
         /// <summary>Pays, closes the footprint, and sends the builders. The caller has checked the site and the wood.</summary>
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId)
-            => PlaceBuildingAt(faction, kind, origin, facing, nodeId, null, -1);
+            => PlaceBuildingAt(faction, kind, origin, facing, nodeId, null, -1, -1);
 
-        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1)
+        private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -387,8 +392,8 @@ namespace Rts.Simulation
                 if (kind == BuildingKind.Wall) economy.BricksConsumedWalls = checked(economy.BricksConsumedWalls + cost);
                 else economy.BricksConsumedTowers = checked(economy.BricksConsumedTowers + cost);
             }
-            int index = world.BuildingCount;
-            if (index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
+            int index = existingIndex >= 0 ? existingIndex : world.BuildingCount;
+            if (existingIndex < 0 && index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
             var footprint = kind == BuildingKind.Bridge ? bridgeCells
                 : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
             if (footprint == null || footprint.Length == 0) return;
@@ -396,7 +401,8 @@ namespace Rts.Simulation
             int workCell = requestedWorkCell >= 0 ? requestedWorkCell
                 : kind == BuildingKind.Town ? NearestReachablePassableCell(FootprintCenter(origin, SizeOf(kind)), faction)
                 : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind)));
-            world.Buildings[index] = new BuildingState { Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
+            uint buildingId = existingIndex >= 0 ? world.Buildings[index].Id : world.NextBuildingId;
+            world.Buildings[index] = new BuildingState { Id = buildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
                 Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
@@ -407,7 +413,7 @@ namespace Rts.Simulation
                     : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0,
                 ConstructionSiegeParts = siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0,
                 ConstructionFrames = framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0 };
-            world.NextBuildingId = checked(world.NextBuildingId + 1);
+            if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
@@ -508,7 +514,8 @@ namespace Rts.Simulation
             building.OriginCell = newOrigin;
             building.Facing = facing;
             building.WorkCell = NearestPassableCell(FootprintCenter(newOrigin, size));
-            building.MovePauseUntilTick = checked(world.Tick + world.Config.Economy.MoveBuildingPauseTicks);
+            long pauseTicks = world.Config.Economy.MoveBuildingPauseTicks;
+            building.MovePauseUntilTick = pauseTicks == 0 ? 0 : checked(world.Tick + pauseTicks + 1);
             world.Buildings[index] = building;
             TerrainChanged();
             return true;
@@ -518,6 +525,8 @@ namespace Rts.Simulation
         {
             int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
             var source = world.Buildings[sourceIndex];
+            int mapCells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            foreach (int cell in candidate) if (cell < 0 || cell >= mapCells) return false;
             int sourceNodeCell = source.NodeId == 0 || source.NodeId > world.Nodes.Length ? -1
                 : world.Map.Cell(world.Nodes[source.NodeId - 1].Definition.Position);
             if ((source.Kind == BuildingKind.Mine || source.Kind == BuildingKind.Drill) && Array.IndexOf(candidate, sourceNodeCell) < 0) return false;
@@ -574,7 +583,7 @@ namespace Rts.Simulation
             workCell = -1;
             bool campReady = false;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].Complete && world.Buildings[i].FactionId == faction
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].Complete && world.Buildings[i].FactionId == faction
                     && world.Buildings[i].Kind == BuildingKind.EngineerCamp) { campReady = true; break; }
             if ((requireCiv ? !BridgeAllowed(faction) : !BridgeOn) || requireCamp && !campReady
                 || requireCamp && ActiveBridgeCount(faction) >= MaxActiveBridges || (byte)facing > 3 || requested == null
@@ -622,7 +631,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Bridge) count++;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Bridge) count++;
             return count;
         }
 
@@ -641,7 +650,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var town = world.Buildings[i];
-                if (!town.Alive || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
                 site = FindSiteNear(faction, size, world.Map.Cell(BuildingCenter(town)));
                 if (site >= 0) return site;
             }
@@ -827,7 +836,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];
-                if (!b.Alive || b.Complete || b.Held || b.FactionId != faction || HumanRegionAt(faction, BuildingCenter(b))) continue;
+                if (!b.Alive || b.Reserved || b.Complete || b.Held || b.FactionId != faction || HumanRegionAt(faction, BuildingCenter(b))) continue;
                 bool staffed = false;
                 for (int j = 0; j < world.VillagerCount && !staffed; j++)
                 {
@@ -874,7 +883,7 @@ namespace Rts.Simulation
                 if (!v.Alive || (v.Task != VillagerTask.ToBuild && v.Task != VillagerTask.Building)) continue;
                 var b = world.Buildings[v.BuildingId - 1];
                 // V3-5 (32 #15): a finished building that is hurt is still work - the villager repairs it instead.
-                if (!b.Alive || (b.Complete && !NeedsRepair(b))) { v.Task = VillagerTask.Idle; continue; }
+                if (!IsActualBuilding(b) || (b.Complete && !NeedsRepair(b))) { v.Task = VillagerTask.Idle; continue; }
                 if (v.Task == VillagerTask.ToBuild && InRange(v.Position, world.Map.Center(b.WorkCell), GatherReach)) v.Task = VillagerTask.Building;
             }
             RepairBuildings();
@@ -882,7 +891,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || b.Complete) continue;
+                if (!b.Alive || b.Reserved || b.Complete) continue;
                 for (int j = 0; j < world.VillagerCount; j++)
                 {
                     var v = world.Villagers[j];
@@ -910,7 +919,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var b = ref world.Buildings[i];
-                if (!b.Alive || !b.Complete || BuildingPaused(b) || b.Queued == 0) continue;
+                if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b) || b.Queued == 0) continue;
                 if (b.TrainRemaining > 0) b.TrainRemaining--;
                 if (b.TrainRemaining > 0) continue;
                 if (b.Kind == BuildingKind.Town)
@@ -989,7 +998,7 @@ namespace Rts.Simulation
         private int QueuedInfantry(uint faction)
         {
             int count = 0;
-            for (int i = 0; i < world.BuildingCount; i++) if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind != BuildingKind.Town) count += world.Buildings[i].Queued;
+            for (int i = 0; i < world.BuildingCount; i++) if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind != BuildingKind.Town) count += world.Buildings[i].Queued;
             return count;
         }
 
@@ -997,7 +1006,7 @@ namespace Rts.Simulation
         {
             int count = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (world.Buildings[i].Alive && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count += world.Buildings[i].Queued;
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) count += world.Buildings[i].Queued;
             return count;
         }
 
@@ -1131,7 +1140,7 @@ namespace Rts.Simulation
         {
             if (!CraftTree1On || !OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-            if (!building.Alive || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 3) return;
+            if (!IsActualBuilding(building) || !building.Complete || !IsCraftProcessingBuilding(building.Kind) || building.Level >= 3) return;
             ref var economy = ref world.Economies[faction - 1];
             if (building.Level == 1)
             {

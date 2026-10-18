@@ -108,16 +108,20 @@ namespace Rts.Simulation
                     rotating.Facing = c.Facing;
                     return;
                 case EconomyCommandKind.RemoveBuilding:
-                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn) || !OwnBuilding(faction, c.ProducerId, out int removeIndex)) return;
+                    if (!(ProcessingOn || ForestryOn || RationsOn || PreservesOn || MasonryOn || CaravanOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || CommonDrillOn || BridgeOn || MountainOn || TollgateOn || SanctuaryOn || BuildingReservationsOn) || !OwnBuildingOrReservation(faction, c.ProducerId, out int removeIndex)) return;
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (world.Config.Economy.EasyRebuild) RefundBuilding(faction, ref removed);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
+                    bool wasReservation = removed.Reserved;
                     removed.Alive = false;
                     RemoveRegionCenter(removed);
-                    foreach (int cell in Footprint(removed))
-                        world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
-                    TerrainChanged();
+                    if (!wasReservation)
+                    {
+                        foreach (int cell in Footprint(removed))
+                            world.Map.SetPassable(cell, removed.Kind != BuildingKind.Bridge);
+                        TerrainChanged();
+                    }
                     return;
                 case EconomyCommandKind.MoveBuilding:
                     if (world.Config.Economy.EasyRebuild) TryMoveBuilding(faction, c.ProducerId, c.Cell, c.Facing);
@@ -181,8 +185,7 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.Town && TownCount(faction) >= rules.TownMaxBuildings) return;
                     bool framesAvailable = CraftTree1On && kind != BuildingKind.Wall
                         && economy.Frames >= rules.CraftTreeFramesPerBuilding;
-                    if ((byte)c.Facing > 3 || economy.Wood < WoodOfForPlacement(kind, faction, framesAvailable)
-                        || economy.Stone < StoneOf(kind, faction)) return;
+                    if ((byte)c.Facing > 3) return;
                     if (kind == BuildingKind.DropSite && DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
                     if (c.Cell < 0 || c.Cell >= width * height || c.Cell % width + size > width || c.Cell / width + size > height) return;
@@ -206,8 +209,15 @@ namespace Rts.Simulation
                         : kind == BuildingKind.MineShaft ? MountainShaftSiteIsClear(faction, c.Cell)
                          : kind == BuildingKind.Harbor ? HarborSiteIsClear(faction, c.Cell)
                          : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size, manualBuildingClearance);
-                     if (!clear || rules.AdjacentBuildings && genericPlacement && !ManualPlacementPortsAreClear(kind, c.Cell, size, c.Facing)
+                    if (!clear || rules.AdjacentBuildings && genericPlacement && !ManualPlacementPortsAreClear(kind, c.Cell, size, c.Facing)
                          || !KeepsMapConnected(faction, c.Cell, size)) return;
+                    if (economy.Wood < WoodOfForPlacement(kind, faction, framesAvailable) || economy.Stone < StoneOf(kind, faction))
+                    {
+                        if (BuildingReservationsOn) CreateBuildingReservation(faction, kind, c.Cell,
+                            kind == BuildingKind.Barracks ? Facing.North : c.Facing, node, null, -1,
+                            caravanOutpost, caravanMarket, caravanDistance, caravanReward, sanctuaryOutpost);
+                        return;
+                    }
                     PlaceBuildingAt(faction, kind, c.Cell, kind == BuildingKind.Barracks ? Facing.North : c.Facing, node);
                     if (kind == BuildingKind.Caravanserai)
                     {
@@ -394,7 +404,14 @@ namespace Rts.Simulation
         private bool OwnBuilding(uint faction, uint id, out int index)
         {
             index = (int)id - 1;
-            return id != 0 && id <= world.BuildingCount && world.Buildings[index].Alive && world.Buildings[index].FactionId == faction;
+            return id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[index]) && world.Buildings[index].FactionId == faction;
+        }
+
+        private bool OwnBuildingOrReservation(uint faction, uint id, out int index)
+        {
+            index = (int)id - 1;
+            return id != 0 && id <= world.BuildingCount && world.Buildings[index].Alive
+                && world.Buildings[index].FactionId == faction;
         }
     }
 }

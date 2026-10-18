@@ -1226,7 +1226,18 @@ namespace Rts.Presentation
             var live = new HashSet<ulong>();
             foreach (var command in latestByArmy.Values)
             {
-                if (!TryGoalPosition(command.Goal, frame, out var goal)) continue;
+                OwnArmyView army = default(OwnArmyView);
+                bool foundArmy = false;
+                foreach (var value in frame.Observation.OwnArmies)
+                    if (value.Id == command.Target.Id) { army = value; foundArmy = true; break; }
+                PolicyGoal displayGoal = command.Goal;
+                if (displayGoal.Kind == GoalKind.None && command.Kind == PolicyKind.Scout && foundArmy)
+                    displayGoal = army.PatrolObjective;
+                if (!TryGoalPosition(displayGoal, frame, out var goal)) continue;
+                if (foundArmy && !BattlefieldArrowRules.ShouldShowMovementArrow(
+                        new CommandView(command.CommandId, command.Target, command.Kind, displayGoal,
+                            command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Source),
+                        army.Position)) continue;
                 live.Add(command.CommandId);
                 if (!arrows.TryGetValue(command.CommandId, out var arrow))
                 {
