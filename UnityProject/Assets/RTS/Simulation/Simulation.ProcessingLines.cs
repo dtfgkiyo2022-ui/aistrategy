@@ -702,6 +702,88 @@ namespace Rts.Simulation
             return BuildingReady(line.MineId) && BuildingReady(line.SmelterId) && BuildingReady(line.KilnId) && BuildingReady(line.SteelworksId);
         }
 
+        private void ValidateLineBuildingReferences(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                ref var line = ref world.ProcessingLines[i];
+                if (line.FactionId != faction) continue;
+                bool changed = false;
+                if (line.Kind == ProcessingLineKind.CoreMetal)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
+                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, BuildingKind.Smelter);
+                }
+                else if (line.Kind == ProcessingLineKind.Steel)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.MineId, BuildingKind.Mine);
+                    changed |= ClearMismatchedLineBuilding(ref line.SmelterId, BuildingKind.Smelter);
+                    changed |= ClearMismatchedLineBuilding(ref line.KilnId, BuildingKind.CharcoalKiln);
+                    changed |= ClearMismatchedLineBuilding(ref line.SteelworksId, BuildingKind.Steelworks);
+                }
+                else if (line.Kind == ProcessingLineKind.CoreWood)
+                    changed |= ClearMismatchedLineBuilding(ref line.LumberCampId, BuildingKind.LumberCamp);
+                else if (line.Kind == ProcessingLineKind.BowGear)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.LumberCampId, BuildingKind.LumberCamp);
+                    changed |= ClearMismatchedLineBuilding(ref line.FletcherId, BuildingKind.Fletcher);
+                }
+                else if (line.Kind == ProcessingLineKind.Rations)
+                    changed |= ClearMismatchedLineBuilding(ref line.MillId, BuildingKind.Mill);
+                else if (line.Kind == ProcessingLineKind.Bricks)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.QuarryId, BuildingKind.Quarry);
+                    changed |= ClearMismatchedLineBuilding(ref line.KilnId, BuildingKind.CharcoalKiln);
+                    changed |= ClearMismatchedLineBuilding(ref line.BrickKilnId, BuildingKind.BrickKiln);
+                }
+                else if (line.Kind == ProcessingLineKind.Tack)
+                    changed |= ClearMismatchedLineBuilding(ref line.SaddleryId, BuildingKind.Saddlery);
+                else if (line.Kind == ProcessingLineKind.Planks)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.LumberCampId, BuildingKind.LumberCamp);
+                    changed |= ClearMismatchedLineBuilding(ref line.SawmillId, BuildingKind.Sawmill);
+                }
+                else if (line.Kind == ProcessingLineKind.Books)
+                    changed |= ClearMismatchedLineBuilding(ref line.ScriptoriumId, BuildingKind.Scriptorium);
+                else if (line.Kind == ProcessingLineKind.Preserves)
+                    changed |= ClearMismatchedLineBuilding(ref line.DryingRackId, BuildingKind.DryingRack);
+                else if (line.Kind == ProcessingLineKind.Jewels)
+                    changed |= ClearMismatchedLineBuilding(ref line.LapidaryId, BuildingKind.Lapidary);
+                else if (line.Kind == ProcessingLineKind.TradeGoods)
+                    changed |= ClearMismatchedLineBuilding(ref line.WeaverId, BuildingKind.Weaver);
+                else if (line.Kind == ProcessingLineKind.Incense)
+                    changed |= ClearMismatchedLineBuilding(ref line.IncenseHouseId, BuildingKind.IncenseHouse);
+                else if (line.Kind == ProcessingLineKind.Charms)
+                    changed |= ClearMismatchedLineBuilding(ref line.CharmWorkshopId, BuildingKind.CharmWorkshop);
+                else if (line.Kind == ProcessingLineKind.RepairKits)
+                    changed |= ClearMismatchedLineBuilding(ref line.RepairYardId, BuildingKind.RepairYard);
+                else if (line.Kind == ProcessingLineKind.Tools)
+                    changed |= ClearMismatchedLineBuilding(ref line.ToolShopId, BuildingKind.ToolShop);
+                else if (line.Kind == ProcessingLineKind.CutStone)
+                    changed |= ClearMismatchedLineBuilding(ref line.StonecutterId, BuildingKind.Stonecutter);
+                else if (line.Kind == ProcessingLineKind.Frames)
+                    changed |= ClearMismatchedLineBuilding(ref line.JoineryId, BuildingKind.Joinery);
+                else if (line.Kind == ProcessingLineKind.Assembler)
+                {
+                    changed |= ClearMismatchedLineBuilding(ref line.AssemblerId, BuildingKind.Assembler);
+                    changed |= ClearMismatchedLineBuilding(ref line.KilnId, BuildingKind.CharcoalKiln);
+                }
+                if (!changed) continue;
+                line.BeltCells = Array.Empty<int>();
+                line.BeltFacings = Array.Empty<Facing>();
+                StopLineHaulers(i);
+            }
+        }
+
+        private bool ClearMismatchedLineBuilding(ref uint id, BuildingKind expected)
+        {
+            if (id == 0 || id > world.BuildingCount) return false;
+            var building = world.Buildings[id - 1];
+            if (building.Id == id && building.Kind == expected) return false;
+            id = 0;
+            return true;
+        }
+
         private bool BuildingReady(uint id)
         => id != 0 && id <= world.BuildingCount && IsActualBuilding(world.Buildings[id - 1]) && world.Buildings[id - 1].Complete;
 

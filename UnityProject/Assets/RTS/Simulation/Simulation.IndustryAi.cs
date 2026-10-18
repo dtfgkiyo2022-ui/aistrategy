@@ -37,6 +37,7 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            if (LineBuildingCheckOn) ValidateLineBuildingReferences(faction);
             DecideCraftTree1(faction);
             DecideCraftTree2(faction);
             DecideCraftTree3(faction);
@@ -479,6 +480,15 @@ namespace Rts.Simulation
                 }
         }
 
+        private uint LineBuildingIdAfterPlacement(uint before, BuildingKind expected)
+        {
+            uint id = world.NextBuildingId - 1;
+            if (!LineBuildingCheckOn) return id;
+            if (world.NextBuildingId == before || id == 0 || id > world.BuildingCount) return 0;
+            var building = world.Buildings[id - 1];
+            return building.Id == id && building.Alive && building.Kind == expected ? id : 0;
+        }
+
         private uint PlaceCommonSawmill(uint faction)
         {
             int size = world.Config.Economy.SawmillSizeCells;
@@ -488,8 +498,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
+                    uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
-                    return world.NextBuildingId - 1;
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Sawmill);
                 }
             return 0;
         }
@@ -503,8 +514,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
+                    uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.Stonecutter, origin, side, 0);
-                    return world.NextBuildingId - 1;
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Stonecutter);
                 }
             return 0;
         }
@@ -518,8 +530,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
+                    uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.Joinery, origin, side, 0);
-                    return world.NextBuildingId - 1;
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Joinery);
                 }
             return 0;
         }
@@ -533,8 +546,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
+                    uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
-                    return world.NextBuildingId - 1;
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
                 }
             return 0;
         }
@@ -629,8 +643,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Weaver, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Weaver);
             }
             return 0;
         }
@@ -742,8 +757,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.ToolShop, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.ToolShop);
             }
             return 0;
         }
@@ -768,8 +784,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.CharmWorkshop, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.CharmWorkshop);
             }
             return 0;
         }
@@ -818,8 +835,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.RepairYard, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.RepairYard);
             }
             return 0;
         }
@@ -844,8 +862,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.IncenseHouse, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.IncenseHouse);
             }
             return 0;
         }
@@ -1360,8 +1379,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.FletcherSizeCells), core))
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.FletcherSizeCells, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Fletcher, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Fletcher);
             }
             return 0;
         }
@@ -1400,8 +1420,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Mill, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Mill);
             }
             return 0;
         }
@@ -1457,8 +1478,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Lapidary, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Lapidary);
             }
             return 0;
         }
@@ -1482,8 +1504,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.DryingRack, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.DryingRack);
             }
             return 0;
         }
@@ -1531,8 +1554,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Scriptorium, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Scriptorium);
             }
             return 0;
         }
@@ -1608,8 +1632,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Saddlery, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Saddlery);
             }
             return 0;
         }
@@ -1634,8 +1659,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Sawmill);
             }
             return 0;
         }
@@ -1715,8 +1741,9 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            uint before = world.NextBuildingId;
                             PlaceBuildingAt(faction, BuildingKind.LumberCamp, origin, side, nodeId);
-                            return world.NextBuildingId - 1;
+                            return LineBuildingIdAfterPlacement(before, BuildingKind.LumberCamp);
                         }
                     }
             }
@@ -1750,8 +1777,9 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            uint before = world.NextBuildingId;
                             PlaceBuildingAt(faction, BuildingKind.Quarry, origin, side, nodeId);
-                            return world.NextBuildingId - 1;
+                            return LineBuildingIdAfterPlacement(before, BuildingKind.Quarry);
                         }
                     }
             }
@@ -1795,8 +1823,9 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            uint before = world.NextBuildingId;
                             PlaceBuildingAt(faction, BuildingKind.Mine, origin, side, id);
-                            return world.NextBuildingId - 1;
+                            return LineBuildingIdAfterPlacement(before, BuildingKind.Mine);
                         }
                     }
             }
@@ -1823,8 +1852,9 @@ namespace Rts.Simulation
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                            uint before = world.NextBuildingId;
                             PlaceBuildingAt(faction, BuildingKind.Smelter, origin, side, 0);
-                            return world.NextBuildingId - 1;
+                            return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
                         }
                     }
             return 0;
@@ -1850,8 +1880,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.CharcoalKilnSizeCells), core))
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.CharcoalKilnSizeCells, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.CharcoalKiln, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.CharcoalKiln);
             }
             return 0;
         }
@@ -1865,8 +1896,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.BrickKiln, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.BrickKiln);
             }
             return 0;
         }
@@ -1887,8 +1919,9 @@ namespace Rts.Simulation
             foreach (var side in SidesToward(FootprintCenter(origin, world.Config.Economy.SteelworksSizeCells), core))
             {
                 if (!PortIsOpen(OutputCell(origin, world.Config.Economy.SteelworksSizeCells, side), faction)) continue;
+                uint before = world.NextBuildingId;
                 PlaceBuildingAt(faction, BuildingKind.Steelworks, origin, side, 0);
-                return world.NextBuildingId - 1;
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Steelworks);
             }
             return 0;
         }
