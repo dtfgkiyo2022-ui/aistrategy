@@ -71,6 +71,8 @@ namespace Rts.Simulation
     public sealed class EconomyRules
     {
         public bool Enabled;
+        /// <summary>Measurement-only escape hatch for scaled matches; normal LiveGameRules never sets this.</summary>
+        public bool MeasurementScale;
         /// <summary>Human building placement may reserve a legal site until the required resources are available.</summary>
         public bool BuildingReservations;
         public int ReservationLimit = 10, ReservationCheckTicks = 10;

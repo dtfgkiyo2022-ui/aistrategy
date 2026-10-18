@@ -476,7 +476,7 @@ namespace Rts.Simulation
             for (int i = 0; i < blocked.Length; i++)
                 Require(blocked[i] >= 0 && blocked[i] < m.WidthCells * m.HeightCells && (i == 0 || blocked[i] != blocked[i - 1]), "Invalid blocked cell.");
             var r = s.Rules;
-            int factionCap = s.Economy != null && s.Economy.ArmyGrowth ? 200 : r.FactionCap;
+            int factionCap = s.Economy != null && s.Economy.ArmyGrowth && !s.Economy.MeasurementScale ? 200 : r.FactionCap;
             Require(factionCap > 0 && r.CoreRadius.Raw >= 0 && r.CoreRadius <= Fix64.FromInt(1024)
                 && r.OwnedObjectiveVision.Raw >= 0 && r.CaptureRadius.Raw >= 0
                 && r.CaptureDurationTicks > 0 && r.CoreReinforcementIntervalTicks > 0
@@ -500,7 +500,7 @@ namespace Rts.Simulation
             var e = c.Economy;
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
-            if (e.ArmyGrowth)
+            if (e.ArmyGrowth && !e.MeasurementScale)
             {
                 e.PopulationCap = 200;
                 c.Rules.FactionCap = 200;
@@ -1014,7 +1014,7 @@ namespace Rts.Simulation
                 techFood[12] = e.CavalryDrillFood; techWood[12] = e.CavalryDrillWood;
                 techTicks[12] = e.CavalryDrillTicks; techMetal[12] = 0; techGems[12] = 0;
             }
-            return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations,
+            return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
