@@ -95,8 +95,10 @@ namespace Rts.Simulation
         private const int EasyRebuildExtensionVersion = 1;
         private const int EasyRebuildExtensionDataLength = 2 * sizeof(int);
         private const int ExploreScoutingExtensionId = 50;
-        private const int ExploreScoutingExtensionVersion = 1;
-        private const int ExploreScoutingExtensionDataLength = 7 * sizeof(int);
+        private const int ExploreScoutingExtensionV1 = 1;
+        private const int ExploreScoutingExtensionVersion = 2;
+        private const int ExploreScoutingExtensionV1DataLength = 7 * sizeof(int);
+        private const int ExploreScoutingExtensionDataLength = 10 * sizeof(int);
         private const int BuildingReservationsExtensionId = 51;
         private const int BuildingReservationsExtensionVersion = 1;
         private const int BuildingReservationsExtensionDataLength = 3 * sizeof(int);
@@ -788,7 +790,9 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     && dataLength == TackExtensionV1DataLength;
                 bool oldCraftTree3 = id == CraftTree3ExtensionId && featureVersion == CraftTree3ExtensionV1
                     && dataLength == CraftTree3ExtensionV1DataLength;
-                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3;
+                bool oldExploreScouting = id == ExploreScoutingExtensionId && featureVersion == ExploreScoutingExtensionV1
+                    && dataLength == ExploreScoutingExtensionV1DataLength;
+                bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -2777,6 +2781,8 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             {
                 writer.Write(e.ExploreScouting ? 1 : 0);
                 writer.Write(e.ExploreChunkCells); writer.Write(e.ExploreMinUnexploredPermille);
+                writer.Write(e.ExploreMinUnexploredPermilleStage2); writer.Write(e.ExploreMinUnexploredPermilleStage3);
+                writer.Write(e.ExploreMinUnexploredPermilleStage4);
                 writer.Write(e.ExploreRetargetTicks); writer.Write(e.ExploreAvoidChunks);
                 writer.Write(e.ExploreAvoidTicks); writer.Write(e.ExploreAutoUntilTick);
                 return new ScenarioExtensionData { Id = ExploreScoutingExtensionId, Version = ExploreScoutingExtensionVersion, Data = stream.ToArray() };
@@ -2791,6 +2797,18 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid exploration flag.");
                 e.ExploreScouting = enabled != 0;
                 e.ExploreChunkCells = reader.ReadInt32(); e.ExploreMinUnexploredPermille = reader.ReadInt32();
+                if (extension.Version == ExploreScoutingExtensionV1)
+                {
+                    e.ExploreMinUnexploredPermilleStage2 = 250;
+                    e.ExploreMinUnexploredPermilleStage3 = 100;
+                    e.ExploreMinUnexploredPermilleStage4 = 1;
+                }
+                else
+                {
+                    e.ExploreMinUnexploredPermilleStage2 = reader.ReadInt32();
+                    e.ExploreMinUnexploredPermilleStage3 = reader.ReadInt32();
+                    e.ExploreMinUnexploredPermilleStage4 = reader.ReadInt32();
+                }
                 e.ExploreRetargetTicks = reader.ReadInt32(); e.ExploreAvoidChunks = reader.ReadInt32();
                 e.ExploreAvoidTicks = reader.ReadInt32(); e.ExploreAutoUntilTick = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing exploration extension data.");

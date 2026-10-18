@@ -47,6 +47,7 @@ namespace Rts.Simulation
         internal bool HasPathGoal, PathImpossible;
         internal bool ExplorePatrolActive, ExplorePatrolAuto, ExploreHasGoal;
         internal int ExploreGoalChunkX, ExploreGoalChunkZ, ExploreAvoidChunkX, ExploreAvoidChunkZ;
+        internal int ExploreFailedChunkX, ExploreFailedChunkZ, ExploreFailureCount;
         internal SimPoint ExploreGoal;
         internal long ExploreRetargetTick, ExploreAvoidUntilTick;
         internal PolicyKind Policy;
@@ -600,6 +601,9 @@ namespace Rts.Simulation
             Require(!e.ResourceFog || e.Enabled, "Resource fog requires an enabled economy.");
             Require(!e.ExploreScouting || e.ExploreChunkCells > 0 && e.ExploreChunkCells <= 64
                 && e.ExploreMinUnexploredPermille >= 0 && e.ExploreMinUnexploredPermille <= 1000
+                && e.ExploreMinUnexploredPermilleStage2 >= 0 && e.ExploreMinUnexploredPermilleStage2 <= e.ExploreMinUnexploredPermille
+                && e.ExploreMinUnexploredPermilleStage3 >= 0 && e.ExploreMinUnexploredPermilleStage3 <= e.ExploreMinUnexploredPermilleStage2
+                && e.ExploreMinUnexploredPermilleStage4 >= 0 && e.ExploreMinUnexploredPermilleStage4 <= e.ExploreMinUnexploredPermilleStage3
                 && e.ExploreRetargetTicks > 0 && e.ExploreAvoidChunks >= 0 && e.ExploreAvoidTicks >= 0
                 && e.ExploreAutoUntilTick >= 0, "Invalid exploration rules.");
             Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
@@ -1055,7 +1059,10 @@ namespace Rts.Simulation
                   AdjacentBuildings = e.AdjacentBuildings,
                    AdjacentBuildingClearanceCells = e.AdjacentBuildingClearanceCells,
                   ResourceFog = e.ResourceFog, ExploreScouting = e.ExploreScouting,
-                  ExploreChunkCells = e.ExploreChunkCells, ExploreMinUnexploredPermille = e.ExploreMinUnexploredPermille,
+                ExploreChunkCells = e.ExploreChunkCells, ExploreMinUnexploredPermille = e.ExploreMinUnexploredPermille,
+                ExploreMinUnexploredPermilleStage2 = e.ExploreMinUnexploredPermilleStage2,
+                ExploreMinUnexploredPermilleStage3 = e.ExploreMinUnexploredPermilleStage3,
+                ExploreMinUnexploredPermilleStage4 = e.ExploreMinUnexploredPermilleStage4,
                   ExploreRetargetTicks = e.ExploreRetargetTicks, ExploreAvoidChunks = e.ExploreAvoidChunks,
                   ExploreAvoidTicks = e.ExploreAvoidTicks, ExploreAutoUntilTick = e.ExploreAutoUntilTick,
                   Bricks = e.Bricks, BrickKilnSizeCells = e.BrickKilnSizeCells, BrickKilnWoodCost = e.BrickKilnWoodCost,

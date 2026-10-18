@@ -196,6 +196,9 @@ namespace Rts.Simulation
         public bool ExploreScouting;
         public int ExploreChunkCells = 8;
         public int ExploreMinUnexploredPermille = 500;
+        public int ExploreMinUnexploredPermilleStage2 = 250;
+        public int ExploreMinUnexploredPermilleStage3 = 100;
+        public int ExploreMinUnexploredPermilleStage4 = 1;
         public int ExploreRetargetTicks = 20;
         public int ExploreAvoidChunks = 1;
         public int ExploreAvoidTicks = 1200;

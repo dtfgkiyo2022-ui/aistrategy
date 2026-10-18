@@ -33,6 +33,21 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void ExploreDecisionKeepsAChunkWithLessThanHalfUnexploredCellsUntilItIsExplored()
+        {
+            var explored = Enumerable.Repeat(true, 4 * 2).ToArray();
+            var passable = Enumerable.Repeat(true, explored.Length).ToArray();
+            explored[1] = false;
+
+            var target = ExploreDecision.NextTarget(explored, 4, 2, 1, 2, 500, P(0, 0), passable,
+                Array.Empty<ExploreAvoidChunk>(), 0, 0);
+
+            Assert.That(target.HasTarget, Is.True);
+            Assert.That(target.ChunkX, Is.EqualTo(0));
+            Assert.That(target.ChunkZ, Is.EqualTo(0));
+        }
+
+        [Test]
         public void ExploreDecisionSkipsFinishedBlockedAndAvoidedChunks()
         {
             var explored = Enumerable.Repeat(true, 8 * 4).ToArray();
@@ -62,6 +77,9 @@ namespace Rts.Core.Tests
             var offWithIgnoredTuning = MapGenerator.GenerateTerrain(1);
             offWithIgnoredTuning.Economy.ExploreChunkCells = 5;
             offWithIgnoredTuning.Economy.ExploreMinUnexploredPermille = 731;
+            offWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage2 = 411;
+            offWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage3 = 123;
+            offWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage4 = 7;
             offWithIgnoredTuning.Economy.ExploreRetargetTicks = 37;
             offWithIgnoredTuning.Economy.ExploreAvoidChunks = 2;
             offWithIgnoredTuning.Economy.ExploreAvoidTicks = 901;
@@ -73,6 +91,9 @@ namespace Rts.Core.Tests
             var oldSettingWithIgnoredTuning = MapGenerator.Generate(1, false);
             oldSettingWithIgnoredTuning.Economy.ExploreChunkCells = 5;
             oldSettingWithIgnoredTuning.Economy.ExploreMinUnexploredPermille = 731;
+            oldSettingWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage2 = 411;
+            oldSettingWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage3 = 123;
+            oldSettingWithIgnoredTuning.Economy.ExploreMinUnexploredPermilleStage4 = 7;
             oldSettingWithIgnoredTuning.Economy.ExploreRetargetTicks = 37;
             oldSettingWithIgnoredTuning.Economy.ExploreAvoidChunks = 2;
             oldSettingWithIgnoredTuning.Economy.ExploreAvoidTicks = 901;
@@ -92,16 +113,22 @@ namespace Rts.Core.Tests
             on.Economy.ExploreScouting = true;
             on.Economy.ExploreChunkCells = 5;
             on.Economy.ExploreMinUnexploredPermille = 731;
+            on.Economy.ExploreMinUnexploredPermilleStage2 = 411;
+            on.Economy.ExploreMinUnexploredPermilleStage3 = 123;
+            on.Economy.ExploreMinUnexploredPermilleStage4 = 7;
             on.Economy.ExploreRetargetTicks = 37;
             on.Economy.ExploreAvoidChunks = 2;
             on.Economy.ExploreAvoidTicks = 901;
             on.Economy.ExploreAutoUntilTick = 4321;
             var bytes = ScenarioBinary.Encode(on);
             var decoded = ScenarioBinary.Decode(bytes);
-            Assert.That(decoded.Extensions.Single(x => x.Id == 50).Version, Is.EqualTo(1));
+            Assert.That(decoded.Extensions.Single(x => x.Id == 50).Version, Is.EqualTo(2));
             Assert.That(decoded.Economy.ExploreScouting, Is.True);
             Assert.That(decoded.Economy.ExploreChunkCells, Is.EqualTo(5));
             Assert.That(decoded.Economy.ExploreMinUnexploredPermille, Is.EqualTo(731));
+            Assert.That(decoded.Economy.ExploreMinUnexploredPermilleStage2, Is.EqualTo(411));
+            Assert.That(decoded.Economy.ExploreMinUnexploredPermilleStage3, Is.EqualTo(123));
+            Assert.That(decoded.Economy.ExploreMinUnexploredPermilleStage4, Is.EqualTo(7));
             Assert.That(decoded.Economy.ExploreRetargetTicks, Is.EqualTo(37));
             Assert.That(decoded.Economy.ExploreAvoidChunks, Is.EqualTo(2));
             Assert.That(decoded.Economy.ExploreAvoidTicks, Is.EqualTo(901));
@@ -151,12 +178,139 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void UnreachablePatrolChunkIsAvoidedAfterRepeatedPathFailures()
+        {
+            var scenario = PatrolScenario(1);
+            scenario.Economy.ExploreAutoUntilTick = 0;
+            scenario.Economy.ExploreRetargetTicks = 1;
+            scenario.Economy.ExploreAvoidTicks = 1200;
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            uint scout = scenario.Soldiers.First(s => s.FactionId == 1 && s.Kind == UnitKind.Scout).ArmyId;
+            var target = new ScopeKey(1, ScopeKind.Army, scout);
+            gateway.Submit(new UserPolicyIntent(1, target, PolicyKind.Scout,
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 50, new LossBudget(1000),
+                new EndCondition(EndKind.UntilReplaced, 0), 0,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (int i = 0; i < 60; i++) gateway.Step();
+
+            var before = simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).PatrolObjective.Point;
+            int chunkX = ChunkX(scenario, before), chunkZ = ChunkZ(scenario, before);
+            SetArmyField(simulation, scout, "PathImpossible", true);
+            SetArmyField(simulation, scout, "ExploreHasGoal", true);
+            SetArmyField(simulation, scout, "ExploreGoalChunkX", chunkX);
+            SetArmyField(simulation, scout, "ExploreGoalChunkZ", chunkZ);
+            for (int i = 0; i < 4; i++) gateway.Step();
+
+            Assert.That(ArmyField<int>(simulation, scout, "ExploreAvoidChunkX"), Is.EqualTo(chunkX));
+            Assert.That(ArmyField<int>(simulation, scout, "ExploreAvoidChunkZ"), Is.EqualTo(chunkZ));
+            Assert.That(ArmyField<long>(simulation, scout, "ExploreAvoidUntilTick"),
+                Is.GreaterThan(simulation.Capture(1).Tick));
+            for (int i = 0; i < 10; i++) gateway.Step();
+            var after = simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).PatrolObjective;
+            Assert.That(after.Kind, Is.EqualTo(GoalKind.Point));
+            Assert.That(SamePoint(after.Point, before), Is.False);
+        }
+
+        [Test]
+        public void ManualPatrolStopsAtHomeWhenAllCellsAreExplored()
+        {
+            var scenario = PatrolScenario(1);
+            scenario.Economy.ExploreAutoUntilTick = 0;
+            var simulation = new Battle(scenario);
+            SetExploredCells(simulation, 1, true);
+            var gateway = new CommandGateway(simulation);
+            uint scout = scenario.Soldiers.First(s => s.FactionId == 1 && s.Kind == UnitKind.Scout).ArmyId;
+            var target = new ScopeKey(1, ScopeKind.Army, scout);
+            gateway.Submit(new UserPolicyIntent(1, target, PolicyKind.Scout,
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 50, new LossBudget(1000),
+                new EndCondition(EndKind.UntilReplaced, 0), 0,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (int i = 0; i < 60; i++) gateway.Step();
+
+            for (int i = 0; i < 600; i++) gateway.Step();
+            var held = simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).Position;
+            for (int i = 0; i < 600; i++) gateway.Step();
+            var after = simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).Position;
+            Assert.That(SamePoint(after, held), Is.True);
+            Assert.That(DistanceSquared(after, scenario.Cores[0].Position), Is.LessThanOrEqualTo(
+                DistanceSquared(P(24, 0), P(0, 0))));
+        }
+
+        [Test]
+        public void ManualPatrolContinuesAfterTheAutomaticSixMinuteBoundary()
+        {
+            var scenario = PatrolScenario(1);
+            scenario.Economy.ExploreAutoUntilTick = 1;
+            scenario.Economy.ExploreRetargetTicks = 1;
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            uint scout = scenario.Soldiers.First(s => s.FactionId == 1 && s.Kind == UnitKind.Scout).ArmyId;
+            var target = new ScopeKey(1, ScopeKind.Army, scout);
+            gateway.Submit(new UserPolicyIntent(1, target, PolicyKind.Scout,
+                new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 50, new LossBudget(1000),
+                new EndCondition(EndKind.UntilReplaced, 0), 0,
+                new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            for (int i = 0; i < 60; i++) gateway.Step();
+            for (long tick = 61; tick <= 7260; tick++) simulation.Step(tick, Array.Empty<ScheduledInput>());
+
+            Assert.That(simulation.Capture(1).Tick, Is.EqualTo(7260));
+            Assert.That(simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).PatrolObjective.Kind,
+                Is.EqualTo(GoalKind.Point));
+        }
+
+        [Test]
+        public void ManualPatrolMeasurementForSeedsOneToThree()
+        {
+            var measurements = new List<string>();
+            foreach (ulong seed in new[] { 1UL, 2UL, 3UL })
+            {
+                var scenario = PatrolScenario(seed);
+                scenario.Economy.ExploreAutoUntilTick = 0;
+                var simulation = new Battle(scenario);
+                var gateway = new CommandGateway(simulation);
+                uint scout = scenario.Soldiers.First(s => s.FactionId == 1 && s.Kind == UnitKind.Scout).ArmyId;
+                var target = new ScopeKey(1, ScopeKind.Army, scout);
+                var previous = simulation.Capture(1).Observation.OwnArmies.Single(a => a.Id == scout).Position;
+                int movingNearHomeTicks = 0;
+                int explored6000 = 0, explored12000 = 0;
+                for (long tick = 1; tick <= 12000; tick++)
+                {
+                    if (tick == 600)
+                        gateway.Submit(new UserPolicyIntent(1, target, PolicyKind.Scout,
+                            new PolicyGoal(GoalKind.None, 0, default(SimPoint)), 50, new LossBudget(1000),
+                            new EndCondition(EndKind.UntilReplaced, 0), 0,
+                            new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+                    gateway.Step();
+                    var frame = simulation.Capture(1);
+                    var army = frame.Observation.OwnArmies.Single(a => a.Id == scout);
+                    var core = scenario.Cores[0].Position;
+                    if (tick >= 600 && DistanceSquared(army.Position, core) <= DistanceSquared(P(24, 0), P(0, 0))
+                        && !SamePoint(army.Position, previous))
+                        movingNearHomeTicks++;
+                    previous = army.Position;
+                    if (tick == 6000) explored6000 = frame.Fog.ExploredCells.Count(x => x) * 1000 / frame.Fog.ExploredCells.Count;
+                    if (tick == 12000) explored12000 = frame.Fog.ExploredCells.Count(x => x) * 1000 / frame.Fog.ExploredCells.Count;
+                }
+                string line = $"seed={seed} exploredPermille6000={explored6000} exploredPermille12000={explored12000} homeMovingTicks={movingNearHomeTicks}";
+                measurements.Add(line);
+                TestContext.WriteLine(line);
+            }
+            string outputDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "explorefix"));
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllLines(Path.Combine(outputDirectory, "manual-patrol-measurement.txt"), measurements);
+        }
+
+        [Test]
         public void ExploreScoutingOffMatchesTheLegacyScenarioAtEveryTick()
         {
             var legacy = MapGenerator.GenerateTerrain(1);
             var off = MapGenerator.GenerateTerrain(1);
             off.Economy.ExploreChunkCells = 5;
             off.Economy.ExploreMinUnexploredPermille = 731;
+            off.Economy.ExploreMinUnexploredPermilleStage2 = 411;
+            off.Economy.ExploreMinUnexploredPermilleStage3 = 123;
+            off.Economy.ExploreMinUnexploredPermilleStage4 = 7;
             off.Economy.ExploreRetargetTicks = 37;
             off.Economy.ExploreAvoidChunks = 2;
             off.Economy.ExploreAvoidTicks = 901;
@@ -458,6 +612,26 @@ namespace Rts.Core.Tests
             var armies = (Array)world.GetType().GetField("Armies", Hidden).GetValue(world);
             object army = armies.GetValue((int)armyId - 1);
             return (T)army.GetType().GetField(field, Hidden).GetValue(army);
+        }
+
+        private static void SetArmyField(Battle simulation, uint armyId, string field, object value)
+        {
+            var world = World(simulation);
+            var armies = (Array)world.GetType().GetField("Armies", Hidden).GetValue(world);
+            object army = armies.GetValue((int)armyId - 1);
+            army.GetType().GetField(field, Hidden).SetValue(army, value);
+            armies.SetValue(army, (int)armyId - 1);
+        }
+
+        private static void SetExploredCells(Battle simulation, uint faction, bool value)
+        {
+            var world = World(simulation);
+            var factions = (Array)world.GetType().GetField("Factions", Hidden).GetValue(world);
+            object state = factions.GetValue((int)faction - 1);
+            var cells = (bool[])state.GetType().GetField("ExploredCells", Hidden).GetValue(state);
+            for (int i = 0; i < cells.Length; i++) cells[i] = value;
+            state.GetType().GetField("ExploredCells", Hidden).SetValue(state, cells);
+            factions.SetValue(state, (int)faction - 1);
         }
     }
 }
