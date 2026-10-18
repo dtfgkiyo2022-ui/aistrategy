@@ -374,6 +374,8 @@ namespace Rts.Simulation
                 gems = ScholarlyDiscount(gems, world.Config.Economy.MechanismResearchCostPermille);
                 gold = ScholarlyDiscount(gold, world.Config.Economy.MechanismResearchCostPermille);
             }
+            // Research must not consume the metal reserved for the first recovery infantry.
+            if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Metal, metal)) return false;
             if (economy.Food < food || economy.Wood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return false;
             if (cult && !CultBudgetAllows(faction, food, wood)) return false;

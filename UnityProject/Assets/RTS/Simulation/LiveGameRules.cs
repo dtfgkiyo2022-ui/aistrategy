@@ -84,6 +84,7 @@ namespace Rts.Simulation
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;
+            e.AiArmyRecovery = true;
             e.LatePush = true;
             e.SiegeByAge = true;
             e.PushWaves = true;
