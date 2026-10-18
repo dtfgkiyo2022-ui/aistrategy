@@ -14,6 +14,9 @@ namespace Rts.Simulation
         private static readonly Fix64 GatherReach = Fix64.FromInt(1);
 
         private bool EconomyOn => world.Config.Economy.Enabled;
+        private bool EasyRebuildOn => EconomyOn && world.Config.Economy.EasyRebuild;
+        // Zero is the canonical "never moved" sentinel; a >= comparison would pause every building on tick zero.
+        private bool BuildingPaused(BuildingState building) => EasyRebuildOn && building.MovePauseUntilTick > world.Tick;
         private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
 
@@ -309,7 +312,7 @@ namespace Rts.Simulation
         {
             if (!ProcessingKilnTarget(v)) return false;
             ref var kiln = ref world.Buildings[v.HaulTo - 1];
-            if (!IsActualBuilding(kiln) || !kiln.Complete)
+            if (!IsActualBuilding(kiln) || !kiln.Complete || BuildingPaused(kiln))
             {
                 v.HaulTo = 0;
                 AddStock(v.FactionId, v.CarryKind, v.Carry);
