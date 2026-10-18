@@ -22,6 +22,10 @@ namespace Rts.Simulation
             {
                 ref var b = ref world.Buildings[i];
                 if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b)) continue;
+                // Recovery keeps raw extraction and metallurgy alive while pausing optional input-consuming lines.
+                if (ArmyRecoveryNeedsInfantry(b.FactionId) && b.Kind != BuildingKind.Farm && b.Kind != BuildingKind.Mine
+                    && b.Kind != BuildingKind.LumberCamp && b.Kind != BuildingKind.Quarry && b.Kind != BuildingKind.Drill
+                    && b.Kind != BuildingKind.Smelter) continue;
                 if (b.Kind == BuildingKind.Mine)
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];

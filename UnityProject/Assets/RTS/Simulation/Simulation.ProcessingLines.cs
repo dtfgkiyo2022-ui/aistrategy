@@ -770,7 +770,9 @@ namespace Rts.Simulation
         {
             if (line.Kind == ProcessingLineKind.CoreMetal)
             {
-                if (line.MineId != 0 && line.SmelterId != 0) SetHaulers(faction, line.MineId, line.SmelterId, wanted);
+                if (line.MineId != 0 && line.SmelterId != 0)
+                    SetHaulers(faction, line.MineId, line.SmelterId, wanted,
+                        AiArmyRecoveryOn && ArmyRecoveryNeedsInfantry(faction));
                 return;
             }
             if (line.Kind == ProcessingLineKind.CoreWood)

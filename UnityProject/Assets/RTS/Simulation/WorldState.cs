@@ -513,6 +513,7 @@ namespace Rts.Simulation
                     Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
+            Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(e.CivVarietyWindowPermille >= 0 && e.CivVarietyWindowPermille <= 1000,
                 "Invalid civ variety window.");
             Require(!e.CivVariety || (e.Enabled && e.Ages), "Civ variety requires ages and an economy.");
@@ -1009,7 +1010,7 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, BuildingReservations = e.BuildingReservations,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, AiArmyRecovery = e.AiArmyRecovery, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,

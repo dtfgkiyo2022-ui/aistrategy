@@ -227,6 +227,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             bool tool = CanUseToolForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
+            if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
             economy.Food = checked(economy.Food - food);
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction, tool);
@@ -395,6 +396,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             bool tool = CanUseToolForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
+            if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
             economy.Food = checked(economy.Food - food);
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction, tool);

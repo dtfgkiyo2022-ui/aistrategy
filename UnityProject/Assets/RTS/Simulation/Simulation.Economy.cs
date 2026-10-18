@@ -22,6 +22,7 @@ namespace Rts.Simulation
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
+        private const int ArmyRecoveryMinimumInfantry = 3;
 
         /// <summary>AI phase, on the allocation cycle (5.4 step 1): the automatic economy trains villagers.</summary>
         private void DecideEconomy()
@@ -101,6 +102,16 @@ namespace Rts.Simulation
                     }
                 }
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && CanAiAssign(v)) AssignWork(ref v);
+                if (AiArmyRecoveryOn && v.Task == VillagerTask.ToNode && !v.Held && !world.Economies[v.FactionId - 1].AutoOff)
+                {
+                    var recoveryKind = RecoveryWorkKindFor(v.FactionId);
+                    var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
+                    if (recoveryKind != 0 && recoveryKind != currentKind)
+                    {
+                        int recoveryNode = NearestWorkNode(v.Position, recoveryKind, v.FactionId);
+                        if (recoveryNode >= 0) SetWorkNode(ref v, recoveryNode);
+                    }
+                }
                 SimPoint goal;
                 if (v.Task == VillagerTask.ToNode) goal = world.Nodes[v.NodeId - 1].Definition.Position;
                 else if (v.Task == VillagerTask.ToDropOff) goal = DropOff(v).point;
@@ -336,6 +347,8 @@ namespace Rts.Simulation
                 var otherKind = world.Nodes[other.NodeId - 1].Definition.Kind;
                 if (otherKind == ResourceKind.Food) food++; else if (otherKind == ResourceKind.Wood) wood++;
             }
+            var recoveryKind = RecoveryWorkKindFor(v.FactionId);
+            if (recoveryKind != 0) return recoveryKind;
             ResourceKind current = v.NodeId == 0 ? 0 : world.Nodes[v.NodeId - 1].Definition.Kind;
             if (GoldNeeded(v.FactionId) > 0 && GoldGathererRoom(v, food, wood)) return ResourceKind.Gold;
             var plan = PlanOf(v.FactionId, v.Position);
@@ -354,6 +367,40 @@ namespace Rts.Simulation
                 else if (stock.Wood < WoodFloor && stock.Wood < stock.Food) kind = ResourceKind.Wood;
             }
             return kind;
+        }
+
+        private bool AiArmyRecoveryOn => EconomyOn && world.Config.Economy.AiArmyRecovery;
+
+        private ResourceKind RecoveryWorkKindFor(uint faction)
+        {
+            if (!ArmyRecoveryNeedsInfantry(faction)) return 0;
+            ref var economy = ref world.Economies[faction - 1];
+            int foodNeed = Math.Max(0, InfantryFoodFor(faction) - economy.Food);
+            int woodNeed = Math.Max(0, InfantryWoodFor(faction) - economy.Wood);
+            int metalNeed = Math.Max(0, InfantryMetalFor(faction) - economy.Metal);
+            if (metalNeed > 0 && OwnSmelter(faction) != 0) return ResourceKind.Ore;
+            if (foodNeed == 0 && woodNeed == 0) return 0;
+            if (woodNeed == 0) return ResourceKind.Food;
+            if (foodNeed == 0) return ResourceKind.Wood;
+            long foodPriority = checked((long)foodNeed * InfantryWoodFor(faction));
+            long woodPriority = checked((long)woodNeed * InfantryFoodFor(faction));
+            return foodPriority >= woodPriority ? ResourceKind.Food : ResourceKind.Wood;
+        }
+
+        private bool ArmyRecoveryNeedsInfantry(uint faction)
+            => AiArmyRecoveryOn && LivingClass(faction, UnitKind.Infantry) + QueuedInfantry(faction) < ArmyRecoveryMinimumInfantry
+                && world.Economies[faction - 1].Age >= 3 && CompleteBarracks(faction)
+                && HasInfantryRoom(faction) && !SavingToAdvance(faction);
+
+        private bool ArmyRecoveryWouldConsumeReserve(uint faction, ResourceKind kind, int amount)
+        {
+            if (!ArmyRecoveryNeedsInfantry(faction)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            int reserve = kind == ResourceKind.Food ? InfantryFoodFor(faction) : kind == ResourceKind.Wood ? InfantryWoodFor(faction)
+                : kind == ResourceKind.Metal ? InfantryMetalFor(faction) : 0;
+            int stock = kind == ResourceKind.Food ? economy.Food : kind == ResourceKind.Wood ? economy.Wood
+                : kind == ResourceKind.Metal ? economy.Metal : int.MaxValue;
+            return reserve > 0 && checked(stock - amount) < reserve;
         }
 
         private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
