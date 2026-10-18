@@ -139,6 +139,7 @@ namespace Rts.UnityHost
         }
 
         public IReadOnlyList<LiveAiModelOption> Models => AiModelCatalog.All
+            .Where(p => StrategistUiRules.IsStrategistModel(p.Model))
             .Select(p => new LiveAiModelOption(p, AiModelAvailability.IsConfigured(p.Model))).ToArray();
         public IReadOnlyList<LiveAiInstruction> Instructions => Array.AsReadOnly(history.ToArray());
         public IReadOnlyList<LiveOperationView> Operations => operationTable == null

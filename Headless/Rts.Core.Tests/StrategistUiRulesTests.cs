@@ -24,10 +24,18 @@ namespace Rts.Core.Tests
         [Test]
         public void RestoreModelKeepsSavedUsableModelOrUsesFirstAvailable()
         {
-            var models = new[] { "local-llm", "jev" };
-            Assert.That(StrategistUiRules.RestoreModel("jev", models), Is.EqualTo("jev"));
+            var models = new[] { "local-llm" };
+            Assert.That(StrategistUiRules.RestoreModel("jev", models), Is.EqualTo("local-llm"));
             Assert.That(StrategistUiRules.RestoreModel("claude-opus-5-5", models), Is.EqualTo("local-llm"));
             Assert.That(StrategistUiRules.RestoreModel(null, models), Is.EqualTo("local-llm"));
+        }
+
+        [Test]
+        public void JevIsNotAFreeFormStrategistModel()
+        {
+            Assert.That(StrategistUiRules.IsStrategistModel("jev"), Is.False);
+            Assert.That(StrategistUiRules.IsStrategistModel("local-llm"), Is.True);
+            Assert.That(StrategistUiRules.DisplayName("jev"), Is.Not.EqualTo("Jev（命令1つ）"));
         }
 
         [Test]

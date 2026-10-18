@@ -20,7 +20,11 @@ namespace Rts.Providers
         /// the most expensive model just because its key is present (seen in a player build, 10-09).
         /// </summary>
         public static readonly string[] FirstChoiceOrder =
-            { "claude-haiku-5-5", "local-llm", "gpt-6-luna", "jev", "claude-haiku-4-5", "claude-sonnet-5-5" };
+            { "claude-haiku-5-5", "local-llm", "gpt-6-luna", "claude-haiku-4-5", "claude-sonnet-5-5" };
+
+        /// <summary>Jev is a fixed-choice judgement provider, not a free-form strategist chat model.</summary>
+        public static bool IsStrategistModel(string model)
+            => !string.Equals(model, "jev", StringComparison.OrdinalIgnoreCase);
 
         public static string RestoreModel(string savedModel, IEnumerable<string> availableModels)
         {
@@ -41,7 +45,6 @@ namespace Rts.Providers
             switch ((model ?? "").ToLowerInvariant())
             {
                 case "local-llm": return "ローカルLLM（無料）";
-                case "jev": return "Jev（命令1つ）";
                 case "claude-haiku-5-5": return "Claude Haiku 5.5";
                 case "claude-haiku-4-5": return "Claude Haiku 4.5";
                 case "claude-sonnet-5-5": return "Claude Sonnet 5.5";

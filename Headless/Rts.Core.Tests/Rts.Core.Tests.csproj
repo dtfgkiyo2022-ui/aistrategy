@@ -206,6 +206,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/CraftVisualRules.cs" Link="Presentation/CraftVisualRules.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/BlueprintTools.cs" Link="Presentation/BlueprintTools.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/FineJudgementOption.cs" Link="Presentation/FineJudgementOption.cs" />
     <Compile Include="StaffChatTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/IStaffControl.cs" Link="Presentation/IStaffControl.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/StaffChatEditModeTests.cs" Link="Tests/StaffChatEditModeTests.cs" />
