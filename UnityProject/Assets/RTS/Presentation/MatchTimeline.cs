@@ -84,7 +84,10 @@ namespace Rts.Presentation
                         Add(frame.Tick, UiText.T("Order #", "命令 #") + command.CommandId + UiText.T(" under way", " 実行中"));
                         break;
                     case CommandStatus.Completed:
-                        Add(frame.Tick, UiText.T("Order #", "命令 #") + command.CommandId + UiText.T(" done", " 完了"));
+                        if (command.Reason == ReasonCode.AutoReturned)
+                            Add(frame.Tick, AutoReturned(command.Target));
+                        else
+                            Add(frame.Tick, UiText.T("Order #", "命令 #") + command.CommandId + UiText.T(" done", " 完了"));
                         break;
                     case CommandStatus.Cancelled:
                     case CommandStatus.Expired:
@@ -206,6 +209,14 @@ namespace Rts.Presentation
                 case ReasonCode.LinePlacementUnavailable: return UiText.T("no legal building site", "建設可能地点がない");
                 default: return reason.ToString();
             }
+        }
+
+        private static string AutoReturned(ScopeKey target)
+        {
+            string subject = target.Kind == ScopeKind.Army
+                ? UiText.T("Army ", "軍団 ") + target.Id
+                : target.Kind == ScopeKind.All ? UiText.T("All forces", "全軍") : Target(target);
+            return subject + UiText.T(": the order ended, so it returned to automatic control", "：指示が終わったのでお任せに戻しました");
         }
 
         private static string LineKind(int value)

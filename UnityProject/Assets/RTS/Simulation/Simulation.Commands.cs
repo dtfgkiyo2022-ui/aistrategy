@@ -20,6 +20,7 @@ namespace Rts.Simulation
             internal uint[] StartIds = Array.Empty<uint>();
             internal int N0, Deaths;
             internal bool Active = true, Returning, Finished, Failed;
+            internal long AutoReturnSinceTick = -1;
         }
         private sealed class CommandState
         {
@@ -32,6 +33,7 @@ namespace Rts.Simulation
             internal uint[] ReservedArmies = Array.Empty<uint>();
             internal PolicyVersion[] Dependencies = Array.Empty<PolicyVersion>();
             internal List<ArmyExecution> Armies = new List<ArmyExecution>();
+            internal bool AutoReturned;
             internal int ViewIndex; // position in its faction's commandViews; display data only, never hashed
         }
         private readonly List<CommandState> commandStates = new List<CommandState>();
@@ -467,6 +469,108 @@ namespace Rts.Simulation
                 a.AcceptedTick = selected?.AcceptedTick ?? 0; a.ApplyTick = selected?.ApplyTick ?? 0;
             }
         }
+
+        private bool AutoReturnAfterHumanOn => world.Config.Economy.AutoReturnAfterHuman;
+
+        private bool AutoReturnOrder(PolicyOrder order)
+        {
+            if (!AutoReturnAfterHumanOn || order.Source != CommandSource.Human) return false;
+            if (order.Kind == PolicyKind.Retreat) return true;
+            if (order.Kind == PolicyKind.Scout) return order.Goal.Kind == GoalKind.Point || order.Goal.Kind == GoalKind.Outpost
+                || order.Goal.Kind == GoalKind.None && order.Target.Kind == ScopeKind.Army;
+            return order.Kind == PolicyKind.Focus && (order.Goal.Kind == GoalKind.Point || order.Goal.Kind == GoalKind.Core
+                || order.Goal.Kind == GoalKind.Outpost);
+        }
+
+        private SimPoint ArmyCenter(ArmyState army)
+        {
+            long x = 0, z = 0;
+            int count = 0;
+            foreach (uint id in army.SoldierIds)
+            {
+                var soldier = world.Soldiers[id - 1];
+                if (!soldier.Alive) continue;
+                x = checked(x + soldier.Position.X.Raw);
+                z = checked(z + soldier.Position.Z.Raw);
+                count++;
+            }
+            return count == 0 ? default : new SimPoint(Fix64.FromRaw(x / count), Fix64.FromRaw(z / count));
+        }
+
+        private bool SoldierHasNearbyCombat(SoldierState soldier)
+        {
+            if (!soldier.Alive) return false;
+            if (soldier.IsAttacking) return true;
+            if (soldier.TargetKind == 1 && soldier.TargetId > 0 && soldier.TargetId <= world.Soldiers.Length)
+                return InRange(soldier.Position, world.Soldiers[soldier.TargetId - 1].Position, Fix64.FromInt(12));
+            if (soldier.TargetKind == 2 && soldier.TargetId > 0 && soldier.TargetId <= world.Cores.Length)
+                return InRange(soldier.Position, world.Cores[soldier.TargetId - 1].Definition.Position, Fix64.FromInt(12));
+            return false;
+        }
+
+        private bool ArmyInNearbyCombat(ArmyState army)
+        {
+            var centre = ArmyCenter(army);
+            foreach (uint id in army.SoldierIds)
+                if (SoldierHasNearbyCombat(world.Soldiers[id - 1])) return true;
+            foreach (var soldier in world.Soldiers)
+                if (soldier.Alive && soldier.Initial.FactionId != army.Definition.FactionId && soldier.IsAttacking
+                    && InRange(soldier.Position, centre, Fix64.FromInt(12))) return true;
+            return false;
+        }
+
+        private bool AutoReturnTargetGone(PolicyOrder order)
+        {
+            if (order.Goal.Kind == GoalKind.Core)
+            {
+                var core = world.Cores[order.Goal.Id - 1];
+                // Not "out of sight": an attack sent into the fog would otherwise end before the army arrived.
+                return core.Hp <= 0 || core.Definition.FactionId == order.Target.FactionId;
+            }
+            if (order.Goal.Kind == GoalKind.Outpost)
+            {
+                var outpost = world.Outposts[order.Goal.Id - 1];
+                return outpost.OwnerFactionId == order.Target.FactionId;
+            }
+            return false;
+        }
+
+        private bool AutoReturnArmyFinished(CommandState command, ArmyExecution execution)
+        {
+            if (!AutoReturnOrder(command.Order)) return false;
+            var army = world.Armies[execution.ArmyId - 1];
+            var live = army.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).ToArray();
+            if (live.Length == 0) return false;
+            var arrive = Fix64.FromInt(world.Config.Economy.AutoReturnArriveMeters);
+            bool ready = false;
+            if (command.Order.Kind == PolicyKind.Focus && command.Order.Goal.Kind == GoalKind.Point)
+            {
+                ready = InRange(ArmyCenter(army), command.Order.Goal.Point, arrive);
+                if (ready && ArmyInNearbyCombat(army))
+                {
+                    execution.AutoReturnSinceTick = -1;
+                    return false;
+                }
+            }
+            else if (command.Order.Kind == PolicyKind.Focus && (command.Order.Goal.Kind == GoalKind.Core
+                || command.Order.Goal.Kind == GoalKind.Outpost))
+                ready = AutoReturnTargetGone(command.Order);
+            else if (command.Order.Kind == PolicyKind.Retreat)
+            {
+                var home = world.Cores[world.Factions[command.Order.Target.FactionId - 1].CoreId - 1].Definition.Position;
+                ready = InRange(ArmyCenter(army), home, arrive);
+            }
+            else if (command.Order.Kind == PolicyKind.Scout && command.Order.Goal.Kind == GoalKind.None)
+                ready = army.ExplorePatrolActive && !army.ExploreHasGoal && HomeArrived(army);
+            else if (command.Order.Kind == PolicyKind.Scout)
+                ready = live.All(id => world.Soldiers[id - 1].Pursuit.Returning) && HomeArrived(army);
+
+            if (!ready) { execution.AutoReturnSinceTick = -1; return false; }
+            if (command.Order.Kind == PolicyKind.Scout && command.Order.Goal.Kind == GoalKind.None) return true;
+            if (execution.AutoReturnSinceTick < 0) execution.AutoReturnSinceTick = world.Tick;
+            return world.Tick - execution.AutoReturnSinceTick >= world.Config.Economy.AutoReturnHoldTicks;
+        }
+
         private void FinishCommands()
         {
             lossReturns.RemoveAll(id =>
@@ -504,10 +608,19 @@ namespace Rts.Simulation
                     var scoutReturning = c.Order.Kind == PolicyKind.Scout && live.Any(id => world.Soldiers[id - 1].Pursuit.Returning);
                     var goal = a.Returning || scoutReturning ? world.Cores[world.Factions[c.Order.Target.FactionId - 1].CoreId - 1].Definition.Position : Destination(c.Order);
                     bool arrived = live.Length > 0 && live.All(id => InRange(world.Soldiers[id - 1].Position, goal, Fix64.FromInt(4)));
-                    a.Finished = a.Returning ? arrived : c.Order.End.Kind == EndKind.Arrived ? arrived :
+                    bool holdHumanRetreat = AutoReturnAfterHumanOn && c.Order.Source == CommandSource.Human
+                        && c.Order.Kind == PolicyKind.Retreat && c.Order.End.Kind == EndKind.UntilReplaced;
+                    a.Finished = !holdHumanRetreat && a.Returning ? arrived : c.Order.End.Kind == EndKind.Arrived ? arrived :
                         c.Order.End.Kind == EndKind.AtTick ? world.Tick >= c.Order.End.Tick :
                         c.Order.End.Kind == EndKind.LossReached ? reached :
-                        (c.Order.End.Kind == EndKind.ObjectiveOwned || c.Order.Kind == PolicyKind.Focus) && c.Order.Goal.Kind == GoalKind.Outpost && world.Outposts[c.Order.Goal.Id - 1].OwnerFactionId == c.Order.Target.FactionId;
+                        !(AutoReturnOrder(c.Order) && c.Order.Source == CommandSource.Human && c.Order.End.Kind == EndKind.UntilReplaced)
+                        && (c.Order.End.Kind == EndKind.ObjectiveOwned || c.Order.Kind == PolicyKind.Focus)
+                        && c.Order.Goal.Kind == GoalKind.Outpost && world.Outposts[c.Order.Goal.Id - 1].OwnerFactionId == c.Order.Target.FactionId;
+                    if (!a.Finished && AutoReturnArmyFinished(c, a))
+                    {
+                        a.Finished = true;
+                        c.AutoReturned = true;
+                    }
                     if (a.Finished && reached && c.Order.End.Kind == EndKind.LossReached &&
                         Combat(c.Order) && !lossReturns.Contains(a.ArmyId)) lossReturns.Add(a.ArmyId);
                     if (a.Finished && (a.Returning || c.Order.Kind == PolicyKind.Retreat))
@@ -516,7 +629,7 @@ namespace Rts.Simulation
                 }
                 if (c.Armies.Any(a => a.Failed) && c.Armies.All(a => a.Failed || !a.Active || a.Finished)) EndCommand(c, CommandStatus.Impossible, ReasonCode.EmptyArmy);
                 else if ((c.Armies.Count != 0 && complete) || c.Order.End.Kind == EndKind.AtTick && world.Tick >= c.Order.End.Tick && !c.Armies.Any(a => a.Returning && !a.Finished))
-                    EndCommand(c, CommandStatus.Completed, loss ? ReasonCode.LossLimit : ReasonCode.None);
+                    EndCommand(c, CommandStatus.Completed, c.AutoReturned ? ReasonCode.AutoReturned : loss ? ReasonCode.LossLimit : ReasonCode.None);
             }
         }
     }

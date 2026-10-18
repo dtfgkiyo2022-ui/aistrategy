@@ -1697,3 +1697,11 @@ AgeClock の時計はそのままに、文明の選択を先に行い、支払�
 ### 35.5 決まったこと（オーナー、10-18）
 - 人の指示が終わったら、斥候に限らずその軍団をお任せに戻す（守る・予備は除く。「全部自分で」のあいだは戻さない）→ 旗 `AutoReturnAfterHuman`（ID 53）
 - Jev は参謀のチャットから外し、試合の設定の「お任せの細かい判断」（使わない／Jev／ローカル LLM）で使う
+
+#### 実装仕様
+
+- `ScenarioEconomy` に `AutoReturnAfterHuman`（既定 `false`）、`AutoReturnArriveMeters`（既定 `4`）、`AutoReturnHoldTicks`（既定 `200`）を置く。オンの値だけを `ScenarioBinary` の拡張欄 ID 53 / version 1 / little-endian `int32 enabled, int32 arriveMeters, int32 holdTicks` に保存し、オフのシナリオは既存バイト列を変えない。`LiveGameRules` の全文明設定ではオンにする。
+- 対象は人の `Focus(Point/Core/Outpost)`、`Retreat`、目的地付き `Scout`、および巡回 `ExploreScouting`。守る（`Defend`）、予備（`MaintainReserve`）、`AllowAbandon` は自動完了させない。全滅した軍団も完了しない。
+- 地点指定は軍団中心が半径 `AutoReturnArriveMeters` 内に入り、近距離戦闘が無い状態を連続 `AutoReturnHoldTicks` tick 維持したら完了する。近距離戦闘中は保持時計をリセットする。コア／前哨の Focus は目標破壊・自陣化・不可視化、Retreat は自コア到着、目的地付き Scout は現在の引き返し完了、巡回 Scout は目標消失かつ帰還到着を完了条件とする。
+- 完了時は通常の人命令を消し、軍団の自動ポリシーへ戻す。`ManualControl` がオンなら自動命令を出さず、軍団は停止したままにする。完了イベントには `ReasonCode.AutoReturned = 18` を付け、タイムラインには「指示が終わったのでお任せに戻しました」と表示する。
+- `AutoReturnSinceTick` は命令置換時に新しい実行状態として初期化する。判定は固定小数点・固定順で行い、シナリオ設定、同一 tick ハッシュ、記録／再生のコマンド結果を一致させる。
