@@ -330,6 +330,7 @@
 .staff-scroll {
     flex-grow: 1;
     flex-shrink: 1;
+    min-height: 0;
     margin-top: 6px;
     margin-bottom: 5px;
     background-color: var(--hud-staff-chat);

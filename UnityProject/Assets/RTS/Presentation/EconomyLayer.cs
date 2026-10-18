@@ -862,8 +862,10 @@ namespace Rts.Presentation
                         buildingCivStandards.Add(b.Id, standard);
                     }
                 }
+                // 10-18 test play: a reservation (and a site still being built) has little or no HP by design, which
+                // drew the "badly damaged" fire on it. Fire is for damaged finished buildings only.
                 if (own && b.MaxHp > 0)
-                    SyncBuildingFire(b.Id, b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
+                    SyncBuildingFire(b.Id, b.Reserved || !b.Complete ? b.MaxHp : b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
                 if (b.Reserved) buildingReservationOrders[b.Id] = b.ReservationOrder;
