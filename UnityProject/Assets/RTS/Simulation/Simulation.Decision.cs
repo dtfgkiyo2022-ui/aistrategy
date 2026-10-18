@@ -16,6 +16,7 @@ namespace Rts.Simulation
         private ContactApproachMemory[][] approachMemory;
         // One state per faction: unlike the old per-army target timer this describes a shared attack.
         private readonly FactionOffenseMemory[] offenseMemory = { new FactionOffenseMemory(), new FactionOffenseMemory() };
+        private const int ExplorePathFailureLimit = 3;
 
         private bool ExploreScoutingOn => world.Config.Economy.ExploreScouting;
 
@@ -74,6 +75,27 @@ namespace Rts.Simulation
                 army.ExplorePatrolAuto = autoPatrol && !manualPatrol;
                 return;
             }
+            if (army.ExploreHasGoal && army.PathImpossible)
+            {
+                if (army.ExploreFailedChunkX == army.ExploreGoalChunkX && army.ExploreFailedChunkZ == army.ExploreGoalChunkZ)
+                    army.ExploreFailureCount++;
+                else
+                {
+                    army.ExploreFailedChunkX = army.ExploreGoalChunkX;
+                    army.ExploreFailedChunkZ = army.ExploreGoalChunkZ;
+                    army.ExploreFailureCount = 1;
+                }
+                if (army.ExploreFailureCount >= ExplorePathFailureLimit)
+                {
+                    army.ExploreAvoidChunkX = army.ExploreGoalChunkX;
+                    army.ExploreAvoidChunkZ = army.ExploreGoalChunkZ;
+                    army.ExploreAvoidUntilTick = checked(world.Tick + world.Config.Economy.ExploreAvoidTicks);
+                    army.ExploreFailureCount = 0;
+                    army.ExploreHasGoal = false;
+                    army.HasPathGoal = false;
+                    army.PathImpossible = false;
+                }
+            }
             if (!army.ExplorePatrolActive || army.ExplorePatrolAuto != (autoPatrol && !manualPatrol))
             {
                 army.ExplorePatrolActive = true;
@@ -93,6 +115,9 @@ namespace Rts.Simulation
             var target = ExploreDecision.NextTarget(world.Factions[faction - 1].ExploredCells,
                 world.Config.Map.WidthCells, world.Config.Map.HeightCells, world.Config.Map.CellSizeMeters,
                 world.Config.Economy.ExploreChunkCells, world.Config.Economy.ExploreMinUnexploredPermille,
+                world.Config.Economy.ExploreMinUnexploredPermilleStage2,
+                world.Config.Economy.ExploreMinUnexploredPermilleStage3,
+                world.Config.Economy.ExploreMinUnexploredPermilleStage4,
                 core, passable, avoid, world.Tick, world.Config.Economy.ExploreAvoidChunks);
             bool changed = army.ExploreHasGoal != target.HasTarget || target.HasTarget && !SamePoint(army.ExploreGoal, target.Position);
             army.ExplorePatrolActive = true;
@@ -100,7 +125,12 @@ namespace Rts.Simulation
             army.ExploreGoal = target.Position;
             army.ExploreGoalChunkX = target.ChunkX; army.ExploreGoalChunkZ = target.ChunkZ;
             army.ExploreRetargetTick = checked(world.Tick + world.Config.Economy.ExploreRetargetTicks);
-            if (changed) army.HasPathGoal = false;
+            if (changed)
+            {
+                army.HasPathGoal = false;
+                army.PathImpossible = false;
+                army.ExploreFailureCount = 0;
+            }
         }
 
         private PolicyView ArmyPolicy(uint id)
@@ -321,6 +351,8 @@ namespace Rts.Simulation
                     w.Value(n + "ExploreRetargetTick", a.ExploreRetargetTick);
                     w.Value(n + "ExploreAvoidChunkX", a.ExploreAvoidChunkX); w.Value(n + "ExploreAvoidChunkZ", a.ExploreAvoidChunkZ);
                     w.Value(n + "ExploreAvoidUntilTick", a.ExploreAvoidUntilTick);
+                    w.Value(n + "ExploreFailedChunkX", a.ExploreFailedChunkX); w.Value(n + "ExploreFailedChunkZ", a.ExploreFailedChunkZ);
+                    w.Value(n + "ExploreFailureCount", a.ExploreFailureCount);
                 }
             }
             for (int i = 0; i < world.SoldierCount; i++)

@@ -10,7 +10,42 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-18。これが最新）
+### 今どこにいるか（2026-10-18 午後。これが最新）
+
+**最初にやること：`D:/rts-verify/state_0928.md` の末尾（10-18）を読む。動いている作業の `.done` を見る。**
+
+**10-18 にマージしたもの（テストプレイ 10-18 の宿題と、その後の直し）**
+- #429・#434 画面：参謀のチャットが Enter で送れない・AI の一覧が見切れて Jev を選べない・左下の説明欄が隠れる・チャット欄と軍団の操作欄の下が見切れる・予約に火が出る
+- #430 兵・斥候がぐるぐる回る・移動の線が残る（旗 `DirectPathMovement` の続き）
+- #431 斥候の巡回の偵察（旗 `ExploreScouting`、ID 50）
+- #432 資源が足りないときの建物の予約（旗 `BuildingReservations`、ID 51）
+- #433 取り壊しで費用を戻す・建物の移動（旗 `EasyRebuild`、ID 49。移動は V キー、取り壊しは Del）
+- #435 お任せが兵を作り直す：襲撃で壊れた金属のラインを建て直す（旗 `AiArmyRecovery`、ID 52。お任せどうしの種1が決着するように）
+- 設計書 35章に、この日の直しと決まったことをまとめた
+- 製品版：`D:/rts-verify/build1018a/起動.bat`（#429〜#432 まで）。この後の分を入れた版を作る予定
+
+**途中の作業**
+| ブランチ（worktree） | 中身 | 状況 |
+|---|---|---|
+| `a/explore-fix`（`../aistrategy-wt-explorefix`） | 斥候の巡回が霧が残っているのに自陣の周りを回る件の直し（霧の残りの条件を 50%→25%→10%→1マスと段階的に下げる、たどり着けない区画は避ける、全部見たら家で止まる） | 全体テスト `D:/rts-verify/fulltest_explorefix.done` → マージ |
+| `a/auto-return`（`../aistrategy-wt-autoreturn`） | 人の指示が終わったらお任せに戻す（旗 `AutoReturnAfterHuman`、ID 53、`ReasonCode.AutoReturned = 18`）。守る・予備は戻さない、「全部自分で」のあいだは戻さない | 全体テスト `D:/rts-verify/fulltest_autoreturn.done` → マージ → #135 |
+| `a/jev-toggle`（`../aistrategy-wt-jevtoggle`） | Jev を参謀のチャットから外し、試合の設定に「お任せの細かい判断：使わない／Jev／ローカル LLM」 | 依頼 `D:/rts-verify/astra/request_jevtoggle1_luna.md`、**未発注** |
+| `a/line-building-id`（`../aistrategy-wt-lineid`） | 加工のラインが壊れた後に別の種類の建物を指したまま止まる（main の不具合。旗 `LineBuildingCheck`、ID 54） | 依頼 `D:/rts-verify/astra/request_lineid1_luna.md`、**未発注** |
+
+- 拡張欄の ID は 54 まで予約済み。**次は 55**。`ReasonCode` は 18、`EventKind` は 12 まで
+
+**オーナーが決めたこと（10-18）**
+- 偵察は「自分のコアから近い順に、まだ見ていない場所を巡る。敵を見たら引き返す。お任せも序盤に」
+- 人の指示が終わったら、斥候に限らずお任せに戻す（プレイヤーはそこまで気が回らない）
+- Jev は参謀のチャット（自由な文）に向かない。お任せの細かい判断のオン・オフで使う
+- 右クリックの地点へ向かう兵は、途中の敵を追わずに目的地へ歩く（近くに来た敵とは戦う）。オーナーには伝えてあり、異論は出ていない
+
+**気をつけること（10-18 に踏んだ）**
+- 拡張欄を足すブランチどうしを合わせると、`ScenarioBinary` の Create/Read のメソッドが行ごとに混ざることがある。取り込んだら必ずビルド（メモリ `scenario-binary-merge-interleave`）
+- Codex は毎回のように：テストが依頼の半分ほど／Unity 側の二重定義や `#if false` の残り物でコンパイルが通らない／EditMode のテストで `UiText.Japanese` を切り替え忘れる／Contracts の値の一覧（`ContractsTests.WireValuesAreFixed`）を足し忘れる。2回目の依頼で項目を名指しし、Unity の EditMode は必ず自分で回す
+- 全体テストは一度、テストのプロセスが途中で落ちて `EXIT=-1` になった（再実行で通過）。`--blame-crash` を付けて回している
+
+### 今どこにいるか（2026-10-18 朝）
 
 **最初にやること**
 1. このメモの「10-18 の宿題」を読む。細部は `D:/rts-verify/state_0928.md` の末尾（10-18）。
