@@ -370,6 +370,7 @@ namespace Rts.Simulation
         }
 
         private bool AiArmyRecoveryOn => EconomyOn && world.Config.Economy.AiArmyRecovery;
+        private bool LineBuildingCheckOn => EconomyOn && world.Config.Economy.LineBuildingCheck;
 
         private ResourceKind RecoveryWorkKindFor(uint faction)
         {

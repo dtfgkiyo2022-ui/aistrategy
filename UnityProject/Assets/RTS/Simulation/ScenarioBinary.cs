@@ -105,6 +105,9 @@ namespace Rts.Simulation
         private const int AiArmyRecoveryExtensionId = 52;
         private const int AiArmyRecoveryExtensionVersion = 1;
         private const int AiArmyRecoveryExtensionDataLength = sizeof(int);
+        private const int LineBuildingCheckExtensionId = 54;
+        private const int LineBuildingCheckExtensionVersion = 1;
+        private const int LineBuildingCheckExtensionDataLength = sizeof(int);
         private const int AutoReturnAfterHumanExtensionId = 53;
         private const int AutoReturnAfterHumanExtensionVersion = 1;
         private const int AutoReturnAfterHumanExtensionDataLength = 3 * sizeof(int);
@@ -256,9 +259,10 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
             ,new ExtensionRegistration(InserterExtensionId, InserterExtensionVersion, InserterExtensionDataLength)
             ,new ExtensionRegistration(EasyRebuildExtensionId, EasyRebuildExtensionVersion, EasyRebuildExtensionDataLength)
             ,new ExtensionRegistration(ExploreScoutingExtensionId, ExploreScoutingExtensionVersion, ExploreScoutingExtensionDataLength)
-            ,new ExtensionRegistration(BuildingReservationsExtensionId, BuildingReservationsExtensionVersion, BuildingReservationsExtensionDataLength)
-            ,new ExtensionRegistration(AiArmyRecoveryExtensionId, AiArmyRecoveryExtensionVersion, AiArmyRecoveryExtensionDataLength)
-            ,new ExtensionRegistration(AutoReturnAfterHumanExtensionId, AutoReturnAfterHumanExtensionVersion, AutoReturnAfterHumanExtensionDataLength)
+             ,new ExtensionRegistration(BuildingReservationsExtensionId, BuildingReservationsExtensionVersion, BuildingReservationsExtensionDataLength)
+             ,new ExtensionRegistration(AiArmyRecoveryExtensionId, AiArmyRecoveryExtensionVersion, AiArmyRecoveryExtensionDataLength)
+             ,new ExtensionRegistration(AutoReturnAfterHumanExtensionId, AutoReturnAfterHumanExtensionVersion, AutoReturnAfterHumanExtensionDataLength)
+             ,new ExtensionRegistration(LineBuildingCheckExtensionId, LineBuildingCheckExtensionVersion, LineBuildingCheckExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -859,8 +863,9 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
                     else if (id == ExploreScoutingExtensionId) ReadExploreScoutingExtension(extension, c.Economy);
                     else if (id == BuildingReservationsExtensionId) ReadBuildingReservationsExtension(extension, c.Economy);
-                    else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
-                    else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
+                     else if (id == AiArmyRecoveryExtensionId) ReadAiArmyRecoveryExtension(extension, c.Economy);
+                     else if (id == LineBuildingCheckExtensionId) ReadLineBuildingCheckExtension(extension, c.Economy);
+                     else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
                      extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -942,6 +947,7 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ExploreScoutingExtensionId && !c.Economy.ExploreScouting);
                 extensions.RemoveAll(extension => extension != null && extension.Id == BuildingReservationsExtensionId && !c.Economy.BuildingReservations);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiArmyRecoveryExtensionId && !c.Economy.AiArmyRecovery);
+                extensions.RemoveAll(extension => extension != null && extension.Id == LineBuildingCheckExtensionId && !c.Economy.LineBuildingCheck);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
             bool hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1359,6 +1365,14 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                         extensions[i] = CreateAiArmyRecoveryExtension(c.Economy);
                     }
                 if (c.Economy.AiArmyRecovery && !hasAiArmyRecovery) extensions.Add(CreateAiArmyRecoveryExtension(c.Economy));
+                bool hasLineBuildingCheck = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == LineBuildingCheckExtensionId)
+                    {
+                        hasLineBuildingCheck = true;
+                        extensions[i] = CreateLineBuildingCheckExtension(c.Economy);
+                    }
+                if (c.Economy.LineBuildingCheck && !hasLineBuildingCheck) extensions.Add(CreateLineBuildingCheckExtension(c.Economy));
                 bool hasAutoReturnAfterHuman = false;
                 for (int i = 0; i < extensions.Count; i++)
                     if (extensions[i] != null && extensions[i].Id == AutoReturnAfterHumanExtensionId)
@@ -2861,6 +2875,26 @@ private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
                 if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI army recovery flag.");
                 e.AiArmyRecovery = enabled != 0;
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI army recovery extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateLineBuildingCheckExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.LineBuildingCheck ? 1 : 0);
+                return new ScenarioExtensionData { Id = LineBuildingCheckExtensionId, Version = LineBuildingCheckExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadLineBuildingCheckExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid line building check flag.");
+                e.LineBuildingCheck = enabled != 0;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing line building check extension data.");
             }
         }
         private static ScenarioExtensionData CreateAutoReturnAfterHumanExtension(EconomyRules e)
