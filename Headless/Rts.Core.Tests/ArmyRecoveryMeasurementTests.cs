@@ -80,11 +80,11 @@ namespace Rts.Core.Tests
             var sim = new Battle(scenario);
             var gateway = new CommandGateway(sim);
             var output = new StringBuilder();
-            output.AppendLine("tick\tfaction\tinfantry\tscouts\tfood\twood\tmetal\tsteel\tvillagers\tpopulation\tpopCap\tage\tadvanceRemaining\tadvanceTo\tbarracks\tready\theld\tqueued\ttrainRemaining\tfoodCost\twoodCost\tmetalCost\tpopulationCondition\tqueueCondition\tfoodCondition\twoodCondition\tmetalCondition\troomCondition\tsavingToAdvance\tprimitiveSaving\tdecisionWouldTrain\tfoodNodes\twoodNodes\tfoodRemaining\twoodRemaining\tidle\ttoResource\ttoResourceUnreachable\tgatherFood\treturningFood\tgatherWood\treturningWood\ttoBuild\tbuilding\thauling\ttrading");
-            for (long tick = 1; tick <= 16000; tick++)
+            output.AppendLine("tick\tfaction\tinfantry\tscouts\tfood\twood\tmetal\tsteel\tvillagers\tpopulation\tpopCap\tage\tadvanceRemaining\tadvanceTo\tbarracks\tready\theld\tqueued\ttrainRemaining\tfoodCost\twoodCost\tmetalCost\tpopulationCondition\tqueueCondition\tfoodCondition\twoodCondition\tmetalCondition\troomCondition\tsavingToAdvance\tprimitiveSaving\trecoveryNeedsInfantry\tcompleteBarracks\tcoreMetalLine\tdecisionWouldTrain\tfoodNodes\twoodNodes\tfoodRemaining\twoodRemaining\tidle\ttoResource\ttoResourceUnreachable\tgatherFood\treturningFood\tgatherWood\treturningWood\ttoBuild\tbuilding\thauling\ttrading");
+            for (long tick = 1; tick <= 22000; tick++)
             {
                 gateway.Step();
-                if (tick < 14000 || tick > 16000 || tick % 20 != 0) continue;
+                if (tick < 14000 || tick > 22000 || tick % 20 != 0) continue;
                 for (uint faction = 1; faction <= 2; faction++)
                     AppendMeasurement(output, sim, faction);
             }
@@ -118,6 +118,45 @@ namespace Rts.Core.Tests
             Assert.That(infantryAfter15000, Is.GreaterThan(0), "automatic economy must recover infantry after tick 15000");
         }
 
+        [Test, Explicit("army recovery scouting diagnostic")]
+        public void ArmyRecoveryWithScoutingRebuildsMetalLine()
+        {
+            var scenario = LiveGameRules.Create(1, false, true, false, false);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            for (long tick = 1; tick <= 22000; tick++) gateway.Step();
+            TestContext.WriteLine("metal=" + ReadEconomyInt(sim, 2, "Metal")
+                + " line=" + CoreMetalLine(sim, 2));
+            Assert.Multiple(() =>
+            {
+                Assert.That(CoreMetalLine(sim, 2), Does.Contain("Mine/"), "line=" + CoreMetalLine(sim, 2));
+                Assert.That(ReadEconomyInt(sim, 2, "Metal"), Is.GreaterThan(0), "line=" + CoreMetalLine(sim, 2));
+            });
+        }
+
+        [Test, Explicit("army recovery villager recovery")]
+        public void AiArmyRecoveryRestoresVillagerIncomeAfterTheArmyDrops()
+        {
+            var scenario = LiveGameRules.Create(1, false, true, false, false);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            for (long tick = 1; tick <= 18000; tick++) gateway.Step();
+            var frame = sim.Capture(1);
+            Assert.That(frame.Economy.Villagers.Count(x => x.Activity == VillagerActivity.ToResource || x.Activity == VillagerActivity.Gathering),
+                Is.GreaterThan(0), "automatic villagers must return to resource work");
+            Assert.That(ReadEconomyInt(sim, 1, "Food"), Is.GreaterThan(0));
+        }
+
+        [Test, Explicit("army recovery seed-1 resolution")]
+        public void SeedOneArmyRecoveryResolvesTheMatch()
+        {
+            var scenario = LiveGameRules.Create(1, false, true, false, false);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            for (long tick = 1; tick <= 30000 && !sim.Capture(1).Result.HasEnded; tick++) gateway.Step();
+            Assert.That(sim.Capture(1).Result.HasEnded, Is.True);
+        }
+
         private static void AppendMeasurement(StringBuilder output, Battle sim, uint faction)
         {
             var frame = sim.Capture(faction);
@@ -137,6 +176,8 @@ namespace Rts.Core.Tests
             bool room = Invoke<bool>(sim, "HasInfantryRoom", faction);
             bool saving = Invoke<bool>(sim, "SavingToAdvance", faction);
             bool primitiveSaving = saving && e.Civ == CivKind.Primitive;
+            bool recoveryNeedsInfantry = Invoke<bool>(sim, "ArmyRecoveryNeedsInfantry", faction);
+            bool completeBarracks = Invoke<bool>(sim, "CompleteBarracks", faction);
             var barracks = e.Buildings.Where(x => x.Kind == BuildingKind.Barracks).ToArray();
             bool ready = barracks.Any(x => x.Complete && !x.PlayerHeld);
             int queued = barracks.Sum(x => x.Queued);
@@ -153,7 +194,7 @@ namespace Rts.Core.Tests
                 livingVillagers, population, popCap, e.Age, e.AdvanceRemaining, e.AdvancingTo, barracks.Length, ready,
                 barracks.Any(x => x.PlayerHeld), queued, trainRemaining, foodCost, woodCost, metalCost,
                 population < popCap, queued < queueTarget, e.Food >= foodCost, e.Wood >= woodCost, e.Metal >= metalCost, room, saving,
-                primitiveSaving, wouldTrain, foodNodes.Length, woodNodes.Length, foodNodes.Sum(x => x.Remaining), woodNodes.Sum(x => x.Remaining),
+                primitiveSaving, recoveryNeedsInfantry, completeBarracks, CoreMetalLine(sim, faction), wouldTrain, foodNodes.Length, woodNodes.Length, foodNodes.Sum(x => x.Remaining), woodNodes.Sum(x => x.Remaining),
                 activity(VillagerActivity.Idle), activity(VillagerActivity.ToResource), toResourceUnreachable, carryActivity(VillagerActivity.Gathering, ResourceKind.Food),
                 carryActivity(VillagerActivity.Returning, ResourceKind.Food), carryActivity(VillagerActivity.Gathering, ResourceKind.Wood),
                 carryActivity(VillagerActivity.Returning, ResourceKind.Wood), activity(VillagerActivity.ToBuild), activity(VillagerActivity.Building),
@@ -162,6 +203,49 @@ namespace Rts.Core.Tests
 
         private static int OwnInfantry(FactionFrame frame)
             => frame.Units.Count(x => x.IsOwn && x.Kind == UnitKind.Infantry);
+
+        private static string CoreMetalLine(Battle sim, uint faction)
+        {
+            int index = Invoke<int>(sim, "LineIndex", faction, ProcessingLineKind.CoreMetal);
+            if (index < 0) return "none";
+            object line = ((Array)GetWorldField(sim, "ProcessingLines")).GetValue(index);
+            uint mine = ReadStructField<uint>(line, "MineId");
+            uint smelter = ReadStructField<uint>(line, "SmelterId");
+            int belts = ((Array)ReadStructField<object>(line, "BeltCells")).Length;
+            string manager = ReadStructField<object>(line, "Manager").ToString();
+            int nodeRemaining = -1;
+            string mineKind = "none";
+            string smelterState = "none";
+            int assignedBuilders = 0;
+            if (mine != 0)
+            {
+                object building = ((Array)GetWorldField(sim, "Buildings")).GetValue((int)mine - 1);
+                mineKind = ReadStructField<object>(building, "Kind").ToString();
+                mineKind = mineKind + "/id" + ReadStructField<uint>(building, "Id");
+                uint nodeId = ReadStructField<uint>(building, "NodeId");
+                if (nodeId != 0)
+                {
+                    object node = ((Array)GetWorldField(sim, "Nodes")).GetValue((int)nodeId - 1);
+                    nodeRemaining = ReadStructField<int>(node, "Remaining");
+                }
+            }
+            if (smelter != 0)
+            {
+                object building = ((Array)GetWorldField(sim, "Buildings")).GetValue((int)smelter - 1);
+                smelterState = ReadStructField<object>(building, "Kind") + "/a" + ReadStructField<bool>(building, "Alive") + "/" + ReadStructField<bool>(building, "Complete")
+                    + "/w" + ReadStructField<int>(building, "WorkCell") + "/p" + ReadStructField<int>(building, "Progress") + "/in" + ReadStructField<int>(building, "Input") + "/out" + ReadStructField<int>(building, "Output");
+                var villagers = (Array)GetWorldField(sim, "Villagers");
+                for (int i = 0; i < villagers.Length; i++)
+                {
+                    object villager = villagers.GetValue(i);
+                    if (ReadStructField<uint>(villager, "BuildingId") == smelter) assignedBuilders++;
+                }
+            }
+            return string.Join(":", manager, mine, smelter, mineKind, smelterState, "builders" + assignedBuilders, belts, nodeRemaining);
+        }
+
+        private static T ReadStructField<T>(object value, string name)
+            => (T)value.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(value);
 
         private static int ReadEconomyInt(Battle sim, uint faction, string name)
         {

@@ -40,6 +40,7 @@ namespace Rts.Simulation
             DecideCraftTree1(faction);
             DecideCraftTree2(faction);
             DecideCraftTree3(faction);
+            if (TryDecideArmyRecoveryMetalLine(faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
@@ -152,6 +153,111 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        /// <summary>AiArmyRecovery: restore the metal line before optional industry while infantry is below its reserve.</summary>
+        private bool TryDecideArmyRecoveryMetalLine(uint faction)
+        {
+            if (!ArmyRecoveryNeedsInfantry(faction) || InfantryMetalFor(faction) <= 0 || !ProcessingAvailable(faction)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
+            ref var line = ref world.ProcessingLines[lineIndex];
+            if (!IsAutoLine(lineIndex)) return true;
+            if (LineRebuildBlocked(lineIndex)) { StopLineHaulers(lineIndex); return true; }
+            if (line.MineId != 0 && !RecoveryBuildingReady(line.MineId, BuildingKind.Mine))
+            {
+                StopLineHaulers(lineIndex);
+                line.MineId = 0;
+                line.SmelterId = 0;
+                line.BeltCells = Array.Empty<int>();
+                line.BeltFacings = Array.Empty<Facing>();
+            }
+            else if (RecoveryMineDepleted(line.MineId))
+            {
+                RetireRecoveryMine(lineIndex);
+                line.MineId = 0;
+                line.SmelterId = 0;
+                line.BeltCells = Array.Empty<int>();
+                line.BeltFacings = Array.Empty<Facing>();
+            }
+            if (!RecoveryBuildingReady(line.MineId, BuildingKind.Mine))
+            {
+                if (BuildingPending(line.MineId))
+                {
+                    SetRecoveryWorkCell(faction, line.MineId);
+                    PrioritizeRecoveryBuilding(faction, line.MineId);
+                    return true;
+                }
+                if (economy.Wood < world.Config.Economy.MineWoodCost) return true;
+                uint id = PlaceMine(faction);
+                if (id != 0) { SetLineBuilding(lineIndex, BuildingKind.Mine, id); SetRecoveryWorkCell(faction, id); }
+                return true;
+            }
+            if (!RecoveryBuildingReady(line.SmelterId, BuildingKind.Smelter))
+            {
+                if (BuildingPending(line.SmelterId))
+                {
+                    SetRecoveryWorkCell(faction, line.SmelterId);
+                    PrioritizeRecoveryBuilding(faction, line.SmelterId);
+                    return true;
+                }
+                if (economy.Wood < world.Config.Economy.SmelterWoodCost) return true;
+                uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                if (id != 0) { SetLineBuilding(lineIndex, BuildingKind.Smelter, id); SetRecoveryWorkCell(faction, id); }
+                return true;
+            }
+            var mine = world.Buildings[line.MineId - 1];
+            var smelter = world.Buildings[line.SmelterId - 1];
+            if (!LayCoreLine(faction, lineIndex, mine, smelter)) SetLineHaulers(faction, line, Haulers);
+            else SetLineHaulers(faction, line, 0);
+            return true;
+        }
+
+        private bool RecoveryBuildingReady(uint id, BuildingKind expected)
+            => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Alive
+                && world.Buildings[id - 1].Complete && world.Buildings[id - 1].Kind == expected;
+
+        private bool RecoveryMineDepleted(uint id)
+            => id != 0 && id <= world.BuildingCount && world.Buildings[id - 1].Kind == BuildingKind.Mine
+                && world.Buildings[id - 1].NodeId != 0 && world.Nodes[world.Buildings[id - 1].NodeId - 1].Remaining <= 0;
+
+        private void RetireRecoveryMine(int lineIndex)
+        {
+            ref var line = ref world.ProcessingLines[lineIndex];
+            if (line.MineId == 0 || line.MineId > world.BuildingCount) return;
+            ref var mine = ref world.Buildings[line.MineId - 1];
+            if (!mine.Alive) return;
+            mine.Alive = false;
+            RemoveRegionCenter(mine);
+            foreach (int cell in Footprint(mine)) world.Map.SetPassable(cell, true);
+            TerrainChanged();
+        }
+
+        private void PrioritizeRecoveryBuilding(uint faction, uint buildingId)
+        {
+            if (buildingId == 0 || buildingId > world.BuildingCount) return;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                ref var v = ref world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.Held
+                    || (v.Task != VillagerTask.ToBuild && v.Task != VillagerTask.Building)
+                    || v.BuildingId == buildingId) continue;
+                v.Task = VillagerTask.Idle;
+                v.BuildingId = 0;
+                v.NodeId = 0;
+                v.HaulFrom = 0;
+                v.HaulTo = 0;
+            }
+            ref var target = ref world.Buildings[buildingId - 1];
+            AssignBuilders(ref target);
+        }
+
+        private void SetRecoveryWorkCell(uint faction, uint buildingId)
+        {
+            if (buildingId == 0 || buildingId > world.BuildingCount) return;
+            ref var building = ref world.Buildings[buildingId - 1];
+            int reachable = NearestReachablePassableCell(FootprintCenter(building.OriginCell, SizeOf(building.Kind)), faction);
+            if (reachable >= 0) building.WorkCell = reachable;
         }
 
         private void DecideCraftTree2(uint faction)
@@ -2227,7 +2333,7 @@ namespace Rts.Simulation
         /// New carriers are the nearest to the mine among those gathering or idle (distance, then id); with none wanted,
         /// every carrier of this line stops.
         /// </summary>
-        private void SetHaulers(uint faction, uint mine, uint smelter, int wanted)
+        private void SetHaulers(uint faction, uint mine, uint smelter, int wanted, bool recovery = false)
         {
             int fromMine = 0, fromSmelter = 0;
             for (int i = 0; i < world.VillagerCount; i++)
@@ -2245,7 +2351,13 @@ namespace Rts.Simulation
                 int best = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
                 {
-                    var v = world.Villagers[i];
+                    ref var v = ref world.Villagers[i];
+                    if (recovery && (v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building)
+                        && v.BuildingId != mine && v.BuildingId != smelter)
+                    {
+                        v.Task = VillagerTask.Idle;
+                        v.BuildingId = 0;
+                    }
                     if (!v.Alive || v.FactionId != faction || v.Held || v.HaulFrom != 0 || v.Carry > 0
                         || (v.Task != VillagerTask.Idle && v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering)) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
