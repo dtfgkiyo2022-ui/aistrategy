@@ -70,6 +70,7 @@ namespace Rts.Presentation
             var result = new List<EconomyAction>();
             var economy = Economy();
             if (economy == null) return result;
+            AddSelectedBuildingActions(result, economy);
             switch (tab)
             {
                 case Tab.Build: AddBuildActions(result, economy); break;
@@ -115,6 +116,9 @@ namespace Rts.Presentation
                 if (buildMode != Mode.None) SetMode(buildMode);
                 return;
             }
+            if (actionId == "building:move") { BeginSelectedBuildingMove(); return; }
+            if (actionId == "building:remove") { RemoveSelectedBuilding(); return; }
+            if (actionId == "building:cancel-reservation") { CancelSelectedBuildingReservation(); return; }
             if (actionId.StartsWith("line:", StringComparison.Ordinal))
             {
                 if (Enum.TryParse(actionId.Substring(5), true, out ProcessingLineKind line))
@@ -442,6 +446,61 @@ namespace Rts.Presentation
             Add(rows, "build:facing", UiText.T("R: ", "R：") + FacingName(facing), false, "", false, true);
             AddFlowActions(rows, economy);
             ApplyReservationLabels(rows, economy);
+        }
+
+        private void AddSelectedBuildingActions(List<EconomyAction> rows, EconomyView economy)
+        {
+            BuildingView selected;
+            if (!TrySelectedBuilding(out selected)) return;
+            var state = BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected);
+            if (state.CanMove)
+            {
+                Add(rows, "building:move", UiText.T("Move (V)", "移動（V）"), true, "", mode == Mode.MoveBuilding);
+                Add(rows, "building:remove", UiText.T("Remove (Del)", "取り壊し（Del）"));
+                Add(rows, "building:remove-info", UiText.T("Paid building materials are refunded.", "支払った建築材料が戻ります。"), false, "", false, true);
+            }
+            else if (state.MoveBlockedByKind)
+            {
+                Add(rows, "building:move-unavailable", UiText.T("Move (V)", "移動（V）"), false,
+                    UiText.T("This building type cannot be moved.", "この種類の建物は移動できません。"));
+                Add(rows, "building:remove", UiText.T("Remove (Del)", "取り壊し（Del）"));
+            }
+            else if (state.CanCancelReservation)
+                Add(rows, "building:cancel-reservation", UiText.T("Cancel reservation", "予約を消す"));
+        }
+
+        public void BeginSelectedBuildingMove()
+        {
+            BuildingView selected;
+            var economy = Economy();
+            if (economy == null || !TrySelectedBuilding(out selected)) return;
+            if (BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected).CanMove)
+            {
+                SetMode(Mode.MoveBuilding);
+                Note(UiText.T("Choose a new place for the building.", "建物の新しい置き場所を選んでください。"));
+            }
+            else if (selected.Complete && BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected).MoveBlockedByKind)
+                Note(UiText.T("This building type cannot be moved.", "この種類の建物は移動できません。"));
+        }
+
+        public void RemoveSelectedBuilding()
+        {
+            BuildingView selected;
+            var economy = Economy();
+            if (economy == null || !TrySelectedBuilding(out selected)) return;
+            if (BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected).CanRemove)
+                Send(BuildingRelocationUiRules.CreateCommand(BuildingRelocationUiAction.Remove,
+                    faction, ++sequence, selected.Id, 0, Facing.North), RemovalNotice(selected, economy));
+        }
+
+        public void CancelSelectedBuildingReservation()
+        {
+            BuildingView selected;
+            var economy = Economy();
+            if (economy == null || !TrySelectedBuilding(out selected)) return;
+            if (BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected).CanCancelReservation)
+                Send(BuildingRelocationUiRules.CreateCommand(BuildingRelocationUiAction.CancelReservation,
+                    faction, ++sequence, selected.Id, 0, Facing.North), UiText.T("Reservation cancelled.", "予約を取り消しました。"));
         }
 
         private void ApplyReservationLabels(List<EconomyAction> rows, EconomyView economy)

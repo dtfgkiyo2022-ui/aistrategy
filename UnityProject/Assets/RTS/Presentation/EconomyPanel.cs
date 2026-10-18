@@ -120,8 +120,27 @@ namespace Rts.Presentation
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
                     return true;
                 case Mode.MoveBuilding:
-                    if (TrySelectedBuilding(out BuildingView selected) && Footprint(cell, SizeOf(selected.Kind), out int moveOrigin, out _))
-                        port.SubmitEconomy(EconomyCommand.MoveBuilding(faction, ++sequence, selected.Id, moveOrigin, facing));
+                    if (!TrySelectedBuilding(out BuildingView selected) ||
+                        !BuildingRelocationUiRules.Evaluate(Economy() != null && Economy().EasyRebuild, faction, selected).CanMove)
+                    {
+                        Note(UiText.T("No movable building is selected.", "移動できる建物が選択されていません。"));
+                    }
+                    else if (!Footprint(cell, SizeOf(selected.Kind), out int moveOrigin, out _))
+                    {
+                        GameAudio.Ui(SoundCue.PlacementRejected);
+                        Note(UiText.T("That building cannot be placed there.", "その場所には建物を置けません。"));
+                    }
+                    else if (!CanMoveTo(selected, moveOrigin, facing))
+                    {
+                        GameAudio.Ui(SoundCue.PlacementRejected);
+                        Note(UiText.T("That building cannot be placed there.", "その場所には建物を置けません。"));
+                    }
+                    else
+                    {
+                        port.SubmitEconomy(BuildingRelocationUiRules.CreateCommand(BuildingRelocationUiAction.Move,
+                            faction, ++sequence, selected.Id, moveOrigin, facing));
+                        Note(UiText.T("Building relocation requested.", "建物の移動を依頼しました。"));
+                    }
                     SetMode(Mode.None);
                     return true;
                 case Mode.BlueprintPaste:
@@ -387,9 +406,16 @@ namespace Rts.Presentation
             if (layer == null) return;
             if (mode == Mode.None)
             {
-                if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out BuildingView selected) && Input.GetKeyDown(KeyCode.V)) SetMode(Mode.MoveBuilding);
-                else if (Economy() != null && Economy().EasyRebuild && TrySelectedBuilding(out selected) && Input.GetKeyDown(KeyCode.Delete))
-                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "蟒ｺ迚ｩ縺ｮ蜿悶ｊ螟悶＠繧偵萓晞ｼ縺励∪縺励◆"));
+                if (Economy() != null && TrySelectedBuilding(out BuildingView selected))
+                {
+                    var selectedActions = BuildingRelocationUiRules.Evaluate(Economy().EasyRebuild, faction, selected);
+                    if (selectedActions.CanMove && Input.GetKeyDown(KeyCode.V)) BeginSelectedBuildingMove();
+                    else if (selectedActions.MoveBlockedByKind && Input.GetKeyDown(KeyCode.V))
+                        Note(UiText.T("This building type cannot be moved.", "この種類の建物は移動できません。"));
+                    else if (selectedActions.CanRemove && Input.GetKeyDown(KeyCode.Delete)) RemoveSelectedBuilding();
+                    else if (selectedActions.CanCancelReservation && Input.GetKeyDown(KeyCode.Delete)) CancelSelectedBuildingReservation();
+                    else return;
+                }
                 else return;
             }
             var camera = Camera.main;
@@ -457,14 +483,21 @@ namespace Rts.Presentation
                 return;
             }
             if (mode == Mode.RemoveBelt) { layer.ShowBeltPreview(onMap ? new List<int> { cell } : null, false); return; }
+            if (mode == Mode.MoveBuilding && !TrySelectedBuilding(out BuildingView movingBuilding))
+            {
+                SetMode(Mode.None);
+                return;
+            }
             var kind = KindOf(mode);
-            if (mode == Mode.MoveBuilding && TrySelectedBuilding(out BuildingView selectedBuilding)) kind = selectedBuilding.Kind;
+            if (mode == Mode.MoveBuilding) kind = movingBuilding.Kind;
             int size = SizeOf(kind);
             var center = Vector3.zero;
             int origin = -1;
             bool shown = onMap && Footprint(cell, size, out origin, out center);
-            bool legal = shown && (mode == Mode.MoveBuilding || AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
-                view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind)));
+            bool legal = shown && (mode == Mode.MoveBuilding
+                ? CanMoveTo(movingBuilding, origin, facing)
+                : AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
+                    view.LatestFrame.FactionId, kind, origin, size, facing, WoodOf(kind), StoneOf(kind)));
             bool reservation = shown && economy.BuildingReservations
                 && (economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind))
                 && AdjacentBuildingPlacementRules.CanPlace(view.LatestFrame.Economy, view.LatestFrame.Objectives,
@@ -575,14 +608,28 @@ namespace Rts.Presentation
                     GUI.Label(new Rect(right, y, half, 22f), UiText.T("Barracks: building ", "兵舎：建設中 ") + Percent(barracks.Value));
             }
             y += 26f;
-            if (economy.EasyRebuild && TrySelectedBuilding(out BuildingView selected) && selected.Complete)
+            if (economy.EasyRebuild && TrySelectedBuilding(out BuildingView selected))
             {
-                ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動 (V)"));
-                if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し (Del)")))
-                    Send(EconomyCommand.RemoveBuilding(faction, ++sequence, selected.Id), UiText.T("Building removal requested", "建物の取り壊しを依頼しました"));
-                y += 26f;
-                GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
-                y += 26f;
+                var selectedActions = BuildingRelocationUiRules.Evaluate(economy.EasyRebuild, faction, selected);
+                if (selectedActions.CanMove)
+                {
+                    ModeButton(new Rect(x, y, half, 22f), Mode.MoveBuilding, UiText.T("Move (V)", "移動（V）"));
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し（Del）"))) RemoveSelectedBuilding();
+                    y += 26f;
+                    GUI.Label(new Rect(x, y, w, 22f), UiText.T("Removal refunds paid materials and contents.", "取り壊しで支払った材料と中身が戻ります。"));
+                    y += 26f;
+                }
+                else if (selectedActions.MoveBlockedByKind)
+                {
+                    GUI.Label(new Rect(x, y, half, 22f), UiText.T("Cannot move this type", "この種類は移動不可"));
+                    if (GUI.Button(new Rect(right, y, half, 22f), UiText.T("Remove (Del)", "取り壊し（Del）"))) RemoveSelectedBuilding();
+                    y += 26f;
+                }
+                else if (selectedActions.CanCancelReservation)
+                {
+                    if (GUI.Button(new Rect(x, y, w, 22f), UiText.T("Cancel reservation", "予約を消す"))) CancelSelectedBuildingReservation();
+                    y += 26f;
+                }
             }
             if (economy.Ages)
             {
@@ -1222,11 +1269,32 @@ namespace Rts.Presentation
             return false;
         }
 
+        private bool CanMoveTo(BuildingView selected, int origin, Facing targetFacing)
+        {
+            var frame = view == null ? null : view.LatestFrame;
+            if (frame == null || frame.Economy == null) return false;
+            return AdjacentBuildingPlacementRules.CanPlace(frame.Economy, frame.Objectives, frame.FactionId,
+                selected.Kind, origin, SizeOf(selected.Kind), targetFacing, 0, 0, true, selected.Id);
+        }
+
         private static int CountIdle(EconomyView economy)
         {
             int count = 0;
             foreach (var v in economy.Villagers) if (v.IsOwn && v.Activity == VillagerActivity.Idle) count++;
             return count;
+        }
+
+        private string RemovalNotice(BuildingView building, EconomyView economy)
+        {
+            int wood = WoodOf(building.Kind), stone = StoneOf(building.Kind);
+            string name = Name(building.Kind);
+            if (wood > 0 && stone > 0)
+                return name + UiText.T(" removed. Wood " + wood + " and stone " + stone + " are refunded.", "を取り壊しました。木材 " + wood + "、石 " + stone + " が戻ります。");
+            if (wood > 0)
+                return name + UiText.T(" removed. Wood " + wood + " is refunded.", "を取り壊しました。木材 " + wood + " が戻ります。");
+            if (stone > 0)
+                return name + UiText.T(" removed. Stone " + stone + " is refunded.", "を取り壊しました。石 " + stone + " が戻ります。");
+            return name + UiText.T(" removed. Some materials are refunded.", "を取り壊しました。材料の一部が戻ります。");
         }
 
         private void Send(EconomyCommand command, string note) { port.SubmitEconomy(command); GameAudio.Ui(SoundCue.CommandMove); Note(note); }
