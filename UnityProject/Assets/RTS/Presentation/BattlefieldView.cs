@@ -70,6 +70,7 @@ namespace Rts.Presentation
         private readonly Dictionary<uint, Vector3> previousArmyPositions = new Dictionary<uint, Vector3>();
         private readonly Dictionary<uint, int> armyAlive = new Dictionary<uint, int>();
         private readonly Dictionary<uint, int> coreHp = new Dictionary<uint, int>();
+        private readonly Dictionary<uint, int> coreMaxHpById = new Dictionary<uint, int>();
         private readonly Dictionary<uint, GameObject> coreFire = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, string> coreFireFiles = new Dictionary<uint, string>();
         private readonly List<TimedBattlefieldEffect> battlefieldEffects = new List<TimedBattlefieldEffect>();
@@ -841,16 +842,18 @@ namespace Rts.Presentation
                 }
                 visual.To = target;
                 // An unobserved core must not show a full bar; hide it instead of inventing a value.
+                int maxHp = objective.MaxHp > 0 ? objective.MaxHp : coreMaxHp;
                 coreHp[objective.Id] = objective.IsHpKnown ? objective.Hp : -1;
+                coreMaxHpById[objective.Id] = maxHp;
                 visual.HpFill.parent.gameObject.SetActive(objective.IsHpKnown);
-                if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp);
+                if (objective.IsHpKnown) UpdateHpBar(visual, objective.Hp, maxHp);
                 if (visual.CivStandard == null && frame.Economy != null && objective.OwnerFactionId == frame.FactionId
                     && frame.Economy.Civ != CivKind.Primitive)
                 {
                     LocalVisualPack.TryCreateCivStandard(frame.Economy.Civ, objective.OwnerFactionId, visual.Object.transform,
                         3.6f, 2.2f, out visual.CivStandard);
                 }
-                SyncCoreFire(objective.Id, objective.IsHpKnown, objective.Hp, new Vector3(target.x, target.y + 8f, target.z));
+                SyncCoreFire(objective.Id, objective.IsHpKnown, objective.Hp, maxHp, new Vector3(target.x, target.y + 8f, target.z));
             }
 
             var missing = new List<uint>();
@@ -858,7 +861,8 @@ namespace Rts.Presentation
                 if (!present.Contains(pair.Key)) missing.Add(pair.Key);
             foreach (var id in missing)
             {
-                if (coreHp[id] >= 0 && coreHp[id] <= coreMaxHp * 0.5f)
+                int maxHp = coreMaxHpById.TryGetValue(id, out var rememberedMaxHp) ? rememberedMaxHp : coreMaxHp;
+                if (coreHp[id] >= 0 && coreHp[id] <= maxHp * 0.5f)
                 {
                     Visual old;
                     if (cores.TryGetValue(id, out old))
@@ -866,15 +870,16 @@ namespace Rts.Presentation
                 }
                 RemoveCoreFire(id);
                 coreHp.Remove(id);
+                coreMaxHpById.Remove(id);
             }
 
             previousCorePositions.Clear();
             foreach (var pair in cores) previousCorePositions[pair.Key] = pair.Value.To;
         }
 
-        private void SyncCoreFire(uint id, bool known, int hp, Vector3 position)
+        private void SyncCoreFire(uint id, bool known, int hp, int maxHp, Vector3 position)
         {
-            string file = !known ? null : hp <= coreMaxHp * 0.25f ? "FX_Building_burning.prefab" : hp <= coreMaxHp * 0.5f ? "FX_Building_burning_small.prefab" : null;
+            string file = !known ? null : hp <= maxHp * 0.25f ? "FX_Building_burning.prefab" : hp <= maxHp * 0.5f ? "FX_Building_burning_small.prefab" : null;
             if (file == null) { RemoveCoreFire(id); return; }
             if (coreFire.TryGetValue(id, out var current) && current != null)
             {
@@ -1300,7 +1305,7 @@ namespace Rts.Presentation
             foreach (var visual in armies.Values) Discard(visual.Object);
             armies.Clear(); armyFlags.Clear(); previousArmyPositions.Clear(); armyAlive.Clear();
             foreach (var visual in cores.Values) Discard(visual.Object);
-            cores.Clear(); previousCorePositions.Clear(); coreHp.Clear();
+            cores.Clear(); previousCorePositions.Clear(); coreHp.Clear(); coreMaxHpById.Clear();
             foreach (var visual in outposts.Values) Discard(visual.Object);
             outposts.Clear();
             foreach (var ghost in ghosts.Values) Discard(ghost);
@@ -1443,9 +1448,9 @@ namespace Rts.Presentation
             return new Visual { Object = root, HpFill = healthBar.Fill, HealthBar = healthBar };
         }
 
-        private void UpdateHpBar(Visual visual, int hp)
+        private void UpdateHpBar(Visual visual, int hp, int maxHp)
         {
-            WorldHealthBarVisuals.Set(visual.HealthBar, hp, coreMaxHp,
+            WorldHealthBarVisuals.Set(visual.HealthBar, hp, maxHp,
                 visual.HealthBar.Root.transform.position, Quaternion.identity);
             visual.Hp = hp;
         }

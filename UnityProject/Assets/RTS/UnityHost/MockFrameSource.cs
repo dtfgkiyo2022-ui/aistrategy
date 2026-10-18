@@ -10,7 +10,7 @@ namespace Rts.UnityHost
         private const int UnitsPerSide = 10;
         private const long MillimetersPerTick = 100;
         private const long TravelMillimeters = 90000;
-        private const int CoreMaxHp = 3000;
+        private const int CoreMaxHp = 6000;
         private const int WidthCells = 128;
         private const int HeightCells = 64;
         private const long CellMillimeters = 2000;
@@ -88,8 +88,8 @@ namespace Rts.UnityHost
             int hp = CoreMaxHp - (int)((tick / 2) % CoreMaxHp);
             var objectives = new List<KnownObjective>
             {
-                new KnownObjective(GoalKind.Core, 1, Point(24000, 64000), true, 1, true, hp, tick),
-                new KnownObjective(GoalKind.Core, 2, Point(232000, 64000), true, 2, true, CoreMaxHp, tick),
+                new KnownObjective(GoalKind.Core, 1, Point(24000, 64000), true, 1, true, hp, tick, CoreMaxHp),
+                new KnownObjective(GoalKind.Core, 2, Point(232000, 64000), true, 2, true, CoreMaxHp, tick, CoreMaxHp),
             };
             objectives.Add(new KnownObjective(GoalKind.Outpost, 1, Point(128000, 96000), true, 1, false, 0, tick, 0, 0, 0));
             long phase = tick % 400;

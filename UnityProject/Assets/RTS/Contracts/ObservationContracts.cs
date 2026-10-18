@@ -156,6 +156,8 @@ namespace Rts.Contracts
         public uint OwnerFactionId { get; }
         public bool IsHpKnown { get; }
         public int Hp { get; }
+        /// <summary>Observed maximum HP. Zero when HP information is not known.</summary>
+        public int MaxHp { get; }
         public long LastSeenTick { get; }
 
         public uint CapturingFactionId { get; }
@@ -170,12 +172,13 @@ namespace Rts.Contracts
             uint ownerFactionId,
             bool isHpKnown,
             int hp,
-            long lastSeenTick)
-            : this(kind, id, position, isOwnerKnown, ownerFactionId, isHpKnown, hp, lastSeenTick, 0, 0, 0) { }
+            long lastSeenTick,
+            int maxHp = 0)
+            : this(kind, id, position, isOwnerKnown, ownerFactionId, isHpKnown, hp, lastSeenTick, 0, 0, 0, maxHp) { }
 
         public KnownObjective(GoalKind kind, uint id, SimPoint position, bool isOwnerKnown,
             uint ownerFactionId, bool isHpKnown, int hp, long lastSeenTick,
-            uint capturingFactionId, int captureTicks, int captureDurationTicks)
+            uint capturingFactionId, int captureTicks, int captureDurationTicks, int maxHp = 0)
         {
             CapturingFactionId = capturingFactionId;
             CaptureTicks = captureTicks;
@@ -187,6 +190,7 @@ namespace Rts.Contracts
             OwnerFactionId = ownerFactionId;
             IsHpKnown = isHpKnown;
             Hp = hp;
+            MaxHp = isHpKnown ? maxHp : 0;
             LastSeenTick = lastSeenTick;
         }
     }
