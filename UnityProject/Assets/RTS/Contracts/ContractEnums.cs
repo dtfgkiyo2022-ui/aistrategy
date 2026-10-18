@@ -175,7 +175,7 @@ namespace Rts.Contracts
         StaleVersion = 4, InvalidPayload = 5, SubjectGone = 6, OwnershipChanged = 7,
         NoPath = 8, EmptyArmy = 9, ObservationTooOld = 10, LossLimit = 11, ReserveShortfall = 12,
         LineUnavailable = 13, LineResourceMissing = 14, LineWoodShortfall = 15, LinePlacementUnavailable = 16,
-        BuildingReservationInvalid = 17
+        BuildingReservationInvalid = 17, AutoReturned = 18
     }
 
 }
