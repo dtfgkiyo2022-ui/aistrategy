@@ -86,6 +86,15 @@ namespace Rts.Simulation
         public bool ArmyGrowth;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
+        /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
+        public bool LargeEconomy;
+        public int LargeVillagerTrainTicks = 40, LargeInfantryTrainTicks = 80;
+        public int LargeVillagerBatch = 4, LargeInfantryBatch = 4;
+        public int LargeBarracksMaxBuildings = 16, LargeArmyCapacity = 300;
+        public int LargeTownDecisionIntervalTicks = 60, LargeTownMinAge;
+        public int LargeFactionCap = 1400;
+        public int LargeResourceAmountPermille = 20000, LargeFoodAmountPermille = 40000;
+        public int LargeOreAmountPermille = 20000, LargeStoneAmountPermille = 20000, LargeGoldAmountPermille = 20000;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

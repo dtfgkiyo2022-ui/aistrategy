@@ -851,10 +851,12 @@ namespace Rts.UnityHost
             // The rules of the played game (LiveGameRules): everything implemented is on so a test play can try it (10-09).
             // Large-army test play (10-19): "-rts-villager-scale V -rts-army-scale A" multiplies the live match with the
             // stage-5 measurement helper on the large map, so the owner can try ~2600 units. It is not a game rule.
+            // "-rts-large-map" alone plays the large map with its own rules (LargeEconomy: 300 villagers, ~1000 soldiers).
             int villagerScale = CommandLineScale("-rts-villager-scale"), armyScale = CommandLineScale("-rts-army-scale");
             bool scaledPlay = economyMap && ScenarioMultiplier == 1 && (villagerScale > 1 || armyScale > 1);
             var scenario = economyMap && ScenarioMultiplier == 1
-                ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay, allCivilisations, monks, ageVictory)
+                ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay || Environment.GetCommandLineArgs().Contains("-rts-large-map"),
+                    allCivilisations, monks, ageVictory)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (scaledPlay) scenario = ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
             currentScenario = scenario;

@@ -11,7 +11,8 @@ namespace Rts.Simulation
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
         public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory)
         {
-            var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true)
+            var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
+                largeEconomy: true)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
             return scenario;
@@ -93,10 +94,44 @@ namespace Rts.Simulation
             e.AutoReturnAfterHuman = true;
             e.BuildingReservations = true;
             e.NoNegativeStock = true;
+            if (e.LargeEconomy)
+            {
+                EnableLargeEconomy(scenario);
+            }
             // The late push is now a real assault under SiegeByAge. Keep the core defence meaningful, but do not let
             // the old 16-cell/30-damage setting delete every attacker before the ordinary core attack envelope.
             e.CoreDefenceRange = 9;
             e.CoreDefenceDamage = 15;
+        }
+
+        internal static void EnableLargeEconomy(ScenarioDefinition scenario)
+        {
+            var e = scenario.Economy;
+            e.LargeEconomy = true;
+            e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
+            e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
+            e.AutoVillagerTarget = 300;
+            e.AutoInfantryQueue = 32;
+            e.QueueLimit = 64;
+            e.PopulationCap = 1400;
+            e.BasePopulation = 80;
+            e.HousePopulation = 50;
+            e.TownMaxBuildings = 8;
+            e.TownCoreDistance = 160;
+            e.TownResourceReach = 40;
+            e.LargeFactionCap = 1400;
+            scenario.Rules.FactionCap = e.LargeFactionCap;
+            // LargeEconomy keeps the existing resource and construction fields as the authoritative costs, but makes
+            // the large-map queues affordable enough to sustain the requested 300 villagers and 1000 soldiers.
+            e.BarracksWoodCost = 100;
+            e.VillagerFoodCost = 10;
+            e.InfantryFoodCost = 5;
+            e.InfantryWoodCost = 1;
+            e.TownWoodCost = 80;
+            e.TownStoneCost = 50;
+            e.TownWork = 400;
+            e.HouseWoodCost = 20;
+            e.HouseWork = 60;
         }
     }
 }

@@ -126,6 +126,7 @@
     <Compile Include="CoreDefenceTests.cs" />
     <Compile Include="ArmyGrowthTests.cs" />
     <Compile Include="EconomyScaleTests.cs" />
+    <Compile Include="LargeEconomyTests.cs" />
     <Compile Include="EconomyScaleMeasurementTests.cs" />
     <Compile Include="EconomyPresentationToolsTests.cs" />
     <Compile Include="RegionTests.cs" />

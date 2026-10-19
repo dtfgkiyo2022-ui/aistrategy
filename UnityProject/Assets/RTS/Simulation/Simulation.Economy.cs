@@ -20,6 +20,7 @@ namespace Rts.Simulation
         private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool NoNegativeStockOn => EconomyOn && world.Config.Economy.NoNegativeStock;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
+        private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
@@ -43,10 +44,14 @@ namespace Rts.Simulation
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
                     DecideAdvance(faction);
                     bool tool = CanUseToolForVillager(faction);
-                    if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                        VillagerFoodCostFor(faction, tool), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
+                    bool shouldTrainVillager = LargeEconomyOn
+                        ? ShouldTrainLargeVillagers(faction, villagers, plan.VillagerTarget)
+                        : EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
+                            VillagerFoodCostFor(faction, tool), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit);
+                    if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && shouldTrainVillager)
                     {
-                        EnqueueCoreVillager(faction);
+                        if (LargeEconomyOn) EnqueueCoreVillagerBatch(faction);
+                        else EnqueueCoreVillager(faction);
                     }
                     ResumeUnbuilt(faction);
                     DecideHouse(faction);
@@ -72,6 +77,17 @@ namespace Rts.Simulation
                 }
                 finally { automaticEconomyAction = false; }
             }
+        }
+
+        private bool ShouldTrainLargeVillagers(uint faction, int villagers, int target)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Queued != 0 || villagers >= target || economy.Food < VillagerFoodCostFor(faction, CanUseToolForVillager(faction))) return false;
+            int batch = Math.Min(rules.LargeVillagerBatch, target - villagers);
+            int population = villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction);
+            int room = PopCapFor(faction) - population;
+            return batch > 0 && batch <= rules.QueueLimit && batch <= room;
         }
 
         /// <summary>Movement phase, after the soldiers: idle villagers are given work, then every villager steps.</summary>
@@ -256,16 +272,20 @@ namespace Rts.Simulation
                 if (economy.TrainRemaining > 0) economy.TrainRemaining--;
                 if (economy.TrainRemaining > 0) continue;
                 uint faction = (uint)f + 1;
-                // A full population holds the finished villager at the door until there is room.
-                if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
-                SpawnVillager(faction);
-                economy.Queued--;
-                if (economy.QueueTools != null && economy.QueueTools.Length > 0)
+                int productionBatch = LargeEconomyOn ? world.Config.Economy.LargeVillagerBatch : 1;
+                for (int produced = 0; produced < productionBatch && economy.Queued > 0; produced++)
                 {
-                    var rest = new bool[economy.QueueTools.Length - 1];
-                    Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                    // A full population holds the finished villager at the door until there is room.
+                    if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) break;
+                    SpawnVillager(faction);
+                    economy.Queued--;
+                    if (economy.QueueTools != null && economy.QueueTools.Length > 0)
+                    {
+                        var rest = new bool[economy.QueueTools.Length - 1];
+                        Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                    }
+                    economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
                 }
-                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
             }
         }
 

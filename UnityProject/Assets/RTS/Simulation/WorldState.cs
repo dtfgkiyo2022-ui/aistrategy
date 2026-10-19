@@ -502,10 +502,14 @@ namespace Rts.Simulation
             var e = c.Economy;
             // Army growth deliberately has a fixed population ceiling for this experiment.  The authored value is
             // ignored while the flag is on, and the ordinary scenario value remains untouched while it is off.
-            if (e.ArmyGrowth && !e.MeasurementScale)
+            if (e.ArmyGrowth && !e.MeasurementScale && !e.LargeEconomy)
             {
                 e.PopulationCap = 200;
                 c.Rules.FactionCap = 200;
+            }
+            if (e.LargeEconomy)
+            {
+                c.Rules.FactionCap = e.LargeFactionCap;
             }
             // Monk rules are opt-in. Keep disabled scenarios byte-for-byte unchanged, but make an enabled authored
             // scenario usable even when an older scenario file has no Monk parameter record yet.
@@ -533,6 +537,12 @@ namespace Rts.Simulation
                      && e.Builders > 0 && e.InfantryFoodCost >= 0 && e.InfantryWoodCost >= 0 && e.InfantryTrainTicks > 0 && e.AutoInfantryQueue >= 0,
                      "Invalid economy rules.");
             else Require(c.Villagers.Length == 0 && !e.Industry, "Villagers and industry need an enabled economy.");
+            Require(!e.LargeEconomy || (e.Enabled && e.LargeVillagerTrainTicks > 0 && e.LargeInfantryTrainTicks > 0
+                && e.LargeVillagerBatch > 0 && e.LargeInfantryBatch > 0 && e.LargeBarracksMaxBuildings > 0
+                && e.LargeArmyCapacity > 0 && e.LargeTownDecisionIntervalTicks > 0 && e.LargeTownMinAge >= 0
+                && e.LargeFactionCap > 0 && e.LargeResourceAmountPermille > 0 && e.LargeFoodAmountPermille > 0
+                && e.LargeOreAmountPermille > 0 && e.LargeStoneAmountPermille > 0 && e.LargeGoldAmountPermille > 0),
+                "Invalid large economy rules.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
                     && e.BeltLimit > 0 && e.BeltLimit <= 8192
@@ -1019,7 +1029,15 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy,
+                LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,
+                LargeVillagerBatch = e.LargeVillagerBatch, LargeInfantryBatch = e.LargeInfantryBatch,
+                LargeBarracksMaxBuildings = e.LargeBarracksMaxBuildings, LargeArmyCapacity = e.LargeArmyCapacity,
+                LargeTownDecisionIntervalTicks = e.LargeTownDecisionIntervalTicks, LargeTownMinAge = e.LargeTownMinAge,
+                LargeFactionCap = e.LargeFactionCap, LargeResourceAmountPermille = e.LargeResourceAmountPermille,
+                LargeFoodAmountPermille = e.LargeFoodAmountPermille, LargeOreAmountPermille = e.LargeOreAmountPermille,
+                LargeStoneAmountPermille = e.LargeStoneAmountPermille, LargeGoldAmountPermille = e.LargeGoldAmountPermille,
+                AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,

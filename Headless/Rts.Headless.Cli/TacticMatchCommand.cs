@@ -32,9 +32,14 @@ internal static class TacticMatchCommand
         bool hasScenario = options.TryGetValue("--scenario", out var scenarioPath);
         bool hasSeed = options.TryGetValue("--map-seed", out var seedText);
         if (hasScenario == hasSeed) throw new InvalidDataException("--scenario または --map-seed の一方を指定してください。");
+        string mapSize = options.GetValueOrDefault("--map-size") ?? "normal";
+        if (mapSize != "normal" && mapSize != "large") throw new InvalidDataException("--map-size must be normal or large.");
+        bool largeMap = mapSize == "large";
         var scenario = hasScenario
             ? JsonInput.Scenario(scenarioPath)
-            : options.ContainsKey("--terrain")
+            : largeMap
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false)
+                : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), false, true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
@@ -138,7 +143,7 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,totalUnits,phases");
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,phases");
         }
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
@@ -230,6 +235,12 @@ internal static class TacticMatchCommand
                 int eastSoldiers = eastFrame.Observation.OwnArmies.Sum(a => a.AliveCount);
                 int westBarracks = westFrame.Economy?.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Barracks) ?? 0;
                 int eastBarracks = eastFrame.Economy?.Buildings.Count(b => b.FactionId == 2 && b.Kind == BuildingKind.Barracks) ?? 0;
+                int westTowns = westFrame.Economy?.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Town) ?? 0;
+                int eastTowns = eastFrame.Economy?.Buildings.Count(b => b.FactionId == 2 && b.Kind == BuildingKind.Town) ?? 0;
+                int westHouses = westFrame.Economy?.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.House) ?? 0;
+                int eastHouses = eastFrame.Economy?.Buildings.Count(b => b.FactionId == 2 && b.Kind == BuildingKind.House) ?? 0;
+                int westResourceRemaining = westFrame.Economy?.Resources.Sum(resource => resource.Remaining) ?? 0;
+                int eastResourceRemaining = eastFrame.Economy?.Resources.Sum(resource => resource.Remaining) ?? 0;
                 var phases = phaseMs.Where(p => !p.Key.StartsWith("alloc:", StringComparison.Ordinal)
                     && !p.Key.StartsWith("allocKB:", StringComparison.Ordinal));
                 string phaseText = string.Join(";", phases.Select(p => p.Key + "=" + p.Value.ToString("0.000", CultureInfo.InvariantCulture)));
@@ -242,6 +253,9 @@ internal static class TacticMatchCommand
                     westVillagers.ToString(CultureInfo.InvariantCulture), westSoldiers.ToString(CultureInfo.InvariantCulture),
                     eastVillagers.ToString(CultureInfo.InvariantCulture), eastSoldiers.ToString(CultureInfo.InvariantCulture),
                     westBarracks.ToString(CultureInfo.InvariantCulture), eastBarracks.ToString(CultureInfo.InvariantCulture),
+                    westTowns.ToString(CultureInfo.InvariantCulture), eastTowns.ToString(CultureInfo.InvariantCulture),
+                    westHouses.ToString(CultureInfo.InvariantCulture), eastHouses.ToString(CultureInfo.InvariantCulture),
+                    westResourceRemaining.ToString(CultureInfo.InvariantCulture), eastResourceRemaining.ToString(CultureInfo.InvariantCulture),
                     (westVillagers + westSoldiers + eastVillagers + eastSoldiers).ToString(CultureInfo.InvariantCulture), phaseText));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }

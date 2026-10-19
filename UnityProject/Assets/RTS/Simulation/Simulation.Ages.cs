@@ -80,7 +80,7 @@ namespace Rts.Simulation
         private bool TownsOn => world.Config.Economy.Enabled && world.Config.Economy.Towns;
 
         private bool TownsAllowed(uint faction)
-            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= 2;
+            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (LargeEconomyOn ? world.Config.Economy.LargeTownMinAge : 2);
 
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
@@ -181,7 +181,8 @@ namespace Rts.Simulation
 
         private int InfantryFoodFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryFood : world.Config.Economy.InfantryFoodCost;
         private int InfantryWoodFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryWood : world.Config.Economy.InfantryWoodCost;
-        private int InfantryTicksFor(uint faction) => Agrarian(faction) ? world.Config.Economy.AgrarianInfantryTicks : world.Config.Economy.InfantryTrainTicks;
+        private int InfantryTicksFor(uint faction) => LargeEconomyOn ? world.Config.Economy.LargeInfantryTrainTicks
+            : Agrarian(faction) ? world.Config.Economy.AgrarianInfantryTicks : world.Config.Economy.InfantryTrainTicks;
 
         private int VillagerFoodCostFor(uint faction)
             => VillagerFoodCostFor(faction, false);
@@ -199,7 +200,8 @@ namespace Rts.Simulation
         private int VillagerTrainTicksFor(uint faction, bool useTool)
         {
             var rules = world.Config.Economy;
-            int ticks = MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
+            int ticks = LargeEconomyOn ? rules.LargeVillagerTrainTicks
+                : MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
             return useTool && ToolsAllowed(faction) ? Math.Max(1, checked((ticks * rules.ToolVillagerTicksPermille + 999) / 1000)) : ticks;
         }
 
@@ -209,6 +211,7 @@ namespace Rts.Simulation
         private int AutoVillagerTargetFor(uint faction)
         {
             var rules = world.Config.Economy;
+            if (LargeEconomyOn) return rules.AutoVillagerTarget;
             int target = EconomyDecision.VillagerTarget(EconomyScaleOn, world.Economies[faction - 1].Age, rules.AutoVillagerTarget,
                 MetropolisAllowed(faction));
             if (!EarlyArmsOn) return target;
