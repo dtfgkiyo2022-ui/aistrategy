@@ -34,6 +34,7 @@
     <Compile Include="TuningRuleTests.cs" />
     <Compile Include="MatchOutcomeTests.cs" />
     <Compile Include="SpatialCombatDeterminismTests.cs" />
+    <Compile Include="Perf7DeterminismTests.cs" />
     <Compile Include="MapGeneratorTests.cs" />
     <Compile Include="EconomyTests.cs" />
     <Compile Include="BeltTests.cs" />
