@@ -167,19 +167,29 @@ namespace Rts.Simulation
             if (approachMemory == null) approachMemory = new[] { Array.Empty<ContactApproachMemory>(), Array.Empty<ContactApproachMemory>() };
             for (uint f = 1; f <= 2; f++)
             {
-                var observation = ObserveForDecision(f);
-                // A* is invoked only for the finite visible-infantry × outpost set on this tick.
-                var approachRoutes = new List<ContactApproachRoute>();
-                foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
-                foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && observation.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
+                FactionObservation observation = null;
+                measure?.Invoke("AI.Observation", true);
+                try
                 {
-                    var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position, f);
-                    int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(world.Map.FindPathCenters(world.Map.Cell(contact.LastPosition), post.Position, f)) / Fix64.FromInt(1).Raw));
-                    approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
+                    observation = ObserveForDecision(f);
+                    // A* is invoked only for the finite visible-infantry × outpost set on this tick.
+                    var approachRoutes = new List<ContactApproachRoute>();
+                    var visibleInfantryContacts = new HashSet<uint>();
+                    for (int i = 0; i < observation.VisibleEnemies.Count; i++)
+                        if (observation.VisibleEnemies[i].Kind == (byte)UnitKind.Infantry)
+                            visibleInfantryContacts.Add(observation.VisibleEnemies[i].ContactId);
+                    foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
+                    foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && visibleInfantryContacts.Contains(c.ContactId)).OrderBy(c => c.ContactId))
+                    {
+                        var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position, f);
+                        int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(world.Map.FindPathCenters(world.Map.Cell(contact.LastPosition), post.Position, f)) / Fix64.FromInt(1).Raw));
+                        approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
+                    }
+                    approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes, world.Config.Rules.OccupationThreatMemoryTicks);
+                    foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
+                        attackMemory[f - 1][post.Id - 1] = PolicyDecision.ObserveAttack(observation, post, attackMemory[f - 1][post.Id - 1]);
                 }
-                approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes, world.Config.Rules.OccupationThreatMemoryTicks);
-                foreach (var post in observation.Objectives.Where(o => o.Kind == GoalKind.Outpost).OrderBy(o => o.Id))
-                    attackMemory[f - 1][post.Id - 1] = PolicyDecision.ObserveAttack(observation, post, attackMemory[f - 1][post.Id - 1]);
+                finally { measure?.Invoke("AI.Observation", false); }
                 foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
                 {
                     ref var a = ref world.Armies[view.Id - 1];
@@ -187,6 +197,9 @@ namespace Rts.Simulation
 
                 }
 
+                measure?.Invoke("AI.Routes", true);
+                try
+                {
                 // The sanctuary civilisation hands the common policies a candidate list of observed outposts only, and
                 // reports the enemy core unreachable while such an outpost is not yet its own. For every other faction
                 // this is the same observation instance and focus is false, so nothing below changes for them.
@@ -230,6 +243,10 @@ namespace Rts.Simulation
                         false, ReturnComplete(observation, a), a.AutoStartIds.Length, a.AutoStartIds.Count(id => !world.Soldiers[id - 1].Alive));
                 }).ToArray();
                 var offenseRoutes = OffenseRoutes(targets, inputs);
+                ArmyDecisionMemory[] allocations;
+                measure?.Invoke("AI.Policy", true);
+                try
+                {
                 var assessed = inputs.Select(i => i.Memory).ToArray();
                 OffenseDecision.Retreat(targets, world.Tick, offenseMemory[f - 1], inputs, own, assessed, offenseRoutes.FirstOrDefault(r => r.Goal.Kind == offenseMemory[f - 1].Goal.Kind && r.Goal.Id == offenseMemory[f - 1].Goal.Id));
                 for (int i = 0; i < inputs.Count; i++) {
@@ -240,7 +257,7 @@ namespace Rts.Simulation
                 // advantage asks that policy for an allocation on every tick, so its existing thresholds can fire a
                 // little earlier without adding a civilisation flag branch inside OffenseDecision.
                 bool academyOffenseTick = AcademyOffenseReady(f);
-                var allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(targets, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], decisionPolicies, out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
+                allocations = world.Tick % 20 != 0 && !academyOffenseTick ? assessed : PolicyDecision.Allocate(targets, world.Tick, inputs, reserve, abandoned, attackMemory[f - 1], decisionPolicies, out reserveShortfall[f - 1], approachMemory[f - 1], offenseMemory[f - 1].CommittedReserveArmyIds, true);
                 var waitGoal = OffenseDecision.WaitGoal(targets, offenseRoutes);
                 OffenseDecision.Update(targets, world.Tick, offenseMemory[f - 1], inputs, own, allocations, offenseRoutes, world.Tick % 20 == 0 || academyOffenseTick,
                     policies.Any(c => c.Order.Kind == PolicyKind.MaintainReserve && c.Order.Source == CommandSource.Human), waitGoal);
@@ -255,6 +272,8 @@ namespace Rts.Simulation
                             allocations[i].Assignment = AssignmentKind.Advance;
                             allocations[i].Goal = inputs[i].Policy.Goal;
                         }
+                }
+                finally { measure?.Invoke("AI.Policy", false); }
                 if (world.Tick % 20 == 0 && reserveShortfall[f - 1] > 0)
                     commandEvents.Add(new GameEvent(world.Tick, (uint)commandEvents.Count, EventKind.AiReport,
                         (byte)(1 << ((int)f - 1)), f, 0, default, reserveShortfall[f - 1], ReasonCode.ReserveShortfall));
@@ -265,10 +284,12 @@ namespace Rts.Simulation
                     if (old.Goal.Kind != a.Decision.Goal.Kind || old.Goal.Id != a.Decision.Goal.Id || !SamePoint(old.Goal.Point, a.Decision.Goal.Point) || old.Returning != a.Decision.Returning || old.Assignment != a.Decision.Assignment)
                     {
                         a.HasPathGoal = false;
-                }
-                foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
+                    }
+                    foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
                     UpdateExplorePatrol(f, ref world.Armies[view.Id - 1]);
-            }
+                }
+                }
+                finally { measure?.Invoke("AI.Routes", false); }
             }
             if (world.Tick % 20 == 0) lastAllocationTick = world.Tick;
         }

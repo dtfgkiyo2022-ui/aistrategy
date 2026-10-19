@@ -165,12 +165,28 @@ namespace Rts.Decision
             var contacts = new HashSet<uint>(o.Contacts.Where(c => !c.IsArmyContact).Select(c => c.ContactId));
             var result = old.Where(m => contacts.Contains(m.ContactId) && o.Tick - m.LastSeenTick <= 600)
                 .OrderBy(m => m.ContactId).ThenBy(m => m.ObjectiveId).ToList();
-            foreach (var post in o.Objectives.Where(x => x.Kind == GoalKind.Outpost).OrderBy(x => x.Id))
-            foreach (var c in o.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && o.VisibleEnemies.Any(e => e.ContactId == c.ContactId && e.Kind == (byte)UnitKind.Infantry)).OrderBy(c => c.ContactId))
+            var resultIndex = new Dictionary<(uint ContactId, uint ObjectiveId), int>();
+            for (int i = 0; i < result.Count; i++)
             {
-                int ix = result.FindIndex(m => m.ContactId == c.ContactId && m.ObjectiveId == post.Id);
+                var key = (result[i].ContactId, result[i].ObjectiveId);
+                if (!resultIndex.ContainsKey(key)) resultIndex.Add(key, i);
+            }
+            var routeIndex = new Dictionary<(uint ContactId, uint ObjectiveId), int>();
+            for (int i = 0; i < routes.Count; i++)
+            {
+                var key = (routes[i].ContactId, routes[i].ObjectiveId);
+                if (!routeIndex.ContainsKey(key)) routeIndex.Add(key, routes[i].Distance);
+            }
+            var visibleInfantry = new HashSet<uint>();
+            for (int i = 0; i < o.VisibleEnemies.Count; i++)
+                if (o.VisibleEnemies[i].Kind == (byte)UnitKind.Infantry) visibleInfantry.Add(o.VisibleEnemies[i].ContactId);
+            foreach (var post in o.Objectives.Where(x => x.Kind == GoalKind.Outpost).OrderBy(x => x.Id))
+            foreach (var c in o.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && visibleInfantry.Contains(c.ContactId)).OrderBy(c => c.ContactId))
+            {
+                var key = (c.ContactId, post.Id);
+                int ix = resultIndex.TryGetValue(key, out var found) ? found : -1;
                 var m = ix < 0 ? new ContactApproachMemory { ContactId = c.ContactId, ObjectiveId = post.Id } : result[ix];
-                int distance = routes.Where(r => r.ContactId == c.ContactId && r.ObjectiveId == post.Id).Select(r => r.Distance).DefaultIfEmpty(int.MaxValue).First();
+                int distance = routeIndex.TryGetValue(key, out var routeDistance) ? routeDistance : int.MaxValue;
                 if (distance != int.MaxValue)
                 {
                     // The first observation establishes a baseline.  A later increase explicitly
@@ -179,7 +195,7 @@ namespace Rts.Decision
                     else if (m.HasPrevious && distance < m.PreviousDistance && distance <= 60) m.ThreatUntilTick = checked(o.Tick + occupationThreatMemoryTicks);
                     m.PreviousPosition = c.LastPosition; m.PreviousDistance = distance; m.LastSeenTick = o.Tick; m.HasPrevious = true;
                 }
-                if (ix < 0) result.Add(m); else result[ix] = m;
+                if (ix < 0) { resultIndex.Add(key, result.Count); result.Add(m); } else result[ix] = m;
             }
             return result.OrderBy(m => m.ObjectiveId).ThenBy(m => m.ContactId).ToArray();
         }
@@ -323,7 +339,8 @@ namespace Rts.Decision
         }
         public static ArmyIntent Tactics(FactionObservation o, TacticalInput input, ref PursuitMemory pursuit)
         {
-            return TacticsCore(o, input, o.VisibleEnemies, o.VisibleEnemies.Count, ref pursuit);
+            var candidates = o.VisibleEnemies as VisibleEnemy[] ?? o.VisibleEnemies.ToArray();
+            return TacticsCore(o, input, candidates, candidates.Length, ref pursuit);
         }
 
         /// <summary>
@@ -336,7 +353,7 @@ namespace Rts.Decision
             return TacticsCore(o, input, candidates, candidateCount, ref pursuit);
         }
 
-        private static ArmyIntent TacticsCore(FactionObservation o, TacticalInput input, IReadOnlyList<VisibleEnemy> candidates,
+        private static ArmyIntent TacticsCore(FactionObservation o, TacticalInput input, VisibleEnemy[] candidates,
             int candidateCount, ref PursuitMemory pursuit)
         {
             var position = input.Position; var mission = input.Mission;
@@ -372,10 +389,19 @@ namespace Rts.Decision
             }
             if (hasVisible && Within(position, nearest.Position, input.Range))
                 return new ArmyIntent(input.ArmyId, defend && Within(position, anchor, 8) || reserve && Within(position, anchor, 8) ? position : mission, nearest.ContactId, default, false);
-            var core = o.Objectives.Where(c => c.Kind == GoalKind.Core && c.OwnerFactionId != o.FactionId && c.IsHpKnown && c.Hp > 0 &&
-                Within(position, c.Position, input.Range + input.CoreRadius) && (!defend && !reserve || Within(c.Position, anchor, leash)))
-                .OrderBy(c => DistanceSquared(position, c.Position)).ThenBy(c => c.Id).ToArray();
-            if (core.Length > 0) return new ArmyIntent(input.ArmyId, mission, 0, new PolicyGoal(GoalKind.Core, core[0].Id, default), false);
+            KnownObjective bestCore = default; Wide bestCoreDistance = default; bool hasCore = false;
+            for (int i = 0; i < o.Objectives.Count; i++)
+            {
+                var core = o.Objectives[i];
+                if (core.Kind != GoalKind.Core || core.OwnerFactionId == o.FactionId || !core.IsHpKnown || core.Hp <= 0
+                    || !Within(position, core.Position, input.Range + input.CoreRadius)
+                    || (defend || reserve) && !Within(core.Position, anchor, leash)) continue;
+                var distance = DistanceSquared(position, core.Position);
+                if (!hasCore || distance < bestCoreDistance
+                    || distance.CompareTo(bestCoreDistance) == 0 && core.Id < bestCore.Id)
+                { bestCore = core; bestCoreDistance = distance; hasCore = true; }
+            }
+            if (hasCore) return new ArmyIntent(input.ArmyId, mission, 0, new PolicyGoal(GoalKind.Core, bestCore.Id, default), false);
             if (hasVisible)
             {
                 if (!pursuit.Active) { pursuit.Active = true; pursuit.Start = position; pursuit.StartTick = input.Tick; pursuit.Mission = mission; }
