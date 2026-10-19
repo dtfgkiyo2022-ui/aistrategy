@@ -929,8 +929,9 @@ namespace Rts.Simulation
             ref var memory = ref f.Objectives[index];
             if (kind == GoalKind.Core) { memory.OwnerKnown = true; memory.OwnerFactionId = owner; }
             if (visible) { memory.OwnerKnown = true; memory.OwnerFactionId = owner; memory.HpKnown = kind == GoalKind.Core; memory.Hp = hp; memory.LastSeenTick = world.Tick; }
+            int maxHp = kind == GoalKind.Core ? world.Cores[id - 1].Definition.Hp : 0;
             return new KnownObjective(kind, id, position, memory.OwnerKnown, memory.OwnerFactionId, memory.HpKnown, memory.Hp, memory.LastSeenTick,
-                visible ? capturing : 0, visible ? captureTicks : 0, visible ? duration : 0);
+                visible ? capturing : 0, visible ? captureTicks : 0, visible ? duration : 0, maxHp);
         }
 
         private static bool SamePoint(SimPoint a, SimPoint b) => a.X == b.X && a.Z == b.Z;

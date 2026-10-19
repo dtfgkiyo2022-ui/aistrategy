@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using Rts.Contracts;
 
 namespace Rts.Presentation
@@ -5,6 +7,60 @@ namespace Rts.Presentation
     /// <summary>One display-only table for selected building descriptions.</summary>
     public static class SelectionInfoText
     {
+        public static string ObjectiveTitle(KnownObjective objective, uint viewerFactionId)
+        {
+            if (objective.Kind == GoalKind.Core)
+                return objective.OwnerFactionId == viewerFactionId
+                    ? UiText.T("Your Core", "自分のコア")
+                    : UiText.T("Enemy Core", "敵のコア");
+
+            if (objective.Kind != GoalKind.Outpost)
+                return "";
+
+            if (!objective.IsOwnerKnown || objective.OwnerFactionId == 0)
+                return UiText.T("Outpost (neutral)", "前哨地（中立）");
+            return objective.OwnerFactionId == viewerFactionId
+                ? UiText.T("Outpost (own)", "前哨地（自分）")
+                : UiText.T("Outpost (enemy)", "前哨地（敵）");
+        }
+
+        public static string ObjectiveDetail(KnownObjective objective, uint viewerFactionId, long currentTick,
+            int fallbackCoreMaxHp = 0)
+        {
+            if (objective.Kind == GoalKind.Core)
+            {
+                if (!objective.IsHpKnown)
+                {
+                    long ageTicks = Math.Max(0L, currentTick - objective.LastSeenTick);
+                    long ageSeconds = ageTicks / 20L;
+                    return UiText.T("HP: unknown (last seen " + ageSeconds.ToString(CultureInfo.InvariantCulture) + "s ago)",
+                        "HP：不明（最後に見たのは " + ageSeconds.ToString(CultureInfo.InvariantCulture) + "秒前）");
+                }
+
+                int maxHp = objective.MaxHp > 0 ? objective.MaxHp : fallbackCoreMaxHp;
+                if (maxHp <= 0)
+                    return UiText.T("HP " + objective.Hp.ToString("N0", CultureInfo.InvariantCulture),
+                        "HP " + objective.Hp.ToString("N0", CultureInfo.InvariantCulture));
+                int hp = Math.Max(0, Math.Min(objective.Hp, maxHp));
+                int percent = (int)(((long)hp * 100L + maxHp / 2L) / maxHp);
+                return UiText.T(
+                    "HP " + hp.ToString("N0", CultureInfo.InvariantCulture) + " / " + maxHp.ToString("N0", CultureInfo.InvariantCulture) + " (" + percent + "%)",
+                    "HP " + hp.ToString("N0", CultureInfo.InvariantCulture) + " / " + maxHp.ToString("N0", CultureInfo.InvariantCulture) + "（" + percent + "%）");
+            }
+
+            if (objective.Kind == GoalKind.Outpost && objective.CapturingFactionId != 0 && objective.CaptureDurationTicks > 0)
+            {
+                int percent = (int)Math.Max(0, Math.Min(100,
+                    ((long)Math.Max(0, objective.CaptureTicks) * 100L + objective.CaptureDurationTicks / 2L) / objective.CaptureDurationTicks));
+                string faction = objective.CapturingFactionId == viewerFactionId
+                    ? UiText.T("own", "自分")
+                    : UiText.T("enemy", "敵");
+                return UiText.T("Capturing: " + faction + " " + percent + "%", "占領中：" + faction + " " + percent + "%");
+            }
+
+            return "";
+        }
+
         public static string BuildingReservationStatus(BuildingView building, EconomyView economy)
         {
             if (!building.Reserved) return "";
