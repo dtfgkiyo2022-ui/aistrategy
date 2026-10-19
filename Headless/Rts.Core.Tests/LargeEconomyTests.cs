@@ -30,6 +30,9 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeEconomy, Is.True);
             Assert.That(decoded.Economy.LargeVillagerTrainTicks, Is.EqualTo(large.Economy.LargeVillagerTrainTicks));
             Assert.That(decoded.Economy.LargeArmyCapacity, Is.EqualTo(large.Economy.LargeArmyCapacity));
+            Assert.That(decoded.Economy.LargeTownVillagersPerTown, Is.EqualTo(large.Economy.LargeTownVillagersPerTown));
+            Assert.That(decoded.Economy.LargeBarracksVillagersPerBuilding, Is.EqualTo(large.Economy.LargeBarracksVillagersPerBuilding));
+            Assert.That(decoded.Economy.LargeTownAutoWorkers, Is.EqualTo(large.Economy.LargeTownAutoWorkers));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
@@ -50,6 +53,9 @@ namespace Rts.Core.Tests
             Assert.That(rules.LargeBarracksMaxBuildings, Is.EqualTo(16));
             Assert.That(rules.LargeArmyCapacity, Is.EqualTo(300));
             Assert.That(rules.LargeTownDecisionIntervalTicks, Is.GreaterThan(0));
+            Assert.That(rules.LargeTownVillagersPerTown, Is.EqualTo(80));
+            Assert.That(rules.LargeBarracksVillagersPerBuilding, Is.EqualTo(20));
+            Assert.That(rules.LargeTownAutoWorkers, Is.EqualTo(4));
             Assert.That(scenario.Rules.FactionCap, Is.EqualTo(1400));
             Assert.That((rules.VillagerFoodCost, rules.InfantryFoodCost, rules.InfantryWoodCost,
                 rules.BarracksWoodCost, rules.TownWoodCost, rules.TownStoneCost, rules.TownWork,
@@ -57,6 +63,23 @@ namespace Rts.Core.Tests
                 Is.EqualTo((ordinary.VillagerFoodCost, ordinary.InfantryFoodCost, ordinary.InfantryWoodCost,
                     ordinary.BarracksWoodCost, ordinary.TownWoodCost, ordinary.TownStoneCost, ordinary.TownWork,
                     ordinary.HouseWoodCost, ordinary.HouseWork)));
+            var decodedEconomy = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)).Economy;
+            Assert.That((decodedEconomy.LargeTownVillagersPerTown, decodedEconomy.LargeBarracksVillagersPerBuilding,
+                decodedEconomy.LargeTownAutoWorkers),
+                Is.EqualTo((rules.LargeTownVillagersPerTown, rules.LargeBarracksVillagersPerBuilding, rules.LargeTownAutoWorkers)));
+        }
+
+        [Test]
+        public void LargeEconomyObservationIsReadOnly()
+        {
+            var simulation = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            var before = ReplayBinary.Hash(simulation.CaptureDiagnostic().CanonicalState);
+            var observation = simulation.CaptureLargeEconomyObservation();
+            var after = ReplayBinary.Hash(simulation.CaptureDiagnostic().CanonicalState);
+            Assert.That(after, Is.EqualTo(before));
+            Assert.That(observation.Factions.Length, Is.EqualTo(2));
+            Assert.That(observation.Factions[0].Workers.Length, Is.EqualTo(6));
+            Assert.That(observation.Factions[0].Income.Length, Is.EqualTo(6));
         }
 
         [Test]

@@ -143,8 +143,9 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,phases");
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,phases," + LargeEconomyHeader());
         }
+        LargeEconomyObservation largeObservation = null;
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
             long tick = simulation.Capture(1).Tick;
@@ -169,6 +170,8 @@ internal static class TacticMatchCommand
             int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
             int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
+            largeObservation = timingWriter != null && simulation.Capture(1).Tick % 1000 == 0
+                ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
                 for (uint faction = 1; faction <= 2; faction++)
@@ -274,7 +277,8 @@ internal static class TacticMatchCommand
                     eastFood.ToString(CultureInfo.InvariantCulture), eastWood.ToString(CultureInfo.InvariantCulture),
                     eastStone.ToString(CultureInfo.InvariantCulture), eastMetal.ToString(CultureInfo.InvariantCulture),
                     westIdle.ToString(CultureInfo.InvariantCulture), eastIdle.ToString(CultureInfo.InvariantCulture),
-                    westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture), phaseText));
+                     westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture), phaseText,
+                     LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
@@ -356,6 +360,50 @@ internal static class TacticMatchCommand
 
     private static int CountWorking(EconomyView economy)
         => economy?.Villagers.Count(value => value.IsOwn && value.Activity != VillagerActivity.Idle) ?? 0;
+
+    private static string LargeEconomyHeader()
+    {
+        var cells = new List<string>();
+        for (int faction = 1; faction <= 2; faction++)
+        {
+            string prefix = faction == 1 ? "westLarge" : "eastLarge";
+            cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
+                prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "LumberCamps", prefix + "OtherBuildings",
+                prefix + "BarracksResourceWaiting", prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+                cells.Add(prefix + resource + "Workers");
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+                cells.Add(prefix + resource + "RoundTripTicks");
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+                cells.Add(prefix + resource + "Income");
+        }
+        return string.Join(",", cells);
+    }
+
+    private static string LargeEconomyCsv(LargeEconomyObservation observation)
+    {
+        var cells = new List<string>();
+        for (int faction = 0; faction < 2; faction++)
+        {
+            if (observation == null)
+            {
+                for (int i = 0; i < 32; i++) cells.Add("");
+                continue;
+            }
+            var value = observation.Factions[faction];
+            cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
+                value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
+                value.LumberCamps, value.OtherBuildings, value.BarracksResourceWaiting, value.BarracksPopulationWaiting,
+                value.BarracksTraining }.Select(FormatInvariant));
+            cells.AddRange(value.Workers.Select(FormatInvariant));
+            cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
+            cells.AddRange(value.Income.Select(FormatInvariant));
+        }
+        return string.Join(",", cells);
+    }
+
+    private static string FormatInvariant(int value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)
     {

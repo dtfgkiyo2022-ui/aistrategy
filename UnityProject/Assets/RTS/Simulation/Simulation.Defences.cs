@@ -364,8 +364,9 @@ namespace Rts.Simulation
         private bool LargeTownNeedsFunding(uint faction)
         {
             int villagers = LivingVillagers(faction);
-            if (villagers < 80) return false;
-            int target = Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / 80));
+            int townsPerVillagers = world.Config.Economy.LargeTownVillagersPerTown;
+            if (villagers < townsPerVillagers) return false;
+            int target = Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townsPerVillagers));
             return TownCount(faction) < target;
         }
     }

@@ -206,9 +206,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         private const int CraftTree3ExtensionDataLength = 19 * sizeof(int);
         private const int LargeEconomyExtensionId = 59;
         private const int LargeEconomyExtensionV1 = 1;
-        private const int LargeEconomyExtensionVersion = 2;
+        private const int LargeEconomyExtensionVersion = 3;
         private const int LargeEconomyExtensionV1DataLength = 15 * sizeof(int);
-        private const int LargeEconomyExtensionDataLength = 18 * sizeof(int);
+        private const int LargeEconomyExtensionDataLength = 21 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -2962,6 +2962,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.LargeOreAmountPermille); writer.Write(e.LargeStoneAmountPermille);
                 writer.Write(e.LargeGoldAmountPermille);
                 writer.Write(e.LargeFoodPerWood); writer.Write(e.LargeConstructionReserveWood); writer.Write(e.LargeTownStoneGatherers);
+                writer.Write(e.LargeTownVillagersPerTown); writer.Write(e.LargeBarracksVillagersPerBuilding); writer.Write(e.LargeTownAutoWorkers);
                 return new ScenarioExtensionData { Id = LargeEconomyExtensionId,
                     Version = LargeEconomyExtensionVersion, Data = stream.ToArray() };
             }
@@ -2986,6 +2987,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 {
                     e.LargeFoodPerWood = reader.ReadInt32(); e.LargeConstructionReserveWood = reader.ReadInt32();
                     e.LargeTownStoneGatherers = reader.ReadInt32();
+                }
+                if (extension.Version >= 3)
+                {
+                    e.LargeTownVillagersPerTown = reader.ReadInt32(); e.LargeBarracksVillagersPerBuilding = reader.ReadInt32();
+                    e.LargeTownAutoWorkers = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing large economy extension data.");
             }

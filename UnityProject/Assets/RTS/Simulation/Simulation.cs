@@ -32,6 +32,10 @@ namespace Rts.Simulation
         private readonly int[] largeVillagerCounts = new int[2];
         private readonly int[] largeTownCounts = new int[2];
         private readonly int[] largeBarracksCounts = new int[2];
+        // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
+        private readonly int[] largeDelivered = new int[12];
+        private readonly int[] largeTownDelivered = new int[2];
+        private readonly int[] largeTownVillagersProduced = new int[2];
 
         private readonly Action<string, bool> measure;
 

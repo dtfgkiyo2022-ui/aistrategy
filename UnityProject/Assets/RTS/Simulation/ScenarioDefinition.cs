@@ -101,6 +101,12 @@ namespace Rts.Simulation
         public int LargeConstructionReserveWood = 300;
         /// <summary>LargeEconomy allocation: stone gatherers kept while another town can be afforded.</summary>
         public int LargeTownStoneGatherers = 24;
+        /// <summary>LargeEconomy allocation: villagers per planned remote town.</summary>
+        public int LargeTownVillagersPerTown = 80;
+        /// <summary>LargeEconomy allocation: villagers per automatic barracks.</summary>
+        public int LargeBarracksVillagersPerBuilding = 20;
+        /// <summary>LargeEconomy allocation: automatic workers assigned around each completed town.</summary>
+        public int LargeTownAutoWorkers = 4;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

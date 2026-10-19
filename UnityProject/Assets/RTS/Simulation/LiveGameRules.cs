@@ -120,6 +120,9 @@ namespace Rts.Simulation
             e.TownCoreDistance = 160;
             e.TownResourceReach = 40;
             e.LargeFactionCap = 1400;
+            e.LargeTownVillagersPerTown = 80;
+            e.LargeBarracksVillagersPerBuilding = 20;
+            e.LargeTownAutoWorkers = 4;
             // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
             // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.
             e.Builders = 8;

@@ -216,7 +216,9 @@ namespace Rts.Simulation
                     if (!InRange(v.Position, drop.point, drop.reach)) continue;
                     if (ProcessingKilnTarget(v))
                     {
+                        int delivered = v.Carry;
                         if (!TryDeliverWoodToKiln(ref v)) AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, delivered - v.Carry);
                         if (v.Carry > 0) continue; // a full kiln is a deliberate hand-haul wait state
                         if (v.HaulTo != 0 && AssignKilnWood(ref v, v.HaulTo)) continue;
                         v.HaulTo = 0; v.Task = VillagerTask.Idle;
@@ -227,12 +229,15 @@ namespace Rts.Simulation
                         if (drop.storageId > world.BuildingCount) continue;
                         ref var storage = ref world.Buildings[drop.storageId - 1];
                         int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, stored);
                         v.Carry -= stored;
                         if (v.Carry > 0) continue;
                     }
                     else
                     {
+                        int delivered = v.Carry;
                         AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, delivered);
                         v.Carry = 0;
                     }
                     if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
@@ -400,17 +405,25 @@ namespace Rts.Simulation
             int wood = largeWorkCounts[factionIndex * 6 + 1];
             int stone = largeWorkCounts[factionIndex * 6 + 2];
             int villagers = largeVillagerCounts[factionIndex];
-            int desiredTowns = villagers < 80 ? 0
-                : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / 80));
+            int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
+            int desiredTowns = villagers < townVillagers ? 0
+                : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townVillagers));
+            int townVillagerThreshold = world.Config.Economy.LargeTownVillagersPerTown;
             bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
                 && economy.Stone < world.Config.Economy.TownStoneCost;
+            int barracksVillagers = world.Config.Economy.LargeBarracksVillagersPerBuilding;
             bool barracksNeedsWood = largeBarracksCounts[factionIndex] < Math.Min(world.Config.Economy.LargeBarracksMaxBuildings,
-                Math.Max(1, villagers / 20)) && economy.Wood < world.Config.Economy.BarracksWoodCost;
+                Math.Max(1, villagers / barracksVillagers)) && economy.Wood < world.Config.Economy.BarracksWoodCost;
             // Keep the next ordinary-cost building payable before balancing the long-run food line. Food has priority
             // when the next villager batch is not covered; the reserve is a scheduling threshold only, and the
             // authoritative prices remain in EconomyRules' ordinary fields.
             if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
-            if (townNeedsStone && stone < world.Config.Economy.LargeTownStoneGatherers) return ResourceKind.Stone;
+            // A remote stone cluster is intentionally far away. Start that line once a small food floor is staffed;
+            // waiting for the global food buffer to be full leaves no worker able to fund the first town.
+            int stoneTarget = villagers < townVillagerThreshold
+                ? Math.Max(1, world.Config.Economy.LargeTownStoneGatherers / 3)
+                : world.Config.Economy.LargeTownStoneGatherers;
+            if (townNeedsStone && food >= stoneTarget * 2 && stone < stoneTarget) return ResourceKind.Stone;
             if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return ResourceKind.Wood;
             if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return ResourceKind.Food;
             return EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood);

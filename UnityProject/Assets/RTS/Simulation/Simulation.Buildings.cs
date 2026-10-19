@@ -15,7 +15,6 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int SiteSearchRadiusCells = 30, CoreClearanceCells = 4, NodeClearanceCells = 2, BuildingClearanceCells = 2;
-        private const int TownAutoWorkers = 4;
         // V3-11 #4 provisional simultaneous bridge limit. It is deliberately a simulation rule rather than a
         // contract field, so enabling bridges does not alter the old scenario bytes.
         private const int MaxActiveBridges = 3;
@@ -33,6 +32,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            if (LargeEconomyOn) DecideTown(faction);
             bool hasBarracks = false, ready = false;
             int barracks = -1, barracksCount = 0;
             for (int i = 0; i < world.BuildingCount; i++)
@@ -47,7 +47,7 @@ namespace Rts.Simulation
             if (EconomyScaleOn)
             {
                 int desired = LargeEconomyOn
-                    ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / 20))
+                    ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
                     : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
                 bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
                 if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
@@ -55,7 +55,7 @@ namespace Rts.Simulation
             }
             else if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
                 PlaceBarracks(faction);
-            DecideTown(faction);
+            if (!LargeEconomyOn) DecideTown(faction);
             DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
             if (CultAllowed(faction) && !DecideCultMonastery(faction)) return;
@@ -222,7 +222,8 @@ namespace Rts.Simulation
         private void AssignTownWorkers(BuildingState town)
         {
             if (town.Held || !TownsOn || HumanRegionAt(town.FactionId, BuildingCenter(town))) return;
-            for (int assigned = 0; assigned < TownAutoWorkers; assigned++)
+            int workerLimit = LargeEconomyOn ? world.Config.Economy.LargeTownAutoWorkers : 4;
+            for (int assigned = 0; assigned < workerLimit; assigned++)
             {
                 int villager = -1, node = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
@@ -249,7 +250,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (!ResourceKnownToFaction(town.FactionId, i) || node.Remaining <= 0 || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
+                if ((!LargeEconomyOn && !ResourceKnownToFaction(town.FactionId, i)) || node.Remaining <= 0
+                    || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
                 var distance = DistanceSquared(from, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
                 { best = i; bestDistance = distance; }
@@ -967,6 +969,7 @@ namespace Rts.Simulation
                     {
                         if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) break;
                         SpawnVillager(b.FactionId, world.Map.Center(b.WorkCell));
+                        if (LargeEconomyOn) largeTownVillagersProduced[b.FactionId - 1]++;
                         b.Queued--;
                         if (b.QueueTools != null && b.QueueTools.Length > 0)
                         {
