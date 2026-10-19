@@ -886,6 +886,28 @@ namespace Rts.Presentation
                 return;
             }
 
+            if (view.Selected.Kind == SelectionKind.Core || view.Selected.Kind == SelectionKind.Outpost)
+            {
+                KnownObjective selectedObjective = default(KnownObjective);
+                bool foundObjective = false;
+                foreach (var objective in frame.Objectives)
+                {
+                    if ((view.Selected.Kind == SelectionKind.Core && objective.Kind != GoalKind.Core) ||
+                        (view.Selected.Kind == SelectionKind.Outpost && objective.Kind != GoalKind.Outpost) ||
+                        objective.Id != view.Selected.Id) continue;
+                    selectedObjective = objective;
+                    foundObjective = true;
+                    break;
+                }
+                if (foundObjective)
+                {
+                    SetSelectionInfo(
+                        SelectionInfoText.ObjectiveTitle(selectedObjective, frame.FactionId),
+                        SelectionInfoText.ObjectiveDetail(selectedObjective, frame.FactionId, frame.Tick));
+                    return;
+                }
+            }
+
             selectionInfoFrame.style.display = DisplayStyle.None;
         }
 

@@ -130,6 +130,22 @@ namespace Rts.Tests.EditMode
         }
 
         [Test]
+        public void CoreObjectiveMaxHpUsesDefinitionOnlyWhenHpIsKnown()
+        {
+            var s = Scenario(0);
+            s.Cores[0].Hp = s.Cores[1].Hp = 6000;
+            var sim = new Battle(s);
+            var objectives = sim.Capture(1).Objectives;
+            var own = objectives.Single(o => o.Kind == GoalKind.Core && o.Id == 1);
+            var enemy = objectives.Single(o => o.Kind == GoalKind.Core && o.Id == 2);
+
+            Assert.That(own.IsHpKnown, Is.True);
+            Assert.That(own.MaxHp, Is.EqualTo(6000));
+            Assert.That(enemy.IsHpKnown, Is.False);
+            Assert.That(enemy.MaxHp, Is.EqualTo(0));
+        }
+
+        [Test]
         public void HiddenWorldChangesDoNotChangeFramesOrAiFor360Ticks()
         {
             var a = Scenario(3); a.Soldiers[1].Position = P(83); a.Soldiers[2].Position = P(231); a.Soldiers[3].Position = P(233);
