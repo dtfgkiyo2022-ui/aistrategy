@@ -541,7 +541,8 @@ namespace Rts.Simulation
                 && e.LargeVillagerBatch > 0 && e.LargeInfantryBatch > 0 && e.LargeBarracksMaxBuildings > 0
                 && e.LargeArmyCapacity > 0 && e.LargeTownDecisionIntervalTicks > 0 && e.LargeTownMinAge >= 0
                 && e.LargeFactionCap > 0 && e.LargeResourceAmountPermille > 0 && e.LargeFoodAmountPermille > 0
-                && e.LargeOreAmountPermille > 0 && e.LargeStoneAmountPermille > 0 && e.LargeGoldAmountPermille > 0),
+                && e.LargeOreAmountPermille > 0 && e.LargeStoneAmountPermille > 0 && e.LargeGoldAmountPermille > 0
+                && e.LargeFoodPerWood > 0 && e.LargeConstructionReserveWood >= 0 && e.LargeTownStoneGatherers > 0),
                 "Invalid large economy rules.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
@@ -1037,6 +1038,8 @@ namespace Rts.Simulation
                 LargeFactionCap = e.LargeFactionCap, LargeResourceAmountPermille = e.LargeResourceAmountPermille,
                 LargeFoodAmountPermille = e.LargeFoodAmountPermille, LargeOreAmountPermille = e.LargeOreAmountPermille,
                 LargeStoneAmountPermille = e.LargeStoneAmountPermille, LargeGoldAmountPermille = e.LargeGoldAmountPermille,
+                LargeFoodPerWood = e.LargeFoodPerWood, LargeConstructionReserveWood = e.LargeConstructionReserveWood,
+                LargeTownStoneGatherers = e.LargeTownStoneGatherers,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,

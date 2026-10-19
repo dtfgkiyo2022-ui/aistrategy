@@ -120,18 +120,12 @@ namespace Rts.Simulation
             e.TownCoreDistance = 160;
             e.TownResourceReach = 40;
             e.LargeFactionCap = 1400;
+            // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
+            // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.
+            e.Builders = 8;
             scenario.Rules.FactionCap = e.LargeFactionCap;
-            // LargeEconomy keeps the existing resource and construction fields as the authoritative costs, but makes
-            // the large-map queues affordable enough to sustain the requested 300 villagers and 1000 soldiers.
-            e.BarracksWoodCost = 100;
-            e.VillagerFoodCost = 10;
-            e.InfantryFoodCost = 5;
-            e.InfantryWoodCost = 1;
-            e.TownWoodCost = 80;
-            e.TownStoneCost = 50;
-            e.TownWork = 400;
-            e.HouseWoodCost = 20;
-            e.HouseWork = 60;
+            // LargeEconomy changes production scale and capacity only. Unit and building costs remain the same as the
+            // ordinary map, so the large-map AI must improve its collection, hauling, and construction decisions.
         }
     }
 }

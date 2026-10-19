@@ -25,6 +25,13 @@ namespace Rts.Simulation
         private bool[] visibilityCoreActive;
         private readonly FactionFrame[] frames = new FactionFrame[2];
         private bool automaticEconomyAction;
+        // LargeEconomy allocation is a per-tick snapshot. It avoids rescanning every villager for every newly idle
+        // villager while keeping the snapshot outside the canonical state.
+        private long largeWorkCountsTick = -1;
+        private readonly int[] largeWorkCounts = new int[12];
+        private readonly int[] largeVillagerCounts = new int[2];
+        private readonly int[] largeTownCounts = new int[2];
+        private readonly int[] largeBarracksCounts = new int[2];
 
         private readonly Action<string, bool> measure;
 

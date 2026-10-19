@@ -169,14 +169,15 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             // Villagers only (not soldiers) count toward the villager target; CanTrainTownVillager checks the population cap.
             int villagers = LivingVillagers(faction) + economy.Queued + QueuedTownVillagers(faction);
-            if (villagers >= PlanOf(faction).VillagerTarget) return;
+            int target = PlanOf(faction).VillagerTarget + (LargeEconomyOn ? TownCount(faction) * rules.LargeVillagerBatch : 0);
+            if (villagers >= target) return;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var town = ref world.Buildings[i];
                 if (!IsActualBuilding(town) || !town.Complete || town.Held || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
-                if (villagers >= PlanOf(faction).VillagerTarget || !CanTrainTownVillager(faction, town)) return;
-                int batch = LargeEconomyOn ? Math.Min(rules.LargeVillagerBatch, PlanOf(faction).VillagerTarget - villagers) : 1;
-                for (int q = 0; q < batch && villagers < PlanOf(faction).VillagerTarget; q++)
+                if (villagers >= target || !CanTrainTownVillager(faction, town)) return;
+                int batch = LargeEconomyOn ? Math.Min(rules.LargeVillagerBatch, target - villagers) : 1;
+                for (int q = 0; q < batch && villagers < target; q++)
                 {
                     if (!CanTrainTownVillager(faction, town)) break;
                     EnqueueTownVillager(faction, ref town);
@@ -374,6 +375,10 @@ namespace Rts.Simulation
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
+            // LargeEconomy funds its next remote town before optional stone structures. Human placement and ordinary
+            // maps keep their existing construction order; the town itself is allowed through this guard.
+            if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
+                && LargeTownNeedsFunding(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
@@ -778,7 +783,8 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int size = world.Config.Economy.TownSizeCells, cx = centre % width, cz = centre / width;
-            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+            int searchRadius = LargeEconomyOn ? Math.Max(width, height) : SiteSearchRadiusCells;
+            for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
                     {

@@ -359,6 +359,7 @@ namespace Rts.Simulation
 
         private ResourceKind WorkKindFor(VillagerState v)
         {
+            if (LargeEconomyOn) return LargeWorkKindFor(v);
             int food = 0, wood = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -389,6 +390,64 @@ namespace Rts.Simulation
             }
             return kind;
         }
+
+        private ResourceKind LargeWorkKindFor(VillagerState v)
+        {
+            RefreshLargeWorkCounts();
+            int factionIndex = checked((int)v.FactionId - 1);
+            ref var economy = ref world.Economies[factionIndex];
+            int food = largeWorkCounts[factionIndex * 6 + 0];
+            int wood = largeWorkCounts[factionIndex * 6 + 1];
+            int stone = largeWorkCounts[factionIndex * 6 + 2];
+            int villagers = largeVillagerCounts[factionIndex];
+            int desiredTowns = villagers < 80 ? 0
+                : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / 80));
+            bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
+                && economy.Stone < world.Config.Economy.TownStoneCost;
+            bool barracksNeedsWood = largeBarracksCounts[factionIndex] < Math.Min(world.Config.Economy.LargeBarracksMaxBuildings,
+                Math.Max(1, villagers / 20)) && economy.Wood < world.Config.Economy.BarracksWoodCost;
+            // Keep the next ordinary-cost building payable before balancing the long-run food line. Food has priority
+            // when the next villager batch is not covered; the reserve is a scheduling threshold only, and the
+            // authoritative prices remain in EconomyRules' ordinary fields.
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            if (townNeedsStone && stone < world.Config.Economy.LargeTownStoneGatherers) return ResourceKind.Stone;
+            if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return ResourceKind.Wood;
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return ResourceKind.Food;
+            return EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood);
+        }
+
+        private void RefreshLargeWorkCounts()
+        {
+            if (!LargeEconomyOn || largeWorkCountsTick == world.Tick) return;
+            Array.Clear(largeWorkCounts, 0, largeWorkCounts.Length);
+            Array.Clear(largeVillagerCounts, 0, largeVillagerCounts.Length);
+            Array.Clear(largeTownCounts, 0, largeTownCounts.Length);
+            Array.Clear(largeBarracksCounts, 0, largeBarracksCounts.Length);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId < 1 || v.FactionId > 2) continue;
+                int factionIndex = (int)v.FactionId - 1;
+                largeVillagerCounts[factionIndex]++;
+                if (v.NodeId == 0 || v.NodeId > world.Nodes.Length
+                    || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
+                int resource = LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind);
+                if (resource >= 0) largeWorkCounts[factionIndex * 6 + resource]++;
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || b.FactionId < 1 || b.FactionId > 2) continue;
+                int factionIndex = (int)b.FactionId - 1;
+                if (b.Kind == BuildingKind.Town) largeTownCounts[factionIndex]++;
+                else if (b.Kind == BuildingKind.Barracks) largeBarracksCounts[factionIndex]++;
+            }
+            largeWorkCountsTick = world.Tick;
+        }
+
+        private static int LargeWorkResourceIndex(ResourceKind kind)
+            => kind == ResourceKind.Food ? 0 : kind == ResourceKind.Wood ? 1 : kind == ResourceKind.Stone ? 2
+                : kind == ResourceKind.Ore ? 3 : kind == ResourceKind.Gold ? 4 : kind == ResourceKind.Metal ? 5 : -1;
 
         private bool AiArmyRecoveryOn => EconomyOn && world.Config.Economy.AiArmyRecovery;
         private bool LineBuildingCheckOn => EconomyOn && world.Config.Economy.LineBuildingCheck;
@@ -428,7 +487,10 @@ namespace Rts.Simulation
         private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
         {
             if (kind == ResourceKind.Gold) return NearestGoldNode(position, faction);
-            if (ResourceFogOn)
+            // LargeEconomy's authored large map has deterministic symmetric resource placement. Its automatic economy
+            // may plan against the full placement so a side does not exhaust its starting wood while waiting for a
+            // scout; ordinary fogged maps retain the explored-only rule.
+            if (ResourceFogOn && !LargeEconomyOn)
             {
                 int best = -1;
                 long bestDistance = 0;
@@ -592,6 +654,15 @@ namespace Rts.Simulation
 
         private void SetWorkNode(ref VillagerState v, int index)
         {
+            if (LargeEconomyOn && largeWorkCountsTick == world.Tick)
+            {
+                int oldResource = v.NodeId > 0 && v.NodeId <= world.Nodes.Length
+                    && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff)
+                    ? LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind) : -1;
+                if (oldResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + oldResource]--;
+                int newResource = LargeWorkResourceIndex(world.Nodes[index].Definition.Kind);
+                if (newResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + newResource]++;
+            }
             v.NodeId = world.Nodes[index].Definition.Id;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }

@@ -42,6 +42,7 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(7, true, true, false, false);
             var rules = scenario.Economy;
+            var ordinary = LiveGameRules.Create(7, false, true, false, false).Economy;
 
             Assert.That(rules.LargeEconomy, Is.True);
             Assert.That(rules.Towns && rules.ArmyGrowth && rules.EconomyScale, Is.True);
@@ -50,6 +51,12 @@ namespace Rts.Core.Tests
             Assert.That(rules.LargeArmyCapacity, Is.EqualTo(300));
             Assert.That(rules.LargeTownDecisionIntervalTicks, Is.GreaterThan(0));
             Assert.That(scenario.Rules.FactionCap, Is.EqualTo(1400));
+            Assert.That((rules.VillagerFoodCost, rules.InfantryFoodCost, rules.InfantryWoodCost,
+                rules.BarracksWoodCost, rules.TownWoodCost, rules.TownStoneCost, rules.TownWork,
+                rules.HouseWoodCost, rules.HouseWork),
+                Is.EqualTo((ordinary.VillagerFoodCost, ordinary.InfantryFoodCost, ordinary.InfantryWoodCost,
+                    ordinary.BarracksWoodCost, ordinary.TownWoodCost, ordinary.TownStoneCost, ordinary.TownWork,
+                    ordinary.HouseWoodCost, ordinary.HouseWork)));
         }
 
         [Test]

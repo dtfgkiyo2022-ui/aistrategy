@@ -95,6 +95,12 @@ namespace Rts.Simulation
         public int LargeFactionCap = 1400;
         public int LargeResourceAmountPermille = 20000, LargeFoodAmountPermille = 40000;
         public int LargeOreAmountPermille = 20000, LargeStoneAmountPermille = 20000, LargeGoldAmountPermille = 20000;
+        /// <summary>LargeEconomy allocation: desired food gatherers per wood gatherer while construction is funded.</summary>
+        public int LargeFoodPerWood = 3;
+        /// <summary>LargeEconomy allocation: wood kept ahead of the next ordinary-cost building.</summary>
+        public int LargeConstructionReserveWood = 300;
+        /// <summary>LargeEconomy allocation: stone gatherers kept while another town can be afforded.</summary>
+        public int LargeTownStoneGatherers = 24;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

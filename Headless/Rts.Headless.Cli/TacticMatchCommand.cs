@@ -143,7 +143,7 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,phases");
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,phases");
         }
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
@@ -241,6 +241,18 @@ internal static class TacticMatchCommand
                 int eastHouses = eastFrame.Economy?.Buildings.Count(b => b.FactionId == 2 && b.Kind == BuildingKind.House) ?? 0;
                 int westResourceRemaining = westFrame.Economy?.Resources.Sum(resource => resource.Remaining) ?? 0;
                 int eastResourceRemaining = eastFrame.Economy?.Resources.Sum(resource => resource.Remaining) ?? 0;
+                int westFood = westFrame.Economy?.Food ?? 0;
+                int westWood = westFrame.Economy?.Wood ?? 0;
+                int westStone = westFrame.Economy?.Stone ?? 0;
+                int westMetal = westFrame.Economy?.Metal ?? 0;
+                int eastFood = eastFrame.Economy?.Food ?? 0;
+                int eastWood = eastFrame.Economy?.Wood ?? 0;
+                int eastStone = eastFrame.Economy?.Stone ?? 0;
+                int eastMetal = eastFrame.Economy?.Metal ?? 0;
+                int westIdle = CountActivity(westFrame.Economy, VillagerActivity.Idle);
+                int eastIdle = CountActivity(eastFrame.Economy, VillagerActivity.Idle);
+                int westWorking = CountWorking(westFrame.Economy);
+                int eastWorking = CountWorking(eastFrame.Economy);
                 var phases = phaseMs.Where(p => !p.Key.StartsWith("alloc:", StringComparison.Ordinal)
                     && !p.Key.StartsWith("allocKB:", StringComparison.Ordinal));
                 string phaseText = string.Join(";", phases.Select(p => p.Key + "=" + p.Value.ToString("0.000", CultureInfo.InvariantCulture)));
@@ -256,7 +268,13 @@ internal static class TacticMatchCommand
                     westTowns.ToString(CultureInfo.InvariantCulture), eastTowns.ToString(CultureInfo.InvariantCulture),
                     westHouses.ToString(CultureInfo.InvariantCulture), eastHouses.ToString(CultureInfo.InvariantCulture),
                     westResourceRemaining.ToString(CultureInfo.InvariantCulture), eastResourceRemaining.ToString(CultureInfo.InvariantCulture),
-                    (westVillagers + westSoldiers + eastVillagers + eastSoldiers).ToString(CultureInfo.InvariantCulture), phaseText));
+                    (westVillagers + westSoldiers + eastVillagers + eastSoldiers).ToString(CultureInfo.InvariantCulture),
+                    westFood.ToString(CultureInfo.InvariantCulture), westWood.ToString(CultureInfo.InvariantCulture),
+                    westStone.ToString(CultureInfo.InvariantCulture), westMetal.ToString(CultureInfo.InvariantCulture),
+                    eastFood.ToString(CultureInfo.InvariantCulture), eastWood.ToString(CultureInfo.InvariantCulture),
+                    eastStone.ToString(CultureInfo.InvariantCulture), eastMetal.ToString(CultureInfo.InvariantCulture),
+                    westIdle.ToString(CultureInfo.InvariantCulture), eastIdle.ToString(CultureInfo.InvariantCulture),
+                    westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture), phaseText));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
@@ -332,6 +350,12 @@ internal static class TacticMatchCommand
             if (economy.Villagers[i].IsOwn) count++;
         return count;
     }
+
+    private static int CountActivity(EconomyView economy, VillagerActivity activity)
+        => economy?.Villagers.Count(value => value.IsOwn && value.Activity == activity) ?? 0;
+
+    private static int CountWorking(EconomyView economy)
+        => economy?.Villagers.Count(value => value.IsOwn && value.Activity != VillagerActivity.Idle) ?? 0;
 
     private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)
     {
