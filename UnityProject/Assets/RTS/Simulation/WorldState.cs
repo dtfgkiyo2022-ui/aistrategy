@@ -91,6 +91,8 @@ namespace Rts.Simulation
         internal long[] CultObservedLastSeenTicks;
         internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
+        // Visibility is maintained as source counts so a moving or removed source can subtract only its old cells.
+        internal int[] VisibleCounts;
         /// <summary>Resource amounts last seen by this faction. Allocated only while ResourceFog is enabled.</summary>
         internal bool[] ResourceSeen;
         internal int[] ResourceRemaining;
@@ -405,7 +407,7 @@ namespace Rts.Simulation
                     ContactLastSeenTicks = new long[Soldiers.Length], ContactAbsent = new bool[Soldiers.Length],
                     CultObservedContactIds = new uint[Soldiers.Length], CultObservedKinds = new UnitKind[Soldiers.Length],
                     CultObservedLastSeenTicks = new long[Soldiers.Length], CultObservedValidUntilTicks = new long[Soldiers.Length],
-                    VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount],
+                    VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount], VisibleCounts = new int[cellCount],
                     ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };

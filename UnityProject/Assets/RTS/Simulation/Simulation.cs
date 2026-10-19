@@ -14,6 +14,15 @@ namespace Rts.Simulation
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
         private readonly long[] coreDamage;
+        private SimPoint[] visibilitySoldierPositions;
+        private long[] visibilitySoldierVisionRaw;
+        private bool[] visibilitySoldierActive;
+        private SimPoint[] visibilityBuildingPositions;
+        private long[] visibilityBuildingVisionRaw;
+        private int[] visibilityBuildingFactions;
+        private bool[] visibilityBuildingActive;
+        private uint[] visibilityOutpostOwners;
+        private bool[] visibilityCoreActive;
         private readonly FactionFrame[] frames = new FactionFrame[2];
         private bool automaticEconomyAction;
 
@@ -40,6 +49,7 @@ namespace Rts.Simulation
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
+            InitializeVisibilityCaches();
             UpdateVisibility();
             UpdateObservations();
             ResolveVictory();
@@ -602,23 +612,129 @@ namespace Rts.Simulation
 
         private void UpdateVisibility()
         {
+            EnsureVisibilityCaches();
+            for (int i = 0; i < world.Soldiers.Length; i++)
+            {
+                ref var s = ref world.Soldiers[i];
+                int faction = checked((int)s.Initial.FactionId) - 1;
+                bool active = s.Alive && faction >= 0 && faction < world.Factions.Length;
+                long visionRaw = s.Parameters.Vision.Raw;
+                if (visibilitySoldierActive[i] && (!active || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
+                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw))
+                    ChangeVisibility(faction, visibilitySoldierPositions[i], visibilitySoldierVisionRaw[i], -1);
+                if (active && (!visibilitySoldierActive[i] || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
+                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw))
+                    ChangeVisibility(faction, s.Position, visionRaw, 1);
+                visibilitySoldierActive[i] = active;
+                visibilitySoldierPositions[i] = s.Position;
+                visibilitySoldierVisionRaw[i] = visionRaw;
+            }
+
             for (int f = 0; f < world.Factions.Length; f++)
             {
                 ref var faction = ref world.Factions[f];
-                Array.Clear(faction.VisibleCells, 0, faction.VisibleCells.Length);
-                foreach (int i in world.SoldierTraversal)
-                {
-                    var s = world.Soldiers[i];
-                    if (s.Alive && s.Initial.FactionId == faction.Id) Reveal(faction.VisibleCells, s.Position, s.Parameters.Vision);
-                }
                 var core = world.Cores[faction.CoreId - 1];
-                if (core.Hp > 0) Reveal(faction.VisibleCells, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision);
-                for (int i = 0; i < world.Outposts.Length; i++)
-                    if (world.Outposts[i].OwnerFactionId == faction.Id) Reveal(faction.VisibleCells, world.Outposts[i].Definition.Position, world.Config.Rules.OwnedObjectiveVision);
-                if (AgesOn) RevealTowers(ref faction);
-                for (int i = 0; i < faction.VisibleCells.Length; i++) if (faction.VisibleCells[i]) faction.ExploredCells[i] = true;
+                bool active = core.Hp > 0;
+                if (visibilityCoreActive[f] != active)
+                {
+                    ChangeVisibility(f, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision.Raw, active ? 1 : -1);
+                    visibilityCoreActive[f] = active;
+                }
             }
+
+            for (int i = 0; i < world.Outposts.Length; i++)
+            {
+                uint owner = world.Outposts[i].OwnerFactionId;
+                if (visibilityOutpostOwners[i] != owner)
+                {
+                    if (visibilityOutpostOwners[i] >= 1 && visibilityOutpostOwners[i] <= world.Factions.Length)
+                        ChangeVisibility(checked((int)visibilityOutpostOwners[i] - 1), world.Outposts[i].Definition.Position,
+                            world.Config.Rules.OwnedObjectiveVision.Raw, -1);
+                    if (owner >= 1 && owner <= world.Factions.Length)
+                        ChangeVisibility(checked((int)owner - 1), world.Outposts[i].Definition.Position,
+                            world.Config.Rules.OwnedObjectiveVision.Raw, 1);
+                    visibilityOutpostOwners[i] = owner;
+                }
+            }
+
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                bool active = AgesOn && IsActualBuilding(b) && b.Complete && Shoots(b.Kind)
+                    && b.FactionId >= 1 && b.FactionId <= world.Factions.Length;
+                int faction = checked((int)b.FactionId) - 1;
+                SimPoint position = active ? FootprintCenter(b.OriginCell, SizeOf(b.Kind)) : default;
+                long visionRaw = active ? Fix64.FromInt(b.Kind == BuildingKind.Castle
+                    ? world.Config.Economy.CastleVision : world.Config.Economy.TowerVision).Raw : 0;
+                bool changed = visibilityBuildingActive[i] != active
+                    || active && (visibilityBuildingFactions[i] != faction
+                        || visibilityBuildingPositions[i].X.Raw != position.X.Raw || visibilityBuildingPositions[i].Z.Raw != position.Z.Raw
+                        || visibilityBuildingVisionRaw[i] != visionRaw);
+                if (changed)
+                {
+                    if (visibilityBuildingActive[i])
+                        ChangeVisibility(visibilityBuildingFactions[i], visibilityBuildingPositions[i], visibilityBuildingVisionRaw[i], -1);
+                    if (active) ChangeVisibility(faction, position, visionRaw, 1);
+                    visibilityBuildingActive[i] = active;
+                    visibilityBuildingFactions[i] = faction;
+                    visibilityBuildingPositions[i] = position;
+                    visibilityBuildingVisionRaw[i] = visionRaw;
+                }
+            }
+
             UpdateResourceObservations();
+        }
+
+        private void InitializeVisibilityCaches()
+        {
+            visibilitySoldierPositions = new SimPoint[world.Soldiers.Length];
+            visibilitySoldierVisionRaw = new long[world.Soldiers.Length];
+            visibilitySoldierActive = new bool[world.Soldiers.Length];
+            visibilityOutpostOwners = new uint[world.Outposts.Length];
+            visibilityCoreActive = new bool[world.Factions.Length];
+            EnsureVisibilityCaches();
+        }
+
+        private void EnsureVisibilityCaches()
+        {
+            int soldierCapacity = world.Soldiers.Length;
+            if (visibilitySoldierActive.Length < soldierCapacity)
+            {
+                Array.Resize(ref visibilitySoldierPositions, soldierCapacity);
+                Array.Resize(ref visibilitySoldierVisionRaw, soldierCapacity);
+                Array.Resize(ref visibilitySoldierActive, soldierCapacity);
+            }
+            int capacity = world.Buildings.Length;
+            if (visibilityBuildingActive != null && visibilityBuildingActive.Length >= capacity) return;
+            int old = visibilityBuildingActive == null ? 0 : visibilityBuildingActive.Length;
+            Array.Resize(ref visibilityBuildingPositions, capacity);
+            Array.Resize(ref visibilityBuildingVisionRaw, capacity);
+            Array.Resize(ref visibilityBuildingFactions, capacity);
+            Array.Resize(ref visibilityBuildingActive, capacity);
+            for (int i = old; i < capacity; i++) visibilityBuildingFactions[i] = -1;
+        }
+
+        private void ChangeVisibility(int faction, SimPoint source, long radiusRaw, int delta)
+        {
+            if (faction < 0 || faction >= world.Factions.Length || radiusRaw < 0) return;
+            ref var state = ref world.Factions[faction];
+            long squared = checked(radiusRaw * radiusRaw);
+            long cellRaw = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
+            int minX = Math.Max(0, checked((int)((source.X.Raw - radiusRaw) / cellRaw) - 2));
+            int maxX = Math.Min(world.Config.Map.WidthCells - 1, checked((int)((source.X.Raw + radiusRaw) / cellRaw) + 2));
+            int minZ = Math.Max(0, checked((int)((source.Z.Raw - radiusRaw) / cellRaw) - 2));
+            int maxZ = Math.Min(world.Config.Map.HeightCells - 1, checked((int)((source.Z.Raw + radiusRaw) / cellRaw) + 2));
+            for (int z = minZ; z <= maxZ; z++) for (int x = minX; x <= maxX; x++)
+            {
+                int cell = z * world.Config.Map.WidthCells + x;
+                var center = world.Map.Center(cell);
+                long dx = checked(source.X.Raw - center.X.Raw), dz = checked(source.Z.Raw - center.Z.Raw);
+                if (checked(dx * dx + dz * dz) > squared) continue;
+                int count = checked(state.VisibleCounts[cell] + delta);
+                state.VisibleCounts[cell] = count;
+                state.VisibleCells[cell] = count > 0;
+                if (count > 0) state.ExploredCells[cell] = true;
+            }
         }
 
         private void Reveal(bool[] visible, SimPoint source, Fix64 radius)
