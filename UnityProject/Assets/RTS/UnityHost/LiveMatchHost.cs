@@ -820,6 +820,16 @@ namespace Rts.UnityHost
             }
         }
 
+        private static int CommandLineScale(string flag)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(args, flag);
+            if (at < 0 || at + 1 >= args.Length) return 1;
+            int value;
+            if (!int.TryParse(args[at + 1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out value)) return 1;
+            return Math.Max(1, Math.Min(64, value));
+        }
+
         private static string TacticSetupJson(ScenarioDefinition scenario, uint factionId)
         {
             return "{\"matchSeed\":" + scenario.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -839,9 +849,14 @@ namespace Rts.UnityHost
             // V3-4: the random map is the terrain map (mapgen-3): forests, a river, mountains, and the industry of mapgen-2.
             // The academy needs gold on the map, so the all-civilisations match asks the generator for the gold placement too.
             // The rules of the played game (LiveGameRules): everything implemented is on so a test play can try it (10-09).
+            // Large-army test play (10-19): "-rts-villager-scale V -rts-army-scale A" multiplies the live match with the
+            // stage-5 measurement helper on the large map, so the owner can try ~2600 units. It is not a game rule.
+            int villagerScale = CommandLineScale("-rts-villager-scale"), armyScale = CommandLineScale("-rts-army-scale");
+            bool scaledPlay = economyMap && ScenarioMultiplier == 1 && (villagerScale > 1 || armyScale > 1);
             var scenario = economyMap && ScenarioMultiplier == 1
-                ? LiveGameRules.Create(mapSeed, largeMap, allCivilisations, monks, ageVictory)
+                ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay, allCivilisations, monks, ageVictory)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
+            if (scaledPlay) scenario = ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
             currentScenario = scenario;
             tickSeconds = 1f / scenario.TickRateHz;
             // Per-phase time of the simulation in the "RTS perf" line (display-side measurement only): the phase names
