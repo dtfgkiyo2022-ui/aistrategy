@@ -27,6 +27,8 @@ namespace Rts.Simulation
         private bool automaticEconomyAction;
 
         private readonly Action<string, bool> measure;
+        // Test-only comparison path; the shipped simulation always uses the optimized index.
+        private readonly bool useLegacySpatialCombatIndex;
 
         /// <summary>
         /// Debug re-run only (chapter 13.3): receives the phase ordinal, its name and the SHA-256 of the canonical
@@ -38,8 +40,14 @@ namespace Rts.Simulation
 
         // Diagnostic observer only; never read back into simulation decisions or canonical state.
         public Simulation(ScenarioDefinition scenario, Action<string, bool> measure = null)
+            : this(scenario, measure, false)
+        {
+        }
+
+        internal Simulation(ScenarioDefinition scenario, Action<string, bool> measure, bool useLegacySpatialCombatIndex)
         {
             this.measure = measure;
+            this.useLegacySpatialCombatIndex = useLegacySpatialCombatIndex;
             world = new WorldState(scenario);
             InitializeSpatialCombatIndex();
             InitializeRegions();

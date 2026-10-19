@@ -13,12 +13,19 @@ namespace Rts.Simulation
         private const int SpatialCombatCellSizeMeters = 16;
 
         private int spatialWidth, spatialHeight;
-        private int[] spatialSoldierHeads, spatialSoldierTails, spatialSoldierNext;
+        private int[][] spatialSoldierHeads, spatialSoldierTails;
+        private int[] spatialSoldierNext;
+        // The old all-faction chain is kept only for the deterministic comparison path.  It is never used by the game path.
+        private int[] legacySpatialSoldierHeads, legacySpatialSoldierTails, legacySpatialSoldierNext;
         private int[] spatialVillagerHeads, spatialVillagerTails, spatialVillagerNext;
         private int[] spatialBuildingHeads, spatialBuildingTails, spatialBuildingNext;
         private int[] spatialBeltHeads, spatialBeltTails, spatialBeltNext;
         private int[] spatialEnemyCandidates, spatialEnemyIndices, spatialVillagerCandidates, spatialBuildingCandidates, spatialBeltCandidates;
         private int[][] combatContactToSoldier;
+        private const int SpatialEnemyQueryCacheSlots = 32;
+        private SpatialEnemyQueryCache[][] spatialEnemyQueryCache;
+        private int[] spatialEnemyQueryCacheCount, spatialEnemyQueryCacheNext;
+        private long spatialEnemyQueryHits, spatialEnemyQueryMisses;
         private long spatialCellRaw, buildingSearchPaddingRaw;
 
         private void InitializeSpatialCombatIndex()
@@ -27,7 +34,13 @@ namespace Rts.Simulation
             spatialHeight = checked((world.Config.Map.HeightMeters + SpatialCombatCellSizeMeters - 1) / SpatialCombatCellSizeMeters);
             int cells = checked(spatialWidth * spatialHeight);
             spatialCellRaw = Fix64.FromInt(SpatialCombatCellSizeMeters).Raw;
-            spatialSoldierHeads = new int[cells]; spatialSoldierTails = new int[cells];
+            spatialSoldierHeads = new[] { new int[cells], new int[cells] };
+            spatialSoldierTails = new[] { new int[cells], new int[cells] };
+            if (useLegacySpatialCombatIndex)
+            {
+                legacySpatialSoldierHeads = new int[cells]; legacySpatialSoldierTails = new int[cells];
+                legacySpatialSoldierNext = new int[world.SoldierCount];
+            }
             spatialVillagerHeads = new int[cells]; spatialVillagerTails = new int[cells];
             spatialBuildingHeads = new int[cells]; spatialBuildingTails = new int[cells];
             spatialBeltHeads = new int[cells]; spatialBeltTails = new int[cells];
@@ -44,6 +57,12 @@ namespace Rts.Simulation
             combatContactToSoldier = new[] { new int[world.SoldierCount + 1], new int[world.SoldierCount + 1] };
             Array.Fill(combatContactToSoldier[0], -1);
             Array.Fill(combatContactToSoldier[1], -1);
+            spatialEnemyQueryCache = new[] { new SpatialEnemyQueryCache[SpatialEnemyQueryCacheSlots], new SpatialEnemyQueryCache[SpatialEnemyQueryCacheSlots] };
+            spatialEnemyQueryCacheCount = new int[2];
+            spatialEnemyQueryCacheNext = new int[2];
+            for (int faction = 0; faction < spatialEnemyQueryCache.Length; faction++)
+                for (int i = 0; i < spatialEnemyQueryCache[faction].Length; i++)
+                    spatialEnemyQueryCache[faction][i].Values = new VisibleEnemy[Math.Max(1, world.SoldierCount)];
 
             int maxFootprintCells = 1;
             foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind)))
@@ -58,6 +77,7 @@ namespace Rts.Simulation
             if (spatialSoldierNext.Length < world.Soldiers.Length)
             {
                 spatialSoldierNext = new int[world.Soldiers.Length];
+                if (useLegacySpatialCombatIndex) legacySpatialSoldierNext = new int[world.Soldiers.Length];
                 spatialEnemyCandidates = new int[world.Soldiers.Length];
                 spatialEnemyIndices = new int[world.Soldiers.Length];
                 spatialEnemyBuffer = new VisibleEnemy[world.Soldiers.Length];
@@ -85,7 +105,14 @@ namespace Rts.Simulation
             EnsureSpatialCombatBuffers();
             ClearSpatialHeads();
             for (int i = 0; i < world.SoldierCount; i++)
-                if (world.Soldiers[i].Alive) AppendSpatial(spatialSoldierHeads, spatialSoldierTails, spatialSoldierNext, i, world.Soldiers[i].Position);
+                if (world.Soldiers[i].Alive)
+                {
+                    int faction = checked((int)world.Soldiers[i].Initial.FactionId) - 1;
+                    if (faction >= 0 && faction < spatialSoldierHeads.Length)
+                        AppendSpatial(spatialSoldierHeads[faction], spatialSoldierTails[faction], spatialSoldierNext, i, world.Soldiers[i].Position);
+                    if (useLegacySpatialCombatIndex)
+                        AppendSpatial(legacySpatialSoldierHeads, legacySpatialSoldierTails, legacySpatialSoldierNext, i, world.Soldiers[i].Position);
+                }
             for (int i = 0; i < world.VillagerCount; i++)
                 if (world.Villagers[i].Alive) AppendSpatial(spatialVillagerHeads, spatialVillagerTails, spatialVillagerNext, i, world.Villagers[i].Position);
             for (int i = 0; i < world.BuildingCount; i++)
@@ -93,6 +120,12 @@ namespace Rts.Simulation
                     BuildingIndexPosition(world.Buildings[i]));
             for (int i = 0; i < world.Belts.Length; i++)
                 if (world.Belts[i].FactionId != 0) AppendSpatial(spatialBeltHeads, spatialBeltTails, spatialBeltNext, i, world.Map.Center(i));
+            for (int faction = 0; faction < spatialEnemyQueryCache.Length; faction++)
+            {
+                spatialEnemyQueryCacheCount[faction] = 0;
+                spatialEnemyQueryCacheNext[faction] = 0;
+            }
+            spatialEnemyQueryHits = spatialEnemyQueryMisses = 0;
         }
 
         private SimPoint BuildingIndexPosition(BuildingState building)
@@ -104,7 +137,14 @@ namespace Rts.Simulation
 
         private void ClearSpatialHeads()
         {
-            Array.Fill(spatialSoldierHeads, -1); Array.Fill(spatialSoldierTails, -1);
+            for (int faction = 0; faction < spatialSoldierHeads.Length; faction++)
+            {
+                Array.Fill(spatialSoldierHeads[faction], -1); Array.Fill(spatialSoldierTails[faction], -1);
+            }
+            if (legacySpatialSoldierHeads != null)
+            {
+                Array.Fill(legacySpatialSoldierHeads, -1); Array.Fill(legacySpatialSoldierTails, -1);
+            }
             Array.Fill(spatialVillagerHeads, -1); Array.Fill(spatialVillagerTails, -1);
             Array.Fill(spatialBuildingHeads, -1); Array.Fill(spatialBuildingTails, -1);
             Array.Fill(spatialBeltHeads, -1); Array.Fill(spatialBeltTails, -1);
@@ -144,7 +184,13 @@ namespace Rts.Simulation
 
         private int QueryVisibleEnemies(uint faction, SimPoint point, Fix64 range)
         {
-            int candidates = QuerySpatial(spatialSoldierHeads, spatialSoldierNext, point, range, 0, spatialEnemyIndices);
+            if (!useLegacySpatialCombatIndex && TryCachedVisibleEnemies(faction, point, range, out int cachedCount))
+                return cachedCount;
+
+            int enemyFaction = checked((int)(faction == 1 ? 2U : 1U)) - 1;
+            int candidates = useLegacySpatialCombatIndex
+                ? QuerySpatial(legacySpatialSoldierHeads, legacySpatialSoldierNext, point, range, 0, spatialEnemyIndices)
+                : QuerySpatial(spatialSoldierHeads[enemyFaction], spatialSoldierNext, point, range, 0, spatialEnemyIndices);
             int count = 0;
             for (int n = 0; n < candidates; n++)
             {
@@ -157,7 +203,64 @@ namespace Rts.Simulation
                 spatialEnemyCandidates[count] = i;
                 spatialEnemyBuffer[count++] = new VisibleEnemy(contact, soldier.Position, kind);
             }
+            if (!useLegacySpatialCombatIndex) StoreCachedVisibleEnemies(faction, point, range, count);
             return count;
+        }
+
+        private bool TryCachedVisibleEnemies(uint faction, SimPoint point, Fix64 range, out int count)
+        {
+            int factionIndex = checked((int)faction) - 1;
+            var entries = spatialEnemyQueryCache[factionIndex];
+            for (int i = 0; i < spatialEnemyQueryCacheCount[factionIndex]; i++)
+            {
+                ref var entry = ref entries[i];
+                if (entry.PointXRaw != point.X.Raw || entry.PointZRaw != point.Z.Raw || entry.RangeRaw != range.Raw) continue;
+                count = entry.Count;
+                Array.Copy(entry.Values, spatialEnemyBuffer, count);
+                spatialEnemyQueryHits++;
+                return true;
+            }
+            spatialEnemyQueryMisses++;
+            count = 0;
+            return false;
+        }
+
+        private void StoreCachedVisibleEnemies(uint faction, SimPoint point, Fix64 range, int count)
+        {
+            int factionIndex = checked((int)faction) - 1;
+            int slot;
+            if (spatialEnemyQueryCacheCount[factionIndex] < SpatialEnemyQueryCacheSlots)
+                slot = spatialEnemyQueryCacheCount[factionIndex]++;
+            else
+            {
+                slot = spatialEnemyQueryCacheNext[factionIndex];
+                spatialEnemyQueryCacheNext[factionIndex] = (slot + 1) % SpatialEnemyQueryCacheSlots;
+            }
+            ref var entry = ref spatialEnemyQueryCache[factionIndex][slot];
+            // The slots are sized for the starting soldiers; reinforcements can make a query larger than that.
+            if (entry.Values.Length < count) entry.Values = new VisibleEnemy[spatialEnemyBuffer.Length];
+            entry.PointXRaw = point.X.Raw; entry.PointZRaw = point.Z.Raw; entry.RangeRaw = range.Raw; entry.Count = count;
+            Array.Copy(spatialEnemyBuffer, entry.Values, count);
+        }
+
+        private struct SpatialEnemyQueryCache
+        {
+            internal long PointXRaw, PointZRaw, RangeRaw;
+            internal int Count;
+            internal VisibleEnemy[] Values;
+        }
+
+        // Test diagnostics only.  These counters are reset at the beginning of every combat-index rebuild.
+        internal long SpatialEnemyQueryHits => spatialEnemyQueryHits;
+        internal long SpatialEnemyQueryMisses => spatialEnemyQueryMisses;
+        internal int QueryVisibleEnemiesForTest(uint faction, SimPoint point, Fix64 range) => QueryVisibleEnemies(faction, point, range);
+        internal void RebuildSpatialCombatIndexForTest() => RebuildSpatialCombatIndex();
+        internal VisibleEnemy[] QueryVisibleEnemiesSnapshotForTest(uint faction, SimPoint point, Fix64 range)
+        {
+            int count = QueryVisibleEnemies(faction, point, range);
+            var result = new VisibleEnemy[count];
+            Array.Copy(spatialEnemyBuffer, result, count);
+            return result;
         }
 
         private VisibleEnemy[] spatialEnemyBuffer;
