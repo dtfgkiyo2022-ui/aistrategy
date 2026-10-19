@@ -29,6 +29,9 @@ namespace Rts.Tests.Headless
             ScenarioScale.MultiplyForMeasurement(scaled, 4, 2);
             Assert.That(scaled.Economy.AutoVillagerTarget, Is.EqualTo(80));
             Assert.That(scaled.Economy.PopulationCap, Is.EqualTo(240));
+            // The house-built cap follows the larger factor, so the multiplied soldiers leave room for villagers.
+            Assert.That(scaled.Economy.BasePopulation, Is.EqualTo(baseline.Economy.BasePopulation * 4));
+            Assert.That(scaled.Economy.HousePopulation, Is.EqualTo(baseline.Economy.HousePopulation * 4));
             Assert.That(scaled.Soldiers.Length, Is.EqualTo(80));
             Assert.That(scaled.Soldiers.Count(d => d.FactionId == 1), Is.EqualTo(40));
             Assert.That(scaled.Armies[0].Capacity, Is.EqualTo(32));

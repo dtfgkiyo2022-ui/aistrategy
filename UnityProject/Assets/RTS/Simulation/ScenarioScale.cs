@@ -62,6 +62,12 @@ namespace Rts.Simulation
             s.Economy.MeasurementScale = true;
             s.Economy.AutoVillagerTarget = checked(s.Economy.AutoVillagerTarget * villagerFactor);
             s.Economy.PopulationCap = checked(s.Economy.PopulationCap * populationFactor);
+            // The house-built cap scales too (10-19): unscaled, the multiplied starting soldiers alone were over it, so
+            // no villager could ever be trained and every scaled measurement kept its three starting villagers.
+            s.Economy.BasePopulation = checked(s.Economy.BasePopulation * populationFactor);
+            s.Economy.HousePopulation = checked(s.Economy.HousePopulation * populationFactor);
+            s.Economy.Age2PopulationBonus = checked(s.Economy.Age2PopulationBonus * populationFactor);
+            s.Economy.Age3PopulationBonus = checked(s.Economy.Age3PopulationBonus * populationFactor);
             // Each barracks may keep a proportionally larger automatic infantry queue. This is the measurement
             // substitute for a barracks-count cap, while leaving the building placement rules untouched.
             s.Economy.AutoInfantryQueue = checked(s.Economy.AutoInfantryQueue * soldierFactor);
