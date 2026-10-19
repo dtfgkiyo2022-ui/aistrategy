@@ -123,6 +123,11 @@ namespace Rts.Simulation
             e.LargeTownVillagersPerTown = 80;
             e.LargeBarracksVillagersPerBuilding = 20;
             e.LargeTownAutoWorkers = 4;
+            e.LargeTargetRoundTripTicks = 300;
+            e.LargeResourceClusterRadiusMeters = 24;
+            e.LargeClusterDecisionIntervalTicks = 100;
+            e.LargeResourceClusterMaxDropSites = 12;
+            e.LargeClusterMinGatherers = 2;
             // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
             // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.
             e.Builders = 8;

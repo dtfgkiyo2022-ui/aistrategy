@@ -107,6 +107,16 @@ namespace Rts.Simulation
         public int LargeBarracksVillagersPerBuilding = 20;
         /// <summary>LargeEconomy allocation: automatic workers assigned around each completed town.</summary>
         public int LargeTownAutoWorkers = 4;
+        /// <summary>LargeEconomy logistics: a resource cluster is served locally when its average round trip exceeds this many ticks.</summary>
+        public int LargeTargetRoundTripTicks = 300;
+        /// <summary>LargeEconomy logistics: same-kind nodes within this distance belong to one deterministic cluster.</summary>
+        public int LargeResourceClusterRadiusMeters = 24;
+        /// <summary>LargeEconomy logistics: cluster decisions are spaced out to keep large matches light.</summary>
+        public int LargeClusterDecisionIntervalTicks = 100;
+        /// <summary>LargeEconomy logistics: maximum automatic resource-cluster drop-offs.</summary>
+        public int LargeResourceClusterMaxDropSites = 12;
+        /// <summary>LargeEconomy logistics: a cluster must have this many active gatherers before it gets a site.</summary>
+        public int LargeClusterMinGatherers = 2;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

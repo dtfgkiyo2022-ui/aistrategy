@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Contracts;
 using Rts.Decision;
 
@@ -499,7 +500,8 @@ namespace Rts.Simulation
 
         private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
         {
-            if (kind == ResourceKind.Gold) return NearestGoldNode(position, faction);
+            if (kind == ResourceKind.Gold && !LargeEconomyOn) return NearestGoldNode(position, faction);
+            if (LargeEconomyOn) return NearestLargeWorkNode(position, kind, faction);
             // LargeEconomy's authored large map has deterministic symmetric resource placement. Its automatic economy
             // may plan against the full placement so a side does not exhaust its starting wood while waiting for a
             // scout; ordinary fogged maps retain the explored-only rule.
@@ -525,6 +527,95 @@ namespace Rts.Simulation
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
             return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
+        }
+
+        private void EnsureLargeResourceClusters()
+        {
+            if (!LargeEconomyOn || largeNodeClusters != null) return;
+            int count = world.Nodes.Length;
+            var parent = new int[count];
+            for (int i = 0; i < count; i++) parent[i] = i;
+            var radius = Fix64.FromInt(world.Config.Economy.LargeResourceClusterRadiusMeters);
+            for (int i = 0; i < count; i++)
+                for (int j = i + 1; j < count; j++)
+                {
+                    if (world.Nodes[i].Definition.Kind != world.Nodes[j].Definition.Kind
+                        || !InRange(world.Nodes[i].Definition.Position, world.Nodes[j].Definition.Position, radius)) continue;
+                    int left = FindClusterRoot(parent, i), right = FindClusterRoot(parent, j);
+                    if (left != right) parent[Math.Max(left, right)] = Math.Min(left, right);
+                }
+            var rootToCluster = new int[count]; Array.Fill(rootToCluster, -1);
+            var sizes = new int[count]; int clusterCount = 0;
+            largeNodeClusters = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                int root = FindClusterRoot(parent, i);
+                int cluster = rootToCluster[root];
+                if (cluster < 0) { cluster = clusterCount++; rootToCluster[root] = cluster; }
+                largeNodeClusters[i] = cluster;
+                sizes[cluster]++;
+            }
+            largeClusterNodes = new int[clusterCount][];
+            largeClusterKinds = new ResourceKind[clusterCount];
+            largeClusterAnchors = new int[clusterCount];
+            for (int cluster = 0; cluster < clusterCount; cluster++) largeClusterNodes[cluster] = new int[sizes[cluster]];
+            Array.Clear(sizes, 0, sizes.Length);
+            for (int i = 0; i < count; i++)
+            {
+                int cluster = largeNodeClusters[i];
+                largeClusterNodes[cluster][sizes[cluster]++] = i;
+                largeClusterKinds[cluster] = world.Nodes[i].Definition.Kind;
+                if (largeClusterNodes[cluster][0] == i) largeClusterAnchors[cluster] = i;
+            }
+        }
+
+        private static int FindClusterRoot(int[] parent, int value)
+        {
+            int root = value;
+            while (parent[root] != root) root = parent[root];
+            while (parent[value] != value)
+            {
+                int next = parent[value]; parent[value] = root; value = next;
+            }
+            return root;
+        }
+
+        private int NearestLargeWorkNode(SimPoint position, ResourceKind kind, uint faction)
+        {
+            EnsureLargeResourceClusters();
+            int bestCluster = -1;
+            BigInteger bestDropDistance = default;
+            uint bestAnchorId = 0;
+            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+            {
+                if (largeClusterKinds[cluster] != kind || ClusterRemaining(cluster) <= 0) continue;
+                var anchor = world.Nodes[largeClusterAnchors[cluster]].Definition.Position;
+                var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
+                var drop = DropOff(probe).point;
+                var distance = DistanceSquared(anchor, drop);
+                uint anchorId = world.Nodes[largeClusterAnchors[cluster]].Definition.Id;
+                if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
+                { bestCluster = cluster; bestDropDistance = distance; bestAnchorId = anchorId; }
+            }
+            if (bestCluster < 0) return -1;
+            int best = -1; BigInteger bestDistance = default; uint bestId = 0;
+            foreach (int nodeIndex in largeClusterNodes[bestCluster])
+            {
+                var node = world.Nodes[nodeIndex];
+                if (node.Remaining <= 0) continue;
+                var distance = DistanceSquared(position, node.Definition.Position);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
+                { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
+            }
+            return best;
+        }
+
+        private int ClusterRemaining(int cluster)
+        {
+            int remaining = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+                remaining = checked(remaining + Math.Max(0, world.Nodes[nodeIndex].Remaining));
+            return remaining;
         }
 
         private int NearestGoldNode(SimPoint position, uint faction)

@@ -543,7 +543,10 @@ namespace Rts.Simulation
                 && e.LargeFactionCap > 0 && e.LargeResourceAmountPermille > 0 && e.LargeFoodAmountPermille > 0
                 && e.LargeOreAmountPermille > 0 && e.LargeStoneAmountPermille > 0 && e.LargeGoldAmountPermille > 0
                  && e.LargeFoodPerWood > 0 && e.LargeConstructionReserveWood >= 0 && e.LargeTownStoneGatherers > 0
-                 && e.LargeTownVillagersPerTown > 0 && e.LargeBarracksVillagersPerBuilding > 0 && e.LargeTownAutoWorkers > 0),
+                 && e.LargeTownVillagersPerTown > 0 && e.LargeBarracksVillagersPerBuilding > 0 && e.LargeTownAutoWorkers > 0
+                 && e.LargeTargetRoundTripTicks > 0 && e.LargeResourceClusterRadiusMeters > 0
+                 && e.LargeClusterDecisionIntervalTicks > 0 && e.LargeResourceClusterMaxDropSites > 0
+                 && e.LargeClusterMinGatherers > 0),
                 "Invalid large economy rules.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
@@ -1040,8 +1043,11 @@ namespace Rts.Simulation
                 LargeFoodAmountPermille = e.LargeFoodAmountPermille, LargeOreAmountPermille = e.LargeOreAmountPermille,
                 LargeStoneAmountPermille = e.LargeStoneAmountPermille, LargeGoldAmountPermille = e.LargeGoldAmountPermille,
                  LargeFoodPerWood = e.LargeFoodPerWood, LargeConstructionReserveWood = e.LargeConstructionReserveWood,
-                 LargeTownStoneGatherers = e.LargeTownStoneGatherers, LargeTownVillagersPerTown = e.LargeTownVillagersPerTown,
-                 LargeBarracksVillagersPerBuilding = e.LargeBarracksVillagersPerBuilding, LargeTownAutoWorkers = e.LargeTownAutoWorkers,
+                  LargeTownStoneGatherers = e.LargeTownStoneGatherers, LargeTownVillagersPerTown = e.LargeTownVillagersPerTown,
+                  LargeBarracksVillagersPerBuilding = e.LargeBarracksVillagersPerBuilding, LargeTownAutoWorkers = e.LargeTownAutoWorkers,
+                  LargeTargetRoundTripTicks = e.LargeTargetRoundTripTicks, LargeResourceClusterRadiusMeters = e.LargeResourceClusterRadiusMeters,
+                  LargeClusterDecisionIntervalTicks = e.LargeClusterDecisionIntervalTicks, LargeResourceClusterMaxDropSites = e.LargeResourceClusterMaxDropSites,
+                  LargeClusterMinGatherers = e.LargeClusterMinGatherers,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,

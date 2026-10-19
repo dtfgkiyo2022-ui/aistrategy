@@ -33,6 +33,11 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeTownVillagersPerTown, Is.EqualTo(large.Economy.LargeTownVillagersPerTown));
             Assert.That(decoded.Economy.LargeBarracksVillagersPerBuilding, Is.EqualTo(large.Economy.LargeBarracksVillagersPerBuilding));
             Assert.That(decoded.Economy.LargeTownAutoWorkers, Is.EqualTo(large.Economy.LargeTownAutoWorkers));
+            Assert.That(decoded.Economy.LargeTargetRoundTripTicks, Is.EqualTo(large.Economy.LargeTargetRoundTripTicks));
+            Assert.That(decoded.Economy.LargeResourceClusterRadiusMeters, Is.EqualTo(large.Economy.LargeResourceClusterRadiusMeters));
+            Assert.That(decoded.Economy.LargeClusterDecisionIntervalTicks, Is.EqualTo(large.Economy.LargeClusterDecisionIntervalTicks));
+            Assert.That(decoded.Economy.LargeResourceClusterMaxDropSites, Is.EqualTo(large.Economy.LargeResourceClusterMaxDropSites));
+            Assert.That(decoded.Economy.LargeClusterMinGatherers, Is.EqualTo(large.Economy.LargeClusterMinGatherers));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
@@ -56,6 +61,11 @@ namespace Rts.Core.Tests
             Assert.That(rules.LargeTownVillagersPerTown, Is.EqualTo(80));
             Assert.That(rules.LargeBarracksVillagersPerBuilding, Is.EqualTo(20));
             Assert.That(rules.LargeTownAutoWorkers, Is.EqualTo(4));
+            Assert.That(rules.LargeTargetRoundTripTicks, Is.EqualTo(300));
+            Assert.That(rules.LargeResourceClusterRadiusMeters, Is.EqualTo(24));
+            Assert.That(rules.LargeClusterDecisionIntervalTicks, Is.EqualTo(100));
+            Assert.That(rules.LargeResourceClusterMaxDropSites, Is.EqualTo(12));
+            Assert.That(rules.LargeClusterMinGatherers, Is.EqualTo(2));
             Assert.That(scenario.Rules.FactionCap, Is.EqualTo(1400));
             Assert.That((rules.VillagerFoodCost, rules.InfantryFoodCost, rules.InfantryWoodCost,
                 rules.BarracksWoodCost, rules.TownWoodCost, rules.TownStoneCost, rules.TownWork,
@@ -65,8 +75,12 @@ namespace Rts.Core.Tests
                     ordinary.HouseWoodCost, ordinary.HouseWork)));
             var decodedEconomy = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)).Economy;
             Assert.That((decodedEconomy.LargeTownVillagersPerTown, decodedEconomy.LargeBarracksVillagersPerBuilding,
-                decodedEconomy.LargeTownAutoWorkers),
-                Is.EqualTo((rules.LargeTownVillagersPerTown, rules.LargeBarracksVillagersPerBuilding, rules.LargeTownAutoWorkers)));
+                decodedEconomy.LargeTownAutoWorkers, decodedEconomy.LargeTargetRoundTripTicks,
+                decodedEconomy.LargeResourceClusterRadiusMeters, decodedEconomy.LargeClusterDecisionIntervalTicks,
+                decodedEconomy.LargeResourceClusterMaxDropSites, decodedEconomy.LargeClusterMinGatherers),
+                Is.EqualTo((rules.LargeTownVillagersPerTown, rules.LargeBarracksVillagersPerBuilding, rules.LargeTownAutoWorkers,
+                    rules.LargeTargetRoundTripTicks, rules.LargeResourceClusterRadiusMeters, rules.LargeClusterDecisionIntervalTicks,
+                    rules.LargeResourceClusterMaxDropSites, rules.LargeClusterMinGatherers)));
         }
 
         [Test]

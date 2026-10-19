@@ -32,6 +32,12 @@ namespace Rts.Simulation
         private readonly int[] largeVillagerCounts = new int[2];
         private readonly int[] largeTownCounts = new int[2];
         private readonly int[] largeBarracksCounts = new int[2];
+        // LargeEconomy resource clusters are built once from the authored node layout. Remaining amounts and worker
+        // counts are read from the live nodes on the spaced decision ticks; the cluster index itself never changes.
+        private int[] largeNodeClusters;
+        private int[][] largeClusterNodes;
+        private ResourceKind[] largeClusterKinds;
+        private int[] largeClusterAnchors;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
         private readonly int[] largeTownDelivered = new int[2];
