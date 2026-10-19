@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- #448: .NET 10 dynamic PGO crashed the runtime (Internal CLR error in ContractList.Copy) on this Zen 4 PC,
+         about 18 of 40 large-map runs; with PGO off 0 of 40. Headless only (the player build is IL2CPP). -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />
