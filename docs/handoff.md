@@ -10,7 +10,22 @@
 
 **6本目「騎馬・機動」（V3-10、PR #206）と7本目「工兵・架橋」（V3-11、PR #207）が main に入った**。その後、共通化その1（文明の登録表 #210）・工兵の重さの直し（#211）・共通化その2（ScenarioBinary の拡張欄 #212）・**8本目「学府・技術」その1（#213）** が入り、main の文明は8つ（学府は旗 `Academy`＋金のある地図で選べる。得点はまだ0で、お任せでは選ばれない）。**学府その2・その3を進行中**（下の「次にやること」）。**2026-10-01 から設計レビューは Astra ではなく Claude（Opus 5.5）が自分で行う**（オーナー決定、メモリ `astra-review-core-design.md`）。オーナー決定（2026-09-29）：**測定や検証より、文明の枝やゲームの選択肢を増やしてコンテンツを充実させる方に注力する。枝は「面白さを確かめてから」ではなく、どんどん増やす**（AoE が面白いのは実証済み）。Astra 推奨の順番（3本目 森林・木工 → 4本目 石工・城塞 → 5本目 隊商・交易、`D:/rts-verify/astra/result_third-civ.md`）に沿って進めている。前のアカウントのメモリ（Cドライブの Claude Code の projects 配下の memory フォルダ）は自動では引き継がれないので、**自分から読みに行くこと**（`MEMORY.md` が索引。特に `content-over-measurement.md`・`add-civ-branches-without-fun-check.md`）。
 
-### 今どこにいるか（2026-10-19 夜。これが最新）
+### 今どこにいるか（2026-10-20 夕方。これが最新）
+
+- **オーナー決定（10-20）**：広い地図（大人数の経済 `LargeEconomy`）を既定にする。小さい地図・少ない人数は仮で、もう動かしたりテストしたりしない（既存の Headless の決定論テストは見張りとして残す）
+- **集積所の上限**：制限をなくすとベルトの意味が消えるので、地図の広さに合わせて 2 → 8（面積 4 倍）。町は数えない。上限を超える遠い資源はベルトで運ぶ（econ5 の依頼 `D:/rts-verify/astra/request_econ5.md`）
+- **main に入ったもの**：#447 perf5（敵探し）、#449 技術設計 36 章、#450・#452 Headless の .NET 設定、#451 perf6（AI）
+- **.NET 10 の不具合の回避（#448・#450・#452）**：大人数の測定・全体テストで Internal CLR error／あり得ない NullReferenceException が出ていた。Headless の `TieredPGO=false` と `TieredCompilationQuickJitForLoops=false`（OSR も止まる）で 40 回中 18 回 → 0 回。デバッグビルドでは出ない。製品版（IL2CPP）は関係なし
+- **全体テストの時間**：上の設定で約 4 時間に伸びた
+- **ブランチの状態**：
+  - perf7（`a/perf-vis-move`、視界と移動）：照合 3 試合一致。全体テスト中
+  - econ4（`a/large-economy-4`、econ1〜4 と広い地図を既定に）：ふだんの地図 2 試合で main と全 tick 一致。全体テスト中
+  - sim-thread（`a/sim-thread`、perf7 の上）：オーナーのテストプレイで「軽くなった」。製品版 `D:/rts-verify/build1020b`。perf7 の後に main へ
+- **テストを書くときの注意**：試合の状態（`CaptureDiagnostic().CanonicalState`）を毎 tick 丸ごとコピーして2つ持つテストは、広い地図の大人数でメモリ不足になる（perf7 のテストを 4000 tick に短縮）。長い照合は「前のビルドで記録して今のビルドで再生」（`D:/rts-verify/perf7_check.ps1` の形）で行う
+- **PC の電源断**：10-20 に 3 回。Windows のログに GPU ドライバーの WATCHDOG（LiveKernelEvent 193）。再開時は Codex の設定（`~/.codex/config.toml`）が壊れていないか先に見る
+- **次**：perf7・econ4 → main、sim-thread → main、広い地図が既定の製品版をビルドしてオーナーに渡す、econ5 を発注
+
+### 今どこにいるか（2026-10-19 夜）
 
 - **規模の方針（オーナー決定）**：1陣営 兵 1000・村人 300（両陣営で約 2600 体）を前提に作り進める。新しい仕組みは最初から 2600 体で重くならない作りにする（兵ごと・毎 tick の全体走査を避ける）
 - **大人数のテストプレイ**：製品版の起動引数 `-rts-villager-scale 15 -rts-army-scale 50` で、広い地図に測定用の倍率をかける（`LiveMatchHost.CommandLineScale`。ゲームの決まりではない）。`D:/rts-verify/build1019c/起動_2600体.bat`

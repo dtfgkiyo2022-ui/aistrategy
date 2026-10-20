@@ -29,7 +29,7 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(1, false, true, false, false);
             var optimized = new Battle(scenario);
-            var legacy = new Battle(scenario, null, true);
+            var legacy = new Battle(scenario, null, true, true);
             for (long tick = 1; tick <= 30000 && (!optimized.Capture(1).Result.HasEnded || !legacy.Capture(1).Result.HasEnded); tick++)
             {
                 optimized.Step(tick, Array.Empty<ScheduledInput>());
@@ -46,7 +46,7 @@ namespace Rts.Core.Tests
         {
             var scenario = LiveGameRules.Create(1, false, true, false, false);
             var optimized = new Battle(scenario);
-            var legacy = new Battle(scenario, null, true);
+            var legacy = new Battle(scenario, null, true, true);
             optimized.RebuildSpatialCombatIndexForTest();
             legacy.RebuildSpatialCombatIndexForTest();
             var point = optimized.Capture(1).Observation.OwnArmies.First().Position;

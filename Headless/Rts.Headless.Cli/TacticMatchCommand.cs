@@ -85,7 +85,8 @@ internal static class TacticMatchCommand
         };
         // The comparison route is measurement-only and is selected by the harness, never by a game scenario or CLI flag.
         bool legacySpatialCombat = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF5_LEGACY"), "1", StringComparison.Ordinal);
-        var simulation = new Battle(scenario, measure, legacySpatialCombat);
+        bool legacyVisibility = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF7_LEGACY"), "1", StringComparison.Ordinal);
+        var simulation = new Battle(scenario, measure, legacySpatialCombat, legacyVisibility);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
@@ -147,7 +148,7 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,phases," + LargeEconomyHeader());
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,phases," + LargeEconomyHeader());
         }
         LargeEconomyObservation largeObservation = null;
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
@@ -281,7 +282,10 @@ internal static class TacticMatchCommand
                     eastFood.ToString(CultureInfo.InvariantCulture), eastWood.ToString(CultureInfo.InvariantCulture),
                     eastStone.ToString(CultureInfo.InvariantCulture), eastMetal.ToString(CultureInfo.InvariantCulture),
                     westIdle.ToString(CultureInfo.InvariantCulture), eastIdle.ToString(CultureInfo.InvariantCulture),
-                     westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture), phaseText,
+                     westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture),
+                     simulation.MovedSoldiers.ToString(CultureInfo.InvariantCulture),
+                     simulation.VisibilityChangedSoldiers.ToString(CultureInfo.InvariantCulture),
+                     simulation.VisibilityProcessedCells.ToString(CultureInfo.InvariantCulture), phaseText,
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }

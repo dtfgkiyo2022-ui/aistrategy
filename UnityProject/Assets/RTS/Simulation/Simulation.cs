@@ -23,6 +23,9 @@ namespace Rts.Simulation
         private bool[] visibilityBuildingActive;
         private uint[] visibilityOutpostOwners;
         private bool[] visibilityCoreActive;
+        private long visibilityChangedSoldiers;
+        private long visibilityProcessedCells;
+        private int movedSoldiers;
         private readonly FactionFrame[] frames = new FactionFrame[2];
         private bool automaticEconomyAction;
         // LargeEconomy allocation is a per-tick snapshot. It avoids rescanning every villager for every newly idle
@@ -46,6 +49,12 @@ namespace Rts.Simulation
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.
         private readonly bool useLegacySpatialCombatIndex;
+        // Test-only comparison path; the shipped simulation always uses the optimized visibility ranges.
+        private bool useLegacyVisibility;
+
+        internal long VisibilityChangedSoldiers => visibilityChangedSoldiers;
+        internal long VisibilityProcessedCells => visibilityProcessedCells;
+        internal int MovedSoldiers => movedSoldiers;
 
         /// <summary>
         /// Debug re-run only (chapter 13.3): receives the phase ordinal, its name and the SHA-256 of the canonical
@@ -81,6 +90,13 @@ namespace Rts.Simulation
             PublishFrames();
         }
 
+        internal Simulation(ScenarioDefinition scenario, Action<string, bool> measure, bool useLegacySpatialCombatIndex,
+            bool useLegacyVisibility)
+            : this(scenario, measure, useLegacySpatialCombatIndex)
+        {
+            this.useLegacyVisibility = useLegacyVisibility;
+        }
+
         public void Step(long tick, IReadOnlyList<ScheduledInput> inputs)
         {
             if (world.Result.HasEnded) return;
@@ -89,6 +105,9 @@ namespace Rts.Simulation
             try
             {
                 world.Tick = tick;
+                visibilityChangedSoldiers = 0;
+                visibilityProcessedCells = 0;
+                movedSoldiers = 0;
                 phaseOrdinal = 0;
                 commandEvents.Clear();
                 PruneLiveCommands();
@@ -439,6 +458,7 @@ namespace Rts.Simulation
 
         private void Move()
         {
+            movedSoldiers = 0;
             if (world.Config.Map.BlockedCellIds.Length != 0 || !world.Config.Map.DefaultPassable || world.BuildingCount > 0) PrepareArmyPaths();
             foreach (int i in world.SoldierTraversal)
             {
@@ -449,6 +469,7 @@ namespace Rts.Simulation
             {
                 ref var s = ref world.Soldiers[i];
                 s.IsMoving = s.Alive && !SamePoint(s.Position, nextPositions[i]);
+                if (s.IsMoving) movedSoldiers++;
                 s.Position = nextPositions[i];
             }
         }
@@ -624,6 +645,9 @@ namespace Rts.Simulation
 
         private void UpdateObservations()
         {
+            measure?.Invoke("Visibility.Observation", true);
+            try
+            {
             for (int f = 0; f < world.Factions.Length; f++)
             {
                 ref var faction = ref world.Factions[f];
@@ -657,23 +681,39 @@ namespace Rts.Simulation
                 }
                 UpdateArmyContacts(ref faction);
             }
+            }
+            finally { measure?.Invoke("Visibility.Observation", false); }
         }
 
         private void UpdateVisibility()
         {
             EnsureVisibilityCaches();
+            measure?.Invoke("Visibility.ChangeDetection", true);
+            try
+            {
             for (int i = 0; i < world.Soldiers.Length; i++)
             {
                 ref var s = ref world.Soldiers[i];
                 int faction = checked((int)s.Initial.FactionId) - 1;
                 bool active = s.Alive && faction >= 0 && faction < world.Factions.Length;
                 long visionRaw = s.Parameters.Vision.Raw;
-                if (visibilitySoldierActive[i] && (!active || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
-                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw))
-                    ChangeVisibility(faction, visibilitySoldierPositions[i], visibilitySoldierVisionRaw[i], -1);
-                if (active && (!visibilitySoldierActive[i] || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
-                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw))
-                    ChangeVisibility(faction, s.Position, visionRaw, 1);
+                bool changed = visibilitySoldierActive[i] && (!active || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
+                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw)
+                    || active && (!visibilitySoldierActive[i] || visibilitySoldierPositions[i].X.Raw != s.Position.X.Raw
+                    || visibilitySoldierPositions[i].Z.Raw != s.Position.Z.Raw || visibilitySoldierVisionRaw[i] != visionRaw);
+                if (changed)
+                {
+                    visibilityChangedSoldiers++;
+                    if (useLegacyVisibility)
+                    {
+                        if (visibilitySoldierActive[i]) ChangeVisibilityLegacy(faction, visibilitySoldierPositions[i], visibilitySoldierVisionRaw[i], -1);
+                        if (active) ChangeVisibilityLegacy(faction, s.Position, visionRaw, 1);
+                    }
+                    else if (visibilitySoldierActive[i] && active)
+                        ChangeVisibilityDelta(faction, visibilitySoldierPositions[i], visibilitySoldierVisionRaw[i], s.Position, visionRaw);
+                    else if (visibilitySoldierActive[i]) ChangeVisibility(faction, visibilitySoldierPositions[i], visibilitySoldierVisionRaw[i], -1);
+                    else if (active) ChangeVisibility(faction, s.Position, visionRaw, 1);
+                }
                 visibilitySoldierActive[i] = active;
                 visibilitySoldierPositions[i] = s.Position;
                 visibilitySoldierVisionRaw[i] = visionRaw;
@@ -686,7 +726,8 @@ namespace Rts.Simulation
                 bool active = core.Hp > 0;
                 if (visibilityCoreActive[f] != active)
                 {
-                    ChangeVisibility(f, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision.Raw, active ? 1 : -1);
+                    if (useLegacyVisibility) ChangeVisibilityLegacy(f, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision.Raw, active ? 1 : -1);
+                    else ChangeVisibility(f, core.Definition.Position, world.Config.Rules.OwnedObjectiveVision.Raw, active ? 1 : -1);
                     visibilityCoreActive[f] = active;
                 }
             }
@@ -697,10 +738,10 @@ namespace Rts.Simulation
                 if (visibilityOutpostOwners[i] != owner)
                 {
                     if (visibilityOutpostOwners[i] >= 1 && visibilityOutpostOwners[i] <= world.Factions.Length)
-                        ChangeVisibility(checked((int)visibilityOutpostOwners[i] - 1), world.Outposts[i].Definition.Position,
+                        ChangeVisibilityForMode(checked((int)visibilityOutpostOwners[i] - 1), world.Outposts[i].Definition.Position,
                             world.Config.Rules.OwnedObjectiveVision.Raw, -1);
                     if (owner >= 1 && owner <= world.Factions.Length)
-                        ChangeVisibility(checked((int)owner - 1), world.Outposts[i].Definition.Position,
+                        ChangeVisibilityForMode(checked((int)owner - 1), world.Outposts[i].Definition.Position,
                             world.Config.Rules.OwnedObjectiveVision.Raw, 1);
                     visibilityOutpostOwners[i] = owner;
                 }
@@ -722,8 +763,8 @@ namespace Rts.Simulation
                 if (changed)
                 {
                     if (visibilityBuildingActive[i])
-                        ChangeVisibility(visibilityBuildingFactions[i], visibilityBuildingPositions[i], visibilityBuildingVisionRaw[i], -1);
-                    if (active) ChangeVisibility(faction, position, visionRaw, 1);
+                        ChangeVisibilityForMode(visibilityBuildingFactions[i], visibilityBuildingPositions[i], visibilityBuildingVisionRaw[i], -1);
+                    if (active) ChangeVisibilityForMode(faction, position, visionRaw, 1);
                     visibilityBuildingActive[i] = active;
                     visibilityBuildingFactions[i] = faction;
                     visibilityBuildingPositions[i] = position;
@@ -731,7 +772,12 @@ namespace Rts.Simulation
                 }
             }
 
-            UpdateResourceObservations();
+            }
+            finally { measure?.Invoke("Visibility.ChangeDetection", false); }
+
+            measure?.Invoke("Visibility.ResourceMemory", true);
+            try { UpdateResourceObservations(); }
+            finally { measure?.Invoke("Visibility.ResourceMemory", false); }
         }
 
         private void InitializeVisibilityCaches()
@@ -763,7 +809,138 @@ namespace Rts.Simulation
             for (int i = old; i < capacity; i++) visibilityBuildingFactions[i] = -1;
         }
 
+        private void ChangeVisibilityForMode(int faction, SimPoint source, long radiusRaw, int delta)
+        {
+            if (useLegacyVisibility) ChangeVisibilityLegacy(faction, source, radiusRaw, delta);
+            else ChangeVisibility(faction, source, radiusRaw, delta);
+        }
+
         private void ChangeVisibility(int faction, SimPoint source, long radiusRaw, int delta)
+        {
+            measure?.Invoke("Visibility.CircleUpdate", true);
+            try
+            {
+            if (faction < 0 || faction >= world.Factions.Length || radiusRaw < 0) return;
+            ref var state = ref world.Factions[faction];
+            long squared = checked(radiusRaw * radiusRaw);
+            long cellRaw = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
+            if (!AxisInterval(source.Z.Raw, radiusRaw, cellRaw, world.Config.Map.HeightCells, out int minZ, out int maxZ)) return;
+            for (int z = minZ; z <= maxZ; z++)
+            {
+                if (!CircleRowInterval(source, radiusRaw, squared, cellRaw, z, world.Config.Map.WidthCells, out int minX, out int maxX)) continue;
+                ApplyVisibilityRange(ref state, z, minX, maxX, delta);
+            }
+            }
+            finally { measure?.Invoke("Visibility.CircleUpdate", false); }
+        }
+
+        private void ChangeVisibilityDelta(int faction, SimPoint oldSource, long oldRadiusRaw, SimPoint newSource, long newRadiusRaw)
+        {
+            measure?.Invoke("Visibility.CircleUpdate", true);
+            try
+            {
+            if (faction < 0 || faction >= world.Factions.Length || oldRadiusRaw < 0 || newRadiusRaw < 0) return;
+            ref var state = ref world.Factions[faction];
+            long oldSquared = checked(oldRadiusRaw * oldRadiusRaw), newSquared = checked(newRadiusRaw * newRadiusRaw);
+            long cellRaw = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw;
+            bool oldRows = AxisInterval(oldSource.Z.Raw, oldRadiusRaw, cellRaw, world.Config.Map.HeightCells, out int oldMinZ, out int oldMaxZ);
+            bool newRows = AxisInterval(newSource.Z.Raw, newRadiusRaw, cellRaw, world.Config.Map.HeightCells, out int newMinZ, out int newMaxZ);
+            int minZ = Math.Min(oldRows ? oldMinZ : world.Config.Map.HeightCells, newRows ? newMinZ : world.Config.Map.HeightCells);
+            int maxZ = Math.Max(oldRows ? oldMaxZ : -1, newRows ? newMaxZ : -1);
+            for (int z = minZ; z <= maxZ; z++)
+            {
+                int oldMinX = 0, oldMaxX = -1, newMinX = 0, newMaxX = -1;
+                bool oldRow = oldRows && CircleRowInterval(oldSource, oldRadiusRaw, oldSquared, cellRaw, z, world.Config.Map.WidthCells, out oldMinX, out oldMaxX);
+                bool newRow = newRows && CircleRowInterval(newSource, newRadiusRaw, newSquared, cellRaw, z, world.Config.Map.WidthCells, out newMinX, out newMaxX);
+                if (!oldRow)
+                {
+                    if (newRow) ApplyVisibilityRange(ref state, z, newMinX, newMaxX, 1);
+                    continue;
+                }
+                if (!newRow)
+                {
+                    ApplyVisibilityRange(ref state, z, oldMinX, oldMaxX, -1);
+                    continue;
+                }
+                if (oldMaxX < newMinX || newMaxX < oldMinX)
+                {
+                    ApplyVisibilityRange(ref state, z, oldMinX, oldMaxX, -1);
+                    ApplyVisibilityRange(ref state, z, newMinX, newMaxX, 1);
+                    continue;
+                }
+                if (oldMinX < newMinX) ApplyVisibilityRange(ref state, z, oldMinX, newMinX - 1, -1);
+                if (newMinX < oldMinX) ApplyVisibilityRange(ref state, z, newMinX, oldMinX - 1, 1);
+                if (newMaxX < oldMaxX) ApplyVisibilityRange(ref state, z, newMaxX + 1, oldMaxX, -1);
+                if (oldMaxX < newMaxX) ApplyVisibilityRange(ref state, z, oldMaxX + 1, newMaxX, 1);
+            }
+            }
+            finally { measure?.Invoke("Visibility.CircleUpdate", false); }
+        }
+
+        private void ApplyVisibilityRange(ref FactionState state, int z, int minX, int maxX, int delta)
+        {
+            if (minX > maxX) return;
+            visibilityProcessedCells += maxX - minX + 1;
+            int width = world.Config.Map.WidthCells;
+            for (int x = minX; x <= maxX; x++)
+            {
+                int cell = z * width + x;
+                int count = checked(state.VisibleCounts[cell] + delta);
+                state.VisibleCounts[cell] = count;
+                state.VisibleCells[cell] = count > 0;
+                if (count > 0) state.ExploredCells[cell] = true;
+            }
+        }
+
+        private static bool AxisInterval(long sourceRaw, long radiusRaw, long cellRaw, int cells, out int min, out int max)
+        {
+            min = max = 0;
+            if (cells <= 0) return false;
+            long half = cellRaw / 2;
+            long lower = checked(sourceRaw - radiusRaw - half), upper = checked(sourceRaw + radiusRaw - half);
+            long lowerCell = CeilDiv(lower, cellRaw), upperCell = FloorDiv(upper, cellRaw);
+            min = (int)Math.Max(0, Math.Min(cells - 1L, lowerCell));
+            max = (int)Math.Max(0, Math.Min(cells - 1L, upperCell));
+            return lowerCell <= cells - 1L && upperCell >= 0 && min <= max;
+        }
+
+        private static bool CircleRowInterval(SimPoint source, long radiusRaw, long squared, long cellRaw, int z, int width,
+            out int min, out int max)
+        {
+            min = max = 0;
+            long centerZ = checked((long)z * cellRaw + cellRaw / 2);
+            long dz = checked(source.Z.Raw - centerZ), dzSquared = checked(dz * dz);
+            if (dzSquared > squared) return false;
+            long horizontal = IntegerSqrt64(squared - dzSquared);
+            return AxisInterval(source.X.Raw, horizontal, cellRaw, width, out min, out max);
+        }
+
+        private static long FloorDiv(long value, long divisor)
+        {
+            long quotient = value / divisor, remainder = value % divisor;
+            return remainder != 0 && value < 0 ? quotient - 1 : quotient;
+        }
+
+        private static long CeilDiv(long value, long divisor)
+        {
+            long quotient = value / divisor, remainder = value % divisor;
+            return remainder != 0 && value > 0 ? quotient + 1 : quotient;
+        }
+
+        private static long IntegerSqrt64(long value)
+        {
+            ulong remaining = (ulong)value, result = 0, bit = 1UL << 62;
+            while (bit > remaining) bit >>= 2;
+            while (bit != 0)
+            {
+                if (remaining >= result + bit) { remaining -= result + bit; result = (result >> 1) + bit; }
+                else result >>= 1;
+                bit >>= 2;
+            }
+            return checked((long)result);
+        }
+
+        private void ChangeVisibilityLegacy(int faction, SimPoint source, long radiusRaw, int delta)
         {
             if (faction < 0 || faction >= world.Factions.Length || radiusRaw < 0) return;
             ref var state = ref world.Factions[faction];
