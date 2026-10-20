@@ -8,6 +8,9 @@
     <!-- #448: .NET 10 dynamic PGO crashed the runtime (Internal CLR error in ContractList.Copy) on this Zen 4 PC,
          about 18 of 40 large-map runs; with PGO off 0 of 40. Headless only (the player build is IL2CPP). -->
     <TieredPGO>false</TieredPGO>
+    <!-- #448: PGO off was not enough (1 of 3 runs still crashed); on-stack replacement of long tier-0 loops is the
+         remaining suspect. Loops start fully optimised instead (0 of 3 with this setting, also 0 with OSR off). -->
+    <TieredCompilationQuickJitForLoops>false</TieredCompilationQuickJitForLoops>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Rts.Core/Rts.Core.csproj" />

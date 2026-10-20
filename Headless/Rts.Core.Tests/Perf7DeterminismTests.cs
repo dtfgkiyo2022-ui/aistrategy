@@ -64,7 +64,10 @@ namespace Rts.Core.Tests
             ScenarioScale.MultiplyForMeasurement(scenario, 4, 8);
             var optimized = new Battle(scenario);
             var legacy = new Battle(scenario, null, true, true);
-            for (long tick = 1; tick <= 12000 && (!optimized.Capture(1).Result.HasEnded || !legacy.Capture(1).Result.HasEnded); tick++)
+            // 4000 ticks: two full canonical-state copies per tick on the scaled large map ran the full suite out of memory
+            // at 12000 (10-20). The 12000-tick comparison is the recorded-replay check (record with the previous build,
+            // replay with this one), which streams the hashes instead of holding both states.
+            for (long tick = 1; tick <= 4000 && (!optimized.Capture(1).Result.HasEnded || !legacy.Capture(1).Result.HasEnded); tick++)
             {
                 optimized.Step(tick, Array.Empty<ScheduledInput>());
                 legacy.Step(tick, Array.Empty<ScheduledInput>());
