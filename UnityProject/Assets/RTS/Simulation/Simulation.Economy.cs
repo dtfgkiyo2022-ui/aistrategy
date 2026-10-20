@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Contracts;
 using Rts.Decision;
 
@@ -20,6 +21,7 @@ namespace Rts.Simulation
         private bool BuildingReservationsOn => EconomyOn && world.Config.Economy.BuildingReservations;
         private bool NoNegativeStockOn => EconomyOn && world.Config.Economy.NoNegativeStock;
         private bool EconomyScaleOn => EconomyOn && world.Config.Economy.EconomyScale;
+        private bool LargeEconomyOn => EconomyOn && world.Config.Economy.LargeEconomy;
 
         /// <summary>V3-5: how far ahead one stock must be before idle villagers go to the other.</summary>
         private const int StockGap = 300, WoodFloor = 150, MinimumFoodGatherers = 3, MinimumWoodGatherers = 2;
@@ -43,10 +45,14 @@ namespace Rts.Simulation
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
                     DecideAdvance(faction);
                     bool tool = CanUseToolForVillager(faction);
-                    if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
-                        VillagerFoodCostFor(faction, tool), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit))
+                    bool shouldTrainVillager = LargeEconomyOn
+                        ? ShouldTrainLargeVillagers(faction, villagers, plan.VillagerTarget)
+                        : EconomyDecision.ShouldTrainVillager(villagers, economy.Queued, plan.VillagerTarget, economy.Food,
+                            VillagerFoodCostFor(faction, tool), villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction), PopCapFor(faction), rules.QueueLimit);
+                    if (!economy.CoreHeld && !HumanRegionAt(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position) && economy.AdvanceRemaining == 0 && shouldTrainVillager)
                     {
-                        EnqueueCoreVillager(faction);
+                        if (LargeEconomyOn) EnqueueCoreVillagerBatch(faction);
+                        else EnqueueCoreVillager(faction);
                     }
                     ResumeUnbuilt(faction);
                     DecideHouse(faction);
@@ -72,6 +78,17 @@ namespace Rts.Simulation
                 }
                 finally { automaticEconomyAction = false; }
             }
+        }
+
+        private bool ShouldTrainLargeVillagers(uint faction, int villagers, int target)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Queued != 0 || villagers >= target || economy.Food < VillagerFoodCostFor(faction, CanUseToolForVillager(faction))) return false;
+            int batch = Math.Min(rules.LargeVillagerBatch, target - villagers);
+            int population = villagers + LivingSoldiers(faction) + QueuedInfantry(faction) + QueuedTownVillagers(faction);
+            int room = PopCapFor(faction) - population;
+            return batch > 0 && batch <= rules.QueueLimit && batch <= room;
         }
 
         /// <summary>Movement phase, after the soldiers: idle villagers are given work, then every villager steps.</summary>
@@ -200,7 +217,9 @@ namespace Rts.Simulation
                     if (!InRange(v.Position, drop.point, drop.reach)) continue;
                     if (ProcessingKilnTarget(v))
                     {
+                        int delivered = v.Carry;
                         if (!TryDeliverWoodToKiln(ref v)) AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, delivered - v.Carry);
                         if (v.Carry > 0) continue; // a full kiln is a deliberate hand-haul wait state
                         if (v.HaulTo != 0 && AssignKilnWood(ref v, v.HaulTo)) continue;
                         v.HaulTo = 0; v.Task = VillagerTask.Idle;
@@ -211,12 +230,15 @@ namespace Rts.Simulation
                         if (drop.storageId > world.BuildingCount) continue;
                         ref var storage = ref world.Buildings[drop.storageId - 1];
                         int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, stored);
                         v.Carry -= stored;
                         if (v.Carry > 0) continue;
                     }
                     else
                     {
+                        int delivered = v.Carry;
                         AddStock(v.FactionId, v.CarryKind, v.Carry);
+                        RecordLargeDelivery(v, v.CarryKind, delivered);
                         v.Carry = 0;
                     }
                     if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
@@ -256,16 +278,20 @@ namespace Rts.Simulation
                 if (economy.TrainRemaining > 0) economy.TrainRemaining--;
                 if (economy.TrainRemaining > 0) continue;
                 uint faction = (uint)f + 1;
-                // A full population holds the finished villager at the door until there is room.
-                if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) continue;
-                SpawnVillager(faction);
-                economy.Queued--;
-                if (economy.QueueTools != null && economy.QueueTools.Length > 0)
+                int productionBatch = LargeEconomyOn ? world.Config.Economy.LargeVillagerBatch : 1;
+                for (int produced = 0; produced < productionBatch && economy.Queued > 0; produced++)
                 {
-                    var rest = new bool[economy.QueueTools.Length - 1];
-                    Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                    // A full population holds the finished villager at the door until there is room.
+                    if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) break;
+                    SpawnVillager(faction);
+                    economy.Queued--;
+                    if (economy.QueueTools != null && economy.QueueTools.Length > 0)
+                    {
+                        var rest = new bool[economy.QueueTools.Length - 1];
+                        Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                    }
+                    economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
                 }
-                economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
             }
         }
 
@@ -339,6 +365,7 @@ namespace Rts.Simulation
 
         private ResourceKind WorkKindFor(VillagerState v)
         {
+            if (LargeEconomyOn) return LargeWorkKindFor(v);
             int food = 0, wood = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -369,6 +396,72 @@ namespace Rts.Simulation
             }
             return kind;
         }
+
+        private ResourceKind LargeWorkKindFor(VillagerState v)
+        {
+            RefreshLargeWorkCounts();
+            int factionIndex = checked((int)v.FactionId - 1);
+            ref var economy = ref world.Economies[factionIndex];
+            int food = largeWorkCounts[factionIndex * 6 + 0];
+            int wood = largeWorkCounts[factionIndex * 6 + 1];
+            int stone = largeWorkCounts[factionIndex * 6 + 2];
+            int villagers = largeVillagerCounts[factionIndex];
+            int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
+            int desiredTowns = villagers < townVillagers ? 0
+                : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townVillagers));
+            int townVillagerThreshold = world.Config.Economy.LargeTownVillagersPerTown;
+            bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
+                && economy.Stone < world.Config.Economy.TownStoneCost;
+            int barracksVillagers = world.Config.Economy.LargeBarracksVillagersPerBuilding;
+            bool barracksNeedsWood = largeBarracksCounts[factionIndex] < Math.Min(world.Config.Economy.LargeBarracksMaxBuildings,
+                Math.Max(1, villagers / barracksVillagers)) && economy.Wood < world.Config.Economy.BarracksWoodCost;
+            // Keep the next ordinary-cost building payable before balancing the long-run food line. Food has priority
+            // when the next villager batch is not covered; the reserve is a scheduling threshold only, and the
+            // authoritative prices remain in EconomyRules' ordinary fields.
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            // A remote stone cluster is intentionally far away. Start that line once a small food floor is staffed;
+            // waiting for the global food buffer to be full leaves no worker able to fund the first town.
+            int stoneTarget = villagers < townVillagerThreshold
+                ? Math.Max(1, world.Config.Economy.LargeTownStoneGatherers / 3)
+                : world.Config.Economy.LargeTownStoneGatherers;
+            if (townNeedsStone && food >= stoneTarget * 2 && stone < stoneTarget) return ResourceKind.Stone;
+            if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return ResourceKind.Wood;
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return ResourceKind.Food;
+            return EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood);
+        }
+
+        private void RefreshLargeWorkCounts()
+        {
+            if (!LargeEconomyOn || largeWorkCountsTick == world.Tick) return;
+            Array.Clear(largeWorkCounts, 0, largeWorkCounts.Length);
+            Array.Clear(largeVillagerCounts, 0, largeVillagerCounts.Length);
+            Array.Clear(largeTownCounts, 0, largeTownCounts.Length);
+            Array.Clear(largeBarracksCounts, 0, largeBarracksCounts.Length);
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId < 1 || v.FactionId > 2) continue;
+                int factionIndex = (int)v.FactionId - 1;
+                largeVillagerCounts[factionIndex]++;
+                if (v.NodeId == 0 || v.NodeId > world.Nodes.Length
+                    || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
+                int resource = LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind);
+                if (resource >= 0) largeWorkCounts[factionIndex * 6 + resource]++;
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || b.FactionId < 1 || b.FactionId > 2) continue;
+                int factionIndex = (int)b.FactionId - 1;
+                if (b.Kind == BuildingKind.Town) largeTownCounts[factionIndex]++;
+                else if (b.Kind == BuildingKind.Barracks) largeBarracksCounts[factionIndex]++;
+            }
+            largeWorkCountsTick = world.Tick;
+        }
+
+        private static int LargeWorkResourceIndex(ResourceKind kind)
+            => kind == ResourceKind.Food ? 0 : kind == ResourceKind.Wood ? 1 : kind == ResourceKind.Stone ? 2
+                : kind == ResourceKind.Ore ? 3 : kind == ResourceKind.Gold ? 4 : kind == ResourceKind.Metal ? 5 : -1;
 
         private bool AiArmyRecoveryOn => EconomyOn && world.Config.Economy.AiArmyRecovery;
         private bool LineBuildingCheckOn => EconomyOn && world.Config.Economy.LineBuildingCheck;
@@ -407,8 +500,12 @@ namespace Rts.Simulation
 
         private int NearestWorkNode(SimPoint position, ResourceKind kind, uint faction)
         {
-            if (kind == ResourceKind.Gold) return NearestGoldNode(position, faction);
-            if (ResourceFogOn)
+            if (kind == ResourceKind.Gold && !LargeEconomyOn) return NearestGoldNode(position, faction);
+            if (LargeEconomyOn) return NearestLargeWorkNode(position, kind, faction);
+            // LargeEconomy's authored large map has deterministic symmetric resource placement. Its automatic economy
+            // may plan against the full placement so a side does not exhaust its starting wood while waiting for a
+            // scout; ordinary fogged maps retain the explored-only rule.
+            if (ResourceFogOn && !LargeEconomyOn)
             {
                 int best = -1;
                 long bestDistance = 0;
@@ -430,6 +527,95 @@ namespace Rts.Simulation
             var remaining = new int[n];
             for (int i = 0; i < n; i++) { positions[i] = world.Nodes[i].Definition.Position; kinds[i] = world.Nodes[i].Definition.Kind; remaining[i] = world.Nodes[i].Remaining; }
             return EconomyDecision.NearestNode(position, positions, kinds, remaining, kind);
+        }
+
+        private void EnsureLargeResourceClusters()
+        {
+            if (!LargeEconomyOn || largeNodeClusters != null) return;
+            int count = world.Nodes.Length;
+            var parent = new int[count];
+            for (int i = 0; i < count; i++) parent[i] = i;
+            var radius = Fix64.FromInt(world.Config.Economy.LargeResourceClusterRadiusMeters);
+            for (int i = 0; i < count; i++)
+                for (int j = i + 1; j < count; j++)
+                {
+                    if (world.Nodes[i].Definition.Kind != world.Nodes[j].Definition.Kind
+                        || !InRange(world.Nodes[i].Definition.Position, world.Nodes[j].Definition.Position, radius)) continue;
+                    int left = FindClusterRoot(parent, i), right = FindClusterRoot(parent, j);
+                    if (left != right) parent[Math.Max(left, right)] = Math.Min(left, right);
+                }
+            var rootToCluster = new int[count]; Array.Fill(rootToCluster, -1);
+            var sizes = new int[count]; int clusterCount = 0;
+            largeNodeClusters = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                int root = FindClusterRoot(parent, i);
+                int cluster = rootToCluster[root];
+                if (cluster < 0) { cluster = clusterCount++; rootToCluster[root] = cluster; }
+                largeNodeClusters[i] = cluster;
+                sizes[cluster]++;
+            }
+            largeClusterNodes = new int[clusterCount][];
+            largeClusterKinds = new ResourceKind[clusterCount];
+            largeClusterAnchors = new int[clusterCount];
+            for (int cluster = 0; cluster < clusterCount; cluster++) largeClusterNodes[cluster] = new int[sizes[cluster]];
+            Array.Clear(sizes, 0, sizes.Length);
+            for (int i = 0; i < count; i++)
+            {
+                int cluster = largeNodeClusters[i];
+                largeClusterNodes[cluster][sizes[cluster]++] = i;
+                largeClusterKinds[cluster] = world.Nodes[i].Definition.Kind;
+                if (largeClusterNodes[cluster][0] == i) largeClusterAnchors[cluster] = i;
+            }
+        }
+
+        private static int FindClusterRoot(int[] parent, int value)
+        {
+            int root = value;
+            while (parent[root] != root) root = parent[root];
+            while (parent[value] != value)
+            {
+                int next = parent[value]; parent[value] = root; value = next;
+            }
+            return root;
+        }
+
+        private int NearestLargeWorkNode(SimPoint position, ResourceKind kind, uint faction)
+        {
+            EnsureLargeResourceClusters();
+            int bestCluster = -1;
+            BigInteger bestDropDistance = default;
+            uint bestAnchorId = 0;
+            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+            {
+                if (largeClusterKinds[cluster] != kind || ClusterRemaining(cluster) <= 0) continue;
+                var anchor = world.Nodes[largeClusterAnchors[cluster]].Definition.Position;
+                var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
+                var drop = DropOff(probe).point;
+                var distance = DistanceSquared(anchor, drop);
+                uint anchorId = world.Nodes[largeClusterAnchors[cluster]].Definition.Id;
+                if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
+                { bestCluster = cluster; bestDropDistance = distance; bestAnchorId = anchorId; }
+            }
+            if (bestCluster < 0) return -1;
+            int best = -1; BigInteger bestDistance = default; uint bestId = 0;
+            foreach (int nodeIndex in largeClusterNodes[bestCluster])
+            {
+                var node = world.Nodes[nodeIndex];
+                if (node.Remaining <= 0) continue;
+                var distance = DistanceSquared(position, node.Definition.Position);
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
+                { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
+            }
+            return best;
+        }
+
+        private int ClusterRemaining(int cluster)
+        {
+            int remaining = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+                remaining = checked(remaining + Math.Max(0, world.Nodes[nodeIndex].Remaining));
+            return remaining;
         }
 
         private int NearestGoldNode(SimPoint position, uint faction)
@@ -572,6 +758,15 @@ namespace Rts.Simulation
 
         private void SetWorkNode(ref VillagerState v, int index)
         {
+            if (LargeEconomyOn && largeWorkCountsTick == world.Tick)
+            {
+                int oldResource = v.NodeId > 0 && v.NodeId <= world.Nodes.Length
+                    && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering || v.Task == VillagerTask.ToDropOff)
+                    ? LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind) : -1;
+                if (oldResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + oldResource]--;
+                int newResource = LargeWorkResourceIndex(world.Nodes[index].Definition.Kind);
+                if (newResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + newResource]++;
+            }
             v.NodeId = world.Nodes[index].Definition.Id;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }

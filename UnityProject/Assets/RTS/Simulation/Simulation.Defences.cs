@@ -339,6 +339,9 @@ namespace Rts.Simulation
         private void DecideTower(uint faction)
         {
             if (!AgesOn || !CivLineStarted(faction)) return;
+            // On the large map a remote town is the next economy base. Do not spend its ordinary-cost stone on
+            // optional towers until the town target has been funded; the normal map keeps the historical tower order.
+            if (LargeEconomyOn && LargeTownNeedsFunding(faction)) return;
             var rules = world.Config.Economy;
             var economy = world.Economies[faction - 1];
             if (economy.Wood < WoodOf(BuildingKind.Tower, faction) || economy.Stone < StoneOf(BuildingKind.Tower, faction)) return;
@@ -356,6 +359,15 @@ namespace Rts.Simulation
             if (towers >= towerLimit) return;
             int origin = FindSite(faction, rules.TowerSizeCells);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Tower, origin, Facing.North, 0);
+        }
+
+        private bool LargeTownNeedsFunding(uint faction)
+        {
+            int villagers = LivingVillagers(faction);
+            int townsPerVillagers = world.Config.Economy.LargeTownVillagersPerTown;
+            if (villagers < townsPerVillagers) return false;
+            int target = Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townsPerVillagers));
+            return TownCount(faction) < target;
         }
     }
 }

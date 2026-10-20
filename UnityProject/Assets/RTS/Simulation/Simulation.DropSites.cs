@@ -238,6 +238,11 @@ namespace Rts.Simulation
         /// </summary>
         private void DecideDropSite(uint faction)
         {
+            if (LargeEconomyOn)
+            {
+                DecideLargeClusterDropSite(faction);
+                return;
+            }
             // Not while the civilisation's own line is still waiting for its wood. While saving to advance, only from the
             // wood beyond the advance price: the drop-off used to wait for the whole saving, and when food was what was
             // missing, villagers walked to far food with a thousand wood in store and the age never came (10-10).
@@ -291,6 +296,98 @@ namespace Rts.Simulation
             if (DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
             int origin = FindSiteNear(faction, rules.DropSiteSizeCells, world.Map.Cell(world.Nodes[bestNode].Definition.Position));
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+        }
+
+        private void DecideLargeClusterDropSite(uint faction)
+        {
+            if (!AgesOn || world.Tick % world.Config.Economy.LargeClusterDecisionIntervalTicks != 0) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.AutoOff || economy.Wood < rules.DropSiteWoodCost) return;
+            EnsureLargeResourceClusters();
+            int maxSites = rules.LargeResourceClusterMaxDropSites;
+            if (AliveDropSites(faction) >= maxSites)
+            {
+                DecideAiRawBelts(faction);
+                return;
+            }
+            var gatherers = new int[largeClusterNodes.Length];
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.NodeId == 0 || v.NodeId > world.Nodes.Length
+                    || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
+                gatherers[largeNodeClusters[v.NodeId - 1]]++;
+            }
+            int best = -1, bestGatherers = 0, bestRoundTrip = 0; uint bestId = 0;
+            for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
+            {
+                if (ClusterRemaining(cluster) <= 0 || gatherers[cluster] < rules.LargeClusterMinGatherers) continue;
+                var kind = largeClusterKinds[cluster];
+                if (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone
+                    && kind != ResourceKind.Ore && kind != ResourceKind.Gold && kind != ResourceKind.Metal) continue;
+                var anchor = world.Nodes[largeClusterAnchors[cluster]].Definition.Position;
+                var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, NodeId = world.Nodes[largeClusterAnchors[cluster]].Definition.Id,
+                    Task = VillagerTask.ToDropOff };
+                var drop = DropOff(probe).point;
+                int roundTrip = LargeClusterRoundTripTicks(faction, cluster, drop);
+                // A legal site can be a few cells away from the node because of terrain and clearances. If the first
+                // site still leaves this cluster over target, allow another site while the explicit LargeEconomy cap has room.
+                if (roundTrip <= rules.LargeTargetRoundTripTicks) continue;
+                uint id = world.Nodes[largeClusterAnchors[cluster]].Definition.Id;
+                // Serve the worst transport first. This prevents a populous food cluster from consuming the cap while
+                // a smaller but much farther stone/ore cluster keeps every load walking to the core.
+                if (best < 0 || roundTrip > bestRoundTrip
+                    || roundTrip == bestRoundTrip && (gatherers[cluster] > bestGatherers
+                        || gatherers[cluster] == bestGatherers && id < bestId))
+                {
+                    best = cluster; bestGatherers = gatherers[cluster]; bestRoundTrip = roundTrip; bestId = id;
+                }
+            }
+            if (best < 0) return;
+            var bestAnchor = world.Nodes[largeClusterAnchors[best]].Definition.Position;
+            var bestProbe = new VillagerState { FactionId = faction, Position = bestAnchor, CarryKind = largeClusterKinds[best],
+                NodeId = world.Nodes[largeClusterAnchors[best]].Definition.Id, Task = VillagerTask.ToDropOff };
+            int preferredCell = LargeClusterFarthestNodeCell(faction, best, DropOff(bestProbe).point);
+            if (preferredCell < 0) preferredCell = world.Map.Cell(bestAnchor);
+            int origin = FindSiteNear(faction, rules.DropSiteSizeCells, preferredCell);
+            if (origin >= 0)
+            {
+                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+                // A new local receiver changes the next deterministic cluster choice on this tick.
+                largeWorkCountsTick = -1;
+            }
+        }
+
+        private int LargeClusterRoundTripTicks(uint faction, int cluster, SimPoint drop)
+        {
+            long total = 0; int count = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+            {
+                var node = world.Nodes[nodeIndex];
+                if (node.Remaining <= 0) continue;
+                var route = world.Map.SharedRoute(world.Map.Cell(node.Definition.Position), drop, faction);
+                if (route.Length <= 0) continue;
+                long distanceRaw = checked((long)(route.Length - 1) * world.Config.Map.CellSizeMeters * 65536L);
+                long oneWay = checked((distanceRaw * 2 + world.VillagerStep.Raw - 1) / world.VillagerStep.Raw);
+                total = checked(total + oneWay * 2);
+                count++;
+            }
+            return count == 0 ? int.MaxValue : checked((int)(total / count));
+        }
+
+        private int LargeClusterFarthestNodeCell(uint faction, int cluster, SimPoint drop)
+        {
+            int best = -1, bestLength = -1; uint bestId = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+            {
+                var node = world.Nodes[nodeIndex];
+                if (node.Remaining <= 0) continue;
+                int length = world.Map.SharedRoute(world.Map.Cell(node.Definition.Position), drop, faction).Length;
+                if (length > bestLength || length == bestLength && node.Definition.Id < bestId)
+                { best = nodeIndex; bestLength = length; bestId = node.Definition.Id; }
+            }
+            return best < 0 ? -1 : world.Map.Cell(world.Nodes[best].Definition.Position);
         }
 
         /// <summary>

@@ -15,7 +15,6 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private const int SiteSearchRadiusCells = 30, CoreClearanceCells = 4, NodeClearanceCells = 2, BuildingClearanceCells = 2;
-        private const int TownAutoWorkers = 4;
         // V3-11 #4 provisional simultaneous bridge limit. It is deliberately a simulation rule rather than a
         // contract field, so enabling bridges does not alter the old scenario bytes.
         private const int MaxActiveBridges = 3;
@@ -33,6 +32,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            if (LargeEconomyOn) DecideTown(faction);
             bool hasBarracks = false, ready = false;
             int barracks = -1, barracksCount = 0;
             for (int i = 0; i < world.BuildingCount; i++)
@@ -46,14 +46,16 @@ namespace Rts.Simulation
             }
             if (EconomyScaleOn)
             {
-                int desired = Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
+                int desired = LargeEconomyOn
+                    ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
+                    : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
                 bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
                 if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
                     PlaceBarracks(faction);
             }
             else if (EconomyDecision.ShouldBuildBarracks(hasBarracks, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
                 PlaceBarracks(faction);
-            DecideTown(faction);
+            if (!LargeEconomyOn) DecideTown(faction);
             DecideSanctuaryShrine(faction);
             if (barracks < 0) return;
             if (CultAllowed(faction) && !DecideCultMonastery(faction)) return;
@@ -111,7 +113,13 @@ namespace Rts.Simulation
                 var special = SpecialUnit(faction);
                 kind = special != 0 && CanPay(faction, special) && 2 * CountClass(faction, special) < CountClass(faction, UnitKind.Infantry) ? special : UnitKind.Infantry;
             }
-            Enqueue(faction, ref building, kind);
+            int batch = LargeEconomyOn ? Math.Min(rules.LargeInfantryBatch,
+                Math.Min(rules.QueueLimit - building.Queued, PlanOf(faction).InfantryQueue - building.Queued)) : 1;
+            for (int i = 0; i < batch; i++)
+            {
+                if (!HasRoomFor(faction, kind) || !CanPay(faction, kind)) break;
+                Enqueue(faction, ref building, kind);
+            }
             return true;
         }
 
@@ -139,6 +147,7 @@ namespace Rts.Simulation
         {
             if (!TownsAllowed(faction)) return;
             var rules = world.Config.Economy;
+            if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
                 || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost
@@ -160,14 +169,20 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             // Villagers only (not soldiers) count toward the villager target; CanTrainTownVillager checks the population cap.
             int villagers = LivingVillagers(faction) + economy.Queued + QueuedTownVillagers(faction);
-            if (villagers >= PlanOf(faction).VillagerTarget) return;
+            int target = PlanOf(faction).VillagerTarget + (LargeEconomyOn ? TownCount(faction) * rules.LargeVillagerBatch : 0);
+            if (villagers >= target) return;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 ref var town = ref world.Buildings[i];
                 if (!IsActualBuilding(town) || !town.Complete || town.Held || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
-                if (villagers >= PlanOf(faction).VillagerTarget || !CanTrainTownVillager(faction, town)) return;
-                EnqueueTownVillager(faction, ref town);
-                villagers++;
+                if (villagers >= target || !CanTrainTownVillager(faction, town)) return;
+                int batch = LargeEconomyOn ? Math.Min(rules.LargeVillagerBatch, target - villagers) : 1;
+                for (int q = 0; q < batch && villagers < target; q++)
+                {
+                    if (!CanTrainTownVillager(faction, town)) break;
+                    EnqueueTownVillager(faction, ref town);
+                    villagers++;
+                }
             }
         }
 
@@ -188,12 +203,14 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var candidate = world.Nodes[i];
-                if (!ResourceKnownToFaction(faction, i) || candidate.Remaining <= 0 || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                if ((!LargeEconomyOn && !ResourceKnownToFaction(faction, i)) || candidate.Remaining <= 0
+                    || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
                 int count = 0, amount = 0;
                 for (int j = 0; j < world.Nodes.Length; j++)
                 {
                     var node = world.Nodes[j];
-                    if (!ResourceKnownToFaction(faction, j) || node.Remaining <= 0 || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
+                    if ((!LargeEconomyOn && !ResourceKnownToFaction(faction, j)) || node.Remaining <= 0
+                        || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
                     count++; amount = checked(amount + node.Remaining);
                 }
                 if (count > bestCount || count == bestCount && (amount > bestAmount || amount == bestAmount && candidate.Definition.Id < world.Nodes[best].Definition.Id))
@@ -205,7 +222,8 @@ namespace Rts.Simulation
         private void AssignTownWorkers(BuildingState town)
         {
             if (town.Held || !TownsOn || HumanRegionAt(town.FactionId, BuildingCenter(town))) return;
-            for (int assigned = 0; assigned < TownAutoWorkers; assigned++)
+            int workerLimit = LargeEconomyOn ? world.Config.Economy.LargeTownAutoWorkers : 4;
+            for (int assigned = 0; assigned < workerLimit; assigned++)
             {
                 int villager = -1, node = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
@@ -232,7 +250,8 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (!ResourceKnownToFaction(town.FactionId, i) || node.Remaining <= 0 || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
+                if ((!LargeEconomyOn && !ResourceKnownToFaction(town.FactionId, i)) || node.Remaining <= 0
+                    || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
                 var distance = DistanceSquared(from, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
                 { best = i; bestDistance = distance; }
@@ -358,6 +377,10 @@ namespace Rts.Simulation
         private void PlaceBuildingAt(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId, int[] bridgeCells, int requestedWorkCell = -1, int existingIndex = -1)
         {
             if (automaticEconomyAction && RegionsOn && !RegionAllowsAiBuilding(faction, origin, SizeOf(kind))) return;
+            // LargeEconomy funds its next remote town before optional stone structures. Human placement and ordinary
+            // maps keep their existing construction order; the town itself is allowed through this guard.
+            if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
+                && LargeTownNeedsFunding(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
@@ -762,7 +785,8 @@ namespace Rts.Simulation
         {
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int size = world.Config.Economy.TownSizeCells, cx = centre % width, cz = centre / width;
-            for (int r = 0; r <= SiteSearchRadiusCells; r++)
+            int searchRadius = LargeEconomyOn ? Math.Max(width, height) : SiteSearchRadiusCells;
+            for (int r = 0; r <= searchRadius; r++)
                 for (int dz = -r; dz <= r; dz++)
                     for (int dx = -r; dx <= r; dx++)
                     {
@@ -938,27 +962,34 @@ namespace Rts.Simulation
                 if (!IsActualBuilding(b) || !b.Complete || BuildingPaused(b) || b.Queued == 0) continue;
                 if (b.TrainRemaining > 0) b.TrainRemaining--;
                 if (b.TrainRemaining > 0) continue;
+                int productionBatch = LargeEconomyOn ? (b.Kind == BuildingKind.Town ? rules.LargeVillagerBatch : rules.LargeInfantryBatch) : 1;
                 if (b.Kind == BuildingKind.Town)
                 {
-                    if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
-                    SpawnVillager(b.FactionId, world.Map.Center(b.WorkCell));
-                    b.Queued--;
-                    if (b.QueueTools != null && b.QueueTools.Length > 0)
+                    for (int produced = 0; produced < productionBatch && b.Queued > 0; produced++)
                     {
-                        var tools = new bool[b.QueueTools.Length - 1];
-                        Array.Copy(b.QueueTools, 1, tools, 0, tools.Length); b.QueueTools = tools;
-                    }
-                    b.TrainRemaining = b.Queued > 0 ? VillagerTrainTicksFor(b.FactionId, QueueToolsAt(b, 0)) : 0;
-                    if (b.QueueKinds != null && b.QueueKinds.Length > 0)
-                    {
-                        var kinds = new UnitKind[b.QueueKinds.Length - 1];
-                        Array.Copy(b.QueueKinds, 1, kinds, 0, kinds.Length);
-                        b.QueueKinds = kinds;
+                        if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) break;
+                        SpawnVillager(b.FactionId, world.Map.Center(b.WorkCell));
+                        if (LargeEconomyOn) largeTownVillagersProduced[b.FactionId - 1]++;
+                        b.Queued--;
+                        if (b.QueueTools != null && b.QueueTools.Length > 0)
+                        {
+                            var tools = new bool[b.QueueTools.Length - 1];
+                            Array.Copy(b.QueueTools, 1, tools, 0, tools.Length); b.QueueTools = tools;
+                        }
+                        if (b.QueueKinds != null && b.QueueKinds.Length > 0)
+                        {
+                            var kinds = new UnitKind[b.QueueKinds.Length - 1];
+                            Array.Copy(b.QueueKinds, 1, kinds, 0, kinds.Length);
+                            b.QueueKinds = kinds;
+                        }
+                        b.TrainRemaining = b.Queued > 0 ? VillagerTrainTicksFor(b.FactionId, QueueToolsAt(b, 0)) : 0;
                     }
                     continue;
                 }
                 // A full population or full armies hold the finished soldier at the door until there is room.
-                if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) continue;
+                for (int produced = 0; produced < productionBatch && b.Queued > 0; produced++)
+                {
+                if (LivingVillagers(b.FactionId) + LivingSoldiers(b.FactionId) >= PopCapFor(b.FactionId)) break;
                 var unit = QueueAt(b, 0);
                 bool rationed = RationsOn && QueueRationsAt(b, 0);
                 bool planked = PlanksOn && QueuePlanksAt(b, 0);
@@ -1007,6 +1038,7 @@ namespace Rts.Simulation
                 if (rationed) world.Economies[b.FactionId - 1].RationsTrainedSoldiers++;
                 if (unit == UnitKind.HeavyCavalry) world.Economies[b.FactionId - 1].TackTrainedHeavyCavalry++;
                 Dequeue(b.FactionId, ref b, unit);
+                }
             }
         }
 

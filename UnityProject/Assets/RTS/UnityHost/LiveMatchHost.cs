@@ -599,9 +599,9 @@ namespace Rts.UnityHost
         // IMapChoice (Ver.3): a random map with the economy, or the Ver.1 two-road map. The seed is picked here, outside
         // the simulation, and the generated map goes into the replay whole, so the wall clock never reaches a decision.
         [SerializeField] private bool economyMap = true;
-        // S-2 trial switch. It is deliberately separate from EconomyMap and defaults off; presentation bounds are not
-        // changed here because the presentation owner handles the large-map camera and overlay work.
-        [SerializeField] private bool largeMap = false;
+        // S-2 switch, separate from EconomyMap. On by default since 10-20 (owner): the game is built for about 2600 units
+        // on the large map with LargeEconomy; the small map is provisional and no longer tested.
+        [SerializeField] private bool largeMap = true;
         private ulong mapSeed;
         private EconomyLayer economyLayer;
         private EconomyPanel economyPanel;
@@ -851,10 +851,12 @@ namespace Rts.UnityHost
             // The rules of the played game (LiveGameRules): everything implemented is on so a test play can try it (10-09).
             // Large-army test play (10-19): "-rts-villager-scale V -rts-army-scale A" multiplies the live match with the
             // stage-5 measurement helper on the large map, so the owner can try ~2600 units. It is not a game rule.
+            // "-rts-large-map" alone plays the large map with its own rules (LargeEconomy: 300 villagers, ~1000 soldiers).
             int villagerScale = CommandLineScale("-rts-villager-scale"), armyScale = CommandLineScale("-rts-army-scale");
             bool scaledPlay = economyMap && ScenarioMultiplier == 1 && (villagerScale > 1 || armyScale > 1);
             var scenario = economyMap && ScenarioMultiplier == 1
-                ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay, allCivilisations, monks, ageVictory)
+                ? LiveGameRules.Create(mapSeed, largeMap || scaledPlay || Environment.GetCommandLineArgs().Contains("-rts-large-map"),
+                    allCivilisations, monks, ageVictory)
                 : ScenarioScale.Multiply(WeekTwoScenario.Create(), ScenarioMultiplier);
             if (scaledPlay) scenario = ScenarioScale.MultiplyForMeasurement(scenario, villagerScale, armyScale);
             currentScenario = scenario;

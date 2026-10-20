@@ -154,7 +154,8 @@ namespace Rts.Simulation
             var home = GrowthHomeObjective(faction, factionState.ArmyIds);
             uint id = world.NextArmyId;
             world.NextArmyId = checked(id + 1);
-            var definition = new ArmyDefinition { Id = id, FactionId = faction, Role = "field", Capacity = ArmyGrowthCapacity,
+            var definition = new ArmyDefinition { Id = id, FactionId = faction, Role = "field",
+                Capacity = LargeEconomyOn ? world.Config.Economy.LargeArmyCapacity : ArmyGrowthCapacity,
                 HomeObjective = home };
             Array.Resize(ref world.Armies, world.Armies.Length + 1);
             world.Armies[id - 1] = new ArmyState { Definition = definition, AutoStartIds = Array.Empty<uint>(), SoldierIds = Array.Empty<uint>(), Path = Array.Empty<int>() };
