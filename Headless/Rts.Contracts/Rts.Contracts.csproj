@@ -8,6 +8,7 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.Perf7Tests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Contracts/**/*.cs" />
   </ItemGroup>
 </Project>
