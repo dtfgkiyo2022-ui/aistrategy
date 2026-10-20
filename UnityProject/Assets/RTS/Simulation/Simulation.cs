@@ -44,6 +44,8 @@ namespace Rts.Simulation
         private readonly int[] largeTownVillagersProduced = new int[2];
 
         private readonly Action<string, bool> measure;
+        // Test-only comparison path; the shipped simulation always uses the optimized index.
+        private readonly bool useLegacySpatialCombatIndex;
 
         /// <summary>
         /// Debug re-run only (chapter 13.3): receives the phase ordinal, its name and the SHA-256 of the canonical
@@ -55,8 +57,14 @@ namespace Rts.Simulation
 
         // Diagnostic observer only; never read back into simulation decisions or canonical state.
         public Simulation(ScenarioDefinition scenario, Action<string, bool> measure = null)
+            : this(scenario, measure, false)
+        {
+        }
+
+        internal Simulation(ScenarioDefinition scenario, Action<string, bool> measure, bool useLegacySpatialCombatIndex)
         {
             this.measure = measure;
+            this.useLegacySpatialCombatIndex = useLegacySpatialCombatIndex;
             world = new WorldState(scenario);
             InitializeSpatialCombatIndex();
             InitializeRegions();
@@ -125,6 +133,13 @@ namespace Rts.Simulation
 
         private void GenerateIntents()
         {
+            uint cachedArmyId = 0;
+            bool cachedHasHumanCommand = false, cachedHumanFocusMovement = false, cachedRegionBlocksMovement = false;
+            bool cachedReturning = false, cachedAllocated = false, cachedReserve = false, cachedDefend = false;
+            bool cachedWaveStaging = false, cachedAuthoritativeAssault = false;
+            Fix64 cachedSearchRange = default;
+            SimPoint cachedHome = default, cachedArmyGoal = default, cachedStagingPoint = default;
+            FactionObservation cachedObservation = null;
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
@@ -133,17 +148,34 @@ namespace Rts.Simulation
                 s.TargetId = 0;
                 if (!s.Alive) continue;
                 ref var a = ref world.Armies[s.Initial.ArmyId - 1];
-                bool hasHumanCommand = world.Config.Economy.DirectPathMovement && a.CommandId != 0 && CommandById(a.CommandId)?.Order.Source == CommandSource.Human;
-                bool humanFocusMovement = world.Config.Economy.DirectPathMovement && hasHumanCommand && a.Policy == PolicyKind.Focus;
-                bool regionBlocksMovement = !hasHumanCommand && RegionBlocksAiArmy(a);
+                if (cachedArmyId != a.Definition.Id)
+                {
+                    cachedArmyId = a.Definition.Id;
+                    cachedHasHumanCommand = world.Config.Economy.DirectPathMovement && a.CommandId != 0 && CommandById(a.CommandId)?.Order.Source == CommandSource.Human;
+                    cachedHumanFocusMovement = world.Config.Economy.DirectPathMovement && cachedHasHumanCommand && a.Policy == PolicyKind.Focus;
+                    cachedRegionBlocksMovement = !cachedHasHumanCommand && RegionBlocksAiArmy(a);
+                    cachedReturning = !(cachedHasHumanCommand && a.Policy == PolicyKind.Focus)
+                        && (a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick);
+                    cachedObservation = decisionObservations[s.Initial.FactionId - 1] ?? frames[s.Initial.FactionId - 1].Observation;
+                    cachedHome = world.Cores[world.Factions[s.Initial.FactionId - 1].CoreId - 1].Definition.Position;
+                    cachedArmyGoal = ArmyGoal(a);
+                    cachedStagingPoint = pushWaveStates[s.Initial.FactionId - 1].StagingPoint;
+                    cachedAllocated = a.Policy == 0 || a.Policy == PolicyKind.Focus;
+                    cachedReserve = cachedAllocated && (a.Decision.Assignment == AssignmentKind.Reserve || a.Decision.Assignment == AssignmentKind.CoreDefense);
+                    cachedDefend = a.Policy == PolicyKind.Defend || cachedAllocated && a.Decision.Assignment == AssignmentKind.Guard;
+                    cachedSearchRange = Fix64.FromInt(cachedReserve ? 24 : cachedDefend ? 12 : 24);
+                    cachedWaveStaging = PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id);
+                    cachedAuthoritativeAssault = IsLatePushAttack(a.Definition.Id);
+                }
+                bool hasHumanCommand = cachedHasHumanCommand;
+                bool humanFocusMovement = cachedHumanFocusMovement;
+                bool regionBlocksMovement = cachedRegionBlocksMovement;
                 uint faction = s.Initial.FactionId;
-                var observation = decisionObservations[faction - 1] ?? frames[faction - 1].Observation;
-                var home = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
-                bool returning = !(hasHumanCommand && a.Policy == PolicyKind.Focus)
-                    && (a.Policy == PolicyKind.Retreat || a.Decision.Returning || a.Policy == 0 && world.Tick < a.Decision.HoldUntilTick);
-                var mission = IsPushWaveAssaultSoldier(s.Initial.Id) ? ArmyGoal(a)
-                    : PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
-                        ? pushWaveStates[faction - 1].StagingPoint : ArmyGoal(a);
+                var observation = cachedObservation;
+                var home = cachedHome;
+                bool returning = cachedReturning;
+                var mission = IsPushWaveAssaultSoldier(s.Initial.Id) ? cachedArmyGoal
+                    : cachedWaveStaging ? cachedStagingPoint : cachedArmyGoal;
                 var input = new TacticalInput(a.Definition.Id, world.Tick, s.Position, mission, home,
                     s.Parameters.Range, world.Config.Rules.CoreRadius, a.Policy, a.Decision.Assignment, returning);
                 ArmyIntent intent;
@@ -204,24 +236,24 @@ namespace Rts.Simulation
                 }
                 else
                 {
-                    bool allocated = a.Policy == 0 || a.Policy == PolicyKind.Focus;
-                    bool reserve = allocated && (a.Decision.Assignment == AssignmentKind.Reserve || a.Decision.Assignment == AssignmentKind.CoreDefense);
-                    bool defend = a.Policy == PolicyKind.Defend || allocated && a.Decision.Assignment == AssignmentKind.Guard;
+                    bool allocated = cachedAllocated;
+                    bool reserve = cachedReserve;
+                    bool defend = cachedDefend;
                     SimPoint searchCenter = reserve ? home : defend ? mission : s.Position;
-                    Fix64 searchRange = Fix64.FromInt(reserve ? 24 : defend ? 12 : 24);
+                    Fix64 searchRange = cachedSearchRange;
                     // Tactics clears a completed return order before evaluating enemies.  Keep the
                     // same query available on the arrival tick; suppressing it unconditionally
                     // changes the decision at the exact tick the soldier reaches its mission.
                     int nearbyEnemies = QueryVisibleEnemies(faction, searchCenter, searchRange);
                     intent = PolicyDecision.Tactics(observation, input, spatialEnemyBuffer, nearbyEnemies, ref s.Pursuit);
                 }
-                bool waveStaging = PushWavesOn && IsPushWaveStagingArmy(a.Definition.Id)
+                bool waveStaging = cachedWaveStaging
                     && !IsPushWaveAssaultSoldier(s.Initial.Id);
                 if (waveStaging && intent.TargetContactId == 0 && intent.TargetObjective.Kind == GoalKind.None)
                     intent = new ArmyIntent(a.Definition.Id, pushWaveStates[faction - 1].StagingPoint, 0, default, false);
                 // A SiegeByAge late push has an authoritative core target. Once a soldier is inside its attack
                 // envelope, do not let a one-tick stale fog observation turn the final approach into idle movement.
-                bool authoritativeAssault = IsLatePushAttack(a.Definition.Id)
+                bool authoritativeAssault = cachedAuthoritativeAssault
                     && (IsPushWaveAssaultSoldier(s.Initial.Id) || !PushWavesOn);
                 if (authoritativeAssault && a.Policy == PolicyKind.Focus && a.Goal.Kind == GoalKind.Core
                     && (!PushWavesOn || intent.TargetContactId == 0))

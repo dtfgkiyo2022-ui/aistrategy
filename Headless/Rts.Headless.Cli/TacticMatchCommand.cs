@@ -33,7 +33,9 @@ internal static class TacticMatchCommand
         bool hasSeed = options.TryGetValue("--map-seed", out var seedText);
         if (hasScenario == hasSeed) throw new InvalidDataException("--scenario または --map-seed の一方を指定してください。");
         string mapSize = options.GetValueOrDefault("--map-size") ?? "normal";
-        if (mapSize != "normal" && mapSize != "large") throw new InvalidDataException("--map-size must be normal or large.");
+        if (mapSize != "normal" && mapSize != "large") throw new InvalidDataException("--map-sizeはnormalまたはlargeです。");
+        if (mapSize != "normal" && (!hasSeed || !options.ContainsKey("--terrain")))
+            throw new InvalidDataException("--map-size largeは--map-seedと--terrainと一緒に指定してください。");
         bool largeMap = mapSize == "large";
         var scenario = hasScenario
             ? JsonInput.Scenario(scenarioPath)
@@ -41,7 +43,7 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), true, true, false, false)
                 : options.ContainsKey("--terrain")
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
-                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), false, true, false, false)
+                ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -81,7 +83,9 @@ internal static class TacticMatchCommand
             phaseMs["allocKB:" + name] = (phaseMs.TryGetValue("allocKB:" + name, out var allocated) ? allocated : 0) + (bytes - phaseStart["alloc:" + name]) / 1024.0;
             phaseMs[name] = (phaseMs.TryGetValue(name, out var sum) ? sum : 0) + (now - began) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
         };
-        var simulation = new Battle(scenario, measure);
+        // The comparison route is measurement-only and is selected by the harness, never by a game scenario or CLI flag.
+        bool legacySpatialCombat = string.Equals(Environment.GetEnvironmentVariable("RTS_PERF5_LEGACY"), "1", StringComparison.Ordinal);
+        var simulation = new Battle(scenario, measure, legacySpatialCombat);
         var gateway = new CommandGateway(simulation);
         var source = new FrameSource(simulation);
         string runtimes = options.GetValueOrDefault("--runtimes") ?? PyodideTacticRuntime.FindDefaultRuntimes();
