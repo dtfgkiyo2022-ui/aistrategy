@@ -10,7 +10,7 @@ namespace Rts.UnityHost
     /// Command boundary between the UI and the real CommandGateway. With delay 0 the order is a direct
     /// standard command; with 0/60/200/400 it goes through the interpretation stub (chapter 11).
     /// </summary>
-    public sealed class LiveCommandPort : ICommandPort, ICommandDelayControl
+    public sealed class LiveCommandPort : IApplicationCommandPort, ICommandDelayControl
     {
         private readonly CommandGateway gateway;
         private readonly int providerDelayTicks;
@@ -43,6 +43,12 @@ namespace Rts.UnityHost
         }
 
         public void Cancel(ulong requestId) { gateway.Cancel(requestId); }
+
+        public ulong SubmitBatch(IReadOnlyList<UserPolicyIntent> intents) { return gateway.SubmitBatch(intents); }
+        public void SubmitEconomy(EconomyCommand command) { gateway.SubmitEconomy(command); }
+        public ulong BeginInterpretation(uint faction, ScopeKey? fixedTarget = null) { return gateway.BeginInterpretation(faction, fixedTarget); }
+        public void EndInterpretation(ulong reservationId) { gateway.EndInterpretation(reservationId); }
+        public bool IsInterpretationOpen(ulong reservationId) { return gateway.IsInterpretationOpen(reservationId); }
 
         public ulong Propose(uint faction, ulong sequence, IReadOnlyList<PolicyOrder> orders, long applyTick)
         {
