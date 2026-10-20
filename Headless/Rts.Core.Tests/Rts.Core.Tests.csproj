@@ -221,5 +221,6 @@
     <Compile Include="AdjacentBuildingsTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/DropSiteLimitEditModeTests.cs" Link="Tests/DropSiteLimitEditModeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/BuildingRelocationUiRulesEditModeTests.cs" Link="Tests/BuildingRelocationUiRulesEditModeTests.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Perf6DecisionTests.cs" Link="Tests/Perf6DecisionTests.cs" />
   </ItemGroup>
 </Project>
