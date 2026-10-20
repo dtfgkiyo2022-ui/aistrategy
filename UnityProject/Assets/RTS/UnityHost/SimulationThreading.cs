@@ -436,8 +436,14 @@ namespace Rts.UnityHost
                     long interval = (long)(tickInterval.TotalSeconds * Stopwatch.Frequency / Math.Max(1, Volatile.Read(ref speed)));
                     next += interval;
                     long remaining = next - Stopwatch.GetTimestamp();
-                    if (remaining > 0) Thread.Sleep((int)Math.Min(20, remaining * 1000L / Stopwatch.Frequency));
-                    else next = Stopwatch.GetTimestamp();
+                    if (remaining <= 0) next = Stopwatch.GetTimestamp();
+                    // Wait for the whole tick interval, in short sleeps so pause, speed and stop still answer quickly.
+                    // (Sleeping only once for at most 20 ms let a light tick run at about twice the chosen speed.)
+                    while (remaining > 0 && Volatile.Read(ref stopRequested) == 0 && Volatile.Read(ref paused) == 0)
+                    {
+                        Thread.Sleep((int)Math.Max(1, Math.Min(20, remaining * 1000L / Stopwatch.Frequency)));
+                        remaining = next - Stopwatch.GetTimestamp();
+                    }
                 }
             }
             catch (Exception e) { Volatile.Write(ref failure, e); }
