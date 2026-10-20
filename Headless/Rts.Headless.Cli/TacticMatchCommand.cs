@@ -329,6 +329,16 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        if (scenario.Economy.LargeEconomy)
+        {
+            var outcomeObservation = simulation.CaptureLargeEconomyObservation();
+            Console.WriteLine("outcome: reason=" + (result.IsFault ? "fault" : result.IsAgeVictory ? "age-victory" : result.HasEnded ? "core-destroyed" : "undecided")
+                + " tick=" + outcomeObservation.Tick.ToString(CultureInfo.InvariantCulture)
+                + " core1Hp=" + outcomeObservation.Factions[0].CoreHp.ToString(CultureInfo.InvariantCulture)
+                + " core1Attackers=" + outcomeObservation.Factions[0].EnemySoldiersAtCore.ToString(CultureInfo.InvariantCulture)
+                + " core2Hp=" + outcomeObservation.Factions[1].CoreHp.ToString(CultureInfo.InvariantCulture)
+                + " core2Attackers=" + outcomeObservation.Factions[1].EnemySoldiersAtCore.ToString(CultureInfo.InvariantCulture));
+        }
         for (uint faction = 1; faction <= 2; faction++)
         {
             var economy = simulation.Capture(faction).Economy;
@@ -379,7 +389,9 @@ internal static class TacticMatchCommand
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
-                prefix + "BarracksResourceWaiting", prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
+                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
+                prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
+                prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -397,14 +409,16 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 35; i++) cells.Add("");
+                for (int i = 0; i < 41; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
             cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
                 value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings, value.BarracksResourceWaiting, value.BarracksPopulationWaiting,
-                value.BarracksTraining }.Select(FormatInvariant));
+                value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
+                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
+                value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
+                value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));

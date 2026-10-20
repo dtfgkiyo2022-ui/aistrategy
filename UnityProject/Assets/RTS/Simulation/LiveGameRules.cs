@@ -128,6 +128,12 @@ namespace Rts.Simulation
             e.LargeClusterDecisionIntervalTicks = 100;
             e.LargeResourceClusterMaxDropSites = 8;
             e.LargeDropSiteMax = 8;
+            e.LargeDropSiteMinSpacingMeters = 24;
+            e.LargeClusterSwitchPermille = 200;
+            e.LargeVillagersPerFarm = 20;
+            e.LargeFarmMinimum = 5;
+            e.LargeFarmMaximum = 32;
+            e.LargeInfantryResourceReserveUnits = 8;
             // DropSiteMax is the existing shared command/frame field. Keep it in sync so the large-map limit is
             // visible to human placement and older presentation paths as well as the LargeEconomy policy.
             e.DropSiteMax = e.LargeDropSiteMax;

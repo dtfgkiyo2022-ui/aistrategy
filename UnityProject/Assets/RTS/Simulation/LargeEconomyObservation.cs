@@ -17,11 +17,13 @@ namespace Rts.Simulation
         public int Villagers, Soldiers;
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
         public int Houses, Barracks, DropSites, Farms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
+        public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
         public int[] WorkerRoundTripTicks = new int[6];
         public int[] Income = new int[6];
         public int TownResourceIncome;
-        public int BarracksResourceWaiting, BarracksPopulationWaiting, BarracksTraining;
+        public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
+        public int BarracksPopulationWaiting, BarracksTraining;
     }
 
     public sealed partial class Simulation
@@ -35,7 +37,17 @@ namespace Rts.Simulation
                 var value = new LargeEconomyFactionObservation { FactionId = faction };
                 value.Villagers = LivingVillagers(faction);
                 value.Soldiers = LivingSoldiers(faction);
+                var core = OwnCore(faction);
+                value.CoreHp = core.Hp;
+                foreach (int soldierIndex in world.SoldierTraversal)
+                {
+                    var soldier = world.Soldiers[soldierIndex];
+                    if (soldier.Alive && soldier.Initial.FactionId != faction
+                        && InRange(soldier.Position, core.Definition.Position, world.Config.Rules.CoreRadius))
+                        value.EnemySoldiersAtCore++;
+                }
                 value.TownVillagersProduced = largeTownVillagersProduced[faction - 1];
+                var dropSites = new List<SimPoint>();
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var b = world.Buildings[i];
@@ -53,12 +65,34 @@ namespace Rts.Simulation
                         value.Barracks++;
                         if (!b.Complete || b.Held) continue;
                         if (b.TrainRemaining > 0 || b.Queued > 0) value.BarracksTraining++;
-                        else if (BarracksResourceBlocked(faction)) value.BarracksResourceWaiting++;
+                        else if (BarracksResourceBlocked(faction))
+                        {
+                            value.BarracksResourceWaiting++;
+                            ref var economy = ref world.Economies[faction - 1];
+                            if (economy.Food < InfantryFoodFor(faction)) value.BarracksFoodWaiting++;
+                            if (economy.Wood < InfantryWoodFor(faction)) value.BarracksWoodWaiting++;
+                            if (economy.Metal < InfantryMetalFor(faction)) value.BarracksMetalWaiting++;
+                        }
                         else if (BarracksPopulationBlocked(faction)) value.BarracksPopulationWaiting++;
                     }
-                    else if (b.Kind == BuildingKind.DropSite) value.DropSites++;
+                    else if (b.Kind == BuildingKind.DropSite)
+                    {
+                        value.DropSites++;
+                        dropSites.Add(BuildingCenter(b));
+                    }
                     else if (b.Kind == BuildingKind.LumberCamp) value.LumberCamps++;
                     else value.OtherBuildings++;
+                }
+                if (dropSites.Count >= 2)
+                {
+                    var best = new System.Numerics.BigInteger(long.MaxValue);
+                    for (int i = 0; i < dropSites.Count; i++)
+                        for (int j = i + 1; j < dropSites.Count; j++)
+                        {
+                            var distance = DistanceSquared(dropSites[i], dropSites[j]);
+                            if (distance < best) best = distance;
+                        }
+                    value.MinimumDropSiteDistanceMeters = checked((int)((long)FixMath.IntegerSqrt(best) / 65536L));
                 }
                 for (int cell = 0; cell < world.Belts.Length; cell++)
                     if (world.Belts[cell].FactionId == faction) value.BeltCells++;

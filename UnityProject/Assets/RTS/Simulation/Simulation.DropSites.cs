@@ -157,7 +157,7 @@ namespace Rts.Simulation
         private bool StorageHasBeltPathToCore(BuildingState storage, uint faction)
         {
             int start = OutputCell(storage);
-            if (start < 0 || start >= world.Belts.Length || world.Belts[start].FactionId != faction) return false;
+            if (start < 0 || start >= world.Belts.Length || !AiBeltCellKnown(faction, start) || world.Belts[start].FactionId != faction) return false;
             var seen = new bool[world.Belts.Length];
             var queue = new int[world.Belts.Length];
             int head = 0, tail = 0;
@@ -166,6 +166,7 @@ namespace Rts.Simulation
             while (head < tail)
             {
                 int cell = queue[head++];
+                if (!AiBeltCellKnown(faction, cell)) continue;
                 ref var belt = ref world.Belts[cell];
                 if (Visit(BeltOutputCell(cell, ref belt))) return true;
                 if (belt.Component == BeltComponentKind.UndergroundEntrance && Visit(belt.PairCell)) return true;
@@ -176,6 +177,7 @@ namespace Rts.Simulation
             bool Visit(int next)
             {
                 if (next < 0 || next >= world.Belts.Length) return false;
+                if (!AiBeltCellKnown(faction, next)) return false;
                 if (FeedsOwnCore(next, faction) && world.Belts[next].FactionId == 0) return true;
                 if (!seen[next] && world.Belts[next].FactionId == faction)
                 {
@@ -189,7 +191,7 @@ namespace Rts.Simulation
         private bool StorageHasBeltPathToBuilding(BuildingState storage, uint faction, ResourceKind item)
         {
             int start = OutputCell(storage);
-            if (start < 0 || start >= world.Belts.Length || world.Belts[start].FactionId != faction) return false;
+            if (start < 0 || start >= world.Belts.Length || !AiBeltCellKnown(faction, start) || world.Belts[start].FactionId != faction) return false;
             var seen = new bool[world.Belts.Length];
             var queue = new int[world.Belts.Length];
             int head = 0, tail = 0;
@@ -198,6 +200,7 @@ namespace Rts.Simulation
             while (head < tail)
             {
                 int cell = queue[head++];
+                if (!AiBeltCellKnown(faction, cell)) continue;
                 ref var belt = ref world.Belts[cell];
                 if (Visit(BeltOutputCellForItem(cell, ref belt, item))) return true;
                 if (belt.Component == BeltComponentKind.Splitter)
@@ -211,6 +214,7 @@ namespace Rts.Simulation
             bool Visit(int next)
             {
                 if (next < 0 || next >= world.Belts.Length) return false;
+                if (!AiBeltCellKnown(faction, next)) return false;
                 if (world.Belts[next].FactionId == 0 && BeltCanFeedBuilding(next, faction, item)) return true;
                 if (!seen[next] && world.Belts[next].FactionId == faction)
                 {
@@ -321,44 +325,133 @@ namespace Rts.Simulation
                     || (v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff)) continue;
                 gatherers[largeNodeClusters[v.NodeId - 1]]++;
             }
-            int best = -1, bestGatherers = 0, bestRoundTrip = 0; uint bestId = 0;
+            int best = -1, bestOrigin = -1, bestGatherers = 0, bestRoundTrip = 0, bestRemaining = -1; uint bestId = 0;
             for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
             {
-                if (ClusterRemaining(cluster) <= 0 || gatherers[cluster] < rules.LargeClusterMinGatherers) continue;
+                int knownNode = FirstKnownRemainingNode(faction, cluster);
+                if (knownNode < 0) continue;
+                int remaining = ClusterRemainingFor(faction, cluster);
+                if (remaining <= 0 || gatherers[cluster] < rules.LargeClusterMinGatherers) continue;
                 var kind = largeClusterKinds[cluster];
                 if (kind != ResourceKind.Food && kind != ResourceKind.Wood && kind != ResourceKind.Stone
                     && kind != ResourceKind.Ore && kind != ResourceKind.Gold && kind != ResourceKind.Metal) continue;
-                var anchor = world.Nodes[largeClusterAnchors[cluster]].Definition.Position;
-                var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, NodeId = world.Nodes[largeClusterAnchors[cluster]].Definition.Id,
+                var anchor = world.Nodes[knownNode].Definition.Position;
+                var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, NodeId = world.Nodes[knownNode].Definition.Id,
                     Task = VillagerTask.ToDropOff };
                 var drop = DropOff(probe).point;
                 int roundTrip = LargeClusterRoundTripTicks(faction, cluster, drop);
-                // A legal site can be a few cells away from the node because of terrain and clearances. If the first
-                // site still leaves this cluster over target, allow another site while the explicit LargeEconomy cap has room.
-                if (roundTrip <= rules.LargeTargetRoundTripTicks) continue;
-                uint id = world.Nodes[largeClusterAnchors[cluster]].Definition.Id;
-                // Serve the worst transport first. This prevents a populous food cluster from consuming the cap while
-                // a smaller but much farther stone/ore cluster keeps every load walking to the core.
+                int initial = LargeClusterInitialRemaining(faction, cluster);
+                bool belowSwitchThreshold = initial > 0
+                    && (long)remaining * 1000L <= (long)initial * rules.LargeClusterSwitchPermille;
+                // When a cluster is nearly exhausted, choose the next cluster before the current one runs dry. A
+                // cluster that already has a local receiver is skipped in that advance window, so the slot goes to
+                // another useful cluster rather than making a second receiver in the same place.
+                if (LargeClusterHasDropSite(faction, cluster)) continue;
+                if (roundTrip <= rules.LargeTargetRoundTripTicks && !belowSwitchThreshold) continue;
+                uint id = world.Nodes[knownNode].Definition.Id;
+                var preferredAnchor = world.Nodes[knownNode].Definition.Position;
+                var preferredProbe = new VillagerState { FactionId = faction, Position = preferredAnchor, CarryKind = kind,
+                    NodeId = id, Task = VillagerTask.ToDropOff };
+                int preferredCell = LargeClusterFarthestNodeCell(faction, cluster, DropOff(preferredProbe).point);
+                if (preferredCell < 0) preferredCell = world.Map.Cell(preferredAnchor);
+                int origin = FindLargeDropSiteOrigin(faction, rules.DropSiteSizeCells, preferredCell);
+                if (origin < 0) continue;
+                // Serve the worst transport first, then preserve the most usable stock. This prevents a small,
+                // nearly empty point from consuming a slot while a farther, richer cluster still walks to a base.
                 if (best < 0 || roundTrip > bestRoundTrip
-                    || roundTrip == bestRoundTrip && (gatherers[cluster] > bestGatherers
-                        || gatherers[cluster] == bestGatherers && id < bestId))
+                    || roundTrip == bestRoundTrip && (remaining > bestRemaining
+                        || remaining == bestRemaining && (gatherers[cluster] > bestGatherers
+                            || gatherers[cluster] == bestGatherers && id < bestId)))
                 {
-                    best = cluster; bestGatherers = gatherers[cluster]; bestRoundTrip = roundTrip; bestId = id;
+                    best = cluster; bestOrigin = origin; bestGatherers = gatherers[cluster]; bestRoundTrip = roundTrip;
+                    bestRemaining = remaining; bestId = id;
                 }
             }
             if (best < 0) return;
-            var bestAnchor = world.Nodes[largeClusterAnchors[best]].Definition.Position;
-            var bestProbe = new VillagerState { FactionId = faction, Position = bestAnchor, CarryKind = largeClusterKinds[best],
-                NodeId = world.Nodes[largeClusterAnchors[best]].Definition.Id, Task = VillagerTask.ToDropOff };
-            int preferredCell = LargeClusterFarthestNodeCell(faction, best, DropOff(bestProbe).point);
-            if (preferredCell < 0) preferredCell = world.Map.Cell(bestAnchor);
-            int origin = FindSiteNear(faction, rules.DropSiteSizeCells, preferredCell);
-            if (origin >= 0)
+            if (bestOrigin >= 0)
             {
-                PlaceBuildingAt(faction, BuildingKind.DropSite, origin, Facing.North, 0);
+                PlaceBuildingAt(faction, BuildingKind.DropSite, bestOrigin, Facing.North, 0);
                 // A new local receiver changes the next deterministic cluster choice on this tick.
                 largeWorkCountsTick = -1;
             }
+        }
+
+        private int LargeClusterInitialRemaining(uint faction, int cluster)
+        {
+            int remaining = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+                if (ResourceKnownToFaction(faction, nodeIndex))
+                    remaining = checked(remaining + Math.Max(0, world.Nodes[nodeIndex].Definition.Amount));
+            return remaining;
+        }
+
+        private int ClusterRemainingFor(uint faction, int cluster)
+        {
+            int remaining = 0;
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+                if (ResourceKnownToFaction(faction, nodeIndex))
+                    remaining = checked(remaining + Math.Max(0, world.Nodes[nodeIndex].Remaining));
+            return remaining;
+        }
+
+        private bool LargeClusterHasDropSite(uint faction, int cluster)
+        {
+            var spacing = Fix64.FromInt(world.Config.Economy.LargeDropSiteMinSpacingMeters);
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+            {
+                if (!ResourceKnownToFaction(faction, nodeIndex)) continue;
+                var point = world.Nodes[nodeIndex].Definition.Position;
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var b = world.Buildings[i];
+                    if (!IsPlannedBuilding(b) || b.FactionId != faction || b.Kind != BuildingKind.DropSite) continue;
+                    if (InRange(point, BuildingCenter(b), spacing)) return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>LargeEconomy AI placement only: skip candidates near every own receiver and base, including reservations.</summary>
+        private int FindLargeDropSiteOrigin(uint faction, int size, int centre, int searchRadius = 30)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int core = world.Map.Cell(OwnCore(faction).Definition.Position), cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= searchRadius; r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (LargeEconomyOn && !ExploredFootprint(faction, origin, size)) continue;
+                        if (!LargeDropSiteSpacingIsClear(faction, origin, size)) continue;
+                        if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
+                    }
+            return -1;
+        }
+
+        private bool LargeDropSiteSpacingIsClear(uint faction, int origin, int size)
+        {
+            var spacing = Fix64.FromInt(world.Config.Economy.LargeDropSiteMinSpacingMeters);
+            var centre = FootprintCenter(origin, size);
+            if (InRange(centre, OwnCore(faction).Definition.Position, spacing)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                // Do not use IsActualBuilding here: an AI reservation is already a committed receiver location.
+                if (!b.Alive || b.FactionId != faction || (b.Kind != BuildingKind.DropSite && b.Kind != BuildingKind.Town)) continue;
+                if (InRange(centre, BuildingCenter(b), spacing)) return false;
+            }
+            return true;
+        }
+
+        private bool ExploredFootprint(uint faction, int origin, int size)
+        {
+            var explored = world.Factions[faction - 1].ExploredCells;
+            foreach (int cell in Footprint(origin, size))
+                if (cell < 0 || cell >= explored.Length || !explored[cell]) return false;
+            return true;
         }
 
         private int LargeClusterRoundTripTicks(uint faction, int cluster, SimPoint drop)
@@ -367,7 +460,7 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[cluster])
             {
                 var node = world.Nodes[nodeIndex];
-                if (node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
                 var route = world.Map.SharedRoute(world.Map.Cell(node.Definition.Position), drop, faction);
                 if (route.Length <= 0) continue;
                 long distanceRaw = checked((long)(route.Length - 1) * world.Config.Map.CellSizeMeters * 65536L);
@@ -384,7 +477,7 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[cluster])
             {
                 var node = world.Nodes[nodeIndex];
-                if (node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
                 int length = world.Map.SharedRoute(world.Map.Cell(node.Definition.Position), drop, faction).Length;
                 if (length > bestLength || length == bestLength && node.Definition.Id < bestId)
                 { best = nodeIndex; bestLength = length; bestId = node.Definition.Id; }
@@ -414,7 +507,8 @@ namespace Rts.Simulation
             for (int n = 0; n < world.Nodes.Length; n++)
             {
                 var node = world.Nodes[n];
-                if (node.Remaining <= 0 || gatherers[n] == 0 && !CommonDrillOn || InRange(node.Definition.Position, core, Fix64.FromInt(FarGatherMeters))) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Remaining <= 0 || gatherers[n] == 0 && !CommonDrillOn
+                    || InRange(node.Definition.Position, core, Fix64.FromInt(FarGatherMeters))) continue;
                 if (!RawReceiverAllowed(faction, node.Definition.Kind)) continue;
                 if (best >= 0 && (gatherers[n] < gatherers[best]
                     || (gatherers[n] == gatherers[best] && node.Definition.Id >= world.Nodes[best].Definition.Id))) continue;
