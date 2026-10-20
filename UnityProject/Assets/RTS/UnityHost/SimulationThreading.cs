@@ -465,6 +465,9 @@ namespace Rts.UnityHost
             AddEvents(allEvents, first); AddEvents(allEvents, second);
             var publication = frames.Publish(generation, first, second, allEvents, perf);
             foreach (var value in publication.Events) events.Enqueue(generation, value);
+            // The canonical state is serialised only for a test observer: building it every tick cost more than the tick
+            // itself on the 2600-unit map and kept the 4x speed from keeping up (test play 10-20).
+            if (TickObserver == null) return;
             var state = match.Simulation.CaptureDiagnostic().CanonicalState;
             var copy = new byte[state.Count];
             for (int i = 0; i < copy.Length; i++) copy[i] = state[i];
