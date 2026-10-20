@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Rts.Application;
 using Rts.Contracts;
 using Rts.Presentation;
@@ -28,11 +29,20 @@ namespace Rts.UnityHost
         [SerializeField] private uint viewFactionId = 1;
         [SerializeField] private string enemyPreset = "maintain";
         [SerializeField] private int aiDelayTicks;
+        // The default presentation path keeps the simulation off Unity's main thread. Smoke remains synchronous so
+        // its existing headless-style contract does not depend on Unity scheduling.
+        [SerializeField] private bool simulationThread = true;
 
         private Battle simulation;
         private ScenarioDefinition currentScenario;
         private CommandGateway gateway;
-        private LiveCommandPort port;
+        private ICommandPort port;
+        private LiveCommandPort livePort;
+        private SimulationCommandPort threadedPort;
+        private SimulationThreadWorker simulationWorker;
+        private readonly PublishedMatchFrameStore publishedFrames = new PublishedMatchFrameStore();
+        private readonly SimulationEventQueue publishedEvents = new SimulationEventQueue();
+        private long matchGeneration;
         private PresetController enemy;
         // The opponent's side is fixed when the match starts; switching the viewed side must not hand it the other frame.
         private uint enemyFactionId = 2;
@@ -243,7 +253,21 @@ namespace Rts.UnityHost
         private bool paused;
         private float tickSeconds = BattlefieldView.TickSeconds;
 
-        public long Tick { get { return simulation == null ? 0 : simulation.Capture(viewFactionId).Tick; } }
+        public long Tick
+        {
+            get
+            {
+                var published = simulationThread ? publishedFrames.Read() : null;
+                return published != null ? published.Tick : simulation == null ? 0 : simulation.Capture(viewFactionId).Tick;
+            }
+        }
+
+        /// <summary>Display setting: the worker owns ticking when enabled. Changes apply at the next match.</summary>
+        public bool SimulationThread
+        {
+            get { return simulationThread; }
+            set { if (value == simulationThread) return; simulationThread = value; matchRestartRequested = true; }
+        }
 
         public bool Paused { get { return paused; } set { paused = value; } }
 
@@ -261,10 +285,12 @@ namespace Rts.UnityHost
             {
                 if (value != 1 && value != 2 || value == viewFactionId) return;
                 viewFactionId = value;
-                if (economyPanel != null) economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+                if (economyPanel != null) economyPanel.Bind(simulationThread ? (IEconomyPort)threadedPort : (IEconomyPort)gateway,
+                    viewFactionId, view, economyLayer);
                 view.ResetVisuals();
                 if (simulation == null) return;
-                view.Push(simulation.Capture(viewFactionId));
+                var published = simulationThread ? publishedFrames.Read() : null;
+                view.Push(published == null ? simulation.Capture(viewFactionId) : published.Current(viewFactionId));
                 panel.Bind(port, viewFactionId, viewFactionId, view);
             }
         }
@@ -296,19 +322,19 @@ namespace Rts.UnityHost
                 switch (command.Kind)
                 {
                     case PlayerControlCommandKind.SetAutoEconomy:
-                        gateway.SubmitEconomy(EconomyCommand.Auto(ownFactionId, ++manualControlSequence, command.Enabled));
+                        SubmitEconomy(EconomyCommand.Auto(ownFactionId, ++manualControlSequence, command.Enabled));
                         break;
                     case PlayerControlCommandKind.StopVillagers:
-                        gateway.SubmitEconomy(EconomyCommand.StopVillagers(ownFactionId, ++manualControlSequence));
+                        SubmitEconomy(EconomyCommand.StopVillagers(ownFactionId, ++manualControlSequence));
                         break;
                     case PlayerControlCommandKind.ReturnEconomyToAuto:
-                        gateway.SubmitEconomy(EconomyCommand.ReturnToAuto(ownFactionId, ++manualControlSequence));
+                        SubmitEconomy(EconomyCommand.ReturnToAuto(ownFactionId, ++manualControlSequence));
                         break;
                     case PlayerControlCommandKind.SwitchOwnDoctrine:
                         SwitchOwnDoctrine(command.Doctrine);
                         break;
                     case PlayerControlCommandKind.StopArmies:
-                        gateway.Submit(new UserPolicyIntent(
+                        port.Submit(new UserPolicyIntent(
                             ++manualControlSequence,
                             new ScopeKey(ownFactionId, ScopeKind.All, 0),
                             PolicyKind.ReturnToAuto,
@@ -320,10 +346,25 @@ namespace Rts.UnityHost
                             new Expiration(long.MaxValue, 0, ExpireFlags.None)));
                         break;
                     case PlayerControlCommandKind.SetAutoAssault:
-                        gateway.SubmitEconomy(EconomyCommand.SetAutoAssault(ownFactionId, ++manualControlSequence, command.Enabled));
+                        SubmitEconomy(EconomyCommand.SetAutoAssault(ownFactionId, ++manualControlSequence, command.Enabled));
                         break;
                 }
             }
+        }
+
+        private void SubmitEconomy(EconomyCommand command)
+        {
+            if (simulationThread && threadedPort != null) threadedPort.SubmitEconomy(command);
+            else ((IEconomyPort)gateway).SubmitEconomy(command);
+        }
+
+        private void EnableExternalAutonomous()
+        {
+            if (autonomousEnabled || activeExternal == null) return;
+            gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
+                PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
+                new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            autonomousEnabled = true;
         }
 
         // IOpponentControl: which doctrine the opponent runs. Reads and writes the field Begin() already uses, so
@@ -341,9 +382,23 @@ namespace Rts.UnityHost
             }
         }
 
-        public void StepOneTick() { StepOnce(); }
-        public FactionFrame Frame { get { return simulation == null ? null : simulation.Capture(viewFactionId); } }
-        public bool HasEnded { get { return simulation != null && simulation.Capture(viewFactionId).Result.HasEnded; } }
+        public void StepOneTick() { if (!simulationThread) StepOnce(); }
+        public FactionFrame Frame
+        {
+            get
+            {
+                var published = simulationThread ? publishedFrames.Read() : null;
+                return published != null ? published.Current(viewFactionId) : simulation == null ? null : simulation.Capture(viewFactionId);
+            }
+        }
+        public bool HasEnded
+        {
+            get
+            {
+                var frame = Frame;
+                return frame != null && frame.Result.HasEnded;
+            }
+        }
         public string MatchPackPath { get { return matchPackPath; } }
 
         public void ConfigureSmoke(SmokeOptions options)
@@ -568,6 +623,7 @@ namespace Rts.UnityHost
         }
 
         private int gatewayOrders;
+        private bool autonomousEnabled;
 
         private void StopExternal()
         {
@@ -586,9 +642,21 @@ namespace Rts.UnityHost
             liveAi = null;
         }
 
-        private void OnDestroy() { StopTactics(); StopLiveAi(); StopExternal(); perfGcTime.Dispose(); perfAlloc.Dispose(); }
+        private void OnDestroy() { StopSimulationThread(); StopTactics(); StopLiveAi(); StopExternal(); perfGcTime.Dispose(); perfAlloc.Dispose(); }
 
-        private void OnDisable() { StopTactics(); }
+        private void OnDisable() { StopSimulationThread(); StopTactics(); }
+
+        private void StopSimulationThread()
+        {
+            var worker = simulationWorker;
+            simulationWorker = null;
+            if (worker == null) return;
+            if (!worker.StopAndJoin(TimeSpan.FromSeconds(5)))
+                Debug.LogError("RTS simulation thread did not stop before the match was discarded.");
+            if (worker.Failure != null) Debug.LogException(worker.Failure);
+            worker.Dispose();
+            publishedFrames.Clear();
+        }
 
         private void StopTactics()
         {
@@ -660,7 +728,8 @@ namespace Rts.UnityHost
 
         FactionFrame IFrameSource.Latest(uint factionId)
         {
-            return simulation == null ? null : simulation.Capture(factionId);
+            var published = simulationThread ? publishedFrames.Read() : null;
+            return published != null ? published.Current(factionId) : simulation == null ? null : simulation.Capture(factionId);
         }
 
         private void RefreshTacticCatalog()
@@ -830,6 +899,16 @@ namespace Rts.UnityHost
             return Math.Max(1, Math.Min(64, value));
         }
 
+        private static bool CommandLineSimulationThread(bool fallback)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            int at = Array.IndexOf(args, "-rts-sim-thread");
+            if (at < 0 || at + 1 >= args.Length) return fallback;
+            if (string.Equals(args[at + 1], "on", StringComparison.OrdinalIgnoreCase)) return true;
+            if (string.Equals(args[at + 1], "off", StringComparison.OrdinalIgnoreCase)) return false;
+            return fallback;
+        }
+
         private static string TacticSetupJson(ScenarioDefinition scenario, uint factionId)
         {
             return "{\"matchSeed\":" + scenario.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -842,7 +921,9 @@ namespace Rts.UnityHost
 
         public void Begin()
         {
+            StopSimulationThread();
             StopTactics();
+            simulationThread = !smokeRunner && CommandLineSimulationThread(simulationThread);
             if (mapSeed == 0 && (!smokeRunner || smokeOptions == null || !smokeOptions.Seed.HasValue)) mapSeed = FreshSeed();
             RefreshTacticCatalog();
             // Stage-5 measurement tools scale the Ver.1 map; they always get it.
@@ -864,11 +945,14 @@ namespace Rts.UnityHost
             // Per-phase time of the simulation in the "RTS perf" line (display-side measurement only): the phase names
             // are the ones the headless --timing-out prints, so a player build can be compared with it phase by phase.
             perfPhaseStarts.Clear();
-            simulation = smokeRunner ? new Battle(scenario) : new Battle(scenario, MeasureSimulationPhase);
+            simulation = smokeRunner || simulationThread ? new Battle(scenario) : new Battle(scenario, MeasureSimulationPhase);
             matchPack = null;
             matchPackPath = "";
             operationTable = new OperationTable(viewFactionId);
-            var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r => port.Interpret(r));
+            threadedPort = simulationThread ? new SimulationCommandPort(aiDelayTicks) : null;
+            livePort = null;
+            var provider = aiDelayTicks == 0 ? null : new DelayedPolicyProvider(aiDelayTicks, r =>
+                simulationThread ? threadedPort.Interpret(r) : livePort.Interpret(r));
             StopLiveAi();
             StopExternal();
             IPolicyProvider external = null;
@@ -905,8 +989,10 @@ namespace Rts.UnityHost
                 externalSchedule = AutonomousPollSchedule.OnChange(fineJudgementEnabled ? Math.Max(20, fineJudgementIntervalTicks) : 600);
             gateway = new CommandGateway(simulation, provider, null,
                 externalSchedule, external);
-            port = new LiveCommandPort(gateway, aiDelayTicks);
-            liveAi = new LiveAiCommandPort(gateway, () => Frame, operationTable: operationTable,
+            livePort = simulationThread ? null : new LiveCommandPort(gateway, aiDelayTicks);
+            port = simulationThread ? (ICommandPort)threadedPort : livePort;
+            var applicationPort = simulationThread ? (IApplicationCommandPort)threadedPort : (IApplicationCommandPort)livePort;
+            liveAi = new LiveAiCommandPort(applicationPort, () => Frame, operationTable: operationTable,
                 changeDoctrine: preset => SwitchOwnDoctrine(preset),
                 changeTacticParam: (name, value) => TrySetOwnTacticParam(name, value),
                 sendTacticSignal: (name, point) => TrySendOwnTacticSignal(name, point),
@@ -926,19 +1012,24 @@ namespace Rts.UnityHost
             own.Initialize();
             manualControlSequence = 0;
             ApplyManualControlCommands(manualControl, rememberedOwnPreset);
-            if (external != null)
-                gateway.EnableAutonomous(new UserPolicyIntent(0, new ScopeKey(viewFactionId, ScopeKind.All, 0),
-                    PolicyKind.Focus, default(PolicyGoal), 50, new LossBudget(300),
-                    new EndCondition(EndKind.UntilReplaced, 0), 0, new Expiration(long.MaxValue, 0, ExpireFlags.None)));
+            autonomousEnabled = false;
+            if (external != null && !simulationThread) EnableExternalAutonomous();
 
             if (view != null)
             {
                 view.SetTerrain(ScenarioTerrain.From(scenario.Map));
                 view.Push(simulation.Capture(viewFactionId));
             }
+            // 10-20 test play: the camera and the ground clicks kept the 256 m x 128 m map of the first weeks, so most
+            // of the large map could not be reached or ordered to. Both follow the match's map now.
+            var battlefieldCamera = FindFirstObjectByType<BattlefieldCamera>();
+            if (battlefieldCamera != null) battlefieldCamera.SetMap(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
+            EconomyPanel.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
+            EconomyLayer.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
             TryStartMatchPack(scenario);
             if (panel != null)
             {
+                panel.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
                 panel.Bind(port, viewFactionId, viewFactionId, view);
                 panel.PlayerControlMode = this;
                 panel.ExternalAi = this;
@@ -967,7 +1058,8 @@ namespace Rts.UnityHost
                 if (economyPanel == null) economyPanel = gameObject.AddComponent<EconomyPanel>();
                 economyLayer.Clear();
                 economyLayer.Bind(view);
-                economyPanel.Bind(gateway, viewFactionId, view, economyLayer);
+                economyPanel.Bind(simulationThread ? (IEconomyPort)threadedPort : (IEconomyPort)gateway,
+                    viewFactionId, view, economyLayer);
                 economyPanel.ExtraCivilisations = economyMap && ScenarioMultiplier == 1 && allCivilisations;
                 // Always present: it stays hidden and builds nothing until the setup panel's switch turns it on.
                 if (hudToolkit == null) hudToolkit = GetComponent<HudToolkit>();
@@ -984,6 +1076,15 @@ namespace Rts.UnityHost
                     panel.ExtraBlocksClick = economyPanel.BlocksClick;
                     panel.ExtraGroundClick = economyPanel.TryConsumeGroundClick;
                 }
+            }
+            if (simulationThread)
+            {
+                long generation = Interlocked.Increment(ref matchGeneration);
+                simulationWorker = new SimulationThreadWorker(() => new SimulationThreadMatch(simulation, gateway)
+                {
+                    StepAction = StepOnceMeasured
+                }, threadedPort, publishedFrames, publishedEvents, generation, TimeSpan.FromSeconds(tickSeconds));
+                simulationWorker.Start();
             }
         }
 
@@ -1025,6 +1126,11 @@ namespace Rts.UnityHost
         /// </summary>
         public bool SwitchOwnDoctrine(string preset)
         {
+            if (simulationThread && simulationWorker != null && !simulationWorker.IsCurrentThread)
+            {
+                simulationWorker.Post(() => SwitchOwnDoctrine(preset));
+                return true;
+            }
             if (simulation == null || gateway == null || port == null) return false;
             if (activeExternal != null) return false;
             if (ownTacticSide != null && ownTacticSide.HasTactic) return false;
@@ -1049,6 +1155,11 @@ namespace Rts.UnityHost
 
         private AiTacticChangeResult TrySetOwnTacticParam(string name, string value)
         {
+            if (simulationThread && simulationWorker != null && !simulationWorker.IsCurrentThread)
+            {
+                simulationWorker.Post(() => TrySetOwnTacticParam(name, value));
+                return AiTacticChangeResult.Ok("戦術の変更を次のtickの先頭で受け付けました");
+            }
             var host = ownTacticSide == null ? null : ownTacticSide.Host;
             if (host == null) return AiTacticChangeResult.Fail("自軍に戦術がないため、つまみを変えられません。");
             TacticParamDefinition definition = null;
@@ -1065,6 +1176,11 @@ namespace Rts.UnityHost
 
         private AiTacticChangeResult TrySendOwnTacticSignal(string name, SimPoint? point)
         {
+            if (simulationThread && simulationWorker != null && !simulationWorker.IsCurrentThread)
+            {
+                simulationWorker.Post(() => TrySendOwnTacticSignal(name, point));
+                return AiTacticChangeResult.Ok("戦術の合図を次のtickの先頭で受け付けました");
+            }
             var host = ownTacticSide == null ? null : ownTacticSide.Host;
             if (host == null) return AiTacticChangeResult.Fail("自軍に戦術がないため、合図を送れません。");
             if (!host.SendSignal(name, point, out var reason)) return AiTacticChangeResult.Fail(reason);
@@ -1080,6 +1196,11 @@ namespace Rts.UnityHost
 
         private AiTacticChangeResult TrySwitchOwnTactic(string name)
         {
+            if (simulationThread && simulationWorker != null && !simulationWorker.IsCurrentThread)
+            {
+                simulationWorker.Post(() => TrySwitchOwnTactic(name));
+                return AiTacticChangeResult.Ok("戦術の切り替えを次のtickの先頭で受け付けました");
+            }
             if (simulation == null || gateway == null || currentScenario == null) return AiTacticChangeResult.Fail("試合が開始されていません。");
             string selection = ResolveTacticSelection(name);
             if (selection == null) return AiTacticChangeResult.Fail("戦術名が見つかりません: " + (name ?? ""));
@@ -1113,6 +1234,11 @@ namespace Rts.UnityHost
 
         private AiTacticChangeResult TryReloadTactic(bool ownSide, bool automatic)
         {
+            if (simulationThread && simulationWorker != null && !simulationWorker.IsCurrentThread)
+            {
+                simulationWorker.Post(() => TryReloadTactic(ownSide, automatic));
+                return AiTacticChangeResult.Ok("戦術の読み直しを次のtickの先頭で受け付けました");
+            }
             if (simulation == null || gateway == null || currentScenario == null)
                 return AiTacticChangeResult.Fail("試合が開始されていません。");
             var oldSide = ownSide ? ownTacticSide : enemyTacticSide;
@@ -1254,6 +1380,7 @@ namespace Rts.UnityHost
         private void StepOnceMeasured()
         {
             if (simulation == null || HasEnded) return;
+            if (simulationThread) EnableExternalAutonomous();
             // Tactic calls are deliberately before the gateway step, matching tactic-match in the CLI.
             TacticHostTickResult ownTacticResult = null;
             TacticHostTickResult enemyTacticResult = null;
@@ -1272,35 +1399,37 @@ namespace Rts.UnityHost
                 matchPack.RecordTactic(ownTacticResult, ownFactionId, ownTactic);
                 matchPack.RecordTactic(enemyTacticResult, enemyFactionId, enemyTactic);
             }
-            long simProbe = PerfProbe.Start();
+            long simProbe = simulationThread ? 0 : PerfProbe.Start();
             long simStarted = System.Diagnostics.Stopwatch.GetTimestamp();
             gateway.Step();
             perfSimStopwatchTicks += System.Diagnostics.Stopwatch.GetTimestamp() - simStarted;
             perfSimSteps++;
             perfTotalSteps++;
-            PerfProbe.Stop("Sim", simProbe);
+            if (!simulationThread) PerfProbe.Stop("Sim", simProbe);
             var frame = simulation.Capture(viewFactionId);
             if (smokeRunner)
             {
                 if (smokeWest != null) smokeWest.Record(ownFactionId == 1 ? ownTacticResult : enemyTacticResult, simulation.Capture(1));
                 if (smokeEast != null) smokeEast.Record(ownFactionId == 2 ? ownTacticResult : enemyTacticResult, simulation.Capture(2));
             }
-            long pushProbe = PerfProbe.Start();
-            if (view != null) view.Push(frame);
-            PerfProbe.Stop("ViewPush", pushProbe);
+            long pushProbe = simulationThread ? 0 : PerfProbe.Start();
+            // BattlefieldView, GameObjects, audio and Unity time remain presentation-only. The worker publishes the
+            // completed frame; the main thread consumes it on Update and BattlefieldView performs its usual smoothing.
+            if (!simulationThread && view != null) view.Push(frame);
+            if (!simulationThread) PerfProbe.Stop("ViewPush", pushProbe);
             if (liveAi != null) liveAi.Poll(frame.Tick);
-            long packProbe = PerfProbe.Start();
+            long packProbe = simulationThread ? 0 : PerfProbe.Start();
             matchPack?.RecordAfterStep(simulation);
-            PerfProbe.Stop("Pack", packProbe);
+            if (!simulationThread) PerfProbe.Stop("Pack", packProbe);
             if (frame.Result.HasEnded)
             {
                 FinishMatchPack();
                 return;
             }
-            long sidesProbe = PerfProbe.Start();
+            long sidesProbe = simulationThread ? 0 : PerfProbe.Start();
             enemy.Step(simulation.Capture(enemyFactionId));
             own.Step(simulation.Capture(ownFactionId));
-            PerfProbe.Stop("Sides", sidesProbe);
+            if (!simulationThread) PerfProbe.Stop("Sides", sidesProbe);
             if (HasEnded) FinishMatchPack();
         }
 
@@ -1385,10 +1514,29 @@ namespace Rts.UnityHost
             }
             // Deliberately polled on Unity's main thread. This is a presentation convenience and never enters the
             // simulation's decision path; the wall clock keeps it independent of pause and match speed.
-            CheckAutomaticTacticReloads();
-            if (port.RestartRequested || externalRestartRequested || matchRestartRequested)
+            if (!simulationThread) CheckAutomaticTacticReloads();
+            if (simulationThread)
             {
-                aiDelayTicks = port.DelayTicks;
+                if (PortRestartRequested) aiDelayTicks = PortDelayTicks;
+                if (externalRestartRequested || matchRestartRequested || PortRestartRequested)
+                {
+                    externalRestartRequested = false;
+                    matchRestartRequested = false;
+                    accumulated = 0f;
+                    Begin();
+                    return;
+                }
+                if (simulationWorker != null)
+                {
+                    simulationWorker.SetPaused(paused);
+                    simulationWorker.SetSpeed(speedMultiplier);
+                }
+                PushPublishedFrame();
+                return;
+            }
+            if (PortRestartRequested || externalRestartRequested || matchRestartRequested)
+            {
+                aiDelayTicks = PortDelayTicks;
                 externalRestartRequested = false;
                 matchRestartRequested = false;
                 accumulated = 0f;
@@ -1411,6 +1559,36 @@ namespace Rts.UnityHost
                     break;
                 }
             }
+        }
+
+        private void PushPublishedFrame()
+        {
+            var published = publishedFrames.Read();
+            if (published == null || published.Generation != matchGeneration || view == null) return;
+            var frame = published.Current(viewFactionId);
+            if (frame == null) return;
+            var delivered = publishedEvents.Drain(matchGeneration);
+            if (delivered.Count != 0)
+            {
+                var events = new List<GameEvent>();
+                foreach (var item in delivered)
+                    if ((item.Event.AudienceMask & (1 << ((int)viewFactionId - 1))) != 0)
+                        events.Add(item.Event);
+                if (events.Count != 0) frame = PublishedMatchFrame.WithEvents(frame, events);
+            }
+            long probe = PerfProbe.Start();
+            view.Push(frame);
+            PerfProbe.Stop("ViewPush", probe);
+        }
+
+        private bool PortRestartRequested
+        {
+            get { return livePort != null ? livePort.RestartRequested : threadedPort != null && threadedPort.RestartRequested; }
+        }
+
+        private int PortDelayTicks
+        {
+            get { return livePort != null ? livePort.DelayTicks : threadedPort == null ? aiDelayTicks : threadedPort.DelayTicks; }
         }
 
         // A player build (IL2CPP) collects garbage every time its small heap fills: about five collections per
@@ -1687,7 +1865,9 @@ namespace Rts.UnityHost
             if (perfAlloc.Valid) perfAllocBytes += perfAlloc.LastValue;
             if (now - perfStartedAt < PerfSeconds) return;
             float frameMs = (now - perfStartedAt) * 1000f / Math.Max(1, perfFrames);
-            Debug.Log("RTS perf: tick=" + Tick + " speed=" + SpeedMultiplier + " frame=" + frameMs.ToString("0.0") + "/"
+            double threadTickMs = simulationThread && publishedFrames.Read() != null ? publishedFrames.Read().Perf.TickMilliseconds : 0;
+            Debug.Log("RTS perf: tick=" + Tick + " speed=" + SpeedMultiplier + " simThread="
+                + threadTickMs.ToString("0.0") + "ms frame=" + frameMs.ToString("0.0") + "/"
                 + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames)
                 + " gc#" + (GC.CollectionCount(0) - perfGcCount)
                 + " gcMs=" + (perfGcTime.Valid ? (perfGcNs / 1e6 / Math.Max(1, perfFrames)).ToString("0.00") : "?")

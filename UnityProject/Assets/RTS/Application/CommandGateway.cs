@@ -13,8 +13,17 @@ namespace Rts.Application
     {
         IReadOnlyList<PolicyVersion> Versions(ScopeKey scope);
     }
+
+    /// <summary>Application command surface shared by the live staff adapter and the simulation-thread facade.</summary>
+    public interface IApplicationCommandPort : ICommandPort, IEconomyPort
+    {
+        ulong SubmitBatch(IReadOnlyList<UserPolicyIntent> intents);
+        ulong BeginInterpretation(uint faction, ScopeKey? fixedTarget = null);
+        void EndInterpretation(ulong reservationId);
+        bool IsInterpretationOpen(ulong reservationId);
+    }
     /// <summary>Tick driven command boundary. Call Submit/Cancel between Step calls on the host thread.</summary>
-    public sealed class CommandGateway : ICommandPort, IEconomyPort
+    public sealed class CommandGateway : IApplicationCommandPort
     {
         private sealed class Request
         {

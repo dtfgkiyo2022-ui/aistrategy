@@ -23,6 +23,13 @@ namespace Rts.Presentation
         [SerializeField] private float mapWidthMeters = 256f;
         [SerializeField] private float mapHeightMeters = 128f;
 
+        /// <summary>The match's map size, so a ground click anywhere on it becomes a point (the large map is 512 x 256).</summary>
+        public void SetMapSize(float widthMeters, float heightMeters)
+        {
+            if (widthMeters > 0f) mapWidthMeters = widthMeters;
+            if (heightMeters > 0f) mapHeightMeters = heightMeters;
+        }
+
         private ICommandPort port;
         private ICommandDelayControl delayControl;
         private IExternalAiControl externalAi;

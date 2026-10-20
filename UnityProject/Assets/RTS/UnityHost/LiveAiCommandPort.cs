@@ -81,10 +81,11 @@ namespace Rts.UnityHost
     /// </summary>
     public sealed class LiveAiCommandPort : IDisposable
     {
-        private readonly CommandGateway gateway;
+        private readonly IApplicationCommandPort gateway;
         private readonly Func<FactionFrame> frame;
         private readonly CommandInterpreterCoordinator coordinator;
         private readonly IDisposable ownedInterpreter;
+        private readonly object sync = new object();
         private readonly Dictionary<ulong, LiveAiInstruction> instructions = new Dictionary<ulong, LiveAiInstruction>();
         private readonly List<LiveAiInstruction> history = new List<LiveAiInstruction>();
         private const int MaxHistoryItems = 50;
@@ -97,7 +98,7 @@ namespace Rts.UnityHost
         private readonly Action<AiSituationSummary> enrichSummary;
         private ulong nextDirectRequestId = ulong.MaxValue;
 
-        public LiveAiCommandPort(CommandGateway gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
+        public LiveAiCommandPort(IApplicationCommandPort gateway, Func<FactionFrame> frame = null, decimal budgetYen = 3m,
             OperationTable operationTable = null, Action<string> changeDoctrine = null,
             Func<string, string, AiTacticChangeResult> changeTacticParam = null,
             Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal = null,
@@ -119,7 +120,7 @@ namespace Rts.UnityHost
         }
 
         /// <summary>Test/development constructor; the supplied interpreter prevents any real network access.</summary>
-        public LiveAiCommandPort(CommandGateway gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
+        public LiveAiCommandPort(IApplicationCommandPort gateway, ICommandInterpreter interpreter, Func<FactionFrame> frame = null,
             decimal budgetYen = 3m, OperationTable operationTable = null, Action<string> changeDoctrine = null,
             Func<string, string, AiTacticChangeResult> changeTacticParam = null,
             Func<string, SimPoint?, AiTacticChangeResult> sendTacticSignal = null,
@@ -141,19 +142,29 @@ namespace Rts.UnityHost
         public IReadOnlyList<LiveAiModelOption> Models => AiModelCatalog.All
             .Where(p => StrategistUiRules.IsStrategistModel(p.Model))
             .Select(p => new LiveAiModelOption(p, AiModelAvailability.IsConfigured(p.Model))).ToArray();
-        public IReadOnlyList<LiveAiInstruction> Instructions => Array.AsReadOnly(history.ToArray());
-        public IReadOnlyList<LiveOperationView> Operations => operationTable == null
-            ? Array.Empty<LiveOperationView>()
-            : operationTable.Operations.Select(o => new LiveOperationView
+        public IReadOnlyList<LiveAiInstruction> Instructions
+        {
+            get { lock (sync) return Array.AsReadOnly(history.ToArray()); }
+        }
+        public IReadOnlyList<LiveOperationView> Operations
+        {
+            get
             {
-                Id = o.Id,
-                Name = o.ConditionDescription,
-                ConditionDescription = o.ConditionDescription,
-                Status = o.StateText
-            }).ToArray();
-        public decimal MatchCostYen => budget.SpentYen;
-        public decimal BudgetYen => budget.BudgetYen;
-        public decimal RemainingBudgetYen => budget.RemainingYen;
+                lock (sync)
+                {
+                    return operationTable == null ? Array.Empty<LiveOperationView>() : operationTable.Operations.Select(o => new LiveOperationView
+                    {
+                        Id = o.Id,
+                        Name = o.ConditionDescription,
+                        ConditionDescription = o.ConditionDescription,
+                        Status = o.StateText
+                    }).ToArray();
+                }
+            }
+        }
+        public decimal MatchCostYen { get { lock (sync) return budget.SpentYen; } }
+        public decimal BudgetYen { get { lock (sync) return budget.BudgetYen; } }
+        public decimal RemainingBudgetYen { get { lock (sync) return budget.RemainingYen; } }
         // The free allowance is intentionally zero until the Ver.4 account/service work exists.
         public decimal RemainingFreeYen => 0m;
 
@@ -388,14 +399,17 @@ namespace Rts.UnityHost
         public void Refresh(FactionFrame latest)
         {
             if (latest == null) return;
-            foreach (var item in history.Where(i => i.State == AiInstructionState.Executing && i.Policies.Count != 0))
+            lock (sync)
             {
-                var views = latest.Commands.Where(c => c.Source == CommandSource.Human && c.AcceptedTick >= item.StartedTick &&
-                    item.Policies.Any(p => p.Target.Equals(c.Target) && p.Kind == c.Kind)).ToArray();
-                if (views.Length == 0) continue;
-                if (views.Any(v => v.Status == CommandStatus.Cancelled)) item.State = AiInstructionState.Cancelled;
-                else if (views.Any(v => v.Status == CommandStatus.Expired || v.Status == CommandStatus.Impossible)) item.State = AiInstructionState.Expired;
-                else if (views.All(v => v.Status == CommandStatus.Completed)) item.State = AiInstructionState.Completed;
+                foreach (var item in history.Where(i => i.State == AiInstructionState.Executing && i.Policies.Count != 0))
+                {
+                    var views = latest.Commands.Where(c => c.Source == CommandSource.Human && c.AcceptedTick >= item.StartedTick &&
+                        item.Policies.Any(p => p.Target.Equals(c.Target) && p.Kind == c.Kind)).ToArray();
+                    if (views.Length == 0) continue;
+                    if (views.Any(v => v.Status == CommandStatus.Cancelled)) item.State = AiInstructionState.Cancelled;
+                    else if (views.Any(v => v.Status == CommandStatus.Expired || v.Status == CommandStatus.Impossible)) item.State = AiInstructionState.Expired;
+                    else if (views.All(v => v.Status == CommandStatus.Completed)) item.State = AiInstructionState.Completed;
+                }
             }
         }
 
@@ -411,7 +425,7 @@ namespace Rts.UnityHost
             return true;
         }
 
-        public void Dispose() { ownedInterpreter?.Dispose(); }
+        public void Dispose() { lock (sync) ownedInterpreter?.Dispose(); }
     }
 
     /// <summary>Routes concurrent requests to one provider instance per model and returns replies canonically.</summary>

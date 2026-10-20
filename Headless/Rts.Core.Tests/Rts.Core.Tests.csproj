@@ -213,6 +213,10 @@
     <Compile Include="TacticReloadTests.cs" />
     <Compile Include="SmokeTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/LiveAiCommandPort.cs" Link="UnityHost/LiveAiCommandPort.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SimulationThreading.cs" Link="UnityHost/SimulationThreading.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/UnityHost/LiveCommandPort.cs" Link="UnityHost/LiveCommandPort.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/ICommandDelayControl.cs" Link="Presentation/ICommandDelayControl.cs" />
+    <Compile Include="SimulationThreadingTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/UnityHost/SmokeOptions.cs" Link="UnityHost/SmokeOptions.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchTimeline.cs" Link="Presentation/MatchTimeline.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/EconomyFlowMetrics.cs" Link="Presentation/EconomyFlowMetrics.cs" />

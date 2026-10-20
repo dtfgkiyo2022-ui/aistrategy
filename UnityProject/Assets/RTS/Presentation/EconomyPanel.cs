@@ -25,7 +25,17 @@ namespace Rts.Presentation
     {
         // UiLayout owns the actual columns. These limits remain documentation for the economy content's intended width.
         private const float LeftColumn = 246f, RightColumn = 440f, MaxWidth = 460f, MinWidth = 300f;
-        private const int CellMeters = 2, MapWidthCells = 128, MapHeightCells = 64;
+        private const int CellMeters = 2;
+        // The match's map in cells (set by SetMapSize). They were constants of the 256 m x 128 m map, so on the large
+        // map nothing could be placed in its right or upper part (10-20 test play).
+        private static int MapWidthCells = 128, MapHeightCells = 64;
+
+        /// <summary>The match's map size in metres; cells are always 2 m.</summary>
+        public static void SetMapSize(int widthMeters, int heightMeters)
+        {
+            if (widthMeters >= CellMeters) MapWidthCells = widthMeters / CellMeters;
+            if (heightMeters >= CellMeters) MapHeightCells = heightMeters / CellMeters;
+        }
 
         private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Inserter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
