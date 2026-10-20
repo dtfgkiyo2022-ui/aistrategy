@@ -86,6 +86,37 @@ namespace Rts.Simulation
         public bool ArmyGrowth;
         /// <summary>S-4b: scale automatic villagers, barracks and housing with the economy.</summary>
         public bool EconomyScale;
+        /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
+        public bool LargeEconomy;
+        public int LargeVillagerTrainTicks = 40, LargeInfantryTrainTicks = 80;
+        public int LargeVillagerBatch = 4, LargeInfantryBatch = 4;
+        public int LargeBarracksMaxBuildings = 16, LargeArmyCapacity = 300;
+        public int LargeTownDecisionIntervalTicks = 60, LargeTownMinAge;
+        public int LargeFactionCap = 1400;
+        public int LargeResourceAmountPermille = 20000, LargeFoodAmountPermille = 40000;
+        public int LargeOreAmountPermille = 20000, LargeStoneAmountPermille = 20000, LargeGoldAmountPermille = 20000;
+        /// <summary>LargeEconomy allocation: desired food gatherers per wood gatherer while construction is funded.</summary>
+        public int LargeFoodPerWood = 3;
+        /// <summary>LargeEconomy allocation: wood kept ahead of the next ordinary-cost building.</summary>
+        public int LargeConstructionReserveWood = 300;
+        /// <summary>LargeEconomy allocation: stone gatherers kept while another town can be afforded.</summary>
+        public int LargeTownStoneGatherers = 24;
+        /// <summary>LargeEconomy allocation: villagers per planned remote town.</summary>
+        public int LargeTownVillagersPerTown = 80;
+        /// <summary>LargeEconomy allocation: villagers per automatic barracks.</summary>
+        public int LargeBarracksVillagersPerBuilding = 20;
+        /// <summary>LargeEconomy allocation: automatic workers assigned around each completed town.</summary>
+        public int LargeTownAutoWorkers = 4;
+        /// <summary>LargeEconomy logistics: a resource cluster is served locally when its average round trip exceeds this many ticks.</summary>
+        public int LargeTargetRoundTripTicks = 300;
+        /// <summary>LargeEconomy logistics: same-kind nodes within this distance belong to one deterministic cluster.</summary>
+        public int LargeResourceClusterRadiusMeters = 24;
+        /// <summary>LargeEconomy logistics: cluster decisions are spaced out to keep large matches light.</summary>
+        public int LargeClusterDecisionIntervalTicks = 100;
+        /// <summary>LargeEconomy logistics: maximum automatic resource-cluster drop-offs.</summary>
+        public int LargeResourceClusterMaxDropSites = 12;
+        /// <summary>LargeEconomy logistics: a cluster must have this many active gatherers before it gets a site.</summary>
+        public int LargeClusterMinGatherers = 2;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

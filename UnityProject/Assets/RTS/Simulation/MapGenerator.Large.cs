@@ -25,7 +25,7 @@ namespace Rts.Simulation
 
         /// <summary>Creates the S-2 512m x 256m economy map. Optional flags have the same meaning as GenerateTerrain.</summary>
         public static ScenarioDefinition GenerateLarge(ulong seed, bool gold = false, bool processingChain = false,
-            bool masonry = false, bool bridge = false)
+            bool masonry = false, bool bridge = false, bool largeEconomy = false)
         {
             var rng = new SplitMix64(seed);
             var s = WeekOneScenario.Create();
@@ -34,6 +34,10 @@ namespace Rts.Simulation
             s.Map = new MapDefinition { WidthMeters = LargeWidthMeters, HeightMeters = LargeHeightMeters,
                 CellSizeMeters = LargeCellMeters, WidthCells = LargeColumns, HeightCells = LargeRows,
                 DefaultPassable = true };
+            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = 5, Ages = true,
+                ProcessingChain = processingChain, Bridge = bridge, GoldEnabled = gold, LargeEconomy = largeEconomy,
+                Age3GoldCostAgrarian = 0, Age3GoldCostMetallurgy = 200 };
+            if (largeEconomy) LiveGameRules.EnableLargeEconomy(s);
 
             int westX = LargeSnap(48), westZ = LargeSnap(LargeRange(rng, 48, 208));
             int eastX = LargeWidthMeters - westX, eastZ = LargeHeightMeters - westZ;
@@ -97,8 +101,8 @@ namespace Rts.Simulation
                     int mirror = LargeMirror(cell);
                     if (!reachable[mirror] || used.Contains(mirror)) throw new InvalidOperationException("Large map resource mirror is unavailable.");
                     used.Add(mirror);
-                    nodes.Add(LargeNode(nodes.Count + 1, kind, cell));
-                    nodes.Add(LargeNode(nodes.Count + 1, kind, mirror));
+                    nodes.Add(LargeNode(nodes.Count + 1, kind, cell, s.Economy));
+                    nodes.Add(LargeNode(nodes.Count + 1, kind, mirror, s.Economy));
                 }
             }
 
@@ -115,8 +119,8 @@ namespace Rts.Simulation
                     int mirror = LargeMirror(cell);
                     if (!reachable[mirror] || used.Contains(mirror)) throw new InvalidOperationException("Large map cluster mirror is unavailable.");
                     used.Add(mirror);
-                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], cell));
-                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], mirror));
+                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], cell, s.Economy));
+                    nodes.Add(LargeNode(nodes.Count + 1, clusterKinds[cluster], mirror, s.Economy));
                 }
             // The gold cluster takes the place of the only remote food, and the three food points by each core run out in
             // about five minutes, before any age that allows farms, so no side ever advanced (10-10). With gold, eight
@@ -130,16 +134,15 @@ namespace Rts.Simulation
                     int mirror = LargeMirror(cell);
                     used.Add(cell);
                     used.Add(mirror);
-                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, cell));
-                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, mirror));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, cell, s.Economy));
+                    nodes.Add(LargeNode(nodes.Count + 1, ResourceKind.Food, mirror, s.Economy));
                 }
             s.ResourceNodes = nodes.ToArray();
 
             PlaceLargeStartingUnits(s, westX, westZ, eastX, eastZ);
-            s.Economy = new EconomyRules { Enabled = true, Industry = true, InfantryMetalCost = 5, Ages = true,
-                ProcessingChain = processingChain, Bridge = bridge, GoldEnabled = gold,
-                Age3GoldCostAgrarian = 0, Age3GoldCostMetallurgy = 200 };
-            s.Economy.AutoVillagerTarget = 20;
+            if (largeEconomy)
+                for (int i = 0; i < s.Armies.Length; i++) s.Armies[i].Capacity = s.Economy.LargeArmyCapacity;
+            if (!largeEconomy) s.Economy.AutoVillagerTarget = 20;
             s.Economy.AdvanceFoodCost = 240; s.Economy.AdvanceWoodCost = 180;
             s.Economy.Age2FoodCost = 480; s.Economy.Age2WoodCost = 300;
             s.Economy.Age3FoodCost = 720; s.Economy.Age3WoodCost = 480;
@@ -285,10 +288,13 @@ namespace Rts.Simulation
         private static long LargeSquare(long value) => value * value;
         private static SimPoint LargePoint(int x, int z) => new SimPoint(Fix64.FromInt(x), Fix64.FromInt(z));
 
-        private static ResourceNodeDefinition LargeNode(int id, ResourceKind kind, int cell)
+        private static ResourceNodeDefinition LargeNode(int id, ResourceKind kind, int cell, EconomyRules rules)
         {
-            int amount = kind == ResourceKind.Food ? LargeFoodAmount : kind == ResourceKind.Ore ? LargeOreAmount
-                : kind == ResourceKind.Stone ? LargeStoneAmount : kind == ResourceKind.Gold ? 400 : LargeResourceAmount;
+            int amount = kind == ResourceKind.Food ? checked(LargeFoodAmount * (rules.LargeEconomy ? rules.LargeFoodAmountPermille : 1000) / 1000)
+                : kind == ResourceKind.Ore ? checked(LargeOreAmount * (rules.LargeEconomy ? rules.LargeOreAmountPermille : 1000) / 1000)
+                : kind == ResourceKind.Stone ? checked(LargeStoneAmount * (rules.LargeEconomy ? rules.LargeStoneAmountPermille : 1000) / 1000)
+                : kind == ResourceKind.Gold ? checked(400 * (rules.LargeEconomy ? rules.LargeGoldAmountPermille : 1000) / 1000)
+                : checked(LargeResourceAmount * (rules.LargeEconomy ? rules.LargeResourceAmountPermille : 1000) / 1000);
             return new ResourceNodeDefinition { Id = (uint)id, Kind = kind,
                 Position = LargePoint(LargeCenterX(cell), LargeCenterZ(cell)), Amount = amount };
         }

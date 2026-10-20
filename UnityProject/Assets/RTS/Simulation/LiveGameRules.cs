@@ -11,7 +11,8 @@ namespace Rts.Simulation
         /// <summary>The terrain or large map of the played game, with its rules.</summary>
         public static ScenarioDefinition Create(ulong mapSeed, bool largeMap, bool allCivilisations, bool monks, bool ageVictory)
         {
-            var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true)
+            var scenario = largeMap ? MapGenerator.GenerateLarge(mapSeed, gold: allCivilisations, processingChain: true,
+                largeEconomy: true)
                 : MapGenerator.GenerateTerrain(mapSeed, gold: allCivilisations, processingChain: true);
             Apply(scenario, allCivilisations, monks, ageVictory);
             return scenario;
@@ -93,10 +94,46 @@ namespace Rts.Simulation
             e.AutoReturnAfterHuman = true;
             e.BuildingReservations = true;
             e.NoNegativeStock = true;
+            if (e.LargeEconomy)
+            {
+                EnableLargeEconomy(scenario);
+            }
             // The late push is now a real assault under SiegeByAge. Keep the core defence meaningful, but do not let
             // the old 16-cell/30-damage setting delete every attacker before the ordinary core attack envelope.
             e.CoreDefenceRange = 9;
             e.CoreDefenceDamage = 15;
+        }
+
+        internal static void EnableLargeEconomy(ScenarioDefinition scenario)
+        {
+            var e = scenario.Economy;
+            e.LargeEconomy = true;
+            e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
+            e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
+            e.AutoVillagerTarget = 300;
+            e.AutoInfantryQueue = 32;
+            e.QueueLimit = 64;
+            e.PopulationCap = 1400;
+            e.BasePopulation = 80;
+            e.HousePopulation = 50;
+            e.TownMaxBuildings = 8;
+            e.TownCoreDistance = 160;
+            e.TownResourceReach = 40;
+            e.LargeFactionCap = 1400;
+            e.LargeTownVillagersPerTown = 80;
+            e.LargeBarracksVillagersPerBuilding = 20;
+            e.LargeTownAutoWorkers = 4;
+            e.LargeTargetRoundTripTicks = 300;
+            e.LargeResourceClusterRadiusMeters = 24;
+            e.LargeClusterDecisionIntervalTicks = 100;
+            e.LargeResourceClusterMaxDropSites = 12;
+            e.LargeClusterMinGatherers = 2;
+            // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
+            // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.
+            e.Builders = 8;
+            scenario.Rules.FactionCap = e.LargeFactionCap;
+            // LargeEconomy changes production scale and capacity only. Unit and building costs remain the same as the
+            // ordinary map, so the large-map AI must improve its collection, hauling, and construction decisions.
         }
     }
 }

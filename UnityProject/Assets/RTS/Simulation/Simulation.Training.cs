@@ -240,6 +240,11 @@ namespace Rts.Simulation
             }
         }
 
+        private void EnqueueCoreVillagerBatch(uint faction)
+        {
+            for (int i = 0; i < world.Config.Economy.LargeVillagerBatch; i++) EnqueueCoreVillager(faction);
+        }
+
         private void CancelCoreVillager(uint faction)
         {
             ref var economy = ref world.Economies[faction - 1];
