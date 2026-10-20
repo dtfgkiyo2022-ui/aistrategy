@@ -1408,7 +1408,9 @@ namespace Rts.Presentation
         private static Button AddSetupButton(VisualElement parent, string text, bool selected, Action action)
         {
             var button = new Button(action);
-            button.text = text;
+            // The chosen button had only the hover colour, so a click under the pointer looked like nothing happened
+            // (owner, 10-20: the tactic choice never seemed to change). A tick mark and a bright frame mark it.
+            button.text = selected ? "✓ " + text : text;
             button.AddToClassList("setup-button");
             button.EnableInClassList("is-selected", selected);
             parent.Add(button);
