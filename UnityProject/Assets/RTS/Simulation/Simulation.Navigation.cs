@@ -75,6 +75,10 @@ namespace Rts.Simulation
                     ref var soldier = ref world.Soldiers[a.SoldierIds[i] - 1];
                     if (!soldier.Alive) continue;
                     var intended = soldier.MoveGoal;
+                    bool splitScout = world.Config.Economy.LargeEconomy && a.ExplorePatrolAuto
+                        && soldier.Initial.Kind == UnitKind.Scout && !soldier.Pursuit.Returning && soldier.ExploreHasGoal;
+                    if (splitScout) intended = soldier.ExploreGoal;
+                    if (!SamePoint(soldier.MoveGoal, intended)) soldier.MoveGoal = intended;
                     bool returning = !(world.Config.Economy.DirectPathMovement && humanFocus)
                         && (a.Policy == PolicyKind.Retreat || a.Decision.Returning);
                     bool atPosition = SamePoint(intended, soldier.Position);

@@ -19,6 +19,14 @@ namespace Rts.Simulation
         private const int ExplorePathFailureLimit = 3;
 
         private bool ExploreScoutingOn => world.Config.Economy.ExploreScouting;
+        private bool LargeExploreOn => ExploreScoutingOn && world.Config.Economy.LargeEconomy;
+
+        private bool LargeExploreReached(uint faction)
+        {
+            int total = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            return (long)world.Factions[faction - 1].ExploredCellCount * 1000L
+                >= (long)world.Config.Economy.LargeExploreTargetPermille * total;
+        }
 
         private bool IsScoutArmy(ArmyState army)
         {
@@ -54,7 +62,8 @@ namespace Rts.Simulation
                 return;
             }
             bool manualPatrol = army.Policy == PolicyKind.Scout && army.Goal.Kind == GoalKind.None;
-            bool autoPatrol = army.Policy == 0 && (world.Tick <= world.Config.Economy.ExploreAutoUntilTick
+            bool autoPatrol = army.Policy == 0 && ((LargeExploreOn && !LargeExploreReached(faction))
+                || (!LargeExploreOn && world.Tick <= world.Config.Economy.ExploreAutoUntilTick)
                 || army.ExplorePatrolActive && ExploreAnyReturning(army));
             if (!manualPatrol && !autoPatrol)
             {
@@ -103,6 +112,13 @@ namespace Rts.Simulation
                 army.ExploreRetargetTick = world.Tick;
                 army.ExploreHasGoal = false;
                 army.HasPathGoal = false;
+                if (LargeExploreOn && army.ExplorePatrolAuto)
+                    foreach (uint id in army.SoldierIds)
+                    {
+                        ref var scout = ref world.Soldiers[id - 1];
+                        scout.ExploreHasGoal = false;
+                        scout.ExploreRetargetTick = world.Tick;
+                    }
             }
             if (world.Tick < army.ExploreRetargetTick && !ExploreArrived(army)) return;
 
@@ -112,6 +128,11 @@ namespace Rts.Simulation
                 ? new[] { new ExploreAvoidChunk(army.ExploreAvoidChunkX, army.ExploreAvoidChunkZ, army.ExploreAvoidUntilTick) }
                 : Array.Empty<ExploreAvoidChunk>();
             var core = world.Cores[world.Factions[faction - 1].CoreId - 1].Definition.Position;
+            if (LargeExploreOn && autoPatrol && !manualPatrol)
+            {
+                UpdateLargeScoutTargets(faction, ref army, core, passable, avoid);
+                return;
+            }
             var target = ExploreDecision.NextTarget(world.Factions[faction - 1].ExploredCells,
                 world.Config.Map.WidthCells, world.Config.Map.HeightCells, world.Config.Map.CellSizeMeters,
                 world.Config.Economy.ExploreChunkCells, world.Config.Economy.ExploreMinUnexploredPermille,
@@ -131,6 +152,57 @@ namespace Rts.Simulation
                 army.PathImpossible = false;
                 army.ExploreFailureCount = 0;
             }
+        }
+
+        private void UpdateLargeScoutTargets(uint faction, ref ArmyState army, SimPoint core,
+            IReadOnlyList<bool> passable, IReadOnlyList<ExploreAvoidChunk> avoid)
+        {
+            var reserved = new List<ExploreReservedChunk>();
+            bool oldHasGoal = army.ExploreHasGoal;
+            SimPoint oldGoal = army.ExploreGoal;
+            uint[] scouts = army.SoldierIds.Where(id => world.Soldiers[id - 1].Alive
+                && world.Soldiers[id - 1].Initial.Kind == UnitKind.Scout).OrderBy(id => id).ToArray();
+            for (int i = 0; i < scouts.Length; i++)
+            {
+                ref var scout = ref world.Soldiers[scouts[i] - 1];
+                bool arrived = scout.ExploreHasGoal && InRange(scout.Position, scout.ExploreGoal, Fix64.FromInt(4));
+                if (!scout.ExploreHasGoal || world.Tick >= scout.ExploreRetargetTick || arrived)
+                {
+                    var target = ExploreDecision.NextTarget(world.Factions[faction - 1].ExploredCells,
+                        world.Factions[faction - 1].ExploredChunkCounts,
+                        world.Config.Map.WidthCells, world.Config.Map.HeightCells, world.Config.Map.CellSizeMeters,
+                        world.Config.Economy.ExploreChunkCells, world.Config.Economy.ExploreMinUnexploredPermille,
+                        world.Config.Economy.ExploreMinUnexploredPermilleStage2,
+                        world.Config.Economy.ExploreMinUnexploredPermilleStage3,
+                        world.Config.Economy.ExploreMinUnexploredPermilleStage4,
+                        core, passable, avoid, reserved, world.Tick, world.Config.Economy.ExploreAvoidChunks);
+                    scout.ExploreHasGoal = target.HasTarget;
+                    scout.ExploreGoal = target.Position;
+                    scout.ExploreGoalChunkX = target.ChunkX;
+                    scout.ExploreGoalChunkZ = target.ChunkZ;
+                    scout.ExploreRetargetTick = checked(world.Tick + world.Config.Economy.ExploreRetargetTicks);
+                    scout.TacticalRoute = false;
+                    scout.LocalPath = null;
+                }
+                if (scout.ExploreHasGoal)
+                    reserved.Add(new ExploreReservedChunk(scout.ExploreGoalChunkX, scout.ExploreGoalChunkZ));
+            }
+            if (scouts.Length == 0)
+            {
+                army.ExploreHasGoal = false;
+                army.ExploreGoal = default;
+            }
+            else
+            {
+                var lead = world.Soldiers[scouts[0] - 1];
+                army.ExploreHasGoal = lead.ExploreHasGoal;
+                army.ExploreGoal = lead.ExploreGoal;
+                army.ExploreGoalChunkX = lead.ExploreGoalChunkX;
+                army.ExploreGoalChunkZ = lead.ExploreGoalChunkZ;
+                army.ExploreRetargetTick = lead.ExploreRetargetTick;
+            }
+            if (oldHasGoal != army.ExploreHasGoal || oldHasGoal && !SamePoint(oldGoal, army.ExploreGoal))
+                army.HasPathGoal = false;
         }
 
         private PolicyView ArmyPolicy(uint id)

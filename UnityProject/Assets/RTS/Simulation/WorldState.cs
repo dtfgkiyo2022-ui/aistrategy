@@ -33,6 +33,11 @@ namespace Rts.Simulation
         internal long ConversionLastAttackTick;
         /// <summary>V3-13 #2: the observation contact currently retained by an autonomous cult monk.</summary>
         internal uint CultTargetContactId;
+        /// <summary>LargeEconomy: each automatic scout keeps its own deterministic patrol chunk.</summary>
+        internal bool ExploreHasGoal;
+        internal SimPoint ExploreGoal;
+        internal int ExploreGoalChunkX, ExploreGoalChunkZ;
+        internal long ExploreRetargetTick;
     }
 
     internal struct ArmyState
@@ -91,6 +96,8 @@ namespace Rts.Simulation
         internal long[] CultObservedLastSeenTicks;
         internal long[] CultObservedValidUntilTicks;
         internal bool[] VisibleCells, ExploredCells;
+        internal int ExploredCellCount;
+        internal int[] ExploredChunkCounts;
         // Visibility is maintained as source counts so a moving or removed source can subtract only its old cells.
         internal int[] VisibleCounts;
         /// <summary>Resource amounts last seen by this faction. Allocated only while ResourceFog is enabled.</summary>
@@ -402,12 +409,16 @@ namespace Rts.Simulation
             {
                 var d = Config.Factions[f];
                 int cellCount = checked(Config.Map.WidthCells * Config.Map.HeightCells);
+                int exploreChunkCells = Math.Max(1, Config.Economy.ExploreChunkCells);
+                int exploreChunkCount = (Config.Map.WidthCells + exploreChunkCells - 1) / exploreChunkCells
+                    * ((Config.Map.HeightCells + exploreChunkCells - 1) / exploreChunkCells);
                 Factions[f] = new FactionState { Id = d.Id, CoreId = d.CoreId, ArmyIds = d.ArmyIds,
                     ContactIds = new uint[Soldiers.Length], ContactPositions = new SimPoint[Soldiers.Length],
                     ContactLastSeenTicks = new long[Soldiers.Length], ContactAbsent = new bool[Soldiers.Length],
                     CultObservedContactIds = new uint[Soldiers.Length], CultObservedKinds = new UnitKind[Soldiers.Length],
                     CultObservedLastSeenTicks = new long[Soldiers.Length], CultObservedValidUntilTicks = new long[Soldiers.Length],
                     VisibleCells = new bool[cellCount], ExploredCells = new bool[cellCount], VisibleCounts = new int[cellCount],
+                    ExploredChunkCounts = new int[exploreChunkCount],
                     ResourceSeen = Config.Economy.ResourceFog ? new bool[Config.ResourceNodes.Length] : null,
                     ResourceRemaining = Config.Economy.ResourceFog ? new int[Config.ResourceNodes.Length] : null,
                     Objectives = new ObjectiveMemory[Cores.Length + Outposts.Length], NextContactId = 1, NextArmyContactId = 1, ArmyContacts = new ArmyContactMemory[Armies.Length] };
@@ -553,7 +564,9 @@ namespace Rts.Simulation
                   && e.LargeClusterMinGatherers > 0 && e.LargeDropSiteMinSpacingMeters > 0
                   && e.LargeClusterSwitchPermille > 0 && e.LargeClusterSwitchPermille <= 1000
                   && e.LargeVillagersPerFarm > 0 && e.LargeFarmMinimum > 0 && e.LargeFarmMaximum >= e.LargeFarmMinimum
-                  && e.LargeInfantryResourceReserveUnits > 0),
+                  && e.LargeInfantryResourceReserveUnits > 0
+                  && e.LargeExploreTargetPermille > 0 && e.LargeExploreTargetPermille <= 1000
+                  && e.LargeExploreScoutCount > 0 && e.LargeExploreChunkCells > 0 && e.LargeExploreChunkCells <= 64),
                 "Invalid large economy rules.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
@@ -1061,6 +1074,8 @@ namespace Rts.Simulation
                    LargeVillagersPerFarm = e.LargeVillagersPerFarm, LargeFarmMinimum = e.LargeFarmMinimum,
                    LargeFarmMaximum = e.LargeFarmMaximum,
                    LargeInfantryResourceReserveUnits = e.LargeInfantryResourceReserveUnits,
+                   LargeExploreTargetPermille = e.LargeExploreTargetPermille, LargeExploreScoutCount = e.LargeExploreScoutCount,
+                   LargeExploreChunkCells = e.LargeExploreChunkCells,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,

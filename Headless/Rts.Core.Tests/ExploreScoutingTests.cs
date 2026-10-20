@@ -71,6 +71,20 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void LargeExploreReservationsChooseDifferentChunksInStableOrder()
+        {
+            var explored = new bool[8 * 4];
+            var passable = Enumerable.Repeat(true, explored.Length).ToArray();
+            var first = ExploreDecision.NextTarget(explored, 8, 4, 1, 2, 500, P(0, 0), passable,
+                Array.Empty<ExploreAvoidChunk>(), 0, 0);
+            var second = ExploreDecision.NextTarget(explored, 8, 4, 1, 2, 500,
+                Math.Min(500, 250), Math.Min(250, 100), 1, P(0, 0), passable,
+                Array.Empty<ExploreAvoidChunk>(), new[] { new ExploreReservedChunk(first.ChunkX, first.ChunkZ) }, 0, 0);
+            Assert.That(first.HasTarget && second.HasTarget, Is.True);
+            Assert.That((second.ChunkX, second.ChunkZ), Is.Not.EqualTo((first.ChunkX, first.ChunkZ)));
+        }
+
+        [Test]
         public void ExploreScoutingExtensionRoundTripsAllNonDefaultsAndIsAbsentWhenOff()
         {
             var off = MapGenerator.GenerateTerrain(1);
