@@ -13,8 +13,22 @@ namespace Rts.Presentation
         [SerializeField] private float minDistance = 25f;
         [SerializeField] private float maxDistance = 170f;
 
+        // The look-at point may go this far past the map edge, so the edge can be brought out from under the top bar
+        // and the side panels (10-20 test play: the large map's edges were hard to see).
+        [SerializeField] private float edgeMarginMeters = 24f;
+
         private Vector3 focus;
         private float distance;
+
+        /// <summary>The match's map size. A larger map also lets the camera pull further back to see more of it.</summary>
+        public void SetMap(float widthMeters, float heightMeters)
+        {
+            if (widthMeters <= 0f || heightMeters <= 0f) return;
+            float scale = Mathf.Max(widthMeters / 256f, heightMeters / 128f);
+            maxDistance = Mathf.Max(maxDistance, 170f * Mathf.Sqrt(scale));
+            mapWidth = widthMeters;
+            mapHeight = heightMeters;
+        }
 
         private void Start()
         {
@@ -32,8 +46,8 @@ namespace Rts.Presentation
                 : new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical"));
             if (move.sqrMagnitude > 1f) move.Normalize();
             focus += move * (panSpeed * distance * Time.unscaledDeltaTime);
-            focus.x = Mathf.Clamp(focus.x, 0f, mapWidth);
-            focus.z = Mathf.Clamp(focus.z, 0f, mapHeight);
+            focus.x = Mathf.Clamp(focus.x, -edgeMarginMeters, mapWidth + edgeMarginMeters);
+            focus.z = Mathf.Clamp(focus.z, -edgeMarginMeters, mapHeight + edgeMarginMeters);
 
             float wheel = Input.mouseScrollDelta.y;
             bool overPanel = UiHitAreas.Shared.ContainsScreen(Input.mousePosition, Screen.height);
