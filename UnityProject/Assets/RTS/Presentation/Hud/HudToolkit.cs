@@ -790,7 +790,10 @@ namespace Rts.Presentation
             statsScroll.style.paddingRight = 6f;
             statsScroll.style.paddingBottom = 6f;
             statsFrame.Add(statsScroll);
-            hudRoot.Add(statsFrame);
+            // 10-20 test play: inside hud-root the opened list stayed behind the strategist panel (a later sibling of
+            // hud-root in the document). Like the selection box, the frame is a direct child of the document root.
+            var layer = document != null && document.rootVisualElement != null ? document.rootVisualElement : hudRoot;
+            layer.Add(statsFrame);
             UpdateStatsVisibility();
         }
 
@@ -1099,6 +1102,8 @@ namespace Rts.Presentation
         {
             if (statsToggle != null) statsToggle.text = statsOpen ? "生産統計  ▾" : "生産統計  ▸";
             if (statsScroll != null) statsScroll.style.display = statsOpen ? DisplayStyle.Flex : DisplayStyle.None;
+            // The opened list is in front of every other panel; closed, it is a one-line button again.
+            if (statsOpen && statsFrame != null) statsFrame.BringToFront();
         }
 
         private void RefreshStats(EconomyView economy)
@@ -1403,7 +1408,9 @@ namespace Rts.Presentation
         private static Button AddSetupButton(VisualElement parent, string text, bool selected, Action action)
         {
             var button = new Button(action);
-            button.text = text;
+            // The chosen button had only the hover colour, so a click under the pointer looked like nothing happened
+            // (owner, 10-20: the tactic choice never seemed to change). A tick mark and a bright frame mark it.
+            button.text = selected ? "✓ " + text : text;
             button.AddToClassList("setup-button");
             button.EnableInClassList("is-selected", selected);
             parent.Add(button);

@@ -1020,9 +1020,16 @@ namespace Rts.UnityHost
                 view.SetTerrain(ScenarioTerrain.From(scenario.Map));
                 view.Push(simulation.Capture(viewFactionId));
             }
+            // 10-20 test play: the camera and the ground clicks kept the 256 m x 128 m map of the first weeks, so most
+            // of the large map could not be reached or ordered to. Both follow the match's map now.
+            var battlefieldCamera = FindFirstObjectByType<BattlefieldCamera>();
+            if (battlefieldCamera != null) battlefieldCamera.SetMap(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
+            EconomyPanel.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
+            EconomyLayer.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
             TryStartMatchPack(scenario);
             if (panel != null)
             {
+                panel.SetMapSize(scenario.Map.WidthMeters, scenario.Map.HeightMeters);
                 panel.Bind(port, viewFactionId, viewFactionId, view);
                 panel.PlayerControlMode = this;
                 panel.ExternalAi = this;

@@ -92,7 +92,16 @@ namespace Rts.Presentation
         private readonly EconomyFlowMetrics flowMetrics = new EconomyFlowMetrics();
         private long lastMetricTick = long.MinValue;
         private const float CellMeters = 2f;
-        private const int MapWidthCells = 128, MapHeightCells = 64;
+        // The match's map in cells (set by SetMapSize). As constants of the 256 m x 128 m map they put every belt of the
+        // large map (256 cells wide) at the wrong place: lines broke and folded back on screen (10-20 test play).
+        private static int MapWidthCells = 128, MapHeightCells = 64;
+
+        /// <summary>The match's map size in metres; cells are always 2 m.</summary>
+        public static void SetMapSize(int widthMeters, int heightMeters)
+        {
+            if (widthMeters >= (int)CellMeters) MapWidthCells = widthMeters / (int)CellMeters;
+            if (heightMeters >= (int)CellMeters) MapHeightCells = heightMeters / (int)CellMeters;
+        }
 
         private static readonly Color BeltColor = new Color(0.18f, 0.18f, 0.2f);
         private static readonly Color EnemyBeltColor = new Color(0.3f, 0.2f, 0.2f);

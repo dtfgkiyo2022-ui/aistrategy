@@ -1154,6 +1154,19 @@
     white-space: normal;
 }
 
+/* The chosen button: the hover colour alone could not be told apart from hovering (10-20). */
+.setup-button.is-selected {
+    border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
+    border-left-color: rgb(255, 224, 140);
+    border-right-color: rgb(255, 224, 140);
+    border-top-color: rgb(255, 224, 140);
+    border-bottom-color: rgb(255, 224, 140);
+    -unity-font-style: bold;
+}
+
 .setup-choice-grid {
     flex-direction: row;
     flex-wrap: wrap;
