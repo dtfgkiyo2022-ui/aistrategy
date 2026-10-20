@@ -510,6 +510,9 @@ namespace Rts.Simulation
             if (e.LargeEconomy)
             {
                 c.Rules.FactionCap = e.LargeFactionCap;
+                // LargeEconomy owns the map-sized cap. Keep the legacy command/frame field synchronized even when
+                // an authored or decoded scenario did not also update extension 38.
+                e.DropSiteMax = e.LargeDropSiteMax;
             }
             // Monk rules are opt-in. Keep disabled scenarios byte-for-byte unchanged, but make an enabled authored
             // scenario usable even when an older scenario file has no Monk parameter record yet.
@@ -546,6 +549,7 @@ namespace Rts.Simulation
                  && e.LargeTownVillagersPerTown > 0 && e.LargeBarracksVillagersPerBuilding > 0 && e.LargeTownAutoWorkers > 0
                  && e.LargeTargetRoundTripTicks > 0 && e.LargeResourceClusterRadiusMeters > 0
                  && e.LargeClusterDecisionIntervalTicks > 0 && e.LargeResourceClusterMaxDropSites > 0
+                 && e.LargeDropSiteMax > 0
                  && e.LargeClusterMinGatherers > 0),
                 "Invalid large economy rules.");
             if (e.Industry)
@@ -1046,7 +1050,8 @@ namespace Rts.Simulation
                   LargeTownStoneGatherers = e.LargeTownStoneGatherers, LargeTownVillagersPerTown = e.LargeTownVillagersPerTown,
                   LargeBarracksVillagersPerBuilding = e.LargeBarracksVillagersPerBuilding, LargeTownAutoWorkers = e.LargeTownAutoWorkers,
                   LargeTargetRoundTripTicks = e.LargeTargetRoundTripTicks, LargeResourceClusterRadiusMeters = e.LargeResourceClusterRadiusMeters,
-                  LargeClusterDecisionIntervalTicks = e.LargeClusterDecisionIntervalTicks, LargeResourceClusterMaxDropSites = e.LargeResourceClusterMaxDropSites,
+            LargeClusterDecisionIntervalTicks = e.LargeClusterDecisionIntervalTicks, LargeResourceClusterMaxDropSites = e.LargeResourceClusterMaxDropSites,
+            LargeDropSiteMax = e.LargeDropSiteMax,
                   LargeClusterMinGatherers = e.LargeClusterMinGatherers,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,

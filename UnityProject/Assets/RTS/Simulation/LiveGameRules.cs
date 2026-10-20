@@ -126,7 +126,11 @@ namespace Rts.Simulation
             e.LargeTargetRoundTripTicks = 300;
             e.LargeResourceClusterRadiusMeters = 24;
             e.LargeClusterDecisionIntervalTicks = 100;
-            e.LargeResourceClusterMaxDropSites = 12;
+            e.LargeResourceClusterMaxDropSites = 8;
+            e.LargeDropSiteMax = 8;
+            // DropSiteMax is the existing shared command/frame field. Keep it in sync so the large-map limit is
+            // visible to human placement and older presentation paths as well as the LargeEconomy policy.
+            e.DropSiteMax = e.LargeDropSiteMax;
             e.LargeClusterMinGatherers = 2;
             // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
             // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.

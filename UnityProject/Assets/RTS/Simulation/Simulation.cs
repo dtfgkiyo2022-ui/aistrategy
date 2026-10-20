@@ -43,6 +43,7 @@ namespace Rts.Simulation
         private int[] largeClusterAnchors;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
+        private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
 

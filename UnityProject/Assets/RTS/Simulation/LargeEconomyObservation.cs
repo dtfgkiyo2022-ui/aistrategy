@@ -16,7 +16,7 @@ namespace Rts.Simulation
         public uint FactionId;
         public int Villagers, Soldiers;
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
-        public int Houses, Barracks, DropSites, LumberCamps, OtherBuildings;
+        public int Houses, Barracks, DropSites, Farms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
         public int[] Workers = new int[6];
         public int[] WorkerRoundTripTicks = new int[6];
         public int[] Income = new int[6];
@@ -47,6 +47,7 @@ namespace Rts.Simulation
                         value.TownVillagersQueued = checked(value.TownVillagersQueued + b.Queued);
                     }
                     else if (b.Kind == BuildingKind.House) value.Houses++;
+                    else if (b.Kind == BuildingKind.Farm) value.Farms++;
                     else if (b.Kind == BuildingKind.Barracks)
                     {
                         value.Barracks++;
@@ -59,6 +60,9 @@ namespace Rts.Simulation
                     else if (b.Kind == BuildingKind.LumberCamp) value.LumberCamps++;
                     else value.OtherBuildings++;
                 }
+                for (int cell = 0; cell < world.Belts.Length; cell++)
+                    if (world.Belts[cell].FactionId == faction) value.BeltCells++;
+                value.BeltDelivered = largeBeltDelivered[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
@@ -135,6 +139,12 @@ namespace Rts.Simulation
                     break;
                 }
             }
+        }
+
+        private void RecordLargeBeltDelivery(uint faction)
+        {
+            if (LargeEconomyOn && faction >= 1 && faction <= 2)
+                largeBeltDelivered[faction - 1] = checked(largeBeltDelivered[faction - 1] + 1);
         }
     }
 }

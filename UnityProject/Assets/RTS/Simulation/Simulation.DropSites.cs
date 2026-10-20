@@ -305,7 +305,9 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.AutoOff || economy.Wood < rules.DropSiteWoodCost) return;
             EnsureLargeResourceClusters();
-            int maxSites = rules.LargeResourceClusterMaxDropSites;
+            // The explicit large-map cap is shared with human placement. The cluster setting is kept as a second
+            // guard so a scenario cannot make the automatic policy exceed the command-visible limit.
+            int maxSites = Math.Min(rules.LargeDropSiteMax, rules.LargeResourceClusterMaxDropSites);
             if (AliveDropSites(faction) >= maxSites)
             {
                 DecideAiRawBelts(faction);

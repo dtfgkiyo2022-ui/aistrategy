@@ -377,7 +377,8 @@ internal static class TacticMatchCommand
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "LumberCamps", prefix + "OtherBuildings",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
+                prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
@@ -396,13 +397,13 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 32; i++) cells.Add("");
+                for (int i = 0; i < 35; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
             cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
                 value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
-                value.LumberCamps, value.OtherBuildings, value.BarracksResourceWaiting, value.BarracksPopulationWaiting,
+                value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings, value.BarracksResourceWaiting, value.BarracksPopulationWaiting,
                 value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));

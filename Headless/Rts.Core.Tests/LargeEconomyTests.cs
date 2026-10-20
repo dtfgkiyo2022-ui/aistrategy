@@ -37,6 +37,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeResourceClusterRadiusMeters, Is.EqualTo(large.Economy.LargeResourceClusterRadiusMeters));
             Assert.That(decoded.Economy.LargeClusterDecisionIntervalTicks, Is.EqualTo(large.Economy.LargeClusterDecisionIntervalTicks));
             Assert.That(decoded.Economy.LargeResourceClusterMaxDropSites, Is.EqualTo(large.Economy.LargeResourceClusterMaxDropSites));
+            Assert.That(decoded.Economy.LargeDropSiteMax, Is.EqualTo(large.Economy.LargeDropSiteMax));
             Assert.That(decoded.Economy.LargeClusterMinGatherers, Is.EqualTo(large.Economy.LargeClusterMinGatherers));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
@@ -64,7 +65,9 @@ namespace Rts.Core.Tests
             Assert.That(rules.LargeTargetRoundTripTicks, Is.EqualTo(300));
             Assert.That(rules.LargeResourceClusterRadiusMeters, Is.EqualTo(24));
             Assert.That(rules.LargeClusterDecisionIntervalTicks, Is.EqualTo(100));
-            Assert.That(rules.LargeResourceClusterMaxDropSites, Is.EqualTo(12));
+            Assert.That(rules.LargeResourceClusterMaxDropSites, Is.EqualTo(8));
+            Assert.That(rules.LargeDropSiteMax, Is.EqualTo(8));
+            Assert.That(rules.DropSiteMax, Is.EqualTo(8));
             Assert.That(rules.LargeClusterMinGatherers, Is.EqualTo(2));
             Assert.That(scenario.Rules.FactionCap, Is.EqualTo(1400));
             Assert.That((rules.VillagerFoodCost, rules.InfantryFoodCost, rules.InfantryWoodCost,
@@ -74,6 +77,7 @@ namespace Rts.Core.Tests
                     ordinary.BarracksWoodCost, ordinary.TownWoodCost, ordinary.TownStoneCost, ordinary.TownWork,
                     ordinary.HouseWoodCost, ordinary.HouseWork)));
             var decodedEconomy = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)).Economy;
+            Assert.That(decodedEconomy.LargeDropSiteMax, Is.EqualTo(rules.LargeDropSiteMax));
             Assert.That((decodedEconomy.LargeTownVillagersPerTown, decodedEconomy.LargeBarracksVillagersPerBuilding,
                 decodedEconomy.LargeTownAutoWorkers, decodedEconomy.LargeTargetRoundTripTicks,
                 decodedEconomy.LargeResourceClusterRadiusMeters, decodedEconomy.LargeClusterDecisionIntervalTicks,

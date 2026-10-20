@@ -115,6 +115,8 @@ namespace Rts.Simulation
         public int LargeClusterDecisionIntervalTicks = 100;
         /// <summary>LargeEconomy logistics: maximum automatic resource-cluster drop-offs.</summary>
         public int LargeResourceClusterMaxDropSites = 12;
+        /// <summary>LargeEconomy logistics: the shared human and automatic drop-site limit on the large map.</summary>
+        public int LargeDropSiteMax = 8;
         /// <summary>LargeEconomy logistics: a cluster must have this many active gatherers before it gets a site.</summary>
         public int LargeClusterMinGatherers = 2;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
