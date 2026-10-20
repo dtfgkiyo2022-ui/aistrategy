@@ -47,12 +47,14 @@ namespace Rts.Simulation
                 else if (target.FactionId == 0 && FeedsOwnCore(next, belt.FactionId))
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
+                    RecordLargeBeltDelivery(belt.FactionId);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
                 {
+                    RecordLargeBeltDelivery(belt.FactionId);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;

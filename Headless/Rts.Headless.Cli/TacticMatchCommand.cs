@@ -188,7 +188,7 @@ internal static class TacticMatchCommand
                         firstEnemyCoreSeen[faction - 1] = checked((int)core.LastSeenTick);
                 }
                 long traceTick = simulation.Capture(1).Tick;
-                if (traceTick == 2400 || traceTick == 4800 || traceTick == 7200)
+                if (traceTick % 1000 == 0)
                     WriteExploreTrace(exploreTrace, scenario, simulation.Capture(1), simulation.Capture(2), firstEnemyCoreSeen);
             }
             if (resourceFogTrace != null)
@@ -329,6 +329,16 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        if (scenario.Economy.LargeEconomy)
+        {
+            var outcomeObservation = simulation.CaptureLargeEconomyObservation();
+            Console.WriteLine("outcome: reason=" + (result.IsFault ? "fault" : result.IsAgeVictory ? "age-victory" : result.HasEnded ? "core-destroyed" : "undecided")
+                + " tick=" + outcomeObservation.Tick.ToString(CultureInfo.InvariantCulture)
+                + " core1Hp=" + outcomeObservation.Factions[0].CoreHp.ToString(CultureInfo.InvariantCulture)
+                + " core1Attackers=" + outcomeObservation.Factions[0].EnemySoldiersAtCore.ToString(CultureInfo.InvariantCulture)
+                + " core2Hp=" + outcomeObservation.Factions[1].CoreHp.ToString(CultureInfo.InvariantCulture)
+                + " core2Attackers=" + outcomeObservation.Factions[1].EnemySoldiersAtCore.ToString(CultureInfo.InvariantCulture));
+        }
         for (uint faction = 1; faction <= 2; faction++)
         {
             var economy = simulation.Capture(faction).Economy;
@@ -377,8 +387,11 @@ internal static class TacticMatchCommand
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "LumberCamps", prefix + "OtherBuildings",
-                prefix + "BarracksResourceWaiting", prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
+                prefix + "LumberCamps", prefix + "OtherBuildings",
+                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
+                prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
+                prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -396,14 +409,16 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 32; i++) cells.Add("");
+                for (int i = 0; i < 41; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
             cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
                 value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
-                value.LumberCamps, value.OtherBuildings, value.BarracksResourceWaiting, value.BarracksPopulationWaiting,
-                value.BarracksTraining }.Select(FormatInvariant));
+                value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
+                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
+                value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
+                value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
@@ -447,12 +462,50 @@ internal static class TacticMatchCommand
             {
                 factionId = frame.FactionId,
                 exploredPermille = frame.Fog.ExploredCells.Count(value => value) * 1000 / Math.Max(1, frame.Fog.ExploredCells.Count),
-                scoutAlive = frame.Observation.OwnArmies.Any(army => army.Kind == UnitKind.Scout && army.AliveCount > 0),
+                scoutAlive = frame.Observation.OwnArmies.Where(army => army.Kind == UnitKind.Scout).Sum(army => army.AliveCount),
+                patrollingScouts = frame.Observation.OwnArmies.Where(army => army.Kind == UnitKind.Scout
+                    && army.PatrolObjective.Kind == GoalKind.Point).Sum(army => army.AliveCount),
                 firstEnemyCoreSeenTick = firstEnemyCoreSeen[index],
-                knownResourcePoints = scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)])
+                knownResourcePoints = scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)]),
+                knownResourceClusters = KnownResourceClusters(scenario, frame)
             })
         }));
         writer.Flush();
+    }
+
+    private static int KnownResourceClusters(ScenarioDefinition scenario, FactionFrame frame)
+    {
+        int radius = Math.Max(1, scenario.Economy.LargeResourceClusterRadiusMeters);
+        long radiusRaw = Fix64.FromInt(radius).Raw;
+        long radiusSquared = radiusRaw * radiusRaw;
+        var known = new bool[scenario.ResourceNodes.Length];
+        for (int i = 0; i < known.Length; i++)
+            known[i] = frame.Fog.ExploredCells[CellOf(scenario, scenario.ResourceNodes[i].Position)];
+        int clusters = 0;
+        for (int start = 0; start < known.Length; start++)
+        {
+            if (!known[start]) continue;
+            clusters++;
+            var queue = new Queue<int>();
+            known[start] = false;
+            queue.Enqueue(start);
+            while (queue.Count != 0)
+            {
+                var node = scenario.ResourceNodes[queue.Dequeue()];
+                for (int i = 0; i < known.Length; i++)
+                {
+                    if (!known[i] || scenario.ResourceNodes[i].Kind != node.Kind) continue;
+                    long dx = scenario.ResourceNodes[i].Position.X.Raw - node.Position.X.Raw;
+                    long dz = scenario.ResourceNodes[i].Position.Z.Raw - node.Position.Z.Raw;
+                    if (dx * dx + dz * dz <= radiusSquared)
+                    {
+                        known[i] = false;
+                        queue.Enqueue(i);
+                    }
+                }
+            }
+        }
+        return clusters;
     }
 
     private static int CellOf(ScenarioDefinition scenario, SimPoint point)

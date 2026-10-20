@@ -37,7 +37,11 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeResourceClusterRadiusMeters, Is.EqualTo(large.Economy.LargeResourceClusterRadiusMeters));
             Assert.That(decoded.Economy.LargeClusterDecisionIntervalTicks, Is.EqualTo(large.Economy.LargeClusterDecisionIntervalTicks));
             Assert.That(decoded.Economy.LargeResourceClusterMaxDropSites, Is.EqualTo(large.Economy.LargeResourceClusterMaxDropSites));
+            Assert.That(decoded.Economy.LargeDropSiteMax, Is.EqualTo(large.Economy.LargeDropSiteMax));
             Assert.That(decoded.Economy.LargeClusterMinGatherers, Is.EqualTo(large.Economy.LargeClusterMinGatherers));
+            Assert.That(decoded.Economy.LargeExploreTargetPermille, Is.EqualTo(large.Economy.LargeExploreTargetPermille));
+            Assert.That(decoded.Economy.LargeExploreScoutCount, Is.EqualTo(large.Economy.LargeExploreScoutCount));
+            Assert.That(decoded.Economy.LargeExploreChunkCells, Is.EqualTo(large.Economy.LargeExploreChunkCells));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
@@ -64,7 +68,9 @@ namespace Rts.Core.Tests
             Assert.That(rules.LargeTargetRoundTripTicks, Is.EqualTo(300));
             Assert.That(rules.LargeResourceClusterRadiusMeters, Is.EqualTo(24));
             Assert.That(rules.LargeClusterDecisionIntervalTicks, Is.EqualTo(100));
-            Assert.That(rules.LargeResourceClusterMaxDropSites, Is.EqualTo(12));
+            Assert.That(rules.LargeResourceClusterMaxDropSites, Is.EqualTo(8));
+            Assert.That(rules.LargeDropSiteMax, Is.EqualTo(8));
+            Assert.That(rules.DropSiteMax, Is.EqualTo(8));
             Assert.That(rules.LargeClusterMinGatherers, Is.EqualTo(2));
             Assert.That(scenario.Rules.FactionCap, Is.EqualTo(1400));
             Assert.That((rules.VillagerFoodCost, rules.InfantryFoodCost, rules.InfantryWoodCost,
@@ -74,6 +80,7 @@ namespace Rts.Core.Tests
                     ordinary.BarracksWoodCost, ordinary.TownWoodCost, ordinary.TownStoneCost, ordinary.TownWork,
                     ordinary.HouseWoodCost, ordinary.HouseWork)));
             var decodedEconomy = ScenarioBinary.Decode(ScenarioBinary.Encode(scenario)).Economy;
+            Assert.That(decodedEconomy.LargeDropSiteMax, Is.EqualTo(rules.LargeDropSiteMax));
             Assert.That((decodedEconomy.LargeTownVillagersPerTown, decodedEconomy.LargeBarracksVillagersPerBuilding,
                 decodedEconomy.LargeTownAutoWorkers, decodedEconomy.LargeTargetRoundTripTicks,
                 decodedEconomy.LargeResourceClusterRadiusMeters, decodedEconomy.LargeClusterDecisionIntervalTicks,
@@ -97,6 +104,26 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void LargeExploreTuningIsIgnoredWhenLargeEconomyIsOff()
+        {
+            var left = LiveGameRules.Create(4, false, true, false, false);
+            var right = LiveGameRules.Create(4, false, true, false, false);
+            right.Economy.LargeExploreTargetPermille = 777;
+            right.Economy.LargeExploreScoutCount = 2;
+            right.Economy.LargeExploreChunkCells = 32;
+            Assert.That(ScenarioBinary.Encode(right), Is.EqualTo(ScenarioBinary.Encode(left)));
+            var a = new Battle(left);
+            var b = new Battle(right);
+            for (long tick = 1; tick <= 1200; tick++)
+            {
+                a.Step(tick, Array.Empty<ScheduledInput>());
+                b.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(ReplayBinary.Hash(a.CaptureDiagnostic().CanonicalState),
+                    Is.EqualTo(ReplayBinary.Hash(b.CaptureDiagnostic().CanonicalState)), "tick " + tick);
+            }
+        }
+
+        [Test]
         public void LargeEconomySimulationIsDeterministic()
         {
             var left = new Battle(LiveGameRules.Create(11, true, false, false, false));
@@ -108,6 +135,17 @@ namespace Rts.Core.Tests
                 if (tick % 200 == 0)
                     Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
                         Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
+            }
+        }
+
+        [Test]
+        public void LargeEconomyScoutingDoesNotFaultThroughFifteenMinutes()
+        {
+            var simulation = new Battle(LiveGameRules.Create(1, true, true, false, false));
+            for (long tick = 1; tick <= 18000; tick++)
+            {
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+                Assert.That(simulation.Capture(1).Result.IsFault, Is.False, "tick " + tick);
             }
         }
     }

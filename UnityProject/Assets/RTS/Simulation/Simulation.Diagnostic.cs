@@ -34,7 +34,13 @@ namespace Rts.Simulation
                     w.Value(n+"Alive",p.Alive); w.Point(n+"Position",p.Position); w.Value(n+"Hp",p.Hp); w.Value(n+"TargetKind",p.TargetKind); w.Value(n+"TargetId",p.TargetId);
                      w.Value(n+"NextAttackTick",p.NextAttackTick); w.Point(n+"MoveGoal",p.MoveGoal); w.Value(n+"StepDistance.Raw",p.StepDistance.Raw);
                      if (RationsOn) w.Value(n+"LastCombatTick",p.LastCombatTick);
-                     w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
+                    w.Value(n+"IsMoving",p.IsMoving); w.Value(n+"IsAttacking",p.IsAttacking); w.Value(n+"IsRetreating",p.IsRetreating);
+                    if (world.Config.Economy.LargeEconomy && p.Initial.Kind == UnitKind.Scout)
+                    {
+                        w.Value(n+"ExploreHasGoal", p.ExploreHasGoal); w.Point(n+"ExploreGoal", p.ExploreGoal);
+                        w.Value(n+"ExploreGoalChunkX", p.ExploreGoalChunkX); w.Value(n+"ExploreGoalChunkZ", p.ExploreGoalChunkZ);
+                        w.Value(n+"ExploreRetargetTick", p.ExploreRetargetTick);
+                    }
                      if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);

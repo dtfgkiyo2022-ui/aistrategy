@@ -425,9 +425,31 @@ namespace Rts.Simulation
                 ? Math.Max(1, world.Config.Economy.LargeTownStoneGatherers / 3)
                 : world.Config.Economy.LargeTownStoneGatherers;
             if (townNeedsStone && food >= stoneTarget * 2 && stone < stoneTarget) return ResourceKind.Stone;
+            // After the 300-villager line is filled, the next useful income is the infantry line. Keep a bounded
+            // reserve for several ordinary-cost batches and name the missing input explicitly, including ore for
+            // metal. This is a scheduling choice only; unit prices and training work remain unchanged.
+            if (villagers >= AutoVillagerTargetFor(v.FactionId))
+            {
+                var infantryInput = LargeInfantryInputKindFor(v.FactionId);
+                if (infantryInput != 0) return infantryInput;
+            }
             if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return ResourceKind.Wood;
             if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return ResourceKind.Food;
             return EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood);
+        }
+
+        private ResourceKind LargeInfantryInputKindFor(uint faction)
+        {
+            if (!CompleteBarracks(faction)) return 0;
+            ref var economy = ref world.Economies[faction - 1];
+            int reserve = world.Config.Economy.LargeInfantryResourceReserveUnits;
+            int foodNeed = checked(InfantryFoodFor(faction) * reserve);
+            int woodNeed = checked(InfantryWoodFor(faction) * reserve);
+            int metalNeed = checked(InfantryMetalFor(faction) * reserve);
+            if (metalNeed > 0 && economy.Metal < metalNeed) return ResourceKind.Ore;
+            if (foodNeed > 0 && economy.Food < foodNeed) return ResourceKind.Food;
+            if (woodNeed > 0 && economy.Wood < woodNeed) return ResourceKind.Wood;
+            return 0;
         }
 
         private void RefreshLargeWorkCounts()
@@ -502,10 +524,7 @@ namespace Rts.Simulation
         {
             if (kind == ResourceKind.Gold && !LargeEconomyOn) return NearestGoldNode(position, faction);
             if (LargeEconomyOn) return NearestLargeWorkNode(position, kind, faction);
-            // LargeEconomy's authored large map has deterministic symmetric resource placement. Its automatic economy
-            // may plan against the full placement so a side does not exhaust its starting wood while waiting for a
-            // scout; ordinary fogged maps retain the explored-only rule.
-            if (ResourceFogOn && !LargeEconomyOn)
+            if (ResourceFogOn)
             {
                 int best = -1;
                 long bestDistance = 0;
@@ -588,12 +607,14 @@ namespace Rts.Simulation
             uint bestAnchorId = 0;
             for (int cluster = 0; cluster < largeClusterNodes.Length; cluster++)
             {
-                if (largeClusterKinds[cluster] != kind || ClusterRemaining(cluster) <= 0) continue;
-                var anchor = world.Nodes[largeClusterAnchors[cluster]].Definition.Position;
+                if (largeClusterKinds[cluster] != kind) continue;
+                int knownNode = FirstKnownRemainingNode(faction, cluster);
+                if (knownNode < 0) continue;
+                var anchor = world.Nodes[knownNode].Definition.Position;
                 var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
                 var drop = DropOff(probe).point;
                 var distance = DistanceSquared(anchor, drop);
-                uint anchorId = world.Nodes[largeClusterAnchors[cluster]].Definition.Id;
+                uint anchorId = world.Nodes[knownNode].Definition.Id;
                 if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
                 { bestCluster = cluster; bestDropDistance = distance; bestAnchorId = anchorId; }
             }
@@ -602,7 +623,7 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[bestCluster])
             {
                 var node = world.Nodes[nodeIndex];
-                if (node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
                 var distance = DistanceSquared(position, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
@@ -616,6 +637,13 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[cluster])
                 remaining = checked(remaining + Math.Max(0, world.Nodes[nodeIndex].Remaining));
             return remaining;
+        }
+
+        private int FirstKnownRemainingNode(uint faction, int cluster)
+        {
+            foreach (int nodeIndex in largeClusterNodes[cluster])
+                if (ResourceKnownToFaction(faction, nodeIndex) && world.Nodes[nodeIndex].Remaining > 0) return nodeIndex;
+            return -1;
         }
 
         private int NearestGoldNode(SimPoint position, uint faction)
@@ -787,7 +815,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if (!node.Fishing || node.Remaining <= 0) continue;
+                if ((LargeEconomyOn && !ResourceKnownToFaction(faction, i)) || !node.Fishing || node.Remaining <= 0) continue;
                 if (harborOnly && !HarborCoversFish(faction, node.Definition.Position)) continue;
                 long dx = node.Definition.Position.X.Raw - position.X.Raw;
                 long dz = node.Definition.Position.Z.Raw - position.Z.Raw;

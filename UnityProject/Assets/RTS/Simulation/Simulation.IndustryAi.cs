@@ -2186,6 +2186,20 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            if (LargeEconomyOn)
+            {
+                int missing = 0;
+                var seen = new bool[world.Belts.Length];
+                foreach (var (route, facings) in routes)
+                    for (int i = 0; i < route.Length; i++)
+                    {
+                        int cell = route[i];
+                        if (cell < 0 || cell >= world.Belts.Length || seen[cell]) continue;
+                        seen[cell] = true;
+                        if (world.Belts[cell].FactionId == 0) missing++;
+                    }
+                if (owned + missing > rules.BeltLimit || economy.Wood < missing * rules.BeltWoodCost) return false;
+            }
             bool whole = true;
             foreach (var (route, facings) in routes)
                 for (int i = 0; i < route.Length; i++)
@@ -2221,7 +2235,7 @@ namespace Rts.Simulation
 
         private (int[] cells, Facing[] facings) BeltRoute(uint faction, int start, bool[] taken, Func<int, int, bool> into)
         {
-            if (!PortIsOpen(start, faction) || taken[start]) return (null, null);
+            if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
             var from = new int[cells];
             for (int i = 0; i < cells; i++) from[i] = -2;
@@ -2235,6 +2249,7 @@ namespace Rts.Simulation
                 {
                     int next = BeltNext(cell, side);
                     if (next < 0) continue;
+                    if (!AiBeltCellKnown(faction, next)) continue;
                     if (into(cell, next))
                     {
                         int length = 0;
@@ -2256,6 +2271,13 @@ namespace Rts.Simulation
             return (null, null);
         }
 
+        private bool AiBeltCellKnown(uint faction, int cell)
+        {
+            if (!LargeEconomyOn) return true;
+            var explored = world.Factions[faction - 1].ExploredCells;
+            return cell >= 0 && cell < explored.Length && explored[cell];
+        }
+
         private const int FarmTarget = 2, FarmSearchRadiusCells = 12;
 
         /// <summary>
@@ -2269,7 +2291,12 @@ namespace Rts.Simulation
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
-            int farmTarget = EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
+            int farmTarget = LargeEconomyOn
+                ? Math.Min(world.Config.Economy.LargeFarmMaximum,
+                    Math.Max(world.Config.Economy.LargeFarmMinimum,
+                        (LivingVillagers(faction) + world.Config.Economy.LargeVillagersPerFarm - 1)
+                            / world.Config.Economy.LargeVillagersPerFarm))
+                : EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
             if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)

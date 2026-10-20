@@ -203,13 +203,13 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var candidate = world.Nodes[i];
-                if ((!LargeEconomyOn && !ResourceKnownToFaction(faction, i)) || candidate.Remaining <= 0
+                if (!ResourceKnownToFaction(faction, i) || candidate.Remaining <= 0
                     || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
                 int count = 0, amount = 0;
                 for (int j = 0; j < world.Nodes.Length; j++)
                 {
                     var node = world.Nodes[j];
-                    if ((!LargeEconomyOn && !ResourceKnownToFaction(faction, j)) || node.Remaining <= 0
+                    if (!ResourceKnownToFaction(faction, j) || node.Remaining <= 0
                         || !InRange(candidate.Definition.Position, node.Definition.Position, Fix64.FromInt(rules.TownResourceReach))) continue;
                     count++; amount = checked(amount + node.Remaining);
                 }
@@ -250,7 +250,7 @@ namespace Rts.Simulation
             for (int i = 0; i < world.Nodes.Length; i++)
             {
                 var node = world.Nodes[i];
-                if ((!LargeEconomyOn && !ResourceKnownToFaction(town.FactionId, i)) || node.Remaining <= 0
+                if (!ResourceKnownToFaction(town.FactionId, i) || node.Remaining <= 0
                     || !InRange(BuildingCenter(town), node.Definition.Position, Fix64.FromInt(world.Config.Economy.TownResourceReach))) continue;
                 var distance = DistanceSquared(from, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < world.Nodes[best].Definition.Id)
@@ -767,6 +767,7 @@ namespace Rts.Simulation
             if (DistanceSquared(FootprintCenter(origin, size), core) < new BigInteger(coreDistance.Raw) * coreDistance.Raw) return false;
             foreach (int cell in Footprint(origin, size))
             {
+                if (LargeEconomyOn && !world.Factions[faction - 1].ExploredCells[cell]) return false;
                 if (!world.Map.IsPassable(cell) || IsRiverCell(cell)) return false;
                 if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
                 foreach (var node in world.Nodes)
