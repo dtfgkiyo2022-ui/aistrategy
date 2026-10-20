@@ -128,6 +128,11 @@ namespace Rts.Simulation
             e.LargeClusterDecisionIntervalTicks = 100;
             e.LargeResourceClusterMaxDropSites = 12;
             e.LargeClusterMinGatherers = 2;
+            e.ExploreScouting = true;
+            e.LargeExploreTargetPermille = 900;
+            e.LargeExploreScoutCount = 4;
+            e.LargeExploreChunkCells = 16;
+            e.ExploreChunkCells = e.LargeExploreChunkCells;
             // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
             // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.
             e.Builders = 8;

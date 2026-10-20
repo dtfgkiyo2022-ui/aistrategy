@@ -188,7 +188,7 @@ internal static class TacticMatchCommand
                         firstEnemyCoreSeen[faction - 1] = checked((int)core.LastSeenTick);
                 }
                 long traceTick = simulation.Capture(1).Tick;
-                if (traceTick == 2400 || traceTick == 4800 || traceTick == 7200)
+                if (traceTick % 1000 == 0)
                     WriteExploreTrace(exploreTrace, scenario, simulation.Capture(1), simulation.Capture(2), firstEnemyCoreSeen);
             }
             if (resourceFogTrace != null)
@@ -447,12 +447,50 @@ internal static class TacticMatchCommand
             {
                 factionId = frame.FactionId,
                 exploredPermille = frame.Fog.ExploredCells.Count(value => value) * 1000 / Math.Max(1, frame.Fog.ExploredCells.Count),
-                scoutAlive = frame.Observation.OwnArmies.Any(army => army.Kind == UnitKind.Scout && army.AliveCount > 0),
+                scoutAlive = frame.Observation.OwnArmies.Where(army => army.Kind == UnitKind.Scout).Sum(army => army.AliveCount),
+                patrollingScouts = frame.Observation.OwnArmies.Where(army => army.Kind == UnitKind.Scout
+                    && army.PatrolObjective.Kind == GoalKind.Point).Sum(army => army.AliveCount),
                 firstEnemyCoreSeenTick = firstEnemyCoreSeen[index],
-                knownResourcePoints = scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)])
+                knownResourcePoints = scenario.ResourceNodes.Count(node => frame.Fog.ExploredCells[CellOf(scenario, node.Position)]),
+                knownResourceClusters = KnownResourceClusters(scenario, frame)
             })
         }));
         writer.Flush();
+    }
+
+    private static int KnownResourceClusters(ScenarioDefinition scenario, FactionFrame frame)
+    {
+        int radius = Math.Max(1, scenario.Economy.LargeResourceClusterRadiusMeters);
+        long radiusRaw = Fix64.FromInt(radius).Raw;
+        long radiusSquared = radiusRaw * radiusRaw;
+        var known = new bool[scenario.ResourceNodes.Length];
+        for (int i = 0; i < known.Length; i++)
+            known[i] = frame.Fog.ExploredCells[CellOf(scenario, scenario.ResourceNodes[i].Position)];
+        int clusters = 0;
+        for (int start = 0; start < known.Length; start++)
+        {
+            if (!known[start]) continue;
+            clusters++;
+            var queue = new Queue<int>();
+            known[start] = false;
+            queue.Enqueue(start);
+            while (queue.Count != 0)
+            {
+                var node = scenario.ResourceNodes[queue.Dequeue()];
+                for (int i = 0; i < known.Length; i++)
+                {
+                    if (!known[i] || scenario.ResourceNodes[i].Kind != node.Kind) continue;
+                    long dx = scenario.ResourceNodes[i].Position.X.Raw - node.Position.X.Raw;
+                    long dz = scenario.ResourceNodes[i].Position.Z.Raw - node.Position.Z.Raw;
+                    if (dx * dx + dz * dz <= radiusSquared)
+                    {
+                        known[i] = false;
+                        queue.Enqueue(i);
+                    }
+                }
+            }
+        }
+        return clusters;
     }
 
     private static int CellOf(ScenarioDefinition scenario, SimPoint point)

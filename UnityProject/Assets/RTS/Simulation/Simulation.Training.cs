@@ -613,7 +613,10 @@ namespace Rts.Simulation
         private bool DecideScout(uint faction, ref BuildingState barracks)
         {
             if (!AgesOn || SavingToAdvance(faction) || barracks.Queued >= world.Config.Economy.QueueLimit) return false;
-            if (QueuedOf(faction, UnitKind.Scout) > 0 || !HasRoomFor(faction, UnitKind.Scout) || !CanPay(faction, UnitKind.Scout)) return false;
+            int planned = LivingClass(faction, UnitKind.Scout) + QueuedOf(faction, UnitKind.Scout);
+            int desired = world.Config.Economy.LargeEconomy ? world.Config.Economy.LargeExploreScoutCount : 1;
+            if (planned >= desired || QueuedOf(faction, UnitKind.Scout) > 0
+                || !HasRoomFor(faction, UnitKind.Scout) || !CanPay(faction, UnitKind.Scout)) return false;
             Enqueue(faction, ref barracks, UnitKind.Scout);
             return true;
         }

@@ -19,6 +19,19 @@ namespace Rts.Decision
         }
     }
 
+    /// <summary>A chunk already assigned to another large-map scout during this decision.</summary>
+    public readonly struct ExploreReservedChunk
+    {
+        public int X { get; }
+        public int Z { get; }
+
+        public ExploreReservedChunk(int x, int z)
+        {
+            X = x;
+            Z = z;
+        }
+    }
+
     /// <summary>The deterministic patrol target selected from one faction's explored map.</summary>
     public readonly struct ExploreTarget
     {
@@ -60,6 +73,33 @@ namespace Rts.Decision
             long tick,
             int avoidChunks)
         {
+            return NextTarget(explored, null, widthCells, heightCells, cellSizeMeters, chunkCells,
+                minUnexploredPermille, fallbackUnexploredPermille, lastUsefulUnexploredPermille,
+                finalUnexploredPermille, core, passable, avoid, Array.Empty<ExploreReservedChunk>(), tick, avoidChunks);
+        }
+
+        /// <summary>
+        /// Selects a target using per-chunk explored counts maintained by the simulation. The boolean map is still
+        /// used only for the candidate chunk's passable target cell, so a large map is not rescanned on every retarget.
+        /// </summary>
+        public static ExploreTarget NextTarget(
+            IReadOnlyList<bool> explored,
+            IReadOnlyList<int> exploredChunkCounts,
+            int widthCells,
+            int heightCells,
+            int cellSizeMeters,
+            int chunkCells,
+            int minUnexploredPermille,
+            int fallbackUnexploredPermille,
+            int lastUsefulUnexploredPermille,
+            int finalUnexploredPermille,
+            SimPoint core,
+            IReadOnlyList<bool> passable,
+            IReadOnlyList<ExploreAvoidChunk> avoid,
+            IReadOnlyList<ExploreReservedChunk> reserved,
+            long tick,
+            int avoidChunks)
+        {
             if (explored == null || passable == null || widthCells <= 0 || heightCells <= 0 || cellSizeMeters <= 0
                 || explored.Count != widthCells * heightCells || passable.Count != explored.Count || chunkCells <= 0
                 || minUnexploredPermille < 0 || minUnexploredPermille > 1000
@@ -73,6 +113,16 @@ namespace Rts.Decision
             int coreZ = coreCell < 0 ? 0 : coreCell / widthCells;
             int chunkCountX = (widthCells + chunkCells - 1) / chunkCells;
             int chunkCountZ = (heightCells + chunkCells - 1) / chunkCells;
+            int chunkCount = chunkCountX * chunkCountZ;
+            IReadOnlyList<int> counts = exploredChunkCounts;
+            if (exploredChunkCounts == null)
+            {
+                var calculated = new int[chunkCount];
+                for (int cell = 0; cell < explored.Count; cell++)
+                    if (explored[cell]) calculated[(cell / widthCells / chunkCells) * chunkCountX + (cell % widthCells) / chunkCells]++;
+                counts = calculated;
+            }
+            if (exploredChunkCounts != null && exploredChunkCounts.Count != chunkCount) return default;
             int[] thresholds = { minUnexploredPermille, fallbackUnexploredPermille,
                 lastUsefulUnexploredPermille, finalUnexploredPermille };
             for (int thresholdIndex = 0; thresholdIndex < thresholds.Length; thresholdIndex++)
@@ -87,12 +137,10 @@ namespace Rts.Decision
                 {
                     int minX = chunkX * chunkCells, minZ = chunkZ * chunkCells;
                     int maxX = Math.Min(widthCells, minX + chunkCells), maxZ = Math.Min(heightCells, minZ + chunkCells);
-                    int total = (maxX - minX) * (maxZ - minZ), unexplored = 0;
-                    for (int z = minZ; z < maxZ; z++)
-                    for (int x = minX; x < maxX; x++)
-                        if (!explored[z * widthCells + x]) unexplored++;
+                    int total = (maxX - minX) * (maxZ - minZ), unexplored = total - counts[chunkZ * chunkCountX + chunkX];
                     if ((long)unexplored * 1000L < (long)threshold * total
-                        || IsAvoided(avoid, chunkX, chunkZ, tick, avoidChunks)) continue;
+                        || IsAvoided(avoid, chunkX, chunkZ, tick, avoidChunks)
+                        || IsReserved(reserved, chunkX, chunkZ)) continue;
 
                     int centreX2 = minX + maxX - 1, centreZ2 = minZ + maxZ - 1;
                     int targetCell = -1;
@@ -138,6 +186,28 @@ namespace Rts.Decision
             int cellSizeMeters,
             int chunkCells,
             int minUnexploredPermille,
+            int fallbackUnexploredPermille,
+            int lastUsefulUnexploredPermille,
+            int finalUnexploredPermille,
+            SimPoint core,
+            IReadOnlyList<bool> passable,
+            IReadOnlyList<ExploreAvoidChunk> avoid,
+            IReadOnlyList<ExploreReservedChunk> reserved,
+            long tick,
+            int avoidChunks)
+        {
+            return NextTarget(explored, null, widthCells, heightCells, cellSizeMeters, chunkCells,
+                minUnexploredPermille, fallbackUnexploredPermille, lastUsefulUnexploredPermille,
+                finalUnexploredPermille, core, passable, avoid, reserved, tick, avoidChunks);
+        }
+
+        public static ExploreTarget NextTarget(
+            IReadOnlyList<bool> explored,
+            int widthCells,
+            int heightCells,
+            int cellSizeMeters,
+            int chunkCells,
+            int minUnexploredPermille,
             SimPoint core,
             IReadOnlyList<bool> passable,
             IReadOnlyList<ExploreAvoidChunk> avoid,
@@ -147,6 +217,14 @@ namespace Rts.Decision
             return NextTarget(explored, widthCells, heightCells, cellSizeMeters, chunkCells, minUnexploredPermille,
                 Math.Min(minUnexploredPermille, 250), Math.Min(minUnexploredPermille, 100),
                 minUnexploredPermille == 0 ? 0 : 1, core, passable, avoid, tick, avoidChunks);
+        }
+
+        private static bool IsReserved(IReadOnlyList<ExploreReservedChunk> reserved, int x, int z)
+        {
+            if (reserved == null) return false;
+            for (int i = 0; i < reserved.Count; i++)
+                if (reserved[i].X == x && reserved[i].Z == z) return true;
+            return false;
         }
 
         private static bool IsAvoided(IReadOnlyList<ExploreAvoidChunk> avoid, int x, int z, long tick, int radius)

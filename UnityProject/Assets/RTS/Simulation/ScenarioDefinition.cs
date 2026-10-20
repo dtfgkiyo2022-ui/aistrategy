@@ -117,6 +117,12 @@ namespace Rts.Simulation
         public int LargeResourceClusterMaxDropSites = 12;
         /// <summary>LargeEconomy logistics: a cluster must have this many active gatherers before it gets a site.</summary>
         public int LargeClusterMinGatherers = 2;
+        /// <summary>LargeEconomy scouting: automatic patrol continues until this fraction of the map is explored.</summary>
+        public int LargeExploreTargetPermille = 900;
+        /// <summary>LargeEconomy scouting: desired living plus queued scouts per faction.</summary>
+        public int LargeExploreScoutCount = 4;
+        /// <summary>LargeEconomy scouting: cells in one patrol chunk.</summary>
+        public int LargeExploreChunkCells = 16;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

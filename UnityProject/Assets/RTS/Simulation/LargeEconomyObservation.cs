@@ -122,6 +122,7 @@ namespace Rts.Simulation
             if (!LargeEconomyOn || amount <= 0) return;
             int resource = LargeWorkResourceIndex(kind);
             if (resource < 0) return;
+            if (villager.FactionId < 1 || villager.FactionId > 2 || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length) return;
             int index = checked((int)(villager.FactionId - 1) * 6 + resource);
             largeDelivered[index] = checked(largeDelivered[index] + amount);
             for (int i = 0; i < world.BuildingCount; i++)

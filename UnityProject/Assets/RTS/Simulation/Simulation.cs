@@ -888,7 +888,14 @@ namespace Rts.Simulation
                 int count = checked(state.VisibleCounts[cell] + delta);
                 state.VisibleCounts[cell] = count;
                 state.VisibleCells[cell] = count > 0;
-                if (count > 0) state.ExploredCells[cell] = true;
+                if (count > 0 && !state.ExploredCells[cell])
+                {
+                    state.ExploredCells[cell] = true;
+                    state.ExploredCellCount++;
+                    int chunkCells = world.Config.Economy.ExploreChunkCells;
+                    int chunkCountX = (width + chunkCells - 1) / chunkCells;
+                    state.ExploredChunkCounts[(z / chunkCells) * chunkCountX + x / chunkCells]++;
+                }
             }
         }
 
@@ -959,7 +966,15 @@ namespace Rts.Simulation
                 int count = checked(state.VisibleCounts[cell] + delta);
                 state.VisibleCounts[cell] = count;
                 state.VisibleCells[cell] = count > 0;
-                if (count > 0) state.ExploredCells[cell] = true;
+                if (count > 0 && !state.ExploredCells[cell])
+                {
+                    state.ExploredCells[cell] = true;
+                    state.ExploredCellCount++;
+                    int chunkCells = world.Config.Economy.ExploreChunkCells;
+                    int chunkCountX = (world.Config.Map.WidthCells + chunkCells - 1) / chunkCells;
+                    state.ExploredChunkCounts[(cell / world.Config.Map.WidthCells / chunkCells) * chunkCountX
+                        + (cell % world.Config.Map.WidthCells) / chunkCells]++;
+                }
             }
         }
 
