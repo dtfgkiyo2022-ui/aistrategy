@@ -46,6 +46,10 @@ namespace Rts.Simulation
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
+        internal int LastCavalryObjectiveCount;
+        internal long LastCavalryPathCellsVisited;
+        internal long LastCavalryRouteCellsVisited;
+        internal long LastCavalryAlternativeRouteCellsVisited;
 
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.
@@ -113,17 +117,27 @@ namespace Rts.Simulation
                 commandEvents.Clear();
                 PruneLiveCommands();
                 Phase("Commands", () => { ApplyInputs(inputs); GenerateLatePushCommands(); ApplyPendingCommands(); ComposePolicies(); });
-                Phase("AI", () => { DecideArmies(); DecideEconomy(); });
+                Phase("AI", () =>
+                {
+                    MeasureSubphase("AI.DecideArmies", DecideArmies);
+                    MeasureSubphase("AI.DecideEconomy", DecideEconomy);
+                });
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); });
                 Phase("Movement", () => { Move(); MoveVillagers(); });
                 Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
-                Phase("ObjectivesReinforcements", () => { EconomyStep(); CaptureOutposts(); if (!EconomyOn) Reinforce(); });
+                Phase("ObjectivesReinforcements", () =>
+                {
+                    MeasureSubphase("ObjectivesReinforcements.EconomyStep", EconomyStep);
+                    MeasureSubphase("ObjectivesReinforcements.CaptureOutposts", CaptureOutposts);
+                    if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
+                });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
-                Phase("ObjectivesReinforcements", ResolveVictory);
+                Phase("ObjectivesReinforcements", () =>
+                    MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
             }
             catch (ArithmeticException)
             {
@@ -147,8 +161,32 @@ namespace Rts.Simulation
                 var bytes = new byte[state.Count];
                 for (int i = 0; i < bytes.Length; i++) bytes[i] = state[i];
                 using (var sha = System.Security.Cryptography.SHA256.Create())
-                    PhaseHashObserver(phaseOrdinal, name, sha.ComputeHash(bytes));
+                PhaseHashObserver(phaseOrdinal, name, sha.ComputeHash(bytes));
             }
+        }
+
+        private void MeasureSubphase(string name, Action action)
+        {
+            if (measure == null) { action(); return; }
+            measure(name, true);
+            try { action(); }
+            finally { measure(name, false); }
+        }
+
+        private void MeasureSubphase(string name, Action<uint> action, uint argument)
+        {
+            if (measure == null) { action(argument); return; }
+            measure(name, true);
+            try { action(argument); }
+            finally { measure(name, false); }
+        }
+
+        private bool MeasureSubphase(string name, Func<uint, bool> action, uint argument)
+        {
+            if (measure == null) return action(argument);
+            measure(name, true);
+            try { return action(argument); }
+            finally { measure(name, false); }
         }
 
         private void GenerateIntents()
