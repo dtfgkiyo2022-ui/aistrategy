@@ -13,13 +13,27 @@ namespace Rts.Decision
         public int ChokeDependentObjectives { get; }
         public int ChokeBlockedObjectives { get; }
         public int Points { get; }
+        public int ObjectiveCount { get; }
+        public long PathCellsVisited { get; }
+        public long RouteCellsVisited { get; }
+        public long AlternativeRouteCellsVisited { get; }
 
         public CavalryMobilityScore(int reachableObjectives, int chokeDependentObjectives, int chokeBlockedObjectives, int points)
+            : this(reachableObjectives, chokeDependentObjectives, chokeBlockedObjectives, points, 0, 0, 0, 0)
+        {
+        }
+
+        public CavalryMobilityScore(int reachableObjectives, int chokeDependentObjectives, int chokeBlockedObjectives, int points,
+            int objectiveCount, long pathCellsVisited, long routeCellsVisited, long alternativeRouteCellsVisited)
         {
             ReachableObjectives = reachableObjectives;
             ChokeDependentObjectives = chokeDependentObjectives;
             ChokeBlockedObjectives = chokeBlockedObjectives;
             Points = points;
+            ObjectiveCount = objectiveCount;
+            PathCellsVisited = pathCellsVisited;
+            RouteCellsVisited = routeCellsVisited;
+            AlternativeRouteCellsVisited = alternativeRouteCellsVisited;
         }
     }
 
@@ -56,10 +70,15 @@ namespace Rts.Decision
             objectives.Sort();
 
             int reachable = 0, dependent = 0, blocked = 0;
+            long pathCellsVisited = 0, routeCellsVisited = 0, alternativeRouteCellsVisited = 0;
+            var routeWorkspace = new RouteDistance.Workspace();
             for (int i = 0; i < objectives.Count; i++)
             {
-                var path = FindPath(width, height, passable, observed, coreCell, objectives[i], null);
-                int pathDistance = RouteDistance.Measure(width, height, passable, observed, coreCell, objectives[i], null);
+                var path = FindPath(width, height, passable, observed, coreCell, objectives[i], null, out int pathVisited);
+                pathCellsVisited += pathVisited;
+                int pathDistance = RouteDistance.Measure(width, height, passable, observed, coreCell, objectives[i], null,
+                    routeWorkspace, out int routeVisited);
+                routeCellsVisited += routeVisited;
                 if (path.Length == 0 || pathDistance < 0) continue;
                 reachable++;
                 var banned = NarrowBand(width, height, passable, observed, path);
@@ -68,7 +87,8 @@ namespace Rts.Decision
                 for (int cell = 0; cell < alternativePassable.Length; cell++)
                     if (banned[cell]) alternativePassable[cell] = false;
                 int alternativeDistance = RouteDistance.Measure(width, height, alternativePassable, observed,
-                    coreCell, objectives[i], null);
+                    coreCell, objectives[i], null, routeWorkspace, out int alternativeVisited);
+                alternativeRouteCellsVisited += alternativeVisited;
                 if (alternativeDistance < 0) blocked++;
                 else if (alternativeDistance > pathDistance) dependent++;
             }
@@ -80,7 +100,8 @@ namespace Rts.Decision
             int points = Math.Min(3, reachable);
             if (reachable >= 2 && dependent == 0 && blocked == 0) points++;
             if (reachable >= 3 && dependent == 0 && blocked == 0) points++;
-            return new CavalryMobilityScore(reachable, dependent, blocked, Math.Min(MaximumPoints, points));
+            return new CavalryMobilityScore(reachable, dependent, blocked, Math.Min(MaximumPoints, points),
+                objectives.Count, pathCellsVisited, routeCellsVisited, alternativeRouteCellsVisited);
         }
 
         private static bool[] NarrowBand(int width, int height, bool[] passable, bool[] observed, int[] path)
@@ -117,8 +138,10 @@ namespace Rts.Decision
             return result;
         }
 
-        private static int[] FindPath(int width, int height, bool[] passable, bool[] observed, int start, int goal, bool[] banned)
+        private static int[] FindPath(int width, int height, bool[] passable, bool[] observed, int start, int goal,
+            bool[] banned, out int visitedCells)
         {
+            visitedCells = 0;
             if (banned != null && (banned[start] || banned[goal])) return Array.Empty<int>();
             int[] parent = new int[passable.Length], queue = new int[passable.Length];
             Array.Fill(parent, -1);
@@ -126,6 +149,7 @@ namespace Rts.Decision
             while (head < tail)
             {
                 int cell = queue[head++];
+                visitedCells++;
                 if (cell == goal) break;
                 int x = cell % width, z = cell / width;
                 Visit(z + 1 < height ? cell + width : -1);
