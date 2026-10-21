@@ -395,10 +395,15 @@ internal static class TacticMatchCommand
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+                cells.Add(prefix + resource + "Haulers");
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "RoundTripTicks");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Income");
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+                cells.Add(prefix + resource + "Stock");
             cells.AddRange(new[] { prefix + "PlanStage", prefix + "PlanR", prefix + "PlanRPlus" });
+            cells.AddRange(new[] { prefix + "WorkersRemovedLastPlan", prefix + "WorkersAssignedLastPlan" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
             {
                 cells.Add(prefix + resource + "IncomePerMinute");
@@ -421,7 +426,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 78; i++) cells.Add("");
+                for (int i = 0; i < 92; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -432,9 +437,13 @@ internal static class TacticMatchCommand
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
+            cells.AddRange(value.Haulers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
+            cells.AddRange(value.Stock.Select(FormatInvariant));
             cells.AddRange(new[] { value.PlanStage, value.PlanR, value.PlanRPlus }.Select(FormatInvariant));
+            cells.Add(FormatInvariant(value.WorkersRemovedLastPlan));
+            cells.Add(FormatInvariant(value.WorkersAssignedLastPlan));
             for (int resource = 0; resource < 6; resource++)
             {
                 cells.Add(FormatInvariant(value.IncomePerMinute[resource]));

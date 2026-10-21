@@ -143,6 +143,28 @@ namespace Rts.Simulation
         public int LargeEconomyMinimumDefenceSoldiers = 20;
         /// <summary>36.5.2: planned farm output per minute used by the integer farm formula.</summary>
         public int LargeFarmFoodPerMinute = 100, LargeFarmReserve = 2;
+        /// <summary>36.5.6: the soldier rate used to size the planned production chain.</summary>
+        public int LargeEconomyTargetSoldiersPerMinute = 60;
+        /// <summary>36.5.6: stage 1 builds one quarter of the target chain.</summary>
+        public int LargeEconomyStage1TargetPermille = 250;
+        /// <summary>36.5.6: stage 1 time limit (six minutes at 20 Hz).</summary>
+        public int LargeEconomyStage1TimeoutTicks = 7200;
+        /// <summary>36.5.6: stage 1 advances after this many ticks without villager growth.</summary>
+        public int LargeEconomyVillagerStallTicks = 600;
+        /// <summary>36.5.6: stage 2 time limit (ten minutes at 20 Hz).</summary>
+        public int LargeEconomyStage2TimeoutTicks = 12000;
+        /// <summary>36.5.6: an overfull stock is redirected to the most blocked known resource.</summary>
+        public int LargeEconomyStockOverflow = 2000;
+        /// <summary>36.5.6: estimated belt cells reserved with the next planned chain items.</summary>
+        public int LargeEconomyConstructionBeltCells = 8;
+        /// <summary>36.5.6: stage 3 starts when metal income reaches half of the target rate.</summary>
+        public int LargeEconomyStage3MetalPermille = 500;
+        /// <summary>econ8c: planned construction resources are gathered over this many ticks.</summary>
+        public int LargeEconomyConstructionHorizonTicks = 2400;
+        /// <summary>econ8c: stall-based stage-one advancement is disabled before this many elapsed ticks.</summary>
+        public int LargeEconomyVillagerStallMinimumTicks = 3600;
+        /// <summary>econ8d: a resource assignment must exceed target by this many workers before rebalancing.</summary>
+        public int LargeEconomyWorkerHysteresis = 3;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

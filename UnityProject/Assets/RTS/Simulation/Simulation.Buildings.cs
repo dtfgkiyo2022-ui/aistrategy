@@ -46,13 +46,14 @@ namespace Rts.Simulation
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
                 if (b.Complete && !b.Held && barracks < 0) { ready = true; barracks = i; }
             }
-            if (EconomyScaleOn && (!LargeEconomyOn || LargePlanIndustryReady(faction)))
+            if (EconomyScaleOn && (!LargeEconomyOn || LargePlanFor(faction) != null))
             {
                 int desired = LargeEconomyOn
                     ? Math.Min(rules.LargeBarracksMaxBuildings, LargePlanFor(faction)?.TargetBarracks
                         ?? Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
                     : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
-                bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
+                bool mayAddBarracks = LargeEconomyOn && barracksCount < desired
+                    || barracksCount == 0 || !SavingToAdvance(faction);
                 if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
                     PlaceBarracks(faction);
             }
@@ -472,6 +473,7 @@ namespace Rts.Simulation
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
             else if (kind == BuildingKind.Quarry) world.Buildings[index].Interval = world.Config.Economy.QuarryIntervalTicks;
+            AddLargeResourceNodeBlockers(world.Buildings[index]);
             EvacuateFootprint(footprint);
             TerrainChanged();
             AssignBuilders(ref world.Buildings[index]);
@@ -557,6 +559,7 @@ namespace Rts.Simulation
             foreach (int cell in oldFootprint) if (cell >= 0 && cell < cells) { touched[cell] = true; saved[cell] = world.Map.IsPassable(cell); }
             foreach (int cell in candidate) if (cell >= 0 && cell < cells && !touched[cell]) { touched[cell] = true; saved[cell] = world.Map.IsPassable(cell); }
             foreach (int cell in oldFootprint) world.Map.SetPassable(cell, true);
+            RemoveLargeResourceNodeBlockers(building);
             foreach (int cell in candidate) world.Map.SetPassable(cell, false);
             bool connected = KeepsMapConnected(faction, newOrigin, size);
             for (int cell = 0; cell < cells; cell++) if (touched[cell]) world.Map.SetPassable(cell, saved[cell]);
@@ -571,6 +574,7 @@ namespace Rts.Simulation
             long pauseTicks = world.Config.Economy.MoveBuildingPauseTicks;
             building.MovePauseUntilTick = pauseTicks == 0 ? 0 : checked(world.Tick + pauseTicks + 1);
             world.Buildings[index] = building;
+            AddLargeResourceNodeBlockers(building);
             TerrainChanged();
             return true;
         }

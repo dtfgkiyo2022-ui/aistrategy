@@ -112,6 +112,7 @@ namespace Rts.Simulation
                     ref var removed = ref world.Buildings[removeIndex];
                     MarkLinesForBuilding(faction, removed.Id);
                     if (world.Config.Economy.EasyRebuild) RefundBuilding(faction, ref removed);
+                    RemoveLargeResourceNodeBlockers(removed);
                     if (removed.Kind == BuildingKind.Bridge) { removed.Held = true; KillBridgeOccupants(removed); }
                     bool wasReservation = removed.Reserved;
                     removed.Alive = false;

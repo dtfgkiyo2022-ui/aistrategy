@@ -48,6 +48,17 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeEconomyMinimumDefenceSoldiers, Is.EqualTo(large.Economy.LargeEconomyMinimumDefenceSoldiers));
             Assert.That(decoded.Economy.LargeFarmFoodPerMinute, Is.EqualTo(large.Economy.LargeFarmFoodPerMinute));
             Assert.That(decoded.Economy.LargeFarmReserve, Is.EqualTo(large.Economy.LargeFarmReserve));
+            Assert.That(decoded.Economy.LargeEconomyTargetSoldiersPerMinute, Is.EqualTo(large.Economy.LargeEconomyTargetSoldiersPerMinute));
+            Assert.That(decoded.Economy.LargeEconomyStage1TargetPermille, Is.EqualTo(large.Economy.LargeEconomyStage1TargetPermille));
+            Assert.That(decoded.Economy.LargeEconomyStage1TimeoutTicks, Is.EqualTo(large.Economy.LargeEconomyStage1TimeoutTicks));
+            Assert.That(decoded.Economy.LargeEconomyVillagerStallTicks, Is.EqualTo(large.Economy.LargeEconomyVillagerStallTicks));
+            Assert.That(decoded.Economy.LargeEconomyStage2TimeoutTicks, Is.EqualTo(large.Economy.LargeEconomyStage2TimeoutTicks));
+            Assert.That(decoded.Economy.LargeEconomyStockOverflow, Is.EqualTo(large.Economy.LargeEconomyStockOverflow));
+            Assert.That(decoded.Economy.LargeEconomyConstructionBeltCells, Is.EqualTo(large.Economy.LargeEconomyConstructionBeltCells));
+            Assert.That(decoded.Economy.LargeEconomyStage3MetalPermille, Is.EqualTo(large.Economy.LargeEconomyStage3MetalPermille));
+            Assert.That(decoded.Economy.LargeEconomyConstructionHorizonTicks, Is.EqualTo(large.Economy.LargeEconomyConstructionHorizonTicks));
+            Assert.That(decoded.Economy.LargeEconomyVillagerStallMinimumTicks, Is.EqualTo(large.Economy.LargeEconomyVillagerStallMinimumTicks));
+            Assert.That(decoded.Economy.LargeEconomyWorkerHysteresis, Is.EqualTo(large.Economy.LargeEconomyWorkerHysteresis));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
@@ -154,5 +165,6 @@ namespace Rts.Core.Tests
                 Assert.That(simulation.Capture(1).Result.IsFault, Is.False, "tick " + tick);
             }
         }
+
     }
 }

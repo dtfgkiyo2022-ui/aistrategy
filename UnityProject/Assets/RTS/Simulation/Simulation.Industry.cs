@@ -897,7 +897,8 @@ namespace Rts.Simulation
         }
 
         /// <summary>Common drills cover exactly one remaining wood, stone, ore, or usable gold point.</summary>
-        private bool DrillSiteIsClear(uint faction, int origin, out uint nodeId, bool goldAlreadyUsable = false)
+        private bool DrillSiteIsClear(uint faction, int origin, out uint nodeId, bool goldAlreadyUsable = false,
+            ResourceKind? requiredKind = null)
         {
             nodeId = 0;
             var footprint = Footprint(origin, world.Config.Economy.DrillSizeCells);
@@ -906,7 +907,8 @@ namespace Rts.Simulation
                 foreach (var node in world.Nodes)
                 {
                     if (world.Map.Cell(node.Definition.Position) != cell) continue;
-                    if (node.Remaining <= 0 || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
+                    if (node.Remaining <= 0 || requiredKind.HasValue && node.Definition.Kind != requiredKind.Value
+                        || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
                         && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold) || nodeId != 0) return false;
                     nodeId = node.Definition.Id;
                 }

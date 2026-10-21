@@ -148,6 +148,16 @@ namespace Rts.Simulation
             e.LargeEconomyMinimumDefenceSoldiers = 20;
             e.LargeFarmFoodPerMinute = 100;
             e.LargeFarmReserve = 2;
+            e.LargeEconomyTargetSoldiersPerMinute = 60;
+            e.LargeEconomyStage1TargetPermille = 250;
+            e.LargeEconomyStage1TimeoutTicks = 7200;
+            e.LargeEconomyVillagerStallTicks = 600;
+            e.LargeEconomyStage2TimeoutTicks = 12000;
+            e.LargeEconomyStockOverflow = 2000;
+            e.LargeEconomyConstructionBeltCells = 8;
+            e.LargeEconomyStage3MetalPermille = 500;
+            e.LargeEconomyConstructionHorizonTicks = 2400;
+            e.LargeEconomyVillagerStallMinimumTicks = 3600;
             e.ExploreChunkCells = e.LargeExploreChunkCells;
             // Ordinary construction prices remain authoritative. More builders are the large-map scheduling choice,
             // not a price or work-value change, and let a remote town become useful before its resource cluster moves on.

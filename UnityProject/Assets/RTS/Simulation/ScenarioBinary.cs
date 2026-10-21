@@ -208,7 +208,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         private const int LargeEconomyExtensionV1 = 1;
         private const int LargeEconomyExtensionV2 = 2;
         private const int LargeEconomyExtensionV3 = 3;
-        private const int LargeEconomyExtensionVersion = 8;
+        private const int LargeEconomyExtensionVersion = 9;
         private const int LargeEconomyExtensionV1DataLength = 15 * sizeof(int);
         private const int LargeEconomyExtensionV2DataLength = 18 * sizeof(int);
         private const int LargeEconomyExtensionV3DataLength = 21 * sizeof(int);
@@ -218,7 +218,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         // Version 7 (10-21) adds the large-map scouting fields after version 6.
         private const int LargeEconomyExtensionV7DataLength = 36 * sizeof(int);
         // Version 8 (10-21) adds the 36.5 planner tuning fields after version 7.
-        private const int LargeEconomyExtensionDataLength = 42 * sizeof(int);
+        private const int LargeEconomyExtensionV8DataLength = 42 * sizeof(int);
+        // Version 9 (10-21) keeps its version and gains the econ8c/econ8d tail.
+        private const int LargeEconomyExtensionV9LegacyDataLength = 52 * sizeof(int);
+        private const int LargeEconomyExtensionDataLength = 53 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -838,7 +841,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       && dataLength == LargeEconomyExtensionV6DataLength;
                   bool oldLargeEconomyV7 = id == LargeEconomyExtensionId && featureVersion == 7
                       && dataLength == LargeEconomyExtensionV7DataLength;
-                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldLargeEconomyV7;
+                   bool oldLargeEconomyV8 = id == LargeEconomyExtensionId && featureVersion == 8
+                       && dataLength == LargeEconomyExtensionV8DataLength;
+                   bool oldLargeEconomyV9 = id == LargeEconomyExtensionId && featureVersion == LargeEconomyExtensionVersion
+                       && dataLength == LargeEconomyExtensionV9LegacyDataLength;
+                 bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldLargeEconomyV7 || oldLargeEconomyV8 || oldLargeEconomyV9;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -2994,9 +3001,16 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  writer.Write(e.LargeExploreTargetPermille); writer.Write(e.LargeExploreScoutCount);
                  writer.Write(e.LargeExploreChunkCells);
                  writer.Write(e.LargeEconomyPlanIntervalTicks); writer.Write(e.LargeEconomyPlanRStep);
-                 writer.Write(e.LargeEconomyPlanMaxR); writer.Write(e.LargeEconomyMinimumDefenceSoldiers);
-                 writer.Write(e.LargeFarmFoodPerMinute); // reserved with the planner fields; farm reserve follows in v8
-                 writer.Write(e.LargeFarmReserve);
+                  writer.Write(e.LargeEconomyPlanMaxR); writer.Write(e.LargeEconomyMinimumDefenceSoldiers);
+                  writer.Write(e.LargeFarmFoodPerMinute); // reserved with the planner fields; farm reserve follows in v8
+                  writer.Write(e.LargeFarmReserve);
+                  writer.Write(e.LargeEconomyTargetSoldiersPerMinute); writer.Write(e.LargeEconomyStage1TargetPermille);
+                  writer.Write(e.LargeEconomyStage1TimeoutTicks); writer.Write(e.LargeEconomyVillagerStallTicks);
+                  writer.Write(e.LargeEconomyStage2TimeoutTicks); writer.Write(e.LargeEconomyStockOverflow);
+                  writer.Write(e.LargeEconomyConstructionBeltCells); writer.Write(e.LargeEconomyStage3MetalPermille);
+                   writer.Write(e.LargeEconomyConstructionHorizonTicks);
+                   writer.Write(e.LargeEconomyVillagerStallMinimumTicks);
+                   writer.Write(e.LargeEconomyWorkerHysteresis);
                 return new ScenarioExtensionData { Id = LargeEconomyExtensionId,
                     Version = LargeEconomyExtensionVersion, Data = stream.ToArray() };
             }
@@ -3048,12 +3062,24 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      e.LargeExploreTargetPermille = reader.ReadInt32(); e.LargeExploreScoutCount = reader.ReadInt32();
                      e.LargeExploreChunkCells = reader.ReadInt32();
                  }
-                 if (extension.Version >= 8)
-                 {
-                     e.LargeEconomyPlanIntervalTicks = reader.ReadInt32(); e.LargeEconomyPlanRStep = reader.ReadInt32();
-                     e.LargeEconomyPlanMaxR = reader.ReadInt32(); e.LargeEconomyMinimumDefenceSoldiers = reader.ReadInt32();
-                     e.LargeFarmFoodPerMinute = reader.ReadInt32(); e.LargeFarmReserve = reader.ReadInt32();
-                 }
+                  if (extension.Version >= 8)
+                  {
+                      e.LargeEconomyPlanIntervalTicks = reader.ReadInt32(); e.LargeEconomyPlanRStep = reader.ReadInt32();
+                      e.LargeEconomyPlanMaxR = reader.ReadInt32(); e.LargeEconomyMinimumDefenceSoldiers = reader.ReadInt32();
+                      e.LargeFarmFoodPerMinute = reader.ReadInt32(); e.LargeFarmReserve = reader.ReadInt32();
+                  }
+                  if (extension.Version >= 9)
+                  {
+                      e.LargeEconomyTargetSoldiersPerMinute = reader.ReadInt32(); e.LargeEconomyStage1TargetPermille = reader.ReadInt32();
+                      e.LargeEconomyStage1TimeoutTicks = reader.ReadInt32(); e.LargeEconomyVillagerStallTicks = reader.ReadInt32();
+                      e.LargeEconomyStage2TimeoutTicks = reader.ReadInt32(); e.LargeEconomyStockOverflow = reader.ReadInt32();
+                      e.LargeEconomyConstructionBeltCells = reader.ReadInt32(); e.LargeEconomyStage3MetalPermille = reader.ReadInt32();
+                      // Version 9 was intentionally kept stable for econ8c. Older v9 payloads have no
+                      // econ8c tail, so use the field defaults when it is absent.
+                       if (stream.Position < stream.Length) e.LargeEconomyConstructionHorizonTicks = reader.ReadInt32();
+                       if (stream.Position < stream.Length) e.LargeEconomyVillagerStallMinimumTicks = reader.ReadInt32();
+                       if (stream.Position < stream.Length) e.LargeEconomyWorkerHysteresis = reader.ReadInt32();
+                  }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing large economy extension data.");
             }
         }

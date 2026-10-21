@@ -32,7 +32,7 @@ namespace Rts.Simulation
         {
             AdvanceReserved(); // every tick, not only on the allocation cycle
             if (!EconomyOn || world.Tick % 20 != 0) return;
-            if (LargeEconomyOn) UpdateLargeEconomyPlans();
+            if (LargeEconomyOn) MeasureSubphase("AI.DecideEconomy.LargePlans", UpdateLargeEconomyPlans);
             var rules = world.Config.Economy;
             for (int f = 0; f < 2; f++)
             {
@@ -44,7 +44,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[f];
                     int villagers = LivingVillagers(faction);
                     var plan = PlanOf(faction, world.Cores[world.Factions[f].CoreId - 1].Definition.Position);
-                    DecideAdvance(faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideAdvance", DecideAdvance, faction);
                     bool tool = CanUseToolForVillager(faction);
                     bool shouldTrainVillager = LargeEconomyOn
                         ? ShouldTrainLargeVillagers(faction, villagers, plan.VillagerTarget)
@@ -55,27 +55,27 @@ namespace Rts.Simulation
                         if (LargeEconomyOn) EnqueueCoreVillagerBatch(faction);
                         else EnqueueCoreVillager(faction);
                     }
-                    ResumeUnbuilt(faction);
-                    DecideHouse(faction);
-                    DecideDropSite(faction);
-                    DecideTower(faction);
-                    DecideResearch(faction);
-                    DecideMarket(faction);
-                    DecideGoodsMarket(faction);
-                    DecideCaravanserai(faction);
-                    DecideCaravanRoute(faction);
-                    DecideTradeRoute(faction);
-                    DecideSiege(faction);
-                    DecideCrossUnit(faction);
-                    DecideCastle(faction);
-                    DecideCaravanMercenary(faction);
-                    DecideRepair(faction);
-                    DecideBuildings(faction);
-                    DecideTownVillagers(faction);
-                    DecideIndustry(faction);
-                    DecideInserters(faction);
-                    DecideTollgate(faction);
-                    DecideCavalryStable(faction);
+                    MeasureSubphase("AI.DecideEconomy.ResumeUnbuilt", ResumeUnbuilt, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideHouse", DecideHouse, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideDropSite", DecideDropSite, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideTower", DecideTower, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideResearch", DecideResearch, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideMarket", DecideMarket, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideGoodsMarket", DecideGoodsMarket, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCaravanserai", DecideCaravanserai, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCaravanRoute", DecideCaravanRoute, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideTradeRoute", DecideTradeRoute, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideSiege", DecideSiege, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCrossUnit", DecideCrossUnit, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCastle", DecideCastle, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCaravanMercenary", DecideCaravanMercenary, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideRepair", DecideRepair, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideBuildings", DecideBuildings, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideTownVillagers", DecideTownVillagers, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideIndustry", DecideIndustry, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideInserters", DecideInserters, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideTollgate", DecideTollgate, faction);
+                    MeasureSubphase("AI.DecideEconomy.DecideCavalryStable", DecideCavalryStable, faction);
                 }
                 finally { automaticEconomyAction = false; }
             }
@@ -158,31 +158,35 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
-            AdvanceBuildingReservations();
-            RegrowFishing();
-            AdvanceBelts();
-            AdvanceIndustry();
-            AdvanceInserters();
-            ApplyBrickUpgrades();
-            RepairMasonryCoresWithBricks();
-            ApplyRationsHealing();
-            ApplyIncenseHealing();
-            ApplyRepairKits();
-            AdvanceMountain();
-            AdvanceByAgeClock();
-            AdvanceAges();
-            AdvanceResearch();
-            AdvanceTollgateFees();
-            AdvanceSanctuaryPilgrimage();
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBuildingReservations", AdvanceBuildingReservations);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.RegrowFishing", RegrowFishing);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBelts", AdvanceBelts);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceIndustry", AdvanceIndustry);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceInserters", AdvanceInserters);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyBrickUpgrades", ApplyBrickUpgrades);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.RepairMasonryCoresWithBricks", RepairMasonryCoresWithBricks);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyRationsHealing", ApplyRationsHealing);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyIncenseHealing", ApplyIncenseHealing);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyRepairKits", ApplyRepairKits);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceMountain", AdvanceMountain);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceByAgeClock", AdvanceByAgeClock);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceAges", AdvanceAges);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceResearch", AdvanceResearch);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceTollgateFees", AdvanceTollgateFees);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceSanctuaryPilgrimage", AdvanceSanctuaryPilgrimage);
             int count = world.VillagerCount; // villagers trained below start next tick
-            for (int i = 0; i < count; i++)
+            void AdvanceEconomyVillagers(uint villagerCount)
             {
-                ref var v = ref world.Villagers[i];
+                for (int i = 0; i < villagerCount; i++)
+                {
+                    ref var v = ref world.Villagers[i];
                 if (!v.Alive) continue;
                 if (IsTradeRouteTask(v.Task)) AdvanceTradeRoute(ref v);
                 else if (IsCaravanTask(v.Task)) AdvanceCaravanRoute(ref v);
                 else if (v.Task == VillagerTask.ToNode)
                 {
+                    ReleaseVillagerFromBlockedLargeNode(ref v);
+                    if (v.Task != VillagerTask.ToNode) continue;
                     var node = world.Nodes[v.NodeId - 1];
                     if (node.Remaining <= 0)
                     {
@@ -198,6 +202,8 @@ namespace Rts.Simulation
                 }
                 else if (v.Task == VillagerTask.Gathering)
                 {
+                    ReleaseVillagerFromBlockedLargeNode(ref v);
+                    if (v.Task != VillagerTask.Gathering) continue;
                     ref var node = ref world.Nodes[v.NodeId - 1];
                     if (node.Remaining <= 0)
                     {
@@ -270,8 +276,10 @@ namespace Rts.Simulation
                     v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
                 }
                 else if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) Haul(ref v);
+                }
             }
-            AdvanceBuildings();
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.Villagers", AdvanceEconomyVillagers, (uint)count);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBuildings", AdvanceBuildings);
             for (int f = 0; f < 2; f++)
             {
                 ref var economy = ref world.Economies[f];
@@ -632,7 +640,7 @@ namespace Rts.Simulation
             foreach (int nodeIndex in largeClusterNodes[bestCluster])
             {
                 var node = world.Nodes[nodeIndex];
-                if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                if (LargeResourceNodeBlocked(nodeIndex) || !ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
                 var distance = DistanceSquared(position, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
@@ -651,7 +659,7 @@ namespace Rts.Simulation
         private int FirstKnownRemainingNode(uint faction, int cluster)
         {
             foreach (int nodeIndex in largeClusterNodes[cluster])
-                if (ResourceKnownToFaction(faction, nodeIndex) && world.Nodes[nodeIndex].Remaining > 0) return nodeIndex;
+                if (!LargeResourceNodeBlocked(nodeIndex) && ResourceKnownToFaction(faction, nodeIndex) && world.Nodes[nodeIndex].Remaining > 0) return nodeIndex;
             return -1;
         }
 

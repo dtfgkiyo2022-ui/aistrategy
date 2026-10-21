@@ -19,14 +19,17 @@ namespace Rts.Simulation
         public int Houses, Barracks, DropSites, Farms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
+        public int[] Haulers = new int[6];
         public int[] WorkerRoundTripTicks = new int[6];
         public int[] Income = new int[6];
+        public int[] Stock = new int[6];
         public int PlanStage, PlanR, PlanRPlus;
         public int[] IncomePerMinute = new int[6];
         public int[] RequiredPerMinute = new int[6];
         public int[] PlannedWorkers = new int[6];
         public int[] TargetFacilities = new int[8];
         public int[] CurrentFacilities = new int[8];
+        public int WorkersRemovedLastPlan, WorkersAssignedLastPlan;
         public int TownResourceIncome;
         public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
         public int BarracksPopulationWaiting, BarracksTraining;
@@ -107,8 +110,19 @@ namespace Rts.Simulation
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
                     value.Workers[resource] = WorkerCount(faction, resource);
-                    value.WorkerRoundTripTicks[resource] = WorkerDistanceTicks(faction, resource);
+                        value.WorkerRoundTripTicks[resource] = WorkerDistanceTicks(faction, resource);
                 }
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var v = world.Villagers[i];
+                    if (!v.Alive || v.FactionId != faction || v.HaulFrom == 0 || v.HaulFrom > world.BuildingCount
+                        || (v.Task != VillagerTask.ToPickup && v.Task != VillagerTask.ToDeliver)) continue;
+                    int resource = HaulerResourceIndex(world.Buildings[v.HaulFrom - 1].Kind);
+                    if (resource >= 0) value.Haulers[resource]++;
+                }
+                ref var stock = ref world.Economies[faction - 1];
+                value.Stock[0] = stock.Food; value.Stock[1] = stock.Wood; value.Stock[2] = stock.Stone;
+                value.Stock[3] = stock.Ore; value.Stock[4] = stock.Gold; value.Stock[5] = stock.Metal;
                 var plan = LargePlanFor(faction);
                 if (plan != null)
                 {
@@ -121,6 +135,8 @@ namespace Rts.Simulation
                     Array.Copy(plan.TargetFacilities, value.TargetFacilities, value.TargetFacilities.Length);
                     Array.Copy(plan.CurrentFacilities, value.CurrentFacilities, value.CurrentFacilities.Length);
                 }
+                value.WorkersRemovedLastPlan = largePlanWorkersRemoved[faction - 1];
+                value.WorkersAssignedLastPlan = largePlanWorkersAssigned[faction - 1];
                 value.TownResourceIncome = largeTownDelivered[faction - 1];
                 result.Factions[faction - 1] = value;
             }
@@ -172,6 +188,11 @@ namespace Rts.Simulation
             }
             return count;
         }
+
+        private static int HaulerResourceIndex(BuildingKind kind)
+            => kind == BuildingKind.Farm ? 0 : kind == BuildingKind.LumberCamp ? 1
+                : kind == BuildingKind.Mine || kind == BuildingKind.Drill ? 3
+                : kind == BuildingKind.Smelter ? 5 : -1;
 
         private void RecordLargeDelivery(VillagerState villager, ResourceKind kind, int amount)
         {

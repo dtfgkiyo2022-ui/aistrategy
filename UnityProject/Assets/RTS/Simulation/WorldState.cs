@@ -566,7 +566,8 @@ namespace Rts.Simulation
                   && e.LargeVillagersPerFarm > 0 && e.LargeFarmMinimum > 0 && e.LargeFarmMaximum >= e.LargeFarmMinimum
                   && e.LargeInfantryResourceReserveUnits > 0
                   && e.LargeExploreTargetPermille > 0 && e.LargeExploreTargetPermille <= 1000
-                  && e.LargeExploreScoutCount > 0 && e.LargeExploreChunkCells > 0 && e.LargeExploreChunkCells <= 64),
+                  && e.LargeExploreScoutCount > 0 && e.LargeExploreChunkCells > 0 && e.LargeExploreChunkCells <= 64
+                  && e.LargeEconomyConstructionHorizonTicks > 0 && e.LargeEconomyVillagerStallMinimumTicks >= 0),
                 "Invalid large economy rules.");
             if (e.Industry)
                 Require(e.BeltWoodCost >= 0 && e.BeltTicksPerCell > 0 && e.BeltTicksPerCell <= 1000 && e.BeltHp > 0
@@ -1076,6 +1077,8 @@ namespace Rts.Simulation
                    LargeInfantryResourceReserveUnits = e.LargeInfantryResourceReserveUnits,
                    LargeExploreTargetPermille = e.LargeExploreTargetPermille, LargeExploreScoutCount = e.LargeExploreScoutCount,
                    LargeExploreChunkCells = e.LargeExploreChunkCells,
+                   LargeEconomyConstructionHorizonTicks = e.LargeEconomyConstructionHorizonTicks,
+                   LargeEconomyVillagerStallMinimumTicks = e.LargeEconomyVillagerStallMinimumTicks,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,

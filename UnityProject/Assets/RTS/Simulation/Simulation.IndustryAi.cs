@@ -37,19 +37,25 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
-            if (LineBuildingCheckOn) ValidateLineBuildingReferences(faction);
+            if (LineBuildingCheckOn) MeasureSubphase("AI.DecideEconomy.DecideIndustry.ValidateLineBuildingReferences",
+                ValidateLineBuildingReferences, faction);
             if (BuildingReservationsOn)
-                for (int i = 0; i < world.ProcessingLines.Length; i++)
-                    if (world.ProcessingLines[i].FactionId == faction && IsAutoLine(i))
-                    {
-                        ref var pendingLine = ref world.ProcessingLines[i];
-                        BindReservedLineBuildings(faction, ref pendingLine);
-                    }
-            if (LargeEconomyOn && EnsureLargePlannedIndustry(faction)) return;
-            DecideCraftTree1(faction);
-            DecideCraftTree2(faction);
-            DecideCraftTree3(faction);
-            if (TryDecideArmyRecoveryMetalLine(faction)) return;
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.BindReservedLineBuildings", BindReservedLineBuildingsForFaction, faction);
+            if (LargeEconomyOn)
+            {
+                bool largeIndustryHandled = MeasureSubphase("AI.DecideEconomy.DecideIndustry.LargePlannedIndustry",
+                    EnsureLargePlannedIndustry, faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.LargeIndustryConnections",
+                    EnsureLargeIndustryConnections, faction);
+                if (largeIndustryHandled) return;
+                return;
+            }
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree1", DecideCraftTree1, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
+            bool recoveryHandled = MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery",
+                TryDecideArmyRecoveryMetalLine, faction);
+            if (recoveryHandled) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
                 DecideFarms(faction);
@@ -60,7 +66,9 @@ namespace Rts.Simulation
                 if (ToolsAllowed(faction)) DecideTools(faction);
                 return;
             }
-            if (TryDecideRequestedLine(faction)) { if (ToolsAllowed(faction)) DecideTools(faction); return; }
+            bool requestedLineHandled = MeasureSubphase("AI.DecideEconomy.DecideIndustry.RequestedLine",
+                TryDecideRequestedLine, faction);
+            if (requestedLineHandled) { if (ToolsAllowed(faction)) DecideTools(faction); return; }
             // No return: the caravan's own decisions below stay exactly as they were.
             if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
             if (IncenseAllowed(faction)) DecideIncense(faction);
@@ -165,6 +173,16 @@ namespace Rts.Simulation
         }
 
         /// <summary>AiArmyRecovery: restore the metal line before optional industry while infantry is below its reserve.</summary>
+        private void BindReservedLineBuildingsForFaction(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+                if (world.ProcessingLines[i].FactionId == faction && IsAutoLine(i))
+                {
+                    ref var pendingLine = ref world.ProcessingLines[i];
+                    BindReservedLineBuildings(faction, ref pendingLine);
+                }
+        }
+
         private bool TryDecideArmyRecoveryMetalLine(uint faction)
         {
             if (!ArmyRecoveryNeedsInfantry(faction) || InfantryMetalFor(faction) <= 0 || !ProcessingAvailable(faction)) return false;
@@ -236,6 +254,7 @@ namespace Rts.Simulation
             if (line.MineId == 0 || line.MineId > world.BuildingCount) return;
             ref var mine = ref world.Buildings[line.MineId - 1];
             if (!mine.Alive) return;
+            RemoveLargeResourceNodeBlockers(mine);
             mine.Alive = false;
             RemoveRegionCenter(mine);
             foreach (int cell in Footprint(mine)) world.Map.SetPassable(cell, true);
@@ -973,13 +992,24 @@ namespace Rts.Simulation
         /// V3-7 first pass: one lumber camp on the nearest usable wood point, then one existing farm-style route to
         /// the core. No terrain score is used here; the later terrain pass owns that decision.
         /// </summary>
-        private void DecideLumberCamp(uint faction)
+        private void DecideLumberCamp(uint faction, bool allowPlacement = true)
         {
             ref var economy = ref world.Economies[faction - 1];
             int camp = OwnBuildingIndex(faction, BuildingKind.LumberCamp);
             if (camp < 0)
             {
-                if (economy.Wood >= world.Config.Economy.LumberCampWoodCost) PlaceLumberCamp(faction);
+                if (allowPlacement && economy.Wood >= world.Config.Economy.LumberCampWoodCost) PlaceLumberCamp(faction);
+                return;
+            }
+            if (!allowPlacement)
+            {
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var existing = world.Buildings[i];
+                    if (!IsActualBuilding(existing) || existing.FactionId != faction || existing.Kind != BuildingKind.LumberCamp
+                        || !existing.Complete || existing.Held) continue;
+                    ConnectLargeFarmLikeBuilding(faction, existing);
+                }
                 return;
             }
             var b = world.Buildings[camp];
@@ -1847,7 +1877,8 @@ namespace Rts.Simulation
         {
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
-            var middle = new SimPoint(Fix64.FromRaw((from.X.Raw + core.X.Raw) / 2), Fix64.FromRaw((from.Z.Raw + core.Z.Raw) / 2));
+            var middle = LargeEconomyOn ? from
+                : new SimPoint(Fix64.FromRaw((from.X.Raw + core.X.Raw) / 2), Fix64.FromRaw((from.Z.Raw + core.Z.Raw) / 2));
             int size = world.Config.Economy.SmelterSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int centre = world.Map.Cell(middle), cx = centre % width, cz = centre / width, coreCell = world.Map.Cell(core);
             for (int r = 0; r <= SiteSearchRadiusCells; r++)
@@ -2286,7 +2317,7 @@ namespace Rts.Simulation
         /// a belt line into the core; until a farm's line is whole, one villager carries its food by hand. A farm the
         /// player placed or runs is left to them.
         /// </summary>
-        private void DecideFarms(uint faction)
+        private void DecideFarms(uint faction, bool allowPlacement = true)
         {
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
@@ -2296,7 +2327,7 @@ namespace Rts.Simulation
             int farmTarget = LargeEconomyOn && LargePlanFor(faction) != null
                 ? LargePlanFor(faction).TargetFarms
                 : EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
-            if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
+            if (allowPlacement && farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -2311,6 +2342,53 @@ namespace Rts.Simulation
                 }
                 SetFarmHauler(faction, b.Id, whole ? 0 : 1);
             }
+        }
+
+        private void EnsureLargeIndustryConnections(uint faction)
+        {
+            DecideFarms(faction, false);
+            DecideLumberCamp(faction, false);
+
+            var mines = new List<int>();
+            var smelters = new List<int>();
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || b.FactionId != faction || !b.Complete || b.Held) continue;
+                if ((b.Kind == BuildingKind.Mine || b.Kind == BuildingKind.Drill) && IsOreMiningBuilding(b)) mines.Add(i);
+                else if (b.Kind == BuildingKind.Smelter) smelters.Add(i);
+            }
+            var usedSmelters = new bool[smelters.Count];
+            for (int mineIndex = 0; mineIndex < mines.Count; mineIndex++)
+            {
+                var mine = world.Buildings[mines[mineIndex]];
+                int selected = -1;
+                for (int i = 0; i < smelters.Count; i++)
+                {
+                    if (usedSmelters[i]) continue;
+                    var candidate = world.Buildings[smelters[i]];
+                    if (selected < 0 || DistanceSquared(BuildingCenter(candidate), BuildingCenter(mine))
+                        < DistanceSquared(BuildingCenter(world.Buildings[smelters[selected]]), BuildingCenter(mine))) selected = i;
+                }
+                if (selected < 0) break;
+                usedSmelters[selected] = true;
+                var smelter = world.Buildings[smelters[selected]];
+                bool whole = LayLineLegacy(faction, mine, smelter);
+                SetHaulers(faction, mine.Id, smelter.Id, whole ? 0 : Haulers);
+            }
+        }
+
+        private void ConnectLargeFarmLikeBuilding(uint faction, BuildingState building)
+        {
+            var taken = new bool[world.Belts.Length];
+            var route = BeltRoute(faction, OutputCell(building), taken, next => FeedsOwnCore(next, faction));
+            bool whole = false;
+            if (route.cells != null)
+            {
+                foreach (int cell in route.cells) taken[cell] = true;
+                whole = LayBelts(faction, route.cells, route.facings);
+            }
+            SetFarmHauler(faction, building.Id, whole ? 0 : 1);
         }
 
         /// <summary>Clear footprints in rings around the core; the quickest ground wins (then the ring order).</summary>

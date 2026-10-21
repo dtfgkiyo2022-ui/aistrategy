@@ -582,7 +582,7 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceDrill(uint faction, int preferredCell = -1)
+        private uint PlaceDrill(uint faction, int preferredCell = -1, ResourceKind? requiredKind = null)
         {
             var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.DrillSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -597,6 +597,7 @@ namespace Rts.Simulation
             {
                 var node = world.Nodes[n];
                 if (!ResourceKnownToFaction(faction, n) || node.Remaining <= 0
+                    || requiredKind.HasValue && node.Definition.Kind != requiredKind.Value
                     || (node.Definition.Kind != ResourceKind.Wood && node.Definition.Kind != ResourceKind.Stone
                         && node.Definition.Kind != ResourceKind.Ore && node.Definition.Kind != ResourceKind.Gold)) continue;
                 bool goldUsable = node.Definition.Kind != ResourceKind.Gold
@@ -609,7 +610,7 @@ namespace Rts.Simulation
                         int x0 = nx - dx, z0 = nz - dz;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
-                        if (!DrillSiteIsClear(faction, origin, out uint nodeId, true) || !KeepsMapConnected(faction, origin, size)) continue;
+                        if (!DrillSiteIsClear(faction, origin, out uint nodeId, true, requiredKind) || !KeepsMapConnected(faction, origin, size)) continue;
                         foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                         {
                             if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;

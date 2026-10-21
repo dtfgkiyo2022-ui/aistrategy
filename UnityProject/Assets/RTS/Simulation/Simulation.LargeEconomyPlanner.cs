@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Rts.Contracts;
 
@@ -13,10 +14,14 @@ namespace Rts.Simulation
         {
             for (uint faction = 1; faction <= 2; faction++)
             {
+                int index = (int)faction - 1;
+                largePlanStages[index] = LargeEconomyPlanStage.GrowVillage;
+                largePlanLastVillagers[index] = LivingVillagers(faction);
+                largePlanLastVillagerGrowthTick[index] = world.Tick;
                 BuildLargeEconomyPlan(faction, 0);
-                largePlanLastUpdateTick[faction - 1] = world.Tick;
+                largePlanLastUpdateTick[index] = world.Tick;
                 for (int resource = 0; resource < 6; resource++)
-                    largePlanDeliveredAtLastUpdate[faction - 1, resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
+                    largePlanDeliveredAtLastUpdate[index, resource] = largeDelivered[index * 6 + resource];
             }
         }
 
@@ -37,6 +42,15 @@ namespace Rts.Simulation
                     income[resource] = checked((int)Math.Min(int.MaxValue, (long)delta * 1200L / elapsed));
                     largePlanDeliveredAtLastUpdate[index, resource] = delivered;
                 }
+                int villagers = LivingVillagers(faction);
+                if (villagers > largePlanLastVillagers[index])
+                {
+                    largePlanLastVillagers[index] = villagers;
+                    largePlanLastVillagerGrowthTick[index] = world.Tick;
+                }
+                long stalled = Math.Max(0, world.Tick - largePlanLastVillagerGrowthTick[index]);
+                largePlanStages[index] = LargeEconomyPlanner.AdvanceStage(world.Config.Economy, largePlanStages[index],
+                    villagers, world.Tick, stalled, income[5]);
                 BuildLargeEconomyPlan(faction, income);
                 largePlanLastUpdateTick[index] = world.Tick;
             }
@@ -53,7 +67,7 @@ namespace Rts.Simulation
             long[] roundTripSum = new long[6]; int[] roundTripCount = new int[6];
             for (int nodeIndex = 0; nodeIndex < world.Nodes.Length; nodeIndex++)
             {
-                if (!ResourceKnownToFaction(faction, nodeIndex)) continue;
+                if (LargeResourceNodeBlocked(nodeIndex) || !ResourceKnownToFaction(faction, nodeIndex)) continue;
                 int resource = LargeWorkResourceIndex(world.Nodes[nodeIndex].Definition.Kind);
                 if (resource >= 0) known[resource]++;
             }
@@ -62,6 +76,7 @@ namespace Rts.Simulation
                 var villager = world.Villagers[i];
                 if (!villager.Alive || villager.FactionId != faction || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length
                     || villager.Task != VillagerTask.ToNode && villager.Task != VillagerTask.Gathering && villager.Task != VillagerTask.ToDropOff) continue;
+                if (LargeResourceNodeBlocked((int)villager.NodeId - 1)) continue;
                 int resource = LargeWorkResourceIndex(world.Nodes[villager.NodeId - 1].Definition.Kind);
                 if (resource < 0) continue;
                 var drop = DropOff(villager).point;
@@ -85,7 +100,9 @@ namespace Rts.Simulation
                     case BuildingKind.Farm: farms++; break;
                     case BuildingKind.LumberCamp: lumber++; break;
                     case BuildingKind.Mine:
-                    case BuildingKind.Drill: mines++; break;
+                    case BuildingKind.Drill:
+                        if (IsOreMiningBuilding(building)) mines++;
+                        break;
                     case BuildingKind.Smelter: smelters++; break;
                     case BuildingKind.Barracks: barracks++; break;
                     case BuildingKind.House: houses++; break;
@@ -99,7 +116,13 @@ namespace Rts.Simulation
                     Villagers = LivingVillagers(faction), Soldiers = LivingSoldiers(faction),
                     CurrentFarms = farms, CurrentLumberCamps = lumber, CurrentMines = mines, CurrentSmelters = smelters,
                     CurrentBarracks = barracks, CurrentHouses = houses, CurrentTowns = towns, CurrentDropSites = dropSites,
-                    IncomePerMinute = income ?? new int[6], WorkerRoundTripTicks = roundTrips, KnownResourceCounts = known
+                    IncomePerMinute = income ?? new int[6],
+                    Stock = new[] { world.Economies[faction - 1].Food, world.Economies[faction - 1].Wood,
+                        world.Economies[faction - 1].Stone, world.Economies[faction - 1].Ore,
+                        world.Economies[faction - 1].Gold, world.Economies[faction - 1].Metal },
+                    WorkerRoundTripTicks = roundTrips, KnownResourceCounts = known,
+                    CurrentStage = largePlanStages[faction - 1], ElapsedTicks = world.Tick,
+                    VillagerGrowthStalledTicks = Math.Max(0, world.Tick - largePlanLastVillagerGrowthTick[faction - 1])
                 });
             RebalanceLargeWorkers(faction);
         }
@@ -110,23 +133,42 @@ namespace Rts.Simulation
             if (plan == null) return;
             largeWorkCountsTick = -1;
             RefreshLargeWorkCounts();
-            var kept = new int[6];
+            largePlanWorkersRemoved[faction - 1] = 0;
+            largePlanWorkersAssigned[faction - 1] = 0;
+            var assigned = new int[6];
             for (int i = 0; i < world.VillagerCount; i++)
             {
-                ref var villager = ref world.Villagers[i];
+                var villager = world.Villagers[i];
                 if (!villager.Alive || villager.FactionId != faction || villager.Held || villager.Carry > 0
                     || villager.Task == VillagerTask.ToBuild || villager.Task == VillagerTask.Building
                     || villager.Task == VillagerTask.ToPickup || villager.Task == VillagerTask.ToDeliver) continue;
                 int resource = CurrentLargeWorkResource(villager);
-                if (resource >= 0 && kept[resource] < plan.WorkerTargets[resource])
+                if (resource >= 0) assigned[resource]++;
+            }
+            int hysteresis = Math.Max(0, world.Config.Economy.LargeEconomyWorkerHysteresis);
+            for (int resource = 0; resource < assigned.Length; resource++)
+            {
+                if (assigned[resource] <= plan.WorkerTargets[resource] + hysteresis) continue;
+                int remove = assigned[resource] - plan.WorkerTargets[resource];
+                for (int i = 0; i < world.VillagerCount && remove > 0; i++)
                 {
-                    kept[resource]++;
-                    continue;
+                    ref var villager = ref world.Villagers[i];
+                    if (!villager.Alive || villager.FactionId != faction || villager.Held || villager.Carry != 0
+                        || villager.Task != VillagerTask.Gathering || CurrentLargeWorkResource(villager) != resource) continue;
+                    villager.Task = VillagerTask.Idle;
+                    villager.NodeId = 0;
+                    villager.Route = Array.Empty<int>();
+                    villager.RouteCursor = 0;
+                    remove--;
+                    largePlanWorkersRemoved[faction - 1]++;
                 }
-                villager.Task = VillagerTask.Idle;
-                villager.NodeId = 0;
-                villager.Route = Array.Empty<int>();
-                villager.RouteCursor = 0;
+            }
+            var kept = new int[6];
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                int resource = CurrentLargeWorkResource(villager);
+                if (resource >= 0) kept[resource]++;
             }
             for (int i = 0; i < world.VillagerCount; i++)
             {
@@ -140,7 +182,7 @@ namespace Rts.Simulation
                 var kind = LargeWorkKindForResource(wanted);
                 int node = NearestWorkNode(villager.Position, kind, faction);
                 if (node < 0 && wanted != 0) node = NearestWorkNode(villager.Position, ResourceKind.Food, faction);
-                if (node >= 0) { SetWorkNode(ref villager, node); kept[Math.Max(0, LargeWorkResourceIndex(world.Nodes[node].Definition.Kind))]++; }
+                if (node >= 0) { SetWorkNode(ref villager, node); kept[Math.Max(0, LargeWorkResourceIndex(world.Nodes[node].Definition.Kind))]++; largePlanWorkersAssigned[faction - 1]++; }
             }
         }
 
@@ -166,13 +208,26 @@ namespace Rts.Simulation
             return count;
         }
 
+        private bool IsOreMiningBuilding(BuildingState building)
+            => IsPlannedBuilding(building) && (building.Kind == BuildingKind.Mine || building.Kind == BuildingKind.Drill)
+                && building.NodeId != 0 && building.NodeId <= world.Nodes.Length
+                && world.Nodes[building.NodeId - 1].Definition.Kind == ResourceKind.Ore;
+
+        private int LargePlanOreMiningBuildingCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].FactionId == faction && IsOreMiningBuilding(world.Buildings[i])) count++;
+            return count;
+        }
+
         private bool LargePlanIndustryReady(uint faction)
         {
             var plan = LargePlanFor(faction);
             return plan == null
                 || LargePlanBuildingCount(faction, BuildingKind.Farm) >= plan.TargetFarms
                 && LargePlanBuildingCount(faction, BuildingKind.LumberCamp) >= plan.TargetLumberCamps
-                && LargePlanBuildingCount(faction, BuildingKind.Mine) + LargePlanBuildingCount(faction, BuildingKind.Drill) >= plan.TargetMines
+                && LargePlanOreMiningBuildingCount(faction) >= plan.TargetMines
                 && LargePlanBuildingCount(faction, BuildingKind.Smelter) >= plan.TargetSmelters;
         }
 
@@ -183,33 +238,66 @@ namespace Rts.Simulation
             if (plan == null) return false;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            if (LargePlanBuildingCount(faction, BuildingKind.Farm) < plan.TargetFarms)
+            int currentMines = LargePlanOreMiningBuildingCount(faction);
+            int[] current =
             {
-                DecideFarms(faction);
-                return true;
-            }
-            if (LargePlanBuildingCount(faction, BuildingKind.LumberCamp) < plan.TargetLumberCamps)
+                LargePlanBuildingCount(faction, BuildingKind.Farm),
+                LargePlanBuildingCount(faction, BuildingKind.LumberCamp),
+                currentMines,
+                LargePlanBuildingCount(faction, BuildingKind.Smelter)
+            };
+            int[] target = { plan.TargetFarms, plan.TargetLumberCamps, plan.TargetMines, plan.TargetSmelters };
+            var candidates = new int[target.Length];
+            int candidateCount = 0;
+            for (int i = 0; i < target.Length; i++)
+                if (current[i] < target[i] && target[i] > 0) candidates[candidateCount++] = i;
+            Array.Sort(candidates, 0, candidateCount, Comparer<int>.Create((a, b) =>
             {
-                if (economy.Wood >= rules.LumberCampWoodCost) PlaceLumberCamp(faction);
-                return true;
-            }
-            if (LargePlanBuildingCount(faction, BuildingKind.Mine) + LargePlanBuildingCount(faction, BuildingKind.Drill) < plan.TargetMines)
+                long left = (long)current[a] * target[b], right = (long)current[b] * target[a];
+                return left != right ? left.CompareTo(right) : a.CompareTo(b);
+            }));
+            bool resourceWaiting = false;
+            for (int candidateIndex = 0; candidateIndex < candidateCount; candidateIndex++)
             {
-                if (economy.Wood >= rules.MineWoodCost) PlaceMine(faction);
-                return true;
-            }
-            if (LargePlanBuildingCount(faction, BuildingKind.Smelter) < plan.TargetSmelters)
-            {
-                if (economy.Wood >= rules.SmelterWoodCost)
-                    for (int i = 0; i < world.BuildingCount; i++)
+                int next = candidates[candidateIndex];
+                bool placed = false;
+                bool canAfford = true;
+                if (next == 0)
+                {
+                    canAfford = economy.Wood >= rules.FarmWoodCost;
+                    placed = canAfford && PlaceFarm(faction);
+                }
+                else if (next == 1)
+                {
+                    canAfford = economy.Wood >= rules.LumberCampWoodCost;
+                    placed = canAfford && PlaceLumberCamp(faction) != 0;
+                }
+                else if (next == 2)
+                {
+                    canAfford = economy.Wood >= rules.MineWoodCost;
+                    if (canAfford)
                     {
-                        var mine = world.Buildings[i];
-                        if (!IsPlannedBuilding(mine) || mine.FactionId != faction
-                            || mine.Kind != BuildingKind.Mine && mine.Kind != BuildingKind.Drill) continue;
-                        if (PlaceSmelter(faction, mine) != 0) break;
+                        placed = rules.CommonDrill && economy.Stone >= rules.DrillStoneCost
+                            && PlaceDrill(faction, -1, ResourceKind.Ore) != 0;
+                        if (!placed) placed = PlaceMine(faction) != 0;
                     }
-                return true;
+                }
+                else if (next == 3)
+                {
+                    canAfford = economy.Wood >= rules.SmelterWoodCost;
+                    if (canAfford)
+                        for (int i = 0; i < world.BuildingCount; i++)
+                        {
+                            var mine = world.Buildings[i];
+                            if (!IsOreMiningBuilding(mine) || mine.FactionId != faction) continue;
+                            if (PlaceSmelter(faction, mine) != 0) { placed = true; break; }
+                        }
+                }
+                if (placed) return true;
+                if (canAfford) continue;
+                resourceWaiting = true;
             }
+            if (resourceWaiting) return true;
             return false;
         }
 
@@ -220,6 +308,12 @@ namespace Rts.Simulation
             string prefix = "LargeEconomyPlan[" + faction.ToString(System.Globalization.CultureInfo.InvariantCulture) + "].";
             w.Value(prefix + "Stage", (byte)plan.Stage); w.Value(prefix + "R", plan.R); w.Value(prefix + "RPlus", plan.RPlus);
             w.Value(prefix + "VillagerTarget", plan.VillagerTarget); w.Value(prefix + "MinimumDefenceSoldiers", plan.MinimumDefenceSoldiers);
+            w.Value(prefix + "StageLastVillagers", largePlanLastVillagers[faction - 1]);
+            w.Value(prefix + "StageLastVillagerGrowthTick", largePlanLastVillagerGrowthTick[faction - 1]);
+            w.Value(prefix + "StageCurrent", (byte)largePlanStages[faction - 1]);
+            w.Value(prefix + "ConstructionWoodPerMinute", plan.ConstructionWoodPerMinute);
+            w.Value(prefix + "ConstructionStonePerMinute", plan.ConstructionStonePerMinute);
+            w.Value(prefix + "HouseWoodPriority", plan.HouseWoodPriority);
             for (int i = 0; i < 6; i++)
             {
                 w.Value(prefix + "IncomePerMinute[" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]", plan.IncomePerMinute[i]);

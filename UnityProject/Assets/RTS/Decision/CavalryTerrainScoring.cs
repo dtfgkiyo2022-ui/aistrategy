@@ -59,8 +59,11 @@ namespace Rts.Decision
             for (int i = 0; i < objectives.Count; i++)
             {
                 var path = FindPath(width, height, passable, observed, coreCell, objectives[i], null);
-                int pathDistance = RouteDistance.Measure(width, height, passable, observed, coreCell, objectives[i], null);
-                if (path.Length == 0 || pathDistance < 0) continue;
+                // FindPath is the same deterministic four-neighbour BFS as RouteDistance.Measure. Its returned
+                // shortest path already contains the start cell, so its edge distance is exactly length - 1.
+                // Reusing it avoids a second full-map BFS without changing the score.
+                int pathDistance = path.Length == 0 ? -1 : path.Length - 1;
+                if (pathDistance < 0) continue;
                 reachable++;
                 var banned = NarrowBand(width, height, passable, observed, path);
                 if (banned == null) continue;

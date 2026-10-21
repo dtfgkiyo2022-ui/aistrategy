@@ -50,6 +50,12 @@ namespace Rts.Simulation
         private readonly LargeEconomyPlan[] largeEconomyPlans = new LargeEconomyPlan[2];
         private readonly int[,] largePlanDeliveredAtLastUpdate = new int[2, 6];
         private readonly long[] largePlanLastUpdateTick = { -1, -1 };
+        private readonly LargeEconomyPlanStage[] largePlanStages =
+            { LargeEconomyPlanStage.GrowVillage, LargeEconomyPlanStage.GrowVillage };
+        private readonly int[] largePlanLastVillagers = { -1, -1 };
+        private readonly long[] largePlanLastVillagerGrowthTick = { 0, 0 };
+        private readonly int[] largePlanWorkersRemoved = new int[2];
+        private readonly int[] largePlanWorkersAssigned = new int[2];
 
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.
@@ -91,6 +97,7 @@ namespace Rts.Simulation
             InitializeVisibilityCaches();
             UpdateVisibility();
             UpdateObservations();
+            if (LargeEconomyOn) InitializeLargeResourceNodeBlockers();
             if (LargeEconomyOn) InitializeLargeEconomyPlans();
             ResolveVictory();
             PublishFrames();
@@ -118,17 +125,26 @@ namespace Rts.Simulation
                 commandEvents.Clear();
                 PruneLiveCommands();
                 Phase("Commands", () => { ApplyInputs(inputs); GenerateLatePushCommands(); ApplyPendingCommands(); ComposePolicies(); });
-                Phase("AI", () => { DecideArmies(); DecideEconomy(); });
+                Phase("AI", () =>
+                {
+                    MeasureSubphase("AI.DecideArmies", DecideArmies);
+                    MeasureSubphase("AI.DecideEconomy", DecideEconomy);
+                });
                 Phase("Commands", ComposePolicies);
                 Phase("EnemySearchCombat", () => { RebuildSpatialCombatIndex(); GenerateIntents(); });
                 Phase("Movement", () => { Move(); MoveVillagers(); });
                 Phase("Visibility", UpdateVisibility); // Post-movement combat visibility.
                 Phase("EnemySearchCombat", () => { Attack(); ResolveConversions(); ResolveDeaths(); });
                 // With an economy, soldiers come only from production (technical-design-v3 4), so the free reinforcements stop.
-                Phase("ObjectivesReinforcements", () => { EconomyStep(); CaptureOutposts(); if (!EconomyOn) Reinforce(); });
+                Phase("ObjectivesReinforcements", () =>
+                {
+                    MeasureSubphase("ObjectivesReinforcements.EconomyStep", EconomyStep);
+                    MeasureSubphase("ObjectivesReinforcements.CaptureOutposts", CaptureOutposts);
+                    if (!EconomyOn) MeasureSubphase("ObjectivesReinforcements.Reinforce", Reinforce);
+                });
                 Phase("Visibility", () => { UpdateVisibility(); UpdateObservations(); });
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
-                Phase("ObjectivesReinforcements", ResolveVictory);
+                Phase("ObjectivesReinforcements", () => MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
             }
             catch (ArithmeticException)
             {
@@ -136,6 +152,30 @@ namespace Rts.Simulation
                 world.Result = new MatchResult(true, 0, false, true, false);
             }
             Phase("Frames", PublishFrames);
+        }
+
+        private void MeasureSubphase(string name, Action action)
+        {
+            if (measure == null) { action(); return; }
+            measure(name, true);
+            try { action(); }
+            finally { measure(name, false); }
+        }
+
+        private void MeasureSubphase(string name, Action<uint> action, uint argument)
+        {
+            if (measure == null) { action(argument); return; }
+            measure(name, true);
+            try { action(argument); }
+            finally { measure(name, false); }
+        }
+
+        private bool MeasureSubphase(string name, Func<uint, bool> action, uint argument)
+        {
+            if (measure == null) return action(argument);
+            measure(name, true);
+            try { return action(argument); }
+            finally { measure(name, false); }
         }
 
         private void Phase(string name, Action action)
