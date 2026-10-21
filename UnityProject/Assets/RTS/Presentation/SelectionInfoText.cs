@@ -82,7 +82,7 @@ namespace Rts.Presentation
         public static string ActiveAgeStrengths(CivKind civ, int age, bool enabled)
         {
             if (!enabled || age < 2) return "";
-            string title = UiText.T("Active age strengths", "発動中の時代強み");
+            string title = UiText.T("Active age strengths", "効いている時代の強み");
             string result = title;
             int last = Math.Min(4, age);
             for (int strengthAge = 2; strengthAge <= last; strengthAge++)
