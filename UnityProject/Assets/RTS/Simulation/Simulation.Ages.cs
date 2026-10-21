@@ -29,6 +29,10 @@ namespace Rts.Simulation
 
         private bool AgeClockOn => AgesOn && world.Config.Economy.AgeClock;
 
+        private bool AgeFourOn => AgesOn && world.Config.Economy.AgeFour;
+
+        private int LastAge => AgeFourOn ? 4 : 3;
+
         private bool AgeClockUxOn => AgeClockOn && world.Config.Economy.AgeClockUx;
 
         private bool ForestryOn => AgesOn && world.Config.Economy.Forestry;
@@ -286,7 +290,7 @@ namespace Rts.Simulation
             if (e.Civ == CivKind.Primitive)
                 return CivEnabled(faction, civ);
             // V3-5 (32 #10): and on from the second age into the third one of the same civilisation.
-            return (e.Age == 1 || e.Age == 2) && civ == e.Civ;
+            return (e.Age == 1 || e.Age == 2 || (AgeFourOn && e.Age == 3)) && civ == e.Civ;
         }
 
         /// <summary>Checks every advance prerequisite that does not depend on the civilisation choice.</summary>
@@ -308,14 +312,15 @@ namespace Rts.Simulation
                     : (rules.AdvanceFoodCost, rules.AdvanceWoodCost, 0, rules.AdvanceTicks);
             if (e.Age == 1 && EarlyArmsOn && !AgeClockOn)
                 return (rules.EarlyAge2FoodCost, rules.EarlyAge2WoodCost, 0, rules.EarlyAge2Ticks);
-            return e.Age == 1 ? (rules.Age2FoodCost, rules.Age2WoodCost, 0, rules.Age2Ticks)
-                : (rules.Age3FoodCost, rules.Age3WoodCost, AcademyAge3GoldCost(faction, e, rules), rules.Age3Ticks);
+            if (e.Age == 1) return (rules.Age2FoodCost, rules.Age2WoodCost, 0, rules.Age2Ticks);
+            if (e.Age == 2) return (rules.Age3FoodCost, rules.Age3WoodCost, AcademyAge3GoldCost(faction, e, rules), rules.Age3Ticks);
+            return (rules.Age4FoodCost, rules.Age4WoodCost, 0, rules.Age4Ticks);
         }
 
         private (int food, int wood, int gold, int ticks) AdvancePrice(uint faction, FactionEconomy e)
         {
             var original = BaseAdvancePrice(faction, e);
-            if (!AgeClockOn || e.Age >= 3) return original;
+            if (!AgeClockOn || e.Age >= LastAge) return original;
 
             long due = AgeClockTickForAge(e.Age);
             long interval = AgeClockIntervalForAge(e.Age);
@@ -335,7 +340,7 @@ namespace Rts.Simulation
         private long AgeClockTickForAge(int age)
         {
             var rules = world.Config.Economy;
-            return age == 0 ? rules.AgeClockTicks1 : age == 1 ? rules.AgeClockTicks2 : rules.AgeClockTicks3;
+            return age == 0 ? rules.AgeClockTicks1 : age == 1 ? rules.AgeClockTicks2 : age == 2 ? rules.AgeClockTicks3 : rules.AgeClockTicks4;
         }
 
         private long AgeClockIntervalForAge(int age)
@@ -345,13 +350,13 @@ namespace Rts.Simulation
         {
             if (!AgeClockOn) return 0;
             int age = world.Economies[faction - 1].Age;
-            return age >= 3 ? 0 : AgeClockTickForAge(age);
+            return age >= LastAge ? 0 : AgeClockTickForAge(age);
         }
 
         private bool CanCompleteAgeClockAdvance(uint faction, CivKind civ)
         {
             var e = world.Economies[faction - 1];
-            if (e.AdvanceRemaining != 0 || e.Age >= 3) return false;
+            if (e.AdvanceRemaining != 0 || e.Age >= LastAge) return false;
             return e.Age == 0 ? CivEnabled(faction, civ) : e.Civ != CivKind.Primitive && civ == e.Civ;
         }
 
@@ -433,7 +438,7 @@ namespace Rts.Simulation
             for (int f = 0; f < 2; f++)
             {
                 ref var e = ref world.Economies[f];
-                if (e.Age >= 3 || world.Tick < AgeClockTickForAge(e.Age)) continue;
+                if (e.Age >= LastAge || world.Tick < AgeClockTickForAge(e.Age)) continue;
                 if (e.Age == 0)
                 {
                     CivKind civ = e.AdvancingTo != CivKind.Primitive ? e.AdvancingTo
@@ -471,7 +476,7 @@ namespace Rts.Simulation
         private void DecideAgeClockAdvance(uint faction)
         {
             var e = world.Economies[faction - 1];
-            if (e.CoreHeld || e.AdvanceRemaining != 0 || e.Age >= 3) return;
+            if (e.CoreHeld || e.AdvanceRemaining != 0 || e.Age >= LastAge) return;
             long due = AgeClockTickForAge(e.Age);
             long interval = AgeClockIntervalForAge(e.Age);
             long remaining = due - world.Tick;
@@ -502,7 +507,7 @@ namespace Rts.Simulation
         {
             if (!AgeClockUxOn) return false;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.AdvanceRemaining != 0 || economy.Age >= 3) return false;
+            if (economy.AdvanceRemaining != 0 || economy.Age >= LastAge) return false;
             CivKind civ = economy.Civ == CivKind.Primitive
                 ? requested != CivKind.Primitive ? requested : economy.ReservedCiv
                 : economy.Civ;
@@ -524,7 +529,7 @@ namespace Rts.Simulation
             if (!AgesOn) return false;
             if (AgeClockOn) return false;
             var e = world.Economies[faction - 1];
-            if (e.AdvanceRemaining > 0 || e.Age >= 3) return false;
+            if (e.AdvanceRemaining > 0 || e.Age >= LastAge) return false;
             // The second and third ages wait for the civilisation's own line, and for the stock to be half way there (32.8).
             if (e.Civ != CivKind.Primitive)
             {

@@ -82,6 +82,14 @@ namespace Rts.Simulation
             e.EarlyArms = true;
             e.AgeClock = true;
             e.AgeClockUx = true;
+            e.AgeFour = true;
+            e.AgeClockTicks1 = 6000; e.AgeClockTicks2 = 12000; e.AgeClockTicks3 = 18000; e.AgeClockTicks4 = 24000;
+            if (e.LargeEconomy) { e.Age4FoodCost = 1080; e.Age4WoodCost = 720; }
+            else { e.Age4FoodCost = 2400; e.Age4WoodCost = 1600; }
+            // Both ordered large-map measurement candidates pass the 24,000..36,000 tick window;
+            // keep the age-to-age increase by adopting the original (450, 600) pair.
+            e.SiegeAge0Permille = 100; e.SiegeAge1Permille = 250; e.SiegeAge2Permille = 450; e.SiegeAge3Permille = 600; e.SiegeAge4Permille = 4000;
+            e.LatePushAfterTicks = 24000; e.LatePushAdvantageAfterTicks = 24000;
             e.CoreDefence = true;
             e.ArmyGrowth = true;
             e.EconomyScale = true;

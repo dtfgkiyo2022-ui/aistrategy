@@ -60,6 +60,7 @@ namespace Rts.Presentation
         private VisualElement civIcon;
         private Label ageLabel;
         private Label ageStageLabel;
+        private Label ageToast;
         private VisualElement resourceRow;
         private VisualElement populationIcon;
         private Label populationLabel;
@@ -193,6 +194,7 @@ namespace Rts.Presentation
         private bool hudAssetsLoaded;
         private string lastAge = "";
         private string lastAgeStage = "";
+        private int lastCommittedAge = -1;
         private CivKind lastCiv = (CivKind)255;
         private string lastPopulation = "";
         private string lastIdle = "";
@@ -612,6 +614,8 @@ namespace Rts.Presentation
             civIcon = root.Q<VisualElement>("civ-icon");
             ageLabel = root.Q<Label>("age-label");
             ageStageLabel = root.Q<Label>("age-stage-label");
+            ageToast = root.Q<Label>("age-toast");
+            if (ageToast != null) ageToast.style.display = DisplayStyle.None;
             resourceRow = root.Q<VisualElement>("resource-row");
             populationIcon = root.Q<VisualElement>("population-icon");
             if (populationIcon != null && populationIconTexture != null)
@@ -2359,6 +2363,16 @@ namespace Rts.Presentation
                 // The IMGUI line ends the age with a "  |  " separator; the toolkit bar separates by layout instead.
                 ageLabel.text = age.TrimEnd(' ', '|');
                 lastAge = age;
+            }
+            if (economy.AdvanceRemaining == 0 && economy.Age != lastCommittedAge)
+            {
+                if (lastCommittedAge >= 0 && ageToast != null)
+                {
+                    ageToast.text = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age);
+                    ageToast.style.display = DisplayStyle.Flex;
+                    ageToast.schedule.Execute(() => { if (ageToast != null) ageToast.style.display = DisplayStyle.None; }).StartingIn(2600);
+                }
+                lastCommittedAge = economy.Age;
             }
 
             string ageStage = TopBarDisplayText.AgeStage(economy);

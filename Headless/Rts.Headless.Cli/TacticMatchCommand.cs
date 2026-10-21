@@ -61,11 +61,28 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
+        if (options.ContainsKey("--age-four-off"))
+        {
+            scenario.Economy.AgeFour = false;
+            scenario.Economy.AgeClockTicks1 = 4800;
+            scenario.Economy.AgeClockTicks2 = 10800;
+            scenario.Economy.AgeClockTicks3 = 15600;
+            scenario.Economy.SiegeAge2Permille = 600;
+            scenario.Economy.LatePushAfterTicks = 12000;
+            scenario.Economy.LatePushAdvantageAfterTicks = 8000;
+        }
+        if (options.TryGetValue("--siege-age2-permille", out var siegeAge2Text))
+            scenario.Economy.SiegeAge2Permille = ParsePermille("--siege-age2-permille", siegeAge2Text);
+        if (options.TryGetValue("--siege-age3-permille", out var siegeAge3Text))
+            scenario.Economy.SiegeAge3Permille = ParsePermille("--siege-age3-permille", siegeAge3Text);
         if (options.ContainsKey("--ages")) scenario.Economy.Ages = true;
         // LiveGameRules keeps both features on by default. These explicit measurement switches are command-line-only.
         if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
+        // Measurement runs may intentionally extend the historical 36,000-tick verification ceiling;
+        // this command does not record a replay, so raising the input guard does not change simulation state.
+        scenario.VerificationTickLimit = Math.Max(scenario.VerificationTickLimit, ticks);
         if (ticks < 0 || ticks > scenario.VerificationTickLimit) throw new InvalidDataException("ticksがシナリオの範囲外です。");
         string westName = options.GetValueOrDefault("--west-tactic") ?? "auto";
         string eastName = options.GetValueOrDefault("--east-tactic") ?? "auto";
@@ -148,7 +165,20 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,phases," + LargeEconomyHeader());
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
+        }
+        StreamWriter ageTrace = null;
+        var priorAges = new Dictionary<uint, int>();
+        var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
+        var latePushAdvantageTicks = new Dictionary<uint, long> { [1] = -1, [2] = -1 };
+        priorAges[1] = simulation.Capture(1).Economy?.Age ?? 0;
+        priorAges[2] = simulation.Capture(2).Economy?.Age ?? 0;
+        if (options.TryGetValue("--age-trace-out", out var ageTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(ageTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            ageTrace = new StreamWriter(ageTracePath, false, new UTF8Encoding(false));
+            ageTrace.WriteLine("tick,faction,age");
         }
         LargeEconomyObservation largeObservation = null;
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
@@ -175,6 +205,23 @@ internal static class TacticMatchCommand
             int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
             int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int age = simulation.Capture(faction).Economy?.Age ?? 0;
+                if (age != priorAges[faction])
+                {
+                    if (ageTrace != null)
+                        ageTrace.WriteLine(simulation.Capture(faction).Tick.ToString(CultureInfo.InvariantCulture) + "," + faction.ToString(CultureInfo.InvariantCulture) + "," + age.ToString(CultureInfo.InvariantCulture));
+                    if (!ageTicks.TryGetValue(faction, out var factionAgeTicks))
+                        ageTicks[faction] = factionAgeTicks = new Dictionary<int, long>();
+                    factionAgeTicks[age] = simulation.Capture(faction).Tick;
+                    priorAges[faction] = age;
+                }
+            }
+            for (uint faction = 1; faction <= 2; faction++)
+                if (latePushAdvantageTicks[faction] < 0
+                    && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
+                    latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
             largeObservation = timingWriter != null && simulation.Capture(1).Tick % 1000 == 0
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
@@ -286,6 +333,7 @@ internal static class TacticMatchCommand
                      simulation.MovedSoldiers.ToString(CultureInfo.InvariantCulture),
                      simulation.VisibilityChangedSoldiers.ToString(CultureInfo.InvariantCulture),
                      simulation.VisibilityProcessedCells.ToString(CultureInfo.InvariantCulture), phaseText,
+                     latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture), latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture),
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
@@ -295,6 +343,7 @@ internal static class TacticMatchCommand
             pack?.RecordAfterStep(simulation);
         }
         timingWriter?.Dispose();
+        ageTrace?.Dispose();
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
@@ -329,6 +378,17 @@ internal static class TacticMatchCommand
         }
         var result = simulation.Capture(1).Result;
         Console.WriteLine("tactic-match: ticks=" + simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture) + " ended=" + result.HasEnded + " winner=" + result.WinnerFactionId.ToString(CultureInfo.InvariantCulture));
+        Console.WriteLine("late-push-advantage: faction1=" + latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture)
+            + " faction2=" + latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture));
+        for (uint faction = 1; faction <= 2; faction++)
+        {
+            if (!ageTicks.TryGetValue(faction, out var factionAgeTicks)) factionAgeTicks = new Dictionary<int, long>();
+            Console.WriteLine("ages: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " age1=" + (factionAgeTicks.TryGetValue(1, out var age1) ? age1 : -1).ToString(CultureInfo.InvariantCulture)
+                + " age2=" + (factionAgeTicks.TryGetValue(2, out var age2) ? age2 : -1).ToString(CultureInfo.InvariantCulture)
+                + " age3=" + (factionAgeTicks.TryGetValue(3, out var age3) ? age3 : -1).ToString(CultureInfo.InvariantCulture)
+                + " age4=" + (factionAgeTicks.TryGetValue(4, out var age4) ? age4 : -1).ToString(CultureInfo.InvariantCulture));
+        }
         if (scenario.Economy.LargeEconomy)
         {
             var outcomeObservation = simulation.CaptureLargeEconomyObservation();
@@ -361,6 +421,13 @@ internal static class TacticMatchCommand
         if (!options.TryGetValue(key, out var text)) return fallback;
         int value = int.Parse(text, CultureInfo.InvariantCulture);
         if (value < 1 || value > 64) throw new InvalidDataException(key + " は1〜64の整数で指定してください。");
+        return value;
+    }
+
+    private static int ParsePermille(string key, string text)
+    {
+        int value = int.Parse(text, CultureInfo.InvariantCulture);
+        if (value < 1 || value > 10000) throw new InvalidDataException(key + "は1〜10000の整数で指定してください。");
         return value;
     }
 

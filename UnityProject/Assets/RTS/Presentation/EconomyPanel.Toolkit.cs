@@ -682,12 +682,12 @@ namespace Rts.Presentation
                     }
                 }
             }
-            else if ((economy.Age == 1 || economy.Age == 2) && economy.AdvanceRemaining == 0)
+            else if ((economy.Age == 1 || economy.Age == 2 || (economy.Age == 3 && economy.AgeFour)) && economy.AdvanceRemaining == 0)
             {
-                int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age3FoodCost;
-                int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
+                int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age == 2 ? economy.Age3FoodCost : economy.Age4FoodCost;
+                int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age == 2 ? economy.Age3WoodCost : economy.Age4WoodCost;
                 int gold = economy.NextAgeGoldCost;
-                string next = UiText.T("Advance: ", "時代を進める：") + AgeName(economy.Civ, economy.Age + 1);
+                string next = UiText.T("Advance: ", "時代を進める：") + TopBarDisplayText.AgeName(economy.Civ, economy.Age + 1);
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
                     + AgeClockLabel(economy, food, wood);
                 string why = economy.Food < food ? UiText.T("not enough food", "食料が足りない") : economy.Wood < wood ? UiText.T("not enough wood", "木材が足りない") : economy.Gold < gold ? UiText.T("not enough gold", "金が足りない") : economy.VillagerQueued > 0 ? UiText.T("villagers in training", "村人の訓練中") : "";
@@ -735,6 +735,7 @@ namespace Rts.Presentation
             if (economy.Civ == CivKind.Agrarian) techs.Add(TechKind.Irrigation); else if (economy.Civ == CivKind.Metallurgy) techs.Add(TechKind.BlastFurnace);
             if (economy.Age >= 2) { techs.Add(TechKind.SteelWeapons); techs.Add(TechKind.SteelArmour); }
             if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); techs.Add(TechKind.GemArmor); }
+            if (economy.Age >= 4 && economy.AgeFour) { techs.Add(TechKind.TotalWar); techs.Add(TechKind.GrandWorkshop); }
             for (int techIndex = 0; techIndex < techs.Count; techIndex++)
             {
                 TechKind tech = techs[techIndex];

@@ -105,6 +105,22 @@
     -unity-text-align: middle-left;
 }
 
+.hud-age-toast {
+    position: absolute;
+    left: 25%;
+    right: 25%;
+    top: 34%;
+    padding: 10px 16px;
+    background-color: var(--hud-panel);
+    border-width: var(--hud-border-width);
+    border-color: var(--hud-accent);
+    border-radius: var(--hud-radius);
+    color: var(--hud-heading);
+    font-size: var(--hud-heading-size);
+    -unity-text-align: middle-center;
+    display: none;
+}
+
 .hud-resource-row {
     flex-direction: row;
     flex-grow: 1;

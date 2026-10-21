@@ -55,6 +55,7 @@
     <Compile Include="AgeTests.cs" />
     <Compile Include="AgeClockTests.cs" />
     <Compile Include="AgeClockUxTests.cs" />
+    <Compile Include="AgeFourTests.cs" />
     <Compile Include="CivTests.cs" />
     <Compile Include="TrainingTests.cs" />
     <Compile Include="DefenceTests.cs" />

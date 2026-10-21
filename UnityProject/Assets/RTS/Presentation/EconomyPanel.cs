@@ -53,6 +53,9 @@ namespace Rts.Presentation
         private readonly List<TopBarResourceVisibility.ResourceEntry> topBarResources =
             new List<TopBarResourceVisibility.ResourceEntry>();
         private readonly List<float> topBarIconOffsets = new List<float>();
+        private int lastCommittedAge = -1;
+        private string ageToast = "";
+        private float ageToastUntil;
 
         public bool IsPlacing { get { return mode != Mode.None; } }
 
@@ -272,26 +275,7 @@ namespace Rts.Presentation
         }
 
         private static string CivName(CivKind c)
-        {
-            switch (c)
-            {
-                case CivKind.Agrarian: return UiText.T("farming", "農耕の文明");
-                case CivKind.Metallurgy: return UiText.T("metallurgy", "冶金の文明");
-                case CivKind.Forestry: return UiText.T("forestry", "森林・木工の文明");
-                case CivKind.Masonry: return UiText.T("masonry", "石工・城塞の文明");
-                case CivKind.Caravan: return UiText.T("caravan", "隊商・交易の文明");
-                case CivKind.Cavalry: return UiText.T("cavalry", "騎馬・機動の文明");
-                case CivKind.Bridge: return UiText.T("engineering", "工兵・架橋の文明");
-                case CivKind.Academy: return UiText.T("academy", "学府・技術の文明");
-                case CivKind.Cult: return UiText.T("cult", "教団・改宗の文明");
-                case CivKind.Fishing: return UiText.T("fishing", "漁労・港湾の文明");
-                case CivKind.Mountain: return UiText.T("mountain", "山岳・鉱夫の文明");
-                case CivKind.Tollgate: return UiText.T("tollgate", "関所・要塞の文明");
-                case CivKind.Metropolis: return UiText.T("metropolis", "都市・人口の文明");
-                case CivKind.Sanctuary: return UiText.T("sanctuary", "聖地・遺物の文明");
-                default: return UiText.T("primitive age", "原始時代");
-            }
-        }
+            => TopBarDisplayText.CivName(c);
 
         /// <summary>A short name for the advance buttons.</summary>
         private static string CivShortName(CivKind c)
@@ -326,15 +310,7 @@ namespace Rts.Presentation
             CivKind.Caravan, CivKind.Cavalry, CivKind.Bridge, CivKind.Academy, CivKind.Cult, CivKind.Fishing, CivKind.Mountain, CivKind.Tollgate, CivKind.Metropolis, CivKind.Sanctuary };
 
         /// <summary>V3-5: the civilisation with its age - the second age is the city age for farming, the iron age for metallurgy.</summary>
-        private static string AgeName(CivKind c, int age)
-        {
-            if (age < 2) return CivName(c);
-            if (c == CivKind.Agrarian)
-                return age == 2 ? UiText.T("farming, city age", "農耕の文明・都市の時代") : UiText.T("farming, trade age", "農耕の文明・交易の時代");
-            if (c == CivKind.Metallurgy)
-                return age == 2 ? UiText.T("metallurgy, iron age", "冶金の文明・鉄の時代") : UiText.T("metallurgy, steel age", "冶金の文明・鋼の時代");
-            return CivName(c) + (age == 2 ? UiText.T(", second age", "・2つ目の時代") : UiText.T(", third age", "・3つ目の時代"));
-        }
+        // AgeName is shared with the UI Toolkit through TopBarDisplayText.
 
         /// <summary>The mark in front of the reserved civilisation's button.</summary>
         private static string Star(EconomyView economy, CivKind civ) => economy.ReservedCiv == civ ? "★" : "";
@@ -582,6 +558,18 @@ namespace Rts.Presentation
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
             var normal = GUI.skin.label;
             float wide = normal.CalcSize(line).x;
+            if (economy.AdvanceRemaining == 0 && economy.Age != lastCommittedAge)
+            {
+                if (lastCommittedAge >= 0)
+                    ageToast = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age);
+                lastCommittedAge = economy.Age;
+                ageToastUntil = Time.time + 2.6f;
+            }
+            if (!string.IsNullOrEmpty(ageToast) && Time.time < ageToastUntil)
+            {
+                float toastWidth = Mathf.Min(560f, Screen.width - 40f);
+                GUI.Box(new Rect((Screen.width - toastWidth) * 0.5f, Screen.height * 0.34f, toastWidth, 44f), ageToast);
+            }
             if (wide <= rect.width)
             {
                 GUI.Label(rect, line);
@@ -993,12 +981,12 @@ namespace Rts.Presentation
                     y += 26f;
                 }
             }
-            else if (economy.Ages && (economy.Age == 1 || economy.Age == 2) && economy.AdvanceRemaining == 0)
+            else if (economy.Ages && (economy.Age == 1 || economy.Age == 2 || (economy.Age == 3 && economy.AgeFour)) && economy.AdvanceRemaining == 0)
             {
-                // V3-5 (32 #7, #10): the next age of the civilisation taken - the second, then the third.
-                string next = UiText.T("Advance: ", "時代を進める：") + AgeName(economy.Civ, economy.Age + 1);
-                int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age3FoodCost;
-                int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age3WoodCost;
+                // The next age of the civilisation: the second, third, then optional fourth.
+                string next = UiText.T("Advance: ", "時代を進める：") + TopBarDisplayText.AgeName(economy.Civ, economy.Age + 1);
+                int food = economy.Age == 1 ? economy.Age2FoodCost : economy.Age == 2 ? economy.Age3FoodCost : economy.Age4FoodCost;
+                int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age == 2 ? economy.Age3WoodCost : economy.Age4WoodCost;
                 int gold = economy.NextAgeGoldCost;
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood
                     + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
@@ -1108,6 +1096,8 @@ namespace Rts.Presentation
                 case TechKind.SteelArmour: return UiText.T("Steel armour (HP +30)", "鋼の鎧（HP+30）");
                 case TechKind.GemArmor: return UiText.T("Gem armor (HP +40)", "宝石の鎧（HP+40）");
                 case TechKind.BlastFurnace: return UiText.T("Blast furnace (smelting)", "高炉（精錬が速い）");
+                case TechKind.TotalWar: return UiText.T("Total war (unit HP +10%)", "総力戦（兵の最大HP+10%）");
+                case TechKind.GrandWorkshop: return UiText.T("Grand workshop (processing faster)", "大工房（加工が速い）");
             }
             // The later civilisations keep their own techs outside the enum; each is researched in that civilisation's building.
             if (t == BridgeTech.Bridgeworks) return UiText.T("Bridgeworks", "架橋術");
@@ -1149,6 +1139,7 @@ namespace Rts.Presentation
             // V3-5 (32 #14): the steel pair comes with the second age and is paid in metal.
             if (economy.Age >= 2) { techs.Add(TechKind.SteelWeapons); techs.Add(TechKind.SteelArmour); }
             if (economy.Age >= 3) { techs.Add(TechKind.Masonry); techs.Add(TechKind.Siegecraft); techs.Add(TechKind.Banking); techs.Add(TechKind.GemArmor); }
+            if (economy.Age >= 4 && economy.AgeFour) { techs.Add(TechKind.TotalWar); techs.Add(TechKind.GrandWorkshop); }
             for (int i = 0; i < techs.Count; i++)
             {
                 var t = techs[i];

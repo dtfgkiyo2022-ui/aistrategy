@@ -275,7 +275,8 @@ namespace Rts.Tactics
             var e = frame.Economy;
             if (e == null) { b.Append("null"); return; }
             var next = NextAgeCost(e);
-            bool canAdvanceNow = e.Ages && e.Age < 3 && e.AdvancingTo == CivKind.Primitive &&
+            int lastAge = e.AgeFour ? 4 : 3;
+            bool canAdvanceNow = e.Ages && e.Age < lastAge && e.AdvancingTo == CivKind.Primitive &&
                 e.Food >= next.food && e.Wood >= next.wood && e.Gold >= next.gold;
             b.Append("{\"food\":").Append(e.Food).Append(",\"wood\":").Append(e.Wood).Append(",\"ore\":").Append(e.Ore).Append(",\"metal\":").Append(e.Metal).Append(",\"stone\":").Append(e.Stone).Append(",\"gold\":").Append(e.Gold).Append(",\"gems\":").Append(e.Gems);
             if (e.RationsEnabled) b.Append(",\"rations\":").Append(e.Rations);
@@ -298,10 +299,11 @@ namespace Rts.Tactics
 
         private static (int food, int wood, int gold) NextAgeCost(EconomyView e)
         {
-            if (!e.Ages || e.Age >= 3) return (0, 0, 0);
+            if (!e.Ages || e.Age >= (e.AgeFour ? 4 : 3)) return (0, 0, 0);
             if (e.Civ == CivKind.Primitive) return (e.AdvanceFoodCost, e.AdvanceWoodCost, 0);
             if (e.Age == 1) return (e.Age2FoodCost, e.Age2WoodCost, 0);
-            return (e.Age3FoodCost, e.Age3WoodCost, e.NextAgeGoldCost);
+            if (e.Age == 2) return (e.Age3FoodCost, e.Age3WoodCost, e.NextAgeGoldCost);
+            return (e.Age4FoodCost, e.Age4WoodCost, e.NextAgeGoldCost);
         }
 
         private static void Point(StringBuilder b, SimPoint p)
