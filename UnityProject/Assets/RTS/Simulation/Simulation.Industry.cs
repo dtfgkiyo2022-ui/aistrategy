@@ -30,7 +30,9 @@ namespace Rts.Simulation
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.MineIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Mountain, 2)
+                        ? Math.Max(1, checked((rules.MineIntervalTicks * rules.MountainMiningTimePermille + 999) / 1000)) : rules.MineIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -39,7 +41,9 @@ namespace Rts.Simulation
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.LumberCampIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Forestry, 2)
+                        ? Math.Max(1, checked((rules.LumberCampIntervalTicks * rules.ForestryLumberSpeedPermille + 999) / 1000)) : rules.LumberCampIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -58,7 +62,9 @@ namespace Rts.Simulation
                     if (b.NodeId == 0 || b.NodeId > world.Nodes.Length) continue;
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.DrillIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Mountain, 2)
+                        ? Math.Max(1, checked((rules.DrillIntervalTicks * rules.MountainMiningTimePermille + 999) / 1000)) : rules.DrillIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -516,9 +522,9 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
-        private int CraftTicksFor(BuildingState building, int baseTicks)
+        private int CraftTicksFor(BuildingState building, int baseTicks, int extraPermille = 1000)
         {
-            int result = baseTicks;
+            int result = Math.Max(1, checked((baseTicks * extraPermille + 999) / 1000));
             if (!CraftTree1On || building.Level < 2)
                 return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
                     ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
@@ -610,7 +616,8 @@ namespace Rts.Simulation
                 if (building.Input < frames || building.InputSecondary < arms) return;
                 economy.FramesConsumed = checked(economy.FramesConsumed + frames);
                 economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
-                building.Timer = CraftTicksFor(building, rules.SiegePartsTicks);
+                building.Timer = CraftTicksFor(building, rules.SiegePartsTicks,
+                    AgeStrength(building.FactionId, CivKind.Metallurgy, 4) ? rules.MetallurgySiegePartsTimePermille : 1000);
                 return;
             }
             if (building.Recipe == RecipeKind.Mechanism)

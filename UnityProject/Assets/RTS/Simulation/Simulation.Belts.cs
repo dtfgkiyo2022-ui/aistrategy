@@ -201,11 +201,12 @@ namespace Rts.Simulation
                 case ResourceKind.RepairKits: economy.RepairKits = Math.Min(world.Config.Economy.RepairKitStockLimit, checked(economy.RepairKits + amount)); break;
                 case ResourceKind.Tools: economy.Tools = Math.Min(world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
                 case ResourceKind.Preserves:
-                    economy.Food = checked(economy.Food + amount * world.Config.Economy.PreserveFoodValue);
-                    economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * world.Config.Economy.PreserveFoodValue);
+                int preserveValue = AgeStrength(faction, CivKind.Fishing, 3) ? world.Config.Economy.FishingPreserveFoodValue : world.Config.Economy.PreserveFoodValue;
+                economy.Food = checked(economy.Food + amount * preserveValue);
+                economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * preserveValue);
                     break;
                 case ResourceKind.TradeGoods:
-                    int value = checked(amount * world.Config.Economy.TradeGoodsValue);
+                    int value = checked(amount * (AgeStrength(faction, CivKind.Caravan, 2) ? world.Config.Economy.CaravanTradeGoodsValue : world.Config.Economy.TradeGoodsValue));
                     if (economy.Food <= economy.Stone)
                     {
                         economy.Food = checked(economy.Food + value);

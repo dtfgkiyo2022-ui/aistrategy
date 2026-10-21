@@ -741,6 +741,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int Age { get; }
         /// <summary>AgeFour: the optional fifth stage (primitive plus four civilisation ages).</summary>
         public bool AgeFour { get; }
+        /// <summary>AgeStrengths: civilisation age bonuses are active in this played rule set.</summary>
+        public bool AgeStrengths { get; }
         public int Age2FoodCost { get; }
         public int Age2WoodCost { get; }
         public int ArcherFoodCost { get; }
@@ -1137,7 +1139,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool buildingReservations = false, int reservationLimit = 0, int reservationCount = 0, int reservationCheckTicks = 0,
              bool ageFour = false, int age4FoodCost = 0, int age4WoodCost = 0, int age4Ticks = 0,
              int totalWarFoodCost = 0, int totalWarWoodCost = 0, int totalWarMetalCost = 0, int totalWarTicks = 0,
-             int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0)
+              int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0,
+              bool ageStrengths = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1233,7 +1236,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CavalryMission = cavalryMission;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
-            AgeFour = ageFour; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
+             AgeFour = ageFour; AgeStrengths = ageStrengths; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

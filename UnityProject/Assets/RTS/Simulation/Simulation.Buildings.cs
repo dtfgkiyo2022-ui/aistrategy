@@ -151,7 +151,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
                 || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost
-                || TownCount(faction) >= rules.TownMaxBuildings) return;
+                || TownCount(faction) >= TownLimitFor(faction)) return;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
@@ -983,7 +983,7 @@ namespace Rts.Simulation
                             Array.Copy(b.QueueKinds, 1, kinds, 0, kinds.Length);
                             b.QueueKinds = kinds;
                         }
-                        b.TrainRemaining = b.Queued > 0 ? VillagerTrainTicksFor(b.FactionId, QueueToolsAt(b, 0)) : 0;
+                        b.TrainRemaining = b.Queued > 0 ? TownVillagerTrainTicksFor(b.FactionId, QueueToolsAt(b, 0)) : 0;
                     }
                     continue;
                 }
@@ -1012,6 +1012,15 @@ namespace Rts.Simulation
                     equipped.Parameters.Damage = checked(equipped.Parameters.Damage + attack);
                     int hp = checked((equipped.Parameters.Hp * hpPermille + 999) / 1000);
                     equipped.Parameters.Hp = hp; equipped.Hp = hp; equipped.Initial.Hp = hp;
+                }
+                if (charmed && AgeStrength(b.FactionId, CivKind.Sanctuary, 3))
+                {
+                    ref var blessed = ref world.Soldiers[world.SoldierCount - 1];
+                    int multiplier = AgeStrength(b.FactionId, CivKind.Sanctuary, 4)
+                        ? world.Config.Economy.SanctuaryCharmHpAge4Permille
+                        : world.Config.Economy.SanctuaryCharmHpPermille;
+                    int hp = checked((blessed.Parameters.Hp * multiplier + 999) / 1000);
+                    blessed.Parameters.Hp = hp; blessed.Hp = hp; blessed.Initial.Hp = hp;
                 }
                 if (siegeParts && unit == UnitKind.Ram)
                 {
@@ -1111,6 +1120,10 @@ namespace Rts.Simulation
             : kind == BuildingKind.Town ? e.TownHp : kind == BuildingKind.Storage ? e.StorageHp : kind == BuildingKind.Weaver ? e.WeaverHp : kind == BuildingKind.IncenseHouse ? e.IncenseHp : kind == BuildingKind.CharmWorkshop ? e.CharmHp : kind == BuildingKind.RepairYard ? e.RepairYardHp : kind == BuildingKind.ToolShop ? e.ToolShopHp : kind == BuildingKind.Stonecutter ? e.StonecutterHp : kind == BuildingKind.Joinery ? e.JoineryHp : kind == BuildingKind.Assembler ? e.AssemblerHp : kind == BuildingKind.Bridge ? BridgeHpForBuilding(faction) : e.BarracksHp;
             if (origin >= 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower))
                 hp = MountainFortHp(hp, faction, origin, SizeOf(kind));
+            if (kind == BuildingKind.Wall && AgeStrength(faction, CivKind.Masonry, 2))
+                hp = checked(hp * world.Config.Economy.MasonryWallHpPermille / 1000);
+            if (kind == BuildingKind.Tollgate && AgeStrength(faction, CivKind.Tollgate, 3))
+                hp = checked(hp * world.Config.Economy.TollgateHpPermille / 1000);
             return hp;
         }
 
@@ -1139,7 +1152,12 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Monastery ? e.MonasteryWork : kind == BuildingKind.Harbor ? e.HarborWork : kind == BuildingKind.MineShaft ? e.MountainWork
                  : kind == BuildingKind.Tollgate ? e.TollgateWork : kind == BuildingKind.GrandHouse ? e.GrandHouseWork
             : kind == BuildingKind.Town ? e.TownWork : kind == BuildingKind.Storage ? e.StorageWork : kind == BuildingKind.Weaver ? e.WeaverWork : kind == BuildingKind.IncenseHouse ? e.IncenseWork : kind == BuildingKind.CharmWorkshop ? e.CharmWork : kind == BuildingKind.RepairYard ? e.RepairYardWork : kind == BuildingKind.ToolShop ? e.ToolShopWork : kind == BuildingKind.Stonecutter ? e.StonecutterWork : kind == BuildingKind.Joinery ? e.JoineryWork : kind == BuildingKind.Assembler ? e.AssemblerWork : kind == BuildingKind.Bridge ? BridgeWorkFor(faction) : e.BarracksWork;
-            return IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
+            work = IsMasonryDefence(faction, kind) ? MasonryDiscount(work, e.MasonryDefenceWorkPermille) : work;
+            if (kind == BuildingKind.Bridge && AgeStrength(faction, CivKind.Bridge, 2))
+                work = Math.Max(1, checked((work * e.BridgeBuildingWorkPermille + 999) / 1000));
+            if (AgeStrength(faction, CivKind.Bridge, 4))
+                work = Math.Max(1, checked((work * e.BridgeGeneralWorkPermille + 999) / 1000));
+            return work;
         }
 
         private int WorkOf(BuildingState building)
@@ -1166,7 +1184,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
                   : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
             : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
-            return IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
+            wood = IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
+            return AgeStrength(faction, CivKind.Forestry, 4)
+                ? checked((wood * e.ForestryBuildingWoodPermille + 999) / 1000) : wood;
         }
 
         private int WoodOfForPlacement(BuildingKind kind, uint faction, bool framesUsed)

@@ -94,7 +94,8 @@ namespace Rts.Simulation
                 if (core.Hp > 0 && core.Hp < core.Definition.Hp
                     && (3 < targetRank || 3 == targetRank && core.Definition.Id < targetId))
                 {
-                    int repaired = Math.Min(rules.RepairKitHp, core.Definition.Hp - core.Hp);
+                    int repairHp = AgeStrength(faction, CivKind.Tollgate, 4) ? rules.TollgateRepairKitHp : rules.RepairKitHp;
+                    int repaired = Math.Min(repairHp, core.Definition.Hp - core.Hp);
                     core.Hp += repaired;
                     economy.RepairKits--;
                     economy.RepairKitsConsumed++;
@@ -103,7 +104,8 @@ namespace Rts.Simulation
                 }
                 if (target < 0) continue;
                 ref var building = ref world.Buildings[target];
-                int amount = Math.Min(rules.RepairKitHp, HpOf(building.Kind, faction, building.OriginCell) - building.Hp);
+                    int buildingRepairHp = AgeStrength(faction, CivKind.Tollgate, 4) ? rules.TollgateRepairKitHp : rules.RepairKitHp;
+                    int amount = Math.Min(buildingRepairHp, HpOf(building.Kind, faction, building.OriginCell) - building.Hp);
                 if (amount <= 0) continue;
                 building.Hp += amount;
                 economy.RepairKits--;

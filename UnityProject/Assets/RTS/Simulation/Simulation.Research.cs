@@ -44,18 +44,27 @@ namespace Rts.Simulation
             if (rules.FishingEnabled && nodeId > 0 && world.Nodes[nodeId - 1].Fishing
                 && world.Economies[faction - 1].Civ == CivKind.Agrarian)
                 interval = interval * (1000 - rules.FishAgrarianBonusPermille) / 1000;
+            if (nodeId > 0 && world.Nodes[nodeId - 1].Fishing && AgeStrength(faction, CivKind.Fishing, 2))
+                interval = Math.Max(1, checked((interval * rules.FishingGatherTimePermille + 999) / 1000));
+            if (nodeId > 0 && world.Nodes[nodeId - 1].Definition.Kind == ResourceKind.Ore && AgeStrength(faction, CivKind.Mountain, 2))
+                interval = Math.Max(1, checked((interval * rules.MountainMiningTimePermille + 999) / 1000));
             return Math.Max(1, interval);
         }
 
         private int CarryFor(uint faction, bool fishing = false)
         {
             int carry = world.Config.Economy.CarryCapacity + (HasTech(faction, TechKind.Carts) ? world.Config.Economy.CartsCarry : 0);
+            if (fishing && AgeStrength(faction, CivKind.Fishing, 4)) carry = checked(carry + world.Config.Economy.FishingFoodCarryBonus);
             return fishing && HasTech(faction, FishingTech.FishingNet)
                 ? checked(carry * (1000 + world.Config.Economy.FishingNetCarryBonusPermille) / 1000) : carry;
         }
 
         private int SmeltTicksFor(uint faction)
-            => world.Config.Economy.SmeltTicks - (HasTech(faction, TechKind.BlastFurnace) ? world.Config.Economy.BlastFurnaceTicks : 0);
+        {
+            int ticks = world.Config.Economy.SmeltTicks - (HasTech(faction, TechKind.BlastFurnace) ? world.Config.Economy.BlastFurnaceTicks : 0);
+            return AgeStrength(faction, CivKind.Metallurgy, 2)
+                ? Math.Max(1, checked((ticks * world.Config.Economy.MetallurgySmeltSpeedPermille + 999) / 1000)) : ticks;
+        }
 
         /// <summary>A farm's ticks per food: its ground's pace, quicker with irrigation, never under 10.</summary>
         private int FarmTicksFor(BuildingState farm)
@@ -376,6 +385,20 @@ namespace Rts.Simulation
                 gems = ScholarlyDiscount(gems, world.Config.Economy.MechanismResearchCostPermille);
                 gold = ScholarlyDiscount(gold, world.Config.Economy.MechanismResearchCostPermille);
             }
+            if (scholarlyResearch && AgeStrength(faction, CivKind.Academy, 3))
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.AcademyScholarlyCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.AcademyScholarlyCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.AcademyScholarlyCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.AcademyScholarlyCostPermille);
+            }
+            if (AgeStrength(faction, CivKind.Academy, 4) && (tech == TechKind.TotalWar || tech == TechKind.GrandWorkshop))
+            {
+                food = ScholarlyDiscount(food, world.Config.Economy.AcademyAge4ResearchCostPermille);
+                wood = ScholarlyDiscount(wood, world.Config.Economy.AcademyAge4ResearchCostPermille);
+                metal = ScholarlyDiscount(metal, world.Config.Economy.AcademyAge4ResearchCostPermille);
+                gold = ScholarlyDiscount(gold, world.Config.Economy.AcademyAge4ResearchCostPermille);
+            }
             // Research must not consume the metal reserved for the first recovery infantry.
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Metal, metal)) return false;
             int heldWood = !byPlayer && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
@@ -411,6 +434,8 @@ namespace Rts.Simulation
             smith.TrainRemaining = bookResearch ? Math.Max(1, checked(ticks * world.Config.Economy.BookResearchPermille / 1000))
                 : mechanismResearch ? Math.Max(1, checked((ticks * world.Config.Economy.MechanismResearchTimePermille + 999) / 1000))
                 : scholarlyResearch ? Math.Max(1, checked((ticks * world.Config.Economy.ScholarlyTimePermille + 999) / 1000)) : ticks;
+            if (AgeStrength(faction, CivKind.Academy, 2))
+                smith.TrainRemaining = Math.Max(1, checked((smith.TrainRemaining * world.Config.Economy.AcademyResearchTimePermille + 999) / 1000));
             if (byPlayer && IndustryOn) smith.Held = true;
             return true;
         }

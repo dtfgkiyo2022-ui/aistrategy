@@ -561,7 +561,7 @@ namespace Rts.Presentation
             if (economy.AdvanceRemaining == 0 && economy.Age != lastCommittedAge)
             {
                 if (lastCommittedAge >= 0)
-                    ageToast = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age);
+                    ageToast = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age, economy.AgeStrengths);
                 lastCommittedAge = economy.Age;
                 ageToastUntil = Time.time + 2.6f;
             }

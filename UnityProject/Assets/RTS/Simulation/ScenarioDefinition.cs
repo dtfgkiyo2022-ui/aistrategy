@@ -564,6 +564,22 @@ namespace Rts.Simulation
         /// <summary>AgeFour research values. These are kept as named fields because the older tech arrays are schema-stable.</summary>
         public int TotalWarFoodCost = 400, TotalWarWoodCost = 300, TotalWarMetalCost = 100, TotalWarTicks = 900;
         public int GrandWorkshopFoodCost = 300, GrandWorkshopWoodCost = 400, GrandWorkshopMetalCost = 0, GrandWorkshopTicks = 900;
+        /// <summary>Technical-design-v3 37.5.1: civilisation age strengths. Only the AgeStrengths extension enables these.</summary>
+        public bool AgeStrengths;
+        public int AgrarianFarmSpeedPermille = 800, AgrarianRationsHealHp = 15, AgrarianPopulationCapBonus = 20;
+        public int MetallurgySmeltSpeedPermille = 800, MetallurgyForgedDamageBonus = 1, MetallurgySiegePartsTimePermille = 700;
+        public int ForestryLumberSpeedPermille = 800, ForestryArcherRangeBonus = 1, ForestryBuildingWoodPermille = 800;
+        public int MasonryWallHpPermille = 1200, MasonryTowerDamageBonus = 2, MasonryCoreHpPermille = 1300;
+        public int CaravanTradeGoodsValue = 5, CaravanMarketReturnPermille = 1100, CaravanRewardPermille = 1500;
+        public int CavalryStableTimePermille = 800, CavalrySpeedPermille = 1100, CavalryHeavyHpPermille = 1150;
+        public int BridgeBuildingWorkPermille = 700, BridgeRamSiegeDamagePermille = 1200, BridgeGeneralWorkPermille = 800;
+        public int AcademyResearchTimePermille = 850, AcademyScholarlyCostPermille = 600, AcademyAge4ResearchCostPermille = 500;
+        public int CultConversionTimePermille = 833, CultIncenseHealHp = 30, CultMonkHpPermille = 1500;
+        public int FishingGatherTimePermille = 833, FishingPreserveFoodValue = 4, FishingFoodCarryBonus = 2;
+        public int MountainMiningTimePermille = 833, MountainMercenaryGems = 8, MountainMercenaryDamageBonus = 2;
+        public int TollgateFeePermille = 1500, TollgateHpPermille = 1300, TollgateRepairKitHp = 60;
+        public int MetropolisVillagerTimePermille = 800, MetropolisTownLimitBonus = 1, MetropolisToolTimePermille = 400;
+        public int SanctuaryPilgrimagePermille = 1200, SanctuaryCharmHpPermille = 1300, SanctuaryCharmHpAge4Permille = 1500;
         /// <summary>V3-5 (32 #21): optional victory after holding the third age while the core remains alive.</summary>
         public bool AgeVictoryEnabled;
         public int AgeVictoryTicks = 3000;

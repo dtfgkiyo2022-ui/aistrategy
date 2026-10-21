@@ -349,8 +349,9 @@ namespace Rts.Simulation
                   totalWarTicks: AgeFourOn ? rules.TotalWarTicks : 0,
                   grandWorkshopFoodCost: AgeFourOn ? rules.GrandWorkshopFoodCost : 0,
                   grandWorkshopWoodCost: AgeFourOn ? rules.GrandWorkshopWoodCost : 0,
-                  grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
-                  grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0);
+                   grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
+                   grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0,
+                   ageStrengths: AgeStrengthsOn);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

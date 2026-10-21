@@ -64,6 +64,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--age-four-off"))
         {
             scenario.Economy.AgeFour = false;
+            scenario.Economy.AgeStrengths = false;
             scenario.Economy.AgeClockTicks1 = 4800;
             scenario.Economy.AgeClockTicks2 = 10800;
             scenario.Economy.AgeClockTicks3 = 15600;

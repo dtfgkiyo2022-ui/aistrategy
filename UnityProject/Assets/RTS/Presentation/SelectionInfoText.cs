@@ -75,6 +75,21 @@ namespace Rts.Presentation
                 UiText.T("wood ", "木材 ") + missingWood + UiText.T(", stone ", "、石 ") + missingStone +
                 UiText.T(", queue ", "、順番 ") + building.ReservationOrder + UiText.T(")", "）");
         }
+
+        public static string ActiveAgeStrengths(EconomyView economy)
+            => economy == null ? "" : ActiveAgeStrengths(economy.Civ, economy.Age, economy.AgeStrengths);
+
+        public static string ActiveAgeStrengths(CivKind civ, int age, bool enabled)
+        {
+            if (!enabled || age < 2) return "";
+            string title = UiText.T("Active age strengths", "発動中の時代強み");
+            string result = title;
+            int last = Math.Min(4, age);
+            for (int strengthAge = 2; strengthAge <= last; strengthAge++)
+                result += "\n" + UiText.T("Age " + strengthAge + ": ", "時代" + strengthAge + "：")
+                    + TopBarDisplayText.AgeStrength(civ, strengthAge);
+            return result;
+        }
         public static string BeltComponentDescription(BeltComponentKind kind)
         {
             return kind == BeltComponentKind.Inserter

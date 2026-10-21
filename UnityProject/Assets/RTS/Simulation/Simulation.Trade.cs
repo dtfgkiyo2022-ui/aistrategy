@@ -48,6 +48,13 @@ namespace Rts.Simulation
                  : kind == ResourceKind.ArmsKit ? e.ArmsKit : kind == ResourceKind.Scholarly ? e.Scholarly : kind == ResourceKind.FineArmsKit ? e.FineArmsKit
                  : kind == ResourceKind.SiegeParts ? e.SiegeParts : kind == ResourceKind.Mechanism ? e.Mechanism : 0;
 
+        private int GoodsValueFor(uint faction, ResourceKind kind)
+        {
+            var rules = world.Config.Economy;
+            int value = kind == ResourceKind.TradeGoods ? rules.CaravanTradeGoodsValue : GoodsValue(rules, kind);
+            return value;
+        }
+
         private static int GoodsValue(EconomyRules rules, ResourceKind kind)
             => kind == ResourceKind.Steel ? rules.GoodsValueSteel : kind == ResourceKind.BowGear ? rules.GoodsValueBowGear
                 : kind == ResourceKind.Rations ? rules.GoodsValueRations : kind == ResourceKind.Bricks ? rules.GoodsValueBricks
@@ -68,6 +75,8 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int returned = checked(baseReturn + (HasTech(faction, TechKind.Banking) ? rules.BankingTradeReturn : 0));
+            if (AgeStrength(faction, CivKind.Caravan, 3))
+                returned = checked((returned * rules.CaravanMarketReturnPermille + 999) / 1000);
             if (HasTech(faction, MetropolisTech.MarketFestivity))
             {
                 int steps = Math.Min(rules.MetropolisMarketMaxBonusPermille / rules.MetropolisMarketBonusPermille,
@@ -90,7 +99,7 @@ namespace Rts.Simulation
             int lot = goodsTrade ? rules.GoodsTradeLot : rules.TradeLot;
             if (StockOf(world.Economies[faction - 1], give) < lot) return;
             AddStock(faction, give, -lot);
-            int returned = goodsTrade ? MarketReturnFor(faction, checked(GoodsValue(rules, give) * lot))
+                int returned = goodsTrade ? MarketReturnFor(faction, checked(GoodsValueFor(faction, give) * lot))
                 : take == ResourceKind.Gems ? rules.GemsTradeReturn : MarketReturnFor(faction, rules.TradeReturn);
             if (goodsTrade)
             {
@@ -359,6 +368,8 @@ namespace Rts.Simulation
                 outpostId = post.Definition.Id; marketId = marketState.Id;
                 long units = distance.Raw / Fix64.FromInt(world.Config.Economy.CaravanRewardDistanceStep).Raw;
                 reward = (int)Math.Max(1, Math.Min(world.Config.Economy.CaravanRewardMaxWood, units));
+                if (AgeStrength(faction, CivKind.Caravan, 4))
+                    reward = checked((reward * world.Config.Economy.CaravanRewardPermille + 999) / 1000);
                 return true;
             }
             return false;
@@ -603,6 +614,8 @@ namespace Rts.Simulation
             {
                 var rules = world.Config.Economy;
                 damage = rules.RamSiegeDamage + (HasTech(s.Initial.FactionId, TechKind.Siegecraft) ? rules.SiegecraftSiegeDamage : 0);
+                if (AgeStrength(s.Initial.FactionId, CivKind.Bridge, 3))
+                    damage = checked((damage * rules.BridgeRamSiegeDamagePermille + 999) / 1000);
                 if (CraftTree3On && s.SiegePartsEnhanced)
                     damage = checked((damage * rules.SiegePartsDamagePermille + 999) / 1000);
             }

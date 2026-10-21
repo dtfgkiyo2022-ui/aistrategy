@@ -16,11 +16,11 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, 0, e.ScoutTrainTicks);
             if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
-            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, e.CavalryTicks);
-            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, e.LightCavalryTicks);
-            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, 0, 0, 0, 0, e.HeavyCavalryTrainTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
+            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
+            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, 0, 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
-            if (kind == UnitKind.Mercenary) return (0, 0, 0, e.MercenaryGems, 0, e.MercenaryTicks);
+            if (kind == UnitKind.Mercenary) return (0, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? e.MountainMercenaryGems : e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
                 return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)
                     : (e.MonkFoodCost, 0, e.MonkGoldCost, 0, 0, e.MonkTrainTicks);
@@ -36,7 +36,7 @@ namespace Rts.Simulation
                 && world.Economies[faction - 1].Age >= 2)
             {
                 var mountain = world.Config.Economy;
-                return (mountain.JewelMercenaryFood, 0, 0, mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
+                return (mountain.JewelMercenaryFood, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? mountain.MountainMercenaryGems : mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
             }
             if (producer == BuildingKind.Monastery && kind == UnitKind.Monk && CultAllowed(faction))
             {
@@ -140,6 +140,7 @@ namespace Rts.Simulation
                 mercenary.Class = unit;
                 mercenary.Parameters.Hp = r.MercenaryHp; mercenary.Parameters.Damage = r.MercenaryDamage;
                 mercenary.Parameters.AttackIntervalTicks = r.MercenaryInterval;
+                if (AgeStrength(mercenary.Initial.FactionId, CivKind.Mountain, 4)) mercenary.Parameters.Damage = checked(mercenary.Parameters.Damage + r.MountainMercenaryDamageBonus);
                 mercenary.Hp = r.MercenaryHp; mercenary.Initial.Hp = r.MercenaryHp;
                 return;
             }
@@ -191,6 +192,10 @@ namespace Rts.Simulation
                 heavy.Parameters.AttackIntervalTicks = r.HeavyCavalryAttackIntervalTicks;
                 heavy.Parameters.Range = r.HeavyCavalryRange; heavy.Parameters.Speed = r.HeavyCavalrySpeed;
                 heavy.Parameters.Vision = r.HeavyCavalryVision;
+                if (AgeStrength(heavy.Initial.FactionId, CivKind.Cavalry, 3))
+                    heavy.Parameters.Speed = Fix64.FromRaw(checked(heavy.Parameters.Speed.Raw * r.CavalrySpeedPermille / 1000));
+                if (AgeStrength(heavy.Initial.FactionId, CivKind.Cavalry, 4))
+                    ScaleSoldierHp(ref heavy, r.CavalryHeavyHpPermille);
                 heavy.StepDistance = Fix64.FromRaw(heavy.Parameters.Speed.Raw / 20);
                 heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
                 return;
@@ -205,6 +210,10 @@ namespace Rts.Simulation
             s.Parameters.AttackIntervalTicks = archer ? e.ArcherInterval : e.CavalryInterval;
             s.Parameters.Range = archer ? e.ArcherRange : e.CavalryRange;
             s.Parameters.Speed = archer ? e.ArcherSpeed : e.CavalrySpeed;
+            if (!archer && AgeStrength(s.Initial.FactionId, CivKind.Cavalry, 3))
+                s.Parameters.Speed = Fix64.FromRaw(checked(s.Parameters.Speed.Raw * e.CavalrySpeedPermille / 1000));
+            if (archer && AgeStrength(s.Initial.FactionId, CivKind.Forestry, 3))
+                s.Parameters.Range = Fix64.FromRaw(checked(s.Parameters.Range.Raw + Fix64.FromInt(e.ForestryArcherRangeBonus).Raw));
             s.Parameters.Vision = archer ? e.ArcherVision : e.CavalryVision;
             s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
             s.Hp = s.Parameters.Hp;
@@ -275,6 +284,10 @@ namespace Rts.Simulation
             return ticks;
         }
 
+        private int CavalryTrainTicks(uint faction, int ticks)
+            => (AgeStrength(faction, CivKind.Cavalry, 2) && ticks > 0)
+                ? Math.Max(1, checked((ticks * world.Config.Economy.CavalryStableTimePermille + 999) / 1000)) : ticks;
+
         private bool CanPay(uint faction, UnitKind kind) => CanPay(faction, kind, BuildingKind.Barracks);
 
         private bool CanPay(uint faction, UnitKind kind, BuildingKind producer)
@@ -338,11 +351,11 @@ namespace Rts.Simulation
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams + world.Config.Economy.PlanksPerRam);
             }
             bool charmed = UsesCharms(faction, kind) && e.Charms >= 1;
-            if (charmed)
-            {
+                if (charmed)
+                {
                 e.Charms = checked(e.Charms - 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed + 1);
-            }
+                }
             bool fineArms = CraftTree2On && UsesArmsKit(kind) && e.FineArmsKit >= 1;
             bool arms = CraftTree2On && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
             bool siegeParts = CraftTree3On && kind == UnitKind.Ram && e.SiegeParts >= 1;
@@ -407,7 +420,7 @@ namespace Rts.Simulation
             if (NoNegativeStockOn && economy.Food < food) return;
             economy.Food = checked(economy.Food - food);
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
-            if (b.Queued == 0) b.TrainRemaining = VillagerTrainTicksFor(faction, tool);
+            if (b.Queued == 0) b.TrainRemaining = TownVillagerTrainTicksFor(faction, tool);
             b.Queued++;
             var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
             Array.Resize(ref kinds, kinds.Length + 1);

@@ -808,10 +808,24 @@ namespace Rts.Simulation
             Require(e.TechTicks.Length == expectedTechLength || (e.AgeFour && e.TechTicks.Length == 29), "Invalid AgeFour tech-ticks array.");
             Require(e.TechMetal.Length == expectedTechLength || (e.AgeFour && e.TechMetal.Length == 29), "Invalid AgeFour tech-metal array.");
             Require(e.TechGems.Length == expectedTechLength || (e.AgeFour && e.TechGems.Length == 29), "Invalid AgeFour tech-gems array.");
-            Require(!e.AgeFour || (e.Age4FoodCost >= 0 && e.Age4WoodCost >= 0 && e.Age4Ticks > 0 && e.Age4PopulationBonus >= 0
-                && e.SiegeAge4Permille > 0 && e.SiegeAge4Permille <= 10000
-                && e.TotalWarFoodCost >= 0 && e.TotalWarWoodCost >= 0 && e.TotalWarMetalCost >= 0 && e.TotalWarTicks > 0
-                && e.GrandWorkshopFoodCost >= 0 && e.GrandWorkshopWoodCost >= 0 && e.GrandWorkshopMetalCost >= 0 && e.GrandWorkshopTicks > 0), "Invalid AgeFour rules.");
+             Require(!e.AgeFour || (e.Age4FoodCost >= 0 && e.Age4WoodCost >= 0 && e.Age4Ticks > 0 && e.Age4PopulationBonus >= 0
+                 && e.SiegeAge4Permille > 0 && e.SiegeAge4Permille <= 10000
+                 && e.TotalWarFoodCost >= 0 && e.TotalWarWoodCost >= 0 && e.TotalWarMetalCost >= 0 && e.TotalWarTicks > 0
+                 && e.GrandWorkshopFoodCost >= 0 && e.GrandWorkshopWoodCost >= 0 && e.GrandWorkshopMetalCost >= 0 && e.GrandWorkshopTicks > 0), "Invalid AgeFour rules.");
+             Require(!e.AgeStrengths || (e.AgeFour && e.AgrarianFarmSpeedPermille > 0 && e.AgrarianRationsHealHp >= 0 && e.AgrarianPopulationCapBonus >= 0
+                 && e.MetallurgySmeltSpeedPermille > 0 && e.MetallurgyForgedDamageBonus >= 0 && e.MetallurgySiegePartsTimePermille > 0
+                 && e.ForestryLumberSpeedPermille > 0 && e.ForestryArcherRangeBonus >= 0 && e.ForestryBuildingWoodPermille > 0
+                 && e.MasonryWallHpPermille > 0 && e.MasonryTowerDamageBonus >= 0 && e.MasonryCoreHpPermille > 0
+                 && e.CaravanTradeGoodsValue >= 0 && e.CaravanMarketReturnPermille > 0 && e.CaravanRewardPermille > 0
+                 && e.CavalryStableTimePermille > 0 && e.CavalrySpeedPermille > 0 && e.CavalryHeavyHpPermille > 0
+                 && e.BridgeBuildingWorkPermille > 0 && e.BridgeRamSiegeDamagePermille > 0 && e.BridgeGeneralWorkPermille > 0
+                 && e.AcademyResearchTimePermille > 0 && e.AcademyScholarlyCostPermille > 0 && e.AcademyAge4ResearchCostPermille > 0
+                 && e.CultConversionTimePermille > 0 && e.CultIncenseHealHp >= 0 && e.CultMonkHpPermille > 0
+                 && e.FishingGatherTimePermille > 0 && e.FishingPreserveFoodValue >= 0 && e.FishingFoodCarryBonus >= 0
+                 && e.MountainMiningTimePermille > 0 && e.MountainMercenaryGems >= 0 && e.MountainMercenaryDamageBonus >= 0
+                 && e.TollgateFeePermille > 0 && e.TollgateHpPermille > 0 && e.TollgateRepairKitHp >= 0
+                 && e.MetropolisVillagerTimePermille > 0 && e.MetropolisTownLimitBonus >= 0 && e.MetropolisToolTimePermille > 0
+                 && e.SanctuaryPilgrimagePermille > 0 && e.SanctuaryCharmHpPermille > 0 && e.SanctuaryCharmHpAge4Permille > 0), "Invalid age-strength rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             Require(!e.CoreDefence || (e.Enabled && e.CoreDefenceRange >= 0 && e.CoreDefenceRange <= 64
@@ -1242,7 +1256,21 @@ namespace Rts.Simulation
                    CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
                    CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
-                AgeFour = e.AgeFour, Age4FoodCost = e.Age4FoodCost, Age4WoodCost = e.Age4WoodCost, Age4Ticks = e.Age4Ticks, Age4PopulationBonus = e.Age4PopulationBonus,
+                 AgeFour = e.AgeFour, AgeStrengths = e.AgeStrengths, Age4FoodCost = e.Age4FoodCost, Age4WoodCost = e.Age4WoodCost, Age4Ticks = e.Age4Ticks, Age4PopulationBonus = e.Age4PopulationBonus,
+                 AgrarianFarmSpeedPermille = e.AgrarianFarmSpeedPermille, AgrarianRationsHealHp = e.AgrarianRationsHealHp, AgrarianPopulationCapBonus = e.AgrarianPopulationCapBonus,
+                 MetallurgySmeltSpeedPermille = e.MetallurgySmeltSpeedPermille, MetallurgyForgedDamageBonus = e.MetallurgyForgedDamageBonus, MetallurgySiegePartsTimePermille = e.MetallurgySiegePartsTimePermille,
+                 ForestryLumberSpeedPermille = e.ForestryLumberSpeedPermille, ForestryArcherRangeBonus = e.ForestryArcherRangeBonus, ForestryBuildingWoodPermille = e.ForestryBuildingWoodPermille,
+                 MasonryWallHpPermille = e.MasonryWallHpPermille, MasonryTowerDamageBonus = e.MasonryTowerDamageBonus, MasonryCoreHpPermille = e.MasonryCoreHpPermille,
+                 CaravanTradeGoodsValue = e.CaravanTradeGoodsValue, CaravanMarketReturnPermille = e.CaravanMarketReturnPermille, CaravanRewardPermille = e.CaravanRewardPermille,
+                 CavalryStableTimePermille = e.CavalryStableTimePermille, CavalrySpeedPermille = e.CavalrySpeedPermille, CavalryHeavyHpPermille = e.CavalryHeavyHpPermille,
+                 BridgeBuildingWorkPermille = e.BridgeBuildingWorkPermille, BridgeRamSiegeDamagePermille = e.BridgeRamSiegeDamagePermille, BridgeGeneralWorkPermille = e.BridgeGeneralWorkPermille,
+                 AcademyResearchTimePermille = e.AcademyResearchTimePermille, AcademyScholarlyCostPermille = e.AcademyScholarlyCostPermille, AcademyAge4ResearchCostPermille = e.AcademyAge4ResearchCostPermille,
+                 CultConversionTimePermille = e.CultConversionTimePermille, CultIncenseHealHp = e.CultIncenseHealHp, CultMonkHpPermille = e.CultMonkHpPermille,
+                 FishingGatherTimePermille = e.FishingGatherTimePermille, FishingPreserveFoodValue = e.FishingPreserveFoodValue, FishingFoodCarryBonus = e.FishingFoodCarryBonus,
+                 MountainMiningTimePermille = e.MountainMiningTimePermille, MountainMercenaryGems = e.MountainMercenaryGems, MountainMercenaryDamageBonus = e.MountainMercenaryDamageBonus,
+                 TollgateFeePermille = e.TollgateFeePermille, TollgateHpPermille = e.TollgateHpPermille, TollgateRepairKitHp = e.TollgateRepairKitHp,
+                 MetropolisVillagerTimePermille = e.MetropolisVillagerTimePermille, MetropolisTownLimitBonus = e.MetropolisTownLimitBonus, MetropolisToolTimePermille = e.MetropolisToolTimePermille,
+                 SanctuaryPilgrimagePermille = e.SanctuaryPilgrimagePermille, SanctuaryCharmHpPermille = e.SanctuaryCharmHpPermille, SanctuaryCharmHpAge4Permille = e.SanctuaryCharmHpAge4Permille,
                 TotalWarFoodCost = e.TotalWarFoodCost, TotalWarWoodCost = e.TotalWarWoodCost, TotalWarMetalCost = e.TotalWarMetalCost, TotalWarTicks = e.TotalWarTicks,
                 GrandWorkshopFoodCost = e.GrandWorkshopFoodCost, GrandWorkshopWoodCost = e.GrandWorkshopWoodCost, GrandWorkshopMetalCost = e.GrandWorkshopMetalCost, GrandWorkshopTicks = e.GrandWorkshopTicks,
                  AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3, AgeClockTicks4 = e.AgeClockTicks4,

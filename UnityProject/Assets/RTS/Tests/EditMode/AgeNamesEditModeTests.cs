@@ -66,5 +66,26 @@ namespace Rts.Tests.EditMode
             }
             finally { UiText.Japanese = wasJapanese; }
         }
+
+        [Test]
+        public void SanctuaryAgeFourStrengthIsShownInCentralMessageAndActiveList()
+        {
+            bool wasJapanese = UiText.Japanese;
+            try
+            {
+                UiText.Japanese = true;
+                string message = TopBarDisplayText.AgeAdvanceMessage(CivKind.Sanctuary, 4, true);
+                string list = SelectionInfoText.ActiveAgeStrengths(CivKind.Sanctuary, 4, true);
+                Assert.That(message, Does.Contain("神域 ― 護符で生まれる兵の HP が 1.5 倍"));
+                Assert.That(list, Does.Contain("神域 ― 護符で生まれる兵の HP が 1.5 倍"));
+
+                UiText.Japanese = false;
+                message = TopBarDisplayText.AgeAdvanceMessage(CivKind.Sanctuary, 4, true);
+                list = SelectionInfoText.ActiveAgeStrengths(CivKind.Sanctuary, 4, true);
+                Assert.That(message, Does.Contain("holy ground - charmed soldiers are born with 1.5x HP"));
+                Assert.That(list, Does.Contain("holy ground - charmed soldiers are born with 1.5x HP"));
+            }
+            finally { UiText.Japanese = wasJapanese; }
+        }
     }
 }

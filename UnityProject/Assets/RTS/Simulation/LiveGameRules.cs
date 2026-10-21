@@ -83,6 +83,7 @@ namespace Rts.Simulation
             e.AgeClock = true;
             e.AgeClockUx = true;
             e.AgeFour = true;
+            e.AgeStrengths = e.AgeFour;
             e.AgeClockTicks1 = 6000; e.AgeClockTicks2 = 12000; e.AgeClockTicks3 = 18000; e.AgeClockTicks4 = 24000;
             if (e.LargeEconomy) { e.Age4FoodCost = 1080; e.Age4WoodCost = 720; }
             else { e.Age4FoodCost = 2400; e.Age4WoodCost = 1600; }

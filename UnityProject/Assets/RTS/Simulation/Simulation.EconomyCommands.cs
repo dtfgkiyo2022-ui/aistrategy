@@ -182,7 +182,7 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.Storage && !world.Config.Economy.BeltComponents) return;
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
-                    if (kind == BuildingKind.Town && TownCount(faction) >= rules.TownMaxBuildings) return;
+                    if (kind == BuildingKind.Town && TownCount(faction) >= TownLimitFor(faction)) return;
                     bool framesAvailable = CraftTree1On && kind != BuildingKind.Wall
                         && economy.Frames >= rules.CraftTreeFramesPerBuilding;
                     if ((byte)c.Facing > 3) return;
