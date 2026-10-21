@@ -27,6 +27,7 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #8): what the barracks trained it as (archer, cavalry); 0 for everyone else. Display and training only.</summary>
         internal UnitKind Class;
         internal bool SiegePartsEnhanced;
+        internal bool EliteKitEnhanced;
         /// <summary>V3-5 #22: transient conversion progress; never serialized into a scenario or replay state.</summary>
         internal int ConversionProgress;
         internal uint ConversionByFaction;
@@ -209,7 +210,8 @@ namespace Rts.Simulation
         internal bool[] QueuePlanks;
         internal bool[] QueueCharms;
         internal bool[] QueueTools;
-        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts;
+        internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine;
+        internal int QueuedSiegeEngine;
         /// <summary>V3-5 tower: shots fired so far.</summary>
         internal int Shots;
         /// <summary>V3-5 blacksmith: the tech being researched (0 when none); its clock is TrainRemaining.</summary>
@@ -280,7 +282,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -291,6 +293,7 @@ namespace Rts.Simulation
         internal int BooksProduced, BooksConsumed, BooksUsedResearch;
         internal int ArmsKitProduced, ArmsKitConsumed, FineArmsKitProduced, FineArmsKitConsumed, ScholarlyProduced, ScholarlyConsumed, ScholarlyUsedResearch;
         internal int SiegePartsProduced, SiegePartsConsumed, SiegePartsEnhancedRams, MechanismProduced, MechanismConsumed, MechanismUsedResearch;
+        internal int SiegeEngineProduced, SiegeEngineConsumed, EliteKitProduced, EliteKitConsumed, CannonProduced;
         internal int PreservesProduced, PreservesConvertedFood;
         internal int JewelsProduced, JewelsConsumed, JewelsTrainedMercenaries;
         internal int TradeGoodsProduced, TradeGoodsConvertedFood, TradeGoodsConvertedStone;
@@ -457,9 +460,9 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0,
-                GoodsSoldCounts = goodsMarket ? new int[29] : null, GoodsSoldUnits = goodsMarket ? new int[29] : null,
-                GoodsReceivedFood = goodsMarket ? new int[29] : null, GoodsReceivedWood = goodsMarket ? new int[29] : null };
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0,
+                GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
+                GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
             VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
             if (e.Industry)
             {
@@ -532,6 +535,12 @@ namespace Rts.Simulation
                 Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
                 c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Monk, Hp = 100,
                     Speed = Fix64.FromInt(2), Vision = Fix64.FromInt(20), Range = Fix64.FromInt(4), Damage = 0, AttackIntervalTicks = 20 };
+            }
+            if (e.CraftTree4 && !Array.Exists(c.UnitParameters, value => value.Kind == UnitKind.Cannon))
+            {
+                Array.Resize(ref c.UnitParameters, c.UnitParameters.Length + 1);
+                c.UnitParameters[c.UnitParameters.Length - 1] = new UnitParameters { Kind = UnitKind.Cannon, Hp = e.CannonHp,
+                    Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
@@ -696,6 +705,13 @@ namespace Rts.Simulation
                 && e.MechanismResearchCostPermille > 0 && e.MechanismResearchCostPermille <= 1000 && e.MechanismResearchTimePermille > 0 && e.MechanismResearchTimePermille <= 1000
                 && e.SiegePartsStockLimit > 0 && e.SiegePartsStockLimit <= e.BufferLimit
                 && e.GoodsValueSiegeParts > 0 && e.GoodsValueMechanism > 0), "Invalid craft-tree3 rules.");
+            Require(!e.CraftTree4 || (e.CraftTree3 && e.AgeFour && e.SiegeEngineTicks > 0 && e.SiegeEngineSiegePartsInput > 0
+                && e.SiegeEngineMechanismInput > 0 && e.EliteKitTicks > 0 && e.EliteKitArmsKitInput > 0 && e.EliteKitMechanismInput > 0
+                && e.EliteKitMetalInput > 0 && e.EliteKitAttack >= 0 && e.EliteKitHpPermille > 0
+                && e.CannonSiegeEngineCost > 0 && e.CannonFoodCost >= 0 && e.CannonWoodCost >= 0 && e.CannonHp > 0
+                && e.CannonDamage >= 0 && e.CannonSiegeDamage >= 0 && e.CannonInterval > 0 && e.CannonRange.Raw >= 0
+                && e.CannonSpeed.Raw > 0 && e.CannonVision.Raw >= 0 && e.CannonAutoLimit > 0
+                && e.GoodsValueSiegeEngine > 0 && e.GoodsValueEliteKit > 0), "Invalid craft-tree4 rules.");
             Require(!e.Books || (e.Enabled && e.Industry && e.Ages && e.ScriptoriumSizeCells > 0 && e.ScriptoriumSizeCells <= 8
                 && e.ScriptoriumWoodCost >= 0 && e.ScriptoriumWork > 0 && e.ScriptoriumHp > 0 && e.BookTicks > 0
                 && e.BookGoldInput > 0 && e.BookWoodInput > 0 && e.BookGoldInput <= e.BufferLimit && e.BookWoodInput <= e.BufferLimit
@@ -993,7 +1009,7 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || e.CraftTree4 && p.Kind == UnitKind.Cannon) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
@@ -1209,6 +1225,10 @@ namespace Rts.Simulation
                   MechanismResearchCostPermille = e.MechanismResearchCostPermille, MechanismResearchTimePermille = e.MechanismResearchTimePermille,
                   SiegePartsStockLimit = e.SiegePartsStockLimit,
                   GoodsValueSiegeParts = e.GoodsValueSiegeParts, GoodsValueMechanism = e.GoodsValueMechanism,
+                  CraftTree4 = e.CraftTree4, SiegeEngineTicks = e.SiegeEngineTicks, SiegeEngineSiegePartsInput = e.SiegeEngineSiegePartsInput,
+                  SiegeEngineMechanismInput = e.SiegeEngineMechanismInput, EliteKitTicks = e.EliteKitTicks, EliteKitArmsKitInput = e.EliteKitArmsKitInput,
+                  EliteKitMechanismInput = e.EliteKitMechanismInput, EliteKitMetalInput = e.EliteKitMetalInput, EliteKitAttack = e.EliteKitAttack,
+                  EliteKitHpPermille = e.EliteKitHpPermille, GoodsValueSiegeEngine = e.GoodsValueSiegeEngine, GoodsValueEliteKit = e.GoodsValueEliteKit,
                   Books = e.Books, ScriptoriumSizeCells = e.ScriptoriumSizeCells, ScriptoriumWoodCost = e.ScriptoriumWoodCost,
                   ScriptoriumWork = e.ScriptoriumWork, ScriptoriumHp = e.ScriptoriumHp, BookTicks = e.BookTicks,
                   BookGoldInput = e.BookGoldInput, BookWoodInput = e.BookWoodInput, BooksPerResearch = e.BooksPerResearch,
@@ -1410,6 +1430,9 @@ namespace Rts.Simulation
                 WorkshopSizeCells = e.WorkshopSizeCells, WorkshopWoodCost = e.WorkshopWoodCost, WorkshopWork = e.WorkshopWork, WorkshopHp = e.WorkshopHp,
                 RamFood = e.RamFood, RamWood = e.RamWood, RamTicks = e.RamTicks, RamHp = e.RamHp, RamDamage = e.RamDamage, RamSiegeDamage = e.RamSiegeDamage,
                  RamInterval = e.RamInterval, RamRange = e.RamRange, RamSpeed = e.RamSpeed, RamVision = e.RamVision,
+                 CannonSiegeEngineCost = e.CannonSiegeEngineCost, CannonFoodCost = e.CannonFoodCost, CannonWoodCost = e.CannonWoodCost,
+                 CannonHp = e.CannonHp, CannonDamage = e.CannonDamage, CannonSiegeDamage = e.CannonSiegeDamage, CannonInterval = e.CannonInterval,
+                 CannonRange = e.CannonRange, CannonSpeed = e.CannonSpeed, CannonVision = e.CannonVision, CannonAutoLimit = e.CannonAutoLimit,
                  MonksEnabled = e.MonksEnabled, ConversionTicks = e.ConversionTicks, MonkFoodCost = e.MonkFoodCost,
                  MonkGoldCost = e.MonkGoldCost, MonkTrainTicks = e.MonkTrainTicks,
                  FishingEnabled = e.FishingEnabled, FishRegrowTicks = e.FishRegrowTicks,

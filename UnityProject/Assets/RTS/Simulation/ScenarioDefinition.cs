@@ -327,6 +327,12 @@ namespace Rts.Simulation
         /// <summary>Automatic CraftTree3 keeps this many siege parts before changing back to the next useful recipe.</summary>
         public int SiegePartsStockLimit = 8;
         public int GoodsValueSiegeParts = 20, GoodsValueMechanism = 22;
+        /// <summary>CraftTree4: fourth-age siege engines and elite kits.</summary>
+        public bool CraftTree4;
+        public int SiegeEngineTicks = 200, SiegeEngineSiegePartsInput = 2, SiegeEngineMechanismInput = 1;
+        public int EliteKitTicks = 180, EliteKitArmsKitInput = 2, EliteKitMechanismInput = 1, EliteKitMetalInput = 5;
+        public int EliteKitAttack = 3, EliteKitHpPermille = 1200;
+        public int GoodsValueSiegeEngine = 30, GoodsValueEliteKit = 28;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;
@@ -557,6 +563,8 @@ namespace Rts.Simulation
         public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
         public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;
         public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
+        public int CannonSiegeEngineCost = 1, CannonFoodCost = 100, CannonWoodCost = 100, CannonHp = 180, CannonDamage = 1, CannonSiegeDamage = 120, CannonInterval = 50, CannonAutoLimit = 4;
+        public Fix64 CannonRange = Fix64.FromInt(8), CannonSpeed = Fix64.FromInt(1), CannonVision = Fix64.FromInt(12);
         /// <summary>V3-5 (32 #10): the third age of a civilisation (trade age for farming, steel age for metallurgy).</summary>
         public int Age3FoodCost = 1200, Age3WoodCost = 800, Age3Ticks = 2400, Age3PopulationBonus = 20;
         /// <summary>AgeFour: the fourth advance uses the third advance's duration and has a +20 population ceiling.</summary>

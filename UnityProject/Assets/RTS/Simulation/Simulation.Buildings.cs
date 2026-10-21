@@ -997,6 +997,7 @@ namespace Rts.Simulation
                 bool charmed = CharmsOn && QueueCharmsAt(b, 0);
                 bool armed = CraftTree2On && QueueArmsAt(b, 0);
                 bool fineArmed = CraftTree2On && QueueFineArmsAt(b, 0);
+                bool elite = CraftTree4On && QueueEliteKitAt(b, 0);
                 bool siegeParts = CraftTree3On && QueueSiegePartsAt(b, 0);
                 // Forged only when its metal was paid (a soldier queued in the primitive age paid none).
                 int metal = InfantryMetalFor(b.FactionId);
@@ -1004,15 +1005,17 @@ namespace Rts.Simulation
                 var spawnKind = unit == UnitKind.Scout || unit == UnitKind.Monk ? unit : UnitKind.Infantry;
                 if (!Spawn(b.FactionId, GoalKind.None, 0, world.Map.Center(b.WorkCell), spawnKind, unit)) continue;
                 ApplyClass(world.SoldierCount - 1, unit);
-                if (armed || fineArmed)
+                if (elite || armed || fineArmed)
                 {
                     ref var equipped = ref world.Soldiers[world.SoldierCount - 1];
-                    int attack = fineArmed ? world.Config.Economy.FineArmsKitAttack : world.Config.Economy.ArmsKitAttack;
-                    int hpPermille = fineArmed ? world.Config.Economy.FineArmsKitHpPermille : world.Config.Economy.ArmsKitHpPermille;
+                    int attack = elite ? world.Config.Economy.EliteKitAttack : fineArmed ? world.Config.Economy.FineArmsKitAttack : world.Config.Economy.ArmsKitAttack;
+                    int hpPermille = elite ? world.Config.Economy.EliteKitHpPermille : fineArmed ? world.Config.Economy.FineArmsKitHpPermille : world.Config.Economy.ArmsKitHpPermille;
                     equipped.Parameters.Damage = checked(equipped.Parameters.Damage + attack);
                     int hp = checked((equipped.Parameters.Hp * hpPermille + 999) / 1000);
                     equipped.Parameters.Hp = hp; equipped.Hp = hp; equipped.Initial.Hp = hp;
+                    if (elite) equipped.EliteKitEnhanced = true;
                 }
+                if (unit == UnitKind.Cannon) world.Economies[b.FactionId - 1].CannonProduced++;
                 if (charmed && AgeStrength(b.FactionId, CivKind.Sanctuary, 3))
                 {
                     ref var blessed = ref world.Soldiers[world.SoldierCount - 1];

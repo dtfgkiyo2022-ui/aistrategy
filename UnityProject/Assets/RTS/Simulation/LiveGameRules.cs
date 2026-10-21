@@ -52,6 +52,7 @@ namespace Rts.Simulation
             e.CraftTree1 = allCivilisations;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;
+            e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.BeltComponents = true;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
@@ -84,6 +85,7 @@ namespace Rts.Simulation
             e.AgeClockUx = true;
             e.AgeFour = true;
             e.AgeStrengths = e.AgeFour;
+            e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.AgeClockTicks1 = 6000; e.AgeClockTicks2 = 12000; e.AgeClockTicks3 = 18000; e.AgeClockTicks4 = 24000;
             if (e.LargeEconomy) { e.Age4FoodCost = 1080; e.Age4WoodCost = 720; }
             else { e.Age4FoodCost = 2400; e.Age4WoodCost = 1600; }

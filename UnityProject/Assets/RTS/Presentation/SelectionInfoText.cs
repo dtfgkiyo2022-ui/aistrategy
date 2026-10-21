@@ -146,7 +146,7 @@ namespace Rts.Presentation
                 case BuildingKind.ToolShop: return UiText.T("Wood → tools; each tool makes villagers eat 0.7× and work in half the time.", "木材2 → 工具1（都市の文明）。工具を1つ使うと、村人の食料が0.7倍・作る時間が半分。");
                 case BuildingKind.Stonecutter: return UiText.T("Stone → cut stone.", "石2 → 切石1。切石は木工所（建材）・組立所（精密部品）の材料。");
                 case BuildingKind.Joinery: return UiText.T("Planks + cut stone → frames.", "板2＋切石1 → 建材1。建物を建てるとき建材1で木材0.7倍・建てる手間0.7倍。");
-                case BuildingKind.Assembler: return UiText.T("Makes the chosen recipe: frames, arms kits, scholarly goods (age 2), siege parts or mechanisms (age 3).", "選んだレシピを作る：建材・武具・学術品（時代2）、攻城部品・精密部品（時代3）。");
+                case BuildingKind.Assembler: return UiText.T("Makes the chosen recipe: frames, arms kits, scholarly goods (age 2), siege parts or mechanisms (age 3), siege engines or elite kits (age 4).", "選んだレシピを作る：建材・武具・学術品（時代2）、攻城部品・精密部品（時代3）、攻城機関・精鋭キット（時代4）。");
                 case BuildingKind.Drill: return UiText.T("Digs the wood, stone, ore or gold point under it without villagers and sends it out of its exit.", "足元の資源の点（木・石・鉱石・金）を村人なしで掘り、出口からベルトへ出す。");
                 default: return "";
             }

@@ -20,6 +20,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
             if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, 0, 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
             if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
+            if (kind == UnitKind.Cannon) return (e.CannonFoodCost, e.CannonWoodCost, 0, 0, 0, e.RamTicks);
             if (kind == UnitKind.Mercenary) return (0, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? e.MountainMercenaryGems : e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
                 return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)
@@ -52,7 +53,8 @@ namespace Rts.Simulation
             if (b.Kind == BuildingKind.Town) return false;
             if (b.Kind == BuildingKind.Monastery) return kind == UnitKind.Monk && CultAllowed(b.FactionId);
             // V3-5 (32 #9): the siege workshop trains rams, and only rams.
-            if (b.Kind == BuildingKind.SiegeWorkshop) return kind == UnitKind.Ram && AgesOn && world.Economies[b.FactionId - 1].Age >= 2;
+            if (b.Kind == BuildingKind.SiegeWorkshop) return (kind == UnitKind.Ram || kind == UnitKind.Cannon) && AgesOn && world.Economies[b.FactionId - 1].Age >= 2
+                && (kind != UnitKind.Cannon || CraftTree4Allowed(b.FactionId));
             // V3-5 (32 #12): the range and the stable train their unit in either civilisation, from the second age.
             if (b.Kind == BuildingKind.ArcheryRange)
                 return kind == UnitKind.Archer && AgesOn
@@ -122,6 +124,17 @@ namespace Rts.Simulation
         /// <summary>Archers and cavalry fight as infantry with their own numbers (32 #8); it is what they were trained as.</summary>
         private void ApplyClass(int index, UnitKind unit)
         {
+            if (unit == UnitKind.Cannon)
+            {
+                var r = world.Config.Economy;
+                ref var cannon = ref world.Soldiers[index];
+                cannon.Class = unit;
+                cannon.Parameters.Hp = r.CannonHp; cannon.Parameters.Damage = r.CannonDamage; cannon.Parameters.AttackIntervalTicks = r.CannonInterval;
+                cannon.Parameters.Range = r.CannonRange; cannon.Parameters.Speed = r.CannonSpeed; cannon.Parameters.Vision = r.CannonVision;
+                cannon.StepDistance = Fix64.FromRaw(r.CannonSpeed.Raw / 20);
+                cannon.Hp = r.CannonHp; cannon.Initial.Hp = r.CannonHp;
+                return;
+            }
             if (unit == UnitKind.Ram)
             {
                 var r = world.Config.Economy;
@@ -228,6 +241,8 @@ namespace Rts.Simulation
         private static bool QueueArmsAt(BuildingState b, int i) => b.QueueArmsKit != null && i >= 0 && i < b.QueueArmsKit.Length && b.QueueArmsKit[i];
         private static bool QueueFineArmsAt(BuildingState b, int i) => b.QueueFineArmsKit != null && i >= 0 && i < b.QueueFineArmsKit.Length && b.QueueFineArmsKit[i];
         private static bool QueueSiegePartsAt(BuildingState b, int i) => b.QueueSiegeParts != null && i >= 0 && i < b.QueueSiegeParts.Length && b.QueueSiegeParts[i];
+        private static bool QueueEliteKitAt(BuildingState b, int i) => b.QueueEliteKit != null && i >= 0 && i < b.QueueEliteKit.Length && b.QueueEliteKit[i];
+        private static bool QueueSiegeEngineAt(BuildingState b, int i) => b.QueueSiegeEngine != null && i >= 0 && i < b.QueueSiegeEngine.Length && b.QueueSiegeEngine[i];
         private static bool QueueToolsAt(FactionEconomy economy, int i)
             => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
 
@@ -298,6 +313,7 @@ namespace Rts.Simulation
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
+                && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)
                 && (kind != UnitKind.HeavyCavalry || TackAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost);
         }
 
@@ -325,6 +341,13 @@ namespace Rts.Simulation
             }
             e.Gems = checked(e.Gems - c.gems);
             e.Gold = checked(e.Gold - c.gold);
+            bool siegeEngine = CraftTree4On && kind == UnitKind.Cannon && e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost;
+            if (siegeEngine)
+            {
+                e.SiegeEngine = checked(e.SiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
+                e.SiegeEngineConsumed = checked(e.SiegeEngineConsumed + world.Config.Economy.CannonSiegeEngineCost);
+                b.QueuedSiegeEngine = checked(b.QueuedSiegeEngine + world.Config.Economy.CannonSiegeEngineCost);
+            }
             if (kind == UnitKind.HeavyCavalry)
             {
                 e.Tack = checked(e.Tack - world.Config.Economy.HeavyCavalryTackCost);
@@ -356,11 +379,13 @@ namespace Rts.Simulation
                 e.Charms = checked(e.Charms - 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed + 1);
                 }
-            bool fineArms = CraftTree2On && UsesArmsKit(kind) && e.FineArmsKit >= 1;
-            bool arms = CraftTree2On && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
+            bool elite = CraftTree4On && kind != UnitKind.Cannon && UsesArmsKit(kind) && e.EliteKit >= 1;
+            bool fineArms = CraftTree2On && !elite && UsesArmsKit(kind) && e.FineArmsKit >= 1;
+            bool arms = CraftTree2On && !elite && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
             bool siegeParts = CraftTree3On && kind == UnitKind.Ram && e.SiegeParts >= 1;
             if (fineArms) { e.FineArmsKit--; e.FineArmsKitConsumed++; }
             else if (arms) { e.ArmsKit--; e.ArmsKitConsumed++; }
+            if (elite) { e.EliteKit--; e.EliteKitConsumed++; }
             if (siegeParts) { e.SiegeParts--; e.SiegePartsConsumed++; }
             if (b.Queued == 0) b.TrainRemaining = TrainTicksFor(faction, kind, c.ticks, rationed, planked);
             b.Queued++;
@@ -401,6 +426,10 @@ namespace Rts.Simulation
                 Array.Resize(ref fineQueue, fineQueue.Length + 1); fineQueue[fineQueue.Length - 1] = fineArms; b.QueueFineArmsKit = fineQueue;
                 var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
                 Array.Resize(ref siegeQueue, siegeQueue.Length + 1); siegeQueue[siegeQueue.Length - 1] = siegeParts; b.QueueSiegeParts = siegeQueue;
+                var eliteQueue = b.QueueEliteKit ?? Array.Empty<bool>();
+                Array.Resize(ref eliteQueue, eliteQueue.Length + 1); eliteQueue[eliteQueue.Length - 1] = elite; b.QueueEliteKit = eliteQueue;
+                var engineQueue = b.QueueSiegeEngine ?? Array.Empty<bool>();
+                Array.Resize(ref engineQueue, engineQueue.Length + 1); engineQueue[engineQueue.Length - 1] = siegeEngine; b.QueueSiegeEngine = engineQueue;
             }
         }
 
@@ -464,6 +493,8 @@ namespace Rts.Simulation
             bool armed = QueueArmsAt(b, b.Queued - 1);
             bool fineArmed = QueueFineArmsAt(b, b.Queued - 1);
             bool siegeParts = QueueSiegePartsAt(b, b.Queued - 1);
+            bool elite = QueueEliteKitAt(b, b.Queued - 1);
+            bool siegeEngine = QueueSiegeEngineAt(b, b.Queued - 1);
             var c = CostOf(faction, kind, b.Kind);
             ref var e = ref world.Economies[faction - 1];
             b.Queued--;
@@ -474,6 +505,8 @@ namespace Rts.Simulation
             if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0) Array.Resize(ref b.QueueArmsKit, b.QueueArmsKit.Length - 1);
             if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0) Array.Resize(ref b.QueueFineArmsKit, b.QueueFineArmsKit.Length - 1);
             if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0) Array.Resize(ref b.QueueSiegeParts, b.QueueSiegeParts.Length - 1);
+            if (b.QueueEliteKit != null && b.QueueEliteKit.Length > 0) Array.Resize(ref b.QueueEliteKit, b.QueueEliteKit.Length - 1);
+            if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0) Array.Resize(ref b.QueueSiegeEngine, b.QueueSiegeEngine.Length - 1);
             e.Food = checked(e.Food + c.food);
             e.Wood = checked(e.Wood + c.wood);
             if (kind == UnitKind.HeavyInfantry)
@@ -525,7 +558,9 @@ namespace Rts.Simulation
             }
             if (fineArmed) { e.FineArmsKit++; e.FineArmsKitConsumed--; }
             else if (armed) { e.ArmsKit++; e.ArmsKitConsumed--; }
+            if (elite) { e.EliteKit++; e.EliteKitConsumed--; }
             if (siegeParts) { e.SiegeParts++; e.SiegePartsConsumed--; }
+            if (siegeEngine) { e.SiegeEngine += world.Config.Economy.CannonSiegeEngineCost; e.SiegeEngineConsumed -= world.Config.Economy.CannonSiegeEngineCost; b.QueuedSiegeEngine -= world.Config.Economy.CannonSiegeEngineCost; }
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -572,12 +607,21 @@ namespace Rts.Simulation
                 var rest = new bool[b.QueueSiegeParts.Length - 1];
                 Array.Copy(b.QueueSiegeParts, 1, rest, 0, rest.Length); b.QueueSiegeParts = rest;
             }
+            if (b.QueueEliteKit != null && b.QueueEliteKit.Length > 0)
+            {
+                var rest = new bool[b.QueueEliteKit.Length - 1]; Array.Copy(b.QueueEliteKit, 1, rest, 0, rest.Length); b.QueueEliteKit = rest;
+            }
+            if (b.QueueSiegeEngine != null && b.QueueSiegeEngine.Length > 0)
+            {
+                var rest = new bool[b.QueueSiegeEngine.Length - 1]; Array.Copy(b.QueueSiegeEngine, 1, rest, 0, rest.Length); b.QueueSiegeEngine = rest;
+            }
             var doneCost = CostOf(faction, done, b.Kind);
             int metal = doneCost.metal;
             int gems = doneCost.gems;
             int gold = doneCost.gold;
             if (done == UnitKind.HeavyInfantry) b.QueuedSteel = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSteel - metal);
             else if (done == UnitKind.SkirmishArcher) b.QueuedBowGear = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedBowGear - metal);
+            else if (done == UnitKind.Cannon) b.QueuedSiegeEngine = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedSiegeEngine - world.Config.Economy.CannonSiegeEngineCost);
             else if (metal > 0 || done == UnitKind.Infantry) b.QueuedMetal = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedMetal - metal);
             if (gems > 0) b.QueuedGems = b.Queued == 0 ? 0 : Math.Max(0, b.QueuedGems - gems);
             if (world.Config.Economy.GoldEnabled && done == UnitKind.Monk)
@@ -606,6 +650,7 @@ namespace Rts.Simulation
             int queued = scout ? QueuedOf(faction, UnitKind.Scout)
                 : QueuedOf(faction, UnitKind.Infantry) + QueuedOf(faction, UnitKind.Archer) + QueuedOf(faction, UnitKind.Cavalry)
                     + QueuedOf(faction, UnitKind.LightCavalry) + QueuedOf(faction, UnitKind.HeavyCavalry) + QueuedOf(faction, UnitKind.HeavyInfantry) + QueuedOf(faction, UnitKind.SkirmishArcher) + QueuedOf(faction, UnitKind.Ram) + QueuedOf(faction, UnitKind.Monk)
+                    + QueuedOf(faction, UnitKind.Cannon)
                     + ((CaravanAllowed(faction) || JewelsAllowed(faction)) ? QueuedOf(faction, UnitKind.Mercenary) : 0);
             int free = 0;
             foreach (uint id in world.Factions[faction - 1].ArmyIds)

@@ -17,7 +17,7 @@ namespace Rts.Simulation
         {
             ResourceKind.Steel, ResourceKind.BowGear, ResourceKind.Rations, ResourceKind.Bricks, ResourceKind.Tack,
             ResourceKind.Planks, ResourceKind.Books, ResourceKind.Incense, ResourceKind.Charms, ResourceKind.RepairKits, ResourceKind.Tools,
-            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit, ResourceKind.SiegeParts, ResourceKind.Mechanism
+            ResourceKind.CutStone, ResourceKind.Frames, ResourceKind.ArmsKit, ResourceKind.Scholarly, ResourceKind.FineArmsKit, ResourceKind.SiegeParts, ResourceKind.Mechanism, ResourceKind.SiegeEngine, ResourceKind.EliteKit
         };
         // V3-9 #2 provisional caravan safety policy. The values are deliberately small and tick-based:
         // danger is only what the faction currently sees, and a route needs 20 clear ticks before restarting.
@@ -32,6 +32,7 @@ namespace Rts.Simulation
             if ((kind == ResourceKind.CutStone || kind == ResourceKind.Frames) && !CraftTree1On) return false;
             if ((kind == ResourceKind.ArmsKit || kind == ResourceKind.Scholarly || kind == ResourceKind.FineArmsKit) && !CraftTree2On) return false;
             if ((kind == ResourceKind.SiegeParts || kind == ResourceKind.Mechanism) && !CraftTree3On) return false;
+            if ((kind == ResourceKind.SiegeEngine || kind == ResourceKind.EliteKit) && !CraftTree4On) return false;
             foreach (var goods in GoodsKinds) if (goods == kind) return true;
             return false;
         }
@@ -46,7 +47,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.RepairKits ? e.RepairKits : kind == ResourceKind.Tools ? e.Tools
                 : kind == ResourceKind.CutStone ? e.CutStone : kind == ResourceKind.Frames ? e.Frames
                  : kind == ResourceKind.ArmsKit ? e.ArmsKit : kind == ResourceKind.Scholarly ? e.Scholarly : kind == ResourceKind.FineArmsKit ? e.FineArmsKit
-                 : kind == ResourceKind.SiegeParts ? e.SiegeParts : kind == ResourceKind.Mechanism ? e.Mechanism : 0;
+                : kind == ResourceKind.SiegeParts ? e.SiegeParts : kind == ResourceKind.Mechanism ? e.Mechanism
+                : kind == ResourceKind.SiegeEngine ? e.SiegeEngine : kind == ResourceKind.EliteKit ? e.EliteKit : 0;
 
         private int GoodsValueFor(uint faction, ResourceKind kind)
         {
@@ -64,7 +66,8 @@ namespace Rts.Simulation
                 : kind == ResourceKind.Tools ? rules.GoodsValueTools : kind == ResourceKind.CutStone ? 4
                 : kind == ResourceKind.Frames ? 10 : kind == ResourceKind.ArmsKit ? rules.GoodsValueArmsKit
                  : kind == ResourceKind.Scholarly ? rules.GoodsValueScholarly : kind == ResourceKind.FineArmsKit ? rules.GoodsValueFineArmsKit
-                 : kind == ResourceKind.SiegeParts ? rules.GoodsValueSiegeParts : kind == ResourceKind.Mechanism ? rules.GoodsValueMechanism : 0;
+                 : kind == ResourceKind.SiegeParts ? rules.GoodsValueSiegeParts : kind == ResourceKind.Mechanism ? rules.GoodsValueMechanism
+                 : kind == ResourceKind.SiegeEngine ? rules.GoodsValueSiegeEngine : kind == ResourceKind.EliteKit ? rules.GoodsValueEliteKit : 0;
 
         // The goods whose workshops stop at a stock limit. Selling at that limit lets the workshop run again.
         private static int GoodsCap(EconomyRules rules, ResourceKind kind)
@@ -125,6 +128,7 @@ namespace Rts.Simulation
                 if ((goods == ResourceKind.CutStone || goods == ResourceKind.Frames) && !CraftTree1On) continue;
                 if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !CraftTree2On) continue;
                 if ((goods == ResourceKind.SiegeParts || goods == ResourceKind.Mechanism) && !CraftTree3On) continue;
+                if ((goods == ResourceKind.SiegeEngine || goods == ResourceKind.EliteKit) && !CraftTree4On) continue;
                 if ((goods == ResourceKind.ArmsKit || goods == ResourceKind.Scholarly || goods == ResourceKind.FineArmsKit) && !CraftTree2On) continue;
                 prices.Add(new GoodsPriceView(goods, MarketReturnFor(faction, checked(GoodsValue(rules, goods) * rules.GoodsTradeLot))));
             }
@@ -609,11 +613,12 @@ namespace Rts.Simulation
         private int SiegeDamage(SoldierState s)
         {
             int damage;
-            if (s.Class != UnitKind.Ram) damage = s.Parameters.Damage;
+            if (s.Class != UnitKind.Ram && s.Class != UnitKind.Cannon) damage = s.Parameters.Damage;
             else
             {
                 var rules = world.Config.Economy;
-                damage = rules.RamSiegeDamage + (HasTech(s.Initial.FactionId, TechKind.Siegecraft) ? rules.SiegecraftSiegeDamage : 0);
+                damage = s.Class == UnitKind.Cannon ? rules.CannonSiegeDamage : rules.RamSiegeDamage;
+                damage += HasTech(s.Initial.FactionId, TechKind.Siegecraft) ? rules.SiegecraftSiegeDamage : 0;
                 if (AgeStrength(s.Initial.FactionId, CivKind.Bridge, 3))
                     damage = checked((damage * rules.BridgeRamSiegeDamagePermille + 999) / 1000);
                 if (CraftTree3On && s.SiegePartsEnhanced)
@@ -711,7 +716,15 @@ namespace Rts.Simulation
                 return;
             }
             ref var b = ref world.Buildings[workshop];
-            if (!b.Complete || b.Held || b.Queued > 0 || CountClass(faction, UnitKind.Ram) >= AutoRamLimitFor(faction)) return;
+            if (!b.Complete || b.Held || b.Queued > 0) return;
+            if (CraftTree4Allowed(faction) && world.Economies[faction - 1].SiegeEngine >= rules.CannonSiegeEngineCost
+                && CountClass(faction, UnitKind.Cannon) < rules.CannonAutoLimit
+                && HasRoomFor(faction, UnitKind.Cannon) && CanPay(faction, UnitKind.Cannon, BuildingKind.SiegeWorkshop))
+            {
+                Enqueue(faction, ref b, UnitKind.Cannon);
+                return;
+            }
+            if (CountClass(faction, UnitKind.Ram) >= AutoRamLimitFor(faction)) return;
             if (HasRoomFor(faction, UnitKind.Ram) && CanPay(faction, UnitKind.Ram)) Enqueue(faction, ref b, UnitKind.Ram);
         }
     }

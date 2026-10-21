@@ -86,6 +86,13 @@ namespace Rts.Simulation
         public int MechanismProduced { get; internal set; }
         public int MechanismConsumed { get; internal set; }
         public int MechanismUsedResearch { get; internal set; }
+        public int SiegeEngine { get; internal set; }
+        public int SiegeEngineProduced { get; internal set; }
+        public int SiegeEngineConsumed { get; internal set; }
+        public int EliteKit { get; internal set; }
+        public int EliteKitProduced { get; internal set; }
+        public int EliteKitConsumed { get; internal set; }
+        public int CannonProduced { get; internal set; }
         public int PreservesProduced { get; internal set; }
         public int PreservesConvertedFood { get; internal set; }
         public int JewelsProduced { get; internal set; }
@@ -228,6 +235,13 @@ namespace Rts.Simulation
                     MechanismProduced = economy.MechanismProduced,
                     MechanismConsumed = economy.MechanismConsumed,
                     MechanismUsedResearch = economy.MechanismUsedResearch,
+                    SiegeEngine = economy.SiegeEngine,
+                    SiegeEngineProduced = economy.SiegeEngineProduced,
+                    SiegeEngineConsumed = economy.SiegeEngineConsumed,
+                    EliteKit = economy.EliteKit,
+                    EliteKitProduced = economy.EliteKitProduced,
+                    EliteKitConsumed = economy.EliteKitConsumed,
+                    CannonProduced = economy.CannonProduced,
                     PreservesProduced = economy.PreservesProduced,
                     PreservesConvertedFood = economy.PreservesConvertedFood,
                     JewelsProduced = economy.JewelsProduced,

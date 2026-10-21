@@ -186,6 +186,11 @@ namespace Rts.Presentation
             return UiText.T(StrengthEnglish[index, clampedAge], StrengthJapanese[index, clampedAge]);
         }
 
+        public static string CraftTree4Products()
+            => UiText.T("CraftTree4: Siege engine, Elite kit", "加工4段目：攻城機関・精鋭キット");
+
+        public static string CannonName() => UiText.T("Cannon", "大砲");
+
         private static int CivIndex(CivKind civ)
         {
             int index = (int)civ;

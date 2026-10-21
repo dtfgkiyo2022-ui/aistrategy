@@ -85,6 +85,8 @@ namespace Rts.Presentation
             table[ResourceKind.FineArmsKit] = new CargoVisual(CargoShape.Crate, new Color(0.38f, 0.50f, 0.67f));
             table[ResourceKind.Scholarly] = new CargoVisual(CargoShape.Book, new Color(0.44f, 0.34f, 0.59f));
             table[ResourceKind.SiegeParts] = new CargoVisual(CargoShape.Crate, new Color(0.47f, 0.38f, 0.27f));
+            table[ResourceKind.SiegeEngine] = new CargoVisual(CargoShape.Crate, new Color(0.25f, 0.25f, 0.30f));
+            table[ResourceKind.EliteKit] = new CargoVisual(CargoShape.Crate, new Color(0.75f, 0.55f, 0.12f));
             table[ResourceKind.Mechanism] = new CargoVisual(CargoShape.Tool, new Color(0.69f, 0.59f, 0.27f));
             return table;
         }
