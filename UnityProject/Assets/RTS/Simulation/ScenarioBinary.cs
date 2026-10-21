@@ -217,6 +217,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         private const int LargeEconomyExtensionV6DataLength = 33 * sizeof(int);
         // Version 7 (10-21) adds the large-map scouting fields after version 6.
         private const int LargeEconomyExtensionDataLength = 36 * sizeof(int);
+        private const int AgeFourExtensionId = 61;
+        private const int AgeFourExtensionVersion = 1;
+        private const int AgeFourExtensionDataLength = 15 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -281,6 +284,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(LineBuildingCheckExtensionId, LineBuildingCheckExtensionVersion, LineBuildingCheckExtensionDataLength)
              ,new ExtensionRegistration(NoNegativeStockExtensionId, NoNegativeStockExtensionVersion, NoNegativeStockExtensionDataLength)
              ,new ExtensionRegistration(LargeEconomyExtensionId, LargeEconomyExtensionVersion, LargeEconomyExtensionDataLength)
+             ,new ExtensionRegistration(AgeFourExtensionId, AgeFourExtensionVersion, AgeFourExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -898,6 +902,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
+                      else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -983,6 +988,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
                  extensions.RemoveAll(extension => extension != null && extension.Id == NoNegativeStockExtensionId && !c.Economy.NoNegativeStock);
                  extensions.RemoveAll(extension => extension != null && extension.Id == LargeEconomyExtensionId && !c.Economy.LargeEconomy);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourExtensionId && !c.Economy.AgeFour);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -995,7 +1001,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
                 if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
             }
-            if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
+                if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
+            bool hasAgeFour = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AgeFourExtensionId)
+                {
+                    hasAgeFour = true;
+                    extensions[i] = CreateAgeFourExtension(c.Economy);
+                }
+            if (c.Economy.AgeFour && !hasAgeFour) extensions.Add(CreateAgeFourExtension(c.Economy));
             // ID 4 is feature-owned data. It is meaningful only when both switches that make fishing selectable are
             // on; an old extension must not resurrect a disabled fishing civilisation on a subsequent round trip.
             if (!c.Economy.FishingCiv || !c.Economy.FishingEnabled)
@@ -2345,6 +2359,38 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.AgeClock = enabled != 0;
                 e.AgeClockTicks1 = reader.ReadInt32(); e.AgeClockTicks2 = reader.ReadInt32(); e.AgeClockTicks3 = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-clock extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAgeFourExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AgeFour ? 1 : 0);
+                writer.Write(e.AgeClockTicks4);
+                writer.Write(e.Age4FoodCost); writer.Write(e.Age4WoodCost); writer.Write(e.Age4Ticks); writer.Write(e.Age4PopulationBonus);
+                writer.Write(e.SiegeAge4Permille);
+                writer.Write(e.TotalWarFoodCost); writer.Write(e.TotalWarWoodCost); writer.Write(e.TotalWarMetalCost); writer.Write(e.TotalWarTicks);
+                writer.Write(e.GrandWorkshopFoodCost); writer.Write(e.GrandWorkshopWoodCost); writer.Write(e.GrandWorkshopMetalCost); writer.Write(e.GrandWorkshopTicks);
+                return new ScenarioExtensionData { Id = AgeFourExtensionId, Version = AgeFourExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAgeFourExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid age-four flag.");
+                e.AgeFour = enabled != 0;
+                e.AgeClockTicks4 = reader.ReadInt32();
+                e.Age4FoodCost = reader.ReadInt32(); e.Age4WoodCost = reader.ReadInt32(); e.Age4Ticks = reader.ReadInt32(); e.Age4PopulationBonus = reader.ReadInt32();
+                e.SiegeAge4Permille = reader.ReadInt32();
+                e.TotalWarFoodCost = reader.ReadInt32(); e.TotalWarWoodCost = reader.ReadInt32(); e.TotalWarMetalCost = reader.ReadInt32(); e.TotalWarTicks = reader.ReadInt32();
+                e.GrandWorkshopFoodCost = reader.ReadInt32(); e.GrandWorkshopWoodCost = reader.ReadInt32(); e.GrandWorkshopMetalCost = reader.ReadInt32(); e.GrandWorkshopTicks = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-four extension data.");
             }
         }
 

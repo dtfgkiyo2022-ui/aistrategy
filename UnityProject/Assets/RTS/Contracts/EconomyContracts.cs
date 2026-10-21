@@ -739,6 +739,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         /// <summary>V3-5 (32 #7, #8): the age inside the civilisation (0 primitive, 1, 2), the price of the second age, and the
         /// civilisations' own units.</summary>
         public int Age { get; }
+        /// <summary>AgeFour: the optional fifth stage (primitive plus four civilisation ages).</summary>
+        public bool AgeFour { get; }
         public int Age2FoodCost { get; }
         public int Age2WoodCost { get; }
         public int ArcherFoodCost { get; }
@@ -759,6 +761,17 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         /// <summary>V3-5 (32 #10): the price of the third age (trade age for farming, steel age for metallurgy).</summary>
         public int Age3FoodCost { get; }
         public int Age3WoodCost { get; }
+        public int Age4FoodCost { get; }
+        public int Age4WoodCost { get; }
+        public int Age4Ticks { get; }
+        public int TotalWarFoodCost { get; }
+        public int TotalWarWoodCost { get; }
+        public int TotalWarMetalCost { get; }
+        public int TotalWarTicks { get; }
+        public int GrandWorkshopFoodCost { get; }
+        public int GrandWorkshopWoodCost { get; }
+        public int GrandWorkshopMetalCost { get; }
+        public int GrandWorkshopTicks { get; }
 
         /// <summary>V3-5 (32 #12): the archery range and the stable.</summary>
         public int RangeWoodCost { get; }
@@ -1121,7 +1134,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              long civChoiceDeadlineTick = 0, bool ageClockUx = false,
              bool commonDrill = false, int drillWoodCost = 0, int drillStoneCost = 0, int drillSizeCells = 0,
              bool inserters = false, int inserterWoodCost = 0, int inserterIntervalTicks = 0, bool easyRebuild = false,
-             bool buildingReservations = false, int reservationLimit = 0, int reservationCount = 0, int reservationCheckTicks = 0)
+             bool buildingReservations = false, int reservationLimit = 0, int reservationCount = 0, int reservationCheckTicks = 0,
+             bool ageFour = false, int age4FoodCost = 0, int age4WoodCost = 0, int age4Ticks = 0,
+             int totalWarFoodCost = 0, int totalWarWoodCost = 0, int totalWarMetalCost = 0, int totalWarTicks = 0,
+             int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1217,6 +1233,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CavalryMission = cavalryMission;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
+            AgeFour = ageFour; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
+            TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
+            GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
+            GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;
             RangeWoodCost = rangeWoodCost; StableWoodCost = stableWoodCost;
             CastleWoodCost = castleWoodCost; CastleStoneCost = castleStoneCost;
             Age = age; Age2FoodCost = age2FoodCost; Age2WoodCost = age2WoodCost; ArcherFoodCost = archerFoodCost; ArcherWoodCost = archerWoodCost;

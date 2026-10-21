@@ -429,7 +429,9 @@ namespace Rts.Simulation
         public int CivVarietyCapMetallurgy = 5, CivVarietyCapAgrarian = 3;
         /// <summary>Age clock: ages arrive at fixed ticks, with the original price discounted as that tick approaches.</summary>
         public bool AgeClock;
-        public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600;
+        public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600, AgeClockTicks4 = 24000;
+        /// <summary>Technical-design-v3 37: opts into the fifth age stage and its age-four-only rules.</summary>
+        public bool AgeFour;
         /// <summary>AgeClockUx: separates civilisation reservation from payment and gives manual players time to choose after the clock.</summary>
         public bool AgeClockUx;
         public int AgeClockUxChoiceTicks = 600;
@@ -500,7 +502,7 @@ namespace Rts.Simulation
         public int LatePushAfterTicks = 14400, LatePushAdvantageAfterTicks = 9600, LatePushEnemyMultiplierPermille = 1500;
         /// <summary>Siege by age: soldiers and rams deal age-scaled damage to cores and buildings.</summary>
         public bool SiegeByAge;
-        public int SiegeAge0Permille = 100, SiegeAge1Permille = 250, SiegeAge2Permille = 600, SiegeAge3Permille = 4000;
+        public int SiegeAge0Permille = 100, SiegeAge1Permille = 250, SiegeAge2Permille = 600, SiegeAge3Permille = 4000, SiegeAge4Permille = 4000;
         /// <summary>V3-32.33: gather automatic late pushes into deterministic attack waves.</summary>
         public bool PushWaves;
         public int WaveStagingDistance = 25, WaveSize = 24, WaveMaxWaitTicks = 2400, WaveMinSize = 6, WaveRetreatPermille = 200;
@@ -557,6 +559,11 @@ namespace Rts.Simulation
         public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
         /// <summary>V3-5 (32 #10): the third age of a civilisation (trade age for farming, steel age for metallurgy).</summary>
         public int Age3FoodCost = 1200, Age3WoodCost = 800, Age3Ticks = 2400, Age3PopulationBonus = 20;
+        /// <summary>AgeFour: the fourth advance uses the third advance's duration and has a +20 population ceiling.</summary>
+        public int Age4FoodCost = 1080, Age4WoodCost = 720, Age4Ticks = 2400, Age4PopulationBonus = 20;
+        /// <summary>AgeFour research values. These are kept as named fields because the older tech arrays are schema-stable.</summary>
+        public int TotalWarFoodCost = 400, TotalWarWoodCost = 300, TotalWarMetalCost = 100, TotalWarTicks = 900;
+        public int GrandWorkshopFoodCost = 300, GrandWorkshopWoodCost = 400, GrandWorkshopMetalCost = 0, GrandWorkshopTicks = 900;
         /// <summary>V3-5 (32 #21): optional victory after holding the third age while the core remains alive.</summary>
         public bool AgeVictoryEnabled;
         public int AgeVictoryTicks = 3000;

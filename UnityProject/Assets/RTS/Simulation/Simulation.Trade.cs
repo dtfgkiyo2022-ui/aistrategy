@@ -609,8 +609,8 @@ namespace Rts.Simulation
             var economy = world.Config.Economy;
             if (!economy.SiegeByAge || damage <= 0) return damage;
             int age = world.Economies[s.Initial.FactionId - 1].Age;
-            int permille = age <= 0 ? economy.SiegeAge0Permille : age == 1 ? economy.SiegeAge1Permille
-                : age == 2 ? economy.SiegeAge2Permille : economy.SiegeAge3Permille;
+        int permille = age <= 0 ? economy.SiegeAge0Permille : age == 1 ? economy.SiegeAge1Permille
+            : age == 2 ? economy.SiegeAge2Permille : age == 3 ? economy.SiegeAge3Permille : economy.SiegeAge4Permille;
             return Math.Max(1, checked(damage * permille / 1000));
         }
 

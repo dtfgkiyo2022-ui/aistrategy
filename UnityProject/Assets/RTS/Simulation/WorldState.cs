@@ -748,7 +748,8 @@ namespace Rts.Simulation
             Require(!e.AgeClock || (e.Enabled && e.Ages), "Age clock requires ages and an economy.");
             Require(!e.AgeClockUx || (e.AgeClock && e.AgeClockUxChoiceTicks > 0), "Age-clock UX requires the age clock and a positive choice window.");
             Require(!e.Ages || (c.Map.Terrain.Length != 0 && e.AdvanceFoodCost >= 0 && e.AdvanceWoodCost >= 0 && e.AdvanceTicks > 0
-                && (!e.AgeClock || (e.AgeClockTicks1 > 0 && e.AgeClockTicks2 > e.AgeClockTicks1 && e.AgeClockTicks3 > e.AgeClockTicks2))
+                && (!e.AgeClock || (e.AgeClockTicks1 > 0 && e.AgeClockTicks2 > e.AgeClockTicks1 && e.AgeClockTicks3 > e.AgeClockTicks2
+                    && (!e.AgeFour || e.AgeClockTicks4 > e.AgeClockTicks3)))
                 && e.AgrarianInfantryFood >= 0 && e.AgrarianInfantryWood >= 0 && e.AgrarianInfantryTicks > 0 && e.ForgedInfantryHp > 0 && e.ForgedInfantryDamage >= 0
                 && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                 && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
@@ -769,9 +770,7 @@ namespace Rts.Simulation
                 && e.TowerWoodCost >= 0 && e.TowerStoneCost >= 0 && e.TowerWork > 0 && e.TowerHp > 0 && e.TowerRange >= 0 && e.TowerVision >= 0
                 && e.TowerDamage >= 0 && e.TowerIntervalTicks > 0
                 && e.BlacksmithSizeCells > 0 && e.BlacksmithSizeCells <= 8 && e.BlacksmithWoodCost >= 0 && e.BlacksmithWork > 0 && e.BlacksmithHp > 0
-                && e.TechFood != null && e.TechFood.Length == (e.Cavalry ? 13 : 12) && e.TechWood != null && e.TechWood.Length == (e.Cavalry ? 13 : 12)
-                && e.TechTicks != null && e.TechTicks.Length == (e.Cavalry ? 13 : 12)
-                && e.TechMetal != null && e.TechMetal.Length == (e.Cavalry ? 13 : 12) && e.TechGems != null && e.TechGems.Length == (e.Cavalry ? 13 : 12)
+                && e.TechFood != null && e.TechWood != null && e.TechTicks != null && e.TechMetal != null && e.TechGems != null
                 && Array.TrueForAll(e.TechMetal, v => v >= 0) && Array.TrueForAll(e.TechGems, v => v >= 0)
                 && e.SteelWeaponsDamage >= 0 && e.SteelArmourHp >= 0 && e.GemArmorHp >= 0
                 && e.RepairHpPerTick > 0 && e.RepairAtPermille >= 0 && e.RepairAtPermille <= 1000
@@ -779,7 +778,7 @@ namespace Rts.Simulation
                 && e.CastleRange >= 0 && e.CastleVision >= 0 && e.CastleDamage >= 0 && e.CastleIntervalTicks > 0
                  && e.MercenaryGems >= 0 && e.MercenaryTicks > 0 && e.MercenaryHp > 0 && e.MercenaryDamage >= 0 && e.MercenaryInterval > 0
                  && (!e.MonksEnabled || (e.ConversionTicks > 0 && e.MonkFoodCost >= 0 && e.MonkGoldCost >= 0 && e.MonkTrainTicks > 0))
-                && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && Array.TrueForAll(e.TechTicks, v => v > 0)
+                && Array.TrueForAll(e.TechFood, v => v >= 0) && Array.TrueForAll(e.TechWood, v => v >= 0) && ValidTechTicks(e.TechTicks)
                 && e.WeaponsDamage >= 0 && e.ArmourHp >= 0 && e.ToolsGatherTicks >= 0 && e.ToolsGatherTicks < e.GatherIntervalTicks && e.CartsCarry >= 0
                 && e.IrrigationTicks >= 0 && e.BlastFurnaceTicks >= 0 && e.BlastFurnaceTicks < e.SmeltTicks
                 && e.Age2FoodCost >= 0 && e.Age2WoodCost >= 0 && e.Age2Ticks > 0 && e.Age2PopulationBonus >= 0
@@ -803,6 +802,16 @@ namespace Rts.Simulation
                 && e.WorkshopSizeCells > 0 && e.WorkshopSizeCells <= 8 && e.WorkshopWoodCost >= 0 && e.WorkshopWork > 0 && e.WorkshopHp > 0
                 && e.RamFood >= 0 && e.RamWood >= 0 && e.RamTicks > 0 && e.RamHp > 0 && e.RamDamage >= 0 && e.RamSiegeDamage >= 0 && e.RamInterval > 0
                 && e.RamRange.Raw >= 0 && e.RamRange <= Fix64.FromInt(64) && e.RamSpeed.Raw > 0 && e.RamSpeed <= Fix64.FromInt(16) && e.RamVision.Raw >= 0), "Invalid age rules.");
+            int expectedTechLength = e.AgeFour ? 12 : (e.Cavalry ? 13 : 12);
+            Require(e.TechFood.Length == expectedTechLength || (e.AgeFour && e.TechFood.Length == 29), "Invalid AgeFour tech-food array.");
+            Require(e.TechWood.Length == expectedTechLength || (e.AgeFour && e.TechWood.Length == 29), "Invalid AgeFour tech-wood array.");
+            Require(e.TechTicks.Length == expectedTechLength || (e.AgeFour && e.TechTicks.Length == 29), "Invalid AgeFour tech-ticks array.");
+            Require(e.TechMetal.Length == expectedTechLength || (e.AgeFour && e.TechMetal.Length == 29), "Invalid AgeFour tech-metal array.");
+            Require(e.TechGems.Length == expectedTechLength || (e.AgeFour && e.TechGems.Length == 29), "Invalid AgeFour tech-gems array.");
+            Require(!e.AgeFour || (e.Age4FoodCost >= 0 && e.Age4WoodCost >= 0 && e.Age4Ticks > 0 && e.Age4PopulationBonus >= 0
+                && e.SiegeAge4Permille > 0 && e.SiegeAge4Permille <= 10000
+                && e.TotalWarFoodCost >= 0 && e.TotalWarWoodCost >= 0 && e.TotalWarMetalCost >= 0 && e.TotalWarTicks > 0
+                && e.GrandWorkshopFoodCost >= 0 && e.GrandWorkshopWoodCost >= 0 && e.GrandWorkshopMetalCost >= 0 && e.GrandWorkshopTicks > 0), "Invalid AgeFour rules.");
             Require(!e.FishingEnabled || (e.Ages && e.FishRegrowTicks > 0 && e.FishAgrarianBonusPermille >= 0
                 && e.FishAgrarianBonusPermille <= 1000 && e.FishReach >= 0 && e.FishReach <= 1024), "Invalid fishing rules.");
             Require(!e.CoreDefence || (e.Enabled && e.CoreDefenceRange >= 0 && e.CoreDefenceRange <= 64
@@ -813,7 +822,8 @@ namespace Rts.Simulation
             Require(!e.SiegeByAge || (e.Enabled && e.Ages && e.SiegeAge0Permille > 0 && e.SiegeAge0Permille <= 10000
                 && e.SiegeAge1Permille > 0 && e.SiegeAge1Permille <= 10000
                 && e.SiegeAge2Permille > 0 && e.SiegeAge2Permille <= 10000
-                && e.SiegeAge3Permille > 0 && e.SiegeAge3Permille <= 10000), "Invalid siege-by-age rules.");
+                && e.SiegeAge3Permille > 0 && e.SiegeAge3Permille <= 10000
+                && (!e.AgeFour || (e.SiegeAge4Permille > 0 && e.SiegeAge4Permille <= 10000))), "Invalid siege-by-age rules.");
             Require(!e.PushWaves || (e.Enabled && e.Ages && e.LatePush && e.SiegeByAge && e.WaveStagingDistance > 0
                 && e.WaveSize > 0 && e.WaveMaxWaitTicks > 0 && e.WaveMinSize > 0 && e.WaveMinSize <= e.WaveSize
                 && e.WaveRetreatPermille > 0 && e.WaveRetreatPermille <= 1000), "Invalid push-wave rules.");
@@ -1041,6 +1051,15 @@ namespace Rts.Simulation
             var techTicks = (int[])e.TechTicks.Clone();
             var techMetal = (int[])e.TechMetal.Clone();
             var techGems = (int[])e.TechGems.Clone();
+            if (e.AgeFour)
+            {
+                Array.Resize(ref techFood, 29); Array.Resize(ref techWood, 29); Array.Resize(ref techTicks, 29);
+                Array.Resize(ref techMetal, 29); Array.Resize(ref techGems, 29);
+                techFood[(int)TechKind.TotalWar - 1] = e.TotalWarFoodCost; techWood[(int)TechKind.TotalWar - 1] = e.TotalWarWoodCost;
+                techTicks[(int)TechKind.TotalWar - 1] = e.TotalWarTicks; techMetal[(int)TechKind.TotalWar - 1] = e.TotalWarMetalCost;
+                techFood[(int)TechKind.GrandWorkshop - 1] = e.GrandWorkshopFoodCost; techWood[(int)TechKind.GrandWorkshop - 1] = e.GrandWorkshopWoodCost;
+                techTicks[(int)TechKind.GrandWorkshop - 1] = e.GrandWorkshopTicks; techMetal[(int)TechKind.GrandWorkshop - 1] = e.GrandWorkshopMetalCost;
+            }
             if (e.Cavalry)
             {
                 if (techFood.Length < 13) Array.Resize(ref techFood, 13);
@@ -1080,7 +1099,7 @@ namespace Rts.Simulation
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,
-                 SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille,
+                 SiegeAge2Permille = e.SiegeAge2Permille, SiegeAge3Permille = e.SiegeAge3Permille, SiegeAge4Permille = e.SiegeAge4Permille,
                  PushWaves = e.PushWaves, WaveStagingDistance = e.WaveStagingDistance, WaveSize = e.WaveSize,
                  WaveMaxWaitTicks = e.WaveMaxWaitTicks, WaveMinSize = e.WaveMinSize, WaveRetreatPermille = e.WaveRetreatPermille,
                  ManualControl = e.ManualControl, AutoReturnAfterHuman = e.AutoReturnAfterHuman,
@@ -1223,7 +1242,10 @@ namespace Rts.Simulation
                    CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
                    CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
-                 AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3,
+                AgeFour = e.AgeFour, Age4FoodCost = e.Age4FoodCost, Age4WoodCost = e.Age4WoodCost, Age4Ticks = e.Age4Ticks, Age4PopulationBonus = e.Age4PopulationBonus,
+                TotalWarFoodCost = e.TotalWarFoodCost, TotalWarWoodCost = e.TotalWarWoodCost, TotalWarMetalCost = e.TotalWarMetalCost, TotalWarTicks = e.TotalWarTicks,
+                GrandWorkshopFoodCost = e.GrandWorkshopFoodCost, GrandWorkshopWoodCost = e.GrandWorkshopWoodCost, GrandWorkshopMetalCost = e.GrandWorkshopMetalCost, GrandWorkshopTicks = e.GrandWorkshopTicks,
+                 AgeClock = e.AgeClock, AgeClockTicks1 = e.AgeClockTicks1, AgeClockTicks2 = e.AgeClockTicks2, AgeClockTicks3 = e.AgeClockTicks3, AgeClockTicks4 = e.AgeClockTicks4,
                  AgeClockUx = e.AgeClockUx, AgeClockUxChoiceTicks = e.AgeClockUxChoiceTicks,
                 EarlyArms = e.EarlyArms, EarlyGatherIntervalTicks = e.EarlyGatherIntervalTicks,
                 CivVariety = e.CivVariety, CivVarietyWindowPermille = e.CivVarietyWindowPermille,
@@ -1399,6 +1421,14 @@ namespace Rts.Simulation
         internal static void ValidatePoint(SimPoint p, MapDefinition map) => Require(
             p.X.Raw >= 0 && p.X <= Fix64.FromInt(map.WidthMeters) && p.Z.Raw >= 0 && p.Z <= Fix64.FromInt(map.HeightMeters),
             "Point is outside the map.");
+        private static bool ValidTechTicks(int[] values)
+        {
+            if (values == null) return false;
+            for (int i = 0; i < values.Length; i++)
+                if (values[i] <= 0 && (values.Length < 29 || (i < 12 || i == (int)TechKind.TotalWar - 1 || i == (int)TechKind.GrandWorkshop - 1))) return false;
+            return true;
+        }
+
         private static T[] Copy<T>(T[] a) => a == null ? throw new ArgumentException("Missing scenario array.") : (T[])a.Clone();
         private static void Require(bool condition, string message) { if (!condition) throw new ArgumentException(message); }
     }

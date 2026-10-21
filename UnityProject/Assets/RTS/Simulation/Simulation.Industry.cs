@@ -518,10 +518,15 @@ namespace Rts.Simulation
 
         private int CraftTicksFor(BuildingState building, int baseTicks)
         {
-            if (!CraftTree1On || building.Level < 2) return baseTicks;
+            int result = baseTicks;
+            if (!CraftTree1On || building.Level < 2)
+                return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
+                    ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
             if (building.Level >= 3 && CraftTree3On)
-                return Math.Max(1, checked((baseTicks * world.Config.Economy.MechanismBuildingTimePermille + 999) / 1000));
-            return Math.Max(1, checked((baseTicks * 2 + 2) / 3));
+                result = Math.Max(1, checked((baseTicks * world.Config.Economy.MechanismBuildingTimePermille + 999) / 1000));
+            else result = Math.Max(1, checked((baseTicks * 2 + 2) / 3));
+            return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
+                ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
         }
 
         private int CraftInputFor(BuildingState building, int baseInput)

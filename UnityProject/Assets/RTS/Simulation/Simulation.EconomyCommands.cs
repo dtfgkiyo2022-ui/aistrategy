@@ -56,7 +56,7 @@ namespace Rts.Simulation
                         else economy.ReservedCiv = c.Civ;
                         return;
                     }
-                    if (AgeClockOn && economy.AdvanceRemaining == 0 && economy.Age < 3
+                    if (AgeClockOn && economy.AdvanceRemaining == 0 && economy.Age < LastAge
                         && world.Tick >= AgeClockTickForAge(economy.Age) && CanCompleteAgeClockAdvance(faction, c.Civ))
                     {
                         CompleteAdvance(ref economy, c.Civ);

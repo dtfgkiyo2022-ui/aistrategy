@@ -17,7 +17,7 @@ namespace Rts.Simulation
         private const ulong CavalryDrillBit = 1UL << 12;
         private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
             BridgeTech.Bridgeworks, TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor,
-            CavalryDrillTech, BridgeTech.SiegeDeployment, TollgateTech.GateDefence, TollgateTech.GateNetwork };
+            CavalryDrillTech, BridgeTech.SiegeDeployment, TollgateTech.GateDefence, TollgateTech.GateNetwork, TechKind.TotalWar, TechKind.GrandWorkshop };
 
         // Academy prices are deliberately fixed per technology. They are not scenario knobs: keeping them here leaves
         // the V3-12 #1 extension payload unchanged while making the academy's discount explicit and deterministic.
@@ -82,6 +82,8 @@ namespace Rts.Simulation
             if (tech == SanctuaryTech.Pilgrimage) return SanctuaryAllowed(faction) && e.Age >= 2 && !HasTech(faction, tech);
             if (tech == SanctuaryTech.HolyRelic) return SanctuaryAllowed(faction) && e.Age >= 3 && !HasTech(faction, tech);
             if (e.Civ == CivKind.Primitive || tech < TechKind.Weapons || HasTech(faction, tech)) return false;
+            if (tech == TechKind.TotalWar || tech == TechKind.GrandWorkshop)
+                return AgeFourOn && e.Age >= 4;
             if (tech == BridgeTech.Bridgeworks) return e.Civ == CivKind.Bridge && e.Age >= 2;
             if (tech == BridgeTech.SiegeDeployment) return e.Civ == CivKind.Bridge && e.Age >= 3;
             if (tech > TechKind.GemArmor) return false;
@@ -463,7 +465,8 @@ namespace Rts.Simulation
                             ApplyTech(soldier, tech);
                     continue;
                 }
-                if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour && tech != TechKind.GemArmor) continue;
+                if (tech != TechKind.Weapons && tech != TechKind.Armour && tech != TechKind.SteelWeapons && tech != TechKind.SteelArmour
+                    && tech != TechKind.GemArmor && tech != TechKind.TotalWar) continue;
                 foreach (int s in world.SoldierTraversal)
                     if (world.Soldiers[s].Alive && world.Soldiers[s].Initial.FactionId == b.FactionId) ApplyTech(s, tech);
             }
@@ -477,6 +480,7 @@ namespace Rts.Simulation
             if (HasTech(faction, TechKind.SteelWeapons)) ApplyTech(index, TechKind.SteelWeapons);
             if (HasTech(faction, TechKind.SteelArmour)) ApplyTech(index, TechKind.SteelArmour);
             if (HasTech(faction, TechKind.GemArmor)) ApplyTech(index, TechKind.GemArmor);
+            if (HasTech(faction, TechKind.TotalWar)) ApplyTech(index, TechKind.TotalWar);
             if (HasCavalryDrill(faction)) ApplyTech(index, CavalryDrillTech);
             if (HasTech(faction, CultTech.MartyrBlessing) && world.Soldiers[index].Initial.Kind == UnitKind.Monk)
                 ApplyTech(index, CultTech.MartyrBlessing);
@@ -493,6 +497,11 @@ namespace Rts.Simulation
                     s.Parameters.Speed = Fix64.FromRaw(checked(s.Parameters.Speed.Raw + rules.CavalryDrillSpeed.Raw));
                     s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
                 }
+            }
+            else if (tech == TechKind.TotalWar)
+            {
+                s.Parameters.Hp = Math.Max(1, checked(s.Parameters.Hp * 1100 / 1000));
+                s.Hp = Math.Max(1, checked(s.Hp * 1100 / 1000));
             }
             else if (tech == TechKind.Weapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.WeaponsDamage);
             else if (tech == TechKind.SteelWeapons) s.Parameters.Damage = checked(s.Parameters.Damage + rules.SteelWeaponsDamage);

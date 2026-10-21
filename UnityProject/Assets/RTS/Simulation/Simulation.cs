@@ -1014,7 +1014,7 @@ namespace Rts.Simulation
             if (!rules.Enabled || !rules.Ages || !rules.AgeVictoryEnabled) return;
             // (#21) Once both sides stand in the third age, being ahead no longer means anything by itself - the fight
             // alone decides from here, exactly as without the flag. Only one side may still be racing for this win.
-            if (world.Economies[0].Age >= 3 && world.Economies[1].Age >= 3) return;
+            if (world.Economies[0].Age >= LastAge && world.Economies[1].Age >= LastAge) return;
             bool firstReady = AgeVictoryReady(0, rules.AgeVictoryTicks);
             bool secondReady = AgeVictoryReady(1, rules.AgeVictoryTicks);
             if (firstReady || secondReady)
@@ -1025,7 +1025,7 @@ namespace Rts.Simulation
         private bool AgeVictoryReady(int index, int requiredTicks)
         {
             var economy = world.Economies[index];
-            if (economy.Age < 3 || world.Cores[world.Factions[index].CoreId - 1].Hp <= 0)
+            if (economy.Age < LastAge || world.Cores[world.Factions[index].CoreId - 1].Hp <= 0)
             {
                 economy.AgeVictoryProgress = 0;
                 world.Economies[index] = economy;

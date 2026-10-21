@@ -23,5 +23,6 @@
             </ui:VisualElement>
         </ui:VisualElement>
         </ui:VisualElement>
+        <ui:Label name="age-toast" class="hud-age-toast" />
     </ui:VisualElement>
 </ui:UXML>

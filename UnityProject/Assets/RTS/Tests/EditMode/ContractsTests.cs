@@ -26,7 +26,7 @@ namespace Rts.Tests.EditMode
 [TestCase(typeof(RecipeKind), "None=0,Frames=1,ArmsKit=2,Scholarly=3,SiegeParts=4,Mechanism=5")]
         [TestCase(typeof(BeltComponentKind), "None=0,Splitter=1,Sorter=2,UndergroundEntrance=3,UndergroundExit=4,Inserter=5")]
         [TestCase(typeof(BeltSpeed), "Normal=0,Fast=1")]
-        [TestCase(typeof(TechKind), "Weapons=1,Armour=2,Tools=3,Carts=4,Irrigation=5,BlastFurnace=6,Siegecraft=7,Masonry=8,Banking=9,SteelWeapons=10,SteelArmour=11,GemArmor=12")]
+        [TestCase(typeof(TechKind), "Weapons=1,Armour=2,Tools=3,Carts=4,Irrigation=5,BlastFurnace=6,Siegecraft=7,Masonry=8,Banking=9,SteelWeapons=10,SteelArmour=11,GemArmor=12,TotalWar=28,GrandWorkshop=29")]
         [TestCase(typeof(EconomyCommandKind), "PlaceBuilding=1,Train=2,CancelTrain=3,AssignVillagers=4,SetAutoEconomy=5,PlaceBelt=6,RemoveBelt=7,ReturnEconomyToAuto=8,SetEconomyPolicy=9,AdvanceAge=10,PlaceWall=11,Research=12,Trade=13,TradeRoute=14,ReturnLineToAuto=15,RotateBuilding=16,RemoveBuilding=17,CaravanRoute=18,SetRegionControl=19,PlaceBeltComponent=20,RemoveBeltComponent=21,RequestLine=22,SetAutoAssault=23,StopVillagers=24,UpgradeBuilding=25,SetRecipe=26,AdvanceNow=27,MoveBuilding=28")]
         [TestCase(typeof(CivKind), "Primitive=0,Agrarian=1,Metallurgy=2,Forestry=3,Masonry=4,Caravan=5,Cavalry=6,Bridge=7,Academy=8,Cult=9,Fishing=10,Mountain=11,Tollgate=12,Metropolis=13,Sanctuary=14")]
         [TestCase(typeof(EconomyPolicy), "Balanced=0,Military=1,Growth=2")]

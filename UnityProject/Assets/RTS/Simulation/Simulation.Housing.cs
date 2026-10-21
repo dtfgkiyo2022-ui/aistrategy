@@ -29,7 +29,8 @@ namespace Rts.Simulation
         private int AgeRoom(int age)
         {
             var rules = world.Config.Economy;
-            return (age >= 2 ? rules.Age2PopulationBonus : 0) + (age >= 3 ? rules.Age3PopulationBonus : 0);
+            return (age >= 2 ? rules.Age2PopulationBonus : 0) + (age >= 3 ? rules.Age3PopulationBonus : 0)
+                + (AgeFourOn && age >= 4 ? rules.Age4PopulationBonus : 0);
         }
 
         private int PopCapFor(uint faction)

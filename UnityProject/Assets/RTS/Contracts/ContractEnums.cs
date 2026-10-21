@@ -82,7 +82,7 @@ namespace Rts.Contracts
     /// </summary>
     /// <summary>Siegecraft, Masonry and Banking are the third age's techs (V3-5, 32 #10); the rest come with a civilisation.</summary>
     public enum TechKind : byte { Weapons = 1, Armour = 2, Tools = 3, Carts = 4, Irrigation = 5, BlastFurnace = 6, Siegecraft = 7, Masonry = 8, Banking = 9,
-        SteelWeapons = 10, SteelArmour = 11, GemArmor = 12 }
+        SteelWeapons = 10, SteelArmour = 11, GemArmor = 12, TotalWar = 28, GrandWorkshop = 29 }
 
     /// <summary>
     /// V3-11 #3: bridge civilisation research values live outside <see cref="TechKind"/> so the

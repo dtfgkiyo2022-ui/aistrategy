@@ -338,7 +338,19 @@ namespace Rts.Simulation
                 easyRebuild: EasyRebuildOn,
                   buildingReservations: BuildingReservationsOn, reservationLimit: BuildingReservationsOn ? rules.ReservationLimit : 0,
                   reservationCount: BuildingReservationsOn ? ReservationCount(faction) : 0,
-                  reservationCheckTicks: BuildingReservationsOn ? rules.ReservationCheckTicks : 0);
+                  reservationCheckTicks: BuildingReservationsOn ? rules.ReservationCheckTicks : 0,
+                  ageFour: AgeFourOn,
+                  age4FoodCost: AgeFourOn ? rules.Age4FoodCost : 0,
+                  age4WoodCost: AgeFourOn ? rules.Age4WoodCost : 0,
+                  age4Ticks: AgeFourOn ? rules.Age4Ticks : 0,
+                  totalWarFoodCost: AgeFourOn ? rules.TotalWarFoodCost : 0,
+                  totalWarWoodCost: AgeFourOn ? rules.TotalWarWoodCost : 0,
+                  totalWarMetalCost: AgeFourOn ? rules.TotalWarMetalCost : 0,
+                  totalWarTicks: AgeFourOn ? rules.TotalWarTicks : 0,
+                  grandWorkshopFoodCost: AgeFourOn ? rules.GrandWorkshopFoodCost : 0,
+                  grandWorkshopWoodCost: AgeFourOn ? rules.GrandWorkshopWoodCost : 0,
+                  grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
+                  grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

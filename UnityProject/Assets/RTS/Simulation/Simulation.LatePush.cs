@@ -75,7 +75,7 @@ namespace Rts.Simulation
                 if (AutoAssaultOffFor(faction)) continue;
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
-                bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= 3;
+                bool reachedThirdAge = world.Config.Economy.SiegeByAge && world.Economies[faction - 1].Age >= LastAge;
                 if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, world.Config.Economy)))
                     latePushLatched[faction - 1] = true;
                 if (!latePushLatched[faction - 1]) continue;
@@ -124,7 +124,7 @@ namespace Rts.Simulation
                 var observation = frames[faction - 1]?.Observation;
                 if (observation == null) continue;
                 var rules = world.Config.Economy;
-                bool reachedThirdAge = rules.SiegeByAge && world.Economies[faction - 1].Age >= 3;
+                bool reachedThirdAge = rules.SiegeByAge && world.Economies[faction - 1].Age >= LastAge;
                 if (!latePushLatched[faction - 1] && (reachedThirdAge || LatePushCondition(observation, rules)))
                     latePushLatched[faction - 1] = true;
                 // The late-push latch is the start signal. Once it fires, waves also operate in age 2;
@@ -338,7 +338,14 @@ namespace Rts.Simulation
         {
             if (observation == null || rules == null || !rules.LatePush) return false;
             if (observation.Tick >= rules.LatePushAfterTicks) return true;
-            if (observation.Tick < rules.LatePushAdvantageAfterTicks) return false;
+            return LatePushAdvantageCondition(observation, rules);
+        }
+
+        /// <summary>Reports only the measured advantage branch, excluding the hard late-push deadline.</summary>
+        public static bool LatePushAdvantageCondition(FactionObservation observation, EconomyRules rules)
+        {
+            if (observation == null || rules == null || !rules.LatePush
+                || observation.Tick < rules.LatePushAdvantageAfterTicks) return false;
 
             int knownOutposts = observation.Objectives.Count(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown);
             int ownedOutposts = observation.Objectives.Count(o => o.Kind == GoalKind.Outpost && o.IsOwnerKnown
