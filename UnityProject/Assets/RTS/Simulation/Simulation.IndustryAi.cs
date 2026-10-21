@@ -22,6 +22,22 @@ namespace Rts.Simulation
         private const int BridgeScoreTier2Cells = 8, BridgeScoreTier3Cells = 16;
         private const int BridgeDangerMeters = 16;
         private const long BridgeRebuildWaitTicks = 200;
+        private RouteDistance.Workspace bridgeRouteWorkspace;
+        private RouteDistance.Workspace bridgeRouteWorkspace2;
+        private bool[] bridgeBasePassable;
+
+        internal long BridgeSearchCalls { get; private set; }
+        internal long BridgeCandidateStartCellsInspected { get; private set; }
+        internal long BridgeCandidatesEvaluated { get; private set; }
+        internal long BridgeRouteEvaluations { get; private set; }
+        internal long BridgeDistanceMapCells { get; private set; }
+
+        private sealed class BridgeCandidate
+        {
+            internal int[] Cells;
+            internal Facing Facing;
+            internal int WorkCell;
+        }
         // A requested-region value cannot legally be uint.MaxValue. It is used only after a shared steel route
         // was tried and rejected, so the same line falls back to the dedicated mine/smelter path deterministically.
         private const uint SharedMetalFallbackMarker = uint.MaxValue;
@@ -37,56 +53,93 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
-            if (LineBuildingCheckOn) ValidateLineBuildingReferences(faction);
+            if (LineBuildingCheckOn)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.ValidateLineBuildingReferences", ValidateLineBuildingReferences, faction);
             if (BuildingReservationsOn)
-                for (int i = 0; i < world.ProcessingLines.Length; i++)
-                    if (world.ProcessingLines[i].FactionId == faction && IsAutoLine(i))
-                    {
-                        ref var pendingLine = ref world.ProcessingLines[i];
-                        BindReservedLineBuildings(faction, ref pendingLine);
-                    }
-            DecideCraftTree1(faction);
-            DecideCraftTree2(faction);
-            DecideCraftTree3(faction);
-            if (TryDecideArmyRecoveryMetalLine(faction)) return;
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.BindReservedLineBuildings", BindReservedLineBuildingsForFaction, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree1", DecideCraftTree1, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
+            if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
-                DecideFarms(faction);
-                if (CavalryAllowed(faction)) DecideTack(faction);
-                if (IncenseAllowed(faction)) DecideIncense(faction);
-                if (CharmsAllowed(faction)) DecideCharms(faction);
-                if (RepairKitsAllowed(faction)) DecideRepairKits(faction);
-                if (ToolsAllowed(faction)) DecideTools(faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.Farms", DecideFarms, faction);
+                if (CavalryAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.Tack", DecideTack, faction);
+                if (IncenseAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.Incense", DecideIncense, faction);
+                if (CharmsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.Charms", DecideCharms, faction);
+                if (RepairKitsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.RepairKits", DecideRepairKits, faction);
+                if (ToolsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyArms.Tools", DecideTools, faction);
                 return;
             }
-            if (TryDecideRequestedLine(faction)) { if (ToolsAllowed(faction)) DecideTools(faction); return; }
+            if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.RequestedLine", TryDecideRequestedLine, faction))
+            {
+                if (ToolsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.RequestedLine.Tools", DecideTools, faction);
+                return;
+            }
             // No return: the caravan's own decisions below stay exactly as they were.
-            if (TradeGoodsAllowed(faction)) DecideTradeGoods(faction);
-            if (IncenseAllowed(faction)) DecideIncense(faction);
-            if (CharmsAllowed(faction)) DecideCharms(faction);
-            if (RepairKitsAllowed(faction)) DecideRepairKits(faction);
+            if (TradeGoodsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.TradeGoods", DecideTradeGoods, faction);
+            if (IncenseAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Incense", DecideIncense, faction);
+            if (CharmsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Charms", DecideCharms, faction);
+            if (RepairKitsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.RepairKits", DecideRepairKits, faction);
             if (FarmingAllowed(faction))
             {
-                DecideFarms(faction);
-                if (RationsAllowed(faction)) DecideRations(faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Farms", DecideFarms, faction);
+                if (RationsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Rations", DecideRations, faction);
                 return;
             }
-            if (FishingAllowed(faction)) { DecideFishingHarbor(faction); DecidePreserves(faction); return; }
+            if (FishingAllowed(faction))
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.FishingHarbor", DecideFishingHarbor, faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Preserves", DecidePreserves, faction);
+                return;
+            }
             if (ForestryAllowed(faction))
             {
-                if (world.Economies[faction - 1].Age < 2) { DecideLumberCamp(faction); return; }
-                DecideForestryLines(faction);
+                if (world.Economies[faction - 1].Age < 2)
+                {
+                    MeasureSubphase("AI.DecideEconomy.DecideIndustry.LumberCamp", DecideLumberCamp, faction);
+                    return;
+                }
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.ForestryLines", DecideForestryLines, faction);
                 return;
             }
-            if (MasonryAllowed(faction)) { DecideQuarry(faction); if (BricksAllowed(faction)) DecideBricks(faction); return; }
-            if (CavalryAllowed(faction)) { DecideTack(faction); return; }
-            if (MountainAllowed(faction)) { DecideMountain(faction); DecideJewels(faction); return; }
-            if (BridgeAllowed(faction)) { DecideEngineerCamp(faction); DecidePlanks(faction); return; }
-            if (ToolsAllowed(faction)) DecideTools(faction);
+            if (MasonryAllowed(faction))
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Quarry", DecideQuarry, faction);
+                if (BricksAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Bricks", DecideBricks, faction);
+                return;
+            }
+            if (CavalryAllowed(faction))
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Tack", DecideTack, faction);
+                return;
+            }
+            if (MountainAllowed(faction))
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Mountain", DecideMountain, faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Jewels", DecideJewels, faction);
+                return;
+            }
+            if (BridgeAllowed(faction))
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.EngineerCamp", DecideEngineerCamp, faction);
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.Planks", DecidePlanks, faction);
+                return;
+            }
+            if (ToolsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Tools", DecideTools, faction);
             if (!IndustryOn || !MetalworkAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
-            if (!ProcessingOn) { DecideLegacyIndustry(faction); return; }
+            if (!ProcessingOn)
+            {
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.LegacyIndustry", DecideLegacyIndustry, faction);
+                return;
+            }
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.Metalwork", DecideMetalwork, faction);
+        }
+
+        private void DecideMetalwork(uint faction)
+        {
             ref var economy = ref world.Economies[faction - 1];
             int coreIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
             ref var coreLine = ref world.ProcessingLines[coreIndex];
@@ -161,6 +214,16 @@ namespace Rts.Simulation
             // Unlike the core line, this branch always needs its two wood carriers: the kiln has no automatic
             // resource input, even after all four belt routes are complete.
             SetLineHaulers(faction, steelLine, Haulers);
+        }
+
+        private void BindReservedLineBuildingsForFaction(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+                if (world.ProcessingLines[i].FactionId == faction && IsAutoLine(i))
+                {
+                    ref var pendingLine = ref world.ProcessingLines[i];
+                    BindReservedLineBuildings(faction, ref pendingLine);
+                }
         }
 
         /// <summary>AiArmyRecovery: restore the metal line before optional industry while infantry is below its reserve.</summary>
@@ -1115,6 +1178,7 @@ namespace Rts.Simulation
         private bool TryFindBridgeCandidate(uint faction, bool requireCamp, bool requireCiv, bool avoidDanger,
             out int[] bestCells, out Facing bestFacing, out int bestWorkCell, out int bestOwnSaving)
         {
+            if (measure != null) BridgeSearchCalls++;
             bestCells = null; bestFacing = Facing.North; bestWorkCell = -1; bestOwnSaving = 0;
             var destinations = BridgeDestinations(faction, includeKnownEnemyCore: requireCamp);
             if (destinations.Count == 0) return false;
@@ -1125,14 +1189,21 @@ namespace Rts.Simulation
             var observedEnemyCells = avoidDanger ? ObservedEnemyCells(faction) : new List<int>();
             int bestAdjusted = 0, bestOwn = 0, bestEnemy = 0, bestFirst = int.MaxValue, bestLength = int.MaxValue;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int mapCells = checked(width * height);
+            if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells) bridgeBasePassable = new bool[mapCells];
+            for (int cell = 0; cell < mapCells; cell++) bridgeBasePassable[cell] = world.Map.IsPassable(cell);
+            var ownWithout = BridgeRouteBaseline(sources, destinations, bridgeBasePassable);
+            var enemyWithout = avoidDanger ? BridgeRouteBaseline(observedEnemyCells, destinations, bridgeBasePassable) : null;
             int max = world.Config.Economy.MaxBridgeLength;
             // Positive directions and z/x order are the deterministic candidate order. Reverse input is equivalent
             // for placement, and the first candidate wins every remaining tie.
             int[] deltas = { 1, width };
+            var candidates = new List<BridgeCandidate>();
             for (int direction = 0; direction < deltas.Length; direction++)
                 for (int z = 0; z < height; z++)
                     for (int x = 0; x < width; x++)
                         {
+                            if (measure != null) BridgeCandidateStartCellsInspected++;
                             int first = z * width + x, delta = deltas[direction];
                             if (!IsRiverCell(first) || world.Map.IsPassable(first)) continue;
                             int before = first - delta;
@@ -1150,21 +1221,33 @@ namespace Rts.Simulation
                                 requireCamp, requireCiv)) continue;
                             if (avoidDanger && ObservedEnemyNear(faction, workCell)) continue;
                             if (BridgeOnRebuildCooldown(faction, candidate)) continue;
-                            int ownSaving = MaximumBridgeSaving(candidate, sources, destinations);
+                            candidates.Add(new BridgeCandidate { Cells = candidate,
+                                Facing = direction == 0 ? Facing.East : Facing.South, WorkCell = workCell });
+                        }
+            if (measure != null) BridgeCandidatesEvaluated += candidates.Count;
+            var ownSavings = BridgeSavingsForCandidates(candidates, sources, destinations, bridgeBasePassable, ownWithout);
+            var enemySavings = avoidDanger
+                ? BridgeSavingsForCandidates(candidates, observedEnemyCells, destinations, bridgeBasePassable, enemyWithout)
+                : null;
+            for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
+            {
+                            var candidate = candidates[candidateIndex];
+                            int ownSaving = ownSavings[candidateIndex];
                             if (ownSaving < BridgeShorteningThresholdCells) continue;
-                            int enemySaving = avoidDanger ? MaximumBridgeSaving(candidate, observedEnemyCells, destinations) : 0;
+                            int enemySaving = avoidDanger ? enemySavings[candidateIndex] : 0;
                             int adjusted = checked(ownSaving - enemySaving / 2); // enemy shortcut is a discount, based only on observed enemies
                             if (adjusted <= 0) continue;
                             if (bestCells == null || adjusted > bestAdjusted || adjusted == bestAdjusted && ownSaving > bestOwn
                                 || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving < bestEnemy
-                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate[0] < bestFirst
-                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate[0] == bestFirst && length < bestLength)
+                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate.Cells[0] < bestFirst
+                                || adjusted == bestAdjusted && ownSaving == bestOwn && enemySaving == bestEnemy && candidate.Cells[0] == bestFirst && candidate.Cells.Length < bestLength)
                             {
-                                bestCells = candidate; bestFacing = direction == 0 ? Facing.East : Facing.South; bestWorkCell = workCell;
-                                bestAdjusted = adjusted; bestOwn = ownSaving; bestEnemy = enemySaving; bestFirst = candidate[0]; bestLength = length;
+                                bestCells = candidate.Cells; bestFacing = candidate.Facing; bestWorkCell = candidate.WorkCell;
+                                bestAdjusted = adjusted; bestOwn = ownSaving; bestEnemy = enemySaving;
+                                bestFirst = candidate.Cells[0]; bestLength = candidate.Cells.Length;
                                 bestOwnSaving = ownSaving;
                             }
-                        }
+            }
             return bestCells != null;
         }
 
@@ -1221,26 +1304,96 @@ namespace Rts.Simulation
             return result;
         }
 
-        private int MaximumBridgeSaving(int[] bridgeCells, List<int> sources, List<int> destinations)
+        private int[] BridgeRouteBaseline(List<int> sources, List<int> destinations, bool[] basePassable)
         {
-            if (sources.Count == 0) return 0;
-            int best = 0, mapCells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
-            var basePassable = new bool[mapCells];
-            var known = new bool[mapCells];
-            for (int cell = 0; cell < mapCells; cell++) { basePassable[cell] = world.Map.IsPassable(cell); known[cell] = true; }
             var without = new int[sources.Count * destinations.Count];
             for (int s = 0; s < sources.Count; s++)
                 for (int d = 0; d < destinations.Count; d++)
                     without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0
-                        : BridgeRouteLength(sources[s], destinations[d], basePassable, known, null);
+                        : BridgeRouteLength(sources[s], destinations[d], basePassable, null, null);
+            return without;
+        }
+
+        private int[] BridgeSavingsForCandidates(List<BridgeCandidate> candidates, List<int> sources,
+            List<int> destinations, bool[] basePassable, int[] without)
+        {
+            var savings = new int[candidates.Count];
+            if (sources.Count == 0 || candidates.Count == 0) return savings;
+            if (bridgeRouteWorkspace2 == null) bridgeRouteWorkspace2 = new RouteDistance.Workspace();
+            int width = world.Config.Map.WidthCells;
+            for (int s = 0; s < sources.Count; s++)
+            {
+                RouteDistance.FillDistances(width, world.Config.Map.HeightCells, basePassable, sources[s], bridgeRouteWorkspace);
+                if (measure != null) BridgeDistanceMapCells += bridgeRouteWorkspace.LastVisitedCells;
+                var fromSource = bridgeRouteWorkspace.Distances;
+                for (int d = 0; d < destinations.Count; d++)
+                {
+                    int before = without[s * destinations.Count + d];
+                    if (before == 0) continue;
+                    RouteDistance.FillDistances(width, world.Config.Map.HeightCells, basePassable, destinations[d], bridgeRouteWorkspace2);
+                    if (measure != null)
+                    {
+                        BridgeDistanceMapCells += bridgeRouteWorkspace2.LastVisitedCells;
+                        BridgeRouteEvaluations += candidates.Count;
+                    }
+                    var toDestination = bridgeRouteWorkspace2.Distances;
+                    for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
+                    {
+                        int after = BridgeOpenedRouteLength(candidates[candidateIndex].Cells, fromSource, toDestination, width);
+                        if (after < 0) continue;
+                        int saving = before < 0 ? checked(basePassable.Length - after) : before - after;
+                        if (saving > savings[candidateIndex]) savings[candidateIndex] = saving;
+                    }
+                }
+            }
+            return savings;
+        }
+
+        private static int BridgeOpenedRouteLength(int[] cells, int[] fromSource, int[] toDestination, int width)
+        {
+            int best = int.MaxValue;
+            for (int i = 0; i < cells.Length; i++)
+            {
+                int sourceEntry = NearestBaseNeighbourDistance(cells[i], fromSource, width);
+                if (sourceEntry < 0) continue;
+                for (int j = 0; j < cells.Length; j++)
+                {
+                    int destinationExit = NearestBaseNeighbourDistance(cells[j], toDestination, width);
+                    if (destinationExit < 0) continue;
+                    int distance = checked(sourceEntry + Math.Abs(i - j) + destinationExit);
+                    if (distance < best) best = distance;
+                }
+            }
+            return best == int.MaxValue ? -1 : best;
+        }
+
+        private static int NearestBaseNeighbourDistance(int cell, int[] distances, int width)
+        {
+            int best = -1, x = cell % width;
+            int z = cell / width;
+            if (z + 1 < distances.Length / width) best = SmallerDistance(best, distances[cell + width]);
+            if (x + 1 < width) best = SmallerDistance(best, distances[cell + 1]);
+            if (z > 0) best = SmallerDistance(best, distances[cell - width]);
+            if (x > 0) best = SmallerDistance(best, distances[cell - 1]);
+            return best < 0 ? -1 : best + 1;
+        }
+
+        private static int SmallerDistance(int current, int candidate)
+            => candidate >= 0 && (current < 0 || candidate < current) ? candidate : current;
+
+        private int MaximumBridgeSaving(int[] bridgeCells, List<int> sources, List<int> destinations,
+            bool[] basePassable, int[] without)
+        {
+            if (sources.Count == 0) return 0;
+            int best = 0;
             for (int s = 0; s < sources.Count; s++)
                 for (int d = 0; d < destinations.Count; d++)
                 {
                     int before = without[s * destinations.Count + d];
                     if (before == 0) continue;
-                    int after = BridgeRouteLength(sources[s], destinations[d], basePassable, known, bridgeCells);
+                    int after = BridgeRouteLength(sources[s], destinations[d], basePassable, null, bridgeCells);
                     if (after < 0) continue;
-                    int saving = before < 0 ? checked(mapCells - after) : before - after;
+                    int saving = before < 0 ? checked(basePassable.Length - after) : before - after;
                     if (saving > best) best = saving;
                 }
             return best;
@@ -1258,8 +1411,9 @@ namespace Rts.Simulation
         private int BridgeRouteLength(int start, int destination, bool[] basePassable, bool[] known,
             IReadOnlyList<int> temporarilyOpen)
         {
+            if (bridgeRouteWorkspace == null) bridgeRouteWorkspace = new RouteDistance.Workspace();
             return RouteDistance.Measure(world.Config.Map.WidthCells, world.Config.Map.HeightCells,
-                basePassable, known, start, destination, temporarilyOpen);
+                basePassable, known, start, destination, temporarilyOpen, bridgeRouteWorkspace);
         }
 
         private bool ObservedEnemyNear(uint faction, int cell)

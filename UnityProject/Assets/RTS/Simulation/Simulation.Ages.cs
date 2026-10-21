@@ -620,7 +620,15 @@ namespace Rts.Simulation
                 if (cell >= 0 && observed[cell] && !objectives.Contains(cell)) objectives.Add(cell);
             }
             objectives.Sort();
-            return CavalryTerrainScoring.Score(width, height, passable, observed, coreCell, objectives, CivCavalryCoreExclusion).Points;
+            var score = CavalryTerrainScoring.Score(width, height, passable, observed, coreCell, objectives, CivCavalryCoreExclusion);
+            if (measure != null)
+            {
+                LastCavalryObjectiveCount = score.ObjectiveCount;
+                LastCavalryPathCellsVisited = score.PathCellsVisited;
+                LastCavalryRouteCellsVisited = score.RouteCellsVisited;
+                LastCavalryAlternativeRouteCellsVisited = score.AlternativeRouteCellsVisited;
+            }
+            return score.Points;
         }
 
         /// <summary>
