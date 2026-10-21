@@ -133,6 +133,16 @@ namespace Rts.Simulation
         public int LargeExploreScoutCount = 4;
         /// <summary>LargeEconomy scouting: cells in one patrol chunk.</summary>
         public int LargeExploreChunkCells = 16;
+        /// <summary>36.5: the planning period. The planner never runs on an ordinary map.</summary>
+        public int LargeEconomyPlanIntervalTicks = 200;
+        /// <summary>36.5.3: R+ is R plus this integer step.</summary>
+        public int LargeEconomyPlanRStep = 10;
+        /// <summary>36.5.3: upper estimate for R from a 300-villager economy.</summary>
+        public int LargeEconomyPlanMaxR = 60;
+        /// <summary>36.5.3 stage 1: the minimum defensive infantry target.</summary>
+        public int LargeEconomyMinimumDefenceSoldiers = 20;
+        /// <summary>36.5.2: planned farm output per minute used by the integer farm formula.</summary>
+        public int LargeFarmFoodPerMinute = 100, LargeFarmReserve = 2;
         /// <summary>Reserves infantry inputs and restores the corresponding automatic income when the army is depleted.</summary>
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>

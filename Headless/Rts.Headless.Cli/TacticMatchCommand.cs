@@ -398,6 +398,18 @@ internal static class TacticMatchCommand
                 cells.Add(prefix + resource + "RoundTripTicks");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Income");
+            cells.AddRange(new[] { prefix + "PlanStage", prefix + "PlanR", prefix + "PlanRPlus" });
+            foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
+            {
+                cells.Add(prefix + resource + "IncomePerMinute");
+                cells.Add(prefix + resource + "RequiredPerMinute");
+                cells.Add(prefix + resource + "PlannedWorkers");
+            }
+            foreach (string facility in new[] { "Farm", "LumberCamp", "Mine", "Smelter", "Barracks", "House", "Town", "DropSite" })
+            {
+                cells.Add(prefix + "Target" + facility);
+                cells.Add(prefix + "Current" + facility);
+            }
         }
         return string.Join(",", cells);
     }
@@ -409,7 +421,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 41; i++) cells.Add("");
+                for (int i = 0; i < 78; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -422,6 +434,18 @@ internal static class TacticMatchCommand
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
+            cells.AddRange(new[] { value.PlanStage, value.PlanR, value.PlanRPlus }.Select(FormatInvariant));
+            for (int resource = 0; resource < 6; resource++)
+            {
+                cells.Add(FormatInvariant(value.IncomePerMinute[resource]));
+                cells.Add(FormatInvariant(value.RequiredPerMinute[resource]));
+                cells.Add(FormatInvariant(value.PlannedWorkers[resource]));
+            }
+            for (int facility = 0; facility < 8; facility++)
+            {
+                cells.Add(FormatInvariant(value.TargetFacilities[facility]));
+                cells.Add(FormatInvariant(value.CurrentFacilities[facility]));
+            }
         }
         return string.Join(",", cells);
     }

@@ -46,6 +46,10 @@ namespace Rts.Simulation
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
+        // LargeEconomyPlanner state is deterministic and is included in the diagnostic state only when the flag is on.
+        private readonly LargeEconomyPlan[] largeEconomyPlans = new LargeEconomyPlan[2];
+        private readonly int[,] largePlanDeliveredAtLastUpdate = new int[2, 6];
+        private readonly long[] largePlanLastUpdateTick = { -1, -1 };
 
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.
@@ -87,6 +91,7 @@ namespace Rts.Simulation
             InitializeVisibilityCaches();
             UpdateVisibility();
             UpdateObservations();
+            if (LargeEconomyOn) InitializeLargeEconomyPlans();
             ResolveVictory();
             PublishFrames();
         }

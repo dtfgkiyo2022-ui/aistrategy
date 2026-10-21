@@ -42,6 +42,12 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.LargeExploreTargetPermille, Is.EqualTo(large.Economy.LargeExploreTargetPermille));
             Assert.That(decoded.Economy.LargeExploreScoutCount, Is.EqualTo(large.Economy.LargeExploreScoutCount));
             Assert.That(decoded.Economy.LargeExploreChunkCells, Is.EqualTo(large.Economy.LargeExploreChunkCells));
+            Assert.That(decoded.Economy.LargeEconomyPlanIntervalTicks, Is.EqualTo(large.Economy.LargeEconomyPlanIntervalTicks));
+            Assert.That(decoded.Economy.LargeEconomyPlanRStep, Is.EqualTo(large.Economy.LargeEconomyPlanRStep));
+            Assert.That(decoded.Economy.LargeEconomyPlanMaxR, Is.EqualTo(large.Economy.LargeEconomyPlanMaxR));
+            Assert.That(decoded.Economy.LargeEconomyMinimumDefenceSoldiers, Is.EqualTo(large.Economy.LargeEconomyMinimumDefenceSoldiers));
+            Assert.That(decoded.Economy.LargeFarmFoodPerMinute, Is.EqualTo(large.Economy.LargeFarmFoodPerMinute));
+            Assert.That(decoded.Economy.LargeFarmReserve, Is.EqualTo(large.Economy.LargeFarmReserve));
             Assert.That(decoded.Extensions.Count(extension => extension.Id == 59), Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 

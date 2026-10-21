@@ -32,7 +32,9 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            if (LargeEconomyOn) DecideTown(faction);
+            if (LargeEconomyOn && LargePlanIndustryReady(faction)
+                && LargePlanBuildingCount(faction, BuildingKind.Barracks) >= (LargePlanFor(faction)?.TargetBarracks ?? 0))
+                DecideTown(faction);
             bool hasBarracks = false, ready = false;
             int barracks = -1, barracksCount = 0;
             for (int i = 0; i < world.BuildingCount; i++)
@@ -44,10 +46,11 @@ namespace Rts.Simulation
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
                 if (b.Complete && !b.Held && barracks < 0) { ready = true; barracks = i; }
             }
-            if (EconomyScaleOn)
+            if (EconomyScaleOn && (!LargeEconomyOn || LargePlanIndustryReady(faction)))
             {
                 int desired = LargeEconomyOn
-                    ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
+                    ? Math.Min(rules.LargeBarracksMaxBuildings, LargePlanFor(faction)?.TargetBarracks
+                        ?? Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
                     : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
                 bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
                 if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
@@ -98,6 +101,10 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            var largePlan = LargePlanFor(faction);
+            int currentInfantry = CountClass(faction, UnitKind.Infantry);
+            if (LargeEconomyOn && largePlan != null && largePlan.Stage != LargeEconomyPlanStage.ProduceArmy
+                && currentInfantry >= largePlan.MinimumDefenceSoldiers) return false;
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             if (!EconomyDecision.ShouldTrainInfantry(ready, building.Queued, Math.Min(PlanOf(faction).InfantryQueue, rules.QueueLimit),
                 economy.Food, economy.Wood, InfantryFoodFor(faction), InfantryWoodFor(faction), population, PopCapFor(faction), HasInfantryRoom(faction))
@@ -115,6 +122,8 @@ namespace Rts.Simulation
             }
             int batch = LargeEconomyOn ? Math.Min(rules.LargeInfantryBatch,
                 Math.Min(rules.QueueLimit - building.Queued, PlanOf(faction).InfantryQueue - building.Queued)) : 1;
+            if (LargeEconomyOn && largePlan != null && largePlan.Stage != LargeEconomyPlanStage.ProduceArmy)
+                batch = Math.Min(batch, Math.Max(0, largePlan.MinimumDefenceSoldiers - currentInfantry));
             for (int i = 0; i < batch; i++)
             {
                 if (!HasRoomFor(faction, kind) || !CanPay(faction, kind)) break;
@@ -148,6 +157,12 @@ namespace Rts.Simulation
             if (!TownsAllowed(faction)) return;
             var rules = world.Config.Economy;
             if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
+            if (LargeEconomyOn)
+            {
+                var largePlan = LargePlanFor(faction);
+                if (largePlan == null || largePlan.Stage != LargeEconomyPlanStage.ProduceArmy
+                    || TownCount(faction) >= largePlan.TargetTowns) return;
+            }
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
                 || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost

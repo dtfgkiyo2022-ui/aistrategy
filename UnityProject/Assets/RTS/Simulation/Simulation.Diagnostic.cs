@@ -480,6 +480,8 @@ namespace Rts.Simulation
                     }
                 }
             }
+            if (LargeEconomyOn)
+                for (int f = 1; f <= 2; f++) WriteLargeEconomyPlan(w, f);
         }
         private sealed class StateWriter : BinaryWriter
         {

@@ -21,6 +21,12 @@ namespace Rts.Simulation
         public int[] Workers = new int[6];
         public int[] WorkerRoundTripTicks = new int[6];
         public int[] Income = new int[6];
+        public int PlanStage, PlanR, PlanRPlus;
+        public int[] IncomePerMinute = new int[6];
+        public int[] RequiredPerMinute = new int[6];
+        public int[] PlannedWorkers = new int[6];
+        public int[] TargetFacilities = new int[8];
+        public int[] CurrentFacilities = new int[8];
         public int TownResourceIncome;
         public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
         public int BarracksPopulationWaiting, BarracksTraining;
@@ -102,6 +108,18 @@ namespace Rts.Simulation
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
                     value.Workers[resource] = WorkerCount(faction, resource);
                     value.WorkerRoundTripTicks[resource] = WorkerDistanceTicks(faction, resource);
+                }
+                var plan = LargePlanFor(faction);
+                if (plan != null)
+                {
+                    value.PlanStage = (int)plan.Stage;
+                    value.PlanR = plan.R;
+                    value.PlanRPlus = plan.RPlus;
+                    Array.Copy(plan.IncomePerMinute, value.IncomePerMinute, value.IncomePerMinute.Length);
+                    Array.Copy(plan.RequiredPerMinute, value.RequiredPerMinute, value.RequiredPerMinute.Length);
+                    Array.Copy(plan.WorkerTargets, value.PlannedWorkers, value.PlannedWorkers.Length);
+                    Array.Copy(plan.TargetFacilities, value.TargetFacilities, value.TargetFacilities.Length);
+                    Array.Copy(plan.CurrentFacilities, value.CurrentFacilities, value.CurrentFacilities.Length);
                 }
                 value.TownResourceIncome = largeTownDelivered[faction - 1];
                 result.Factions[faction - 1] = value;

@@ -57,9 +57,37 @@ namespace Rts.Simulation
         private void DecideHouse(uint faction)
         {
             // Saving to advance comes first: the base that makes it save already has its villagers.
-            if (!AgesOn || SavingToAdvance(faction)) return;
+            if (!AgesOn || SavingToAdvance(faction) && !LargeEconomyOn) return;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
+            var largePlan = LargePlanFor(faction);
+            if (LargeEconomyOn && largePlan != null)
+            {
+                int plannedHouses = 0;
+                for (int i = 0; i < world.BuildingCount; i++)
+                    if (IsPlannedBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction
+                        && (world.Buildings[i].Kind == BuildingKind.House || world.Buildings[i].Kind == BuildingKind.GrandHouse)) plannedHouses++;
+                if (plannedHouses < largePlan.TargetHouses)
+                {
+                    BuildingKind plannedKind = MetropolisAllowed(faction) ? BuildingKind.GrandHouse : BuildingKind.House;
+                    int plannedWood = plannedKind == BuildingKind.GrandHouse ? rules.GrandHouseWoodCost : rules.HouseWoodCost;
+                    if (economy.Wood >= plannedWood)
+                    {
+                        bool pending = false;
+                        for (int i = 0; i < world.BuildingCount; i++)
+                            if (IsPlannedBuilding(world.Buildings[i]) && !world.Buildings[i].Complete
+                                && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == plannedKind) { pending = true; break; }
+                        if (!pending)
+                        {
+                            int plannedSize = plannedKind == BuildingKind.GrandHouse ? rules.GrandHouseSizeCells : rules.HouseSizeCells;
+                            int plannedOrigin = FindSiteNear(faction, plannedSize, world.Map.Cell(OwnCore(faction).Definition.Position),
+                                Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
+                            if (plannedOrigin >= 0) PlaceBuildingAt(faction, plannedKind, plannedOrigin, Facing.North, 0);
+                        }
+                    }
+                    return;
+                }
+            }
             int cap = PopCapFor(faction);
             int ceiling = ScaledHousingCeiling(economy.Age);
             bool metropolis = MetropolisAllowed(faction);

@@ -32,6 +32,7 @@ namespace Rts.Simulation
         {
             AdvanceReserved(); // every tick, not only on the allocation cycle
             if (!EconomyOn || world.Tick % 20 != 0) return;
+            if (LargeEconomyOn) UpdateLargeEconomyPlans();
             var rules = world.Config.Economy;
             for (int f = 0; f < 2; f++)
             {
@@ -401,6 +402,14 @@ namespace Rts.Simulation
         {
             RefreshLargeWorkCounts();
             int factionIndex = checked((int)v.FactionId - 1);
+            var largePlan = LargePlanFor(v.FactionId);
+            if (largePlan != null)
+            {
+                for (int resource = 0; resource < 6; resource++)
+                    if (largeWorkCounts[factionIndex * 6 + resource] < largePlan.WorkerTargets[resource])
+                        return resource == 0 ? ResourceKind.Food : resource == 1 ? ResourceKind.Wood : resource == 2 ? ResourceKind.Stone
+                            : resource == 3 ? ResourceKind.Ore : resource == 4 ? ResourceKind.Gold : ResourceKind.Metal;
+            }
             ref var economy = ref world.Economies[factionIndex];
             int food = largeWorkCounts[factionIndex * 6 + 0];
             int wood = largeWorkCounts[factionIndex * 6 + 1];

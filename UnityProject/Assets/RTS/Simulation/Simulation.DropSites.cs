@@ -312,6 +312,8 @@ namespace Rts.Simulation
             // The explicit large-map cap is shared with human placement. The cluster setting is kept as a second
             // guard so a scenario cannot make the automatic policy exceed the command-visible limit.
             int maxSites = Math.Min(rules.LargeDropSiteMax, rules.LargeResourceClusterMaxDropSites);
+            var largePlan = LargePlanFor(faction);
+            if (largePlan != null) maxSites = Math.Min(maxSites, largePlan.TargetDropSites);
             if (AliveDropSites(faction) >= maxSites)
             {
                 DecideAiRawBelts(faction);

@@ -45,6 +45,7 @@ namespace Rts.Simulation
                         ref var pendingLine = ref world.ProcessingLines[i];
                         BindReservedLineBuildings(faction, ref pendingLine);
                     }
+            if (LargeEconomyOn && EnsureLargePlannedIndustry(faction)) return;
             DecideCraftTree1(faction);
             DecideCraftTree2(faction);
             DecideCraftTree3(faction);
@@ -2290,12 +2291,10 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
-                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
-            int farmTarget = LargeEconomyOn
-                ? Math.Min(world.Config.Economy.LargeFarmMaximum,
-                    Math.Max(world.Config.Economy.LargeFarmMinimum,
-                        (LivingVillagers(faction) + world.Config.Economy.LargeVillagersPerFarm - 1)
-                            / world.Config.Economy.LargeVillagersPerFarm))
+                if ((LargeEconomyOn ? IsPlannedBuilding(world.Buildings[i]) : IsActualBuilding(world.Buildings[i]))
+                    && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
+            int farmTarget = LargeEconomyOn && LargePlanFor(faction) != null
+                ? LargePlanFor(faction).TargetFarms
                 : EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
             if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
             var taken = new bool[world.Belts.Length];
