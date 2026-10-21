@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using Rts.Contracts;
 using Rts.Replay;
@@ -23,6 +24,34 @@ namespace Rts.Core.Tests
                 Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState.ToArray()),
                     Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState.ToArray())), "tick " + tick);
             }
+        }
+
+        [Test]
+        public void BridgeCandidateCacheMatchesTheUncachedCandidate()
+        {
+            var simulation = new Battle(LiveGameRules.Create(1, false, true, false, false));
+            string uncached = simulation.FindBridgeCandidateForTest(1, false);
+            string cached = simulation.FindBridgeCandidateForTest(1, true);
+            Assert.That(cached, Is.EqualTo(uncached));
+        }
+
+        [Test]
+        public void BridgeDistanceCacheRebuildsAfterTerrainChanges()
+        {
+            var simulation = new Battle(LiveGameRules.Create(1, false, true, false, false), (name, start) => { });
+            simulation.ProbeBridgeDistanceMapForTest(0);
+            long builds = simulation.BridgeDistanceMapsBuilt;
+            long baseBuilds = simulation.BridgeBasePassableBuilds;
+            simulation.ProbeBridgeDistanceMapForTest(0);
+            Assert.That(simulation.BridgeDistanceMapsBuilt, Is.EqualTo(builds));
+            Assert.That(simulation.BridgeDistanceMapCacheHits, Is.GreaterThanOrEqualTo(1));
+
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = (WorldState)worldField.GetValue(simulation);
+            world.Map.SetPassable(0, !world.Map.IsPassable(0));
+            simulation.ProbeBridgeDistanceMapForTest(0);
+            Assert.That(simulation.BridgeDistanceMapsBuilt, Is.GreaterThan(builds));
+            Assert.That(simulation.BridgeBasePassableBuilds, Is.GreaterThan(baseBuilds));
         }
 
         [Test, Explicit("freeze1 large-map verification")]

@@ -23,20 +23,39 @@ namespace Rts.Simulation
         private const int BridgeDangerMeters = 16;
         private const long BridgeRebuildWaitTicks = 200;
         private RouteDistance.Workspace bridgeRouteWorkspace;
-        private RouteDistance.Workspace bridgeRouteWorkspace2;
+        private RouteDistance.Workspace bridgeRouteWorkspace2 = new RouteDistance.Workspace();
         private bool[] bridgeBasePassable;
+        private int bridgeBasePassableVersion = -1;
+        private readonly Dictionary<int, BridgeDistanceMap> bridgeDistanceMaps = new Dictionary<int, BridgeDistanceMap>();
+        private int bridgeDistanceMapVersion = -1;
+        private bool bridgeDistanceCacheEnabled = true;
+        private const int BridgeDistanceMapCacheLimit = 64;
 
         internal long BridgeSearchCalls { get; private set; }
         internal long BridgeCandidateStartCellsInspected { get; private set; }
         internal long BridgeCandidatesEvaluated { get; private set; }
         internal long BridgeRouteEvaluations { get; private set; }
         internal long BridgeDistanceMapCells { get; private set; }
+        internal long BridgeDistanceMapsBuilt { get; private set; }
+        internal long BridgeDistanceMapCacheHits { get; private set; }
+        internal long BridgeDistanceMapRequests { get; private set; }
+        internal long BridgeLegacyDistanceMapCells { get; private set; }
+        internal long BridgeBasePassableBuilds { get; private set; }
+        internal long BridgeBasePassableCellsScanned { get; private set; }
+        internal long BridgeSourceCellsConsidered { get; private set; }
+        internal long BridgeDestinationCellsConsidered { get; private set; }
 
         private sealed class BridgeCandidate
         {
             internal int[] Cells;
             internal Facing Facing;
             internal int WorkCell;
+        }
+
+        private sealed class BridgeDistanceMap
+        {
+            internal int[] Distances;
+            internal int VisitedCells;
         }
         // A requested-region value cannot legally be uint.MaxValue. It is used only after a shared steel route
         // was tried and rejected, so the same line falls back to the dedicated mine/smelter path deterministically.
@@ -1187,11 +1206,27 @@ namespace Rts.Simulation
             var sources = requireCamp ? destinations : BridgeSources(faction);
             if (sources.Count == 0) return false;
             var observedEnemyCells = avoidDanger ? ObservedEnemyCells(faction) : new List<int>();
+            if (measure != null)
+            {
+                BridgeSourceCellsConsidered += sources.Count;
+                BridgeDestinationCellsConsidered += destinations.Count;
+            }
             int bestAdjusted = 0, bestOwn = 0, bestEnemy = 0, bestFirst = int.MaxValue, bestLength = int.MaxValue;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int mapCells = checked(width * height);
-            if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells) bridgeBasePassable = new bool[mapCells];
-            for (int cell = 0; cell < mapCells; cell++) bridgeBasePassable[cell] = world.Map.IsPassable(cell);
+            if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells || bridgeBasePassableVersion != world.Map.PassableVersion)
+            {
+                if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells) bridgeBasePassable = new bool[mapCells];
+                for (int cell = 0; cell < mapCells; cell++) bridgeBasePassable[cell] = world.Map.IsPassable(cell);
+                bridgeBasePassableVersion = world.Map.PassableVersion;
+                bridgeDistanceMapVersion = bridgeBasePassableVersion;
+                bridgeDistanceMaps.Clear();
+                if (measure != null)
+                {
+                    BridgeBasePassableBuilds++;
+                    BridgeBasePassableCellsScanned += mapCells;
+                }
+            }
             var ownWithout = BridgeRouteBaseline(sources, destinations, bridgeBasePassable);
             var enemyWithout = avoidDanger ? BridgeRouteBaseline(observedEnemyCells, destinations, bridgeBasePassable) : null;
             int max = world.Config.Economy.MaxBridgeLength;
@@ -1319,24 +1354,16 @@ namespace Rts.Simulation
         {
             var savings = new int[candidates.Count];
             if (sources.Count == 0 || candidates.Count == 0) return savings;
-            if (bridgeRouteWorkspace2 == null) bridgeRouteWorkspace2 = new RouteDistance.Workspace();
             int width = world.Config.Map.WidthCells;
             for (int s = 0; s < sources.Count; s++)
             {
-                RouteDistance.FillDistances(width, world.Config.Map.HeightCells, basePassable, sources[s], bridgeRouteWorkspace);
-                if (measure != null) BridgeDistanceMapCells += bridgeRouteWorkspace.LastVisitedCells;
-                var fromSource = bridgeRouteWorkspace.Distances;
+                var fromSource = BridgeDistanceMapFor(sources[s], basePassable, bridgeRouteWorkspace);
                 for (int d = 0; d < destinations.Count; d++)
                 {
                     int before = without[s * destinations.Count + d];
                     if (before == 0) continue;
-                    RouteDistance.FillDistances(width, world.Config.Map.HeightCells, basePassable, destinations[d], bridgeRouteWorkspace2);
-                    if (measure != null)
-                    {
-                        BridgeDistanceMapCells += bridgeRouteWorkspace2.LastVisitedCells;
-                        BridgeRouteEvaluations += candidates.Count;
-                    }
-                    var toDestination = bridgeRouteWorkspace2.Distances;
+                    var toDestination = BridgeDistanceMapFor(destinations[d], basePassable, bridgeRouteWorkspace2);
+                    if (measure != null) BridgeRouteEvaluations += candidates.Count;
                     for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
                     {
                         int after = BridgeOpenedRouteLength(candidates[candidateIndex].Cells, fromSource, toDestination, width);
@@ -1347,6 +1374,73 @@ namespace Rts.Simulation
                 }
             }
             return savings;
+        }
+
+        private int[] BridgeDistanceMapFor(int start, bool[] basePassable, RouteDistance.Workspace workspace)
+        {
+            if (measure != null) BridgeDistanceMapRequests++;
+            if (bridgeDistanceCacheEnabled && bridgeDistanceMapVersion == world.Map.PassableVersion
+                && bridgeDistanceMaps.TryGetValue(start, out var cached))
+            {
+                if (measure != null)
+                {
+                    BridgeDistanceMapCacheHits++;
+                    BridgeLegacyDistanceMapCells += cached.VisitedCells;
+                }
+                return cached.Distances;
+            }
+            if (workspace == null) workspace = new RouteDistance.Workspace();
+            RouteDistance.FillDistances(world.Config.Map.WidthCells, world.Config.Map.HeightCells, basePassable, start, workspace);
+            int visitedCells = workspace.LastVisitedCells;
+            if (measure != null)
+            {
+                BridgeDistanceMapsBuilt++;
+                BridgeDistanceMapCells += visitedCells;
+                BridgeLegacyDistanceMapCells += visitedCells;
+            }
+            if (!bridgeDistanceCacheEnabled) return workspace.Distances;
+            // Each map covers the whole grid (about 0.5 MB on the large map). Dropping them all only costs a rebuild,
+            // never a different answer, so the cache stays bounded between terrain changes.
+            if (bridgeDistanceMaps.Count >= BridgeDistanceMapCacheLimit) bridgeDistanceMaps.Clear();
+            var distances = new int[basePassable.Length];
+            System.Array.Copy(workspace.Distances, distances, distances.Length);
+            bridgeDistanceMaps[start] = new BridgeDistanceMap { Distances = distances, VisitedCells = visitedCells };
+            return distances;
+        }
+
+        /// <summary>Test-only comparison of the uncached and cached candidate selection.</summary>
+        internal string FindBridgeCandidateForTest(uint faction, bool useDistanceCache)
+        {
+            bool previous = bridgeDistanceCacheEnabled;
+            bridgeDistanceCacheEnabled = useDistanceCache;
+            try
+            {
+                if (!TryFindBridgeCandidate(faction, false, false, false, out var cells, out var facing, out var workCell, out _))
+                    return "none";
+                return facing + ":" + workCell + ":" + string.Join("/", cells);
+            }
+            finally { bridgeDistanceCacheEnabled = previous; }
+        }
+
+        /// <summary>Test-only distance-map probe used to verify terrain invalidation.</summary>
+        internal void ProbeBridgeDistanceMapForTest(int start)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int mapCells = checked(width * height);
+            if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells || bridgeBasePassableVersion != world.Map.PassableVersion)
+            {
+                if (bridgeBasePassable == null || bridgeBasePassable.Length != mapCells) bridgeBasePassable = new bool[mapCells];
+                for (int cell = 0; cell < mapCells; cell++) bridgeBasePassable[cell] = world.Map.IsPassable(cell);
+                bridgeBasePassableVersion = world.Map.PassableVersion;
+                bridgeDistanceMapVersion = bridgeBasePassableVersion;
+                bridgeDistanceMaps.Clear();
+                if (measure != null)
+                {
+                    BridgeBasePassableBuilds++;
+                    BridgeBasePassableCellsScanned += mapCells;
+                }
+            }
+            BridgeDistanceMapFor(start, bridgeBasePassable, bridgeRouteWorkspace);
         }
 
         private static int BridgeOpenedRouteLength(int[] cells, int[] fromSource, int[] toDestination, int width)
