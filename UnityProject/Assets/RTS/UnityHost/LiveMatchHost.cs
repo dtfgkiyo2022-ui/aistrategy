@@ -1486,6 +1486,11 @@ namespace Rts.UnityHost
             manualControl = PlayerPrefs.GetInt(ManualControlKey, 0) == 1;
             if (!manualControl) rememberedOwnPreset = ownPreset;
             if (!smokeRunner) allCivilisations = PlayerPrefs.GetInt(AllCivilisationsKey, allCivilisations ? 1 : 0) == 1;
+            // Measurement only (10-23 memory leak hunt): "-rts-speed 4" starts the live match at that speed.
+            int speedAt = Array.IndexOf(Environment.GetCommandLineArgs(), "-rts-speed");
+            if (speedAt >= 0 && speedAt + 1 < Environment.GetCommandLineArgs().Length
+                && int.TryParse(Environment.GetCommandLineArgs()[speedAt + 1], out int startSpeed))
+                SpeedMultiplier = startSpeed;
             if (!smokeRunner)
             {
                 workshop = GetComponent<SteamWorkshopService>();
@@ -1835,6 +1840,22 @@ namespace Rts.UnityHost
         private long perfGcNs, perfAllocBytes;
         private Unity.Profiling.ProfilerRecorder perfGcTime, perfAlloc;
 
+        /// <summary>
+        /// 10-23 memory leak hunt: native memory and the number of live engine objects that hold native memory. Counting
+        /// with FindObjectsByType walks every object, so it only runs on the perf line (every few seconds).
+        /// </summary>
+        private static string MemoryPerfText()
+        {
+            const long mb = 1024 * 1024;
+            return " nativeMB=" + (UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() / mb)
+                + " reservedMB=" + (UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong() / mb)
+                + " gfxMB=" + (UnityEngine.Profiling.Profiler.GetAllocatedMemoryForGraphicsDriver() / mb)
+                + " meshes=" + Resources.FindObjectsOfTypeAll<Mesh>().Length
+                + " textures=" + Resources.FindObjectsOfTypeAll<Texture>().Length
+                + " materials=" + Resources.FindObjectsOfTypeAll<Material>().Length
+                + " gameObjects=" + Resources.FindObjectsOfTypeAll<GameObject>().Length;
+        }
+
         private void WritePerfLine()
         {
             if (smokeRunner || simulation == null) return;
@@ -1871,7 +1892,8 @@ namespace Rts.UnityHost
                 + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames)
                 + " gc#" + (GC.CollectionCount(0) - perfGcCount)
                 + " gcMs=" + (perfGcTime.Valid ? (perfGcNs / 1e6 / Math.Max(1, perfFrames)).ToString("0.00") : "?")
-                + " allocKB=" + (perfAlloc.Valid ? (perfAllocBytes / 1024.0 / Math.Max(1, perfFrames)).ToString("0") : "?"));
+                + " allocKB=" + (perfAlloc.Valid ? (perfAllocBytes / 1024.0 / Math.Max(1, perfFrames)).ToString("0") : "?")
+                + MemoryPerfText());
             perfGcCount = GC.CollectionCount(0);
             perfGcNs = 0;
             perfAllocBytes = 0;
