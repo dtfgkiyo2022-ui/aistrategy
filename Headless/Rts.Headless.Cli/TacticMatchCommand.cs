@@ -167,7 +167,7 @@ internal static class TacticMatchCommand
             string directory = Path.GetDirectoryName(Path.GetFullPath(timingPath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
-            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
+            timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
         }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();
@@ -340,7 +340,21 @@ internal static class TacticMatchCommand
                      westWorking.ToString(CultureInfo.InvariantCulture), eastWorking.ToString(CultureInfo.InvariantCulture),
                      simulation.MovedSoldiers.ToString(CultureInfo.InvariantCulture),
                      simulation.VisibilityChangedSoldiers.ToString(CultureInfo.InvariantCulture),
-                     simulation.VisibilityProcessedCells.ToString(CultureInfo.InvariantCulture), phaseText,
+                     simulation.VisibilityProcessedCells.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeSearchCalls.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeCandidateStartCellsInspected.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeCandidatesEvaluated.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeRouteEvaluations.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeDistanceMapRequests.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeDistanceMapsBuilt.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeDistanceMapCacheHits.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeDistanceMapCells.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeLegacyDistanceMapCells.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeBasePassableBuilds.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeBasePassableCellsScanned.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeSourceCellsConsidered.ToString(CultureInfo.InvariantCulture),
+                     simulation.BridgeDestinationCellsConsidered.ToString(CultureInfo.InvariantCulture),
+                     phaseText,
                      latePushAdvantageTicks[1].ToString(CultureInfo.InvariantCulture), latePushAdvantageTicks[2].ToString(CultureInfo.InvariantCulture),
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
