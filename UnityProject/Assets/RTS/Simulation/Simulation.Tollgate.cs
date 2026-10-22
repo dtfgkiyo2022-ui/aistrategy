@@ -11,21 +11,42 @@ namespace Rts.Simulation
         // Derived from the buildings (never saved): the faction owning a finished tollgate on each cell, 0 elsewhere.
         // Rebuilt at the start of every tick; the route caches are dropped only when it actually changes.
         private uint[] tollgateOwners;
+        // The (cell, owner) writes that built tollgateOwners, in building order. This runs after every phase (about a
+        // dozen times a tick); rebuilding a whole-map array each time made ~6 MB of garbage per tick on the large map and
+        // the IL2CPP heap grew until the player crashed (10-23). The array is now rebuilt only when these writes change;
+        // equal writes always give an equal array, so the result is unchanged.
+        private readonly List<int> tollgateWriteCells = new List<int>(), nextTollgateWriteCells = new List<int>();
+        private readonly List<uint> tollgateWriteOwners = new List<uint>(), nextTollgateWriteOwners = new List<uint>();
 
         private void RefreshTollgateOwners()
         {
             int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
-            var next = new uint[cells];
+            nextTollgateWriteCells.Clear();
+            nextTollgateWriteOwners.Clear();
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (!IsActualBuilding(building) || !building.Complete || building.Kind != BuildingKind.Tollgate) continue;
-                foreach (int cell in Footprint(building)) if (cell >= 0 && cell < cells) next[cell] = building.FactionId;
+                foreach (int cell in Footprint(building))
+                    if (cell >= 0 && cell < cells) { nextTollgateWriteCells.Add(cell); nextTollgateWriteOwners.Add(building.FactionId); }
             }
+            if (tollgateOwners != null && tollgateOwners.Length == cells && SameTollgateWrites()) return;
+            var next = new uint[cells];
+            for (int i = 0; i < nextTollgateWriteCells.Count; i++) next[nextTollgateWriteCells[i]] = nextTollgateWriteOwners[i];
             bool changed = tollgateOwners == null || tollgateOwners.Length != cells;
             for (int i = 0; !changed && i < cells; i++) changed = tollgateOwners[i] != next[i];
             tollgateOwners = next;
+            tollgateWriteCells.Clear(); tollgateWriteCells.AddRange(nextTollgateWriteCells);
+            tollgateWriteOwners.Clear(); tollgateWriteOwners.AddRange(nextTollgateWriteOwners);
             if (changed) world.Map.InvalidateRoutes();
+        }
+
+        private bool SameTollgateWrites()
+        {
+            if (tollgateWriteCells.Count != nextTollgateWriteCells.Count) return false;
+            for (int i = 0; i < tollgateWriteCells.Count; i++)
+                if (tollgateWriteCells[i] != nextTollgateWriteCells[i] || tollgateWriteOwners[i] != nextTollgateWriteOwners[i]) return false;
+            return true;
         }
 
         private bool IsPassableForFaction(int cell, uint faction)

@@ -1486,6 +1486,11 @@ namespace Rts.UnityHost
             manualControl = PlayerPrefs.GetInt(ManualControlKey, 0) == 1;
             if (!manualControl) rememberedOwnPreset = ownPreset;
             if (!smokeRunner) allCivilisations = PlayerPrefs.GetInt(AllCivilisationsKey, allCivilisations ? 1 : 0) == 1;
+            // Measurement only (10-23 memory leak hunt): "-rts-speed 4" starts the live match at that speed.
+            int speedAt = Array.IndexOf(Environment.GetCommandLineArgs(), "-rts-speed");
+            if (speedAt >= 0 && speedAt + 1 < Environment.GetCommandLineArgs().Length
+                && int.TryParse(Environment.GetCommandLineArgs()[speedAt + 1], out int startSpeed))
+                SpeedMultiplier = startSpeed;
             if (!smokeRunner)
             {
                 workshop = GetComponent<SteamWorkshopService>();
@@ -1835,6 +1840,22 @@ namespace Rts.UnityHost
         private long perfGcNs, perfAllocBytes;
         private Unity.Profiling.ProfilerRecorder perfGcTime, perfAlloc;
 
+        /// <summary>
+        /// 10-23 memory leak hunt: native memory and the number of live engine objects that hold native memory. Counting
+        /// with FindObjectsByType walks every object, so it only runs on the perf line (every few seconds).
+        /// </summary>
+        private static string MemoryPerfText()
+        {
+            const long mb = 1024 * 1024;
+            return " nativeMB=" + (UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong() / mb)
+                + " reservedMB=" + (UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong() / mb)
+                + " gfxMB=" + (UnityEngine.Profiling.Profiler.GetAllocatedMemoryForGraphicsDriver() / mb)
+                + " meshes=" + Resources.FindObjectsOfTypeAll<Mesh>().Length
+                + " textures=" + Resources.FindObjectsOfTypeAll<Texture>().Length
+                + " materials=" + Resources.FindObjectsOfTypeAll<Material>().Length
+                + " gameObjects=" + Resources.FindObjectsOfTypeAll<GameObject>().Length;
+        }
+
         private void WritePerfLine()
         {
             if (smokeRunner || simulation == null) return;
@@ -1871,7 +1892,8 @@ namespace Rts.UnityHost
                 + (perfWorstFrame * 1000f).ToString("0") + "ms" + PerfProbe.Summary(perfFrames)
                 + " gc#" + (GC.CollectionCount(0) - perfGcCount)
                 + " gcMs=" + (perfGcTime.Valid ? (perfGcNs / 1e6 / Math.Max(1, perfFrames)).ToString("0.00") : "?")
-                + " allocKB=" + (perfAlloc.Valid ? (perfAllocBytes / 1024.0 / Math.Max(1, perfFrames)).ToString("0") : "?"));
+                + " allocKB=" + (perfAlloc.Valid ? (perfAllocBytes / 1024.0 / Math.Max(1, perfFrames)).ToString("0") : "?")
+                + MemoryPerfText());
             perfGcCount = GC.CollectionCount(0);
             perfGcNs = 0;
             perfAllocBytes = 0;
@@ -1884,8 +1906,23 @@ namespace Rts.UnityHost
         /// Temporary play-test entry owned by the host. The production chat UI can call Speak directly; this small
         /// inspector-friendly panel keeps the G-5 path usable before that UI exists.
         /// </summary>
+        private bool memoryGuardLogged;
+
         private void OnGUI()
         {
+            if (simulationWorker != null && simulationWorker.MemoryGuardTripped)
+            {
+                if (!memoryGuardLogged)
+                {
+                    memoryGuardLogged = true;
+                    Debug.LogError("RTS memory guard: the managed heap passed " + (SimulationThreadWorker.MemoryGuardBytes >> 30)
+                        + " GB at tick " + Tick + "; the match was stopped to protect the PC.");
+                }
+                GUI.depth = -20;
+                GUI.Box(new Rect(Screen.width * 0.5f - 300f, Screen.height * 0.4f, 600f, 70f),
+                    UiText.T("Memory use grew too large, so the match was stopped to protect the PC.\nPlease report this and restart the game.",
+                        "メモリの使用量が大きくなりすぎたため、PC を守るために試合を止めました。\nお手数ですが報告のうえ、ゲームを再起動してください。"));
+            }
             if (HudToolkit.IsEnabled || !developmentAiEntry || liveAi == null || simulation == null) return;
             // In front of the other panels, so nothing drawn later can sit over the staff panel and take its clicks.
             GUI.depth = -10;
