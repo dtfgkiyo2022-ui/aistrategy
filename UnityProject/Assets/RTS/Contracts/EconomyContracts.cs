@@ -741,6 +741,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int Age { get; }
         /// <summary>AgeFour: the optional fifth stage (primitive plus four civilisation ages).</summary>
         public bool AgeFour { get; }
+        /// <summary>AgeFourAi: the last failed automatic research attempt, for measurement traces.</summary>
+        public TechKind AgeFourAiResearchFailureTech { get; }
+        public byte AgeFourAiResearchFailureReason { get; }
+        public long AgeFourAiResearchFailureTick { get; }
         /// <summary>AgeStrengths: civilisation age bonuses are active in this played rule set.</summary>
         public bool AgeStrengths { get; }
         public int Age2FoodCost { get; }
@@ -1158,8 +1162,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0,
               bool ageStrengths = false,
               bool craftTree4Enabled = false, int siegeEngine = 0, int eliteKit = 0, int siegeEngineTicks = 0, int eliteKitTicks = 0,
-              int eliteKitAttack = 0, int eliteKitHpPermille = 0, int cannonFoodCost = 0, int cannonWoodCost = 0, int cannonRange = 0, int cannonSiegeDamage = 0,
-              int siegeEngineProduced = 0, int siegeEngineConsumed = 0, int eliteKitProduced = 0, int eliteKitConsumed = 0, int cannonProduced = 0)
+               int eliteKitAttack = 0, int eliteKitHpPermille = 0, int cannonFoodCost = 0, int cannonWoodCost = 0, int cannonRange = 0, int cannonSiegeDamage = 0,
+               int siegeEngineProduced = 0, int siegeEngineConsumed = 0, int eliteKitProduced = 0, int eliteKitConsumed = 0, int cannonProduced = 0,
+               TechKind ageFourAiResearchFailureTech = 0, byte ageFourAiResearchFailureReason = 0, long ageFourAiResearchFailureTick = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1261,6 +1266,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
              AgeFour = ageFour; AgeStrengths = ageStrengths; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
+             AgeFourAiResearchFailureTech = ageFourAiResearchFailureTech;
+             AgeFourAiResearchFailureReason = ageFourAiResearchFailureReason;
+             AgeFourAiResearchFailureTick = ageFourAiResearchFailureTick;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

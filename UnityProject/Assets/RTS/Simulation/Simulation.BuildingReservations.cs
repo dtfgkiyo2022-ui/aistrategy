@@ -79,8 +79,10 @@ namespace Rts.Simulation
             var economy = world.Economies[faction - 1];
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             int heldStone = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionStone(faction) : 0;
+            heldWood = checked(heldWood + (automaticEconomyAction ? AgeFourAiWoodReserve(faction) : 0));
             if (automaticEconomyAction && BuildingReservationsOn
                 && (economy.Wood - heldWood < wood || economy.Stone - heldStone < stone)) return false;
+            if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < wood) return false;
             return !NoNegativeStockOn || (economy.Wood >= wood && economy.Stone >= stone);
         }
 

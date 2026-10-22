@@ -126,6 +126,7 @@
     <Compile Include="CraftTree2Tests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="CraftTree4Tests.cs" />
+    <Compile Include="AgeFourAiTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
     <Compile Include="TollgateTests.cs" />

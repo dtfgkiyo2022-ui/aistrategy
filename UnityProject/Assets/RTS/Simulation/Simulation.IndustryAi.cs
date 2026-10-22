@@ -68,6 +68,11 @@ namespace Rts.Simulation
             CultTech.MartyrBlessing, TollgateTech.GateNetwork, MetropolisTech.CitizenMilitia,
             SanctuaryTech.HolyRelic
         };
+        private static readonly RecipeKind[] AgeFourAiRecipeOrder =
+        {
+            RecipeKind.SiegeEngine, RecipeKind.EliteKit, RecipeKind.SiegeParts, RecipeKind.Mechanism,
+            RecipeKind.Frames, RecipeKind.ArmsKit, RecipeKind.Scholarly
+        };
 
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
@@ -80,6 +85,7 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.AgeFourAi", DecideAgeFourAiIndustry, faction);
             if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
@@ -435,6 +441,180 @@ namespace Rts.Simulation
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
         }
 
+        private void DecideAgeFourAiIndustry(uint faction)
+        {
+            if (!AgeFourAiIndustryOn || world.Economies[faction - 1].Age < 3 || !AssemblerAllowed(faction)) return;
+            EnsureAgeFourAiBuildings(faction);
+            AssignAgeFourAiRecipes(faction);
+            MaintainAgeFourAiProcessingLines(faction);
+        }
+
+        private void EnsureAgeFourAiBuildings(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (CountPlannedBuildings(faction, BuildingKind.Barracks) < BarracksTargetFor(faction)) return;
+            // Extra processing capacity must not take the food/wood needed by a barracks that
+            // is ready to train but is currently resource-starved. Existing processing buildings
+            // continue to run; only new buildings are deferred in this AgeFourAi branch.
+            if (AgeFourAiBarracksWaitingForResources(faction)) return;
+            if (CountPlannedBuildings(faction, BuildingKind.Sawmill) < 2 && AgeFourAiCanSpendWood(faction, rules.SawmillWoodCost, rules.BarracksWoodCost))
+            {
+                PlaceCommonSawmill(faction);
+                return;
+            }
+            if (CountPlannedBuildings(faction, BuildingKind.Stonecutter) < 1 && AgeFourAiCanSpendWood(faction, rules.StonecutterWoodCost, rules.BarracksWoodCost))
+            {
+                PlaceStonecutter(faction);
+                return;
+            }
+            if (CountPlannedBuildings(faction, BuildingKind.CharcoalKiln) < 2 && AgeFourAiCanSpendWood(faction, rules.CharcoalKilnWoodCost, rules.BarracksWoodCost))
+            {
+                PlaceKiln(faction);
+                return;
+            }
+            if (CountPlannedBuildings(faction, BuildingKind.Assembler) < rules.AgeFourAiAssemblers
+                && AgeFourAiCanSpendWood(faction, rules.AssemblerWoodCost, rules.BarracksWoodCost))
+                PlaceAssembler(faction);
+        }
+
+        private bool AgeFourAiCanSpendWood(uint faction, int cost, int barracksCost)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int reserve = economy.Age >= 4 && economy.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost
+                ? world.Config.Economy.CannonWoodCost : 0;
+            return economy.Wood >= cost + barracksCost + reserve;
+        }
+
+        private bool AgeFourAiBarracksWaitingForResources(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var barracks = world.Buildings[i];
+                if (!IsActualBuilding(barracks) || !barracks.Complete || barracks.Held
+                    || barracks.FactionId != faction || barracks.Kind != BuildingKind.Barracks
+                    || barracks.Queued >= world.Config.Economy.QueueLimit) continue;
+                if (HasRoomFor(faction, UnitKind.Infantry) && !CanPay(faction, UnitKind.Infantry, barracks.Kind)) return true;
+            }
+            return false;
+        }
+
+        private int CountPlannedBuildings(uint faction, BuildingKind kind)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId == faction && building.Kind == kind && IsPlannedBuilding(building)) count++;
+            }
+            return count;
+        }
+
+        private void AssignAgeFourAiRecipes(uint faction)
+        {
+            var economy = world.Economies[faction - 1];
+            var selected = new int[8];
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var assembler = ref world.Buildings[i];
+                if (!IsActualBuilding(assembler) || assembler.FactionId != faction || assembler.Kind != BuildingKind.Assembler
+                    || !assembler.Complete) continue;
+                if (assembler.Timer != 0)
+                {
+                    selected[(int)assembler.Recipe]++;
+                    continue;
+                }
+                if (assembler.Recipe != RecipeKind.None && selected[(int)assembler.Recipe] < 2
+                    && AssemblerRecipeHasMaterialProspect(economy, assembler))
+                {
+                    selected[(int)assembler.Recipe]++;
+                    continue;
+                }
+                RecipeKind wanted = PreferredAgeFourAiRecipe(faction, economy, selected);
+                if (wanted != RecipeKind.None && assembler.Recipe != wanted)
+                    SetAssemblerRecipe(faction, assembler.Id, wanted);
+                selected[(int)wanted]++;
+            }
+        }
+
+        private bool AssemblerRecipeHasMaterialProspect(FactionEconomy economy, BuildingState assembler)
+            => assembler.Input > 0 || assembler.InputSecondary > 0 || assembler.InputTertiary > 0
+                || RecipeInputsAvailable(economy, assembler.Recipe);
+
+        private RecipeKind PreferredAgeFourAiRecipe(uint faction, FactionEconomy economy, int[] selected)
+        {
+            for (int i = 0; i < AgeFourAiRecipeOrder.Length; i++)
+            {
+                RecipeKind recipe = AgeFourAiRecipeOrder[i];
+                if (!AgeFourAiRecipeAllowed(faction, recipe) || selected[(int)recipe] >= 2) continue;
+                if (RecipeInputsAvailable(economy, recipe)) return recipe;
+            }
+            bool age4 = world.Economies[faction - 1].Age >= 4;
+            RecipeKind fallback = age4 ? AgeFourAiFallbackForSiegeEngine(faction, economy, selected)
+                : AgeFourAiFallbackForSiegeParts(faction, economy, selected);
+            return fallback;
+        }
+
+        private bool AgeFourAiRecipeAllowed(uint faction, RecipeKind recipe)
+            => recipe == RecipeKind.SiegeEngine || recipe == RecipeKind.EliteKit
+                ? CraftTree4Allowed(faction)
+                : recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism
+                    ? CraftTree3Allowed(faction) : CraftTree2On && world.Economies[faction - 1].Age >= 2;
+
+        private RecipeKind AgeFourAiFallbackForSiegeEngine(uint faction, FactionEconomy economy, int[] selected)
+        {
+            var rules = world.Config.Economy;
+            if (economy.SiegeParts < rules.SiegeEngineSiegePartsInput)
+            {
+                if (economy.Frames < rules.SiegePartsFramesInput && selected[(int)RecipeKind.Frames] < 2) return RecipeKind.Frames;
+                if (economy.ArmsKit < rules.SiegePartsArmsKitInput && selected[(int)RecipeKind.ArmsKit] < 2) return RecipeKind.ArmsKit;
+            }
+            if (economy.Mechanism < rules.SiegeEngineMechanismInput)
+            {
+                if (economy.Scholarly < rules.MechanismScholarlyInput && selected[(int)RecipeKind.Scholarly] < 2) return RecipeKind.Scholarly;
+                if (economy.ArmsKit < rules.MechanismArmsKitInput && selected[(int)RecipeKind.ArmsKit] < 2) return RecipeKind.ArmsKit;
+            }
+            return RecipeKind.None;
+        }
+
+        private RecipeKind AgeFourAiFallbackForSiegeParts(uint faction, FactionEconomy economy, int[] selected)
+        {
+            var rules = world.Config.Economy;
+            if (economy.Frames < rules.SiegePartsFramesInput && selected[(int)RecipeKind.Frames] < 2) return RecipeKind.Frames;
+            if (economy.ArmsKit < rules.SiegePartsArmsKitInput && selected[(int)RecipeKind.ArmsKit] < 2) return RecipeKind.ArmsKit;
+            return RecipeKind.None;
+        }
+
+        private void MaintainAgeFourAiProcessingLines(uint faction)
+        {
+            int plankLine = LineIndex(faction, ProcessingLineKind.Planks);
+            int stoneLine = LineIndex(faction, ProcessingLineKind.CutStone);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction) continue;
+                if (building.Kind == BuildingKind.Sawmill)
+                {
+                    var route = BeltRoute(faction, OutputCell(building), TakenForOtherLines(faction, plankLine), next => FeedsOwnCore(next, faction));
+                    if (route.cells != null) LayRoutes(faction, route);
+                    SetSimpleHaulers(faction, building.Id, 0, 1);
+                }
+                else if (building.Kind == BuildingKind.Stonecutter)
+                {
+                    var route = BeltRoute(faction, OutputCell(building), TakenForOtherLines(faction, stoneLine), next => FeedsOwnCore(next, faction));
+                    if (route.cells != null) LayRoutes(faction, route);
+                    SetSimpleHaulers(faction, building.Id, 0, 1);
+                }
+                else if (building.Kind == BuildingKind.CharcoalKiln)
+                {
+                    var route = BeltRoute(faction, OutputCell(building), TakenForOtherLines(faction, -1), next => FeedsOwnCore(next, faction));
+                    if (route.cells != null) LayRoutes(faction, route);
+                    SetKilnWoodHaulers(faction, building.Id, 1);
+                    SetSimpleHaulers(faction, building.Id, 0, 1);
+                }
+            }
+        }
+
         private RecipeKind PreferredCraftTree4Recipe(uint faction)
         {
             var e = world.Economies[faction - 1];
@@ -479,6 +659,14 @@ namespace Rts.Simulation
         private bool RecipeInputsAvailable(FactionEconomy economy, RecipeKind recipe)
         {
             var rules = world.Config.Economy;
+            if (recipe == RecipeKind.Frames)
+                return economy.Planks >= rules.CraftTreeJoineryPlankInput && economy.CutStone >= rules.CraftTreeJoineryCutStoneInput;
+            if (recipe == RecipeKind.ArmsKit)
+            {
+                bool steel = economy.Steel >= rules.ArmsKitSteelInput;
+                return economy.Planks >= rules.ArmsKitPlankInput
+                    && (steel ? economy.Steel >= rules.ArmsKitSteelInput : economy.Charcoal >= rules.ArmsKitCharcoalInput);
+            }
             if (recipe == RecipeKind.Scholarly)
                 return economy.Planks >= rules.ScholarlyPlankInput && economy.Charcoal >= rules.ScholarlyCharcoalInput
                     && economy.Food >= rules.ScholarlyFoodInput;
@@ -2427,7 +2615,7 @@ namespace Rts.Simulation
                     if (belt.FactionId != 0) return false;
                     added++; wood = checked(wood + world.Config.Economy.BeltWoodCost);
                 }
-            return owned + added <= world.Config.Economy.BeltLimit && economy.Wood >= wood;
+            return owned + added <= world.Config.Economy.BeltLimit && economy.Wood - AgeFourAiWoodReserve(faction) >= wood;
         }
 
         private bool LayAutomaticSplitter(uint faction, int cell, Facing facing)
@@ -2464,6 +2652,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            int reservedWood = AgeFourAiWoodReserve(faction);
             if (LargeEconomyOn)
             {
                 int missing = 0;
@@ -2476,7 +2665,7 @@ namespace Rts.Simulation
                         seen[cell] = true;
                         if (world.Belts[cell].FactionId == 0) missing++;
                     }
-                if (owned + missing > rules.BeltLimit || economy.Wood < missing * rules.BeltWoodCost) return false;
+                if (owned + missing > rules.BeltLimit || economy.Wood - reservedWood < missing * rules.BeltWoodCost) return false;
             }
             bool whole = true;
             foreach (var (route, facings) in routes)
@@ -2485,13 +2674,23 @@ namespace Rts.Simulation
                     ref var belt = ref world.Belts[route[i]];
                     if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
                     whole = false;
-                    if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) continue;
+                    if (owned >= rules.BeltLimit || economy.Wood - reservedWood < rules.BeltWoodCost) continue;
                     economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
                     world.BeltOrder = null;
                 }
             return whole;
+        }
+
+        private int AgeFourAiWoodReserve(uint faction)
+        {
+            if (!AgeFourAiOn) return 0;
+            var economy = world.Economies[faction - 1];
+            int workshop = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop);
+            return economy.Age >= 4 && economy.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost
+                && workshop >= 0 && world.Buildings[workshop].Complete
+                ? world.Config.Economy.CannonWoodCost : 0;
         }
 
         private Facing FacingFrom(int from, int to)

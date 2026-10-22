@@ -84,6 +84,7 @@ namespace Rts.Simulation
             e.AgeClock = true;
             e.AgeClockUx = true;
             e.AgeFour = true;
+            e.AgeFourAi = e.AgeFour;
             e.AgeStrengths = e.AgeFour;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.AgeClockTicks1 = 6000; e.AgeClockTicks2 = 12000; e.AgeClockTicks3 = 18000; e.AgeClockTicks4 = 24000;

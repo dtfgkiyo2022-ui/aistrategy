@@ -318,6 +318,10 @@ namespace Rts.Simulation
         /// <summary>V3-5 (32 #7): 0 primitive, 1 on taking a civilisation, 2 after the second age.</summary>
         internal byte Age;
         internal long AdvanceRemaining;
+        /// <summary>AgeFourAi: last failed automatic research attempt, for deterministic diagnostics.</summary>
+        internal TechKind AgeFourAiResearchFailureTech;
+        internal byte AgeFourAiResearchFailureReason;
+        internal long AgeFourAiResearchFailureTick;
         /// <summary>Consecutive ticks at age 3 with a living core, for the optional age victory.</summary>
         internal int AgeVictoryProgress;
         /// <summary>V3-5 (32 #6): researched techs, bit 1 &lt;&lt; (TechKind - 1).</summary>
@@ -828,6 +832,8 @@ namespace Rts.Simulation
                  && e.SiegeAge4Permille > 0 && e.SiegeAge4Permille <= 10000
                  && e.TotalWarFoodCost >= 0 && e.TotalWarWoodCost >= 0 && e.TotalWarMetalCost >= 0 && e.TotalWarTicks > 0
                  && e.GrandWorkshopFoodCost >= 0 && e.GrandWorkshopWoodCost >= 0 && e.GrandWorkshopMetalCost >= 0 && e.GrandWorkshopTicks > 0), "Invalid AgeFour rules.");
+            Require(!e.AgeFourAi || (e.AgeFour && e.AgeFourAiAssemblers > 0), "Invalid AgeFourAi rules.");
+            Require(!e.AgeFourAiIndustry || e.AgeFourAi, "Invalid AgeFourAiIndustry rules.");
              Require(!e.AgeStrengths || (e.AgeFour && e.AgrarianFarmSpeedPermille > 0 && e.AgrarianRationsHealHp >= 0 && e.AgrarianPopulationCapBonus >= 0
                  && e.MetallurgySmeltSpeedPermille > 0 && e.MetallurgyForgedDamageBonus >= 0 && e.MetallurgySiegePartsTimePermille > 0
                  && e.ForestryLumberSpeedPermille > 0 && e.ForestryArcherRangeBonus >= 0 && e.ForestryBuildingWoodPermille > 0
@@ -1276,7 +1282,8 @@ namespace Rts.Simulation
                    CraftTiming = e.CraftTiming, CraftTimingFoodPerWood = e.CraftTimingFoodPerWood,
                    CraftBalance = e.CraftBalance, CraftBalanceTollgateTiming = e.CraftBalanceTollgateTiming,
                 Ages = e.Ages, AdvanceFoodCost = e.AdvanceFoodCost, AdvanceWoodCost = e.AdvanceWoodCost, AdvanceTicks = e.AdvanceTicks,
-                 AgeFour = e.AgeFour, AgeStrengths = e.AgeStrengths, Age4FoodCost = e.Age4FoodCost, Age4WoodCost = e.Age4WoodCost, Age4Ticks = e.Age4Ticks, Age4PopulationBonus = e.Age4PopulationBonus,
+                  AgeFour = e.AgeFour, AgeFourAi = e.AgeFourAi, AgeFourAiIndustry = e.AgeFourAiIndustry, AgeFourAiAssemblers = e.AgeFourAiAssemblers,
+                 AgeStrengths = e.AgeStrengths, Age4FoodCost = e.Age4FoodCost, Age4WoodCost = e.Age4WoodCost, Age4Ticks = e.Age4Ticks, Age4PopulationBonus = e.Age4PopulationBonus,
                  AgrarianFarmSpeedPermille = e.AgrarianFarmSpeedPermille, AgrarianRationsHealHp = e.AgrarianRationsHealHp, AgrarianPopulationCapBonus = e.AgrarianPopulationCapBonus,
                  MetallurgySmeltSpeedPermille = e.MetallurgySmeltSpeedPermille, MetallurgyForgedDamageBonus = e.MetallurgyForgedDamageBonus, MetallurgySiegePartsTimePermille = e.MetallurgySiegePartsTimePermille,
                  ForestryLumberSpeedPermille = e.ForestryLumberSpeedPermille, ForestryArcherRangeBonus = e.ForestryArcherRangeBonus, ForestryBuildingWoodPermille = e.ForestryBuildingWoodPermille,
