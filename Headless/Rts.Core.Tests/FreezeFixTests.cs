@@ -54,6 +54,32 @@ namespace Rts.Core.Tests
             Assert.That(simulation.BridgeBasePassableBuilds, Is.GreaterThan(baseBuilds));
         }
 
+        [Test]
+        public void PlacementSiteChoiceMatchesWithAndWithoutConnectivityCache()
+        {
+            var simulation = new Battle(LiveGameRules.Create(3, true, true, false, false), (name, start) => { });
+            int uncached = simulation.FindSiteForTest(1, 2, false);
+            int cached = simulation.FindSiteForTest(1, 2, true);
+            Assert.That(cached, Is.EqualTo(uncached));
+        }
+
+        [Test]
+        public void PlacementConnectivityCacheRebuildsAfterTerrainChanges()
+        {
+            var simulation = new Battle(LiveGameRules.Create(3, true, true, false, false), (name, start) => { });
+            simulation.ProbePlacementConnectivityForTest(1, 1000, 2, true);
+            long checks = simulation.PlacementConnectivityChecks;
+            simulation.ProbePlacementConnectivityForTest(1, 1000, 2, true);
+            Assert.That(simulation.PlacementConnectivityChecks, Is.EqualTo(checks));
+            Assert.That(simulation.PlacementConnectivityCacheHits, Is.GreaterThanOrEqualTo(1));
+
+            var worldField = typeof(Battle).GetField("world", BindingFlags.Instance | BindingFlags.NonPublic);
+            var world = (WorldState)worldField.GetValue(simulation);
+            world.Map.SetPassable(0, !world.Map.IsPassable(0));
+            simulation.ProbePlacementConnectivityForTest(1, 1000, 2, true);
+            Assert.That(simulation.PlacementConnectivityChecks, Is.GreaterThan(checks));
+        }
+
         [Test, Explicit("freeze1 large-map verification")]
         public void LargeSeed3BridgeSearchStaysWithinTraversalBudget()
         {

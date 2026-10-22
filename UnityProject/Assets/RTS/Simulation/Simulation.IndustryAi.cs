@@ -29,7 +29,19 @@ namespace Rts.Simulation
         private readonly Dictionary<int, BridgeDistanceMap> bridgeDistanceMaps = new Dictionary<int, BridgeDistanceMap>();
         private int bridgeDistanceMapVersion = -1;
         private bool bridgeDistanceCacheEnabled = true;
-        private const int BridgeDistanceMapCacheLimit = 64;
+        // A large-map bridge evaluation can use the own objectives and the observed enemy cells as distinct starts.
+        // Keeping 256 maps avoids evicting the first objective maps while scoring the later candidates; the cache is
+        // still cleared whenever PassableVersion changes and remains bounded.
+        private const int BridgeDistanceMapCacheLimit = 256;
+        private bool bridgeCandidateCacheValid;
+        private uint bridgeCandidateCacheFaction;
+        private bool bridgeCandidateCacheRequireCamp, bridgeCandidateCacheRequireCiv, bridgeCandidateCacheAvoidDanger;
+        private int bridgeCandidateCachePassableVersion, bridgeCandidateCacheActiveCount;
+        private bool bridgeCandidateCacheCampReady, bridgeCandidateCacheBridgeAllowed;
+        private ulong bridgeCandidateCacheSignature;
+        private int[] bridgeCandidateCacheCells;
+        private Facing bridgeCandidateCacheFacing;
+        private int bridgeCandidateCacheWorkCell, bridgeCandidateCacheOwnSaving;
 
         internal long BridgeSearchCalls { get; private set; }
         internal long BridgeCandidateStartCellsInspected { get; private set; }
@@ -1163,7 +1175,9 @@ namespace Rts.Simulation
             {
                 ref var economy = ref world.Economies[faction - 1];
                 if (economy.Wood < world.Config.Economy.EngineerCampWoodCost) return;
-                int origin = FindSite(faction, world.Config.Economy.EngineerCampSizeCells);
+                int origin = -1;
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.EngineerCamp.FindSite", () =>
+                    origin = FindSite(faction, world.Config.Economy.EngineerCampSizeCells));
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.EngineerCamp, origin, Facing.North, 0);
                 return;
             }
@@ -1241,6 +1255,28 @@ namespace Rts.Simulation
                 BridgeSourceCellsConsidered += sources.Count;
                 BridgeDestinationCellsConsidered += destinations.Count;
             }
+            bool cacheable = !avoidDanger || observedEnemyCells.Count == 0;
+            int activeBridgeCount = ActiveBridgeCount(faction);
+            bool campReady = BridgeCampReady(faction);
+            bool bridgeAllowed = BridgeAllowed(faction);
+            ulong inputSignature = BridgeCandidateSignature(destinations, sources);
+            if (cacheable && bridgeCandidateCacheValid
+                && bridgeCandidateCacheFaction == faction
+                && bridgeCandidateCacheRequireCamp == requireCamp
+                && bridgeCandidateCacheRequireCiv == requireCiv
+                && bridgeCandidateCacheAvoidDanger == avoidDanger
+                && bridgeCandidateCachePassableVersion == world.Map.PassableVersion
+                && bridgeCandidateCacheActiveCount == activeBridgeCount
+                && bridgeCandidateCacheCampReady == campReady
+                && bridgeCandidateCacheBridgeAllowed == bridgeAllowed
+                && bridgeCandidateCacheSignature == inputSignature)
+            {
+                bestCells = bridgeCandidateCacheCells == null ? null : (int[])bridgeCandidateCacheCells.Clone();
+                bestFacing = bridgeCandidateCacheFacing;
+                bestWorkCell = bridgeCandidateCacheWorkCell;
+                bestOwnSaving = bridgeCandidateCacheOwnSaving;
+                return bestCells != null;
+            }
             int bestAdjusted = 0, bestOwn = 0, bestEnemy = 0, bestFirst = int.MaxValue, bestLength = int.MaxValue;
             int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int mapCells = checked(width * height);
@@ -1257,16 +1293,23 @@ namespace Rts.Simulation
                     BridgeBasePassableCellsScanned += mapCells;
                 }
             }
-            var ownWithout = BridgeRouteBaseline(sources, destinations, bridgeBasePassable);
-            var enemyWithout = avoidDanger ? BridgeRouteBaseline(observedEnemyCells, destinations, bridgeBasePassable) : null;
+            var ownWithout = Array.Empty<int>();
+            MeasureSubphase("AI.DecideEconomy.BridgeSearch.OwnBaseline", () =>
+                ownWithout = BridgeRouteBaseline(sources, destinations, bridgeBasePassable));
+            var enemyWithout = avoidDanger ? new int[0] : null;
+            if (avoidDanger)
+                MeasureSubphase("AI.DecideEconomy.BridgeSearch.EnemyBaseline", () =>
+                    enemyWithout = BridgeRouteBaseline(observedEnemyCells, destinations, bridgeBasePassable));
             int max = world.Config.Economy.MaxBridgeLength;
             // Positive directions and z/x order are the deterministic candidate order. Reverse input is equivalent
             // for placement, and the first candidate wins every remaining tie.
             int[] deltas = { 1, width };
             var candidates = new List<BridgeCandidate>();
-            for (int direction = 0; direction < deltas.Length; direction++)
-                for (int z = 0; z < height; z++)
-                    for (int x = 0; x < width; x++)
+            MeasureSubphase("AI.DecideEconomy.BridgeSearch.CandidateScan", () =>
+            {
+                for (int direction = 0; direction < deltas.Length; direction++)
+                    for (int z = 0; z < height; z++)
+                        for (int x = 0; x < width; x++)
                         {
                             if (measure != null) BridgeCandidateStartCellsInspected++;
                             int first = z * width + x, delta = deltas[direction];
@@ -1289,11 +1332,15 @@ namespace Rts.Simulation
                             candidates.Add(new BridgeCandidate { Cells = candidate,
                                 Facing = direction == 0 ? Facing.East : Facing.South, WorkCell = workCell });
                         }
+            });
             if (measure != null) BridgeCandidatesEvaluated += candidates.Count;
-            var ownSavings = BridgeSavingsForCandidates(candidates, sources, destinations, bridgeBasePassable, ownWithout);
-            var enemySavings = avoidDanger
-                ? BridgeSavingsForCandidates(candidates, observedEnemyCells, destinations, bridgeBasePassable, enemyWithout)
-                : null;
+            var ownSavings = Array.Empty<int>();
+            MeasureSubphase("AI.DecideEconomy.BridgeSearch.OwnSavings", () =>
+                ownSavings = BridgeSavingsForCandidates(candidates, sources, destinations, bridgeBasePassable, ownWithout));
+            var enemySavings = avoidDanger ? new int[0] : null;
+            if (avoidDanger)
+                MeasureSubphase("AI.DecideEconomy.BridgeSearch.EnemySavings", () =>
+                    enemySavings = BridgeSavingsForCandidates(candidates, observedEnemyCells, destinations, bridgeBasePassable, enemyWithout));
             for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
             {
                             var candidate = candidates[candidateIndex];
@@ -1313,7 +1360,46 @@ namespace Rts.Simulation
                                 bestOwnSaving = ownSaving;
                             }
             }
+            if (cacheable)
+            {
+                bridgeCandidateCacheValid = true;
+                bridgeCandidateCacheFaction = faction;
+                bridgeCandidateCacheRequireCamp = requireCamp;
+                bridgeCandidateCacheRequireCiv = requireCiv;
+                bridgeCandidateCacheAvoidDanger = avoidDanger;
+                bridgeCandidateCachePassableVersion = world.Map.PassableVersion;
+                bridgeCandidateCacheActiveCount = activeBridgeCount;
+                bridgeCandidateCacheCampReady = campReady;
+                bridgeCandidateCacheBridgeAllowed = bridgeAllowed;
+                bridgeCandidateCacheSignature = inputSignature;
+                bridgeCandidateCacheCells = bestCells == null ? null : (int[])bestCells.Clone();
+                bridgeCandidateCacheFacing = bestFacing;
+                bridgeCandidateCacheWorkCell = bestWorkCell;
+                bridgeCandidateCacheOwnSaving = bestOwnSaving;
+            }
             return bestCells != null;
+        }
+
+        private bool BridgeCampReady(uint faction)
+        {
+            int index = OwnBuildingIndex(faction, BuildingKind.EngineerCamp);
+            return index >= 0 && world.Buildings[index].Complete;
+        }
+
+        private static ulong MixBridgeSignature(ulong hash, int value)
+        {
+            hash ^= unchecked((uint)value);
+            return hash * 1099511628211UL;
+        }
+
+        private ulong BridgeCandidateSignature(List<int> destinations, List<int> sources)
+        {
+            ulong hash = 1469598103934665603UL;
+            hash = MixBridgeSignature(hash, destinations.Count);
+            foreach (int cell in destinations) hash = MixBridgeSignature(hash, cell);
+            hash = MixBridgeSignature(hash, sources.Count);
+            foreach (int cell in sources) hash = MixBridgeSignature(hash, cell);
+            return hash;
         }
 
         private List<int> BridgeDestinations(uint faction, bool includeKnownEnemyCore)
@@ -1372,10 +1458,12 @@ namespace Rts.Simulation
         private int[] BridgeRouteBaseline(List<int> sources, List<int> destinations, bool[] basePassable)
         {
             var without = new int[sources.Count * destinations.Count];
-            for (int s = 0; s < sources.Count; s++)
-                for (int d = 0; d < destinations.Count; d++)
-                    without[s * destinations.Count + d] = sources[s] == destinations[d] ? 0
-                        : BridgeRouteLength(sources[s], destinations[d], basePassable, null, null);
+            for (int d = 0; d < destinations.Count; d++)
+            {
+                var distances = BridgeDistanceMapFor(destinations[d], basePassable, bridgeRouteWorkspace2);
+                for (int s = 0; s < sources.Count; s++)
+                    without[s * destinations.Count + d] = distances[sources[s]];
+            }
             return without;
         }
 

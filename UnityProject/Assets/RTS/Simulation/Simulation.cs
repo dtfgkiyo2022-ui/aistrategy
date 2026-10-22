@@ -54,6 +54,24 @@ namespace Rts.Simulation
         internal long LastCavalryRouteCellsVisited;
         internal long LastCavalryAlternativeRouteCellsVisited;
 
+        // Placement-search diagnostics. These counters are observer-only and never participate in decisions or hashes.
+        private long placementSiteCandidatesInspected;
+        private long placementSiteClearChecks;
+        private long placementConnectivityChecks;
+        private long placementConnectivityCacheHits;
+        private long placementConnectivityVisitedCells;
+
+        // KeepsMapConnected runs on the same map thread as the simulation. Reuse its scratch space so rejected
+        // placement candidates do not allocate two map-sized arrays each time.
+        private int[] placementConnectivitySeen;
+        private int[] placementConnectivityQueue;
+        private int[] placementConnectivityClosed;
+        private int placementConnectivityStamp;
+        private int placementConnectivityCacheVersion = -1;
+        private bool placementConnectivityCacheEnabled = true;
+        private readonly Dictionary<(uint Faction, int Origin, int Size), bool> placementConnectivityCache
+            = new Dictionary<(uint, int, int), bool>();
+
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.
         private readonly bool useLegacySpatialCombatIndex;
@@ -63,6 +81,11 @@ namespace Rts.Simulation
         internal long VisibilityChangedSoldiers => visibilityChangedSoldiers;
         internal long VisibilityProcessedCells => visibilityProcessedCells;
         internal int MovedSoldiers => movedSoldiers;
+        internal long PlacementSiteCandidatesInspected => placementSiteCandidatesInspected;
+        internal long PlacementSiteClearChecks => placementSiteClearChecks;
+        internal long PlacementConnectivityChecks => placementConnectivityChecks;
+        internal long PlacementConnectivityCacheHits => placementConnectivityCacheHits;
+        internal long PlacementConnectivityVisitedCells => placementConnectivityVisitedCells;
 
         /// <summary>
         /// Debug re-run only (chapter 13.3): receives the phase ordinal, its name and the SHA-256 of the canonical

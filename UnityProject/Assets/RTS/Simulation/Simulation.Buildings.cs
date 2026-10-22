@@ -436,13 +436,20 @@ namespace Rts.Simulation
             }
             int index = existingIndex >= 0 ? existingIndex : world.BuildingCount;
             if (existingIndex < 0 && index == world.Buildings.Length) Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
-            var footprint = kind == BuildingKind.Bridge ? bridgeCells
-                : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind));
+            int[] footprint = null;
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.Footprint", () =>
+                footprint = kind == BuildingKind.Bridge ? bridgeCells
+                    : kind == BuildingKind.Tollgate ? TollgateFootprint(origin, facing) : Footprint(origin, SizeOf(kind)));
             if (footprint == null || footprint.Length == 0) return;
-            foreach (int cell in footprint) world.Map.SetPassable(cell, false);
-            int workCell = requestedWorkCell >= 0 ? requestedWorkCell
-                : kind == BuildingKind.Town ? NearestReachablePassableCell(FootprintCenter(origin, SizeOf(kind)), faction)
-                : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind)));
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.CloseTerrain", () =>
+            {
+                foreach (int cell in footprint) world.Map.SetPassable(cell, false);
+            });
+            int workCell = -1;
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.WorkCell", () =>
+                workCell = requestedWorkCell >= 0 ? requestedWorkCell
+                    : kind == BuildingKind.Town ? NearestReachablePassableCell(FootprintCenter(origin, SizeOf(kind)), faction)
+                    : NearestPassableCell(kind == BuildingKind.Bridge ? BridgeCenter(bridgeCells) : FootprintCenter(origin, SizeOf(kind))));
             uint buildingId = existingIndex >= 0 ? world.Buildings[index].Id : world.NextBuildingId;
             world.Buildings[index] = new BuildingState { Id = buildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
@@ -457,9 +464,9 @@ namespace Rts.Simulation
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
             else if (kind == BuildingKind.Quarry) world.Buildings[index].Interval = world.Config.Economy.QuarryIntervalTicks;
-            EvacuateFootprint(footprint);
-            TerrainChanged();
-            AssignBuilders(ref world.Buildings[index]);
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.Evacuate", () => EvacuateFootprint(footprint));
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.TerrainChanged", TerrainChanged);
+            MeasureSubphase("AI.DecideEconomy.PlaceBuilding.AssignBuilders", () => AssignBuilders(ref world.Buildings[index]));
         }
 
         private void RefundBuilding(uint faction, ref BuildingState building)
@@ -709,6 +716,8 @@ namespace Rts.Simulation
                         int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
+                        placementSiteCandidatesInspected++;
+                        placementSiteClearChecks++;
                         if (SiteIsClear(origin, core, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
@@ -720,16 +729,37 @@ namespace Rts.Simulation
             {
                 if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
                 if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
-                foreach (var node in world.Nodes)
-                    if (Chebyshev(cell, world.Map.Cell(node.Definition.Position)) < NodeClearanceCells) return false;
-                for (int i = 0; i < world.BuildingCount; i++)
-                {
-                    if (!world.Buildings[i].Alive) continue;
-                    foreach (int other in Footprint(world.Buildings[i]))
-                        if (Chebyshev(cell, other) < buildingClearanceCells) return false;
-                }
+            }
+            return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
+        }
+
+        /// <summary>
+        /// The node and building clearance of a square footprint, measured once per node and per building cell against the
+        /// footprint rectangle instead of once per footprint cell (freeze3). The answer is the same as comparing every pair
+        /// of cells: the Chebyshev distance from a point to a rectangle is the smallest distance to any of its cells.
+        /// Nothing is cached, so reservations, belts and buildings placed earlier in the same tick are always seen.
+        /// </summary>
+        private bool ClearOfNodesAndBuildings(int origin, int size, int buildingClearanceCells)
+        {
+            int width = world.Config.Map.WidthCells;
+            int x0 = origin % width, z0 = origin / width, x1 = x0 + size - 1, z1 = z0 + size - 1;
+            foreach (var node in world.Nodes)
+                if (RectangleDistance(x0, z0, x1, z1, world.Map.Cell(node.Definition.Position), width) < NodeClearanceCells) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                if (!world.Buildings[i].Alive) continue;
+                foreach (int other in Footprint(world.Buildings[i]))
+                    if (RectangleDistance(x0, z0, x1, z1, other, width) < buildingClearanceCells) return false;
             }
             return true;
+        }
+
+        private static int RectangleDistance(int x0, int z0, int x1, int z1, int cell, int width)
+        {
+            int x = cell % width, z = cell / width;
+            int dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+            int dz = z < z0 ? z0 - z : z > z1 ? z - z1 : 0;
+            return Math.Max(dx, dz);
         }
 
         private bool ManualPlacementPortsAreClear(BuildingKind kind, int origin, int size, Facing facing)
@@ -770,16 +800,8 @@ namespace Rts.Simulation
                 if (LargeEconomyOn && !world.Factions[faction - 1].ExploredCells[cell]) return false;
                 if (!world.Map.IsPassable(cell) || IsRiverCell(cell)) return false;
                 if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
-                foreach (var node in world.Nodes)
-                    if (Chebyshev(cell, world.Map.Cell(node.Definition.Position)) < NodeClearanceCells) return false;
-                for (int i = 0; i < world.BuildingCount; i++)
-                {
-                    if (!world.Buildings[i].Alive) continue;
-                    foreach (int other in Footprint(world.Buildings[i]))
-                        if (Chebyshev(cell, other) < BuildingClearanceCells) return false;
-                }
             }
-            return true;
+            return ClearOfNodesAndBuildings(origin, size, BuildingClearanceCells);
         }
 
         private int FindTownSite(uint faction, int centre)
@@ -795,6 +817,8 @@ namespace Rts.Simulation
                         int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
                         if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
                         int origin = z0 * width + x0;
+                        placementSiteCandidatesInspected++;
+                        placementSiteClearChecks++;
                         if (TownSiteIsClear(faction, origin, size) && KeepsMapConnected(faction, origin, size)) return origin;
                     }
             return -1;
@@ -806,52 +830,124 @@ namespace Rts.Simulation
         /// </summary>
         private bool KeepsMapConnected(uint faction, int origin, int size)
         {
+            int passableVersion = world.Map.PassableVersion;
+            if (placementConnectivityCacheVersion != passableVersion)
+            {
+                placementConnectivityCache.Clear();
+                placementConnectivityCacheVersion = passableVersion;
+            }
+            var key = (faction, origin, size);
+            if (placementConnectivityCacheEnabled && placementConnectivityCache.TryGetValue(key, out bool cached))
+            {
+                placementConnectivityCacheHits++;
+                return cached;
+            }
+
+            placementConnectivityChecks++;
             int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells, width = world.Config.Map.WidthCells;
-            var closed = new bool[cells];
-            foreach (int cell in Footprint(origin, size)) closed[cell] = true;
-            var seen = new bool[cells];
-            var queue = new int[cells];
+            if (placementConnectivitySeen == null || placementConnectivitySeen.Length != cells)
+            {
+                placementConnectivitySeen = new int[cells];
+                placementConnectivityQueue = new int[cells];
+                placementConnectivityClosed = new int[cells];
+                placementConnectivityStamp = 0;
+            }
+            int stamp = ++placementConnectivityStamp;
+            if (stamp <= 0)
+            {
+                Array.Clear(placementConnectivitySeen, 0, placementConnectivitySeen.Length);
+                placementConnectivityStamp = stamp = 1;
+            }
+            int[] footprint = Footprint(origin, size);
             int head = 0, tail = 0, start = world.Map.Cell(OwnCore(faction).Definition.Position);
-            if (!world.Map.IsPassable(start) || closed[start]) return false;
-            queue[tail++] = start; seen[start] = true;
+            for (int i = 0; i < footprint.Length; i++) placementConnectivityClosed[footprint[i]] = stamp;
+            if (!world.Map.IsPassable(start) || placementConnectivityClosed[start] == stamp)
+            {
+                placementConnectivityCache[key] = false;
+                return false;
+            }
+            placementConnectivityQueue[tail++] = start; placementConnectivitySeen[start] = stamp;
             while (head < tail)
             {
-                int cell = queue[head++], x = cell % width;
+                int cell = placementConnectivityQueue[head++], x = cell % width;
                 Visit(cell + width); if (x + 1 < width) Visit(cell + 1); Visit(cell - width); if (x > 0) Visit(cell - 1);
             }
+            placementConnectivityVisitedCells += tail;
+            bool result = Reached(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position);
+            if (result)
+                foreach (var post in world.Outposts)
+                    if (!Reached(post.Definition.Position)) { result = false; break; }
+            if (result)
+                foreach (var node in world.Nodes)
+                {
+                    int c = world.Map.Cell(node.Definition.Position);
+                    if (c < 0) { result = false; break; }
+                    if (placementConnectivityClosed[c] == stamp || !world.Map.IsPassable(c)) continue;
+                    if (!Reached(node.Definition.Position)) { result = false; break; }
+                }
+            if (placementConnectivityCacheEnabled) placementConnectivityCache[key] = result;
+            return result;
+
             void Visit(int next)
             {
-                if (next < 0 || next >= cells || seen[next] || closed[next] || !world.Map.IsPassable(next)) return;
-                seen[next] = true; queue[tail++] = next;
+                if (next < 0 || next >= cells || placementConnectivitySeen[next] == stamp
+                    || placementConnectivityClosed[next] == stamp || !world.Map.IsPassable(next)) return;
+                placementConnectivitySeen[next] = stamp; placementConnectivityQueue[tail++] = next;
             }
-            if (!Reached(world.Cores[world.Factions[2 - faction].CoreId - 1].Definition.Position)) return false;
-            foreach (var post in world.Outposts) if (!Reached(post.Definition.Position)) return false;
-            foreach (var node in world.Nodes)
-            {
-                int c = world.Map.Cell(node.Definition.Position);
-                if (c < 0) return false;
-                if (closed[c] || !world.Map.IsPassable(c)) continue;
-                if (!seen[c]) return false;
-            }
-            return true;
-            bool Reached(SimPoint p) { int c = world.Map.Cell(p); return c >= 0 && seen[c]; }
+            bool Reached(SimPoint p) { int c = world.Map.Cell(p); return c >= 0 && placementConnectivitySeen[c] == stamp; }
+        }
+
+        private static bool ContainsCell(int[] cells, int value)
+        {
+            for (int i = 0; i < cells.Length; i++) if (cells[i] == value) return true;
+            return false;
+        }
+
+        /// <summary>Test-only comparison of placement search with and without the connectivity-result cache.</summary>
+        internal int FindSiteForTest(uint faction, int size, bool useConnectivityCache)
+        {
+            bool previous = placementConnectivityCacheEnabled;
+            placementConnectivityCacheEnabled = useConnectivityCache;
+            try { return FindSite(faction, size); }
+            finally { placementConnectivityCacheEnabled = previous; }
+        }
+
+        /// <summary>Test-only probe for cache reuse and PassableVersion invalidation.</summary>
+        internal bool ProbePlacementConnectivityForTest(uint faction, int origin, int size, bool useConnectivityCache)
+        {
+            bool previous = placementConnectivityCacheEnabled;
+            placementConnectivityCacheEnabled = useConnectivityCache;
+            try { return KeepsMapConnected(faction, origin, size); }
+            finally { placementConnectivityCacheEnabled = previous; }
         }
 
         /// <summary>Anyone standing on a new footprint steps to the nearest free cell (distance, then cell id).</summary>
         private void EvacuateFootprint(int[] footprint)
         {
+            var nearestByPosition = new Dictionary<(long X, long Z), int>();
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
                 if (!s.Alive || Array.IndexOf(footprint, world.Map.Cell(s.Position)) < 0) continue;
-                s.Position = s.MoveGoal = world.Map.Center(NearestPassableCell(s.Position));
+                int destination = NearestPassableCellCached(s.Position, nearestByPosition);
+                s.Position = s.MoveGoal = world.Map.Center(destination);
             }
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 ref var v = ref world.Villagers[i];
                 if (!v.Alive || Array.IndexOf(footprint, world.Map.Cell(v.Position)) < 0) continue;
-                v.Position = v.MoveGoal = world.Map.Center(NearestPassableCell(v.Position));
+                int destination = NearestPassableCellCached(v.Position, nearestByPosition);
+                v.Position = v.MoveGoal = world.Map.Center(destination);
             }
+        }
+
+        private int NearestPassableCellCached(SimPoint from, Dictionary<(long X, long Z), int> cache)
+        {
+            var key = (from.X.Raw, from.Z.Raw);
+            if (cache.TryGetValue(key, out int destination)) return destination;
+            destination = NearestPassableCell(from);
+            cache.Add(key, destination);
+            return destination;
         }
 
         /// <summary>Every route was planned on the old terrain: armies, soldiers' local routes and villagers plan again.</summary>

@@ -59,10 +59,14 @@ namespace Rts.Simulation
         private void DecideHouse(uint faction)
         {
             // Saving to advance comes first: the base that makes it save already has its villagers.
-            if (!AgesOn || SavingToAdvance(faction)) return;
+            if (!AgesOn) return;
+            bool saving = false;
+            MeasureSubphase("AI.DecideEconomy.DecideHouse.SavingToAdvance", () => saving = SavingToAdvance(faction));
+            if (saving) return;
             var rules = world.Config.Economy;
             ref var economy = ref world.Economies[faction - 1];
-            int cap = PopCapFor(faction);
+            int cap = 0;
+            MeasureSubphase("AI.DecideEconomy.DecideHouse.PopCap", () => cap = PopCapFor(faction));
             int ceiling = ScaledHousingCeiling(faction, economy.Age);
             bool metropolis = MetropolisAllowed(faction);
             BuildingKind kind = metropolis ? BuildingKind.GrandHouse : BuildingKind.House;
@@ -73,14 +77,23 @@ namespace Rts.Simulation
             // S-4b: several barracks and a larger villager target fill the cap faster, so the scaled economy starts the
             // next house earlier. Waiting for the villager target here froze the population at the base cap.
             if (population + (EconomyScaleOn ? ScaledHouseMargin : HouseMargin) < cap) return;
-            for (int i = 0; i < world.BuildingCount; i++)
+            bool alreadyPlanned = false;
+            MeasureSubphase("AI.DecideEconomy.DecideHouse.Existing", () =>
             {
-                var b = world.Buildings[i];
-                if (IsPlannedBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind) return; // one is on its way
-            }
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var b = world.Buildings[i];
+                    if (IsPlannedBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind)
+                    { alreadyPlanned = true; return; } // one is on its way
+                }
+            });
+            if (alreadyPlanned) return;
             int searchRadius = EconomyScaleOn ? Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells) : SiteSearchRadiusCells;
-            int origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius);
-            if (origin >= 0) PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
+            int origin = -1;
+            MeasureSubphase("AI.DecideEconomy.DecideHouse.FindSite", () =>
+                origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius));
+            if (origin >= 0)
+                MeasureSubphase("AI.DecideEconomy.DecideHouse.Place", () => PlaceBuildingAt(faction, kind, origin, Facing.North, 0));
         }
     }
 }
