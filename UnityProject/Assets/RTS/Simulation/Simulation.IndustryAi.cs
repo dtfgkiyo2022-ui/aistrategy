@@ -79,6 +79,7 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree1", DecideCraftTree1, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
             if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
             {
@@ -422,6 +423,31 @@ namespace Rts.Simulation
             }
         }
 
+        private void DecideCraftTree4(uint faction)
+        {
+            if (!CraftTree4Allowed(faction)) return;
+            int assemblerIndex = OwnBuildingIndex(faction, BuildingKind.Assembler);
+            if (assemblerIndex < 0) return;
+            ref var assembler = ref world.Buildings[assemblerIndex];
+            if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.Timer != 0) return;
+            RecipeKind wanted = PreferredCraftTree4Recipe(faction);
+            if (wanted != RecipeKind.None && assembler.Recipe != wanted)
+                SetAssemblerRecipe(faction, assembler.Id, wanted);
+        }
+
+        private RecipeKind PreferredCraftTree4Recipe(uint faction)
+        {
+            var e = world.Economies[faction - 1];
+            var r = world.Config.Economy;
+            if (e.SiegeParts >= r.SiegeEngineSiegePartsInput && e.Mechanism >= r.SiegeEngineMechanismInput)
+                return RecipeKind.SiegeEngine;
+            if (e.ArmsKit >= r.EliteKitArmsKitInput && e.Mechanism >= r.EliteKitMechanismInput && e.Metal >= r.EliteKitMetalInput)
+                return RecipeKind.EliteKit;
+            if (e.SiegeParts > 0 || e.Mechanism > 0) return RecipeKind.SiegeEngine;
+            if (e.ArmsKit > 0) return RecipeKind.EliteKit;
+            return RecipeKind.SiegeEngine;
+        }
+
         private RecipeKind PreferredAssemblerRecipe(uint faction)
             => PreferredCraftTree3Recipe(faction);
 
@@ -461,6 +487,10 @@ namespace Rts.Simulation
                     && economy.CutStone >= rules.MechanismCutStoneInput;
             if (recipe == RecipeKind.SiegeParts)
                 return economy.Frames >= rules.SiegePartsFramesInput && economy.ArmsKit >= rules.SiegePartsArmsKitInput;
+            if (recipe == RecipeKind.SiegeEngine)
+                return economy.SiegeParts >= rules.SiegeEngineSiegePartsInput && economy.Mechanism >= rules.SiegeEngineMechanismInput;
+            if (recipe == RecipeKind.EliteKit)
+                return economy.ArmsKit >= rules.EliteKitArmsKitInput && economy.Mechanism >= rules.EliteKitMechanismInput && economy.Metal >= rules.EliteKitMetalInput;
             return false;
         }
 

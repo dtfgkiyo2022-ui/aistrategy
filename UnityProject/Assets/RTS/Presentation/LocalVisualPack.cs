@@ -199,6 +199,13 @@ namespace Rts.Presentation
                     new TieredUnitSpec("machines/TT_Ram_lvl3.prefab", 3.4f, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX"))
                 }
             },
+            { UnitKind.Cannon, new[]
+                {
+                    new TieredUnitSpec("machines/TT_Catapult_lvl1.prefab", 3.6f, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX")),
+                    new TieredUnitSpec("machines/TT_Catapult_lvl2.prefab", 3.6f, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX")),
+                    new TieredUnitSpec("machines/TT_Catapult_lvl3.prefab", 3.6f, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX"))
+                }
+            },
             { UnitKind.Monk, new[]
                 {
                     new TieredUnitSpec("TT_Priest.prefab", 2.4f, new AnimationSpec("animation_infantry/Staff/staff_01_idle.FBX", "animation_infantry/Staff/staff_02_walk.FBX", "animation_infantry/Staff/staff_04_attack_A.FBX")),
@@ -220,6 +227,7 @@ namespace Rts.Presentation
             { UnitKind.HeavyCavalry, new UnitSpec("TT_Mounted_Paladin.prefab", 3.0f) },
             { UnitKind.LightCavalry, new UnitSpec("TT_Light_Cavalry.prefab", 2.8f) },
             { UnitKind.Ram, new UnitSpec("machines/TT_Ram_lvl1.prefab", 3.4f) },
+            { UnitKind.Cannon, new UnitSpec("machines/TT_Catapult_lvl1.prefab", 3.6f) },
             { UnitKind.Mercenary, new UnitSpec("TT_HeavySwordman.prefab", 2.6f) },
             { UnitKind.Monk, new UnitSpec("TT_Priest.prefab", 2.4f) },
             { UnitKind.HeavyInfantry, new UnitSpec("TT_Heavy_Infantry.prefab", 2.6f) },
@@ -242,7 +250,8 @@ namespace Rts.Presentation
             { UnitKind.Cavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
             { UnitKind.HeavyCavalry, new AnimationSpec("animation_cavalry/cavalry/cavalry_01_idle.FBX", "animation_cavalry/cavalry/cavalry_02_walk.FBX", "animation_cavalry/cavalry/cavalry_04_attack.FBX") },
             { UnitKind.LightCavalry, new AnimationSpec("animation_cavalry/cavalry_spear_A/cav_spear_A_01_idle.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_02_walk.FBX", "animation_cavalry/cavalry_spear_A/cav_spear_A_04_attack.FBX") },
-            { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") }
+            { UnitKind.Ram, new AnimationSpec("animation_machines/Ram/ram_01_idle.FBX", "animation_machines/Ram/ram_02_move.FBX", "animation_machines/Ram/ram_03_attack.FBX") },
+            { UnitKind.Cannon, new AnimationSpec("animation_machines/Catapult/catapult_01_idle.FBX", "animation_machines/Catapult/catapult_02_move.FBX", "animation_machines/Catapult/catapult_03_attack.FBX") }
         };
 
         private static readonly Dictionary<string, AnimationClip> animationClips = new Dictionary<string, AnimationClip>();

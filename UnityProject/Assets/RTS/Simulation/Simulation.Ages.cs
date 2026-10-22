@@ -57,6 +57,7 @@ namespace Rts.Simulation
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
         private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
         private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
+        private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -78,6 +79,11 @@ namespace Rts.Simulation
 
         private bool SanctuaryOn => AgesOn && world.Config.Economy.Sanctuary;
 
+        private bool AgeStrengthsOn => AgeFourOn && world.Config.Economy.AgeStrengths;
+
+        private bool AgeStrength(uint faction, CivKind civ, int age)
+            => AgeStrengthsOn && world.Economies[faction - 1].Civ == civ && world.Economies[faction - 1].Age >= age;
+
         private bool FishingOn => AgesOn && world.Config.Economy.FishingCiv && world.Config.Economy.FishingEnabled;
 
         /// <summary>S-3: towns are a shared second-age expansion, independent of civilisation.</summary>
@@ -85,6 +91,9 @@ namespace Rts.Simulation
 
         private bool TownsAllowed(uint faction)
             => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (LargeEconomyOn ? world.Config.Economy.LargeTownMinAge : 2);
+
+        private int TownLimitFor(uint faction)
+            => checked(world.Config.Economy.TownMaxBuildings + (AgeStrength(faction, CivKind.Metropolis, 3) ? world.Config.Economy.MetropolisTownLimitBonus : 0));
 
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
@@ -139,6 +148,9 @@ namespace Rts.Simulation
 
         private bool CraftTree3Allowed(uint faction)
             => CraftTree3On && world.Economies[faction - 1].Age >= 3;
+
+        private bool CraftTree4Allowed(uint faction)
+            => CraftTree4On && world.Economies[faction - 1].Age >= 4;
 
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;
@@ -206,7 +218,16 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int ticks = LargeEconomyOn ? rules.LargeVillagerTrainTicks
                 : MetropolisAllowed(faction) ? checked(rules.VillagerTrainTicks * 2 / 3) : rules.VillagerTrainTicks;
-            return useTool && ToolsAllowed(faction) ? Math.Max(1, checked((ticks * rules.ToolVillagerTicksPermille + 999) / 1000)) : ticks;
+            if (useTool && ToolsAllowed(faction))
+                ticks = Math.Max(1, checked((ticks * (AgeStrength(faction, CivKind.Metropolis, 4) ? rules.MetropolisToolTimePermille : rules.ToolVillagerTicksPermille) + 999) / 1000));
+            return ticks;
+        }
+
+        private int TownVillagerTrainTicksFor(uint faction, bool useTool)
+        {
+            int ticks = VillagerTrainTicksFor(faction, useTool);
+            return AgeStrength(faction, CivKind.Metropolis, 2)
+                ? Math.Max(1, checked((ticks * world.Config.Economy.MetropolisVillagerTimePermille + 999) / 1000)) : ticks;
         }
 
         private bool CanUseToolForVillager(uint faction)
@@ -244,7 +265,8 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             ref var s = ref world.Soldiers[index];
             s.Parameters.Hp = rules.ForgedInfantryHp;
-            s.Parameters.Damage = rules.ForgedInfantryDamage;
+            s.Parameters.Damage = checked(rules.ForgedInfantryDamage
+                + (AgeStrength(faction, CivKind.Metallurgy, 3) ? rules.MetallurgyForgedDamageBonus : 0));
             s.Hp = rules.ForgedInfantryHp;
             s.Initial.Hp = rules.ForgedInfantryHp;
         }
@@ -276,7 +298,9 @@ namespace Rts.Simulation
                     if (terrain.Length != 0 && terrain[cell] == (byte)TerrainKind.River && InRange(world.Map.Center(cell), centre, Fix64.FromInt(rules.FarmRiverReach))) river = true;
                 }
             if (river) steps++;
-            return System.Math.Max(rules.FarmMinTicks, rules.FarmBaseTicks - rules.FarmStepTicks * steps);
+            int result = System.Math.Max(rules.FarmMinTicks, rules.FarmBaseTicks - rules.FarmStepTicks * steps);
+            return AgeStrength(faction, CivKind.Agrarian, 2)
+                ? System.Math.Max(1, checked((result * rules.AgrarianFarmSpeedPermille + 999) / 1000)) : result;
         }
 
         /// <summary>
@@ -424,8 +448,79 @@ namespace Rts.Simulation
                 ref var e = ref world.Economies[f];
                 if (e.AdvanceRemaining == 0) continue;
                 if (--e.AdvanceRemaining > 0) continue;
+                uint faction = (uint)f + 1;
                 CompleteAdvance(ref e, e.AdvancingTo);
+                ApplyAgeStrengthsAtAdvance(faction);
             }
+        }
+
+        private void ApplyAgeStrengthsAtAdvance(uint faction)
+        {
+            if (!AgeStrengthsOn) return;
+            var e = world.Economies[faction - 1];
+            int ageBit = 1 << e.Age;
+            if ((ageStrengthsApplied[faction - 1] & ageBit) != 0) return;
+            ageStrengthsApplied[faction - 1] = (byte)(ageStrengthsApplied[faction - 1] | ageBit);
+            var rules = world.Config.Economy;
+            if (e.Civ == CivKind.Masonry && e.Age >= 4)
+            {
+                ref var core = ref world.Cores[world.Factions[faction - 1].CoreId - 1];
+                int oldMax = core.Definition.Hp;
+                int newMax = checked(oldMax * rules.MasonryCoreHpPermille / 1000);
+                core.Definition.Hp = newMax;
+                core.Hp = ScaleHp(core.Hp, oldMax, newMax);
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var building = ref world.Buildings[i];
+                if (!IsActualBuilding(building) || building.FactionId != faction) continue;
+                int oldMax = BaseBuildingHpForStrength(building, e.Civ, e.Age - 1);
+                int newMax = MaxHpOf(building);
+                if (newMax != oldMax && oldMax > 0) building.Hp = ScaleHp(building.Hp, oldMax, newMax);
+            }
+            for (int i = 0; i < world.SoldierCount; i++)
+            {
+                ref var soldier = ref world.Soldiers[i];
+                if (!soldier.Alive || soldier.Initial.FactionId != faction) continue;
+                if (e.Civ == CivKind.Metallurgy && e.Age == 3 && soldier.Initial.Kind == UnitKind.Infantry)
+                    soldier.Parameters.Damage = checked(soldier.Parameters.Damage + rules.MetallurgyForgedDamageBonus);
+                if (e.Civ == CivKind.Forestry && e.Age == 3 && soldier.Initial.Kind == UnitKind.Archer)
+                    soldier.Parameters.Range = Fix64.FromRaw(checked(soldier.Parameters.Range.Raw + Fix64.FromInt(rules.ForestryArcherRangeBonus).Raw));
+                if (e.Civ == CivKind.Mountain && e.Age == 4 && soldier.Initial.Kind == UnitKind.Mercenary)
+                    soldier.Parameters.Damage = checked(soldier.Parameters.Damage + rules.MountainMercenaryDamageBonus);
+                if (e.Civ == CivKind.Cavalry && e.Age == 4 && soldier.Initial.Kind == UnitKind.HeavyCavalry)
+                    ScaleSoldierHp(ref soldier, rules.CavalryHeavyHpPermille);
+                if (e.Civ == CivKind.Cult && e.Age == 4 && soldier.Initial.Kind == UnitKind.Monk)
+                    ScaleSoldierHp(ref soldier, rules.CultMonkHpPermille);
+                if (e.Civ == CivKind.Cavalry && e.Age == 3
+                    && (soldier.Initial.Kind == UnitKind.Cavalry || soldier.Initial.Kind == UnitKind.LightCavalry || soldier.Initial.Kind == UnitKind.HeavyCavalry))
+                {
+                    soldier.Parameters.Speed = Fix64.FromRaw(checked(soldier.Parameters.Speed.Raw * rules.CavalrySpeedPermille / 1000));
+                    soldier.StepDistance = Fix64.FromRaw(soldier.Parameters.Speed.Raw / 20);
+                }
+            }
+        }
+
+        private int BaseBuildingHpForStrength(BuildingState building, CivKind civ, int age)
+        {
+            int hp = HpOf(building.Kind, building.FactionId, building.OriginCell);
+            if (civ == CivKind.Masonry && age >= 2 && building.Kind == BuildingKind.Wall)
+                hp = checked(hp * 1000 / world.Config.Economy.MasonryWallHpPermille);
+            if (civ == CivKind.Tollgate && age >= 3 && building.Kind == BuildingKind.Tollgate)
+                hp = checked(hp * 1000 / world.Config.Economy.TollgateHpPermille);
+            return hp;
+        }
+
+        private static int ScaleHp(int hp, int oldMax, int newMax)
+            => oldMax <= 0 ? hp : checked((hp * newMax + oldMax / 2) / oldMax);
+
+        private static void ScaleSoldierHp(ref SoldierState soldier, int permille)
+        {
+            int oldMax = soldier.Parameters.Hp;
+            int newMax = checked(oldMax * permille / 1000);
+            soldier.Parameters.Hp = newMax;
+            soldier.Hp = ScaleHp(soldier.Hp, oldMax, newMax);
+            soldier.Initial.Hp = newMax;
         }
 
         /// <summary>

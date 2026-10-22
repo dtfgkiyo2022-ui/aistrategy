@@ -60,10 +60,12 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree1-off")) scenario.Economy.CraftTree1 = false;
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
+        if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
         {
             scenario.Economy.AgeFour = false;
+            scenario.Economy.AgeStrengths = false;
             scenario.Economy.AgeClockTicks1 = 4800;
             scenario.Economy.AgeClockTicks2 = 10800;
             scenario.Economy.AgeClockTicks3 = 15600;
@@ -171,6 +173,7 @@ internal static class TacticMatchCommand
         var priorAges = new Dictionary<uint, int>();
         var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
         var latePushAdvantageTicks = new Dictionary<uint, long> { [1] = -1, [2] = -1 };
+        int[] peakSoldiers = { 0, 0 };
         priorAges[1] = simulation.Capture(1).Economy?.Age ?? 0;
         priorAges[2] = simulation.Capture(2).Economy?.Age ?? 0;
         if (options.TryGetValue("--age-trace-out", out var ageTracePath))
@@ -205,6 +208,11 @@ internal static class TacticMatchCommand
             int gc1Before = timingWriter == null ? 0 : GC.CollectionCount(1);
             int gc2Before = timingWriter == null ? 0 : GC.CollectionCount(2);
             gateway.Step();
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int soldiers = simulation.Capture(faction).Observation.OwnArmies.Sum(a => a.AliveCount);
+                if (soldiers > peakSoldiers[faction - 1]) peakSoldiers[faction - 1] = soldiers;
+            }
             for (uint faction = 1; faction <= 2; faction++)
             {
                 int age = simulation.Capture(faction).Economy?.Age ?? 0;
@@ -426,6 +434,18 @@ internal static class TacticMatchCommand
                 + " villagers=" + CountOwnVillagers(economy).ToString(CultureInfo.InvariantCulture)
                 + " beltCells=" + economy.Belts.Count.ToString(CultureInfo.InvariantCulture)
                 + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
+            Console.WriteLine("craft4: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " assemblers=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler).ToString(CultureInfo.InvariantCulture)
+                + " siegeParts=" + economy.SiegeParts.ToString(CultureInfo.InvariantCulture)
+                + " mechanism=" + economy.Mechanism.ToString(CultureInfo.InvariantCulture)
+                + " siegeEngine=" + economy.SiegeEngine.ToString(CultureInfo.InvariantCulture)
+                + " siegeEngineProduced=" + economy.SiegeEngineProduced.ToString(CultureInfo.InvariantCulture)
+                + " siegeEngineConsumed=" + economy.SiegeEngineConsumed.ToString(CultureInfo.InvariantCulture)
+                + " eliteKit=" + economy.EliteKit.ToString(CultureInfo.InvariantCulture)
+                + " eliteKitProduced=" + economy.EliteKitProduced.ToString(CultureInfo.InvariantCulture)
+                + " eliteKitConsumed=" + economy.EliteKitConsumed.ToString(CultureInfo.InvariantCulture)
+                + " cannonProduced=" + economy.CannonProduced.ToString(CultureInfo.InvariantCulture)
+                + " peakSoldiers=" + peakSoldiers[faction - 1].ToString(CultureInfo.InvariantCulture));
         }
         return result.IsFault ? 4 : 0;
     }

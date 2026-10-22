@@ -95,6 +95,7 @@ namespace Rts.Simulation
                     nearbyGates++;
                 }
                 int multiplier = checked(1000 + nearbyGates * (HasTech(gate.FactionId, TollgateTech.GateNetwork) ? rules.TollgateNetworkFeeBonusPermille : 0));
+                if (AgeStrength(gate.FactionId, CivKind.Tollgate, 2)) multiplier = checked(multiplier * rules.TollgateFeePermille / 1000);
                 ref var economy = ref world.Economies[gate.FactionId - 1];
                 economy.Wood = checked(economy.Wood + checked(enemyCount * rules.TollgateWoodPerEnemy * multiplier / 1000));
                 economy.Food = checked(economy.Food + checked(enemyCount * rules.TollgateFoodPerEnemy * multiplier / 1000));

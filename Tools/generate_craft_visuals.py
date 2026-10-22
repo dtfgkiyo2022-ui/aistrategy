@@ -27,6 +27,7 @@ GOODS_COLORS = {
     "CutStone": (168, 170, 176), "Frames": (196, 150, 92),
     "ArmsKit": (150, 92, 64), "FineArmsKit": (96, 128, 170), "Scholarly": (112, 86, 150),
     "SiegeParts": (120, 96, 70), "Mechanism": (176, 150, 70),
+    "SiegeEngine": (98, 74, 58), "EliteKit": (150, 120, 190),
 }
 
 
@@ -116,6 +117,17 @@ def draw_goods(name, color):
             draw.rectangle((x - 3, y - 3, x + 3, y + 3), fill=dark)
         draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=dark, outline=light, width=2)
         draw.ellipse((cx - 5, cy - 5, cx + 5, cy + 5), fill=light)
+    elif name == "SiegeEngine":
+        # A throwing arm on two wheels.
+        draw.rectangle((14, 38, 50, 44), fill=dark, outline=light, width=2)
+        draw.ellipse((14, 40, 26, 52), fill=dark, outline=light, width=2)
+        draw.ellipse((38, 40, 50, 52), fill=dark, outline=light, width=2)
+        draw.line((24, 40, 46, 16), fill=light, width=4)
+        draw.ellipse((42, 11, 52, 21), fill=dark, outline=light, width=2)
+    elif name == "EliteKit":
+        # A shield with a star.
+        draw.polygon((32, 12, 49, 19, 46, 40, 32, 52, 18, 40, 15, 19), fill=dark, outline=light)
+        draw.polygon((32, 21, 35, 29, 43, 29, 37, 34, 39, 42, 32, 37, 25, 42, 27, 34, 21, 29, 29, 29), fill=light)
     elif name == "Tools":
         draw.line((18, 43, 43, 18), fill=light, width=6)
         draw.ellipse((13, 36, 27, 50), fill=dark, outline=light, width=2)

@@ -149,7 +149,8 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             int damage = kind == BuildingKind.Castle ? rules.CastleDamage : rules.TowerDamage;
-            return damage + (HasTech(faction, TechKind.Masonry) ? rules.MasonryTowerDamage : 0);
+            return damage + (HasTech(faction, TechKind.Masonry) ? rules.MasonryTowerDamage : 0)
+                + (AgeStrength(faction, CivKind.Masonry, 3) && kind == BuildingKind.Tower ? rules.MasonryTowerDamageBonus : 0);
         }
 
         /// <summary>A building that shoots: the tower, and since 32 #17 the castle.</summary>

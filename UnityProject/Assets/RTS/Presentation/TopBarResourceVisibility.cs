@@ -33,7 +33,9 @@ namespace Rts.Presentation
             Scholarly,
             FineArmsKit,
             SiegeParts,
-            Mechanism
+            Mechanism,
+            SiegeEngine,
+            EliteKit
         }
 
         public readonly struct ResourceEntry
@@ -165,6 +167,8 @@ namespace Rts.Presentation
 
         public static bool ShowSiegeParts(EconomyView economy) => economy != null && economy.CraftTree3Enabled && economy.SiegeParts > 0;
         public static bool ShowMechanism(EconomyView economy) => economy != null && economy.CraftTree3Enabled && economy.Mechanism > 0;
+        public static bool ShowSiegeEngine(EconomyView economy) => economy != null && economy.CraftTree4Enabled && economy.SiegeEngine > 0;
+        public static bool ShowEliteKit(EconomyView economy) => economy != null && economy.CraftTree4Enabled && economy.EliteKit > 0;
 
         /// <summary>
         /// Fills the shared top-bar resource list. This is deliberately plain C# so IMGUI and UI Toolkit use the same
@@ -209,6 +213,8 @@ namespace Rts.Presentation
             if (ShowFineArmsKit(economy)) target.Add(new ResourceEntry(ResourceKind.FineArmsKit, UiText.T("Fine arms kit", "良い武具"), economy.FineArmsKit));
             if (ShowSiegeParts(economy)) target.Add(new ResourceEntry(ResourceKind.SiegeParts, UiText.T("Siege parts", "攻城部品"), economy.SiegeParts));
             if (ShowMechanism(economy)) target.Add(new ResourceEntry(ResourceKind.Mechanism, UiText.T("Mechanism", "精密部品"), economy.Mechanism));
+            if (ShowSiegeEngine(economy)) target.Add(new ResourceEntry(ResourceKind.SiegeEngine, UiText.T("Siege engine", "攻城機関"), economy.SiegeEngine));
+            if (ShowEliteKit(economy)) target.Add(new ResourceEntry(ResourceKind.EliteKit, UiText.T("Elite kit", "精鋭キット"), economy.EliteKit));
             if (ShowBooks(economy))
                 target.Add(new ResourceEntry(ResourceKind.Books, UiText.T("Books", "書物"), economy.Books));
             if (ShowIncense(economy))

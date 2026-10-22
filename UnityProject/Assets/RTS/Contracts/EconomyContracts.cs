@@ -741,6 +741,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int Age { get; }
         /// <summary>AgeFour: the optional fifth stage (primitive plus four civilisation ages).</summary>
         public bool AgeFour { get; }
+        /// <summary>AgeStrengths: civilisation age bonuses are active in this played rule set.</summary>
+        public bool AgeStrengths { get; }
         public int Age2FoodCost { get; }
         public int Age2WoodCost { get; }
         public int ArcherFoodCost { get; }
@@ -875,6 +877,22 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int FineArmsKit { get; }
         public int SiegeParts { get; }
         public int Mechanism { get; }
+        public bool CraftTree4Enabled { get; }
+        public int SiegeEngine { get; }
+        public int EliteKit { get; }
+        public int SiegeEngineTicks { get; }
+        public int EliteKitTicks { get; }
+        public int EliteKitAttack { get; }
+        public int EliteKitHpPermille { get; }
+        public int CannonFoodCost { get; }
+        public int CannonWoodCost { get; }
+        public int CannonRange { get; }
+        public int CannonSiegeDamage { get; }
+        public int SiegeEngineProduced { get; }
+        public int SiegeEngineConsumed { get; }
+        public int EliteKitProduced { get; }
+        public int EliteKitConsumed { get; }
+        public int CannonProduced { get; }
         public int StonecutterWoodCost { get; }
         public int StonecutterSizeCells { get; }
         public int StonecutterTicks { get; }
@@ -1137,7 +1155,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              bool buildingReservations = false, int reservationLimit = 0, int reservationCount = 0, int reservationCheckTicks = 0,
              bool ageFour = false, int age4FoodCost = 0, int age4WoodCost = 0, int age4Ticks = 0,
              int totalWarFoodCost = 0, int totalWarWoodCost = 0, int totalWarMetalCost = 0, int totalWarTicks = 0,
-             int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0)
+              int grandWorkshopFoodCost = 0, int grandWorkshopWoodCost = 0, int grandWorkshopMetalCost = 0, int grandWorkshopTicks = 0,
+              bool ageStrengths = false,
+              bool craftTree4Enabled = false, int siegeEngine = 0, int eliteKit = 0, int siegeEngineTicks = 0, int eliteKitTicks = 0,
+              int eliteKitAttack = 0, int eliteKitHpPermille = 0, int cannonFoodCost = 0, int cannonWoodCost = 0, int cannonRange = 0, int cannonSiegeDamage = 0,
+              int siegeEngineProduced = 0, int siegeEngineConsumed = 0, int eliteKitProduced = 0, int eliteKitConsumed = 0, int cannonProduced = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1200,6 +1222,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CraftTree1Enabled = craftTree1Enabled; CutStone = cutStone; Frames = frames;
              CraftTree2Enabled = craftTree2Enabled; ArmsKit = armsKit; Scholarly = scholarly; FineArmsKit = fineArmsKit;
              CraftTree3Enabled = craftTree3Enabled; SiegeParts = siegeParts; Mechanism = mechanism;
+            CraftTree4Enabled = craftTree4Enabled; SiegeEngine = siegeEngine; EliteKit = eliteKit; SiegeEngineTicks = siegeEngineTicks;
+            EliteKitTicks = eliteKitTicks; EliteKitAttack = eliteKitAttack; EliteKitHpPermille = eliteKitHpPermille;
+            CannonFoodCost = cannonFoodCost; CannonWoodCost = cannonWoodCost; CannonRange = cannonRange; CannonSiegeDamage = cannonSiegeDamage;
+            SiegeEngineProduced = siegeEngineProduced; SiegeEngineConsumed = siegeEngineConsumed;
+            EliteKitProduced = eliteKitProduced; EliteKitConsumed = eliteKitConsumed; CannonProduced = cannonProduced;
             StonecutterWoodCost = stonecutterWoodCost; StonecutterSizeCells = stonecutterSizeCells;
             StonecutterTicks = stonecutterTicks; StonecutterStoneInput = stonecutterStoneInput;
             JoineryWoodCost = joineryWoodCost; JoinerySizeCells = joinerySizeCells; JoineryTicks = joineryTicks;
@@ -1233,7 +1260,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CavalryMission = cavalryMission;
             RamFoodCost = ramFoodCost; RamWoodCost = ramWoodCost;
             Age3FoodCost = age3FoodCost; Age3WoodCost = age3WoodCost;
-            AgeFour = ageFour; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
+             AgeFour = ageFour; AgeStrengths = ageStrengths; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

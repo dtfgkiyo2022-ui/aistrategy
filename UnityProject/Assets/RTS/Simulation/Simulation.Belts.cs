@@ -195,17 +195,20 @@ namespace Rts.Simulation
                 case ResourceKind.FineArmsKit: economy.FineArmsKit = checked(economy.FineArmsKit + amount); break;
                 case ResourceKind.SiegeParts: economy.SiegeParts = checked(economy.SiegeParts + amount); break;
                 case ResourceKind.Mechanism: economy.Mechanism = checked(economy.Mechanism + amount); break;
+                case ResourceKind.SiegeEngine: economy.SiegeEngine = checked(economy.SiegeEngine + amount); break;
+                case ResourceKind.EliteKit: economy.EliteKit = checked(economy.EliteKit + amount); break;
                 case ResourceKind.Books: economy.Books = checked(economy.Books + amount); break;
                 case ResourceKind.Incense: economy.Incense = Math.Min(world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;
                 case ResourceKind.RepairKits: economy.RepairKits = Math.Min(world.Config.Economy.RepairKitStockLimit, checked(economy.RepairKits + amount)); break;
                 case ResourceKind.Tools: economy.Tools = Math.Min(world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
                 case ResourceKind.Preserves:
-                    economy.Food = checked(economy.Food + amount * world.Config.Economy.PreserveFoodValue);
-                    economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * world.Config.Economy.PreserveFoodValue);
+                int preserveValue = AgeStrength(faction, CivKind.Fishing, 3) ? world.Config.Economy.FishingPreserveFoodValue : world.Config.Economy.PreserveFoodValue;
+                economy.Food = checked(economy.Food + amount * preserveValue);
+                economy.PreservesConvertedFood = checked(economy.PreservesConvertedFood + amount * preserveValue);
                     break;
                 case ResourceKind.TradeGoods:
-                    int value = checked(amount * world.Config.Economy.TradeGoodsValue);
+                    int value = checked(amount * (AgeStrength(faction, CivKind.Caravan, 2) ? world.Config.Economy.CaravanTradeGoodsValue : world.Config.Economy.TradeGoodsValue));
                     if (economy.Food <= economy.Stone)
                     {
                         economy.Food = checked(economy.Food + value);

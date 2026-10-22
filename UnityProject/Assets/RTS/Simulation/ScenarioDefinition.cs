@@ -327,6 +327,12 @@ namespace Rts.Simulation
         /// <summary>Automatic CraftTree3 keeps this many siege parts before changing back to the next useful recipe.</summary>
         public int SiegePartsStockLimit = 8;
         public int GoodsValueSiegeParts = 20, GoodsValueMechanism = 22;
+        /// <summary>CraftTree4: fourth-age siege engines and elite kits.</summary>
+        public bool CraftTree4;
+        public int SiegeEngineTicks = 200, SiegeEngineSiegePartsInput = 2, SiegeEngineMechanismInput = 1;
+        public int EliteKitTicks = 180, EliteKitArmsKitInput = 2, EliteKitMechanismInput = 1, EliteKitMetalInput = 5;
+        public int EliteKitAttack = 3, EliteKitHpPermille = 1200;
+        public int GoodsValueSiegeEngine = 30, GoodsValueEliteKit = 28;
         /// <summary>Books: academy scriptoria turn gold and wood into research stock.</summary>
         public bool Books;
         public int ScriptoriumSizeCells = 2, ScriptoriumWoodCost = 80, ScriptoriumWork = 200, ScriptoriumHp = 400;
@@ -557,6 +563,8 @@ namespace Rts.Simulation
         public int WorkshopSizeCells = 3, WorkshopWoodCost = 200, WorkshopWork = 350, WorkshopHp = 800;
         public int RamFood = 40, RamWood = 160, RamTicks = 400, RamHp = 220, RamDamage = 3, RamSiegeDamage = 60, RamInterval = 40;
         public Fix64 RamRange = Fix64.FromInt(2), RamSpeed = Fix64.FromInt(1), RamVision = Fix64.FromInt(12);
+        public int CannonSiegeEngineCost = 1, CannonFoodCost = 100, CannonWoodCost = 100, CannonHp = 180, CannonDamage = 1, CannonSiegeDamage = 120, CannonInterval = 50, CannonAutoLimit = 4;
+        public Fix64 CannonRange = Fix64.FromInt(8), CannonSpeed = Fix64.FromInt(1), CannonVision = Fix64.FromInt(12);
         /// <summary>V3-5 (32 #10): the third age of a civilisation (trade age for farming, steel age for metallurgy).</summary>
         public int Age3FoodCost = 1200, Age3WoodCost = 800, Age3Ticks = 2400, Age3PopulationBonus = 20;
         /// <summary>AgeFour: the fourth advance uses the third advance's duration and has a +20 population ceiling.</summary>
@@ -564,6 +572,22 @@ namespace Rts.Simulation
         /// <summary>AgeFour research values. These are kept as named fields because the older tech arrays are schema-stable.</summary>
         public int TotalWarFoodCost = 400, TotalWarWoodCost = 300, TotalWarMetalCost = 100, TotalWarTicks = 900;
         public int GrandWorkshopFoodCost = 300, GrandWorkshopWoodCost = 400, GrandWorkshopMetalCost = 0, GrandWorkshopTicks = 900;
+        /// <summary>Technical-design-v3 37.5.1: civilisation age strengths. Only the AgeStrengths extension enables these.</summary>
+        public bool AgeStrengths;
+        public int AgrarianFarmSpeedPermille = 800, AgrarianRationsHealHp = 15, AgrarianPopulationCapBonus = 20;
+        public int MetallurgySmeltSpeedPermille = 800, MetallurgyForgedDamageBonus = 1, MetallurgySiegePartsTimePermille = 700;
+        public int ForestryLumberSpeedPermille = 800, ForestryArcherRangeBonus = 1, ForestryBuildingWoodPermille = 800;
+        public int MasonryWallHpPermille = 1200, MasonryTowerDamageBonus = 2, MasonryCoreHpPermille = 1300;
+        public int CaravanTradeGoodsValue = 5, CaravanMarketReturnPermille = 1100, CaravanRewardPermille = 1500;
+        public int CavalryStableTimePermille = 800, CavalrySpeedPermille = 1100, CavalryHeavyHpPermille = 1150;
+        public int BridgeBuildingWorkPermille = 700, BridgeRamSiegeDamagePermille = 1200, BridgeGeneralWorkPermille = 800;
+        public int AcademyResearchTimePermille = 850, AcademyScholarlyCostPermille = 600, AcademyAge4ResearchCostPermille = 500;
+        public int CultConversionTimePermille = 833, CultIncenseHealHp = 30, CultMonkHpPermille = 1500;
+        public int FishingGatherTimePermille = 833, FishingPreserveFoodValue = 4, FishingFoodCarryBonus = 2;
+        public int MountainMiningTimePermille = 833, MountainMercenaryGems = 8, MountainMercenaryDamageBonus = 2;
+        public int TollgateFeePermille = 1500, TollgateHpPermille = 1300, TollgateRepairKitHp = 60;
+        public int MetropolisVillagerTimePermille = 800, MetropolisTownLimitBonus = 1, MetropolisToolTimePermille = 400;
+        public int SanctuaryPilgrimagePermille = 1200, SanctuaryCharmHpPermille = 1300, SanctuaryCharmHpAge4Permille = 1500;
         /// <summary>V3-5 (32 #21): optional victory after holding the third age while the core remains alive.</summary>
         public bool AgeVictoryEnabled;
         public int AgeVictoryTicks = 3000;

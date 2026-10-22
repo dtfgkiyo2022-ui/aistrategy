@@ -96,6 +96,14 @@ namespace Rts.Tactics
                 markdown.AppendLine("精密部品: Lv2加工建物をLv3へ強化し、作成時間" + scenario.Economy.MechanismBuildingTimePermille + "‰・材料" + scenario.Economy.MechanismBuildingMaterialPermille + "‰。時代3研究の費用・時間は" + scenario.Economy.MechanismResearchCostPermille + "‰・" + scenario.Economy.MechanismResearchTimePermille + "‰。");
                 markdown.AppendLine();
             }
+            if (scenario.Economy.CraftTree4)
+            {
+                markdown.AppendLine("### CraftTree4（4段目）");
+                markdown.AppendLine();
+                markdown.AppendLine("`SiegeEngine`: SiegeParts 2 + Mechanism 1、" + scenario.Economy.SiegeEngineTicks + " tick。`EliteKit`: ArmsKit 2 + Mechanism 1 + Metal 5、" + scenario.Economy.EliteKitTicks + " tick。EliteKit は兵の攻撃 +" + scenario.Economy.EliteKitAttack + "、HP " + scenario.Economy.EliteKitHpPermille + "‰、ArmsKit と非重複。");
+                markdown.AppendLine("`Cannon`: SiegeWorkshop で SiegeEngine 1・Food " + scenario.Economy.CannonFoodCost + "・Wood " + scenario.Economy.CannonWoodCost + "、射程 " + scenario.Economy.CannonRange + "、対建物攻撃 " + scenario.Economy.CannonSiegeDamage + "。");
+                markdown.AppendLine();
+            }
             markdown.AppendLine("## 見本 `TacticSamples/defend-then-push/main.js`");
             markdown.AppendLine();
             markdown.AppendLine("```javascript");
@@ -251,6 +259,7 @@ namespace Rts.Tactics
                 case UnitKind.HeavyInfantry: return "food=" + e.HeavyInfantryFoodCost + ", wood=" + e.HeavyInfantryWoodCost + ", steel=" + e.HeavyInfantrySteelCost + ", ticks=" + e.HeavyInfantryTrainTicks;
                 case UnitKind.SkirmishArcher: return "food=" + e.SkirmishArcherFoodCost + ", bowGear=" + e.SkirmishArcherBowGearCost + ", ticks=" + e.SkirmishArcherTrainTicks;
                 case UnitKind.Ram: return "food=" + e.RamFood + ", wood=" + e.RamWood + ", ticks=" + e.RamTicks;
+                case UnitKind.Cannon: return "food=" + e.CannonFoodCost + ", wood=" + e.CannonWoodCost + ", siegeEngine=" + e.CannonSiegeEngineCost + ", ticks=" + e.RamTicks;
                 case UnitKind.Mercenary: return "gems=" + e.MercenaryGems + ", ticks=" + e.MercenaryTicks;
                 case UnitKind.Monk: return "food=" + e.MonkFoodCost + ", gold=" + e.MonkGoldCost + ", ticks=" + e.MonkTrainTicks;
                 default: return "—";

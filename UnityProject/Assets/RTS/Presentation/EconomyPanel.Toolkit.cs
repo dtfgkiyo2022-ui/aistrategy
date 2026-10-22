@@ -361,6 +361,11 @@ namespace Rts.Presentation
                     Add(rows, "recipe:" + assembler.Id + ":ArmsKit", UiText.T("Assembler " + assembler.Id + ": Arms kit (plank 1 + charcoal 2 or steel 1, " + economy.ArmsKitTicks + "t)", "Assembler " + assembler.Id + ": 武具キット（板1＋木炭2または鋼1、" + economy.ArmsKitTicks + "t）"), true, armsMaterial ? "" : UiText.T("Missing planks and charcoal/steel", "板材と木炭/鋼が不足"), assembler.Recipe == RecipeKind.ArmsKit);
                     bool scholarlyMaterial = economy.Planks >= economy.ScholarlyPlankInput && economy.Charcoal >= economy.ScholarlyCharcoalInput && economy.Food >= economy.ScholarlyFoodInput;
                     Add(rows, "recipe:" + assembler.Id + ":Scholarly", UiText.T("Assembler " + assembler.Id + ": Scholarly (plank 1 + charcoal 1 + food 2, " + economy.ScholarlyTicks + "t)", "Assembler " + assembler.Id + ": 学術資材（板1＋木炭1＋食料2、" + economy.ScholarlyTicks + "t）"), true, scholarlyMaterial ? "" : UiText.T("Missing planks, charcoal, or food", "板材・木炭・食料が不足"), assembler.Recipe == RecipeKind.Scholarly);
+                    if (economy.CraftTree4Enabled)
+                    {
+                        Add(rows, "recipe:" + assembler.Id + ":SiegeEngine", UiText.T("Assembler " + assembler.Id + ": Siege engine (siege parts 2 + mechanism 1, " + economy.SiegeEngineTicks + "t)", "Assembler " + assembler.Id + ": 攻城機関（攻城部品2＋精密部品1、" + economy.SiegeEngineTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeEngine);
+                        Add(rows, "recipe:" + assembler.Id + ":EliteKit", UiText.T("Assembler " + assembler.Id + ": Elite kit (arms kit 2 + mechanism 1 + metal 5, " + economy.EliteKitTicks + "t)", "Assembler " + assembler.Id + ": 精鋭キット（武具キット2＋精密部品1＋金属5、" + economy.EliteKitTicks + "t）"), true, "", assembler.Recipe == RecipeKind.EliteKit);
+                    }
                     if (economy.CraftTree3Enabled)
                     {
                         Add(rows, "recipe:" + assembler.Id + ":SiegeParts", UiText.T("Assembler " + assembler.Id + ": Siege parts (frames 1 + arms kit 1, " + economy.SiegePartsTicks + "t)", "Assembler " + assembler.Id + ": 攻城部品（建材1＋武具1、" + economy.SiegePartsTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeParts);
