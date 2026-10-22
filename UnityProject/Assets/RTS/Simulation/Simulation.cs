@@ -68,10 +68,6 @@ namespace Rts.Simulation
         private bool placementConnectivityCacheEnabled = true;
         private readonly Dictionary<(uint Faction, int Origin, int Size), bool> placementConnectivityCache
             = new Dictionary<(uint, int, int), bool>();
-        private bool[] placementBlocked;
-        private int placementBlockedPassableVersion = -1;
-        private long placementBlockedTick = -1;
-        private int placementBlockedBuildingCount = -1;
 
         private readonly Action<string, bool> measure;
         // Test-only comparison path; the shipped simulation always uses the optimized index.

@@ -727,66 +727,39 @@ namespace Rts.Simulation
         {
             foreach (int cell in Footprint(origin, size))
             {
-                if (IsPlacementBlocked(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
-                if (buildingClearanceCells != BuildingClearanceCells && HasBuildingWithin(cell, buildingClearanceCells)) return false;
+                if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
+            }
+            return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
+        }
+
+        /// <summary>
+        /// The node and building clearance of a square footprint, measured once per node and per building cell against the
+        /// footprint rectangle instead of once per footprint cell (freeze3). The answer is the same as comparing every pair
+        /// of cells: the Chebyshev distance from a point to a rectangle is the smallest distance to any of its cells.
+        /// Nothing is cached, so reservations, belts and buildings placed earlier in the same tick are always seen.
+        /// </summary>
+        private bool ClearOfNodesAndBuildings(int origin, int size, int buildingClearanceCells)
+        {
+            int width = world.Config.Map.WidthCells;
+            int x0 = origin % width, z0 = origin / width, x1 = x0 + size - 1, z1 = z0 + size - 1;
+            foreach (var node in world.Nodes)
+                if (RectangleDistance(x0, z0, x1, z1, world.Map.Cell(node.Definition.Position), width) < NodeClearanceCells) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                if (!world.Buildings[i].Alive) continue;
+                foreach (int other in Footprint(world.Buildings[i]))
+                    if (RectangleDistance(x0, z0, x1, z1, other, width) < buildingClearanceCells) return false;
             }
             return true;
         }
 
-        private bool IsPlacementBlocked(int cell)
+        private static int RectangleDistance(int x0, int z0, int x1, int z1, int cell, int width)
         {
-            EnsurePlacementBlocked();
-            // Belts change without a PassableVersion bump (and within a tick), so they are read live, never cached.
-            return cell < 0 || cell >= placementBlocked.Length || placementBlocked[cell]
-                || world.Belts.Length != 0 && world.Belts[cell].FactionId != 0;
-        }
-
-        private void EnsurePlacementBlocked()
-        {
-            int passableVersion = world.Map.PassableVersion;
-            if (placementBlocked != null && placementBlockedPassableVersion == passableVersion && placementBlockedTick == world.Tick
-                && placementBlockedBuildingCount == world.BuildingCount) return;
-            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
-            int cells = checked(width * height);
-            if (placementBlocked == null || placementBlocked.Length != cells) placementBlocked = new bool[cells];
-            Array.Clear(placementBlocked, 0, placementBlocked.Length);
-            for (int cell = 0; cell < cells; cell++)
-                placementBlocked[cell] = !world.Map.IsPassable(cell) || IsRiverCell(cell);
-            foreach (var node in world.Nodes)
-                MarkPlacementClearance(world.Map.Cell(node.Definition.Position), NodeClearanceCells, width, height);
-            for (int i = 0; i < world.BuildingCount; i++)
-            {
-                var building = world.Buildings[i];
-                if (!building.Alive) continue;
-                foreach (int cell in Footprint(building))
-                    MarkPlacementClearance(cell, BuildingClearanceCells, width, height);
-            }
-            placementBlockedPassableVersion = passableVersion;
-            placementBlockedTick = world.Tick;
-            placementBlockedBuildingCount = world.BuildingCount;
-        }
-
-        private void MarkPlacementClearance(int cell, int clearance, int width, int height)
-        {
-            if (cell < 0 || cell >= placementBlocked.Length) return;
-            int cx = cell % width, cz = cell / width;
-            for (int dz = -clearance + 1; dz < clearance; dz++)
-                for (int dx = -clearance + 1; dx < clearance; dx++)
-                {
-                    int x = cx + dx, z = cz + dz;
-                    if (x >= 0 && x < width && z >= 0 && z < height) placementBlocked[z * width + x] = true;
-                }
-        }
-
-        private bool HasBuildingWithin(int cell, int clearance)
-        {
-            foreach (var building in world.Buildings)
-            {
-                if (!building.Alive) continue;
-                foreach (int other in Footprint(building))
-                    if (Chebyshev(cell, other) < clearance) return true;
-            }
-            return false;
+            int x = cell % width, z = cell / width;
+            int dx = x < x0 ? x0 - x : x > x1 ? x - x1 : 0;
+            int dz = z < z0 ? z0 - z : z > z1 ? z - z1 : 0;
+            return Math.Max(dx, dz);
         }
 
         private bool ManualPlacementPortsAreClear(BuildingKind kind, int origin, int size, Facing facing)
@@ -825,9 +798,10 @@ namespace Rts.Simulation
             foreach (int cell in Footprint(origin, size))
             {
                 if (LargeEconomyOn && !world.Factions[faction - 1].ExploredCells[cell]) return false;
-                if (IsPlacementBlocked(cell)) return false;
+                if (!world.Map.IsPassable(cell) || IsRiverCell(cell)) return false;
+                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false;
             }
-            return true;
+            return ClearOfNodesAndBuildings(origin, size, BuildingClearanceCells);
         }
 
         private int FindTownSite(uint faction, int centre)
