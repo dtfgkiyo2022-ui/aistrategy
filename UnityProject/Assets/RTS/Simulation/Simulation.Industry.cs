@@ -522,7 +522,10 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
-        private int CraftTicksFor(BuildingState building, int baseTicks, int extraPermille = 1000)
+        private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
+
+        /// <summary>CraftTicksFor with an extra time factor (AgeStrengths). Kept apart so the two-argument form stays unique.</summary>
+        private int CraftTicksScaled(BuildingState building, int baseTicks, int extraPermille)
         {
             int result = Math.Max(1, checked((baseTicks * extraPermille + 999) / 1000));
             if (!CraftTree1On || building.Level < 2)
@@ -618,7 +621,7 @@ namespace Rts.Simulation
                 if (building.Input < frames || building.InputSecondary < arms) return;
                 economy.FramesConsumed = checked(economy.FramesConsumed + frames);
                 economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
-                building.Timer = CraftTicksFor(building, rules.SiegePartsTicks,
+                building.Timer = CraftTicksScaled(building, rules.SiegePartsTicks,
                     AgeStrength(building.FactionId, CivKind.Metallurgy, 4) ? rules.MetallurgySiegePartsTimePermille : 1000);
                 return;
             }

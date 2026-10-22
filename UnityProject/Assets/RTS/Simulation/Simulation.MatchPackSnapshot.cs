@@ -290,17 +290,19 @@ namespace Rts.Simulation
         private MatchPackGoodsTradeSnapshot[] GoodsMarketSnapshot(FactionEconomy economy)
         {
             if (!GoodsMarketOn || economy.GoodsSoldCounts == null) return Array.Empty<MatchPackGoodsTradeSnapshot>();
-            var result = new MatchPackGoodsTradeSnapshot[GoodsKinds.Length];
+            var result = new System.Collections.Generic.List<MatchPackGoodsTradeSnapshot>(GoodsKinds.Length);
             for (int i = 0; i < GoodsKinds.Length; i++)
             {
+                // CraftTree4 goods only appear when that flag is on, so flag-off packs keep their old list.
+                if ((GoodsKinds[i] == ResourceKind.SiegeEngine || GoodsKinds[i] == ResourceKind.EliteKit) && !CraftTree4On) continue;
                 int index = (int)GoodsKinds[i];
-                result[i] = new MatchPackGoodsTradeSnapshot
+                result.Add(new MatchPackGoodsTradeSnapshot
                 {
                     Goods = GoodsKinds[i].ToString(), SoldCount = economy.GoodsSoldCounts[index], SoldUnits = economy.GoodsSoldUnits[index],
                     ReceivedFood = economy.GoodsReceivedFood[index], ReceivedWood = economy.GoodsReceivedWood[index]
-                };
+                });
             }
-            return result;
+            return result.ToArray();
         }
 
         private int CountGatherers(uint factionId, ResourceKind kind)

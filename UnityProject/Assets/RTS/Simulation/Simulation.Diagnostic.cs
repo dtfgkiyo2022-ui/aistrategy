@@ -248,6 +248,7 @@ namespace Rts.Simulation
                 {
                     foreach (var goods in GoodsKinds)
                     {
+                        if ((goods == ResourceKind.SiegeEngine || goods == ResourceKind.EliteKit) && !CraftTree4On) continue;
                         int i = (int)goods;
                         string key = n + "GoodsMarket." + goods.ToString();
                         w.Value(key + ".SoldCount", e.GoodsSoldCounts[i]);

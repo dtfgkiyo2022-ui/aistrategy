@@ -705,7 +705,7 @@ namespace Rts.Simulation
                 && e.MechanismResearchCostPermille > 0 && e.MechanismResearchCostPermille <= 1000 && e.MechanismResearchTimePermille > 0 && e.MechanismResearchTimePermille <= 1000
                 && e.SiegePartsStockLimit > 0 && e.SiegePartsStockLimit <= e.BufferLimit
                 && e.GoodsValueSiegeParts > 0 && e.GoodsValueMechanism > 0), "Invalid craft-tree3 rules.");
-            Require(!e.CraftTree4 || (e.CraftTree3 && e.AgeFour && e.SiegeEngineTicks > 0 && e.SiegeEngineSiegePartsInput > 0
+            Require(!e.CraftTree4 || (e.SiegeEngineTicks > 0 && e.SiegeEngineSiegePartsInput > 0
                 && e.SiegeEngineMechanismInput > 0 && e.EliteKitTicks > 0 && e.EliteKitArmsKitInput > 0 && e.EliteKitMechanismInput > 0
                 && e.EliteKitMetalInput > 0 && e.EliteKitAttack >= 0 && e.EliteKitHpPermille > 0
                 && e.CannonSiegeEngineCost > 0 && e.CannonFoodCost >= 0 && e.CannonWoodCost >= 0 && e.CannonHp > 0
@@ -1009,7 +1009,7 @@ namespace Rts.Simulation
             for (int i = 0; i < c.UnitParameters.Length; i++)
             {
                 var p = c.UnitParameters[i];
-                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || e.CraftTree4 && p.Kind == UnitKind.Cannon) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
+                Require((p.Kind == UnitKind.Infantry || p.Kind == UnitKind.Scout || p.Kind == UnitKind.Monk || p.Kind == UnitKind.Cannon) && (i == 0 || c.UnitParameters[i - 1].Kind != p.Kind)
                     && p.Hp > 0 && p.Damage >= 0 && p.AttackIntervalTicks > 0 && p.Speed.Raw >= 0 && p.Speed <= Fix64.FromInt(16)
                     && p.Range.Raw >= 0 && p.Range <= Fix64.FromInt(1024) && p.Vision.Raw >= 0, "Invalid unit parameters.");
             }
