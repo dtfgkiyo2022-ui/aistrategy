@@ -387,7 +387,7 @@ internal static class TacticMatchCommand
                 int westWorking = CountWorking(westFrame.Economy);
                 int eastWorking = CountWorking(eastFrame.Economy);
                 var phases = phaseMs.Where(p => !p.Key.StartsWith("alloc:", StringComparison.Ordinal)
-                    && !p.Key.StartsWith("allocKB:", StringComparison.Ordinal));
+                    && (Environment.GetEnvironmentVariable("RTS_ALLOC_PHASES") == "1" || !p.Key.StartsWith("allocKB:", StringComparison.Ordinal)));
                 string phaseText = string.Join(";", phases.Select(p => p.Key + "=" + p.Value.ToString("0.000", CultureInfo.InvariantCulture)));
                 timingWriter.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
                     ((System.Diagnostics.Stopwatch.GetTimestamp() - stepStarted) * 1000.0 / System.Diagnostics.Stopwatch.Frequency).ToString("0.000", CultureInfo.InvariantCulture),

@@ -365,6 +365,11 @@ namespace Rts.UnityHost
         private int stopRequested;
         private int paused;
         private int speed = 1;
+        // 10-23: the managed heap once grew to ~45 GB and took other programs on the PC down with it. Past this size the
+        // worker stops stepping (the match stays as it is) instead of letting the whole machine run out of memory.
+        public const long MemoryGuardBytes = 6L * 1024 * 1024 * 1024;
+        private int memoryGuardTripped;
+        private int stepsSinceMemoryCheck;
         private Exception failure;
         private SimulationThreadMatch match;
         private byte[] finalCanonicalState;
@@ -383,6 +388,7 @@ namespace Rts.UnityHost
         public long Generation { get { return generation; } }
         public bool IsRunning { get { return thread != null && thread.IsAlive; } }
         public Exception Failure { get { return Volatile.Read(ref failure); } }
+        public bool MemoryGuardTripped { get { return Volatile.Read(ref memoryGuardTripped) != 0; } }
         public IReadOnlyList<byte> FinalCanonicalState { get { return Volatile.Read(ref finalCanonicalState); } }
         public Action<long, IReadOnlyList<byte>> TickObserver { get; set; }
         [ThreadStatic] private static SimulationThreadWorker current;
@@ -424,7 +430,7 @@ namespace Rts.UnityHost
                 {
                     while (controls.TryDequeue(out var control)) control();
                     commands.Drain(match.Gateway);
-                    if (Volatile.Read(ref paused) != 0 || match.HasEnded)
+                    if (Volatile.Read(ref paused) != 0 || match.HasEnded || Volatile.Read(ref memoryGuardTripped) != 0)
                     {
                         wake.WaitOne(20);
                         continue;
@@ -433,6 +439,11 @@ namespace Rts.UnityHost
                     match.Step();
                     double milliseconds = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
                     Publish(new SimulationThreadPerf(milliseconds, 0));
+                    if (++stepsSinceMemoryCheck >= 100)
+                    {
+                        stepsSinceMemoryCheck = 0;
+                        if (GC.GetTotalMemory(false) > MemoryGuardBytes) Volatile.Write(ref memoryGuardTripped, 1);
+                    }
                     long interval = (long)(tickInterval.TotalSeconds * Stopwatch.Frequency / Math.Max(1, Volatile.Read(ref speed)));
                     next += interval;
                     long remaining = next - Stopwatch.GetTimestamp();

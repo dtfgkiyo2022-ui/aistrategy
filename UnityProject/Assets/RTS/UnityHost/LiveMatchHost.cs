@@ -1906,8 +1906,23 @@ namespace Rts.UnityHost
         /// Temporary play-test entry owned by the host. The production chat UI can call Speak directly; this small
         /// inspector-friendly panel keeps the G-5 path usable before that UI exists.
         /// </summary>
+        private bool memoryGuardLogged;
+
         private void OnGUI()
         {
+            if (simulationWorker != null && simulationWorker.MemoryGuardTripped)
+            {
+                if (!memoryGuardLogged)
+                {
+                    memoryGuardLogged = true;
+                    Debug.LogError("RTS memory guard: the managed heap passed " + (SimulationThreadWorker.MemoryGuardBytes >> 30)
+                        + " GB at tick " + Tick + "; the match was stopped to protect the PC.");
+                }
+                GUI.depth = -20;
+                GUI.Box(new Rect(Screen.width * 0.5f - 300f, Screen.height * 0.4f, 600f, 70f),
+                    UiText.T("Memory use grew too large, so the match was stopped to protect the PC.\nPlease report this and restart the game.",
+                        "メモリの使用量が大きくなりすぎたため、PC を守るために試合を止めました。\nお手数ですが報告のうえ、ゲームを再起動してください。"));
+            }
             if (HudToolkit.IsEnabled || !developmentAiEntry || liveAi == null || simulation == null) return;
             // In front of the other panels, so nothing drawn later can sit over the staff panel and take its clicks.
             GUI.depth = -10;
