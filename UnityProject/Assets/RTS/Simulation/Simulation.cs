@@ -14,6 +14,9 @@ namespace Rts.Simulation
         private SimPoint[] nextPositions;
         private long[] soldierDamage;
         private readonly long[] coreDamage;
+        // The age-advance hook is deliberately idempotent: a repeated invocation for one faction/age must not
+        // rescale the same existing core, building, or soldier twice.
+        private readonly byte[] ageStrengthsApplied = new byte[2];
         private SimPoint[] visibilitySoldierPositions;
         private long[] visibilitySoldierVisionRaw;
         private bool[] visibilitySoldierActive;
@@ -667,6 +670,7 @@ namespace Rts.Simulation
         {
             int ticks = world.Config.Economy.ConversionTicks;
             if (CultAllowed(faction) && HasTech(faction, CultTech.Sermon)) ticks = checked(ticks * 2 / 3);
+            if (AgeStrength(faction, CivKind.Cult, 2)) ticks = Math.Max(1, checked((ticks * world.Config.Economy.CultConversionTimePermille + 999) / 1000));
             return Math.Max(1, ticks);
         }
 

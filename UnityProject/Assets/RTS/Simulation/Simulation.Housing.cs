@@ -19,10 +19,11 @@ namespace Rts.Simulation
         /// S-4b: with ArmyGrowth the ceiling is its fixed PopulationCap (200); otherwise the ages still lift the ceiling
         /// as before, so EconomyScale never lowers the cap.
         /// </summary>
-        private int ScaledHousingCeiling(int age)
+        private int ScaledHousingCeiling(uint faction, int age)
         {
             var rules = world.Config.Economy;
-            return EconomyScaleOn && rules.ArmyGrowth ? rules.PopulationCap : rules.PopulationCap + AgeRoom(age);
+            int ceiling = EconomyScaleOn && rules.ArmyGrowth ? rules.PopulationCap : rules.PopulationCap + AgeRoom(age);
+            return AgeStrength(faction, CivKind.Agrarian, 4) ? checked(ceiling + rules.AgrarianPopulationCapBonus) : ceiling;
         }
 
         /// <summary>V3-5 (32 #7, #10): how much the ages lift the population ceiling - the second and the third each add their bonus.</summary>
@@ -37,7 +38,7 @@ namespace Rts.Simulation
         {
             var rules = world.Config.Economy;
             if (!AgesOn) return rules.PopulationCap;
-            int ceiling = ScaledHousingCeiling(world.Economies[faction - 1].Age);
+            int ceiling = ScaledHousingCeiling(faction, world.Economies[faction - 1].Age);
             int houses = 0, grandHouses = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -66,7 +67,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int cap = 0;
             MeasureSubphase("AI.DecideEconomy.DecideHouse.PopCap", () => cap = PopCapFor(faction));
-            int ceiling = ScaledHousingCeiling(economy.Age);
+            int ceiling = ScaledHousingCeiling(faction, economy.Age);
             bool metropolis = MetropolisAllowed(faction);
             BuildingKind kind = metropolis ? BuildingKind.GrandHouse : BuildingKind.House;
             int size = metropolis ? rules.GrandHouseSizeCells : rules.HouseSizeCells;

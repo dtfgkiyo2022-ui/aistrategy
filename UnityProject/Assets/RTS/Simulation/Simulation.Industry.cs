@@ -30,7 +30,9 @@ namespace Rts.Simulation
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.MineIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Mountain, 2)
+                        ? Math.Max(1, checked((rules.MineIntervalTicks * rules.MountainMiningTimePermille + 999) / 1000)) : rules.MineIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -39,7 +41,9 @@ namespace Rts.Simulation
                 {
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.LumberCampIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Forestry, 2)
+                        ? Math.Max(1, checked((rules.LumberCampIntervalTicks * rules.ForestryLumberSpeedPermille + 999) / 1000)) : rules.LumberCampIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -58,7 +62,9 @@ namespace Rts.Simulation
                     if (b.NodeId == 0 || b.NodeId > world.Nodes.Length) continue;
                     ref var node = ref world.Nodes[b.NodeId - 1];
                     if (node.Remaining <= 0 || b.Output >= rules.BufferLimit) continue;
-                    if (++b.Timer < rules.DrillIntervalTicks) continue;
+                    int interval = AgeStrength(b.FactionId, CivKind.Mountain, 2)
+                        ? Math.Max(1, checked((rules.DrillIntervalTicks * rules.MountainMiningTimePermille + 999) / 1000)) : rules.DrillIntervalTicks;
+                    if (++b.Timer < interval) continue;
                     b.Timer = 0;
                     node.Remaining--;
                     b.Output++;
@@ -516,9 +522,12 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
-        private int CraftTicksFor(BuildingState building, int baseTicks)
+        private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
+
+        /// <summary>CraftTicksFor with an extra time factor (AgeStrengths). Kept apart so the two-argument form stays unique.</summary>
+        private int CraftTicksScaled(BuildingState building, int baseTicks, int extraPermille)
         {
-            int result = baseTicks;
+            int result = Math.Max(1, checked((baseTicks * extraPermille + 999) / 1000));
             if (!CraftTree1On || building.Level < 2)
                 return AgeFourOn && HasTech(building.FactionId, TechKind.GrandWorkshop)
                     ? Math.Max(1, checked((result * 4 + 4) / 5)) : result;
@@ -552,6 +561,8 @@ namespace Rts.Simulation
                     else if (building.Recipe == RecipeKind.Scholarly) { economy.Scholarly++; economy.ScholarlyProduced++; }
                     else if (building.Recipe == RecipeKind.SiegeParts) { economy.SiegeParts++; economy.SiegePartsProduced++; }
                     else if (building.Recipe == RecipeKind.Mechanism) { economy.Mechanism++; economy.MechanismProduced++; }
+                    else if (building.Recipe == RecipeKind.SiegeEngine) { economy.SiegeEngine++; economy.SiegeEngineProduced++; }
+                    else if (building.Recipe == RecipeKind.EliteKit) { economy.EliteKit++; economy.EliteKitProduced++; }
                     building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
                 }
                 return;
@@ -610,7 +621,8 @@ namespace Rts.Simulation
                 if (building.Input < frames || building.InputSecondary < arms) return;
                 economy.FramesConsumed = checked(economy.FramesConsumed + frames);
                 economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
-                building.Timer = CraftTicksFor(building, rules.SiegePartsTicks);
+                building.Timer = CraftTicksScaled(building, rules.SiegePartsTicks,
+                    AgeStrength(building.FactionId, CivKind.Metallurgy, 4) ? rules.MetallurgySiegePartsTimePermille : 1000);
                 return;
             }
             if (building.Recipe == RecipeKind.Mechanism)
@@ -625,6 +637,31 @@ namespace Rts.Simulation
                 economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + scholarly);
                 economy.CutStoneConsumed = checked(economy.CutStoneConsumed + stone);
                 building.Timer = CraftTicksFor(building, rules.MechanismTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.SiegeEngine)
+            {
+                int parts = CraftInputFor(building, rules.SiegeEngineSiegePartsInput), mechanism = CraftInputFor(building, rules.SiegeEngineMechanismInput);
+                Fill(ref economy.SiegeParts, ref building.Input, parts);
+                Fill(ref economy.Mechanism, ref building.InputSecondary, mechanism);
+                building.InputSecondaryKind = ResourceKind.Mechanism;
+                if (building.Input < parts || building.InputSecondary < mechanism) return;
+                economy.SiegePartsConsumed = checked(economy.SiegePartsConsumed + parts);
+                economy.MechanismConsumed = checked(economy.MechanismConsumed + mechanism);
+                building.Timer = CraftTicksFor(building, rules.SiegeEngineTicks);
+                return;
+            }
+            if (building.Recipe == RecipeKind.EliteKit)
+            {
+                int arms = CraftInputFor(building, rules.EliteKitArmsKitInput), mechanism = CraftInputFor(building, rules.EliteKitMechanismInput), metal = CraftInputFor(building, rules.EliteKitMetalInput);
+                Fill(ref economy.ArmsKit, ref building.Input, arms);
+                Fill(ref economy.Mechanism, ref building.InputSecondary, mechanism);
+                Fill(ref economy.Metal, ref building.InputTertiary, metal);
+                building.InputSecondaryKind = ResourceKind.Mechanism;
+                if (building.Input < arms || building.InputSecondary < mechanism || building.InputTertiary < metal) return;
+                economy.ArmsKitConsumed = checked(economy.ArmsKitConsumed + arms);
+                economy.MechanismConsumed = checked(economy.MechanismConsumed + mechanism);
+                building.Timer = CraftTicksFor(building, rules.EliteKitTicks);
             }
         }
 
@@ -639,8 +676,9 @@ namespace Rts.Simulation
         {
             if (!AssemblerAllowed(faction) || !OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-                if (!IsActualBuilding(building) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.Mechanism
-                || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)) return;
+                if (!IsActualBuilding(building) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.EliteKit
+                || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)
+                || (recipe == RecipeKind.SiegeEngine || recipe == RecipeKind.EliteKit) && !CraftTree4Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
             building.Recipe = recipe;
             building.Timer = 0;
@@ -673,6 +711,14 @@ namespace Rts.Simulation
             else if (building.Recipe == RecipeKind.Mechanism)
             {
                 economy.ArmsKit += building.Input; economy.Scholarly += building.InputSecondary; economy.CutStone += building.InputTertiary;
+            }
+            else if (building.Recipe == RecipeKind.SiegeEngine)
+            {
+                economy.SiegeParts += building.Input; economy.Mechanism += building.InputSecondary;
+            }
+            else if (building.Recipe == RecipeKind.EliteKit)
+            {
+                economy.ArmsKit += building.Input; economy.Mechanism += building.InputSecondary; economy.Metal += building.InputTertiary;
             }
             building.Input = 0; building.InputSecondary = 0; building.InputTertiary = 0; building.InputSecondaryKind = 0;
         }
@@ -754,6 +800,11 @@ namespace Rts.Simulation
                     { b.InputSecondaryKind = ResourceKind.Scholarly; b.InputSecondary++; return true; }
                     if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.CutStone && b.InputTertiary < rules.BufferLimit)
                     { b.InputTertiary++; return true; }
+                    if (b.Recipe == RecipeKind.SiegeEngine && item == ResourceKind.SiegeParts && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (b.Recipe == RecipeKind.SiegeEngine && item == ResourceKind.Mechanism && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Mechanism; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.EliteKit && item == ResourceKind.ArmsKit && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (b.Recipe == RecipeKind.EliteKit && item == ResourceKind.Mechanism && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Mechanism; b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.EliteKit && item == ResourceKind.Metal && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
                 }
                 if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone && b.Input < rules.BufferLimit)
                 {
@@ -841,6 +892,8 @@ namespace Rts.Simulation
                     && item == ResourceKind.Wood) return true;
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None
                     && item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly) return true;
+                if (CraftTree4On && b.Kind == BuildingKind.Assembler && (b.Recipe == RecipeKind.SiegeEngine || b.Recipe == RecipeKind.EliteKit)
+                    && (item == ResourceKind.SiegeParts || item == ResourceKind.ArmsKit || item == ResourceKind.Mechanism || item == ResourceKind.Metal)) return true;
                 if (StonecutterAllowed(faction) && b.Kind == BuildingKind.Stonecutter && item == ResourceKind.Stone) return true;
                 if (JoineryAllowed(faction) && b.Kind == BuildingKind.Joinery
                     && (item == ResourceKind.Planks || item == ResourceKind.CutStone)) return true;

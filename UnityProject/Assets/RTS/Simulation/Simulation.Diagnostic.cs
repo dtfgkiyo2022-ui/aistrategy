@@ -42,6 +42,7 @@ namespace Rts.Simulation
                         w.Value(n+"ExploreRetargetTick", p.ExploreRetargetTick);
                     }
                      if (CraftTree3On) w.Value(n+"SiegePartsEnhanced", p.SiegePartsEnhanced);
+                     if (CraftTree4On) w.Value(n+"EliteKitEnhanced", p.EliteKitEnhanced);
                     w.Value(n+"Joining",p.Joining); w.Value(n+"TacticalRoute",p.TacticalRoute);
                     w.Value(n+"LocalCursor",p.LocalCursor); w.Value(n+"JoinCursor",p.JoinCursor); w.Value(n+"SlotWaitTimedOut",p.SlotWaitTimedOut);
                     w.Value(n+"SlotWaitSinceTick",p.SlotWaitSinceTick); w.Point(n+"SlotWaitTarget",p.SlotWaitTarget); w.Point(n+"LocalGoal",p.LocalGoal);
@@ -184,6 +185,12 @@ namespace Rts.Simulation
                     w.Value(n + "Mechanism", e.Mechanism); w.Value(n + "MechanismProduced", e.MechanismProduced); w.Value(n + "MechanismConsumed", e.MechanismConsumed);
                     w.Value(n + "MechanismUsedResearch", e.MechanismUsedResearch);
                 }
+                if (CraftTree4On)
+                {
+                    w.Value(n + "SiegeEngine", e.SiegeEngine); w.Value(n + "SiegeEngineProduced", e.SiegeEngineProduced); w.Value(n + "SiegeEngineConsumed", e.SiegeEngineConsumed);
+                    w.Value(n + "EliteKit", e.EliteKit); w.Value(n + "EliteKitProduced", e.EliteKitProduced); w.Value(n + "EliteKitConsumed", e.EliteKitConsumed);
+                    w.Value(n + "CannonProduced", e.CannonProduced);
+                }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
@@ -241,6 +248,7 @@ namespace Rts.Simulation
                 {
                     foreach (var goods in GoodsKinds)
                     {
+                        if ((goods == ResourceKind.SiegeEngine || goods == ResourceKind.EliteKit) && !CraftTree4On) continue;
                         int i = (int)goods;
                         string key = n + "GoodsMarket." + goods.ToString();
                         w.Value(key + ".SoldCount", e.GoodsSoldCounts[i]);
@@ -358,6 +366,16 @@ namespace Rts.Simulation
                         var siegeQueue = b.QueueSiegeParts ?? Array.Empty<bool>();
                         w.Value(n + "QueueSiegeParts.Count", (uint)siegeQueue.Length);
                         for (int q = 0; q < siegeQueue.Length; q++) w.Value(n + "QueueSiegeParts[" + q.ToString(CultureInfo.InvariantCulture) + "]", siegeQueue[q]);
+                        if (CraftTree4On)
+                        {
+                            var eliteQueue = b.QueueEliteKit ?? Array.Empty<bool>();
+                            w.Value(n + "QueueEliteKit.Count", (uint)eliteQueue.Length);
+                            for (int q = 0; q < eliteQueue.Length; q++) w.Value(n + "QueueEliteKit[" + q.ToString(CultureInfo.InvariantCulture) + "]", eliteQueue[q]);
+                            var engineQueue = b.QueueSiegeEngine ?? Array.Empty<bool>();
+                            w.Value(n + "QueueSiegeEngine.Count", (uint)engineQueue.Length);
+                            for (int q = 0; q < engineQueue.Length; q++) w.Value(n + "QueueSiegeEngine[" + q.ToString(CultureInfo.InvariantCulture) + "]", engineQueue[q]);
+                            w.Value(n + "QueuedSiegeEngine", b.QueuedSiegeEngine);
+                        }
                     }
                 if (world.Config.Economy.BeltComponents && b.Kind == BuildingKind.Storage)
                 {

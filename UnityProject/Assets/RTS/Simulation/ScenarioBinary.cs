@@ -220,6 +220,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         private const int AgeFourExtensionId = 61;
         private const int AgeFourExtensionVersion = 1;
         private const int AgeFourExtensionDataLength = 15 * sizeof(int);
+        private const int AgeStrengthsExtensionId = 62;
+        private const int AgeStrengthsExtensionVersion = 2;
+        private const int AgeStrengthsExtensionDataLength = 43 * sizeof(int);
+        private const int CraftTree4ExtensionId = 63;
+        private const int CraftTree4ExtensionVersion = 1;
+        private const int CraftTree4ExtensionDataLength = 20 * sizeof(int) + 3 * sizeof(long);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -285,6 +291,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(NoNegativeStockExtensionId, NoNegativeStockExtensionVersion, NoNegativeStockExtensionDataLength)
              ,new ExtensionRegistration(LargeEconomyExtensionId, LargeEconomyExtensionVersion, LargeEconomyExtensionDataLength)
              ,new ExtensionRegistration(AgeFourExtensionId, AgeFourExtensionVersion, AgeFourExtensionDataLength)
+             ,new ExtensionRegistration(AgeStrengthsExtensionId, AgeStrengthsExtensionVersion, AgeStrengthsExtensionDataLength)
+             ,new ExtensionRegistration(CraftTree4ExtensionId, CraftTree4ExtensionVersion, CraftTree4ExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -902,7 +910,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == AutoReturnAfterHumanExtensionId) ReadAutoReturnAfterHumanExtension(extension, c.Economy);
                       else if (id == NoNegativeStockExtensionId) ReadNoNegativeStockExtension(extension, c.Economy);
                       else if (id == LargeEconomyExtensionId) ReadLargeEconomyExtension(extension, c.Economy);
-                      else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
+                       else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
+                    else if (id == AgeStrengthsExtensionId) ReadAgeStrengthsExtension(extension, c.Economy);
+                    else if (id == CraftTree4ExtensionId) ReadCraftTree4Extension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -988,7 +998,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AutoReturnAfterHumanExtensionId && !c.Economy.AutoReturnAfterHuman);
                  extensions.RemoveAll(extension => extension != null && extension.Id == NoNegativeStockExtensionId && !c.Economy.NoNegativeStock);
                  extensions.RemoveAll(extension => extension != null && extension.Id == LargeEconomyExtensionId && !c.Economy.LargeEconomy);
-                 extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourExtensionId && !c.Economy.AgeFour);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourExtensionId && !c.Economy.AgeFour);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AgeStrengthsExtensionId && !c.Economy.AgeStrengths);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1010,6 +1022,23 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions[i] = CreateAgeFourExtension(c.Economy);
                 }
             if (c.Economy.AgeFour && !hasAgeFour) extensions.Add(CreateAgeFourExtension(c.Economy));
+            bool hasAgeStrengths = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AgeStrengthsExtensionId)
+                {
+                    hasAgeStrengths = true;
+                    extensions[i] = CreateAgeStrengthsExtension(c.Economy);
+                }
+            if (c.Economy.AgeStrengths && !hasAgeStrengths) extensions.Add(CreateAgeStrengthsExtension(c.Economy));
+            bool hasCraftTree4 = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == CraftTree4ExtensionId)
+                {
+                    hasCraftTree4 = true;
+                    extensions[i] = CreateCraftTree4Extension(c.Economy);
+                }
+            if (c.Economy.CraftTree4 && c.Economy.AgeFour && c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && !hasCraftTree4)
+                extensions.Add(CreateCraftTree4Extension(c.Economy));
             // ID 4 is feature-owned data. It is meaningful only when both switches that make fishing selectable are
             // on; an old extension must not resurrect a disabled fishing civilisation on a subsequent round trip.
             if (!c.Economy.FishingCiv || !c.Economy.FishingEnabled)
@@ -2391,6 +2420,92 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.TotalWarFoodCost = reader.ReadInt32(); e.TotalWarWoodCost = reader.ReadInt32(); e.TotalWarMetalCost = reader.ReadInt32(); e.TotalWarTicks = reader.ReadInt32();
                 e.GrandWorkshopFoodCost = reader.ReadInt32(); e.GrandWorkshopWoodCost = reader.ReadInt32(); e.GrandWorkshopMetalCost = reader.ReadInt32(); e.GrandWorkshopTicks = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-four extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAgeStrengthsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AgeStrengths ? 1 : 0);
+                writer.Write(e.AgrarianFarmSpeedPermille); writer.Write(e.AgrarianRationsHealHp); writer.Write(e.AgrarianPopulationCapBonus);
+                writer.Write(e.MetallurgySmeltSpeedPermille); writer.Write(e.MetallurgyForgedDamageBonus); writer.Write(e.MetallurgySiegePartsTimePermille);
+                writer.Write(e.ForestryLumberSpeedPermille); writer.Write(e.ForestryArcherRangeBonus); writer.Write(e.ForestryBuildingWoodPermille);
+                writer.Write(e.MasonryWallHpPermille); writer.Write(e.MasonryTowerDamageBonus); writer.Write(e.MasonryCoreHpPermille);
+                writer.Write(e.CaravanTradeGoodsValue); writer.Write(e.CaravanMarketReturnPermille); writer.Write(e.CaravanRewardPermille);
+                writer.Write(e.CavalryStableTimePermille); writer.Write(e.CavalrySpeedPermille); writer.Write(e.CavalryHeavyHpPermille);
+                writer.Write(e.BridgeBuildingWorkPermille); writer.Write(e.BridgeRamSiegeDamagePermille); writer.Write(e.BridgeGeneralWorkPermille);
+                writer.Write(e.AcademyResearchTimePermille); writer.Write(e.AcademyScholarlyCostPermille); writer.Write(e.AcademyAge4ResearchCostPermille);
+                writer.Write(e.CultConversionTimePermille); writer.Write(e.CultIncenseHealHp); writer.Write(e.CultMonkHpPermille);
+                writer.Write(e.FishingGatherTimePermille); writer.Write(e.FishingPreserveFoodValue); writer.Write(e.FishingFoodCarryBonus);
+                writer.Write(e.MountainMiningTimePermille); writer.Write(e.MountainMercenaryGems); writer.Write(e.MountainMercenaryDamageBonus);
+                writer.Write(e.TollgateFeePermille); writer.Write(e.TollgateHpPermille); writer.Write(e.TollgateRepairKitHp);
+                writer.Write(e.MetropolisVillagerTimePermille); writer.Write(e.MetropolisTownLimitBonus); writer.Write(e.MetropolisToolTimePermille);
+                writer.Write(e.SanctuaryPilgrimagePermille); writer.Write(e.SanctuaryCharmHpPermille); writer.Write(e.SanctuaryCharmHpAge4Permille);
+                return new ScenarioExtensionData { Id = AgeStrengthsExtensionId, Version = AgeStrengthsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAgeStrengthsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid age-strengths flag.");
+                e.AgeStrengths = enabled != 0;
+                e.AgrarianFarmSpeedPermille = reader.ReadInt32(); e.AgrarianRationsHealHp = reader.ReadInt32(); e.AgrarianPopulationCapBonus = reader.ReadInt32();
+                e.MetallurgySmeltSpeedPermille = reader.ReadInt32(); e.MetallurgyForgedDamageBonus = reader.ReadInt32(); e.MetallurgySiegePartsTimePermille = reader.ReadInt32();
+                e.ForestryLumberSpeedPermille = reader.ReadInt32(); e.ForestryArcherRangeBonus = reader.ReadInt32(); e.ForestryBuildingWoodPermille = reader.ReadInt32();
+                e.MasonryWallHpPermille = reader.ReadInt32(); e.MasonryTowerDamageBonus = reader.ReadInt32(); e.MasonryCoreHpPermille = reader.ReadInt32();
+                e.CaravanTradeGoodsValue = reader.ReadInt32(); e.CaravanMarketReturnPermille = reader.ReadInt32(); e.CaravanRewardPermille = reader.ReadInt32();
+                e.CavalryStableTimePermille = reader.ReadInt32(); e.CavalrySpeedPermille = reader.ReadInt32(); e.CavalryHeavyHpPermille = reader.ReadInt32();
+                e.BridgeBuildingWorkPermille = reader.ReadInt32(); e.BridgeRamSiegeDamagePermille = reader.ReadInt32(); e.BridgeGeneralWorkPermille = reader.ReadInt32();
+                e.AcademyResearchTimePermille = reader.ReadInt32(); e.AcademyScholarlyCostPermille = reader.ReadInt32(); e.AcademyAge4ResearchCostPermille = reader.ReadInt32();
+                e.CultConversionTimePermille = reader.ReadInt32(); e.CultIncenseHealHp = reader.ReadInt32(); e.CultMonkHpPermille = reader.ReadInt32();
+                e.FishingGatherTimePermille = reader.ReadInt32(); e.FishingPreserveFoodValue = reader.ReadInt32(); e.FishingFoodCarryBonus = reader.ReadInt32();
+                e.MountainMiningTimePermille = reader.ReadInt32(); e.MountainMercenaryGems = reader.ReadInt32(); e.MountainMercenaryDamageBonus = reader.ReadInt32();
+                e.TollgateFeePermille = reader.ReadInt32(); e.TollgateHpPermille = reader.ReadInt32(); e.TollgateRepairKitHp = reader.ReadInt32();
+                e.MetropolisVillagerTimePermille = reader.ReadInt32(); e.MetropolisTownLimitBonus = reader.ReadInt32(); e.MetropolisToolTimePermille = reader.ReadInt32();
+                e.SanctuaryPilgrimagePermille = reader.ReadInt32(); e.SanctuaryCharmHpPermille = reader.ReadInt32(); e.SanctuaryCharmHpAge4Permille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-strengths extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftTree4Extension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftTree4 ? 1 : 0);
+                writer.Write(e.SiegeEngineTicks); writer.Write(e.SiegeEngineSiegePartsInput); writer.Write(e.SiegeEngineMechanismInput);
+                writer.Write(e.EliteKitTicks); writer.Write(e.EliteKitArmsKitInput); writer.Write(e.EliteKitMechanismInput); writer.Write(e.EliteKitMetalInput);
+                writer.Write(e.EliteKitAttack); writer.Write(e.EliteKitHpPermille);
+                writer.Write(e.CannonSiegeEngineCost); writer.Write(e.CannonFoodCost); writer.Write(e.CannonWoodCost); writer.Write(e.CannonHp);
+                writer.Write(e.CannonDamage); writer.Write(e.CannonSiegeDamage); writer.Write(e.CannonInterval);
+                writer.Write(e.CannonRange.Raw); writer.Write(e.CannonSpeed.Raw); writer.Write(e.CannonVision.Raw); writer.Write(e.CannonAutoLimit);
+                writer.Write(e.GoodsValueSiegeEngine); writer.Write(e.GoodsValueEliteKit);
+                return new ScenarioExtensionData { Id = CraftTree4ExtensionId, Version = CraftTree4ExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftTree4Extension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-tree4 flag.");
+                e.CraftTree4 = enabled != 0;
+                e.SiegeEngineTicks = reader.ReadInt32(); e.SiegeEngineSiegePartsInput = reader.ReadInt32(); e.SiegeEngineMechanismInput = reader.ReadInt32();
+                e.EliteKitTicks = reader.ReadInt32(); e.EliteKitArmsKitInput = reader.ReadInt32(); e.EliteKitMechanismInput = reader.ReadInt32(); e.EliteKitMetalInput = reader.ReadInt32();
+                e.EliteKitAttack = reader.ReadInt32(); e.EliteKitHpPermille = reader.ReadInt32();
+                e.CannonSiegeEngineCost = reader.ReadInt32(); e.CannonFoodCost = reader.ReadInt32(); e.CannonWoodCost = reader.ReadInt32(); e.CannonHp = reader.ReadInt32();
+                e.CannonDamage = reader.ReadInt32(); e.CannonSiegeDamage = reader.ReadInt32(); e.CannonInterval = reader.ReadInt32();
+                e.CannonRange = Fix64.FromRaw(reader.ReadInt64()); e.CannonSpeed = Fix64.FromRaw(reader.ReadInt64()); e.CannonVision = Fix64.FromRaw(reader.ReadInt64()); e.CannonAutoLimit = reader.ReadInt32();
+                e.GoodsValueSiegeEngine = reader.ReadInt32(); e.GoodsValueEliteKit = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree4 extension data.");
             }
         }
 

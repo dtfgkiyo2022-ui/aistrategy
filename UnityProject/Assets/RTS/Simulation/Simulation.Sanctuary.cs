@@ -137,7 +137,10 @@ namespace Rts.Simulation
                     foreach (var site in sites)
                         if (InRange(soldier.Position, site, radius)) { near = true; break; }
                     if (!near) continue;
-                    soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + rules.SanctuaryPilgrimageHeal));
+                    int heal = AgeStrength(faction, CivKind.Sanctuary, 2)
+                        ? Math.Max(1, checked((rules.SanctuaryPilgrimageHeal * rules.SanctuaryPilgrimagePermille + 999) / 1000))
+                        : rules.SanctuaryPilgrimageHeal;
+                    soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + heal));
                 }
             }
         }

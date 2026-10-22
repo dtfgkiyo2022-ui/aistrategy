@@ -26,7 +26,8 @@ namespace Rts.Simulation
                     economy.Rations = checked(economy.Rations - 1);
                     economy.RationsConsumed++;
                     int before = soldier.Hp;
-                    soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + rules.RationsHealHp));
+                    int heal = AgeStrength(faction, CivKind.Agrarian, 3) ? rules.AgrarianRationsHealHp : rules.RationsHealHp;
+                    soldier.Hp = Math.Min(soldier.Parameters.Hp, checked(soldier.Hp + heal));
                     economy.RationsHealedHp = checked(economy.RationsHealedHp + soldier.Hp - before);
                     healed++;
                 }

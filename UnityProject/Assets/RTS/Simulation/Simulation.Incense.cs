@@ -33,7 +33,8 @@ namespace Rts.Simulation
                 if (best < 0) continue;
                 ref var target = ref world.Soldiers[best];
                 int before = target.Hp;
-                target.Hp = Math.Min(target.Parameters.Hp, checked(target.Hp + rules.IncenseHealHp));
+                    int heal = AgeStrength(faction, CivKind.Cult, 3) ? rules.CultIncenseHealHp : rules.IncenseHealHp;
+                    target.Hp = Math.Min(target.Parameters.Hp, checked(target.Hp + heal));
                 economy.Incense--;
                 economy.IncenseConsumed++;
                 economy.IncenseHealedHp = checked(economy.IncenseHealedHp + target.Hp - before);

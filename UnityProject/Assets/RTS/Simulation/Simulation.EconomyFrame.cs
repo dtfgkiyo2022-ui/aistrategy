@@ -329,6 +329,22 @@ namespace Rts.Simulation
                  mechanismBuildingMaterialPermille: CraftTree3On ? rules.MechanismBuildingMaterialPermille : 0,
                  mechanismResearchCostPermille: CraftTree3On ? rules.MechanismResearchCostPermille : 0,
                  mechanismResearchTimePermille: CraftTree3On ? rules.MechanismResearchTimePermille : 0,
+                 craftTree4Enabled: CraftTree4On,
+                 siegeEngine: CraftTree4On ? economy.SiegeEngine : 0,
+                 eliteKit: CraftTree4On ? economy.EliteKit : 0,
+                 siegeEngineTicks: CraftTree4On ? rules.SiegeEngineTicks : 0,
+                 eliteKitTicks: CraftTree4On ? rules.EliteKitTicks : 0,
+                 eliteKitAttack: CraftTree4On ? rules.EliteKitAttack : 0,
+                 eliteKitHpPermille: CraftTree4On ? rules.EliteKitHpPermille : 0,
+                 cannonFoodCost: CraftTree4On ? rules.CannonFoodCost : 0,
+                 cannonWoodCost: CraftTree4On ? rules.CannonWoodCost : 0,
+                 cannonRange: CraftTree4On ? (int)rules.CannonRange.Raw : 0,
+                 cannonSiegeDamage: CraftTree4On ? rules.CannonSiegeDamage : 0,
+                 siegeEngineProduced: CraftTree4On ? economy.SiegeEngineProduced : 0,
+                 siegeEngineConsumed: CraftTree4On ? economy.SiegeEngineConsumed : 0,
+                 eliteKitProduced: CraftTree4On ? economy.EliteKitProduced : 0,
+                 eliteKitConsumed: CraftTree4On ? economy.EliteKitConsumed : 0,
+                 cannonProduced: CraftTree4On ? economy.CannonProduced : 0,
                 civChoiceDeadlineTick: civChoiceDeadline,
                 ageClockUx: AgeClockUxOn,
                 commonDrill: CommonDrillOn, drillWoodCost: CommonDrillOn ? rules.DrillWoodCost : 0,
@@ -349,8 +365,9 @@ namespace Rts.Simulation
                   totalWarTicks: AgeFourOn ? rules.TotalWarTicks : 0,
                   grandWorkshopFoodCost: AgeFourOn ? rules.GrandWorkshopFoodCost : 0,
                   grandWorkshopWoodCost: AgeFourOn ? rules.GrandWorkshopWoodCost : 0,
-                  grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
-                  grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0);
+                   grandWorkshopMetalCost: AgeFourOn ? rules.GrandWorkshopMetalCost : 0,
+                   grandWorkshopTicks: AgeFourOn ? rules.GrandWorkshopTicks : 0,
+                   ageStrengths: AgeStrengthsOn);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

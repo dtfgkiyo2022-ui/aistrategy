@@ -64,11 +64,11 @@ namespace Rts.Contracts
     // 3 is left for the sentry of the held PR #62. Villager is Ver.3 (technical-design-v3 3.3).
     // Archer and Cavalry (V3-5, technical-design-v3 32 #8) are what a barracks trains; LightCavalry is the V3-10 early
     // stable unit. They carry their own parameters and class; the counter line maps LightCavalry to Cavalry.
-    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13 }
+    public enum UnitKind : byte { Infantry = 1, Scout = 2, Villager = 4, Archer = 5, Cavalry = 6, Ram = 7, Mercenary = 8, Monk = 9, HeavyInfantry = 10, SkirmishArcher = 11, LightCavalry = 12, HeavyCavalry = 13, Cannon = 14 }
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28, SiegeEngine = 29, EliteKit = 30 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -159,7 +159,7 @@ namespace Rts.Contracts
         Storage = 31, Mill = 32, BrickKiln = 33, Saddlery = 34, Sawmill = 35, Scriptorium = 36, DryingRack = 37, Lapidary = 38, Weaver = 39, IncenseHouse = 40, CharmWorkshop = 41, RepairYard = 42, ToolShop = 43, Stonecutter = 44, Joinery = 45, Assembler = 46, Drill = 47 }
 
     /// <summary>CraftTree2 recipes. Values are compact so later stages can append recipes without gaps.</summary>
-    public enum RecipeKind : byte { None = 0, Frames = 1, ArmsKit = 2, Scholarly = 3, SiegeParts = 4, Mechanism = 5 }
+    public enum RecipeKind : byte { None = 0, Frames = 1, ArmsKit = 2, Scholarly = 3, SiegeParts = 4, Mechanism = 5, SiegeEngine = 6, EliteKit = 7 }
 
     public enum EventKind : byte
     {

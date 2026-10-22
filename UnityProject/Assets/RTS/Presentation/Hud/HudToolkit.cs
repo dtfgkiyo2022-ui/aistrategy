@@ -908,9 +908,10 @@ namespace Rts.Presentation
                 }
                 if (foundObjective)
                 {
-                    SetSelectionInfo(
-                        SelectionInfoText.ObjectiveTitle(selectedObjective, frame.FactionId),
-                        SelectionInfoText.ObjectiveDetail(selectedObjective, frame.FactionId, frame.Tick));
+                    string detail = SelectionInfoText.ObjectiveDetail(selectedObjective, frame.FactionId, frame.Tick);
+                    if (selectedObjective.Kind == GoalKind.Core && selectedObjective.OwnerFactionId == frame.FactionId && economy != null && economy.AgeStrengths)
+                        detail += "\n" + SelectionInfoText.ActiveAgeStrengths(economy);
+                    SetSelectionInfo(SelectionInfoText.ObjectiveTitle(selectedObjective, frame.FactionId), detail);
                     return;
                 }
             }
@@ -2368,7 +2369,7 @@ namespace Rts.Presentation
             {
                 if (lastCommittedAge >= 0 && ageToast != null)
                 {
-                    ageToast.text = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age);
+                    ageToast.text = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age, economy.AgeStrengths);
                     ageToast.style.display = DisplayStyle.Flex;
                     ageToast.schedule.Execute(() => { if (ageToast != null) ageToast.style.display = DisplayStyle.None; }).StartingIn(2600);
                 }

@@ -86,6 +86,13 @@ namespace Rts.Simulation
         public int MechanismProduced { get; internal set; }
         public int MechanismConsumed { get; internal set; }
         public int MechanismUsedResearch { get; internal set; }
+        public int SiegeEngine { get; internal set; }
+        public int SiegeEngineProduced { get; internal set; }
+        public int SiegeEngineConsumed { get; internal set; }
+        public int EliteKit { get; internal set; }
+        public int EliteKitProduced { get; internal set; }
+        public int EliteKitConsumed { get; internal set; }
+        public int CannonProduced { get; internal set; }
         public int PreservesProduced { get; internal set; }
         public int PreservesConvertedFood { get; internal set; }
         public int JewelsProduced { get; internal set; }
@@ -228,6 +235,13 @@ namespace Rts.Simulation
                     MechanismProduced = economy.MechanismProduced,
                     MechanismConsumed = economy.MechanismConsumed,
                     MechanismUsedResearch = economy.MechanismUsedResearch,
+                    SiegeEngine = economy.SiegeEngine,
+                    SiegeEngineProduced = economy.SiegeEngineProduced,
+                    SiegeEngineConsumed = economy.SiegeEngineConsumed,
+                    EliteKit = economy.EliteKit,
+                    EliteKitProduced = economy.EliteKitProduced,
+                    EliteKitConsumed = economy.EliteKitConsumed,
+                    CannonProduced = economy.CannonProduced,
                     PreservesProduced = economy.PreservesProduced,
                     PreservesConvertedFood = economy.PreservesConvertedFood,
                     JewelsProduced = economy.JewelsProduced,
@@ -276,17 +290,19 @@ namespace Rts.Simulation
         private MatchPackGoodsTradeSnapshot[] GoodsMarketSnapshot(FactionEconomy economy)
         {
             if (!GoodsMarketOn || economy.GoodsSoldCounts == null) return Array.Empty<MatchPackGoodsTradeSnapshot>();
-            var result = new MatchPackGoodsTradeSnapshot[GoodsKinds.Length];
+            var result = new System.Collections.Generic.List<MatchPackGoodsTradeSnapshot>(GoodsKinds.Length);
             for (int i = 0; i < GoodsKinds.Length; i++)
             {
+                // CraftTree4 goods only appear when that flag is on, so flag-off packs keep their old list.
+                if ((GoodsKinds[i] == ResourceKind.SiegeEngine || GoodsKinds[i] == ResourceKind.EliteKit) && !CraftTree4On) continue;
                 int index = (int)GoodsKinds[i];
-                result[i] = new MatchPackGoodsTradeSnapshot
+                result.Add(new MatchPackGoodsTradeSnapshot
                 {
                     Goods = GoodsKinds[i].ToString(), SoldCount = economy.GoodsSoldCounts[index], SoldUnits = economy.GoodsSoldUnits[index],
                     ReceivedFood = economy.GoodsReceivedFood[index], ReceivedWood = economy.GoodsReceivedWood[index]
-                };
+                });
             }
-            return result;
+            return result.ToArray();
         }
 
         private int CountGatherers(uint factionId, ResourceKind kind)

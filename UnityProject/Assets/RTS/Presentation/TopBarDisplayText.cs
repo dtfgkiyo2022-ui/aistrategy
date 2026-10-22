@@ -78,6 +78,43 @@ namespace Rts.Presentation
             "加工の3段目・加工建物のLv3・城・3つ目の技術が使えます",
             "総力戦・大工房が使えます"
         };
+        // Technical-design-v3 37.5.1: one strength per civilisation for ages 2-4 (AgeStrengths). Rows follow CivEnglish.
+        private static readonly string[,] StrengthEnglish =
+        {
+            { "", "", "", "", "" },
+            { "", "", "farms work 1.2x faster", "rations heal 15 HP", "population cap +20" },
+            { "", "", "smelters work 1.25x faster", "forged infantry attack +1", "siege parts take 0.7x the time" },
+            { "", "", "lumber camps work 1.25x faster", "archers gain +1 range", "buildings cost 0.8x wood" },
+            { "", "", "walls have 1.2x HP", "towers hit +2", "the core has 1.3x max HP" },
+            { "", "", "trade goods add 5 instead of 4", "market exchanges return +10%", "caravan rewards are 1.5x" },
+            { "", "", "stables train in 0.8x the time", "cavalry move 10% faster", "heavy cavalry have +15% HP" },
+            { "", "", "bridges take 0.7x the work", "rams deal +20% to buildings", "buildings take 0.8x the work" },
+            { "", "", "research takes 0.85x the time", "books discount research to 0.6x", "age-four research costs half" },
+            { "", "", "conversion is 20% faster", "incense heals 30 HP", "monks have 1.5x HP" },
+            { "", "", "fishing is 1.2x faster", "preserves add 4 food instead of 3", "villagers carry 2 more food" },
+            { "", "", "mines and drills work 1.2x faster", "barracks mercenaries cost 8 gems", "mercenaries attack +2" },
+            { "", "", "tolls are 1.5x", "tollgates have 1.3x HP", "repair kits mend 60 HP" },
+            { "", "", "town villagers train in 0.8x the time", "one more town allowed", "tools cut training time to 0.4x" },
+            { "", "", "pilgrimage income is 1.2x", "charms give 1.3x HP", "charms give 1.5x HP" }
+        };
+        private static readonly string[,] StrengthJapanese =
+        {
+            { "", "", "", "", "" },
+            { "", "", "農場の作る速さが 1.2 倍", "糧食の回復が HP 15 に", "人口の上限 +20" },
+            { "", "", "精錬所の作る速さが 1.25 倍", "鍛えた歩兵の攻撃 +1", "攻城部品の作る時間が 0.7 倍" },
+            { "", "", "木こり小屋の作る速さが 1.25 倍", "弓兵の射程 +1", "建物の木の費用が 0.8 倍" },
+            { "", "", "壁の HP が 1.2 倍", "塔の一撃 +2", "コアの最大 HP が 1.3 倍" },
+            { "", "", "交易品で増える量が 4→5", "市場の交換の取り分 +10%", "隊商の報酬が 1.5 倍" },
+            { "", "", "厩舎の訓練時間が 0.8 倍", "騎兵の速さ +10%", "重騎兵の HP +15%" },
+            { "", "", "橋の建てる手間が 0.7 倍", "破城槌の対建物 +20%", "建物の建てる手間が 0.8 倍" },
+            { "", "", "研究の時間が 0.85 倍", "書物の割引が 0.7→0.6", "時代4 の研究の値段が半分" },
+            { "", "", "改宗の速さ +20%", "香の回復が HP 30 に", "僧侶の HP が 1.5 倍" },
+            { "", "", "漁の速さが 1.2 倍", "保存食で増える食料が 3→4", "食料を運ぶ量 +2" },
+            { "", "", "坑道・採掘機の速さが 1.2 倍", "兵舎の傭兵の宝石が 10→8", "傭兵の攻撃 +2" },
+            { "", "", "通行料が 1.5 倍", "関所の HP が 1.3 倍", "補修材の修理が 40→60" },
+            { "", "", "町の村人の訓練時間が 0.8 倍", "町の数の上限 +1", "道具の割引で訓練時間が 0.5→0.4" },
+            { "", "", "巡礼の収入が 1.2 倍", "護符で生まれる兵の HP が 1.3 倍", "護符で生まれる兵の HP が 1.5 倍" }
+        };
 
         public static string Age(EconomyView economy)
         {
@@ -129,12 +166,30 @@ namespace Rts.Presentation
                 "・" + AgeJapanese[index, clampedAge] + "の時代");
         }
 
-        public static string AgeAdvanceMessage(CivKind civ, int age)
+        public static string AgeAdvanceMessage(CivKind civ, int age) => AgeAdvanceMessage(civ, age, false);
+
+        /// <summary>The centre notice; with AgeStrengths it also names the civilisation's strength for that age.</summary>
+        public static string AgeAdvanceMessage(CivKind civ, int age, bool ageStrengths)
         {
             int clampedAge = age < 0 ? 0 : age > 4 ? 4 : age;
-            return UiText.T("Age " + clampedAge + " reached: " + AgeName(civ, clampedAge) + " — " + IntentEnglish[clampedAge] + ". " + UnlockEnglish[clampedAge],
-                "時代" + clampedAge + "に進みました：" + AgeName(civ, clampedAge) + " ― " + IntentJapanese[clampedAge] + "。" + UnlockJapanese[clampedAge]);
+            string strength = ageStrengths ? AgeStrength(civ, clampedAge) : "";
+            return UiText.T("Age " + clampedAge + " reached: " + AgeName(civ, clampedAge) + " — " + IntentEnglish[clampedAge] + ". " + UnlockEnglish[clampedAge]
+                    + (strength.Length > 0 ? ". Strength: " + strength : ""),
+                "時代" + clampedAge + "に進みました：" + AgeName(civ, clampedAge) + " ― " + IntentJapanese[clampedAge] + "。" + UnlockJapanese[clampedAge]
+                    + (strength.Length > 0 ? "。強み：" + strength : ""));
         }
+
+        /// <summary>AgeStrengths: the strength a civilisation gains on reaching the age; empty below age 2.</summary>
+        public static string AgeStrength(CivKind civ, int age)
+        {
+            int index = CivIndex(civ), clampedAge = age < 0 ? 0 : age > 4 ? 4 : age;
+            return UiText.T(StrengthEnglish[index, clampedAge], StrengthJapanese[index, clampedAge]);
+        }
+
+        public static string CraftTree4Products()
+            => UiText.T("CraftTree4: Siege engine, Elite kit", "加工4段目：攻城機関・精鋭キット");
+
+        public static string CannonName() => UiText.T("Cannon", "大砲");
 
         private static int CivIndex(CivKind civ)
         {
