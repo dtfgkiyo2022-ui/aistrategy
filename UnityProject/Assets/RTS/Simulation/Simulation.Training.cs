@@ -312,6 +312,9 @@ namespace Rts.Simulation
             var c = CostOf(faction, kind, producer);
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            // The reserve protects the purchase of the cannon itself; do not count it twice
+            // when CanPay is checking that cannon.
+            heldWood = checked(heldWood + (automaticEconomyAction && kind != UnitKind.Cannon ? AgeFourAiWoodReserve(faction) : 0));
             return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
                 && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)
                 && (kind != UnitKind.HeavyCavalry || TackAllowed(faction) && e.Tack >= world.Config.Economy.HeavyCavalryTackCost);

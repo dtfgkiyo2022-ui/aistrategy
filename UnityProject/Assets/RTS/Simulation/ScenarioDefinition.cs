@@ -438,6 +438,11 @@ namespace Rts.Simulation
         public int AgeClockTicks1 = 4800, AgeClockTicks2 = 10800, AgeClockTicks3 = 15600, AgeClockTicks4 = 24000;
         /// <summary>Technical-design-v3 37: opts into the fifth age stage and its age-four-only rules.</summary>
         public bool AgeFour;
+        /// <summary>AgeFourAi: lets the automatic economy sustain the age-four research and craft chain.</summary>
+        public bool AgeFourAi;
+        /// <summary>AgeFourAiIndustry: opts into the additional processing buildings and assembler recipe policy.</summary>
+        public bool AgeFourAiIndustry;
+        public int AgeFourAiAssemblers = 3;
         /// <summary>AgeClockUx: separates civilisation reservation from payment and gives manual players time to choose after the clock.</summary>
         public bool AgeClockUx;
         public int AgeClockUxChoiceTicks = 600;

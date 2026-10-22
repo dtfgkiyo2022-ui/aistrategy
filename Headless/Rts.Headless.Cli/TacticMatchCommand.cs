@@ -65,6 +65,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--age-four-off"))
         {
             scenario.Economy.AgeFour = false;
+            scenario.Economy.AgeFourAi = false;
             scenario.Economy.AgeStrengths = false;
             scenario.Economy.AgeClockTicks1 = 4800;
             scenario.Economy.AgeClockTicks2 = 10800;
@@ -73,6 +74,8 @@ internal static class TacticMatchCommand
             scenario.Economy.LatePushAfterTicks = 12000;
             scenario.Economy.LatePushAdvantageAfterTicks = 8000;
         }
+        if (options.ContainsKey("--age-four-ai-off")) scenario.Economy.AgeFourAi = false;
+        if (options.ContainsKey("--age-four-ai-industry")) scenario.Economy.AgeFourAiIndustry = true;
         if (options.TryGetValue("--siege-age2-permille", out var siegeAge2Text))
             scenario.Economy.SiegeAge2Permille = ParsePermille("--siege-age2-permille", siegeAge2Text);
         if (options.TryGetValue("--siege-age3-permille", out var siegeAge3Text))
@@ -125,18 +128,32 @@ internal static class TacticMatchCommand
         var eastHuman = LoadHumanOrders(options.GetValueOrDefault("--east-human"), 2, ticks);
         var loggedDiscarded = new HashSet<ulong>();
         StreamWriter researchTrace = null;
-        Dictionary<uint, TechKind> priorResearch = null;
-        int priorBooks = 0, researchStarts = 0, researchCompletions = 0;
-        long firstBooksThresholdTick = -1;
+        Dictionary<uint, Dictionary<uint, TechKind>> priorResearch = null;
+        var priorBooks = new Dictionary<uint, int>();
+        var researchStarts = new Dictionary<uint, int>();
+        var researchCompletions = new Dictionary<uint, int>();
+        var firstBooksThresholdTick = new Dictionary<uint, long>();
+        var priorResearchFailureTicks = new Dictionary<uint, long>();
         if (options.TryGetValue("--research-trace-out", out var tracePath))
         {
             string directory = Path.GetDirectoryName(Path.GetFullPath(tracePath));
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             researchTrace = new StreamWriter(tracePath, false, new UTF8Encoding(false));
-            priorResearch = new Dictionary<uint, TechKind>();
-            var initial = simulation.Capture(1).Economy;
-            priorBooks = initial?.Books ?? 0;
-            researchTrace.WriteLine("{\"event\":\"header\",\"booksPerResearch\":" + (initial?.BooksPerResearch ?? 0) + "}");
+            priorResearch = new Dictionary<uint, Dictionary<uint, TechKind>>();
+            researchTrace.WriteLine(JsonSerializer.Serialize(new
+            {
+                @event = "header",
+                factions = new[] { 1, 2 },
+                booksPerResearch = simulation.Capture(1).Economy?.BooksPerResearch ?? 0
+            }));
+        }
+        StreamWriter craftTrace = null;
+        if (options.TryGetValue("--craft-trace-out", out var craftTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(craftTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            craftTrace = new StreamWriter(craftTracePath, false, new UTF8Encoding(false));
+            craftTrace.WriteLine("{\"event\":\"header\",\"intervalTicks\":1000}");
         }
         MatchPackWriter pack = null;
         if (options.TryGetValue("--pack-out", out var packPath))
@@ -254,39 +271,92 @@ internal static class TacticMatchCommand
             }
             if (researchTrace != null)
             {
-                var economy = simulation.Capture(1).Economy;
-                if (economy != null)
+                for (uint faction = 1; faction <= 2; faction++)
                 {
-                    if (firstBooksThresholdTick < 0 && priorBooks < economy.BooksPerResearch && economy.Books >= economy.BooksPerResearch)
+                    var economy = simulation.Capture(faction).Economy;
+                    if (economy == null) continue;
+                    if (economy.AgeFourAiResearchFailureTick > (priorResearchFailureTicks.TryGetValue(faction, out var failureTick) ? failureTick : 0))
                     {
-                        firstBooksThresholdTick = simulation.Capture(1).Tick;
-                        researchTrace.WriteLine("{\"event\":\"books-threshold\",\"tick\":" + simulation.Capture(1).Tick + ",\"books\":" + economy.Books + "}");
+                        researchTrace.WriteLine(JsonSerializer.Serialize(new
+                        {
+                            @event = "research-failure", faction, tick = economy.AgeFourAiResearchFailureTick,
+                            tech = economy.AgeFourAiResearchFailureTech.ToString(),
+                            reason = ResearchFailureReasonName(economy.AgeFourAiResearchFailureReason),
+                            food = economy.Food, wood = economy.Wood, metal = economy.Metal,
+                            ore = economy.Ore, gems = economy.Gems
+                        }));
+                        priorResearchFailureTicks[faction] = economy.AgeFourAiResearchFailureTick;
+                    }
+                    if (!priorResearch.TryGetValue(faction, out var factionPriorResearch))
+                    {
+                        factionPriorResearch = new Dictionary<uint, TechKind>();
+                        priorResearch[faction] = factionPriorResearch;
+                    }
+                    int booksBefore = priorBooks.TryGetValue(faction, out var savedBooks) ? savedBooks : 0;
+                    if (!firstBooksThresholdTick.ContainsKey(faction) && booksBefore < economy.BooksPerResearch && economy.Books >= economy.BooksPerResearch)
+                    {
+                        firstBooksThresholdTick[faction] = simulation.Capture(faction).Tick;
+                        researchTrace.WriteLine(JsonSerializer.Serialize(new { @event = "books-threshold", faction, tick = simulation.Capture(faction).Tick, books = economy.Books }));
                     }
                     var current = new Dictionary<uint, TechKind>();
-                    foreach (var building in economy.Buildings.Where(b => b.FactionId == 1))
+                    foreach (var building in economy.Buildings.Where(b => b.FactionId == faction))
                     {
                         if (building.Researching != 0)
                         {
                             current[building.Id] = building.Researching;
-                            if (!priorResearch.TryGetValue(building.Id, out var prior) || prior == 0)
+                            if (!factionPriorResearch.TryGetValue(building.Id, out var prior) || prior == 0)
                             {
-                                researchStarts++;
-                                researchTrace.WriteLine("{\"event\":\"research-start\",\"tick\":" + simulation.Capture(1).Tick
-                                    + ",\"building\":\"" + building.Kind + "\",\"tech\":\"" + building.Researching
-                                    + "\",\"books\":" + economy.Books + ",\"starts\":" + researchStarts + "}");
+                                int starts = researchStarts.TryGetValue(faction, out var oldStarts) ? oldStarts + 1 : 1;
+                                researchStarts[faction] = starts;
+                                researchTrace.WriteLine(JsonSerializer.Serialize(new
+                                {
+                                    @event = "research-start", faction, tick = simulation.Capture(faction).Tick,
+                                    building = building.Kind.ToString(), tech = building.Researching.ToString(), books = economy.Books, starts
+                                }));
                             }
                         }
-                        else if (priorResearch.TryGetValue(building.Id, out var priorCompleted) && priorCompleted != 0)
+                        else if (factionPriorResearch.TryGetValue(building.Id, out var priorCompleted) && priorCompleted != 0)
                         {
-                            researchCompletions++;
-                            researchTrace.WriteLine("{\"event\":\"research-complete\",\"tick\":" + simulation.Capture(1).Tick
-                                + ",\"building\":\"" + building.Kind + "\",\"tech\":\"" + priorCompleted
-                                + "\",\"completions\":" + researchCompletions + "}");
+                            int completions = researchCompletions.TryGetValue(faction, out var oldCompletions) ? oldCompletions + 1 : 1;
+                            researchCompletions[faction] = completions;
+                            researchTrace.WriteLine(JsonSerializer.Serialize(new
+                            {
+                                @event = "research-complete", faction, tick = simulation.Capture(faction).Tick,
+                                building = building.Kind.ToString(), tech = priorCompleted.ToString(), completions
+                            }));
                         }
                     }
-                    priorResearch = current;
-                    priorBooks = economy.Books;
+                    priorResearch[faction] = current;
+                    priorBooks[faction] = economy.Books;
                 }
+            }
+            if (craftTrace != null && simulation.Capture(1).Tick % 1000 == 0)
+            {
+                for (uint faction = 1; faction <= 2; faction++)
+                {
+                    var economy = simulation.Capture(faction).Economy;
+                    if (economy == null) continue;
+                    var assemblers = economy.Buildings.Where(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler)
+                        .OrderBy(b => b.Id)
+                        .Select(b => new
+                        {
+                            id = b.Id, recipe = b.Recipe.ToString(), timer = b.TrainRemaining,
+                            input = b.Input, inputSecondary = b.InputSecondary, inputTertiary = b.InputTertiary
+                        }).ToArray();
+                    int planksInAssemblers = assemblers.Where(b => b.recipe == RecipeKind.Frames.ToString()
+                            || b.recipe == RecipeKind.ArmsKit.ToString()
+                            || b.recipe == RecipeKind.Scholarly.ToString())
+                        .Sum(b => b.input);
+                    int foodInAssemblers = assemblers.Where(b => b.recipe == RecipeKind.Scholarly.ToString())
+                        .Sum(b => b.inputTertiary);
+                    craftTrace.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        @event = "sample", tick = simulation.Capture(faction).Tick, faction,
+                        age = economy.Age, food = economy.Food, wood = economy.Wood, planks = economy.Planks,
+                        planksInAssemblers, foodInAssemblers, assemblers
+                    }));
+                }
+                craftTrace.Flush();
             }
             if (timingWriter != null)
             {
@@ -371,6 +441,7 @@ internal static class TacticMatchCommand
         }
         timingWriter?.Dispose();
         ageTrace?.Dispose();
+        craftTrace?.Dispose();
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
@@ -395,7 +466,21 @@ internal static class TacticMatchCommand
             }));
             exploreTrace.Dispose();
         }
-        researchTrace?.WriteLine("{\"event\":\"summary\",\"thresholdTick\":" + firstBooksThresholdTick + ",\"researchStarts\":" + researchStarts + ",\"researchCompletions\":" + researchCompletions + ",\"finalBooks\":" + (simulation.Capture(1).Economy?.Books ?? 0) + "}");
+        if (researchTrace != null)
+        {
+            researchTrace.WriteLine(JsonSerializer.Serialize(new
+            {
+                @event = "summary",
+                factions = new[] { 1, 2 }.Select(faction => new
+                {
+                    faction,
+                    thresholdTick = firstBooksThresholdTick.TryGetValue((uint)faction, out var threshold) ? threshold : -1,
+                    researchStarts = researchStarts.TryGetValue((uint)faction, out var starts) ? starts : 0,
+                    researchCompletions = researchCompletions.TryGetValue((uint)faction, out var completions) ? completions : 0,
+                    finalBooks = simulation.Capture((uint)faction).Economy?.Books ?? 0
+                }).ToArray()
+            }));
+        }
         researchTrace?.Dispose();
         if (options.TryGetValue("--log-out", out var logPath)) File.WriteAllLines(logPath, lines, new UTF8Encoding(false));
         if (options.TryGetValue("--out", out var outputPath))
@@ -441,6 +526,9 @@ internal static class TacticMatchCommand
                 + " resourceRemaining=" + resources.ToString(CultureInfo.InvariantCulture));
             Console.WriteLine("craft4: faction=" + faction.ToString(CultureInfo.InvariantCulture)
                 + " assemblers=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler).ToString(CultureInfo.InvariantCulture)
+                + " siegeWorkshops=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.SiegeWorkshop).ToString(CultureInfo.InvariantCulture)
+                + " siegeWorkshopComplete=" + economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.SiegeWorkshop && b.Complete).ToString(CultureInfo.InvariantCulture)
+                + " siegeWorkshopQueued=" + economy.Buildings.Where(b => b.FactionId == faction && b.Kind == BuildingKind.SiegeWorkshop).Sum(b => b.Queued).ToString(CultureInfo.InvariantCulture)
                 + " siegeParts=" + economy.SiegeParts.ToString(CultureInfo.InvariantCulture)
                 + " mechanism=" + economy.Mechanism.ToString(CultureInfo.InvariantCulture)
                 + " siegeEngine=" + economy.SiegeEngine.ToString(CultureInfo.InvariantCulture)
@@ -762,6 +850,9 @@ internal static class TacticMatchCommand
         if (name == "idle" || name == "rush" || name == "auto") return;
         if (!Directory.Exists(name)) throw new InvalidDataException("戦術はidle、rush、auto、または存在するフォルダパスです。");
     }
+    private static string ResearchFailureReasonName(byte reason)
+        => reason == 1 ? "prerequisite" : reason == 2 ? "building" : reason == 3 ? "researching" : reason == 4 ? "resource" : "unknown";
+
     private static IReadOnlyList<ScheduledSignal> ParseSignals(string text)
     {
         var result = new List<ScheduledSignal>();

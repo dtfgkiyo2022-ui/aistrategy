@@ -226,6 +226,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
         private const int CraftTree4ExtensionId = 63;
         private const int CraftTree4ExtensionVersion = 1;
         private const int CraftTree4ExtensionDataLength = 20 * sizeof(int) + 3 * sizeof(long);
+        private const int AgeFourAiExtensionId = 64;
+        private const int AgeFourAiExtensionVersion = 1;
+        private const int AgeFourAiExtensionDataLength = 3 * sizeof(int);
         private sealed class ExtensionRegistration
         {
             internal readonly int Id, Version, DataLength;
@@ -293,6 +296,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(AgeFourExtensionId, AgeFourExtensionVersion, AgeFourExtensionDataLength)
              ,new ExtensionRegistration(AgeStrengthsExtensionId, AgeStrengthsExtensionVersion, AgeStrengthsExtensionDataLength)
              ,new ExtensionRegistration(CraftTree4ExtensionId, CraftTree4ExtensionVersion, CraftTree4ExtensionDataLength)
+             ,new ExtensionRegistration(AgeFourAiExtensionId, AgeFourAiExtensionVersion, AgeFourAiExtensionDataLength)
          };
 
         public static byte[] Encode(ScenarioDefinition source)
@@ -844,9 +848,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == LargeEconomyExtensionV4DataLength;
                  bool oldLargeEconomyV5 = id == LargeEconomyExtensionId && featureVersion == 5
                      && dataLength == LargeEconomyExtensionV5DataLength;
-                 bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
-                     && dataLength == LargeEconomyExtensionV6DataLength;
-                 bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6;
+                  bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
+                       && dataLength == LargeEconomyExtensionV6DataLength;
+                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -913,6 +917,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
                     else if (id == AgeStrengthsExtensionId) ReadAgeStrengthsExtension(extension, c.Economy);
                     else if (id == CraftTree4ExtensionId) ReadCraftTree4Extension(extension, c.Economy);
+                    else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1001,7 +1006,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourExtensionId && !c.Economy.AgeFour);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeStrengthsExtensionId && !c.Economy.AgeStrengths);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
-            bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false;
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
+            bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1012,6 +1018,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
                 if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
                 if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
+                if (extensions[i].Id == AgeFourAiExtensionId)
+                {
+                    hasAgeFourAi = true;
+                    extensions[i] = CreateAgeFourAiExtension(c.Economy);
+                }
             }
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
             bool hasAgeFour = false;
@@ -1039,6 +1050,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 }
             if (c.Economy.CraftTree4 && c.Economy.AgeFour && c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && !hasCraftTree4)
                 extensions.Add(CreateCraftTree4Extension(c.Economy));
+            if (c.Economy.AgeFour && c.Economy.AgeFourAi && !hasAgeFourAi)
+                extensions.Add(CreateAgeFourAiExtension(c.Economy));
             // ID 4 is feature-owned data. It is meaningful only when both switches that make fishing selectable are
             // on; an old extension must not resurrect a disabled fishing civilisation on a subsequent round trip.
             if (!c.Economy.FishingCiv || !c.Economy.FishingEnabled)
@@ -2506,6 +2519,34 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.CannonRange = Fix64.FromRaw(reader.ReadInt64()); e.CannonSpeed = Fix64.FromRaw(reader.ReadInt64()); e.CannonVision = Fix64.FromRaw(reader.ReadInt64()); e.CannonAutoLimit = reader.ReadInt32();
                 e.GoodsValueSiegeEngine = reader.ReadInt32(); e.GoodsValueEliteKit = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree4 extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAgeFourAiExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AgeFourAi ? 1 : 0);
+                writer.Write(e.AgeFourAiAssemblers);
+                writer.Write(e.AgeFourAiIndustry ? 1 : 0);
+                return new ScenarioExtensionData { Id = AgeFourAiExtensionId, Version = AgeFourAiExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAgeFourAiExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid age-four-ai flag.");
+                e.AgeFourAi = enabled != 0 && e.AgeFour;
+                e.AgeFourAiAssemblers = reader.ReadInt32();
+                int industry = reader.ReadInt32();
+                if (industry < 0 || industry > 1) throw new InvalidDataException("Invalid age-four-ai industry flag.");
+                e.AgeFourAiIndustry = industry != 0 && e.AgeFourAi;
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing age-four-ai extension data.");
             }
         }
 

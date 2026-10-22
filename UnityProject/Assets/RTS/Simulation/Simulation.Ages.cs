@@ -31,6 +31,9 @@ namespace Rts.Simulation
 
         private bool AgeFourOn => AgesOn && world.Config.Economy.AgeFour;
 
+        private bool AgeFourAiOn => AgeFourOn && world.Config.Economy.AgeFourAi;
+        private bool AgeFourAiIndustryOn => AgeFourAiOn && world.Config.Economy.AgeFourAiIndustry;
+
         private int LastAge => AgeFourOn ? 4 : 3;
 
         private bool AgeClockUxOn => AgeClockOn && world.Config.Economy.AgeClockUx;

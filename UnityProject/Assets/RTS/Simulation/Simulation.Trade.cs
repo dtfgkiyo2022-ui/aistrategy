@@ -708,16 +708,37 @@ namespace Rts.Simulation
             if (!AgesOn || world.Economies[faction - 1].Age < 2 || SavingToAdvance(faction)) return;
             var rules = world.Config.Economy;
             int workshop = OwnBuildingIndex(faction, BuildingKind.SiegeWorkshop);
+            ref var economy = ref world.Economies[faction - 1];
+            // AgeFourAi must not inherit the old "build only when the workshop branch is reached"
+            // dead-end: once an age-four siege engine exists, the workshop is an explicit demand.
+            // Keep this entirely inside the flag so AgeFourAi=false is byte-for-byte unchanged.
+            if (AgeFourAiOn && economy.Age >= 4 && economy.SiegeEngine >= rules.CannonSiegeEngineCost && workshop < 0)
+            {
+                if (economy.Wood < rules.WorkshopWoodCost) return;
+                int ageFourOrigin = FindSite(faction, rules.WorkshopSizeCells);
+                if (ageFourOrigin >= 0) PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, ageFourOrigin, Facing.North, 0);
+                return;
+            }
             if (workshop < 0)
             {
-                if (world.Economies[faction - 1].Wood < rules.WorkshopWoodCost) return;
+                if (economy.Wood < rules.WorkshopWoodCost) return;
                 int origin = FindSite(faction, rules.WorkshopSizeCells);
                 if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.SiegeWorkshop, origin, Facing.North, 0);
                 return;
             }
             ref var b = ref world.Buildings[workshop];
             if (!b.Complete || b.Held || b.Queued > 0) return;
-            if (CraftTree4Allowed(faction) && world.Economies[faction - 1].SiegeEngine >= rules.CannonSiegeEngineCost
+            if (AgeFourAiOn && economy.Age >= 4 && CraftTree4Allowed(faction) && economy.SiegeEngine >= rules.CannonSiegeEngineCost
+                && CountClass(faction, UnitKind.Cannon) < rules.CannonAutoLimit
+                && AgeFourAiHasCannonRoom(faction) && CanPay(faction, UnitKind.Cannon, BuildingKind.SiegeWorkshop))
+            {
+                Enqueue(faction, ref b, UnitKind.Cannon);
+                return;
+            }
+            // Do not spend the last food/wood on rams while an engine is waiting for a cannon.
+            // CanPay above remains the single source of truth for the actual price check.
+            if (AgeFourAiOn && economy.Age >= 4 && economy.SiegeEngine >= rules.CannonSiegeEngineCost) return;
+            if (CraftTree4Allowed(faction) && economy.SiegeEngine >= rules.CannonSiegeEngineCost
                 && CountClass(faction, UnitKind.Cannon) < rules.CannonAutoLimit
                 && HasRoomFor(faction, UnitKind.Cannon) && CanPay(faction, UnitKind.Cannon, BuildingKind.SiegeWorkshop))
             {
@@ -727,5 +748,10 @@ namespace Rts.Simulation
             if (CountClass(faction, UnitKind.Ram) >= AutoRamLimitFor(faction)) return;
             if (HasRoomFor(faction, UnitKind.Ram) && CanPay(faction, UnitKind.Ram)) Enqueue(faction, ref b, UnitKind.Ram);
         }
+
+        private bool AgeFourAiHasCannonRoom(uint faction)
+            => HasRoomFor(faction, UnitKind.Cannon)
+                || EconomyScaleOn && world.Config.Economy.ArmyGrowth
+                    && world.Factions[faction - 1].ArmyIds.Length < 12;
     }
 }

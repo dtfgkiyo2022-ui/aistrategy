@@ -46,9 +46,7 @@ namespace Rts.Simulation
             }
             if (EconomyScaleOn)
             {
-                int desired = LargeEconomyOn
-                    ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
-                    : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
+                int desired = BarracksTargetFor(faction);
                 bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);
                 if (mayAddBarracks && EconomyDecision.ShouldBuildBarracks(barracksCount, desired, economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0), rules.BarracksWoodCost))
                     PlaceBarracks(faction);
@@ -141,6 +139,15 @@ namespace Rts.Simulation
             int origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
+        }
+
+        private int BarracksTargetFor(uint faction)
+        {
+            if (!EconomyScaleOn) return 1;
+            var rules = world.Config.Economy;
+            return LargeEconomyOn
+                ? Math.Min(rules.LargeBarracksMaxBuildings, Math.Max(1, LivingVillagers(faction) / rules.LargeBarracksVillagersPerBuilding))
+                : Math.Min(4, Math.Max(1, LivingVillagers(faction) / 15));
         }
 
         private void DecideTown(uint faction)

@@ -11,6 +11,11 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
+        private const byte AgeFourAiResearchFailurePrerequisite = 1;
+        private const byte AgeFourAiResearchFailureBuilding = 2;
+        private const byte AgeFourAiResearchFailureResearching = 3;
+        private const byte AgeFourAiResearchFailureResource = 4;
+
         // Kept outside TechKind so the existing contract enum numbers and names remain unchanged. The cavalry tail
         // supplies the thirteenth slot only when that optional civilisation is enabled.
         private const TechKind CavalryDrillTech = (TechKind)13;
@@ -18,6 +23,7 @@ namespace Rts.Simulation
         private static readonly TechKind[] AutoResearchOrder = { TechKind.Tools, TechKind.Weapons, TechKind.Armour, TechKind.Carts, TechKind.Irrigation, TechKind.BlastFurnace,
             BridgeTech.Bridgeworks, TechKind.Masonry, TechKind.Siegecraft, TechKind.Banking, TechKind.SteelWeapons, TechKind.SteelArmour, TechKind.GemArmor,
             CavalryDrillTech, BridgeTech.SiegeDeployment, TollgateTech.GateDefence, TollgateTech.GateNetwork, TechKind.TotalWar, TechKind.GrandWorkshop };
+        private static readonly TechKind[] AgeFourAiResearchOrder = { TechKind.TotalWar, TechKind.GrandWorkshop };
 
         // Academy prices are deliberately fixed per technology. They are not scenario knobs: keeping them here leaves
         // the V3-12 #1 extension payload unchanged while making the academy's discount explicit and deterministic.
@@ -295,6 +301,18 @@ namespace Rts.Simulation
             return false;
         }
 
+        private bool FailAgeFourAiResearch(uint faction, TechKind tech, byte reason)
+        {
+            if (AgeFourAiOn)
+            {
+                ref var economy = ref world.Economies[faction - 1];
+                economy.AgeFourAiResearchFailureTech = tech;
+                economy.AgeFourAiResearchFailureReason = reason;
+                economy.AgeFourAiResearchFailureTick = world.Tick;
+            }
+            return false;
+        }
+
         /// <summary>Pays and starts <paramref name="tech"/> at <paramref name="smith"/>; returns false and changes nothing when it cannot.</summary>
         private bool StartResearch(uint faction, ref BuildingState smith, TechKind tech, bool byPlayer)
         {
@@ -305,37 +323,41 @@ namespace Rts.Simulation
             bool tollgate = smith.Kind == BuildingKind.Tollgate;
             bool metropolis = smith.Kind == BuildingKind.GrandHouse;
             bool sanctuary = smith.Kind == BuildingKind.Shrine;
-            if (!AgesOn || !smith.Complete || BuildingPaused(smith) || smith.Researching != 0 || BeingResearched(faction, tech)) return false;
+            if (!AgesOn) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
+            if (!smith.Complete || BuildingPaused(smith)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureBuilding);
+            if (smith.Researching != 0 || BeingResearched(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResearching);
             if (academy)
             {
                 if (!AcademyAllowed(faction) || !AcademyTechOpen(faction, tech) || !AcademyGoldAvailable(faction, tech)
-                    || !AcademyBudgetAllows(faction, tech)) return false;
+                    || !AcademyBudgetAllows(faction, tech)) return FailAgeFourAiResearch(faction, tech,
+                        AcademyAllowed(faction) && AcademyTechOpen(faction, tech) ? AgeFourAiResearchFailureResource : AgeFourAiResearchFailurePrerequisite);
             }
             else if (mountain)
             {
-                if (!IsMountainTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsMountainTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
             else if (fishing)
             {
-                if (!IsFishingTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsFishingTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
             else if (cult)
             {
-                if (!IsCultTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsCultTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
             else if (tollgate)
             {
-                if (!IsTollgateTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsTollgateTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
             else if (metropolis)
             {
-                if (!IsMetropolisTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsMetropolisTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
             else if (sanctuary)
             {
-                if (!IsSanctuaryTech(tech) || !TechOpen(faction, tech)) return false;
+                if (!IsSanctuaryTech(tech) || !TechOpen(faction, tech)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             }
-            else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || IsTollgateTech(tech) || IsMetropolisTech(tech) || IsSanctuaryTech(tech) || !TechOpen(faction, tech)) return false;
+            else if (smith.Kind != BuildingKind.Blacksmith || IsMountainTech(tech) || IsTollgateTech(tech) || IsMetropolisTech(tech) || IsSanctuaryTech(tech) || !TechOpen(faction, tech))
+                return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailurePrerequisite);
             ref var economy = ref world.Economies[faction - 1];
             if (CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech)
                 && economy.Mechanism < 1 && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch
@@ -343,7 +365,7 @@ namespace Rts.Simulation
                 // Let the single assembler turn Scholarly into Mechanism first.  Without this
                 // one-cycle reservation, DecideResearch runs before DecideIndustry and consumes
                 // the intermediate directly, so Mechanism can never reach a third-age research.
-                return false;
+                return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             int food = academy ? AcademyFoodCost(tech) : mountain ? MountainFoodCost(tech) : fishing ? FishingFoodCost(tech) : tollgate ? TollgateFoodCost(tech) : metropolis ? MetropolisFoodCost(tech) : sanctuary ? SanctuaryFoodCost(tech) : TechFoodCost(tech);
             int wood = academy ? AcademyWoodCost(tech) : mountain ? MountainWoodCost(tech) : fishing ? FishingWoodCost(tech) : tollgate ? TollgateWoodCost(tech) : metropolis ? MetropolisWoodCost(tech) : sanctuary ? SanctuaryWoodCost(tech) : TechWoodCost(tech);
             int gold = academy ? AcademyGoldCost(tech) : 0;
@@ -400,11 +422,12 @@ namespace Rts.Simulation
                 gold = ScholarlyDiscount(gold, world.Config.Economy.AcademyAge4ResearchCostPermille);
             }
             // Research must not consume the metal reserved for the first recovery infantry.
-            if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Metal, metal)) return false;
+            if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Metal, metal)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             int heldWood = !byPlayer && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            heldWood = checked(heldWood + (!byPlayer ? AgeFourAiWoodReserve(faction) : 0));
             if (economy.Food < food || economy.Wood - heldWood < wood || economy.Gold < gold || economy.Metal < metal
-                || economy.Ore < oreForMetal || economy.Gems < gems) return false;
-            if (cult && !CultBudgetAllows(faction, food, wood)) return false;
+                || economy.Ore < oreForMetal || economy.Gems < gems) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
+            if (cult && !CultBudgetAllows(faction, food, wood)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             economy.Food = checked(economy.Food - food);
             economy.Wood = checked(economy.Wood - wood);
             economy.Gold = checked(economy.Gold - gold);
@@ -552,6 +575,7 @@ namespace Rts.Simulation
         private void DecideResearch(uint faction)
         {
             if (!AgesOn || SavingHard(faction)) return;
+            if (AgeFourAiOn && world.Economies[faction - 1].Age >= 4 && TryAgeFourAiResearchBeforeNormalDecision(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Fishing && DecideFishingResearch(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Mountain && DecideMountainResearch(faction)) return;
             if (world.Economies[faction - 1].Civ == CivKind.Cult)
@@ -589,6 +613,20 @@ namespace Rts.Simulation
             foreach (var tech in AutoResearchOrder)
                 if (AcademyTech(tech) && world.Economies[faction - 1].Civ == CivKind.Academy && AcademyResearchOperational(faction)) continue;
                 else if (!IsMetropolisTech(tech) && TechOpen(faction, tech)) { StartResearch(faction, ref b, tech, false); return; }
+        }
+
+        private bool TryAgeFourAiResearchBeforeNormalDecision(uint faction)
+        {
+            int smithIndex = OwnBuildingIndex(faction, BuildingKind.Blacksmith);
+            if (smithIndex < 0) return false;
+            ref var smith = ref world.Buildings[smithIndex];
+            if (!smith.Complete || smith.Held || smith.Researching != 0) return false;
+            foreach (var tech in AgeFourAiResearchOrder)
+            {
+                if (!TechOpen(faction, tech)) continue;
+                if (StartResearch(faction, ref smith, tech, false)) return true;
+            }
+            return false;
         }
 
         private bool DecideMetropolisResearch(uint faction)

@@ -432,7 +432,18 @@ namespace Rts.Simulation
                     if (world.Economies[f].CivChoiceDeadlineTick != 0)
                         w.Value("Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].CivChoiceDeadlineTick", world.Economies[f].CivChoiceDeadlineTick);
             // V3-2: written only with industry, so a V3-1 economy keeps its exact canonical bytes.
-            if (!world.Config.Economy.Industry) return;
+            if (!world.Config.Economy.Industry)
+            {
+                if (AgeFourAiOn)
+                    for (int f = 0; f < world.Economies.Length; f++)
+                    {
+                        var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(n + "AgeFourAiResearchFailureTech", (byte)e.AgeFourAiResearchFailureTech);
+                        w.Value(n + "AgeFourAiResearchFailureReason", e.AgeFourAiResearchFailureReason);
+                        w.Value(n + "AgeFourAiResearchFailureTick", e.AgeFourAiResearchFailureTick);
+                    }
+                return;
+            }
             for (int f = 0; f < world.Economies.Length; f++)
             {
                 var e = world.Economies[f]; string n = "Economy[" + (f + 1).ToString(CultureInfo.InvariantCulture) + "].";
@@ -442,6 +453,12 @@ namespace Rts.Simulation
                 if (world.Config.Economy.Ages) { w.Value(n + "Stone", e.Stone); w.Value(n + "Gems", e.Gems); w.Value(n + "Techs", e.Techs); w.Value(n + "Age", e.Age); }
                 if (world.Config.Economy.GoldEnabled) w.Value(n + "Gold", e.Gold);
                 if (world.Config.Economy.Ages) { w.Value(n + "Civ", (byte)e.Civ); w.Value(n + "AdvancingTo", (byte)e.AdvancingTo); w.Value(n + "AdvanceRemaining", e.AdvanceRemaining); w.Value(n + "AgeVictoryProgress", e.AgeVictoryProgress); }
+                if (AgeFourAiOn)
+                {
+                    w.Value(n + "AgeFourAiResearchFailureTech", (byte)e.AgeFourAiResearchFailureTech);
+                    w.Value(n + "AgeFourAiResearchFailureReason", e.AgeFourAiResearchFailureReason);
+                    w.Value(n + "AgeFourAiResearchFailureTick", e.AgeFourAiResearchFailureTick);
+                }
             }
             uint belts = 0;
             foreach (var b in world.Belts) if (b.FactionId != 0) belts++;
