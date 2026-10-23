@@ -583,6 +583,7 @@ internal static class TacticMatchCommand
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
+                prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
                 prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
@@ -595,7 +596,8 @@ internal static class TacticMatchCommand
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
-                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute" });
+                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
+                prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -613,12 +615,14 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 67; i++) cells.Add("");
+                for (int i = 0; i < 74; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
             cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
-                value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
+                value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
+            cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
+            cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
                 value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
@@ -628,7 +632,9 @@ internal static class TacticMatchCommand
                 value.AiFactoryBarracksResourceWaiting, value.PlanksProduced, value.PlanksConsumed, value.CutStoneProduced, value.CutStoneConsumed,
                 value.StoneToolsProduced, value.StoneToolsConsumed, value.JerkyProduced, value.JerkyConsumed, value.FramesProduced, value.FramesConsumed,
                 value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
-                value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute }.Select(FormatInvariant));
+                value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
+                value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
+                value.AiExpandTownSkippedStone }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));

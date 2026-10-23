@@ -49,6 +49,11 @@ namespace Rts.Simulation
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
+        // AiExpand town-placement failures are observer-only and are updated only while AiExpand is enabled.
+        private readonly int[] aiExpandTownSkippedUnknownResource = new int[2];
+        private readonly int[] aiExpandTownSkippedNoSite = new int[2];
+        private readonly int[] aiExpandTownSkippedWood = new int[2];
+        private readonly int[] aiExpandTownSkippedStone = new int[2];
         internal int LastCavalryObjectiveCount;
         internal long LastCavalryPathCellsVisited;
         internal long LastCavalryRouteCellsVisited;

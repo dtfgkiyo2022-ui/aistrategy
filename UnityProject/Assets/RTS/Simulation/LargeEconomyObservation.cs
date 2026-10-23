@@ -16,6 +16,8 @@ namespace Rts.Simulation
         public uint FactionId;
         public int Villagers, Soldiers;
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
+        public int[] TownConnectedLines = Array.Empty<int>();
+        public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
@@ -32,6 +34,7 @@ namespace Rts.Simulation
         public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
+        public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
     }
 
     public sealed partial class Simulation
@@ -55,16 +58,20 @@ namespace Rts.Simulation
                         value.EnemySoldiersAtCore++;
                 }
                 value.TownVillagersProduced = largeTownVillagersProduced[faction - 1];
+                var townCenters = new List<SimPoint>();
                 var dropSites = new List<SimPoint>();
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var b = world.Buildings[i];
                     if (!IsActualBuilding(b) || b.FactionId != faction) continue;
+                    if (InRange(BuildingCenter(b), core.Definition.Position, Fix64.FromInt(40))) value.CoreNearBuildings++;
+                    else value.CoreFarBuildings++;
                     if (b.Kind == BuildingKind.Town)
                     {
                         value.PlannedTowns++;
                         if (b.Complete) value.CompletedTowns++; else value.TownsBuilding++;
                         value.TownVillagersQueued = checked(value.TownVillagersQueued + b.Queued);
+                        townCenters.Add(BuildingCenter(b));
                     }
                     else if (b.Kind == BuildingKind.House) value.Houses++;
                     else if (b.Kind == BuildingKind.Farm) value.Farms++;
@@ -91,6 +98,7 @@ namespace Rts.Simulation
                     else if (b.Kind == BuildingKind.LumberCamp) value.LumberCamps++;
                     else value.OtherBuildings++;
                 }
+                value.TownConnectedLines = TownConnectedLineCounts(faction, townCenters);
                 if (dropSites.Count >= 2)
                 {
                     var best = new System.Numerics.BigInteger(long.MaxValue);
@@ -145,6 +153,13 @@ namespace Rts.Simulation
                     value.AiFactorySkippedNoSite = factoryEconomy.AiFactorySkippedNoSite;
                     value.AiFactorySkippedNoRoute = factoryEconomy.AiFactorySkippedNoRoute;
                 }
+                if (AiExpandOn)
+                {
+                    value.AiExpandTownSkippedUnknownResource = aiExpandTownSkippedUnknownResource[faction - 1];
+                    value.AiExpandTownSkippedNoSite = aiExpandTownSkippedNoSite[faction - 1];
+                    value.AiExpandTownSkippedWood = aiExpandTownSkippedWood[faction - 1];
+                    value.AiExpandTownSkippedStone = aiExpandTownSkippedStone[faction - 1];
+                }
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {
@@ -156,6 +171,21 @@ namespace Rts.Simulation
                 result.Factions[faction - 1] = value;
             }
             return result;
+        }
+
+        private int[] TownConnectedLineCounts(uint faction, List<SimPoint> towns)
+        {
+            if (towns.Count == 0) return Array.Empty<int>();
+            var counts = new int[towns.Count];
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || !LineBeltsWhole(i) || line.BeltCells == null || line.BeltCells.Length == 0) continue;
+                SimPoint endpoint = world.Map.Center(line.BeltCells[line.BeltCells.Length - 1]);
+                for (int town = 0; town < towns.Count; town++)
+                    if (InRange(endpoint, towns[town], world.Config.Rules.CoreRadius)) counts[town]++;
+            }
+            return counts;
         }
 
         private bool BarracksResourceBlocked(uint faction)

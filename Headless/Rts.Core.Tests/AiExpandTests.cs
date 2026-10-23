@@ -88,6 +88,36 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AgeOneAndAgeTwoReachExpansionTownTargets()
+        {
+            var scenario = Scenario(true);
+            var e = scenario.Economy;
+            e.AiExpandAge1TownCount = 1;
+            e.AiExpandAge2TownCount = 2;
+            e.TownMaxBuildings = 2;
+            e.TownWoodCost = e.TownStoneCost = 1;
+            e.AgeClock = false;
+            e.AgeClockUx = false;
+            e.AutoVillagerTarget = 0; e.AutoInfantryQueue = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = 0;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            Steps(gateway, sim, 20000);
+            var ageOne = sim.Capture(1).Economy;
+            Assert.That(ageOne.Age, Is.GreaterThanOrEqualTo(1));
+            Assert.That(ageOne.Buildings.Count(b => b.Kind == BuildingKind.Town && b.Complete), Is.GreaterThanOrEqualTo(1));
+
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            Steps(gateway, sim, 20000);
+            var ageTwo = sim.Capture(1).Economy;
+            Assert.That(ageTwo.Age, Is.GreaterThanOrEqualTo(2));
+            Assert.That(ageTwo.Buildings.Count(b => b.Kind == BuildingKind.Town && b.Complete), Is.GreaterThanOrEqualTo(2));
+        }
+
+        [Test]
         public void SecondBarracksUsesEnemyFacingBase()
         {
             var scenario = Scenario(true);

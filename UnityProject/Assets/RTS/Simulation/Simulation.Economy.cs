@@ -435,6 +435,14 @@ namespace Rts.Simulation
             int desiredTowns = villagers < townVillagers ? 0
                 : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townVillagers));
             int townVillagerThreshold = world.Config.Economy.LargeTownVillagersPerTown;
+            // A town is ahead of optional construction, but not ahead of the food floor that keeps the
+            // large-economy villager line alive.
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            if (AiExpandTownNeedsFunding(v.FactionId))
+            {
+                if (economy.Wood < world.Config.Economy.TownWoodCost) return ResourceKind.Wood;
+                if (economy.Stone < world.Config.Economy.TownStoneCost) return ResourceKind.Stone;
+            }
             bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
                 && economy.Stone < world.Config.Economy.TownStoneCost;
             int barracksVillagers = world.Config.Economy.LargeBarracksVillagersPerBuilding;

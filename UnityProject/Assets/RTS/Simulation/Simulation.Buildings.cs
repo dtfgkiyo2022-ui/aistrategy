@@ -220,20 +220,72 @@ namespace Rts.Simulation
         {
             if (!TownsAllowed(faction)) return;
             var rules = world.Config.Economy;
-            if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
-            if (!LargeEconomyOn && AiExpandOn && world.Tick % rules.AiExpandDecisionIntervalTicks != 0) return;
+            if (AiExpandOn)
+            {
+                if (world.Tick % rules.AiExpandDecisionIntervalTicks != 0) return;
+            }
+            else if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
-                || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost
-                || TownCount(faction) >= TownLimitFor(faction)) return;
+            if (TownCount(faction) >= TownLimitFor(faction)) return;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
                     return;
+            int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
+            int availableStone = economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0);
+            if (availableWood < rules.TownWoodCost || availableStone < rules.TownStoneCost)
+            {
+                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < rules.TownWoodCost, availableStone < rules.TownStoneCost);
+                return;
+            }
             int resourceCell = BestTownResourceCell(faction);
-            if (resourceCell < 0) return;
+            if (resourceCell < 0)
+            {
+                if (AiExpandOn) RecordAiExpandTownPlacementFailure(faction, HasUnknownTownResource(faction));
+                return;
+            }
             int origin = FindTownSite(faction, resourceCell);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Town, origin, Facing.North, 0);
+            else if (AiExpandOn) RecordAiExpandTownPlacementFailure(faction, false);
+        }
+
+        private bool HasUnknownTownResource(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (ResourceKnownToFaction(faction, i) || node.Remaining <= 0
+                    || InRange(node.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private void RecordAiExpandTownFundingFailure(uint faction, bool wood, bool stone)
+        {
+            if (!AiExpandOn || faction < 1 || faction > 2) return;
+            if (wood) aiExpandTownSkippedWood[faction - 1]++;
+            if (stone) aiExpandTownSkippedStone[faction - 1]++;
+        }
+
+        private void RecordAiExpandTownPlacementFailure(uint faction, bool unknownResource)
+        {
+            if (!AiExpandOn || faction < 1 || faction > 2) return;
+            if (unknownResource) aiExpandTownSkippedUnknownResource[faction - 1]++;
+            else aiExpandTownSkippedNoSite[faction - 1]++;
+        }
+
+        private bool AiExpandTownNeedsFunding(uint faction)
+        {
+            if (!AiExpandOn || !TownsAllowed(faction) || TownCount(faction) >= TownLimitFor(faction)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
+                    && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
+                    return false;
+            ref var economy = ref world.Economies[faction - 1];
+            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
         }
 
         private void DecideTownVillagers(uint faction)
@@ -470,6 +522,8 @@ namespace Rts.Simulation
             // maps keep their existing construction order; the town itself is allowed through this guard.
             if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
                 && LargeTownNeedsFunding(faction)) return;
+            if (automaticEconomyAction && AiExpandTownNeedsFunding(faction) && kind != BuildingKind.Town
+                && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite) return;
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
