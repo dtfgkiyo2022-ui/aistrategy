@@ -60,6 +60,7 @@ namespace Rts.Simulation
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
           private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
           private bool AiFactoryOn => PrimitiveCraftOn && world.Config.Economy.AiFactory;
+        private bool AiExpandOn => AiFactoryOn && world.Config.Economy.AiExpand;
         private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
         private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
         private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
@@ -95,10 +96,21 @@ namespace Rts.Simulation
         private bool TownsOn => world.Config.Economy.Enabled && world.Config.Economy.Towns;
 
         private bool TownsAllowed(uint faction)
-            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (LargeEconomyOn ? world.Config.Economy.LargeTownMinAge : 2);
+            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (AiExpandOn ? 1
+                : LargeEconomyOn ? world.Config.Economy.LargeTownMinAge : 2);
 
         private int TownLimitFor(uint faction)
-            => checked(world.Config.Economy.TownMaxBuildings + (AgeStrength(faction, CivKind.Metropolis, 3) ? world.Config.Economy.MetropolisTownLimitBonus : 0));
+        {
+            if (AiExpandOn)
+            {
+                var e = world.Config.Economy;
+                int age = world.Economies[faction - 1].Age;
+                int target = age <= 1 ? e.AiExpandAge1TownCount : age == 2 ? e.AiExpandAge2TownCount : e.AiExpandAge3TownCount;
+                return Math.Min(e.TownMaxBuildings, target);
+            }
+            return checked(world.Config.Economy.TownMaxBuildings
+                + (AgeStrength(faction, CivKind.Metropolis, 3) ? world.Config.Economy.MetropolisTownLimitBonus : 0));
+        }
 
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;

@@ -44,7 +44,8 @@ namespace Rts.Simulation
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
-                else if (target.FactionId == 0 && FeedsOwnCore(next, belt.FactionId))
+                else if (target.FactionId == 0 && (FeedsOwnCore(next, belt.FactionId)
+                    || AiExpandOn && FeedsCompletedTown(next, belt.FactionId)))
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
                     RecordLargeBeltDelivery(belt.FactionId);
@@ -161,6 +162,18 @@ namespace Rts.Simulation
         {
             var core = OwnCore(faction);
             return core.Hp > 0 && InRange(world.Map.Center(cell), core.Definition.Position, world.Config.Rules.CoreRadius);
+        }
+
+        private bool FeedsCompletedTown(int cell, uint faction)
+        {
+            var point = world.Map.Center(cell);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (InRange(point, BuildingCenter(town), world.Config.Rules.CoreRadius)) return true;
+            }
+            return false;
         }
 
         private bool InsideAnyCore(int cell)

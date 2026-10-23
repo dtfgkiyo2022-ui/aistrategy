@@ -137,6 +137,10 @@ namespace Rts.Simulation
         public bool AiArmyRecovery;
         /// <summary>Checks automatic processing-line building IDs against the live building kind before reuse.</summary>
         public bool LineBuildingCheck;
+        /// <summary>Technical-design-v3 38.5: expands automatic factory bases through completed towns.</summary>
+        public bool AiExpand;
+        public int AiExpandAge1TownCount = 1, AiExpandAge2TownCount = 2, AiExpandAge3TownCount = 3;
+        public int AiExpandDecisionIntervalTicks = 100;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;

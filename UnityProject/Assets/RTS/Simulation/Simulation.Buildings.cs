@@ -140,9 +140,71 @@ namespace Rts.Simulation
 
         private void PlaceBarracks(uint faction)
         {
-            int origin = FindBarracksSite(faction);
+            int origin = -1;
+            if (AiExpandOn && OwnBarracksCount(faction) > 0)
+            {
+                origin = FindSiteNear(faction, world.Config.Economy.BarracksSizeCells, AiExpandBarracksCentre(faction),
+                    Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
+                if (origin < 0) origin = FindAiExpandBarracksSite(faction, AiExpandBarracksCentre(faction));
+                for (int i = 0; i < world.BuildingCount && origin < 0; i++)
+                {
+                    var town = world.Buildings[i];
+                    if (IsActualBuilding(town) && town.Complete && town.FactionId == faction && town.Kind == BuildingKind.Town)
+                        origin = FindSiteNear(faction, world.Config.Economy.BarracksSizeCells, world.Map.Cell(BuildingCenter(town)),
+                            Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
+                    if (origin < 0 && IsActualBuilding(town) && town.Complete && town.FactionId == faction && town.Kind == BuildingKind.Town)
+                        origin = FindAiExpandBarracksSite(faction, world.Map.Cell(BuildingCenter(town)));
+                }
+            }
+            if (origin < 0 && (!AiExpandOn || !AiExpandHasCompletedTown(faction))) origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
+        }
+
+        private int FindAiExpandBarracksSite(uint faction, int centre)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.BarracksSizeCells, cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= Math.Max(width, height); r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (SiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), size)) return origin;
+                    }
+            return -1;
+        }
+
+        private int OwnBarracksCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction
+                    && world.Buildings[i].Kind == BuildingKind.Barracks) count++;
+            return count;
+        }
+
+        private int AiExpandBarracksCentre(uint faction)
+        {
+            uint enemyFaction = faction == 1 ? 2u : 1u;
+            var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
+            SimPoint target = IsVisibleTo(faction, enemy) ? enemy
+                : world.Map.Center(faction == 1 ? world.Config.Map.WidthCells - 1 : 0);
+            int best = world.Map.Cell(OwnCore(faction).Definition.Position);
+            var bestDistance = DistanceSquared(world.Map.Center(best), target);
+            uint bestId = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                var distance = DistanceSquared(BuildingCenter(town), target);
+                if (distance < bestDistance || distance == bestDistance && town.Id < bestId)
+                { best = world.Map.Cell(BuildingCenter(town)); bestDistance = distance; bestId = town.Id; }
+            }
+            return best;
         }
 
         private int BarracksTargetFor(uint faction)
@@ -159,6 +221,7 @@ namespace Rts.Simulation
             if (!TownsAllowed(faction)) return;
             var rules = world.Config.Economy;
             if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
+            if (!LargeEconomyOn && AiExpandOn && world.Tick % rules.AiExpandDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
                 || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost
