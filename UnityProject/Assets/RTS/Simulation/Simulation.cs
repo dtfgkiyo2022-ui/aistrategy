@@ -38,6 +38,15 @@ namespace Rts.Simulation
         private readonly int[] largeVillagerCounts = new int[2];
         private readonly int[] largeTownCounts = new int[2];
         private readonly int[] largeBarracksCounts = new int[2];
+        // AiExpand work-route availability is a function of the faction, the drop-off cell used for the load,
+        // and the resource cell. Keep the table bounded and reuse its backing storage; terrain changes invalidate
+        // the answers through GridMap.PassableVersion.
+        private const int AiExpandWorkRouteCacheLimit = 4096;
+        private int aiExpandWorkRouteCacheVersion = -1;
+        private readonly Dictionary<(uint Faction, int Origin, int Resource), bool> aiExpandWorkRouteCache
+            = new Dictionary<(uint, int, int), bool>(AiExpandWorkRouteCacheLimit);
+        private readonly Queue<(uint Faction, int Origin, int Resource)> aiExpandWorkRouteCacheOrder
+            = new Queue<(uint, int, int)>(AiExpandWorkRouteCacheLimit);
         // LargeEconomy resource clusters are built once from the authored node layout. Remaining amounts and worker
         // counts are read from the live nodes on the spaced decision ticks; the cluster index itself never changes.
         private int[] largeNodeClusters;

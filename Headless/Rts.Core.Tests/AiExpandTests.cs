@@ -79,6 +79,58 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void WorkRouteCacheInvalidatesWhenAClosedCellOpens()
+        {
+            var scenario = Scenario(true);
+            var sim = new Battle(scenario);
+            int width = scenario.Map.WidthCells;
+            int origin = 0, resource = width * 2;
+            for (int x = 0; x < width; x++) sim.SetPassableForTest(width + x, false);
+
+            Assert.That(sim.ProbeAiExpandWorkRouteForTest(1, origin, resource), Is.False);
+            sim.SetPassableForTest(width, true);
+            Assert.That(sim.ProbeAiExpandWorkRouteForTest(1, origin, resource), Is.True);
+        }
+
+        [Test]
+        public void AutomaticResearchKeepsWoodForPendingTown()
+        {
+            var scenario = Scenario(true, false);
+            var e = scenario.Economy;
+            e.AgeClock = false; e.AgeClockUx = false;
+            e.AdvanceFoodCost = e.AdvanceWoodCost = 0; e.AdvanceTicks = 1;
+            e.Age2FoodCost = e.Age2WoodCost = 1000000;
+            e.TownWoodCost = 300; e.TownStoneCost = 1000000;
+            e.StartFood = 100000; e.StartWood = e.TownWoodCost + e.TechWood[0] + 120 - 1; e.StartStone = 0; e.StartMetal = 100000;
+            e.AutoVillagerTarget = 10; e.AutoInfantryQueue = 0;
+            e.BarracksWoodCost = e.BlacksmithWoodCost = e.FarmWoodCost = e.HouseWoodCost = e.DropSiteWoodCost = e.TowerWoodCost = e.HutWoodCost = e.SawmillWoodCost = 0;
+            e.BarracksWork = e.BlacksmithWork = e.FarmWork = 1;
+            e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 1;
+            e.AiExpandDecisionIntervalTicks = 100000;
+            e.AiExpandShareMinVillagers = 0; e.AiExpandFoodWorkerPermille = 1000; e.AiExpandWoodWorkerPermille = 0;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            bool blacksmithReady = false;
+            for (int tick = 0; tick < 5000; tick++)
+            {
+                bool wasResearching = sim.Capture(1).Economy.Buildings.Any(b => b.Researching != 0);
+                gateway.Step();
+                var frame = sim.Capture(1);
+                blacksmithReady |= frame.Economy.Buildings.Any(b => b.Kind == BuildingKind.Blacksmith && b.Complete);
+                if (blacksmithReady && !wasResearching && frame.Economy.Buildings.Any(b => b.Researching != 0))
+                    Assert.That(frame.Economy.Wood, Is.GreaterThanOrEqualTo(e.TownWoodCost), "tick " + tick);
+            }
+            var economy = sim.Capture(1).Economy;
+            Assert.That(blacksmithReady, Is.True);
+            Assert.That(economy.Buildings.Any(b => b.Kind == BuildingKind.Town), Is.False);
+        }
+
+        [Test]
         public void VillagerShareFloorsFundWoodAndStoneAfterAgeOne()
         {
             var scenario = Scenario(true);

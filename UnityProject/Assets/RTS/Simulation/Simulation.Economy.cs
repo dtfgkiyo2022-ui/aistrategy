@@ -689,15 +689,51 @@ namespace Rts.Simulation
         {
             if (!AiExpandOn) return true;
             if (Clear(from, to, faction)) return true;
-            return world.Map.SharedRoute(world.Map.Cell(from), to, faction).Length > 1;
+            return AiExpandWorkRouteAvailable(world.Map.Cell(from), world.Map.Cell(to), faction);
+        }
+
+        private bool AiExpandWorkRouteAvailable(int originCell, int resourceCell, uint faction)
+        {
+            if (!AiExpandOn) return true;
+            if (originCell < 0 || resourceCell < 0) return false;
+            int version = world.Map.PassableVersion;
+            if (aiExpandWorkRouteCacheVersion != version)
+            {
+                aiExpandWorkRouteCache.Clear();
+                aiExpandWorkRouteCacheOrder.Clear();
+                aiExpandWorkRouteCacheVersion = version;
+            }
+            var key = (Faction: faction, Origin: originCell, Resource: resourceCell);
+            if (aiExpandWorkRouteCache.TryGetValue(key, out bool available)) return available;
+            available = originCell == resourceCell
+                || world.Map.SharedRoute(originCell, world.Map.Center(resourceCell), faction).Length > 1;
+            if (aiExpandWorkRouteCache.Count == AiExpandWorkRouteCacheLimit)
+            {
+                var oldest = aiExpandWorkRouteCacheOrder.Dequeue();
+                aiExpandWorkRouteCache.Remove(oldest);
+            }
+            aiExpandWorkRouteCache.Add(key, available);
+            aiExpandWorkRouteCacheOrder.Enqueue(key);
+            return available;
+        }
+
+        /// <summary>Test-only route-cache probe; the shipped AI calls the same cell-keyed path.</summary>
+        internal bool ProbeAiExpandWorkRouteForTest(uint faction, int originCell, int resourceCell)
+            => AiExpandWorkRouteAvailable(originCell, resourceCell, faction);
+
+        /// <summary>Test-only terrain mutation used to verify PassableVersion invalidation.</summary>
+        internal void SetPassableForTest(int cell, bool value)
+        {
+            world.Map.SetPassable(cell, value);
+            TerrainChanged();
         }
 
         private bool AiExpandWorkRouteTimedOut(ref VillagerState villager)
         {
             if (!AiExpandOn || villager.Task != VillagerTask.ToNode || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length
                 || villager.AiExpandWorkStartTick < 0 || world.Tick - villager.AiExpandWorkStartTick < world.Config.Economy.AiExpandUnreachableWorkTimeoutTicks) return false;
-            var goal = world.Nodes[villager.NodeId - 1].Definition.Position;
-            if (AiExpandWorkRouteAvailable(villager.Position, goal, villager.FactionId)) return false;
+            var node = world.Nodes[villager.NodeId - 1];
+            if (AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId)) return false;
             villager.Task = VillagerTask.Idle; villager.NodeId = 0; villager.Route = Array.Empty<int>(); villager.RouteCursor = 0;
             villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
             return true;

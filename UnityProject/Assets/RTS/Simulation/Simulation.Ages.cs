@@ -422,6 +422,8 @@ namespace Rts.Simulation
         {
             ref var e = ref world.Economies[faction - 1];
             var (food, wood, gold, ticks) = AdvancePrice(faction, e);
+            if (automaticEconomyAction && AiExpandTownPending(faction)
+                && e.Wood - wood < world.Config.Economy.TownWoodCost) return;
             e.Food = checked(e.Food - food);
             e.Wood = checked(e.Wood - wood);
             e.Gold = checked(e.Gold - gold);
