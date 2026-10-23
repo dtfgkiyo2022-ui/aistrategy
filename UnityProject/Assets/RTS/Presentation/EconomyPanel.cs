@@ -563,12 +563,14 @@ namespace Rts.Presentation
                 if (lastCommittedAge >= 0)
                     ageToast = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age, economy.AgeStrengths);
                 lastCommittedAge = economy.Age;
-                ageToastUntil = Time.time + 2.6f;
+                ageToastUntil = Time.time + 6f;
             }
             if (!string.IsNullOrEmpty(ageToast) && Time.time < ageToastUntil)
             {
-                float toastWidth = Mathf.Min(560f, Screen.width - 40f);
-                GUI.Box(new Rect((Screen.width - toastWidth) * 0.5f, Screen.height * 0.34f, toastWidth, 44f), ageToast);
+                float toastWidth = Mathf.Min(640f, Screen.width - 40f);
+                var toastStyle = new GUIStyle(GUI.skin.box) { wordWrap = true, alignment = TextAnchor.MiddleCenter };
+                float toastHeight = toastStyle.CalcHeight(new GUIContent(ageToast), toastWidth) + 8f;
+                GUI.Box(new Rect((Screen.width - toastWidth) * 0.5f, Screen.height * 0.34f, toastWidth, toastHeight), ageToast, toastStyle);
             }
             if (wide <= rect.width)
             {

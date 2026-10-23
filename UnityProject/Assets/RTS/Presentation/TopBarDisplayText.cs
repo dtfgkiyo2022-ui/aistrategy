@@ -130,6 +130,8 @@ namespace Rts.Presentation
         public static string AgeStage(EconomyView economy)
         {
             if (economy == null || !economy.Ages) return "";
+            // AgeFour shows "時代 N／4" in the age line already; the old I-IV stage read "I" in the primitive age (時代 0).
+            if (economy.AgeFour) return "";
             int age = economy.AdvanceRemaining > 0 ? economy.Age + 1 : economy.Age;
             string numeral = age <= 1 ? "I" : age == 2 ? "II" : age == 3 ? "III" : "IV";
             return UiText.T("AGE ", "段階 ") + numeral;
@@ -173,10 +175,11 @@ namespace Rts.Presentation
         {
             int clampedAge = age < 0 ? 0 : age > 4 ? 4 : age;
             string strength = ageStrengths ? AgeStrength(civ, clampedAge) : "";
-            return UiText.T("Age " + clampedAge + " reached: " + AgeName(civ, clampedAge) + " — " + IntentEnglish[clampedAge] + ". " + UnlockEnglish[clampedAge]
-                    + (strength.Length > 0 ? ". Strength: " + strength : ""),
-                "時代" + clampedAge + "に進みました：" + AgeName(civ, clampedAge) + " ― " + IntentJapanese[clampedAge] + "。" + UnlockJapanese[clampedAge]
-                    + (strength.Length > 0 ? "。強み：" + strength : ""));
+            // Three short lines (10-23 play-test: one long line ran off the screen under the staff panel).
+            return UiText.T("Age " + clampedAge + " reached: " + AgeName(civ, clampedAge) + "\n" + IntentEnglish[clampedAge] + " — " + UnlockEnglish[clampedAge]
+                    + (strength.Length > 0 ? "\nStrength: " + strength : ""),
+                "時代" + clampedAge + "に進みました：" + AgeName(civ, clampedAge) + "\n" + IntentJapanese[clampedAge] + " ― " + UnlockJapanese[clampedAge]
+                    + (strength.Length > 0 ? "\n強み：" + strength : ""));
         }
 
         /// <summary>AgeStrengths: the strength a civilisation gains on reaching the age; empty below age 2.</summary>
