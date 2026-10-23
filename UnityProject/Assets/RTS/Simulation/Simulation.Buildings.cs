@@ -544,6 +544,7 @@ namespace Rts.Simulation
             if (automaticEconomyAction && kind != BuildingKind.Smelter
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
+            RecordLargeUse(faction, ResourceKind.Wood, ConstructionUseKind(kind), woodCost);
             if (framesUsed)
             {
                 economy.Frames = checked(economy.Frames - world.Config.Economy.CraftTreeFramesPerBuilding);
@@ -558,6 +559,7 @@ namespace Rts.Simulation
                 economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
             }
             economy.Stone = checked(economy.Stone - stoneCost);
+            RecordLargeUse(faction, ResourceKind.Stone, ConstructionUseKind(kind), stoneCost);
             if (siegeCastle)
             {
                 economy.SiegeParts = checked(economy.SiegeParts - world.Config.Economy.SiegePartsPerCastle);

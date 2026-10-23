@@ -48,14 +48,14 @@ namespace Rts.Simulation
                     || AiExpandOn && FeedsCompletedTown(next, belt.FactionId)))
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
-                    RecordLargeBeltDelivery(belt.FactionId);
+                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
                 {
-                    RecordLargeBeltDelivery(belt.FactionId);
+                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
@@ -263,6 +263,7 @@ namespace Rts.Simulation
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - cost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
@@ -289,6 +290,7 @@ namespace Rts.Simulation
                 world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
                 economy.Wood = checked(economy.Wood - rules.UndergroundBeltWoodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.UndergroundBeltWoodCost);
                 world.BeltOrder = null;
                 return;
             }
@@ -305,6 +307,7 @@ namespace Rts.Simulation
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
             economy.Wood = checked(economy.Wood - cost);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
             world.BeltOrder = null;
         }
 

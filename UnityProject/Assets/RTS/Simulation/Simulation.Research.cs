@@ -439,6 +439,7 @@ namespace Rts.Simulation
             if (cult && !CultBudgetAllows(faction, food, wood)) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             economy.Food = checked(economy.Food - food);
             economy.Wood = checked(economy.Wood - wood);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Research, wood);
             economy.Gold = checked(economy.Gold - gold);
             economy.Metal = checked(economy.Metal - metal);
             if (AiFactoryOn) economy.MetalConsumed = checked(economy.MetalConsumed + metal);

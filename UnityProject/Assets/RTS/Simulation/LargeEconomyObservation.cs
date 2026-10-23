@@ -4,6 +4,27 @@ using Rts.Contracts;
 
 namespace Rts.Simulation
 {
+    internal static class LargeEconomyUseKind
+    {
+        internal const int House = 0;
+        internal const int Barracks = 1;
+        internal const int Infantry = 2;
+        internal const int ProcessingBuilding = 3;
+        internal const int FactoryTemplate = 4;
+        internal const int Belt = 5;
+        internal const int Town = 6;
+        internal const int DropSite = 7;
+        internal const int Research = 8;
+        internal const int AgeUp = 9;
+        internal const int Other = 10;
+        internal const int Count = 11;
+        internal static readonly string[] Names =
+        {
+            "house", "barracks", "infantry", "processingBuilding", "factoryTemplate", "belt",
+            "town", "dropSite", "research", "ageUp", "other"
+        };
+    }
+
     /// <summary>Read-only, non-canonical counters for LargeEconomy measurement. It never feeds simulation decisions.</summary>
     public sealed class LargeEconomyObservation
     {
@@ -19,10 +40,18 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
+        public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
+        public int[] ToResourceWorkers = new int[6];
+        public int[] GatheringWorkers = new int[6];
+        public int[] ToDropOffWorkers = new int[6];
         public int[] WorkerRoundTripTicks = new int[6];
+        public int[] WorkerRoundTripMeters = new int[6];
         public int[] Income = new int[6];
+        public int[] BeltIncome = new int[6];
+        public int Builders, Haulers, IdleWorkers;
+        public int[,] Uses = new int[LargeEconomyUseKind.Count, 2];
         public int TownResourceIncome;
         public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
         public int BarracksPopulationWaiting, BarracksTraining;
@@ -39,6 +68,17 @@ namespace Rts.Simulation
 
     public sealed partial class Simulation
     {
+        private int ConstructionUseKind(BuildingKind kind)
+        {
+            if (kind == BuildingKind.House || kind == BuildingKind.GrandHouse) return LargeEconomyUseKind.House;
+            if (kind == BuildingKind.Barracks) return LargeEconomyUseKind.Barracks;
+            if (kind == BuildingKind.Town) return LargeEconomyUseKind.Town;
+            if (kind == BuildingKind.DropSite) return LargeEconomyUseKind.DropSite;
+            if (AiFactoryOn && automaticEconomyAction && (kind == BuildingKind.Hut || IsCraftProcessingBuilding(kind))) return LargeEconomyUseKind.FactoryTemplate;
+            if (IsCraftProcessingBuilding(kind)) return LargeEconomyUseKind.ProcessingBuilding;
+            return LargeEconomyUseKind.Other;
+        }
+
         /// <summary>Captures LargeEconomy counters at an observation point; no canonical state is changed.</summary>
         public LargeEconomyObservation CaptureLargeEconomyObservation()
         {
@@ -97,6 +137,21 @@ namespace Rts.Simulation
                     }
                     else if (b.Kind == BuildingKind.LumberCamp) value.LumberCamps++;
                     else value.OtherBuildings++;
+                    int machineResource = b.Kind == BuildingKind.Quarry ? 2
+                        : b.Kind == BuildingKind.Drill && b.NodeId > 0 && b.NodeId <= world.Nodes.Length
+                            ? LargeWorkResourceIndex(world.Nodes[b.NodeId - 1].Definition.Kind) : -1;
+                    if (machineResource == 1)
+                    {
+                        value.WoodMachines++;
+                        if (b.Output < world.Config.Economy.BufferLimit && b.NodeId > 0 && b.NodeId <= world.Nodes.Length && world.Nodes[b.NodeId - 1].Remaining > 0) value.WoodMachinesActive++;
+                        if (b.Output >= world.Config.Economy.BufferLimit) value.WoodMachineOutputFull++;
+                    }
+                    else if (machineResource == 2)
+                    {
+                        value.StoneMachines++;
+                        if (b.Output < world.Config.Economy.BufferLimit && b.NodeId > 0 && b.NodeId <= world.Nodes.Length && world.Nodes[b.NodeId - 1].Remaining > 0) value.StoneMachinesActive++;
+                        if (b.Output >= world.Config.Economy.BufferLimit) value.StoneMachineOutputFull++;
+                    }
                 }
                 value.TownConnectedLines = TownConnectedLineCounts(faction, townCenters);
                 if (dropSites.Count >= 2)
@@ -164,9 +219,31 @@ namespace Rts.Simulation
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
-                    value.Workers[resource] = WorkerCount(faction, resource);
+                    value.BeltIncome[resource] = largeBeltIncome[(int)(faction - 1) * 6 + resource];
                     value.WorkerRoundTripTicks[resource] = WorkerDistanceTicks(faction, resource);
+                    value.WorkerRoundTripMeters[resource] = WorkerDistanceMeters(faction, resource);
                 }
+                for (int i = 0; i < world.VillagerCount; i++)
+                {
+                    var villager = world.Villagers[i];
+                    if (!villager.Alive || villager.FactionId != faction) continue;
+                    int resource = villager.NodeId > 0 && villager.NodeId <= world.Nodes.Length
+                        ? LargeWorkResourceIndex(world.Nodes[villager.NodeId - 1].Definition.Kind) : -1;
+                    if (resource >= 0)
+                    {
+                        if (villager.Task == VillagerTask.ToNode) value.ToResourceWorkers[resource]++;
+                        else if (villager.Task == VillagerTask.Gathering) value.GatheringWorkers[resource]++;
+                        else if (villager.Task == VillagerTask.ToDropOff) value.ToDropOffWorkers[resource]++;
+                    }
+                    if (villager.Task == VillagerTask.ToBuild || villager.Task == VillagerTask.Building) value.Builders++;
+                    else if (villager.Task == VillagerTask.ToPickup || villager.Task == VillagerTask.ToDeliver) value.Haulers++;
+                    else if (villager.Task == VillagerTask.Idle) value.IdleWorkers++;
+                }
+                for (int resource = 0; resource < 6; resource++)
+                    value.Workers[resource] = value.ToResourceWorkers[resource] + value.GatheringWorkers[resource] + value.ToDropOffWorkers[resource];
+                for (int kind = 0; kind < LargeEconomyUseKind.Count; kind++)
+                    for (int resource = 0; resource < 2; resource++)
+                        value.Uses[kind, resource] = largeResourceUses[faction - 1, kind, resource];
                 value.TownResourceIncome = largeTownDelivered[faction - 1];
                 result.Factions[faction - 1] = value;
             }
@@ -221,6 +298,24 @@ namespace Rts.Simulation
             return count == 0 ? 0 : checked((int)(sum / count));
         }
 
+        private int WorkerDistanceMeters(uint faction, int resource)
+        {
+            long sum = 0; int count = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var v = world.Villagers[i];
+                if (!v.Alive || v.FactionId != faction || v.NodeId == 0 || v.NodeId > world.Nodes.Length
+                    || v.Task != VillagerTask.ToNode && v.Task != VillagerTask.Gathering && v.Task != VillagerTask.ToDropOff
+                    || LargeWorkResourceIndex(world.Nodes[v.NodeId - 1].Definition.Kind) != resource) continue;
+                var drop = DropOff(v).point;
+                int routeLength = world.Map.SharedRoute(world.Map.Cell(world.Nodes[v.NodeId - 1].Definition.Position), drop, faction).Length;
+                if (routeLength <= 0) continue;
+                sum = checked(sum + (long)Math.Max(0, routeLength - 1) * world.Config.Map.CellSizeMeters);
+                count++;
+            }
+            return count == 0 ? 0 : checked((int)(sum / count));
+        }
+
         private int WorkerCount(uint faction, int resource)
         {
             int count = 0;
@@ -255,10 +350,21 @@ namespace Rts.Simulation
             }
         }
 
-        private void RecordLargeBeltDelivery(uint faction)
+        private void RecordLargeBeltDelivery(uint faction, ResourceKind kind, int amount)
         {
-            if (LargeEconomyOn && faction >= 1 && faction <= 2)
+            if (LargeEconomyOn && faction >= 1 && faction <= 2 && amount > 0)
+            {
                 largeBeltDelivered[faction - 1] = checked(largeBeltDelivered[faction - 1] + 1);
+                int resource = LargeWorkResourceIndex(kind);
+                if (resource >= 0) largeBeltIncome[(int)(faction - 1) * 6 + resource] = checked(largeBeltIncome[(int)(faction - 1) * 6 + resource] + amount);
+            }
+        }
+
+        private void RecordLargeUse(uint faction, ResourceKind resource, int kind, int amount)
+        {
+            if (!LargeEconomyOn || faction < 1 || faction > 2 || amount <= 0 || kind < 0 || kind >= LargeEconomyUseKind.Count) return;
+            int resourceIndex = resource == ResourceKind.Wood ? 0 : resource == ResourceKind.Stone ? 1 : -1;
+            if (resourceIndex >= 0) largeResourceUses[faction - 1, kind, resourceIndex] = checked(largeResourceUses[faction - 1, kind, resourceIndex] + amount);
         }
     }
 }

@@ -340,6 +340,7 @@ namespace Rts.Simulation
             ref var e = ref world.Economies[faction - 1];
             e.Food = checked(e.Food - c.food);
             e.Wood = checked(e.Wood - c.wood);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Infantry, c.wood);
             if (kind == UnitKind.HeavyInfantry)
             {
                 e.Steel = checked(e.Steel - c.metal);

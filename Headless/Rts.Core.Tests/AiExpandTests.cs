@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using Rts.Application;
@@ -55,12 +56,93 @@ namespace Rts.Core.Tests
             scenario.Economy.AiExpandAge2TownCount = 2;
             scenario.Economy.AiExpandAge3TownCount = 3;
             scenario.Economy.AiExpandDecisionIntervalTicks = 137;
+            scenario.Economy.AiExpandShareMinVillagers = 21;
+            scenario.Economy.AiExpandFoodWorkerPermille = 451;
+            scenario.Economy.AiExpandWoodWorkerPermille = 251;
+            scenario.Economy.AiExpandStoneWorkerPermille = 101;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Any(x => x.Id == 68 && x.Version == 1), Is.True);
             Assert.That(decoded.Economy.AiExpand, Is.True);
             Assert.That(decoded.Economy.AiExpandDecisionIntervalTicks, Is.EqualTo(137));
+            Assert.That(decoded.Economy.AiExpandShareMinVillagers, Is.EqualTo(21));
+            Assert.That(decoded.Economy.AiExpandFoodWorkerPermille, Is.EqualTo(451));
+            Assert.That(decoded.Economy.AiExpandWoodWorkerPermille, Is.EqualTo(251));
+            Assert.That(decoded.Economy.AiExpandStoneWorkerPermille, Is.EqualTo(101));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void VillagerShareFloorsFundWoodAndStoneAfterAgeOne()
+        {
+            var scenario = Scenario(true);
+            var e = scenario.Economy;
+            e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 0;
+            e.PopulationCap = 1000;
+            e.AutoVillagerTarget = 0; e.AutoInfantryQueue = 0;
+            e.AgeClockTicks1 = 1; e.AdvanceFoodCost = e.AdvanceWoodCost = e.Age2FoodCost = e.Age2WoodCost = 0;
+            e.AdvanceTicks = e.Age2Ticks = 1;
+            e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 0;
+            e.Towns = false;
+            SetFactionOneVillagers(scenario, 40);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            Steps(gateway, sim, 4000);
+
+            var observation = sim.CaptureLargeEconomyObservation().Factions[0];
+            Assert.That(observation.Villagers, Is.EqualTo(40));
+            Assert.That(observation.Workers[0], Is.GreaterThanOrEqualTo(15));
+            Assert.That(observation.Workers[1], Is.GreaterThanOrEqualTo(10));
+            Assert.That(observation.Workers[2], Is.GreaterThanOrEqualTo(4));
+            Assert.That(observation.Income[1], Is.GreaterThan(0), "wood actually delivered");
+            Assert.That(observation.Income[2], Is.GreaterThan(0), "stone actually delivered");
+        }
+
+        [Test]
+        public void VillagerShareFloorsAreInactiveBelowMinimumPopulation()
+        {
+            // 19 villagers: the floors must not act, so the run matches one whose floors can never act.
+            var (left, leftGateway) = ShareFloorMatch(19, 20);
+            var (right, rightGateway) = ShareFloorMatch(19, 1000);
+            for (int tick = 0; tick < 1600; tick++)
+            {
+                leftGateway.Step();
+                rightGateway.Step();
+                var l = left.CaptureLargeEconomyObservation().Factions[0];
+                var r = right.CaptureLargeEconomyObservation().Factions[0];
+                Assert.That(l.Workers, Is.EqualTo(r.Workers), "tick " + tick);
+                var le = left.Capture(1).Economy; var re = right.Capture(1).Economy;
+                Assert.That((le.Food, le.Wood, le.Stone), Is.EqualTo((re.Food, re.Wood, re.Stone)), "tick " + tick);
+            }
+            Assert.That(left.CaptureLargeEconomyObservation().Factions[0].Villagers, Is.EqualTo(19));
+        }
+
+        private static (Battle sim, CommandGateway gateway) ShareFloorMatch(int villagers, int shareMinVillagers)
+        {
+            var scenario = Scenario(true);
+            var e = scenario.Economy;
+            e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 0;
+            e.PopulationCap = 1000;
+            e.AutoVillagerTarget = 0; e.AutoInfantryQueue = 0;
+            e.AgeClockTicks1 = 1; e.AdvanceFoodCost = e.AdvanceWoodCost = e.Age2FoodCost = e.Age2WoodCost = 0;
+            e.AdvanceTicks = e.Age2Ticks = 1;
+            e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 0;
+            e.Towns = false;
+            e.AiExpandShareMinVillagers = shareMinVillagers;
+            SetFactionOneVillagers(scenario, villagers);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            return (sim, gateway);
         }
 
         [Test]
@@ -164,6 +246,27 @@ namespace Rts.Core.Tests
             long dx = (left.X.Raw - right.X.Raw) / 65536;
             long dz = (left.Z.Raw - right.Z.Raw) / 65536;
             return dx * dx + dz * dz;
+        }
+
+        private static void SetFactionOneVillagers(ScenarioDefinition scenario, int count)
+        {
+            var villagers = scenario.Villagers.Where(v => v.FactionId != 1).ToList();
+            var factionOne = scenario.Villagers.Where(v => v.FactionId == 1).Take(count).ToList();
+            uint nextId = scenario.Villagers.Length == 0 ? 1 : scenario.Villagers.Max(v => v.Id) + 1;
+            var core = scenario.Cores[0].Position;
+            long one = Fix64.FromInt(1).Raw;
+            while (factionOne.Count < count)
+            {
+                int index = factionOne.Count;
+                factionOne.Add(new VillagerDefinition
+                {
+                    Id = nextId++, FactionId = 1,
+                    Position = new SimPoint(Fix64.FromRaw(core.X.Raw + (index % 8 - 4) * one),
+                        Fix64.FromRaw(core.Z.Raw + (index / 8 - 2) * one))
+                });
+            }
+            villagers.AddRange(factionOne);
+            scenario.Villagers = villagers.OrderBy(v => v.Id).ToArray();
         }
     }
 }

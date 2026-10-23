@@ -431,6 +431,12 @@ namespace Rts.Simulation
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
             }
             int villagers = largeVillagerCounts[factionIndex];
+            if (world.Config.Economy.AiExpand && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
+            {
+                if (food * 1000 < villagers * world.Config.Economy.AiExpandFoodWorkerPermille) return ResourceKind.Food;
+                if (wood * 1000 < villagers * world.Config.Economy.AiExpandWoodWorkerPermille) return ResourceKind.Wood;
+                if (economy.Age >= 1 && stone * 1000 < villagers * world.Config.Economy.AiExpandStoneWorkerPermille) return ResourceKind.Stone;
+            }
             int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
             int desiredTowns = villagers < townVillagers ? 0
                 : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townVillagers));

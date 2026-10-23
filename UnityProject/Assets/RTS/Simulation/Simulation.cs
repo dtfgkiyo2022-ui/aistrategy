@@ -46,9 +46,11 @@ namespace Rts.Simulation
         private int[] largeClusterAnchors;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
+        private readonly int[] largeBeltIncome = new int[12];
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
+        private readonly int[,,] largeResourceUses = new int[2, LargeEconomyUseKind.Count, 2];
         // AiExpand town-placement failures are observer-only and are updated only while AiExpand is enabled.
         private readonly int[] aiExpandTownSkippedUnknownResource = new int[2];
         private readonly int[] aiExpandTownSkippedNoSite = new int[2];

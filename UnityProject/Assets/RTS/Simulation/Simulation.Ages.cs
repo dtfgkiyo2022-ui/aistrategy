@@ -634,6 +634,7 @@ namespace Rts.Simulation
             if (economy.Food < price.food || economy.Wood - heldWood < price.wood || economy.Gold < price.gold) return false;
             economy.Food = checked(economy.Food - price.food);
             economy.Wood = checked(economy.Wood - price.wood);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.AgeUp, price.wood);
             economy.Gold = checked(economy.Gold - price.gold);
             CompleteAdvance(ref economy, civ);
             return true;
