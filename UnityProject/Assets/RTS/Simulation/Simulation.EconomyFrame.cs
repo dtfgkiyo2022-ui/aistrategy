@@ -382,7 +382,19 @@ namespace Rts.Simulation
                     jerkyFoodInput: PrimitiveCraftOn ? rules.JerkyFoodInput : 0,
                     jerkyOutput: PrimitiveCraftOn ? rules.JerkyOutput : 0,
                     stoneToolsGatherIntervalPermille: PrimitiveCraftOn ? rules.StoneToolsGatherIntervalPermille : 0,
-                    jerkyHpPermille: PrimitiveCraftOn ? rules.JerkyHpPermille : 0);
+                    jerkyHpPermille: PrimitiveCraftOn ? rules.JerkyHpPermille : 0,
+                    aiFactoryEnabled: AiFactoryOn,
+                    aiFactoryPrimitiveLineCount: AiFactoryOn ? rules.AiFactoryPrimitiveLineCount : 0,
+                    aiFactoryAge1LineCount: AiFactoryOn ? rules.AiFactoryAge1LineCount : 0,
+                    aiFactoryAge2LineCount: AiFactoryOn ? rules.AiFactoryAge2LineCount : 0,
+                    aiFactoryAge3LineCount: AiFactoryOn ? rules.AiFactoryAge3LineCount : 0,
+                    aiFactoryBarracksIdleWindowTicks: AiFactoryOn ? rules.AiFactoryBarracksIdleWindowTicks : 0,
+                    aiFactoryBarracksIdlePermille: AiFactoryOn ? rules.AiFactoryBarracksIdlePermille : 0,
+                    aiFactoryPrimitiveBarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryPrimitiveBarracksMaxBuildings : 0,
+                    aiFactoryAge1BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge1BarracksMaxBuildings : 0,
+                    aiFactoryAge2BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge2BarracksMaxBuildings : 0,
+                    aiFactoryAge3BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge3BarracksMaxBuildings : 0,
+                    aiFactoryAge4BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

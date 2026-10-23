@@ -11,7 +11,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private bool CommonDrillOn => IndustryOn && world.Config.Economy.CommonDrill;
+        private bool CommonDrillOn => IndustryOn && (world.Config.Economy.CommonDrill || AiFactoryOn);
 
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
@@ -1242,7 +1242,8 @@ namespace Rts.Simulation
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))
                || ((PlanksOn || CraftTree1On) && destination == BuildingKind.Sawmill && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
-               || (CraftTree1On && destination == BuildingKind.Stonecutter && source == BuildingKind.Quarry && kind == ResourceKind.Stone)
+               || ((CraftTree1On || AiFactoryOn) && destination == BuildingKind.Stonecutter
+                   && (source == BuildingKind.Quarry || source == BuildingKind.Drill) && kind == ResourceKind.Stone)
                || (CraftTree1On && destination == BuildingKind.Joinery && (source == BuildingKind.Sawmill && kind == ResourceKind.Planks || source == BuildingKind.Stonecutter && kind == ResourceKind.CutStone))
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))

@@ -58,7 +58,8 @@ namespace Rts.Simulation
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
-        private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
+          private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
+          private bool AiFactoryOn => PrimitiveCraftOn && world.Config.Economy.AiFactory;
         private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
         private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
         private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
@@ -142,7 +143,7 @@ namespace Rts.Simulation
             => CraftTree1On && (world.Economies[faction - 1].Age >= 1 || PrimitiveCraftOn);
 
         private bool StonecutterAllowed(uint faction)
-            => CraftTreeCommonAllowed(faction);
+             => CraftTreeCommonAllowed(faction) || AiFactoryOn;
 
         private bool JoineryAllowed(uint faction)
             => CraftTree1On && world.Economies[faction - 1].Age >= 2;
@@ -164,8 +165,9 @@ namespace Rts.Simulation
         private bool RationsAllowed(uint faction)
             => RationsOn && world.Economies[faction - 1].Civ == CivKind.Agrarian && world.Economies[faction - 1].Age >= 1;
 
-        private bool ForestryAllowed(uint faction)
-            => ForestryOn && world.Economies[faction - 1].Civ == CivKind.Forestry && world.Economies[faction - 1].Age >= 1;
+          private bool ForestryAllowed(uint faction)
+             => (ForestryOn && world.Economies[faction - 1].Civ == CivKind.Forestry && world.Economies[faction - 1].Age >= 1)
+                || AiFactoryOn;
 
         private bool MasonryAllowed(uint faction)
             => MasonryOn && world.Economies[faction - 1].Civ == CivKind.Masonry && world.Economies[faction - 1].Age >= 1;

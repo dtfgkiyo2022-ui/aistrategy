@@ -183,6 +183,9 @@ namespace Rts.Simulation
         /// <summary>V3-11 #2: tick at which an automatic bridge was destroyed; 0 means it has not been destroyed.</summary>
         internal long DestroyedTick;
         internal long TrainRemaining;
+        /// <summary>AiFactory: rolling resource-wait measurement for automatic barracks growth.</summary>
+        internal int AiFactoryIdleTicks;
+        internal long AiFactoryIdleWindowStartTick;
         /// <summary>V3-2 mine and smelter (12.2): output side, items at the input and output, and the work clock
         /// (mine: ticks towards the next ore; smelter: ticks left on the metal being made, 0 when idle).</summary>
         internal Facing Facing;
@@ -276,7 +279,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -1229,7 +1232,16 @@ namespace Rts.Simulation
                   HutWork = e.HutWork, HutHp = e.HutHp, PrimitiveCraftTicks = e.PrimitiveCraftTicks,
                   StoneToolsStoneInput = e.StoneToolsStoneInput, StoneToolsWoodInput = e.StoneToolsWoodInput,
                   JerkyFoodInput = e.JerkyFoodInput, JerkyOutput = e.JerkyOutput,
-                  StoneToolsGatherIntervalPermille = e.StoneToolsGatherIntervalPermille, JerkyHpPermille = e.JerkyHpPermille,
+                    StoneToolsGatherIntervalPermille = e.StoneToolsGatherIntervalPermille, JerkyHpPermille = e.JerkyHpPermille,
+                    AiFactory = e.AiFactory, AiFactoryPrimitiveLineCount = e.AiFactoryPrimitiveLineCount,
+                    AiFactoryAge1LineCount = e.AiFactoryAge1LineCount, AiFactoryAge2LineCount = e.AiFactoryAge2LineCount,
+                    AiFactoryAge3LineCount = e.AiFactoryAge3LineCount, AiFactoryBarracksIdleWindowTicks = e.AiFactoryBarracksIdleWindowTicks,
+                    AiFactoryBarracksIdlePermille = e.AiFactoryBarracksIdlePermille,
+                    AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryPrimitiveBarracksMaxBuildings,
+                    AiFactoryAge1BarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings,
+                    AiFactoryAge2BarracksMaxBuildings = e.AiFactoryAge2BarracksMaxBuildings,
+                    AiFactoryAge3BarracksMaxBuildings = e.AiFactoryAge3BarracksMaxBuildings,
+                    AiFactoryAge4BarracksMaxBuildings = e.AiFactoryAge4BarracksMaxBuildings,
                   CraftTree2 = e.CraftTree2, AssemblerSizeCells = e.AssemblerSizeCells, AssemblerWoodCost = e.AssemblerWoodCost,
                   AssemblerWork = e.AssemblerWork, AssemblerHp = e.AssemblerHp, ArmsKitTicks = e.ArmsKitTicks,
                   ArmsKitPlankInput = e.ArmsKitPlankInput, ArmsKitCharcoalInput = e.ArmsKitCharcoalInput, ArmsKitSteelInput = e.ArmsKitSteelInput,

@@ -190,6 +190,9 @@ private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
 private const int PrimitiveCraftExtensionId = 66;
 private const int PrimitiveCraftExtensionVersion = 1;
 private const int PrimitiveCraftExtensionDataLength = 12 * sizeof(int);
+private const int AiFactoryExtensionId = 67;
+private const int AiFactoryExtensionVersion = 1;
+private const int AiFactoryExtensionDataLength = 12 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -280,6 +283,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(ResourceFogExtensionId, ResourceFogExtensionVersion, ResourceFogExtensionDataLength)
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
             ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
+            ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -907,6 +911,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     else if (id == PrimitiveCraftExtensionId) ReadPrimitiveCraftExtension(extension, c.Economy);
+                    else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -993,6 +998,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PrimitiveCraftExtensionId && !c.Economy.PrimitiveCraft);
+                extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1497,6 +1503,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     if (extensions[i] != null && extensions[i].Id == PrimitiveCraftExtensionId)
                     { hasPrimitiveCraft = true; extensions[i] = CreatePrimitiveCraftExtension(c.Economy); }
                 if (c.Economy.PrimitiveCraft && !hasPrimitiveCraft) extensions.Add(CreatePrimitiveCraftExtension(c.Economy));
+                bool hasAiFactory = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == AiFactoryExtensionId)
+                    { hasAiFactory = true; extensions[i] = CreateAiFactoryExtension(c.Economy); }
+                if (c.Economy.PrimitiveCraft && c.Economy.AiFactory && !hasAiFactory)
+                    extensions.Add(CreateAiFactoryExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1728,6 +1740,45 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.PrimitiveCraftTicks = reader.ReadInt32(); e.StoneToolsStoneInput = reader.ReadInt32(); e.StoneToolsWoodInput = reader.ReadInt32();
                 e.JerkyFoodInput = reader.ReadInt32(); e.JerkyOutput = reader.ReadInt32(); e.StoneToolsGatherIntervalPermille = reader.ReadInt32(); e.JerkyHpPermille = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing primitive-craft extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiFactoryExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiFactory ? 1 : 0);
+                writer.Write(e.AiFactoryPrimitiveLineCount); writer.Write(e.AiFactoryAge1LineCount);
+                writer.Write(e.AiFactoryAge2LineCount); writer.Write(e.AiFactoryAge3LineCount);
+                writer.Write(e.AiFactoryBarracksIdleWindowTicks); writer.Write(e.AiFactoryBarracksIdlePermille);
+                writer.Write(e.AiFactoryPrimitiveBarracksMaxBuildings); writer.Write(e.AiFactoryAge1BarracksMaxBuildings);
+                writer.Write(e.AiFactoryAge2BarracksMaxBuildings); writer.Write(e.AiFactoryAge3BarracksMaxBuildings);
+                writer.Write(e.AiFactoryAge4BarracksMaxBuildings);
+                return new ScenarioExtensionData { Id = AiFactoryExtensionId, Version = AiFactoryExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiFactoryExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI-factory flag.");
+                e.AiFactory = enabled != 0;
+                e.AiFactoryPrimitiveLineCount = reader.ReadInt32(); e.AiFactoryAge1LineCount = reader.ReadInt32();
+                e.AiFactoryAge2LineCount = reader.ReadInt32(); e.AiFactoryAge3LineCount = reader.ReadInt32();
+                e.AiFactoryBarracksIdleWindowTicks = reader.ReadInt32(); e.AiFactoryBarracksIdlePermille = reader.ReadInt32();
+                e.AiFactoryPrimitiveBarracksMaxBuildings = reader.ReadInt32(); e.AiFactoryAge1BarracksMaxBuildings = reader.ReadInt32();
+                e.AiFactoryAge2BarracksMaxBuildings = reader.ReadInt32(); e.AiFactoryAge3BarracksMaxBuildings = reader.ReadInt32();
+                e.AiFactoryAge4BarracksMaxBuildings = reader.ReadInt32();
+                if (e.AiFactoryPrimitiveLineCount < 0 || e.AiFactoryAge1LineCount < 0 || e.AiFactoryAge2LineCount < 0 || e.AiFactoryAge3LineCount < 0
+                    || e.AiFactoryBarracksIdleWindowTicks <= 0 || e.AiFactoryBarracksIdlePermille < 0 || e.AiFactoryBarracksIdlePermille > 1000
+                    || e.AiFactoryPrimitiveBarracksMaxBuildings < 0 || e.AiFactoryAge1BarracksMaxBuildings < 0
+                    || e.AiFactoryAge2BarracksMaxBuildings < 0 || e.AiFactoryAge3BarracksMaxBuildings < 0 || e.AiFactoryAge4BarracksMaxBuildings < 0)
+                    throw new InvalidDataException("Invalid AI-factory parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-factory extension data.");
             }
         }
 

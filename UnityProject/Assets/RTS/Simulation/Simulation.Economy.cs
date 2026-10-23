@@ -31,6 +31,7 @@ namespace Rts.Simulation
         private void DecideEconomy()
         {
             AdvanceReserved(); // every tick, not only on the allocation cycle
+            if (AiFactoryOn) UpdateAiFactoryBarracksIdle();
             if (!EconomyOn || world.Tick % 20 != 0) return;
             var rules = world.Config.Economy;
             for (int f = 0; f < 2; f++)

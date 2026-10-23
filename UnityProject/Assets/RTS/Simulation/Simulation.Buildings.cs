@@ -44,7 +44,11 @@ namespace Rts.Simulation
                 // V3-3: a barracks the player operates is not queued by the automatic economy.
                 if (b.Complete && !b.Held && barracks < 0) { ready = true; barracks = i; }
             }
-            if (EconomyScaleOn)
+            if (AiFactoryOn)
+            {
+                if (AiFactoryShouldBuildBarracks(faction, barracksCount)) PlaceBarracks(faction);
+            }
+            else if (EconomyScaleOn)
             {
                 int desired = BarracksTargetFor(faction);
                 bool mayAddBarracks = barracksCount == 0 || !SavingToAdvance(faction);

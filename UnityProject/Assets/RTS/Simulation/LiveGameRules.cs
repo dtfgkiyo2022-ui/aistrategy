@@ -51,6 +51,7 @@ namespace Rts.Simulation
             e.CraftBalance = allCivilisations;
             e.CraftTree1 = allCivilisations;
             e.PrimitiveCraft = allCivilisations;
+            e.AiFactory = allCivilisations && e.PrimitiveCraft;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;

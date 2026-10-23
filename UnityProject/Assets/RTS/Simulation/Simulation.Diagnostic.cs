@@ -300,6 +300,11 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (AiFactoryOn && b.Kind == BuildingKind.Barracks)
+                {
+                    w.Value(n + "AiFactoryIdleTicks", b.AiFactoryIdleTicks);
+                    w.Value(n + "AiFactoryIdleWindowStartTick", b.AiFactoryIdleWindowStartTick);
+                }
                 if (world.Config.Economy.BuildingReservations)
                 {
                     w.Value(n + "Reserved", b.Reserved);
@@ -518,6 +523,7 @@ namespace Rts.Simulation
                     if (RepairKitsOn) w.Value(n + "RepairYardId", line.RepairYardId);
                     if (ToolsOn) w.Value(n + "ToolShopId", line.ToolShopId);
                     if (PrimitiveCraftOn) w.Value(n + "HutId", line.HutId);
+                    if (AiFactoryOn) w.Value(n + "DrillId", line.DrillId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

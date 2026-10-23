@@ -735,7 +735,8 @@ namespace Rts.Simulation
             if (!CraftTreeCommonAllowed(faction)) return;
             if (PrimitiveCraftOn && world.Economies[faction - 1].Age == 0)
             {
-                DecidePrimitiveCraft(faction);
+                if (AiFactoryOn) DecideAiFactoryPrimitive(faction);
+                else DecidePrimitiveCraft(faction);
                 return;
             }
             int houseIndex = OwnBuildingIndex(faction, BuildingKind.House);
@@ -2783,7 +2784,14 @@ namespace Rts.Simulation
 
         private bool[] TakenForOtherLines(uint faction, int currentLine)
         {
-            var taken = new bool[world.Belts.Length];
+            bool[] taken;
+            if (AiFactoryOn)
+            {
+                EnsureAiFactoryWorkspace();
+                taken = aiFactoryTakenWorkspace;
+                Array.Clear(taken, 0, taken.Length);
+            }
+            else taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 if (i == currentLine || world.ProcessingLines[i].FactionId != faction) continue;
@@ -2804,7 +2812,14 @@ namespace Rts.Simulation
             if (LargeEconomyOn)
             {
                 int missing = 0;
-                var seen = new bool[world.Belts.Length];
+                bool[] seen;
+                if (AiFactoryOn)
+                {
+                    EnsureAiFactoryWorkspace();
+                    seen = aiFactorySeenWorkspace;
+                    Array.Clear(seen, 0, seen.Length);
+                }
+                else seen = new bool[world.Belts.Length];
                 foreach (var (route, facings) in routes)
                     for (int i = 0; i < route.Length; i++)
                     {
@@ -2862,9 +2877,19 @@ namespace Rts.Simulation
         {
             if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
-            var from = new int[cells];
+            int[] from, queue;
+            if (AiFactoryOn)
+            {
+                EnsureAiFactoryWorkspace();
+                from = aiFactoryRouteFromWorkspace;
+                queue = aiFactoryRouteQueueWorkspace;
+            }
+            else
+            {
+                from = new int[cells];
+                queue = new int[cells];
+            }
             for (int i = 0; i < cells; i++) from[i] = -2;
-            var queue = new int[cells];
             int head = 0, tail = 0;
             queue[tail++] = start; from[start] = -1;
             while (head < tail)
@@ -2898,7 +2923,7 @@ namespace Rts.Simulation
 
         private bool AiBeltCellKnown(uint faction, int cell)
         {
-            if (!LargeEconomyOn) return true;
+            if (!LargeEconomyOn && !AiFactoryOn) return true;
             var explored = world.Factions[faction - 1].ExploredCells;
             return cell >= 0 && cell < explored.Length && explored[cell];
         }

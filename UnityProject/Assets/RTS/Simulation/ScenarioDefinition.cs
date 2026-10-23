@@ -314,6 +314,12 @@ namespace Rts.Simulation
         public int HutSizeCells = 2, HutWoodCost = 40, HutWork = 100, HutHp = 250;
         public int PrimitiveCraftTicks = 60, StoneToolsStoneInput = 1, StoneToolsWoodInput = 1;
         public int JerkyFoodInput = 3, JerkyOutput = 2, StoneToolsGatherIntervalPermille = 850, JerkyHpPermille = 1100;
+        /// <summary>AiFactory (technical-design-v3 37.8): deterministic line templates and restrained barracks growth.</summary>
+        public bool AiFactory;
+        public int AiFactoryPrimitiveLineCount = 3, AiFactoryAge1LineCount = 1, AiFactoryAge2LineCount = 2, AiFactoryAge3LineCount = 1;
+        public int AiFactoryBarracksIdleWindowTicks = 1200, AiFactoryBarracksIdlePermille = 100;
+        public int AiFactoryPrimitiveBarracksMaxBuildings = 1, AiFactoryAge1BarracksMaxBuildings = 2;
+        public int AiFactoryAge2BarracksMaxBuildings = 4, AiFactoryAge3BarracksMaxBuildings = 6, AiFactoryAge4BarracksMaxBuildings = 8;
         /// <summary>CraftTree2: the shared second-stage assembler and its effects.</summary>
         public bool CraftTree2;
         public int AssemblerSizeCells = 2, AssemblerWoodCost = 120, AssemblerWork = 300, AssemblerHp = 600;

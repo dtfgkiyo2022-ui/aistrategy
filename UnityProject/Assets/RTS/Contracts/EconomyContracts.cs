@@ -1051,6 +1051,18 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int JerkyOutput { get; }
         public int StoneToolsGatherIntervalPermille { get; }
         public int JerkyHpPermille { get; }
+        public bool AiFactoryEnabled { get; }
+        public int AiFactoryPrimitiveLineCount { get; }
+        public int AiFactoryAge1LineCount { get; }
+        public int AiFactoryAge2LineCount { get; }
+        public int AiFactoryAge3LineCount { get; }
+        public int AiFactoryBarracksIdleWindowTicks { get; }
+        public int AiFactoryBarracksIdlePermille { get; }
+        public int AiFactoryPrimitiveBarracksMaxBuildings { get; }
+        public int AiFactoryAge1BarracksMaxBuildings { get; }
+        public int AiFactoryAge2BarracksMaxBuildings { get; }
+        public int AiFactoryAge3BarracksMaxBuildings { get; }
+        public int AiFactoryAge4BarracksMaxBuildings { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1179,7 +1191,12 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
                TechKind ageFourAiResearchFailureTech = 0, byte ageFourAiResearchFailureReason = 0, long ageFourAiResearchFailureTick = 0,
                bool primitiveCraftEnabled = false, int stoneTools = 0, int jerky = 0, int hutWoodCost = 0, int hutSizeCells = 0,
                int primitiveCraftTicks = 0, int stoneToolsStoneInput = 0, int stoneToolsWoodInput = 0, int jerkyFoodInput = 0,
-               int jerkyOutput = 0, int stoneToolsGatherIntervalPermille = 0, int jerkyHpPermille = 0)
+               int jerkyOutput = 0, int stoneToolsGatherIntervalPermille = 0, int jerkyHpPermille = 0,
+               bool aiFactoryEnabled = false, int aiFactoryPrimitiveLineCount = 0, int aiFactoryAge1LineCount = 0,
+               int aiFactoryAge2LineCount = 0, int aiFactoryAge3LineCount = 0, int aiFactoryBarracksIdleWindowTicks = 0,
+               int aiFactoryBarracksIdlePermille = 0, int aiFactoryPrimitiveBarracksMaxBuildings = 0,
+               int aiFactoryAge1BarracksMaxBuildings = 0, int aiFactoryAge2BarracksMaxBuildings = 0,
+               int aiFactoryAge3BarracksMaxBuildings = 0, int aiFactoryAge4BarracksMaxBuildings = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1287,6 +1304,12 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             PrimitiveCraftEnabled = primitiveCraftEnabled; StoneTools = stoneTools; Jerky = jerky; HutWoodCost = hutWoodCost; HutSizeCells = hutSizeCells;
             PrimitiveCraftTicks = primitiveCraftTicks; StoneToolsStoneInput = stoneToolsStoneInput; StoneToolsWoodInput = stoneToolsWoodInput;
             JerkyFoodInput = jerkyFoodInput; JerkyOutput = jerkyOutput; StoneToolsGatherIntervalPermille = stoneToolsGatherIntervalPermille; JerkyHpPermille = jerkyHpPermille;
+            AiFactoryEnabled = aiFactoryEnabled; AiFactoryPrimitiveLineCount = aiFactoryPrimitiveLineCount; AiFactoryAge1LineCount = aiFactoryAge1LineCount;
+            AiFactoryAge2LineCount = aiFactoryAge2LineCount; AiFactoryAge3LineCount = aiFactoryAge3LineCount;
+            AiFactoryBarracksIdleWindowTicks = aiFactoryBarracksIdleWindowTicks; AiFactoryBarracksIdlePermille = aiFactoryBarracksIdlePermille;
+            AiFactoryPrimitiveBarracksMaxBuildings = aiFactoryPrimitiveBarracksMaxBuildings; AiFactoryAge1BarracksMaxBuildings = aiFactoryAge1BarracksMaxBuildings;
+            AiFactoryAge2BarracksMaxBuildings = aiFactoryAge2BarracksMaxBuildings; AiFactoryAge3BarracksMaxBuildings = aiFactoryAge3BarracksMaxBuildings;
+            AiFactoryAge4BarracksMaxBuildings = aiFactoryAge4BarracksMaxBuildings;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

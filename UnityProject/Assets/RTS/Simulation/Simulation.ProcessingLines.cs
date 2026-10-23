@@ -805,7 +805,8 @@ namespace Rts.Simulation
                     || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.StonecutterId == buildingId
                     || line.JoineryId == buildingId || line.AssemblerId == buildingId || line.ScriptoriumId == buildingId || line.DryingRackId == buildingId
                     || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId
-                    || line.RepairYardId == buildingId || line.ToolShopId == buildingId || line.HutId == buildingId) return true;
+                    || line.RepairYardId == buildingId || line.ToolShopId == buildingId || line.HutId == buildingId
+                    || line.DrillId == buildingId) return true;
             }
             return false;
         }
@@ -865,6 +866,7 @@ namespace Rts.Simulation
         {
             ref var line = ref world.ProcessingLines[index];
             if (kind == BuildingKind.Mine) line.MineId = id;
+            else if (kind == BuildingKind.Drill) line.DrillId = id;
             else if (kind == BuildingKind.Smelter) line.SmelterId = id;
             else if (kind == BuildingKind.CharcoalKiln) line.KilnId = id;
             else if (kind == BuildingKind.Steelworks) line.SteelworksId = id;
