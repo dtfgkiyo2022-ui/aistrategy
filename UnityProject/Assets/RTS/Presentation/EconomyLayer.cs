@@ -1282,6 +1282,7 @@ namespace Rts.Presentation
                 case BuildingKind.Harbor: return UiText.T("Harbor", "漁港");
                 case BuildingKind.MineShaft: return UiText.T("Mine shaft", "坑道小屋");
                 case BuildingKind.Tollgate: return UiText.T("Tollgate", "関所");
+                case BuildingKind.Town: return UiText.T("Town", "町");
                 case BuildingKind.GrandHouse: return UiText.T("Grand house", "大住居");
                 case BuildingKind.Shrine: return UiText.T("Shrine", "祠");
                 case BuildingKind.Storage: return UiText.T("Storage", "倉庫");
