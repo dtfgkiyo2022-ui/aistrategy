@@ -309,6 +309,11 @@ namespace Rts.Simulation
         public int CraftTreeJoineryTicks = 80, CraftTreeJoineryPlankInput = 2, CraftTreeJoineryCutStoneInput = 1;
         public int CraftTreeFramesPerBuilding = 1, CraftTreeFrameWoodPermille = 700, CraftTreeFrameWorkPermille = 700;
         public int CraftTreeLevel2FramesCost = 2;
+        /// <summary>PrimitiveCraft: the age-zero hut and its two first recipes.</summary>
+        public bool PrimitiveCraft;
+        public int HutSizeCells = 2, HutWoodCost = 40, HutWork = 100, HutHp = 250;
+        public int PrimitiveCraftTicks = 60, StoneToolsStoneInput = 1, StoneToolsWoodInput = 1;
+        public int JerkyFoodInput = 3, JerkyOutput = 2, StoneToolsGatherIntervalPermille = 850, JerkyHpPermille = 1100;
         /// <summary>CraftTree2: the shared second-stage assembler and its effects.</summary>
         public bool CraftTree2;
         public int AssemblerSizeCells = 2, AssemblerWoodCost = 120, AssemblerWork = 300, AssemblerHp = 600;

@@ -63,7 +63,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19 }
+public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19, PrimitiveCraft = 20 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -1039,6 +1039,18 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int CellSizeMeters { get; }
         public IReadOnlyList<bool> PassableCells { get; }
         public IReadOnlyList<bool> RiverCells { get; }
+        public bool PrimitiveCraftEnabled { get; }
+        public int StoneTools { get; }
+        public int Jerky { get; }
+        public int HutWoodCost { get; }
+        public int HutSizeCells { get; }
+        public int PrimitiveCraftTicks { get; }
+        public int StoneToolsStoneInput { get; }
+        public int StoneToolsWoodInput { get; }
+        public int JerkyFoodInput { get; }
+        public int JerkyOutput { get; }
+        public int StoneToolsGatherIntervalPermille { get; }
+        public int JerkyHpPermille { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1164,7 +1176,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
               bool craftTree4Enabled = false, int siegeEngine = 0, int eliteKit = 0, int siegeEngineTicks = 0, int eliteKitTicks = 0,
                int eliteKitAttack = 0, int eliteKitHpPermille = 0, int cannonFoodCost = 0, int cannonWoodCost = 0, int cannonRange = 0, int cannonSiegeDamage = 0,
                int siegeEngineProduced = 0, int siegeEngineConsumed = 0, int eliteKitProduced = 0, int eliteKitConsumed = 0, int cannonProduced = 0,
-               TechKind ageFourAiResearchFailureTech = 0, byte ageFourAiResearchFailureReason = 0, long ageFourAiResearchFailureTick = 0)
+               TechKind ageFourAiResearchFailureTech = 0, byte ageFourAiResearchFailureReason = 0, long ageFourAiResearchFailureTick = 0,
+               bool primitiveCraftEnabled = false, int stoneTools = 0, int jerky = 0, int hutWoodCost = 0, int hutSizeCells = 0,
+               int primitiveCraftTicks = 0, int stoneToolsStoneInput = 0, int stoneToolsWoodInput = 0, int jerkyFoodInput = 0,
+               int jerkyOutput = 0, int stoneToolsGatherIntervalPermille = 0, int jerkyHpPermille = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1268,7 +1283,10 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              AgeFour = ageFour; AgeStrengths = ageStrengths; Age4FoodCost = age4FoodCost; Age4WoodCost = age4WoodCost; Age4Ticks = age4Ticks;
              AgeFourAiResearchFailureTech = ageFourAiResearchFailureTech;
              AgeFourAiResearchFailureReason = ageFourAiResearchFailureReason;
-             AgeFourAiResearchFailureTick = ageFourAiResearchFailureTick;
+            AgeFourAiResearchFailureTick = ageFourAiResearchFailureTick;
+            PrimitiveCraftEnabled = primitiveCraftEnabled; StoneTools = stoneTools; Jerky = jerky; HutWoodCost = hutWoodCost; HutSizeCells = hutSizeCells;
+            PrimitiveCraftTicks = primitiveCraftTicks; StoneToolsStoneInput = stoneToolsStoneInput; StoneToolsWoodInput = stoneToolsWoodInput;
+            JerkyFoodInput = jerkyFoodInput; JerkyOutput = jerkyOutput; StoneToolsGatherIntervalPermille = stoneToolsGatherIntervalPermille; JerkyHpPermille = jerkyHpPermille;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

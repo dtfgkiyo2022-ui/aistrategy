@@ -29,5 +29,12 @@ namespace Rts.Presentation
         public static string CannonDescription()
             => T("Cannon: SiegeWorkshop unit; consumes 1 siege engine, 100 food and 100 wood. Range 8; deals double ram building damage.",
                 "大砲：攻城工房で生産。攻城機関1・食料100・木材100を使う。射程8、建物には破城槌の2倍の攻撃。");
+
+        public static string PrimitiveCraftHutDescription()
+            => T("Hut: primitive workbench. Stone tools use 1 stone + 1 wood; jerky uses 3 food and improves soldier HP.",
+                "作業小屋：原始時代の作業台。石器は石1＋木1、干し肉は食料3で作り、兵のHPを高める。");
+
+        public static string PrimitiveCraftGoodsLabel()
+            => T("Stone tools / Jerky", "石器／干し肉");
     }
 }

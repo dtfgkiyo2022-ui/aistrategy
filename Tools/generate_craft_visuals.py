@@ -28,6 +28,7 @@ GOODS_COLORS = {
     "ArmsKit": (150, 92, 64), "FineArmsKit": (96, 128, 170), "Scholarly": (112, 86, 150),
     "SiegeParts": (120, 96, 70), "Mechanism": (176, 150, 70),
     "SiegeEngine": (98, 74, 58), "EliteKit": (150, 120, 190),
+    "StoneTools": (116, 150, 163), "Jerky": (181, 92, 54),
 }
 
 
@@ -128,6 +129,14 @@ def draw_goods(name, color):
         # A shield with a star.
         draw.polygon((32, 12, 49, 19, 46, 40, 32, 52, 18, 40, 15, 19), fill=dark, outline=light)
         draw.polygon((32, 21, 35, 29, 43, 29, 37, 34, 39, 42, 32, 37, 25, 42, 27, 34, 21, 29, 29, 29), fill=light)
+    elif name == "StoneTools":
+        draw.polygon((14, 42, 27, 18, 34, 24, 22, 48), fill=light, outline=dark)
+        draw.polygon((30, 19, 46, 15, 50, 23, 35, 28), fill=dark, outline=light)
+        draw.line((22, 42, 45, 22), fill=light, width=3)
+    elif name == "Jerky":
+        draw.rounded_rectangle((14, 20, 50, 45), radius=8, fill=dark, outline=light, width=2)
+        draw.line((20, 27, 43, 35), fill=light, width=3)
+        draw.line((19, 37, 39, 29), fill=light, width=2)
     elif name == "Tools":
         draw.line((18, 43, 43, 18), fill=light, width=6)
         draw.ellipse((13, 36, 27, 50), fill=dark, outline=light, width=2)
@@ -173,14 +182,10 @@ def draw_belt():
 
 def main():
     GOODS.mkdir(parents=True, exist_ok=True)
-    STATUS.mkdir(parents=True, exist_ok=True)
-    BELT.mkdir(parents=True, exist_ok=True)
-    for name, color in GOODS_COLORS.items():
+    for name in ("StoneTools", "Jerky"):
+        color = GOODS_COLORS[name]
         draw_goods(name, color).save(GOODS / f"{name}.png")
-    for name in ("WaitingForMaterial", "OutputBlocked", "StockFull", "Working"):
-        draw_status(name).save(STATUS / f"{name}.png")
-    draw_belt().save(BELT / "BeltChevron.png")
-    print(f"generated {len(GOODS_COLORS)} goods, 4 status, 1 belt texture")
+    print("generated 2 goods: StoneTools, Jerky")
 
 
 if __name__ == "__main__":

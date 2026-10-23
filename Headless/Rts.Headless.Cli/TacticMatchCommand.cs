@@ -58,6 +58,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--explore-scouting-off")) scenario.Economy.ExploreScouting = false;
         if (options.ContainsKey("--army-recovery-off")) scenario.Economy.AiArmyRecovery = false;
         if (options.ContainsKey("--craft-tree1-off")) scenario.Economy.CraftTree1 = false;
+        if (options.ContainsKey("--primitive-craft-off")) scenario.Economy.PrimitiveCraft = false;
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;

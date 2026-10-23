@@ -188,12 +188,18 @@ namespace Rts.Simulation
                 {
                     // A full population holds the finished villager at the door until there is room.
                     if (LivingVillagers(faction) + LivingSoldiers(faction) >= PopCapFor(faction)) break;
-                    SpawnVillager(faction);
+                    bool stoneTool = QueueStoneToolsAt(economy, 0);
+                    SpawnVillager(faction, OwnCore(faction).Definition.Position, stoneTool);
                     economy.Queued--;
                     if (economy.QueueTools != null && economy.QueueTools.Length > 0)
                     {
                         var rest = new bool[economy.QueueTools.Length - 1];
                         Array.Copy(economy.QueueTools, 1, rest, 0, rest.Length); economy.QueueTools = rest;
+                    }
+                    if (economy.QueueStoneTools != null && economy.QueueStoneTools.Length > 0)
+                    {
+                        var rest = new bool[economy.QueueStoneTools.Length - 1];
+                        Array.Copy(economy.QueueStoneTools, 1, rest, 0, rest.Length); economy.QueueStoneTools = rest;
                     }
                     economy.TrainRemaining = economy.Queued > 0 ? VillagerTrainTicksFor(faction, QueueToolsAt(economy, 0)) : 0;
                 }
@@ -372,13 +378,21 @@ namespace Rts.Simulation
         {
             if (LargeEconomyOn) return LargeWorkKindFor(v);
             int food = 0, wood = 0;
+            int stone = 0;
             for (int i = 0; i < world.VillagerCount; i++)
             {
                 var other = world.Villagers[i];
                 if (!other.Alive || other.Id == v.Id || other.FactionId != v.FactionId || other.Task == VillagerTask.Idle || other.NodeId == 0
                     || other.Task == VillagerTask.ToBuild || other.Task == VillagerTask.Building) continue;
                 var otherKind = world.Nodes[other.NodeId - 1].Definition.Kind;
-                if (otherKind == ResourceKind.Food) food++; else if (otherKind == ResourceKind.Wood) wood++;
+                if (otherKind == ResourceKind.Food) food++; else if (otherKind == ResourceKind.Wood) wood++; else if (otherKind == ResourceKind.Stone) stone++;
+            }
+            if (PrimitiveCraftOn && world.Economies[v.FactionId - 1].Age == 0)
+            {
+                var stock = world.Economies[v.FactionId - 1];
+                var rules = world.Config.Economy;
+                if (wood == 0 || stock.Wood < rules.HutWoodCost + rules.SawmillWoodCost) return ResourceKind.Wood;
+                if (stone == 0 || stock.Stone < rules.StoneToolsStoneInput) return ResourceKind.Stone;
             }
             var recoveryKind = RecoveryWorkKindFor(v.FactionId);
             if (recoveryKind != 0) return recoveryKind;
@@ -410,6 +424,11 @@ namespace Rts.Simulation
             int food = largeWorkCounts[factionIndex * 6 + 0];
             int wood = largeWorkCounts[factionIndex * 6 + 1];
             int stone = largeWorkCounts[factionIndex * 6 + 2];
+            if (PrimitiveCraftOn && economy.Age == 0)
+            {
+                if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return ResourceKind.Wood;
+                if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
+            }
             int villagers = largeVillagerCounts[factionIndex];
             int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
             int desiredTowns = villagers < townVillagers ? 0
@@ -862,9 +881,12 @@ namespace Rts.Simulation
         }
 
         private void SpawnVillager(uint faction)
-            => SpawnVillager(faction, OwnCore(faction).Definition.Position);
+            => SpawnVillager(faction, OwnCore(faction).Definition.Position, false);
 
         private void SpawnVillager(uint faction, SimPoint origin)
+            => SpawnVillager(faction, origin, false);
+
+        private void SpawnVillager(uint faction, SimPoint origin, bool stoneTools)
         {
             int cell = -1;
             for (int i = 0; i < world.Config.Map.WidthCells * world.Config.Map.HeightCells; i++)
@@ -875,7 +897,7 @@ namespace Rts.Simulation
                 Array.Resize(ref world.Villagers, world.Villagers.Length == 0 ? 4 : checked(world.Villagers.Length * 2));
             var position = world.Map.Center(cell);
             world.Villagers[index] = new VillagerState { Id = world.NextVillagerId, FactionId = faction, Alive = true,
-                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>() };
+                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>(), StoneToolsUsed = stoneTools };
             world.NextVillagerId = checked(world.NextVillagerId + 1);
         }
 

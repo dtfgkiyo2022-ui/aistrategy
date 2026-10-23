@@ -1592,7 +1592,8 @@ kindはFocus（向かわせる）、Defend（守る）、AllowAbandon（放棄�
                     case "騎兵育成所": mapped = BuildingKind.Stable; break; case "城": mapped = BuildingKind.Castle; break;
                     case "製材所": mapped = BuildingKind.Sawmill; break;
                     case "写本所": mapped = BuildingKind.Scriptorium; break;
-                    case "支城": case "町の中心": mapped = BuildingKind.Town; break;
+            case "支城": case "町の中心": mapped = BuildingKind.Town; break;
+            case "作業小屋": mapped = BuildingKind.Hut; break;
                 }
             }
             else if (typeof(T) == typeof(UnitKind))

@@ -58,6 +58,7 @@ namespace Rts.Simulation
         private bool GoodsMarketOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.GoodsMarket;
         private bool CraftTimingOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTiming;
         private bool CraftTree1On => world.Config.Economy.Enabled && world.Config.Economy.Industry && AgesOn && world.Config.Economy.CraftTree1;
+        private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
         private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
         private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
         private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
@@ -138,7 +139,7 @@ namespace Rts.Simulation
             => CraftTreeCommonAllowed(faction) || ProcessingAvailable(faction) || BricksAllowed(faction);
 
         private bool CraftTreeCommonAllowed(uint faction)
-            => CraftTree1On && world.Economies[faction - 1].Age >= 1;
+            => CraftTree1On && (world.Economies[faction - 1].Age >= 1 || PrimitiveCraftOn);
 
         private bool StonecutterAllowed(uint faction)
             => CraftTreeCommonAllowed(faction);
@@ -235,6 +236,9 @@ namespace Rts.Simulation
 
         private bool CanUseToolForVillager(uint faction)
             => ToolsAllowed(faction) && world.Economies[faction - 1].Tools > 0;
+
+        private bool CanUseStoneToolsForVillager(uint faction)
+            => PrimitiveCraftOn && world.Economies[faction - 1].StoneTools > 0;
 
         private int AutoVillagerTargetFor(uint faction)
         {

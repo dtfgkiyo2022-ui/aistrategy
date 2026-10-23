@@ -121,6 +121,7 @@
   <Compile Include="CraftTimingTests.cs" />
   <Compile Include="CraftBalanceTests.cs" />
     <Compile Include="CraftTree1Tests.cs" />
+    <Compile Include="PrimitiveCraftTests.cs" />
   <Compile Include="DropSiteLimitTests.cs" />
   <Compile Include="StorageFeedsTests.cs" />
     <Compile Include="CraftTree2Tests.cs" />

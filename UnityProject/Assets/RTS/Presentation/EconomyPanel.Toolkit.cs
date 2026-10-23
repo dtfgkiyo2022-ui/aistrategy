@@ -323,6 +323,8 @@ namespace Rts.Presentation
                 }
                 Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
             }
+            if (economy.PrimitiveCraftEnabled && economy.Age == 0)
+                Add(rows, "build:hut", UiText.T("Hut (", "作業小屋（木材 ") + economy.HutWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Hut);
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
                 for (int buildingIndex = 0; buildingIndex < economy.Buildings.Count; buildingIndex++)
@@ -540,6 +542,7 @@ namespace Rts.Presentation
                 case "build:drill": kind = BuildingKind.Drill; return true;
                 case "build:saddlery": kind = BuildingKind.Saddlery; return true;
                 case "build:sawmill": kind = BuildingKind.Sawmill; return true;
+                case "build:hut": kind = BuildingKind.Hut; return true;
                 case "build:stonecutter": kind = BuildingKind.Stonecutter; return true;
                 case "build:joinery": kind = BuildingKind.Joinery; return true;
                 case "build:scriptorium": kind = BuildingKind.Scriptorium; return true;

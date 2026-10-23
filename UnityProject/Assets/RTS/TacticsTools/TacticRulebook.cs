@@ -124,6 +124,7 @@ namespace Rts.Tactics
                 ("enemySummary", "visibleCount と、現在見えている敵だけを兵種名別に数えた byKind"),
                 ("objectives[]", "kind/id/position/ownerKnown/ownerFactionId/hpKnown/hp/lastSeenTick/capturingFactionId/captureTicks/captureDurationTicks"),
                 ("economy", "food/wood/ore/metal/stone/gold/gems/population/populationCap/civilisation/age/agesEnabled/advancingTo/advanceRemainingTicks/nextAgeAutoTick/nextAgeCost{food,wood,gold}/canAdvanceNow/auto/policy"),
+                ("economy.primitiveCraft", "primitiveCraftEnabled/stoneTools/jerky/hutWoodCost/hutSizeCells/primitiveCraftTicks"),
                 ("economy.rations", "糧食。農耕の文明だけが製粉所で作り、兵の訓練短縮と静穏時の回復に使う"),
                 ("economy.planks", "板。工兵の文明だけが製材所で作り、破城槌と橋に使う"),
                 ("economy.books", "書物。学府の文明だけが写本所で作り、研究を短縮する"),
@@ -204,6 +205,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Joinery, e.JoineryWoodCost, 0, e.JoineryWork);
             Add(rows, BuildingKind.Assembler, e.AssemblerWoodCost, 0, e.AssemblerWork);
             Add(rows, BuildingKind.Drill, e.DrillWoodCost, e.DrillStoneCost, e.DrillWork);
+            Add(rows, BuildingKind.Hut, e.HutWoodCost, 0, e.HutWork);
             return Enum.GetValues(typeof(BuildingKind)).Cast<BuildingKind>().Select(kind => rows[kind]);
         }
 

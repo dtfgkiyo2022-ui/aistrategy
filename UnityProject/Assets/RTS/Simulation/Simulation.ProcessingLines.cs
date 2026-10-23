@@ -36,7 +36,7 @@ namespace Rts.Simulation
 
         private void RequestProcessingLine(uint faction, EconomyCommand command)
         {
-            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.Assembler)
+            if ((byte)command.Line < (byte)ProcessingLineKind.CoreMetal || (byte)command.Line > (byte)ProcessingLineKind.PrimitiveCraft)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineUnavailable, -1);
                 return;
@@ -68,7 +68,8 @@ namespace Rts.Simulation
                 }
             }
             bool commonLine = CraftTreeCommonAllowed(faction) && (command.Line == ProcessingLineKind.Planks || command.Line == ProcessingLineKind.CutStone || command.Line == ProcessingLineKind.Frames)
-                || AssemblerAllowed(faction) && command.Line == ProcessingLineKind.Assembler;
+                || AssemblerAllowed(faction) && command.Line == ProcessingLineKind.Assembler
+                || PrimitiveCraftOn && command.Line == ProcessingLineKind.PrimitiveCraft;
             if (!commonLine && command.Line != ProcessingLineKind.Tack && command.Line != ProcessingLineKind.Books && command.Line != ProcessingLineKind.Preserves && command.Line != ProcessingLineKind.Jewels && command.Line != ProcessingLineKind.TradeGoods && command.Line != ProcessingLineKind.Incense && command.Line != ProcessingLineKind.Charms && command.Line != ProcessingLineKind.RepairKits && command.Line != ProcessingLineKind.Tools && FindRequestedResourceNode(faction, command.Line, requestedCell) < 0)
             {
                 RejectLineRequest(faction, command, ReasonCode.LineResourceMissing, requestedCell);
@@ -102,6 +103,7 @@ namespace Rts.Simulation
             if (kind == ProcessingLineKind.Planks || kind == ProcessingLineKind.CutStone) return CraftTreeCommonAllowed(faction);
             if (kind == ProcessingLineKind.Frames) return JoineryAllowed(faction);
             if (kind == ProcessingLineKind.Assembler) return AssemblerAllowed(faction);
+            if (kind == ProcessingLineKind.PrimitiveCraft) return PrimitiveCraftOn;
             if (kind == ProcessingLineKind.Bricks) return BricksAllowed(faction);
             if (kind == ProcessingLineKind.Rations) return RationsAllowed(faction);
             if (kind == ProcessingLineKind.Tack) return TackAllowed(faction);
@@ -137,6 +139,7 @@ namespace Rts.Simulation
                 : kind == ProcessingLineKind.CutStone ? world.Config.Economy.StonecutterWoodCost
                 : kind == ProcessingLineKind.Frames ? world.Config.Economy.JoineryWoodCost
                 : kind == ProcessingLineKind.Assembler ? world.Config.Economy.AssemblerWoodCost
+                : kind == ProcessingLineKind.PrimitiveCraft ? world.Config.Economy.HutWoodCost
             : kind == ProcessingLineKind.CoreWood || kind == ProcessingLineKind.BowGear
                 ? world.Config.Economy.LumberCampWoodCost
                 : world.Config.Economy.MineWoodCost;
@@ -802,7 +805,7 @@ namespace Rts.Simulation
                     || line.BrickKilnId == buildingId || line.SaddleryId == buildingId || line.SawmillId == buildingId || line.StonecutterId == buildingId
                     || line.JoineryId == buildingId || line.AssemblerId == buildingId || line.ScriptoriumId == buildingId || line.DryingRackId == buildingId
                     || line.LapidaryId == buildingId || line.WeaverId == buildingId || line.IncenseHouseId == buildingId || line.CharmWorkshopId == buildingId
-                    || line.RepairYardId == buildingId || line.ToolShopId == buildingId) return true;
+                    || line.RepairYardId == buildingId || line.ToolShopId == buildingId || line.HutId == buildingId) return true;
             }
             return false;
         }
@@ -815,7 +818,8 @@ namespace Rts.Simulation
         private void BindReservedLineBuildings(uint faction, ref ProcessingLineState line)
         {
             if (!BuildingReservationsOn) return;
-            if (line.Kind == ProcessingLineKind.Assembler) BindReservedLineBuilding(faction, ref line.AssemblerId, BuildingKind.Assembler);
+            if (line.Kind == ProcessingLineKind.PrimitiveCraft) BindReservedLineBuilding(faction, ref line.HutId, BuildingKind.Hut);
+            else if (line.Kind == ProcessingLineKind.Assembler) BindReservedLineBuilding(faction, ref line.AssemblerId, BuildingKind.Assembler);
             else if (line.Kind == ProcessingLineKind.Bricks)
             {
                 BindReservedLineBuilding(faction, ref line.QuarryId, BuildingKind.Quarry);
@@ -973,6 +977,11 @@ namespace Rts.Simulation
             {
                 SetKilnWoodHaulers(faction, line.KilnId, wanted == 0 ? 0 : 1);
                 SetSimpleHaulers(faction, line.KilnId, 0, wanted);
+                return;
+            }
+            if (line.Kind == ProcessingLineKind.PrimitiveCraft)
+            {
+                SetSimpleHaulers(faction, line.HutId, 0, wanted);
                 return;
             }
             if (line.Kind == ProcessingLineKind.Preserves)

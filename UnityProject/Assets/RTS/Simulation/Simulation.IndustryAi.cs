@@ -733,6 +733,11 @@ namespace Rts.Simulation
         private void DecideCraftTree1(uint faction)
         {
             if (!CraftTreeCommonAllowed(faction)) return;
+            if (PrimitiveCraftOn && world.Economies[faction - 1].Age == 0)
+            {
+                DecidePrimitiveCraft(faction);
+                return;
+            }
             int houseIndex = OwnBuildingIndex(faction, BuildingKind.House);
             if (!CompleteBarracks(faction) || houseIndex < 0 || !world.Buildings[houseIndex].Complete) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -797,6 +802,61 @@ namespace Rts.Simulation
                     UpgradeProcessingBuilding(faction, buildingId);
                     break;
                 }
+        }
+
+        private void DecidePrimitiveCraft(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int hutIndex = GetOrCreateLine(faction, ProcessingLineKind.PrimitiveCraft);
+            ref var hutLine = ref world.ProcessingLines[hutIndex];
+            if (!BuildingReady(hutLine.HutId))
+            {
+                if (!BuildingPending(hutLine.HutId) && economy.Wood >= rules.HutWoodCost)
+                {
+                    uint id = PlaceHut(faction);
+                    if (id != 0) hutLine.HutId = id;
+                }
+                return;
+            }
+            ref var hut = ref world.Buildings[hutLine.HutId - 1];
+            if (hut.Complete && hut.Recipe == RecipeKind.None)
+                SetBuildingRecipe(faction, hut.Id, OwnBuildingIndex(faction, BuildingKind.Barracks) >= 0 ? RecipeKind.Jerky : RecipeKind.StoneTools);
+            if (hut.Complete)
+            {
+                var route = BeltRoute(faction, OutputCell(hut), TakenForOtherLines(faction, hutIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(hutIndex, route); LayRoutes(faction, route); }
+            }
+            int plankIndex = GetOrCreateLine(faction, ProcessingLineKind.Planks);
+            ref var plankLine = ref world.ProcessingLines[plankIndex];
+            if (!BuildingReady(plankLine.SawmillId) && !BuildingPending(plankLine.SawmillId)
+                && economy.Wood >= rules.SawmillWoodCost + rules.CraftTreePlankWoodInput * 2)
+            {
+                uint id = PlaceCommonSawmill(faction);
+                if (id != 0) plankLine.SawmillId = id;
+            }
+            else if (BuildingReady(plankLine.SawmillId))
+            {
+                var sawmill = world.Buildings[plankLine.SawmillId - 1];
+                var route = BeltRoute(faction, OutputCell(sawmill), TakenForOtherLines(faction, plankIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(plankIndex, route); LayRoutes(faction, route); }
+            }
+        }
+
+        private uint PlaceHut(uint faction)
+        {
+            int size = world.Config.Economy.HutSizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    uint before = world.NextBuildingId;
+                    PlaceBuildingAt(faction, BuildingKind.Hut, origin, side, 0);
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Hut);
+                }
+            return 0;
         }
 
         private uint LineBuildingIdAfterPlacement(uint before, BuildingKind expected)

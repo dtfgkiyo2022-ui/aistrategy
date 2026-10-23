@@ -62,7 +62,7 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanDistance : default,
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
                     CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
-                     own && CraftTree2On ? b.InputTertiary : 0, own && CraftTree2On ? b.Recipe : RecipeKind.None,
+                     own && (CraftTree2On || PrimitiveCraftOn) ? b.InputTertiary : 0, own && (CraftTree2On || PrimitiveCraftOn) ? b.Recipe : RecipeKind.None,
                     b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0));
             }
             IReadOnlyList<ResourceView> resources;
@@ -370,7 +370,19 @@ namespace Rts.Simulation
                     ageStrengths: AgeStrengthsOn,
                     ageFourAiResearchFailureTech: AgeFourAiOn ? economy.AgeFourAiResearchFailureTech : 0,
                     ageFourAiResearchFailureReason: AgeFourAiOn ? economy.AgeFourAiResearchFailureReason : (byte)0,
-                    ageFourAiResearchFailureTick: AgeFourAiOn ? economy.AgeFourAiResearchFailureTick : 0);
+                    ageFourAiResearchFailureTick: AgeFourAiOn ? economy.AgeFourAiResearchFailureTick : 0,
+                    primitiveCraftEnabled: PrimitiveCraftOn,
+                    stoneTools: PrimitiveCraftOn ? economy.StoneTools : 0,
+                    jerky: PrimitiveCraftOn ? economy.Jerky : 0,
+                    hutWoodCost: PrimitiveCraftOn ? rules.HutWoodCost : 0,
+                    hutSizeCells: PrimitiveCraftOn ? rules.HutSizeCells : 0,
+                    primitiveCraftTicks: PrimitiveCraftOn ? rules.PrimitiveCraftTicks : 0,
+                    stoneToolsStoneInput: PrimitiveCraftOn ? rules.StoneToolsStoneInput : 0,
+                    stoneToolsWoodInput: PrimitiveCraftOn ? rules.StoneToolsWoodInput : 0,
+                    jerkyFoodInput: PrimitiveCraftOn ? rules.JerkyFoodInput : 0,
+                    jerkyOutput: PrimitiveCraftOn ? rules.JerkyOutput : 0,
+                    stoneToolsGatherIntervalPermille: PrimitiveCraftOn ? rules.StoneToolsGatherIntervalPermille : 0,
+                    jerkyHpPermille: PrimitiveCraftOn ? rules.JerkyHpPermille : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

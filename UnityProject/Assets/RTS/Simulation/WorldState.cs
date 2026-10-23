@@ -140,6 +140,7 @@ namespace Rts.Simulation
         internal ResourceKind CarryKind;
         internal int Carry;
         internal long NextGatherTick;
+        internal bool StoneToolsUsed;
         internal int[] Route;
         internal int RouteCursor;
         internal SimPoint RouteGoal;
@@ -210,6 +211,8 @@ namespace Rts.Simulation
         internal bool[] QueuePlanks;
         internal bool[] QueueCharms;
         internal bool[] QueueTools;
+        internal bool[] QueueJerky;
+        internal bool[] QueueStoneTools;
         internal bool[] QueueArmsKit, QueueFineArmsKit, QueueSiegeParts, QueueEliteKit, QueueSiegeEngine;
         internal int QueuedSiegeEngine;
         /// <summary>V3-5 tower: shots fired so far.</summary>
@@ -273,7 +276,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -282,7 +285,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -301,6 +304,8 @@ namespace Rts.Simulation
         internal int CharmsProduced, CharmsConsumed, CharmsTrainedSoldiers;
         internal int RepairKitsProduced, RepairKitsConsumed, RepairKitsRepairedHp, RepairKitsCoreRepairedHp;
         internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
+        internal int StoneToolsProduced, StoneToolsConsumed, StoneToolsTrainedVillagers;
+        internal int JerkyProduced, JerkyConsumed, JerkyTrainedSoldiers;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>
@@ -311,6 +316,7 @@ namespace Rts.Simulation
         /// <summary>V3-3 (19): the player trained or cancelled at the core; the automatic economy trains no villagers.</summary>
         internal bool CoreHeld;
         internal bool[] QueueTools;
+        internal bool[] QueueStoneTools;
         /// <summary>V3-3 (20): what the automatic economy aims for. Balanced without industry.</summary>
         internal EconomyPolicy Policy;
         /// <summary>V3-4 (26): the civilisation, and while advancing the one chosen and the ticks left.</summary>
@@ -608,9 +614,9 @@ namespace Rts.Simulation
                         "Invalid belt component.");
                     Require(b.Component != BeltComponentKind.Inserter || e.Inserters, "Inserters are disabled.");
                     if (b.Component == BeltComponentKind.Sorter)
-            Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear), "A sorter needs a resource kind.");
+                        Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : (e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear)), "A sorter needs a resource kind.");
                     if (b.Component == BeltComponentKind.Inserter)
-                        Require(b.SorterKind == 0 || (byte)b.SorterKind <= (byte)ResourceKind.Mechanism, "An inserter needs a valid selector.");
+                        Require(b.SorterKind == 0 || (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : ResourceKind.Mechanism), "An inserter needs a valid selector.");
                     if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
@@ -693,6 +699,11 @@ namespace Rts.Simulation
                 && e.CraftTreeJoineryCutStoneInput > 0 && e.CraftTreeJoineryCutStoneInput <= e.BufferLimit
                 && e.CraftTreeFramesPerBuilding > 0 && e.CraftTreeFrameWoodPermille > 0 && e.CraftTreeFrameWoodPermille <= 1000
                 && e.CraftTreeFrameWorkPermille > 0 && e.CraftTreeFrameWorkPermille <= 1000 && e.CraftTreeLevel2FramesCost > 0), "Invalid craft-tree rules.");
+            Require(!e.PrimitiveCraft || (e.Enabled && e.Industry && e.Ages && e.CraftTree1
+                && e.HutSizeCells > 0 && e.HutSizeCells <= 8 && e.HutWoodCost >= 0 && e.HutWork > 0 && e.HutHp > 0
+                && e.PrimitiveCraftTicks > 0 && e.StoneToolsStoneInput > 0 && e.StoneToolsWoodInput > 0
+                && e.JerkyFoodInput > 0 && e.JerkyOutput > 0 && e.StoneToolsGatherIntervalPermille > 0 && e.StoneToolsGatherIntervalPermille <= 1000
+                && e.JerkyHpPermille >= 1000), "Invalid primitive-craft rules.");
             Require(!e.CraftTree2 || (e.Enabled && e.Industry && e.Ages && e.AssemblerSizeCells > 0 && e.AssemblerSizeCells <= 8
                 && e.AssemblerWoodCost >= 0 && e.AssemblerWork > 0 && e.AssemblerHp > 0
                 && e.ArmsKitTicks > 0 && e.ArmsKitPlankInput > 0 && e.ArmsKitCharcoalInput > 0 && e.ArmsKitSteelInput > 0
@@ -1000,7 +1011,8 @@ namespace Rts.Simulation
                         || (e.Forestry && b.Item == ResourceKind.BowGear) || (e.Rations && b.Item == ResourceKind.Rations)
                         || (e.Bricks && b.Item == ResourceKind.Bricks) || (e.Planks && b.Item == ResourceKind.Planks)
                         || (e.Books && b.Item == ResourceKind.Books) || (e.Preserves && b.Item == ResourceKind.Preserves)
-|| (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms) || (e.Tools && b.Item == ResourceKind.Tools))
+                        || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms) || (e.Tools && b.Item == ResourceKind.Tools)
+                        || (e.PrimitiveCraft && (b.Item == ResourceKind.StoneTools || b.Item == ResourceKind.Jerky)))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
                 Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
@@ -1213,6 +1225,11 @@ namespace Rts.Simulation
                   CraftTreeJoineryCutStoneInput = e.CraftTreeJoineryCutStoneInput, CraftTreeFramesPerBuilding = e.CraftTreeFramesPerBuilding,
                   CraftTreeFrameWoodPermille = e.CraftTreeFrameWoodPermille, CraftTreeFrameWorkPermille = e.CraftTreeFrameWorkPermille,
                   CraftTreeLevel2FramesCost = e.CraftTreeLevel2FramesCost,
+                  PrimitiveCraft = e.PrimitiveCraft, HutSizeCells = e.HutSizeCells, HutWoodCost = e.HutWoodCost,
+                  HutWork = e.HutWork, HutHp = e.HutHp, PrimitiveCraftTicks = e.PrimitiveCraftTicks,
+                  StoneToolsStoneInput = e.StoneToolsStoneInput, StoneToolsWoodInput = e.StoneToolsWoodInput,
+                  JerkyFoodInput = e.JerkyFoodInput, JerkyOutput = e.JerkyOutput,
+                  StoneToolsGatherIntervalPermille = e.StoneToolsGatherIntervalPermille, JerkyHpPermille = e.JerkyHpPermille,
                   CraftTree2 = e.CraftTree2, AssemblerSizeCells = e.AssemblerSizeCells, AssemblerWoodCost = e.AssemblerWoodCost,
                   AssemblerWork = e.AssemblerWork, AssemblerHp = e.AssemblerHp, ArmsKitTicks = e.ArmsKitTicks,
                   ArmsKitPlankInput = e.ArmsKitPlankInput, ArmsKitCharcoalInput = e.ArmsKitCharcoalInput, ArmsKitSteelInput = e.ArmsKitSteelInput,

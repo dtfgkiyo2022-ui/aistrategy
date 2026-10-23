@@ -172,6 +172,16 @@ namespace Rts.Simulation
                     w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
                     w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
                 }
+                if (PrimitiveCraftOn)
+                {
+                    w.Value(n + "StoneTools", e.StoneTools); w.Value(n + "StoneToolsProduced", e.StoneToolsProduced);
+                    w.Value(n + "StoneToolsConsumed", e.StoneToolsConsumed); w.Value(n + "StoneToolsTrainedVillagers", e.StoneToolsTrainedVillagers);
+                    w.Value(n + "Jerky", e.Jerky); w.Value(n + "JerkyProduced", e.JerkyProduced);
+                    w.Value(n + "JerkyConsumed", e.JerkyConsumed); w.Value(n + "JerkyTrainedSoldiers", e.JerkyTrainedSoldiers);
+                    var stoneTools = e.QueueStoneTools ?? Array.Empty<bool>();
+                    w.Value(n + "QueueStoneTools.Count", (uint)stoneTools.Length);
+                    for (int q = 0; q < stoneTools.Length; q++) w.Value(n + "QueueStoneTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", stoneTools[q]);
+                }
                 if (CraftTree2On)
                 {
                     w.Value(n + "ArmsKit", e.ArmsKit); w.Value(n + "ArmsKitProduced", e.ArmsKitProduced); w.Value(n + "ArmsKitConsumed", e.ArmsKitConsumed);
@@ -331,6 +341,12 @@ namespace Rts.Simulation
                             w.Value(n + "QueueTools.Count", (uint)tools.Length);
                             for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
                         }
+                        if (PrimitiveCraftOn)
+                        {
+                            var jerky = b.QueueJerky ?? Array.Empty<bool>();
+                            w.Value(n + "QueueJerky.Count", (uint)jerky.Length);
+                            for (int q = 0; q < jerky.Length; q++) w.Value(n + "QueueJerky[" + q.ToString(CultureInfo.InvariantCulture) + "]", jerky[q]);
+                        }
                     }
                     if (b.Kind == BuildingKind.Bridge)
                     {
@@ -406,6 +422,7 @@ namespace Rts.Simulation
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
+                if (PrimitiveCraftOn) w.Value(n + "StoneToolsUsed", v.StoneToolsUsed);
                 w.Value(n + "BuildingId", v.BuildingId);
                 if (world.Config.Economy.Caravan)
                 {
@@ -500,6 +517,7 @@ namespace Rts.Simulation
                     if (CharmsOn) w.Value(n + "CharmWorkshopId", line.CharmWorkshopId);
                     if (RepairKitsOn) w.Value(n + "RepairYardId", line.RepairYardId);
                     if (ToolsOn) w.Value(n + "ToolShopId", line.ToolShopId);
+                    if (PrimitiveCraftOn) w.Value(n + "HutId", line.HutId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

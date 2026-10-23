@@ -187,6 +187,9 @@ private const int GoodsMarketExtensionDataLength = 17 * sizeof(int);
 private const int CraftTree1ExtensionId = 41;
 private const int CraftTree1ExtensionVersion = 1;
 private const int CraftTree1ExtensionDataLength = 22 * sizeof(int);
+private const int PrimitiveCraftExtensionId = 66;
+private const int PrimitiveCraftExtensionVersion = 1;
+private const int PrimitiveCraftExtensionDataLength = 12 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -276,6 +279,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(CraftBalanceExtensionId, CraftBalanceExtensionVersion, CraftBalanceExtensionDataLength)
             ,new ExtensionRegistration(ResourceFogExtensionId, ResourceFogExtensionVersion, ResourceFogExtensionDataLength)
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
+            ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -902,6 +906,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == CraftBalanceExtensionId) ReadCraftBalanceExtension(extension, c.Economy);
                     else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
+                    else if (id == PrimitiveCraftExtensionId) ReadPrimitiveCraftExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -987,6 +992,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftBalanceExtensionId && !c.Economy.CraftBalance);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
+                extensions.RemoveAll(extension => extension != null && extension.Id == PrimitiveCraftExtensionId && !c.Economy.PrimitiveCraft);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1486,6 +1492,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     }
                 if (c.Economy.AutoReturnAfterHuman && !hasAutoReturnAfterHuman)
                     extensions.Add(CreateAutoReturnAfterHumanExtension(c.Economy));
+                bool hasPrimitiveCraft = false;
+                for (int i = 0; i < extensions.Count; i++)
+                    if (extensions[i] != null && extensions[i].Id == PrimitiveCraftExtensionId)
+                    { hasPrimitiveCraft = true; extensions[i] = CreatePrimitiveCraftExtension(c.Economy); }
+                if (c.Economy.PrimitiveCraft && !hasPrimitiveCraft) extensions.Add(CreatePrimitiveCraftExtension(c.Economy));
                 return extensions.ToArray();
         }
 
@@ -1689,6 +1700,34 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.CraftTreeFrameWoodPermille = reader.ReadInt32(); e.CraftTreeFrameWorkPermille = reader.ReadInt32();
                 e.CraftTreeLevel2FramesCost = reader.ReadInt32();
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-tree extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreatePrimitiveCraftExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.PrimitiveCraft ? 1 : 0);
+                writer.Write(e.HutSizeCells); writer.Write(e.HutWoodCost); writer.Write(e.HutWork); writer.Write(e.HutHp);
+                writer.Write(e.PrimitiveCraftTicks); writer.Write(e.StoneToolsStoneInput); writer.Write(e.StoneToolsWoodInput);
+                writer.Write(e.JerkyFoodInput); writer.Write(e.JerkyOutput); writer.Write(e.StoneToolsGatherIntervalPermille); writer.Write(e.JerkyHpPermille);
+                return new ScenarioExtensionData { Id = PrimitiveCraftExtensionId, Version = PrimitiveCraftExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadPrimitiveCraftExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid primitive-craft flag.");
+                e.PrimitiveCraft = enabled != 0;
+                e.HutSizeCells = reader.ReadInt32(); e.HutWoodCost = reader.ReadInt32(); e.HutWork = reader.ReadInt32(); e.HutHp = reader.ReadInt32();
+                e.PrimitiveCraftTicks = reader.ReadInt32(); e.StoneToolsStoneInput = reader.ReadInt32(); e.StoneToolsWoodInput = reader.ReadInt32();
+                e.JerkyFoodInput = reader.ReadInt32(); e.JerkyOutput = reader.ReadInt32(); e.StoneToolsGatherIntervalPermille = reader.ReadInt32(); e.JerkyHpPermille = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing primitive-craft extension data.");
             }
         }
 
