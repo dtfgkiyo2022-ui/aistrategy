@@ -353,6 +353,7 @@ namespace Rts.Simulation
             else
             {
                 e.Metal = checked(e.Metal - c.metal);
+                if (AiFactoryOn) e.MetalConsumed = checked(e.MetalConsumed + c.metal);
                 b.QueuedMetal = checked(b.QueuedMetal + c.metal);
             }
             e.Gems = checked(e.Gems - c.gems);

@@ -216,6 +216,7 @@ namespace Rts.Simulation
                 var candidate = world.Nodes[i];
                 if (!ResourceKnownToFaction(faction, i) || candidate.Remaining <= 0
                     || InRange(candidate.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                if (AiFactoryOn && OwnTownResourceCluster(faction, candidate.Definition.Position, rules.TownResourceReach * 2)) continue;
                 int count = 0, amount = 0;
                 for (int j = 0; j < world.Nodes.Length; j++)
                 {
@@ -228,6 +229,20 @@ namespace Rts.Simulation
                 { best = i; bestCount = count; bestAmount = amount; }
             }
             return best < 0 ? -1 : world.Map.Cell(world.Nodes[best].Definition.Position);
+        }
+
+        private bool OwnTownResourceCluster(uint faction, SimPoint resource, int reach)
+        {
+            Fix64 radius = Fix64.FromInt(Math.Max(1, reach));
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                // Include planned/construction towns: the exclusion is about the chosen resource cluster,
+                // not only about completed drop-off capacity.
+                if (!town.Alive || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (InRange(BuildingCenter(town), resource, radius)) return true;
+            }
+            return false;
         }
 
         private void AssignTownWorkers(BuildingState town)

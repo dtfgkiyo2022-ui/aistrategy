@@ -372,6 +372,8 @@ namespace Rts.Simulation
         private void DecideCraftTree2(uint faction)
         {
             if (!AssemblerAllowed(faction)) return;
+            if (AiFactoryOn && world.Economies[faction - 1].Age >= 2)
+                DecideAiFactoryAge2(faction);
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.Assembler);
@@ -427,7 +429,8 @@ namespace Rts.Simulation
             if (assemblerIndex < 0) return;
             ref var assembler = ref world.Buildings[assemblerIndex];
             if (!IsActualBuilding(assembler) || !assembler.Complete) return;
-            RecipeKind wanted = PreferredCraftTree3Recipe(faction);
+            RecipeKind wanted = AiFactoryOn ? RecipeKind.SiegeParts : PreferredCraftTree3Recipe(faction);
+            if (AiFactoryOn) DecideAiFactoryAge3(faction);
             if (assembler.Recipe != wanted && assembler.Timer == 0)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
             if (economy.Mechanism < 1) return;
@@ -737,6 +740,11 @@ namespace Rts.Simulation
             {
                 if (AiFactoryOn) DecideAiFactoryPrimitive(faction);
                 else DecidePrimitiveCraft(faction);
+                return;
+            }
+            if (AiFactoryOn && world.Economies[faction - 1].Age == 1)
+            {
+                DecideAiFactoryAge1(faction);
                 return;
             }
             int houseIndex = OwnBuildingIndex(faction, BuildingKind.House);

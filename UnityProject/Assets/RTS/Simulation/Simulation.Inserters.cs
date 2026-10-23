@@ -227,7 +227,10 @@ namespace Rts.Simulation
                 case ResourceKind.Wood: economy.Wood -= amount; break;
                 case ResourceKind.Stone: economy.Stone -= amount; break;
                 case ResourceKind.Ore: economy.Ore -= amount; break;
-                case ResourceKind.Metal: economy.Metal -= amount; break;
+                case ResourceKind.Metal:
+                    economy.Metal -= amount;
+                    if (AiFactoryOn) economy.MetalConsumed = checked(economy.MetalConsumed + amount);
+                    break;
                 case ResourceKind.Gems: economy.Gems -= amount; break;
                 case ResourceKind.Gold: economy.Gold -= amount; break;
                 case ResourceKind.Charcoal: economy.Charcoal -= amount; break;

@@ -587,7 +587,15 @@ internal static class TacticMatchCommand
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
-                prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining" });
+                prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining",
+                prefix + "AiFactoryConnectedLines", prefix + "AiFactoryPrimitiveConnectedLines", prefix + "AiFactoryAge1ConnectedLines",
+                prefix + "AiFactoryAge2MaterialConnectedLines", prefix + "AiFactoryAge2MetalConnectedLines", prefix + "AiFactoryAge3PartsConnectedLines",
+                prefix + "AiFactoryBarracksResourceWaiting", prefix + "PlanksProduced", prefix + "PlanksConsumed",
+                prefix + "CutStoneProduced", prefix + "CutStoneConsumed", prefix + "StoneToolsProduced", prefix + "StoneToolsConsumed",
+                prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
+                prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
+                prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
+                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -605,7 +613,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 41; i++) cells.Add("");
+                for (int i = 0; i < 67; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -615,6 +623,12 @@ internal static class TacticMatchCommand
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
+            cells.AddRange(new[] { value.AiFactoryConnectedLines, value.AiFactoryPrimitiveConnectedLines, value.AiFactoryAge1ConnectedLines,
+                value.AiFactoryAge2MaterialConnectedLines, value.AiFactoryAge2MetalConnectedLines, value.AiFactoryAge3PartsConnectedLines,
+                value.AiFactoryBarracksResourceWaiting, value.PlanksProduced, value.PlanksConsumed, value.CutStoneProduced, value.CutStoneConsumed,
+                value.StoneToolsProduced, value.StoneToolsConsumed, value.JerkyProduced, value.JerkyConsumed, value.FramesProduced, value.FramesConsumed,
+                value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
+                value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));

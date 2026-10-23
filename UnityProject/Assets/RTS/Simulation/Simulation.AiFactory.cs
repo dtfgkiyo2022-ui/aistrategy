@@ -8,6 +8,8 @@ namespace Rts.Simulation
     {
         private bool[] aiFactoryTakenWorkspace, aiFactorySeenWorkspace;
         private int[] aiFactoryRouteFromWorkspace, aiFactoryRouteQueueWorkspace;
+        private readonly long[] aiFactoryNextDecisionTick = { 0, 0 };
+        private const int AiFactoryDecisionIntervalTicks = 100;
 
         private void EnsureAiFactoryWorkspace()
         {
@@ -23,11 +25,154 @@ namespace Rts.Simulation
 
         private void DecideAiFactoryPrimitive(uint faction)
         {
+            if (!AiFactoryDecisionDue(faction)) return;
             // Each template is independent: an unavailable resource point or route skips only that template and
             // leaves the following template eligible on the same decision pass.
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryPrimitiveCraftLine(faction);
+        }
+
+        private bool AiFactoryDecisionDue(uint faction)
+        {
+            if (faction < 1 || faction > 2 || world.Tick < aiFactoryNextDecisionTick[faction - 1]) return false;
+            aiFactoryNextDecisionTick[faction - 1] = checked(world.Tick + AiFactoryDecisionIntervalTicks);
+            return true;
+        }
+
+        /// <summary>V3-37.8: one civilisation-specific processing chain in age 1.</summary>
+        private void DecideAiFactoryAge1(uint faction)
+        {
+            if (!AiFactoryDecisionDue(faction)) return;
+            switch (world.Economies[faction - 1].Civ)
+            {
+                case CivKind.Agrarian: DecideRations(faction); break;
+                case CivKind.Metallurgy: DecideMetalwork(faction); break;
+                case CivKind.Forestry: DecideLumberCamp(faction); break;
+                case CivKind.Masonry: DecideBricks(faction); break;
+                case CivKind.Caravan: DecideTradeGoods(faction); break;
+                case CivKind.Cavalry: DecideTack(faction); break;
+                case CivKind.Bridge: DecidePlanks(faction); break;
+                case CivKind.Academy: DecideBooks(faction); break;
+                case CivKind.Cult: DecideIncense(faction); break;
+                case CivKind.Fishing: DecidePreserves(faction); break;
+                case CivKind.Mountain: DecideJewels(faction); break;
+                case CivKind.Tollgate: DecideRepairKits(faction); break;
+                case CivKind.Metropolis: DecideCharms(faction); break;
+                case CivKind.Sanctuary: DecideBooks(faction); break;
+                default: DecidePlanks(faction); break;
+            }
+        }
+
+        /// <summary>V3-37.8: merge the common plank and cut-stone exits into the building-material line.</summary>
+        private void DecideAiFactoryAge2(uint faction)
+        {
+            if (!AiFactoryDecisionDue(faction)) return;
+            EnsureAiFactoryWoodLine(faction);
+            EnsureAiFactoryStoneLine(faction);
+            EnsureAiFactoryMetalLine(faction);
+            EnsureAiFactoryBuildingMaterialLine(faction);
+        }
+
+        private void EnsureAiFactoryMetalLine(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int index = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
+            ref var line = ref world.ProcessingLines[index];
+            if (!BuildingReady(line.MineId))
+            {
+                if (BuildingPending(line.MineId) || economy.Wood < rules.MineWoodCost) return;
+                uint id = PlaceMine(faction);
+                if (id == 0) { RecordAiFactorySkip(faction, 0, 1); return; }
+                line.MineId = id;
+                return;
+            }
+            if (!BuildingReady(line.SmelterId))
+            {
+                if (BuildingPending(line.SmelterId) || economy.Wood < rules.SmelterWoodCost) return;
+                uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                if (id == 0) { RecordAiFactorySkip(faction, 0, 1); return; }
+                line.SmelterId = id;
+                return;
+            }
+            var mine = world.Buildings[line.MineId - 1];
+            var smelter = world.Buildings[line.SmelterId - 1];
+            if (!mine.Complete || !smelter.Complete) return;
+            bool whole = LayCoreLine(faction, index, mine, smelter);
+            SetLineHaulers(faction, line, whole ? 0 : HaulersForAiFactory);
+            if (!whole) RecordAiFactorySkip(faction, 0, 2);
+        }
+
+        private const int HaulersForAiFactory = 1;
+
+        private void EnsureAiFactoryBuildingMaterialLine(uint faction)
+        {
+            int plankIndex = LineIndex(faction, ProcessingLineKind.Planks);
+            int stoneIndex = LineIndex(faction, ProcessingLineKind.CutStone);
+            if (plankIndex < 0 || stoneIndex < 0) return;
+            ref var plankLine = ref world.ProcessingLines[plankIndex];
+            ref var stoneLine = ref world.ProcessingLines[stoneIndex];
+            if (!BuildingReady(plankLine.SawmillId) || !BuildingReady(stoneLine.StonecutterId)) return;
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int index = GetOrCreateLine(faction, ProcessingLineKind.Frames);
+            ref var line = ref world.ProcessingLines[index];
+            if (!BuildingReady(line.JoineryId))
+            {
+                if (BuildingPending(line.JoineryId) || economy.Wood < rules.JoineryWoodCost) return;
+                uint id = PlaceJoinery(faction);
+                if (id == 0) { RecordAiFactorySkip(faction, 0, 1); return; }
+                line.JoineryId = id;
+                return;
+            }
+            var sawmill = world.Buildings[plankLine.SawmillId - 1];
+            var stonecutter = world.Buildings[stoneLine.StonecutterId - 1];
+            var joinery = world.Buildings[line.JoineryId - 1];
+            if (!sawmill.Complete || !stonecutter.Complete || !joinery.Complete) return;
+            if (!LineBeltsWhole(index))
+            {
+                var taken = TakenForOtherLines(faction, index);
+                var planks = BeltRoute(faction, OutputCell(sawmill), taken, next => InFootprint(joinery, next));
+                if (planks.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                foreach (int cell in planks.cells) taken[cell] = true;
+                var stone = BeltRoute(faction, OutputCell(stonecutter), taken, next => InFootprint(joinery, next));
+                if (stone.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                foreach (int cell in stone.cells) taken[cell] = true;
+                var core = BeltRoute(faction, OutputCell(joinery), taken, next => FeedsOwnCore(next, faction));
+                if (core.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                SetLineBelts(index, planks, stone, core);
+                if (!LayRoutes(faction, planks, stone, core)) RecordAiFactorySkip(faction, 0, 2);
+            }
+            SetSimpleHaulers(faction, sawmill.Id, joinery.Id, 1);
+            SetSimpleHaulers(faction, stonecutter.Id, joinery.Id, 1);
+            SetSimpleHaulers(faction, joinery.Id, 0, LineBeltsWhole(index) ? 0 : 1);
+        }
+
+        /// <summary>V3-37.8: the third-age siege-parts assembler sends its output to the core.</summary>
+        private void DecideAiFactoryAge3(uint faction)
+        {
+            if (!AiFactoryDecisionDue(faction)) return;
+            int index = LineIndex(faction, ProcessingLineKind.Assembler);
+            if (index < 0) return;
+            ref var line = ref world.ProcessingLines[index];
+            if (!BuildingReady(line.AssemblerId)) return;
+            SetAssemblerRecipe(faction, line.AssemblerId, RecipeKind.SiegeParts);
+            var assembler = world.Buildings[line.AssemblerId - 1];
+            if (!assembler.Complete || LineBeltsWhole(index)) return;
+            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+            if (route.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+            SetLineBelts(index, route);
+            if (!LayRoutes(faction, route)) RecordAiFactorySkip(faction, 0, 2);
+        }
+
+        private void RecordAiFactorySkip(uint faction, int unknownResource, int reason)
+        {
+            if (!AiFactoryOn || faction < 1 || faction > 2) return;
+            ref var economy = ref world.Economies[faction - 1];
+            if (unknownResource != 0) economy.AiFactorySkippedUnknownResource++;
+            else if (reason == 1) economy.AiFactorySkippedNoSite++;
+            else economy.AiFactorySkippedNoRoute++;
         }
 
         private void EnsureAiFactoryWoodLine(uint faction)

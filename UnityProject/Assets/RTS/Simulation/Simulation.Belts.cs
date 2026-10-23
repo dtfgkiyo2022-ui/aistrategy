@@ -178,7 +178,10 @@ namespace Rts.Simulation
                 case ResourceKind.Food: economy.Food = checked(economy.Food + amount); break;
                 case ResourceKind.Wood: economy.Wood = checked(economy.Wood + amount); break;
                 case ResourceKind.Ore: economy.Ore = checked(economy.Ore + amount); break;
-                case ResourceKind.Metal: economy.Metal = checked(economy.Metal + amount); break;
+                case ResourceKind.Metal:
+                    economy.Metal = checked(economy.Metal + amount);
+                    if (AiFactoryOn) economy.MetalProduced = checked(economy.MetalProduced + amount);
+                    break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;

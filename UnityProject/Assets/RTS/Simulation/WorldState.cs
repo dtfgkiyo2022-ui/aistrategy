@@ -309,6 +309,9 @@ namespace Rts.Simulation
         internal int ToolsProduced, ToolsConsumed, ToolsTrainedVillagers, ToolsSavedFood;
         internal int StoneToolsProduced, StoneToolsConsumed, StoneToolsTrainedVillagers;
         internal int JerkyProduced, JerkyConsumed, JerkyTrainedSoldiers;
+        /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
+        internal int MetalProduced, MetalConsumed;
+        internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
         /// <summary>Villagers paid for and waiting at the core; the first one trains for TrainRemaining more ticks.</summary>

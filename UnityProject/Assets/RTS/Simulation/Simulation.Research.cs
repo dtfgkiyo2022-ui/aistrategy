@@ -441,6 +441,7 @@ namespace Rts.Simulation
             economy.Wood = checked(economy.Wood - wood);
             economy.Gold = checked(economy.Gold - gold);
             economy.Metal = checked(economy.Metal - metal);
+            if (AiFactoryOn) economy.MetalConsumed = checked(economy.MetalConsumed + metal);
             economy.Ore = checked(economy.Ore - oreForMetal);
             economy.Gems = checked(economy.Gems - gems);
             if (bookResearch)

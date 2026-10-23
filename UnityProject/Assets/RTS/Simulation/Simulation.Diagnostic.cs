@@ -195,6 +195,14 @@ namespace Rts.Simulation
                     w.Value(n + "Mechanism", e.Mechanism); w.Value(n + "MechanismProduced", e.MechanismProduced); w.Value(n + "MechanismConsumed", e.MechanismConsumed);
                     w.Value(n + "MechanismUsedResearch", e.MechanismUsedResearch);
                 }
+                if (AiFactoryOn)
+                {
+                    w.Value(n + "MetalProduced", e.MetalProduced);
+                    w.Value(n + "MetalConsumed", e.MetalConsumed);
+                    w.Value(n + "AiFactorySkippedUnknownResource", e.AiFactorySkippedUnknownResource);
+                    w.Value(n + "AiFactorySkippedNoSite", e.AiFactorySkippedNoSite);
+                    w.Value(n + "AiFactorySkippedNoRoute", e.AiFactorySkippedNoRoute);
+                }
                 if (CraftTree4On)
                 {
                     w.Value(n + "SiegeEngine", e.SiegeEngine); w.Value(n + "SiegeEngineProduced", e.SiegeEngineProduced); w.Value(n + "SiegeEngineConsumed", e.SiegeEngineConsumed);
