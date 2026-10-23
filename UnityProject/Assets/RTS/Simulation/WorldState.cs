@@ -140,6 +140,8 @@ namespace Rts.Simulation
         internal ResourceKind CarryKind;
         internal int Carry;
         internal long NextGatherTick;
+        /// <summary>AiExpand: start tick of the current automatic resource assignment; -1 means none.</summary>
+        internal long AiExpandWorkStartTick;
         internal bool StoneToolsUsed;
         internal int[] Route;
         internal int RouteCursor;
@@ -471,7 +473,7 @@ namespace Rts.Simulation
             {
                 var v = Config.Villagers[i];
                 Villagers[i] = new VillagerState { Id = v.Id, FactionId = v.FactionId, Alive = true, Hp = e.VillagerHp,
-                    Position = v.Position, MoveGoal = v.Position, Route = Array.Empty<int>() };
+                    Position = v.Position, MoveGoal = v.Position, Route = Array.Empty<int>(), AiExpandWorkStartTick = e.AiExpand ? -1 : 0 };
             }
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
@@ -561,6 +563,16 @@ namespace Rts.Simulation
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
+            Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
+                && e.AiExpandAge1TownCount >= 0 && e.AiExpandAge2TownCount >= e.AiExpandAge1TownCount
+                 && e.AiExpandAge3TownCount >= e.AiExpandAge2TownCount && e.AiExpandDecisionIntervalTicks > 0
+                 && e.AiExpandUnreachableWorkTimeoutTicks > 0
+                 && e.AiExpandShareMinVillagers >= 0 && e.AiExpandFoodWorkerPermille >= 0 && e.AiExpandFoodWorkerPermille <= 1000
+                 && e.AiExpandWoodWorkerPermille >= 0 && e.AiExpandWoodWorkerPermille <= 1000
+                 && e.AiExpandStoneWorkerPermille >= 0 && e.AiExpandStoneWorkerPermille <= 1000
+                 && e.AiExpandTownStoneWorkerPermille >= 0 && e.AiExpandTownStoneWorkerPermille <= 1000
+                 && e.AiExpandPrimitiveFoodWorkerPermille >= 0 && e.AiExpandPrimitiveFoodWorkerPermille <= 1000),
+                "AiExpand requires the factory, ages, industry, and valid expansion rules.");
             Require(e.CivVarietyWindowPermille >= 0 && e.CivVarietyWindowPermille <= 1000,
                 "Invalid civ variety window.");
             Require(!e.CivVariety || (e.Enabled && e.Ages), "Civ variety requires ages and an economy.");
@@ -1150,6 +1162,13 @@ namespace Rts.Simulation
                    LargeExploreTargetPermille = e.LargeExploreTargetPermille, LargeExploreScoutCount = e.LargeExploreScoutCount,
                    LargeExploreChunkCells = e.LargeExploreChunkCells,
                 AiArmyRecovery = e.AiArmyRecovery, LineBuildingCheck = e.LineBuildingCheck, Regions = e.Regions, DirectPathMovement = e.DirectPathMovement, LatePush = e.LatePush,
+                AiExpand = e.AiExpand, AiExpandAge1TownCount = e.AiExpandAge1TownCount, AiExpandAge2TownCount = e.AiExpandAge2TownCount,
+                AiExpandAge3TownCount = e.AiExpandAge3TownCount, AiExpandDecisionIntervalTicks = e.AiExpandDecisionIntervalTicks,
+                 AiExpandUnreachableWorkTimeoutTicks = e.AiExpandUnreachableWorkTimeoutTicks,
+                 AiExpandShareMinVillagers = e.AiExpandShareMinVillagers, AiExpandFoodWorkerPermille = e.AiExpandFoodWorkerPermille,
+                 AiExpandWoodWorkerPermille = e.AiExpandWoodWorkerPermille, AiExpandStoneWorkerPermille = e.AiExpandStoneWorkerPermille,
+                 AiExpandTownStoneWorkerPermille = e.AiExpandTownStoneWorkerPermille,
+                 AiExpandPrimitiveFoodWorkerPermille = e.AiExpandPrimitiveFoodWorkerPermille,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,

@@ -38,6 +38,15 @@ namespace Rts.Simulation
         private readonly int[] largeVillagerCounts = new int[2];
         private readonly int[] largeTownCounts = new int[2];
         private readonly int[] largeBarracksCounts = new int[2];
+        // AiExpand work-route availability is a function of the faction, the drop-off cell used for the load,
+        // and the resource cell. Keep the table bounded and reuse its backing storage; terrain changes invalidate
+        // the answers through GridMap.PassableVersion.
+        private const int AiExpandWorkRouteCacheLimit = 4096;
+        private int aiExpandWorkRouteCacheVersion = -1;
+        private readonly Dictionary<(uint Faction, int Origin, int Resource), bool> aiExpandWorkRouteCache
+            = new Dictionary<(uint, int, int), bool>(AiExpandWorkRouteCacheLimit);
+        private readonly Queue<(uint Faction, int Origin, int Resource)> aiExpandWorkRouteCacheOrder
+            = new Queue<(uint, int, int)>(AiExpandWorkRouteCacheLimit);
         // LargeEconomy resource clusters are built once from the authored node layout. Remaining amounts and worker
         // counts are read from the live nodes on the spaced decision ticks; the cluster index itself never changes.
         private int[] largeNodeClusters;
@@ -46,9 +55,17 @@ namespace Rts.Simulation
         private int[] largeClusterAnchors;
         // LargeEconomy measurement counters. They are observer-only and are never read by simulation decisions or hashes.
         private readonly int[] largeDelivered = new int[12];
+        private readonly int[] largeBeltIncome = new int[12];
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
+        private readonly int[,,] largeResourceUses = new int[2, LargeEconomyUseKind.Count, 2];
+        // AiExpand town-placement failures are observer-only and are updated only while AiExpand is enabled.
+        private readonly int[] aiExpandTownSkippedUnknownResource = new int[2];
+        private readonly int[] aiExpandTownSkippedNoSite = new int[2];
+        private readonly int[] aiExpandTownSkippedWood = new int[2];
+        private readonly int[] aiExpandTownSkippedStone = new int[2];
+        private readonly long[] aiExpandTownReserveSuppressedUntil = { long.MinValue, long.MinValue };
         internal int LastCavalryObjectiveCount;
         internal long LastCavalryPathCellsVisited;
         internal long LastCavalryRouteCellsVisited;

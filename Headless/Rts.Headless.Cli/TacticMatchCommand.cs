@@ -157,6 +157,20 @@ internal static class TacticMatchCommand
             craftTrace = new StreamWriter(craftTracePath, false, new UTF8Encoding(false));
             craftTrace.WriteLine("{\"event\":\"header\",\"intervalTicks\":1000}");
         }
+        StreamWriter economyTrace = null;
+        if (options.TryGetValue("--economy-trace-out", out var economyTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(economyTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            economyTrace = new StreamWriter(economyTracePath, false, new UTF8Encoding(false));
+            economyTrace.WriteLine(JsonSerializer.Serialize(new
+            {
+                @event = "header", seed = scenario.Seed, largeEconomy = scenario.Economy.LargeEconomy,
+                aiExpand = scenario.Economy.AiExpand, aiFactory = scenario.Economy.AiFactory,
+                intervalTicks = 1000, resourceOrder = new[] { "food", "wood", "stone", "ore", "gold", "metal" },
+                useOrder = LargeEconomyUseKind.Names
+            }));
+        }
         MatchPackWriter pack = null;
         if (options.TryGetValue("--pack-out", out var packPath))
         {
@@ -249,7 +263,7 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = timingWriter != null && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null) && simulation.Capture(1).Tick % 1000 == 0
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -436,6 +450,11 @@ internal static class TacticMatchCommand
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
+            if (economyTrace != null && (largeObservation != null || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks))
+            {
+                var observation = largeObservation ?? simulation.CaptureLargeEconomyObservation();
+                WriteEconomyTrace(economyTrace, scenario, simulation, observation);
+            }
             RecordHumanReplayDiscards(simulation, lines, loggedDiscarded);
             if (westAuto != null && !simulation.Capture(1).Result.HasEnded) westAuto.Step(simulation.Capture(1));
             if (eastAuto != null && !simulation.Capture(2).Result.HasEnded) eastAuto.Step(simulation.Capture(2));
@@ -444,6 +463,7 @@ internal static class TacticMatchCommand
         timingWriter?.Dispose();
         ageTrace?.Dispose();
         craftTrace?.Dispose();
+        economyTrace?.Dispose();
         west?.Dispose();
         east?.Dispose();
         pack?.Complete(simulation, gateway.Inputs, ticks);
@@ -583,6 +603,7 @@ internal static class TacticMatchCommand
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
+                prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
                 prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
@@ -595,7 +616,8 @@ internal static class TacticMatchCommand
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
-                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute" });
+                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
+                prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -613,12 +635,14 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 67; i++) cells.Add("");
+                for (int i = 0; i < 74; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
             cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
-                value.TownVillagersProduced, value.TownResourceIncome, value.Houses, value.Barracks, value.DropSites,
+                value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
+            cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
+            cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
                 value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
@@ -628,7 +652,9 @@ internal static class TacticMatchCommand
                 value.AiFactoryBarracksResourceWaiting, value.PlanksProduced, value.PlanksConsumed, value.CutStoneProduced, value.CutStoneConsumed,
                 value.StoneToolsProduced, value.StoneToolsConsumed, value.JerkyProduced, value.JerkyConsumed, value.FramesProduced, value.FramesConsumed,
                 value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
-                value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute }.Select(FormatInvariant));
+                value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
+                value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
+                value.AiExpandTownSkippedStone }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
@@ -637,6 +663,39 @@ internal static class TacticMatchCommand
     }
 
     private static string FormatInvariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static void WriteEconomyTrace(StreamWriter writer, ScenarioDefinition scenario, Battle simulation, LargeEconomyObservation observation)
+    {
+        writer.WriteLine(JsonSerializer.Serialize(new
+        {
+            @event = "checkpoint", tick = observation.Tick, ended = simulation.Capture(1).Result.HasEnded,
+            winner = simulation.Capture(1).Result.WinnerFactionId,
+            factions = observation.Factions.Select(f => new
+            {
+                faction = f.FactionId, villagers = f.Villagers, soldiers = f.Soldiers,
+                workers = f.Workers, toResource = f.ToResourceWorkers, gathering = f.GatheringWorkers,
+                toDropOff = f.ToDropOffWorkers, builders = f.Builders, haulers = f.Haulers, idle = f.IdleWorkers,
+                roundTripTicks = f.WorkerRoundTripTicks, roundTripMeters = f.WorkerRoundTripMeters,
+                villagerIncome = f.Income, beltIncome = f.BeltIncome,
+                food = simulation.Capture(f.FactionId).Economy?.Food ?? 0,
+                wood = simulation.Capture(f.FactionId).Economy?.Wood ?? 0,
+                stone = simulation.Capture(f.FactionId).Economy?.Stone ?? 0,
+                ore = simulation.Capture(f.FactionId).Economy?.Ore ?? 0,
+                gold = simulation.Capture(f.FactionId).Economy?.Gold ?? 0,
+                beltCells = f.BeltCells, lumberCamps = f.LumberCamps, dropSites = f.DropSites,
+                woodMachines = f.WoodMachines, stoneMachines = f.StoneMachines,
+                woodMachinesActive = f.WoodMachinesActive, stoneMachinesActive = f.StoneMachinesActive,
+                woodMachineOutputFull = f.WoodMachineOutputFull, stoneMachineOutputFull = f.StoneMachineOutputFull,
+                towns = f.CompletedTowns, townsBuilding = f.TownsBuilding, factoryLines = f.AiFactoryConnectedLines,
+                aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
+                uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
+                {
+                    kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]
+                }).ToArray()
+            }).ToArray()
+        }));
+        writer.Flush();
+    }
 
     private static void WriteResourceFogTrace(StreamWriter writer, ScenarioDefinition scenario, FactionFrame west, FactionFrame east)
     {

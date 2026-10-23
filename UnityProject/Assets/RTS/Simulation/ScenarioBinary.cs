@@ -193,6 +193,9 @@ private const int PrimitiveCraftExtensionDataLength = 12 * sizeof(int);
 private const int AiFactoryExtensionId = 67;
 private const int AiFactoryExtensionVersion = 1;
 private const int AiFactoryExtensionDataLength = 12 * sizeof(int);
+private const int AiExpandExtensionId = 68;
+private const int AiExpandExtensionVersion = 1;
+        private const int AiExpandExtensionDataLength = 12 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -284,6 +287,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
             ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
             ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
+            ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -912,6 +916,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     else if (id == PrimitiveCraftExtensionId) ReadPrimitiveCraftExtension(extension, c.Economy);
                     else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
+                    else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -999,6 +1004,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PrimitiveCraftExtensionId && !c.Economy.PrimitiveCraft);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
+                extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1020,9 +1026,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
+            bool hasAiExpand = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
+                if (extensions[i].Id == AiExpandExtensionId)
+                {
+                    hasAiExpand = true;
+                    extensions[i] = CreateAiExpandExtension(c.Economy);
+                }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1036,6 +1048,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     extensions[i] = CreateAgeFourAiExtension(c.Economy);
                 }
             }
+            if (c.Economy.AiFactory && c.Economy.AiExpand && !hasAiExpand)
+                extensions.Add(CreateAiExpandExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
             bool hasAgeFour = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1779,6 +1793,49 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.AiFactoryAge2BarracksMaxBuildings < 0 || e.AiFactoryAge3BarracksMaxBuildings < 0 || e.AiFactoryAge4BarracksMaxBuildings < 0)
                     throw new InvalidDataException("Invalid AI-factory parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-factory extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiExpandExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiExpand ? 1 : 0);
+                writer.Write(e.AiExpandAge1TownCount); writer.Write(e.AiExpandAge2TownCount);
+                writer.Write(e.AiExpandAge3TownCount); writer.Write(e.AiExpandDecisionIntervalTicks);
+                writer.Write(e.AiExpandUnreachableWorkTimeoutTicks);
+                writer.Write(e.AiExpandShareMinVillagers); writer.Write(e.AiExpandFoodWorkerPermille);
+                writer.Write(e.AiExpandWoodWorkerPermille); writer.Write(e.AiExpandStoneWorkerPermille);
+                writer.Write(e.AiExpandTownStoneWorkerPermille); writer.Write(e.AiExpandPrimitiveFoodWorkerPermille);
+                return new ScenarioExtensionData { Id = AiExpandExtensionId, Version = AiExpandExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiExpandExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI-expand flag.");
+                e.AiExpand = enabled != 0;
+                e.AiExpandAge1TownCount = reader.ReadInt32(); e.AiExpandAge2TownCount = reader.ReadInt32();
+                e.AiExpandAge3TownCount = reader.ReadInt32(); e.AiExpandDecisionIntervalTicks = reader.ReadInt32();
+                e.AiExpandUnreachableWorkTimeoutTicks = reader.ReadInt32();
+                e.AiExpandShareMinVillagers = reader.ReadInt32(); e.AiExpandFoodWorkerPermille = reader.ReadInt32();
+                e.AiExpandWoodWorkerPermille = reader.ReadInt32(); e.AiExpandStoneWorkerPermille = reader.ReadInt32();
+                e.AiExpandTownStoneWorkerPermille = reader.ReadInt32(); e.AiExpandPrimitiveFoodWorkerPermille = reader.ReadInt32();
+                if (e.AiExpandAge1TownCount < 0 || e.AiExpandAge2TownCount < e.AiExpandAge1TownCount
+                    || e.AiExpandAge3TownCount < e.AiExpandAge2TownCount || e.AiExpandDecisionIntervalTicks <= 0
+                    || e.AiExpandUnreachableWorkTimeoutTicks <= 0
+                    || e.AiExpandShareMinVillagers < 0 || e.AiExpandFoodWorkerPermille < 0 || e.AiExpandFoodWorkerPermille > 1000
+                     || e.AiExpandWoodWorkerPermille < 0 || e.AiExpandWoodWorkerPermille > 1000
+                     || e.AiExpandStoneWorkerPermille < 0 || e.AiExpandStoneWorkerPermille > 1000
+                     || e.AiExpandTownStoneWorkerPermille < 0 || e.AiExpandTownStoneWorkerPermille > 1000
+                     || e.AiExpandPrimitiveFoodWorkerPermille < 0 || e.AiExpandPrimitiveFoodWorkerPermille > 1000)
+                    throw new InvalidDataException("Invalid AI-expand parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-expand extension data.");
             }
         }
 

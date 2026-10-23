@@ -14,7 +14,7 @@ namespace Rts.Simulation
         private readonly int width, height;
         private readonly long size;
         private readonly bool[] passable;
-        /// <summary>Counts the changes made through SetPassable, so a reader can keep its own copy until the next one.
+        /// <summary>Counts changes to route passability, so a reader can keep its own copy until the next one.
         /// Not part of the state: it only says when to rebuild a view.</summary>
         internal int PassableVersion { get; private set; }
         // Derived from immutable terrain only. FIFO eviction changes cost, never route choices.
@@ -108,7 +108,11 @@ namespace Rts.Simulation
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
-        internal void InvalidateRoutes() { routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); }
+        internal void InvalidateRoutes()
+        {
+            PassableVersion++;
+            routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
+        }
         public bool IsPassable(int cell) => cell >= 0 && cell < passable.Length && passable[cell];
         public bool IsPassableFor(int cell, uint factionId)
             => cell >= 0 && cell < passable.Length && (FactionPassability == null ? passable[cell] : FactionPassability(cell, factionId));

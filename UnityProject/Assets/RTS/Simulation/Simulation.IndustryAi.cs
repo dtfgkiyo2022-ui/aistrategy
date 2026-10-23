@@ -893,12 +893,13 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceStonecutter(uint faction)
+        private uint PlaceStonecutter(uint faction, int preferredBaseCell = -1)
         {
             int size = world.Config.Economy.StonecutterSizeCells;
-            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
             if (origin < 0) return 0;
-            var core = OwnCore(faction).Definition.Position;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
@@ -909,12 +910,13 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceJoinery(uint faction)
+        private uint PlaceJoinery(uint faction, int preferredBaseCell = -1)
         {
             int size = world.Config.Economy.JoinerySizeCells;
-            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
             if (origin < 0) return 0;
-            var core = OwnCore(faction).Definition.Position;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
@@ -925,12 +927,13 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceAssembler(uint faction)
+        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1)
         {
             int size = world.Config.Economy.AssemblerSizeCells;
-            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
             if (origin < 0) return 0;
-            var core = OwnCore(faction).Definition.Position;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
@@ -2280,14 +2283,15 @@ namespace Rts.Simulation
             return LayRoutes(faction, route);
         }
 
-        private uint PlaceSawmill(uint faction, BuildingState camp)
+        private uint PlaceSawmill(uint faction, BuildingState camp, int preferredBaseCell = -1)
         {
             int size = world.Config.Economy.SawmillSizeCells;
-            int centre = camp.OriginCell;
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : camp.OriginCell;
             int origin = FindProcessingSite(faction, centre, size);
-            if (origin < 0) origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0 && (!AiExpandOn || preferredBaseCell < 0))
+                origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
             if (origin < 0) return 0;
-            var core = OwnCore(faction).Definition.Position;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
             foreach (var side in SidesToward(FootprintCenter(origin, size), core))
             {
                 if (!PortIsOpen(OutputCell(origin, size, side), faction)) continue;
@@ -2304,7 +2308,8 @@ namespace Rts.Simulation
             var toSawmill = BeltRoute(faction, OutputCell(camp), taken, next => InFootprint(sawmill, next));
             if (toSawmill.cells == null) return false;
             foreach (int c in toSawmill.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, next => FeedsOwnCore(next, faction));
+            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, next => AiExpandOn
+                ? FeedsAiExpandBase(next, faction, BuildingCenter(sawmill)) : FeedsOwnCore(next, faction));
             if (toCore.cells == null) return false;
             SetLineBelts(lineIndex, toSawmill, toCore);
             return LayRoutes(faction, toSawmill, toCore);
@@ -2469,6 +2474,11 @@ namespace Rts.Simulation
         {
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
+            if (AiExpandOn)
+            {
+                int baseCell = AiExpandBaseCellForSource(faction, from);
+                core = world.Map.Center(baseCell);
+            }
             var middle = new SimPoint(Fix64.FromRaw((from.X.Raw + core.X.Raw) / 2), Fix64.FromRaw((from.Z.Raw + core.Z.Raw) / 2));
             int size = world.Config.Economy.SmelterSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
             int centre = world.Map.Cell(middle), cx = centre % width, cz = centre / width, coreCell = world.Map.Cell(core);
@@ -2597,7 +2607,8 @@ namespace Rts.Simulation
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
             foreach (int c in toSmelter.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => FeedsOwnCore(next, faction));
+            var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => AiExpandOn
+                ? FeedsAiExpandBase(next, faction, BuildingCenter(smelter)) : FeedsOwnCore(next, faction));
             if (toCore.cells == null) return false;
             return LayRoutes(faction, toSmelter, toCore);
         }
@@ -2784,6 +2795,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood < world.Config.Economy.SplitterWoodCost) return false;
             economy.Wood = checked(economy.Wood - world.Config.Economy.SplitterWoodCost);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, world.Config.Economy.SplitterWoodCost);
             belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
             belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
             world.BeltOrder = null;
@@ -2847,6 +2859,7 @@ namespace Rts.Simulation
                     whole = false;
                     if (owned >= rules.BeltLimit || economy.Wood - reservedWood < rules.BeltWoodCost) continue;
                     economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
+                    RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
                     world.BeltOrder = null;
@@ -3021,6 +3034,7 @@ namespace Rts.Simulation
                 whole = false;
                 if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) continue;
                 economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                 owned++;
                 world.BeltOrder = null;

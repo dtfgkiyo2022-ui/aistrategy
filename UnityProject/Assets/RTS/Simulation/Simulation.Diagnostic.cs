@@ -434,7 +434,9 @@ namespace Rts.Simulation
                 w.Value(n + "Id", v.Id); w.Value(n + "FactionId", v.FactionId); w.Value(n + "Alive", v.Alive); w.Value(n + "Hp", v.Hp);
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
-                w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
+                w.Value(n + "NextGatherTick", v.NextGatherTick);
+                if (AiExpandOn) w.Value(n + "AiExpandWorkStartTick", v.AiExpandWorkStartTick);
+                w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
                 if (PrimitiveCraftOn) w.Value(n + "StoneToolsUsed", v.StoneToolsUsed);
                 w.Value(n + "BuildingId", v.BuildingId);
                 if (world.Config.Economy.Caravan)

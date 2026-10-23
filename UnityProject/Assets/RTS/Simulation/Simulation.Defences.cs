@@ -364,6 +364,7 @@ namespace Rts.Simulation
 
         private bool LargeTownNeedsFunding(uint faction)
         {
+            if (AiExpandOn) return AiExpandTownNeedsFunding(faction);
             int villagers = LivingVillagers(faction);
             int townsPerVillagers = world.Config.Economy.LargeTownVillagersPerTown;
             if (villagers < townsPerVillagers) return false;

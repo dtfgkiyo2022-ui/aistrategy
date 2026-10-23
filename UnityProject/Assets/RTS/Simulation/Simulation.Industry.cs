@@ -98,6 +98,7 @@ namespace Rts.Simulation
                     if ((BricksAllowed(b.FactionId) || CraftTreeCommonAllowed(b.FactionId)) && b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     if (b.Timer == 0 && b.Input >= woodInput && b.Output < rules.BufferLimit)
@@ -175,7 +176,7 @@ namespace Rts.Simulation
                     }
                     if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
                     {
-                        economy.Wood--; b.InputSecondary++;
+                        economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.InputSecondary++;
                     }
                     int tackFood = CraftInputFor(b, rules.TackFoodInput), tackWood = CraftInputFor(b, rules.TackWoodInput);
                     if (b.Timer == 0 && b.Input >= tackFood && b.InputSecondary >= tackWood && b.Output < rules.BufferLimit)
@@ -195,7 +196,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     if (b.Input < rules.BufferLimit && economy.Wood > 0)
                     {
-                        economy.Wood--; b.Input++;
+                        economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.Input++;
                     }
                     int plankInput = CraftTreeCommonAllowed(b.FactionId) ? rules.CraftTreePlankWoodInput : rules.PlankWoodInput;
                     plankInput = CraftInputFor(b, plankInput);
@@ -216,6 +217,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Stone > 0)
                     {
                         economy.Stone--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     int stoneInput = CraftInputFor(b, rules.CraftTreeStoneInput);
@@ -264,8 +266,8 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     if (b.Recipe == RecipeKind.StoneTools)
                     {
-                        Fill(ref economy.Stone, ref b.Input, rules.StoneToolsStoneInput);
-                        Fill(ref economy.Wood, ref b.InputSecondary, rules.StoneToolsWoodInput);
+                        FillRaw(b.FactionId, ResourceKind.Stone, ref economy.Stone, ref b.Input, rules.StoneToolsStoneInput);
+                        FillRaw(b.FactionId, ResourceKind.Wood, ref economy.Wood, ref b.InputSecondary, rules.StoneToolsWoodInput);
                         if (b.Timer == 0 && b.Input >= rules.StoneToolsStoneInput && b.InputSecondary >= rules.StoneToolsWoodInput && b.Output < rules.BufferLimit)
                         { b.Input -= rules.StoneToolsStoneInput; b.InputSecondary -= rules.StoneToolsWoodInput; b.Timer = CraftTicksFor(b, rules.PrimitiveCraftTicks); }
                         if (b.Timer > 0 && --b.Timer == 0) { b.Output++; economy.StoneToolsProduced++; }
@@ -289,6 +291,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Stone > 0)
                     {
                         economy.Stone--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     if (b.InputSecondary < rules.BufferLimit && economy.Charcoal > 0)
@@ -329,6 +332,7 @@ namespace Rts.Simulation
                     if (b.InputSecondary < rules.BufferLimit && economy.Wood > 0)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.InputSecondary++;
                     }
                     int bookGold = CraftInputFor(b, rules.BookGoldInput), bookWood = CraftInputFor(b, rules.BookWoodInput);
@@ -372,6 +376,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Stone > rules.JewelKeepStone)
                     {
                         economy.Stone--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Stone, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     if (b.InputSecondary < rules.BufferLimit && economy.Ore > 0)
@@ -399,6 +404,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Wood > rules.TradeGoodsKeepWood)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     int tradeWood = CraftInputFor(b, rules.TradeGoodsWoodInput);
@@ -421,6 +427,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Wood > rules.IncenseKeepWood)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     if (b.InputSecondary < rules.BufferLimit && economy.Food > rules.IncenseKeepFood)
@@ -448,6 +455,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Wood > rules.CharmKeepWood)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     int charmWood = CraftInputFor(b, rules.CharmWoodInput);
@@ -469,6 +477,7 @@ namespace Rts.Simulation
                     if (b.Input < rules.BufferLimit && economy.Wood > rules.RepairKitKeepWood)
                     {
                         economy.Wood--;
+                        RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1);
                         b.Input++;
                     }
                     int repairWood = CraftInputFor(b, rules.RepairKitWoodInput);
@@ -489,7 +498,7 @@ namespace Rts.Simulation
                     ref var economy = ref world.Economies[b.FactionId - 1];
                     if (b.Input < rules.BufferLimit && economy.Wood > rules.ToolKeepWood)
                     {
-                        economy.Wood--; b.Input++;
+                        economy.Wood--; RecordLargeUse(b.FactionId, ResourceKind.Wood, LargeEconomyUseKind.ProcessingBuilding, 1); b.Input++;
                     }
                     int toolWood = CraftInputFor(b, rules.ToolWoodInput);
                     if (b.Timer == 0 && b.Input >= toolWood
@@ -694,6 +703,14 @@ namespace Rts.Simulation
             if (slot >= required || stock <= 0) return;
             int amount = Math.Min(stock, required - slot);
             stock -= amount; slot += amount;
+        }
+
+        private void FillRaw(uint faction, ResourceKind resource, ref int stock, ref int slot, int required)
+        {
+            if (slot >= required || stock <= 0) return;
+            int amount = Math.Min(stock, required - slot);
+            stock -= amount; slot += amount;
+            RecordLargeUse(faction, resource, LargeEconomyUseKind.ProcessingBuilding, amount);
         }
 
         private void SetAssemblerRecipe(uint faction, uint buildingId, RecipeKind recipe)

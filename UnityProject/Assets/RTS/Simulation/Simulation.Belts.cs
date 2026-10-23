@@ -44,17 +44,18 @@ namespace Rts.Simulation
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
-                else if (target.FactionId == 0 && FeedsOwnCore(next, belt.FactionId))
+                else if (target.FactionId == 0 && (FeedsOwnCore(next, belt.FactionId)
+                    || AiExpandOn && FeedsCompletedTown(next, belt.FactionId)))
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
-                    RecordLargeBeltDelivery(belt.FactionId);
+                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
                 {
-                    RecordLargeBeltDelivery(belt.FactionId);
+                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
@@ -163,6 +164,18 @@ namespace Rts.Simulation
             return core.Hp > 0 && InRange(world.Map.Center(cell), core.Definition.Position, world.Config.Rules.CoreRadius);
         }
 
+        private bool FeedsCompletedTown(int cell, uint faction)
+        {
+            var point = world.Map.Center(cell);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (InRange(point, BuildingCenter(town), world.Config.Rules.CoreRadius)) return true;
+            }
+            return false;
+        }
+
         private bool InsideAnyCore(int cell)
         {
             foreach (var core in world.Cores)
@@ -250,6 +263,7 @@ namespace Rts.Simulation
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - cost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
@@ -276,6 +290,7 @@ namespace Rts.Simulation
                 world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
                 economy.Wood = checked(economy.Wood - rules.UndergroundBeltWoodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.UndergroundBeltWoodCost);
                 world.BeltOrder = null;
                 return;
             }
@@ -292,6 +307,7 @@ namespace Rts.Simulation
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
             economy.Wood = checked(economy.Wood - cost);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
             world.BeltOrder = null;
         }
 

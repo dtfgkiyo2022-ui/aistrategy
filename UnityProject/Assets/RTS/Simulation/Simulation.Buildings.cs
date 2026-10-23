@@ -140,9 +140,71 @@ namespace Rts.Simulation
 
         private void PlaceBarracks(uint faction)
         {
-            int origin = FindBarracksSite(faction);
+            int origin = -1;
+            if (AiExpandOn && OwnBarracksCount(faction) > 0)
+            {
+                origin = FindSiteNear(faction, world.Config.Economy.BarracksSizeCells, AiExpandBarracksCentre(faction),
+                    Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
+                if (origin < 0) origin = FindAiExpandBarracksSite(faction, AiExpandBarracksCentre(faction));
+                for (int i = 0; i < world.BuildingCount && origin < 0; i++)
+                {
+                    var town = world.Buildings[i];
+                    if (IsActualBuilding(town) && town.Complete && town.FactionId == faction && town.Kind == BuildingKind.Town)
+                        origin = FindSiteNear(faction, world.Config.Economy.BarracksSizeCells, world.Map.Cell(BuildingCenter(town)),
+                            Math.Max(world.Config.Map.WidthCells, world.Config.Map.HeightCells));
+                    if (origin < 0 && IsActualBuilding(town) && town.Complete && town.FactionId == faction && town.Kind == BuildingKind.Town)
+                        origin = FindAiExpandBarracksSite(faction, world.Map.Cell(BuildingCenter(town)));
+                }
+            }
+            if (origin < 0 && (!AiExpandOn || !AiExpandHasCompletedTown(faction))) origin = FindBarracksSite(faction);
             if (origin < 0) return; // no room near the core: try again next cycle
             PlaceBuildingAt(faction, BuildingKind.Barracks, origin, Facing.North, 0);
+        }
+
+        private int FindAiExpandBarracksSite(uint faction, int centre)
+        {
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int size = world.Config.Economy.BarracksSizeCells, cx = centre % width, cz = centre / width;
+            for (int r = 0; r <= Math.Max(width, height); r++)
+                for (int dz = -r; dz <= r; dz++)
+                    for (int dx = -r; dx <= r; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r) continue;
+                        int x0 = cx + dx - size / 2, z0 = cz + dz - size / 2;
+                        if (x0 < 0 || z0 < 0 || x0 + size > width || z0 + size > height) continue;
+                        int origin = z0 * width + x0;
+                        if (SiteIsClear(origin, world.Map.Cell(OwnCore(faction).Definition.Position), size)) return origin;
+                    }
+            return -1;
+        }
+
+        private int OwnBarracksCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction
+                    && world.Buildings[i].Kind == BuildingKind.Barracks) count++;
+            return count;
+        }
+
+        private int AiExpandBarracksCentre(uint faction)
+        {
+            uint enemyFaction = faction == 1 ? 2u : 1u;
+            var enemy = world.Cores[world.Factions[enemyFaction - 1].CoreId - 1].Definition.Position;
+            SimPoint target = IsVisibleTo(faction, enemy) ? enemy
+                : world.Map.Center(faction == 1 ? world.Config.Map.WidthCells - 1 : 0);
+            int best = world.Map.Cell(OwnCore(faction).Definition.Position);
+            var bestDistance = DistanceSquared(world.Map.Center(best), target);
+            uint bestId = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                var distance = DistanceSquared(BuildingCenter(town), target);
+                if (distance < bestDistance || distance == bestDistance && town.Id < bestId)
+                { best = world.Map.Cell(BuildingCenter(town)); bestDistance = distance; bestId = town.Id; }
+            }
+            return best;
         }
 
         private int BarracksTargetFor(uint faction)
@@ -158,19 +220,85 @@ namespace Rts.Simulation
         {
             if (!TownsAllowed(faction)) return;
             var rules = world.Config.Economy;
-            if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
+            if (AiExpandOn)
+            {
+                if (world.Tick % rules.AiExpandDecisionIntervalTicks != 0) return;
+            }
+            else if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0) < rules.TownWoodCost
-                || economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0) < rules.TownStoneCost
-                || TownCount(faction) >= TownLimitFor(faction)) return;
+            if (TownCount(faction) >= TownLimitFor(faction)) return;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
                     return;
+            int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
+            int availableStone = economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0);
+            if (availableWood < rules.TownWoodCost || availableStone < rules.TownStoneCost)
+            {
+                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < rules.TownWoodCost, availableStone < rules.TownStoneCost);
+                return;
+            }
             int resourceCell = BestTownResourceCell(faction);
-            if (resourceCell < 0) return;
+            if (resourceCell < 0)
+            {
+                if (AiExpandOn) RecordAiExpandTownPlacementFailure(faction, HasUnknownTownResource(faction));
+                return;
+            }
             int origin = FindTownSite(faction, resourceCell);
             if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Town, origin, Facing.North, 0);
+            else if (AiExpandOn) RecordAiExpandTownPlacementFailure(faction, false);
+        }
+
+        private bool HasUnknownTownResource(uint faction)
+        {
+            var core = OwnCore(faction).Definition.Position;
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (ResourceKnownToFaction(faction, i) || node.Remaining <= 0
+                    || InRange(node.Definition.Position, core, Fix64.FromInt(rules.TownCoreDistance))) continue;
+                return true;
+            }
+            return false;
+        }
+
+        private void RecordAiExpandTownFundingFailure(uint faction, bool wood, bool stone)
+        {
+            if (!AiExpandOn || faction < 1 || faction > 2) return;
+            if (wood) aiExpandTownSkippedWood[faction - 1]++;
+            if (stone) aiExpandTownSkippedStone[faction - 1]++;
+        }
+
+        private void RecordAiExpandTownPlacementFailure(uint faction, bool unknownResource)
+        {
+            if (!AiExpandOn || faction < 1 || faction > 2) return;
+            if (unknownResource) aiExpandTownSkippedUnknownResource[faction - 1]++;
+            else aiExpandTownSkippedNoSite[faction - 1]++;
+            aiExpandTownReserveSuppressedUntil[faction - 1] = checked(world.Tick + world.Config.Economy.AiExpandDecisionIntervalTicks);
+        }
+
+        private bool AiExpandTownNeedsFunding(uint faction)
+        {
+            if (!AiExpandTownPending(faction)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
+        }
+
+        /// <summary>
+        /// AiExpand: a town is wanted and not placed yet. The wood reserve for soldiers and buildings holds on this, not
+        /// on the stock, so it does not drop on the tick the town's wood and stone are complete (aiexpand4: stone 659,
+        /// wood 5 at tick 18000).
+        /// </summary>
+        private bool AiExpandTownPending(uint faction)
+        {
+            if (!AiExpandOn || !TownsAllowed(faction) || TownCount(faction) >= TownLimitFor(faction)
+                || world.Tick < aiExpandTownReserveSuppressedUntil[faction - 1]) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
+                    && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
+                    return false;
+            return true;
         }
 
         private void DecideTownVillagers(uint faction)
@@ -420,6 +548,10 @@ namespace Rts.Simulation
             int siegeCost = siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0;
             int brickCost = brickCastle ? world.Config.Economy.BricksPerCastle
                 : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
+            // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
+            if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
+                && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
+                && economy.Wood - woodCost < world.Config.Economy.TownWoodCost) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
@@ -427,6 +559,7 @@ namespace Rts.Simulation
             if (automaticEconomyAction && kind != BuildingKind.Smelter
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
+            RecordLargeUse(faction, ResourceKind.Wood, ConstructionUseKind(kind), woodCost);
             if (framesUsed)
             {
                 economy.Frames = checked(economy.Frames - world.Config.Economy.CraftTreeFramesPerBuilding);
@@ -441,6 +574,7 @@ namespace Rts.Simulation
                 economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
             }
             economy.Stone = checked(economy.Stone - stoneCost);
+            RecordLargeUse(faction, ResourceKind.Stone, ConstructionUseKind(kind), stoneCost);
             if (siegeCastle)
             {
                 economy.SiegeParts = checked(economy.SiegeParts - world.Config.Economy.SiegePartsPerCastle);
@@ -1021,15 +1155,35 @@ namespace Rts.Simulation
                 {
                     var v = world.Villagers[i];
                     if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    if (AiExpandOn && IsStoneWorkerForBuilder(v)) continue;
                     if (building.Kind == BuildingKind.Town
                         && world.Map.FindPath(world.Map.Cell(v.Position), world.Map.Center(building.WorkCell), v.FactionId).Length == 0) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
+                }
+                if (best < 0)
+                {
+                    for (int i = 0; i < world.VillagerCount; i++)
+                    {
+                        var v = world.Villagers[i];
+                        if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                        if (building.Kind == BuildingKind.Town
+                            && world.Map.FindPath(world.Map.Cell(v.Position), world.Map.Center(building.WorkCell), v.FactionId).Length == 0) continue;
+                        if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
+                    }
                 }
                 if (best < 0) return;
                 world.Villagers[best].HaulFrom = 0; world.Villagers[best].HaulTo = 0;
                 world.Villagers[best].Task = VillagerTask.ToBuild;
                 world.Villagers[best].BuildingId = building.Id;
             }
+        }
+
+        private bool IsStoneWorkerForBuilder(VillagerState villager)
+        {
+            if (villager.Carry > 0 && villager.CarryKind == ResourceKind.Stone) return true;
+            if ((villager.Task != VillagerTask.ToNode && villager.Task != VillagerTask.Gathering) || villager.NodeId == 0) return false;
+            return villager.NodeId <= world.Nodes.Length
+                && world.Nodes[villager.NodeId - 1].Definition.Kind == ResourceKind.Stone;
         }
 
         /// <summary>V3-17 #2: the metropolis sends two additional villagers to every construction site.</summary>

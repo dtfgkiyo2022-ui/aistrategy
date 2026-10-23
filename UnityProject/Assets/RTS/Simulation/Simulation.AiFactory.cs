@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Rts.Contracts;
 
 namespace Rts.Simulation
@@ -44,6 +45,12 @@ namespace Rts.Simulation
         private void DecideAiFactoryAge1(uint faction)
         {
             if (!AiFactoryDecisionDue(faction)) return;
+            if (AiExpandOn)
+            {
+                EnsureAiFactoryWoodLine(faction);
+                EnsureAiFactoryStoneLine(faction);
+                EnsureAiFactoryMetalLine(faction);
+            }
             switch (world.Economies[faction - 1].Civ)
             {
                 case CivKind.Agrarian: DecideRations(faction); break;
@@ -80,10 +87,18 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int index = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
             ref var line = ref world.ProcessingLines[index];
+            if (BuildingReady(line.MineId) && BuildingReady(line.SmelterId)
+                && AiExpandProcessorNeedsRemoteBase(faction, ResourceKind.Ore, world.Buildings[line.SmelterId - 1]))
+            {
+                if (economy.Wood < rules.MineWoodCost) return;
+                uint remoteMine = PlaceMine(faction, AiExpandResourceCell(faction, ResourceKind.Ore));
+                if (remoteMine != 0) { line.MineId = remoteMine; line.SmelterId = 0; line.BeltCells = Array.Empty<int>(); }
+                return;
+            }
             if (!BuildingReady(line.MineId))
             {
                 if (BuildingPending(line.MineId) || economy.Wood < rules.MineWoodCost) return;
-                uint id = PlaceMine(faction);
+                uint id = PlaceMine(faction, AiExpandOn ? AiExpandResourceCell(faction, ResourceKind.Ore) : -1);
                 if (id == 0) { RecordAiFactorySkip(faction, 0, 1); return; }
                 line.MineId = id;
                 return;
@@ -106,6 +121,88 @@ namespace Rts.Simulation
 
         private const int HaulersForAiFactory = 1;
 
+        private int AiExpandBaseCellForSource(uint faction, SimPoint source)
+        {
+            int best = world.Map.Cell(OwnCore(faction).Definition.Position);
+            BigInteger bestDistance = DistanceSquared(source, OwnCore(faction).Definition.Position);
+            uint bestId = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                var centre = BuildingCenter(town);
+                var distance = DistanceSquared(source, centre);
+                if (distance < bestDistance || distance == bestDistance && town.Id < bestId)
+                { best = world.Map.Cell(centre); bestDistance = distance; bestId = town.Id; }
+            }
+            return best;
+        }
+
+        private int AiExpandResourceCell(uint faction, ResourceKind kind)
+        {
+            int preferredTown = AiExpandPreferredTownCell(faction);
+            int best = -1;
+            BigInteger bestDistance = default;
+            uint bestId = 0;
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (!ResourceKnownToFaction(faction, i) || node.Remaining <= 0 || node.Definition.Kind != kind) continue;
+                var distance = preferredTown >= 0
+                    ? DistanceSquared(node.Definition.Position, world.Map.Center(preferredTown))
+                    : DistanceSquared(node.Definition.Position, world.Map.Center(AiExpandBaseCellForSource(faction, node.Definition.Position)));
+                if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
+                { best = i; bestDistance = distance; bestId = node.Definition.Id; }
+            }
+            return best < 0 ? -1 : world.Map.Cell(world.Nodes[best].Definition.Position);
+        }
+
+        private int AiExpandPreferredTownCell(uint faction)
+        {
+            int best = -1;
+            uint bestId = uint.MaxValue;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var town = world.Buildings[i];
+                if (!IsActualBuilding(town) || !town.Complete || town.FactionId != faction || town.Kind != BuildingKind.Town) continue;
+                if (town.Id < bestId) { best = world.Map.Cell(BuildingCenter(town)); bestId = town.Id; }
+            }
+            return best;
+        }
+
+        private int AiExpandResourceBaseCell(uint faction, ResourceKind kind)
+        {
+            int resourceCell = AiExpandResourceCell(faction, kind);
+            return resourceCell < 0 ? world.Map.Cell(OwnCore(faction).Definition.Position)
+                : AiExpandBaseCellForSource(faction, world.Map.Center(resourceCell));
+        }
+
+        private bool AiExpandHasCompletedTown(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].Complete
+                    && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town) return true;
+            return false;
+        }
+
+        private bool AiExpandProcessorNeedsRemoteBase(uint faction, ResourceKind kind, BuildingState processor)
+        {
+            if (!AiExpandOn || !AiExpandHasCompletedTown(faction)) return false;
+            int baseCell = AiExpandResourceBaseCell(faction, kind);
+            return !InRange(BuildingCenter(processor), world.Map.Center(baseCell), Fix64.FromInt(world.Config.Economy.TownResourceReach));
+        }
+
+        private bool FeedsAiExpandBase(int cell, uint faction, SimPoint source)
+        {
+            int baseCell = AiExpandBaseCellForSource(faction, source);
+            int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
+            return baseCell == coreCell ? FeedsOwnCore(cell, faction)
+                : InRange(world.Map.Center(cell), world.Map.Center(baseCell), world.Config.Rules.CoreRadius);
+        }
+
+        private int AiExpandBaseCellForBuilding(uint faction, BuildingState building)
+            => AiExpandBaseCellForSource(faction, BuildingCenter(building));
+
         private void EnsureAiFactoryBuildingMaterialLine(uint faction)
         {
             int plankIndex = LineIndex(faction, ProcessingLineKind.Planks);
@@ -121,7 +218,8 @@ namespace Rts.Simulation
             if (!BuildingReady(line.JoineryId))
             {
                 if (BuildingPending(line.JoineryId) || economy.Wood < rules.JoineryWoodCost) return;
-                uint id = PlaceJoinery(faction);
+                int baseCell = AiExpandOn ? AiExpandBaseCellForBuilding(faction, world.Buildings[plankLine.SawmillId - 1]) : -1;
+                uint id = PlaceJoinery(faction, baseCell);
                 if (id == 0) { RecordAiFactorySkip(faction, 0, 1); return; }
                 line.JoineryId = id;
                 return;
@@ -139,7 +237,8 @@ namespace Rts.Simulation
                 var stone = BeltRoute(faction, OutputCell(stonecutter), taken, next => InFootprint(joinery, next));
                 if (stone.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
                 foreach (int cell in stone.cells) taken[cell] = true;
-                var core = BeltRoute(faction, OutputCell(joinery), taken, next => FeedsOwnCore(next, faction));
+                var core = BeltRoute(faction, OutputCell(joinery), taken, next => AiExpandOn
+                    ? FeedsAiExpandBase(next, faction, BuildingCenter(joinery)) : FeedsOwnCore(next, faction));
                 if (core.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
                 SetLineBelts(index, planks, stone, core);
                 if (!LayRoutes(faction, planks, stone, core)) RecordAiFactorySkip(faction, 0, 2);
@@ -160,7 +259,8 @@ namespace Rts.Simulation
             SetAssemblerRecipe(faction, line.AssemblerId, RecipeKind.SiegeParts);
             var assembler = world.Buildings[line.AssemblerId - 1];
             if (!assembler.Complete || LineBeltsWhole(index)) return;
-            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
+            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), next => AiExpandOn
+                ? FeedsAiExpandBase(next, faction, BuildingCenter(assembler)) : FeedsOwnCore(next, faction));
             if (route.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
             SetLineBelts(index, route);
             if (!LayRoutes(faction, route)) RecordAiFactorySkip(faction, 0, 2);
@@ -181,16 +281,26 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             int index = GetOrCreateLine(faction, ProcessingLineKind.Planks);
             ref var line = ref world.ProcessingLines[index];
+            if (BuildingReady(line.LumberCampId) && BuildingReady(line.SawmillId)
+                && AiExpandProcessorNeedsRemoteBase(faction, ResourceKind.Wood, world.Buildings[line.SawmillId - 1]))
+            {
+                if (economy.Wood < rules.LumberCampWoodCost) return;
+                uint remoteCamp = PlaceLumberCamp(faction, AiExpandResourceCell(faction, ResourceKind.Wood));
+                if (remoteCamp != 0) { line.LumberCampId = remoteCamp; line.SawmillId = 0; line.BeltCells = Array.Empty<int>(); }
+                return;
+            }
             if (!BuildingReady(line.LumberCampId))
             {
                 if (BuildingPending(line.LumberCampId) || economy.Wood < rules.LumberCampWoodCost) return;
-                line.LumberCampId = PlaceLumberCamp(faction);
+                line.LumberCampId = PlaceLumberCamp(faction, AiExpandOn ? AiExpandResourceCell(faction, ResourceKind.Wood) : -1);
                 return;
             }
             if (!BuildingReady(line.SawmillId))
             {
                 if (BuildingPending(line.SawmillId) || economy.Wood < rules.SawmillWoodCost) return;
-                line.SawmillId = PlaceSawmill(faction, world.Buildings[line.LumberCampId - 1]);
+                var camp = world.Buildings[line.LumberCampId - 1];
+                int baseCell = AiExpandOn ? AiExpandBaseCellForBuilding(faction, camp) : -1;
+                line.SawmillId = PlaceSawmill(faction, camp, baseCell);
                 return;
             }
             if (!line.LumberCampId.Equals(0u) && !line.SawmillId.Equals(0u))
@@ -200,8 +310,8 @@ namespace Rts.Simulation
                 if (camp.Complete && sawmill.Complete && !LineBeltsWhole(index)) LayPlanksLine(faction, index, camp, sawmill);
                 if (LineBeltsWhole(index))
                 {
-                    SetSimpleHaulers(faction, camp.Id, sawmill.Id, 1);
-                    SetSimpleHaulers(faction, sawmill.Id, 0, 1);
+                    SetSimpleHaulers(faction, camp.Id, sawmill.Id, LineBeltsWhole(index) ? 0 : 1);
+                    SetSimpleHaulers(faction, sawmill.Id, 0, LineBeltsWhole(index) ? 0 : 1);
                 }
             }
         }
@@ -215,13 +325,14 @@ namespace Rts.Simulation
             if (!BuildingReady(line.DrillId))
             {
                 if (BuildingPending(line.DrillId) || economy.Wood < rules.DrillWoodCost) return;
-                line.DrillId = PlaceDrill(faction);
+                line.DrillId = PlaceDrill(faction, AiExpandOn ? AiExpandResourceCell(faction, ResourceKind.Stone) : -1);
                 return;
             }
             if (!BuildingReady(line.StonecutterId))
             {
                 if (BuildingPending(line.StonecutterId) || economy.Wood < rules.StonecutterWoodCost) return;
-                line.StonecutterId = PlaceStonecutter(faction);
+                int baseCell = AiExpandOn ? AiExpandBaseCellForBuilding(faction, world.Buildings[line.DrillId - 1]) : -1;
+                line.StonecutterId = PlaceStonecutter(faction, baseCell);
                 return;
             }
             var drill = world.Buildings[line.DrillId - 1];
@@ -234,7 +345,8 @@ namespace Rts.Simulation
                 if (toStonecutter.cells != null)
                 {
                     foreach (int cell in toStonecutter.cells) taken[cell] = true;
-                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, next => FeedsOwnCore(next, faction));
+                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, next => AiExpandOn
+                        ? FeedsAiExpandBase(next, faction, BuildingCenter(stonecutter)) : FeedsOwnCore(next, faction));
                     if (toCore.cells != null)
                     {
                         SetLineBelts(index, toStonecutter, toCore);
@@ -244,8 +356,8 @@ namespace Rts.Simulation
             }
             if (LineBeltsWhole(index))
             {
-                SetSimpleHaulers(faction, drill.Id, stonecutter.Id, 1);
-                SetSimpleHaulers(faction, stonecutter.Id, 0, 1);
+                SetSimpleHaulers(faction, drill.Id, stonecutter.Id, LineBeltsWhole(index) ? 0 : 1);
+                SetSimpleHaulers(faction, stonecutter.Id, 0, LineBeltsWhole(index) ? 0 : 1);
             }
             else
             {

@@ -120,6 +120,7 @@ namespace Rts.Simulation
                         if (HoldCaravanAtMarket(ref v)) continue;
                     }
                 }
+                if (AiExpandWorkRouteTimedOut(ref v)) continue;
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && CanAiAssign(v)) AssignWork(ref v);
                 if (AiArmyRecoveryOn && v.Task == VillagerTask.ToNode && !v.Held && !world.Economies[v.FactionId - 1].AutoOff)
                 {
@@ -354,6 +355,7 @@ namespace Rts.Simulation
             if (index < 0) return false;
             v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
             v.NodeId = world.Nodes[index].Definition.Id;
+            if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
             return true;
         }
@@ -425,16 +427,37 @@ namespace Rts.Simulation
             int food = largeWorkCounts[factionIndex * 6 + 0];
             int wood = largeWorkCounts[factionIndex * 6 + 1];
             int stone = largeWorkCounts[factionIndex * 6 + 2];
+            int villagers = largeVillagerCounts[factionIndex];
+            if (AiExpandOn && villagers >= 5 && economy.Age == 0
+                && food * 1000 < villagers * world.Config.Economy.AiExpandPrimitiveFoodWorkerPermille)
+                return ResourceKind.Food;
             if (PrimitiveCraftOn && economy.Age == 0)
             {
                 if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return ResourceKind.Wood;
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
             }
-            int villagers = largeVillagerCounts[factionIndex];
+            if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
+                && economy.Stone < world.Config.Economy.TownStoneCost
+                && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
+                return ResourceKind.Stone;
+            if (AiExpandOn && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
+            {
+                if (food * 1000 < villagers * world.Config.Economy.AiExpandFoodWorkerPermille) return ResourceKind.Food;
+                if (wood * 1000 < villagers * world.Config.Economy.AiExpandWoodWorkerPermille) return ResourceKind.Wood;
+                if (economy.Age >= 1 && stone * 1000 < villagers * world.Config.Economy.AiExpandStoneWorkerPermille) return ResourceKind.Stone;
+            }
             int townVillagers = world.Config.Economy.LargeTownVillagersPerTown;
             int desiredTowns = villagers < townVillagers ? 0
                 : Math.Min(world.Config.Economy.TownMaxBuildings, Math.Max(1, villagers / townVillagers));
             int townVillagerThreshold = world.Config.Economy.LargeTownVillagersPerTown;
+            // A town is ahead of optional construction, but not ahead of the food floor that keeps the
+            // large-economy villager line alive.
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            if (AiExpandTownNeedsFunding(v.FactionId))
+            {
+                if (economy.Wood < world.Config.Economy.TownWoodCost) return ResourceKind.Wood;
+                if (economy.Stone < world.Config.Economy.TownStoneCost) return ResourceKind.Stone;
+            }
             bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
                 && economy.Stone < world.Config.Economy.TownStoneCost;
             int barracksVillagers = world.Config.Economy.LargeBarracksVillagersPerBuilding;
@@ -638,6 +661,8 @@ namespace Rts.Simulation
                 var anchor = world.Nodes[knownNode].Definition.Position;
                 var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
                 var drop = DropOff(probe).point;
+                if (AiExpandOn && (!AiExpandWorkRouteAvailable(position, anchor, faction)
+                    || !AiExpandWorkRouteAvailable(anchor, drop, faction))) continue;
                 var distance = DistanceSquared(anchor, drop);
                 uint anchorId = world.Nodes[knownNode].Definition.Id;
                 if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
@@ -649,11 +674,69 @@ namespace Rts.Simulation
             {
                 var node = world.Nodes[nodeIndex];
                 if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                if (AiExpandOn)
+                {
+                    if (!AiExpandWorkRouteAvailable(position, node.Definition.Position, faction)) continue;
+                }
                 var distance = DistanceSquared(position, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
             }
             return best;
+        }
+
+        private bool AiExpandWorkRouteAvailable(SimPoint from, SimPoint to, uint faction)
+        {
+            if (!AiExpandOn) return true;
+            if (Clear(from, to, faction)) return true;
+            return AiExpandWorkRouteAvailable(world.Map.Cell(from), world.Map.Cell(to), faction);
+        }
+
+        private bool AiExpandWorkRouteAvailable(int originCell, int resourceCell, uint faction)
+        {
+            if (!AiExpandOn) return true;
+            if (originCell < 0 || resourceCell < 0) return false;
+            int version = world.Map.PassableVersion;
+            if (aiExpandWorkRouteCacheVersion != version)
+            {
+                aiExpandWorkRouteCache.Clear();
+                aiExpandWorkRouteCacheOrder.Clear();
+                aiExpandWorkRouteCacheVersion = version;
+            }
+            var key = (Faction: faction, Origin: originCell, Resource: resourceCell);
+            if (aiExpandWorkRouteCache.TryGetValue(key, out bool available)) return available;
+            available = originCell == resourceCell
+                || world.Map.SharedRoute(originCell, world.Map.Center(resourceCell), faction).Length > 1;
+            if (aiExpandWorkRouteCache.Count == AiExpandWorkRouteCacheLimit)
+            {
+                var oldest = aiExpandWorkRouteCacheOrder.Dequeue();
+                aiExpandWorkRouteCache.Remove(oldest);
+            }
+            aiExpandWorkRouteCache.Add(key, available);
+            aiExpandWorkRouteCacheOrder.Enqueue(key);
+            return available;
+        }
+
+        /// <summary>Test-only route-cache probe; the shipped AI calls the same cell-keyed path.</summary>
+        internal bool ProbeAiExpandWorkRouteForTest(uint faction, int originCell, int resourceCell)
+            => AiExpandWorkRouteAvailable(originCell, resourceCell, faction);
+
+        /// <summary>Test-only terrain mutation used to verify PassableVersion invalidation.</summary>
+        internal void SetPassableForTest(int cell, bool value)
+        {
+            world.Map.SetPassable(cell, value);
+            TerrainChanged();
+        }
+
+        private bool AiExpandWorkRouteTimedOut(ref VillagerState villager)
+        {
+            if (!AiExpandOn || villager.Task != VillagerTask.ToNode || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length
+                || villager.AiExpandWorkStartTick < 0 || world.Tick - villager.AiExpandWorkStartTick < world.Config.Economy.AiExpandUnreachableWorkTimeoutTicks) return false;
+            var node = world.Nodes[villager.NodeId - 1];
+            if (AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId)) return false;
+            villager.Task = VillagerTask.Idle; villager.NodeId = 0; villager.Route = Array.Empty<int>(); villager.RouteCursor = 0;
+            villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
+            return true;
         }
 
         private int ClusterRemaining(int cluster)
@@ -821,6 +904,7 @@ namespace Rts.Simulation
                 if (newResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + newResource]++;
             }
             v.NodeId = world.Nodes[index].Definition.Id;
+            if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }
 
@@ -898,7 +982,8 @@ namespace Rts.Simulation
                 Array.Resize(ref world.Villagers, world.Villagers.Length == 0 ? 4 : checked(world.Villagers.Length * 2));
             var position = world.Map.Center(cell);
             world.Villagers[index] = new VillagerState { Id = world.NextVillagerId, FactionId = faction, Alive = true,
-                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>(), StoneToolsUsed = stoneTools };
+                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>(),
+                StoneToolsUsed = stoneTools, AiExpandWorkStartTick = AiExpandOn ? -1 : 0 };
             world.NextVillagerId = checked(world.NextVillagerId + 1);
         }
 
