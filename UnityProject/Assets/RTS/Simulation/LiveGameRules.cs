@@ -51,7 +51,9 @@ namespace Rts.Simulation
             e.CraftBalance = allCivilisations;
             e.CraftTree1 = allCivilisations;
             e.PrimitiveCraft = allCivilisations;
-            e.AiFactory = allCivilisations && e.PrimitiveCraft;
+            // 37.8 was designed and measured for the 300-villager large economy. On the small (provisional) map the
+            // templates take the little wood there is, and the sides field neither their second unit nor primitive goods.
+            e.AiFactory = allCivilisations && e.PrimitiveCraft && e.LargeEconomy;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
