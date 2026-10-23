@@ -425,12 +425,19 @@ namespace Rts.Simulation
             int food = largeWorkCounts[factionIndex * 6 + 0];
             int wood = largeWorkCounts[factionIndex * 6 + 1];
             int stone = largeWorkCounts[factionIndex * 6 + 2];
+            int villagers = largeVillagerCounts[factionIndex];
+            if (world.Config.Economy.AiExpand && villagers >= 5 && economy.Age == 0
+                && food * 1000 < villagers * world.Config.Economy.AiExpandPrimitiveFoodWorkerPermille)
+                return ResourceKind.Food;
             if (PrimitiveCraftOn && economy.Age == 0)
             {
                 if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return ResourceKind.Wood;
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
             }
-            int villagers = largeVillagerCounts[factionIndex];
+            if (world.Config.Economy.AiExpand && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
+                && economy.Stone < world.Config.Economy.TownStoneCost
+                && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
+                return ResourceKind.Stone;
             if (world.Config.Economy.AiExpand && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
             {
                 if (food * 1000 < villagers * world.Config.Economy.AiExpandFoodWorkerPermille) return ResourceKind.Food;

@@ -60,6 +60,8 @@ namespace Rts.Core.Tests
             scenario.Economy.AiExpandFoodWorkerPermille = 451;
             scenario.Economy.AiExpandWoodWorkerPermille = 251;
             scenario.Economy.AiExpandStoneWorkerPermille = 101;
+            scenario.Economy.AiExpandTownStoneWorkerPermille = 151;
+            scenario.Economy.AiExpandPrimitiveFoodWorkerPermille = 401;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Any(x => x.Id == 68 && x.Version == 1), Is.True);
@@ -69,6 +71,8 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.AiExpandFoodWorkerPermille, Is.EqualTo(451));
             Assert.That(decoded.Economy.AiExpandWoodWorkerPermille, Is.EqualTo(251));
             Assert.That(decoded.Economy.AiExpandStoneWorkerPermille, Is.EqualTo(101));
+            Assert.That(decoded.Economy.AiExpandTownStoneWorkerPermille, Is.EqualTo(151));
+            Assert.That(decoded.Economy.AiExpandPrimitiveFoodWorkerPermille, Is.EqualTo(401));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
@@ -120,6 +124,72 @@ namespace Rts.Core.Tests
                 Assert.That((le.Food, le.Wood, le.Stone), Is.EqualTo((re.Food, re.Wood, re.Stone)), "tick " + tick);
             }
             Assert.That(left.CaptureLargeEconomyObservation().Factions[0].Villagers, Is.EqualTo(19));
+        }
+
+        [Test]
+        public void TownFundingKeepsWoodForTheTownDuringAutomaticSpending()
+        {
+            var scenario = Scenario(true);
+            var e = scenario.Economy;
+            // Wood for one barracks (150) above the town's wood, too little for a siege workshop (200); houses, farms and drop sites are free here because
+            // they may still be built while the town is funded. Every automatic soldier would then cut into the reserve.
+            e.TownWoodCost = 300; e.StartWood = e.TownWoodCost + e.BarracksWoodCost + 40;
+            e.StartFood = 100000; e.StartStone = 0; e.TownStoneCost = 1000000;
+            e.StartMetal = 100000; e.AutoVillagerTarget = 0; e.AutoInfantryQueue = 20;
+            e.HouseWoodCost = e.FarmWoodCost = e.DropSiteWoodCost = 0;
+            e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = e.AiFactoryAge2BarracksMaxBuildings = 1;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            // Processing intake and belts may still take single pieces of wood; the reserve is about soldiers and buildings.
+            int startSoldiers = sim.Capture(1).Units.Count(u => u.IsOwn), soldiers = startSoldiers;
+            int checkedTicks = 0;
+            for (int tick = 0; tick < 2000; tick++)
+            {
+                gateway.Step();
+                var frame = sim.Capture(1);
+                int now = frame.Units.Count(u => u.IsOwn);
+                if (frame.Economy.Age >= 1)
+                {
+                    checkedTicks++;
+                    if (now > soldiers)
+                        Assert.That(frame.Economy.Wood, Is.GreaterThanOrEqualTo(e.TownWoodCost), "a soldier left the town's wood, tick " + tick);
+                    // Processing intake may take single pieces; no building or soldier payment goes below the reserve.
+                    Assert.That(frame.Economy.Wood, Is.GreaterThanOrEqualTo(e.TownWoodCost - 20), "tick " + tick);
+                }
+                soldiers = now;
+            }
+            // 40 spare wood pays at most two soldiers at 20 wood; afterwards training waits for the town.
+            Assert.That(soldiers - startSoldiers, Is.LessThanOrEqualTo(2));
+            Assert.That(checkedTicks, Is.GreaterThan(1900), "the side reached age 1 and the reserve was checked");
+        }
+
+        [Test]
+        public void PrimitiveFoodFloorGrowsVillagersBeforePrimitiveCraftWood()
+        {
+            var scenario = Scenario(true);
+            var e = scenario.Economy;
+            e.StartFood = 0; e.StartWood = e.StartStone = e.StartMetal = 0;
+            e.AgeClockTicks1 = 100000; e.AgeClockTicks2 = 200000; e.AgeClockTicks3 = 300000; e.AgeClockTicks4 = 400000;
+            e.PopulationCap = 100; e.AutoVillagerTarget = 12; e.AutoInfantryQueue = 0;
+            e.AiExpandPrimitiveFoodWorkerPermille = 400; e.AiExpandShareMinVillagers = 20;
+            e.Towns = false; e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
+            e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 0;
+            SetFactionOneVillagers(scenario, 7);
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            Steps(gateway, sim, 2000);
+            var observation = sim.CaptureLargeEconomyObservation().Factions[0];
+            Assert.That(sim.Capture(1).Economy.Age, Is.EqualTo(0), "still the primitive age");
+            Assert.That(observation.Workers[0], Is.GreaterThanOrEqualTo(3));
+            Assert.That(observation.Villagers, Is.GreaterThan(7));
         }
 
         private static (Battle sim, CommandGateway gateway) ShareFloorMatch(int villagers, int shareMinVillagers)

@@ -522,8 +522,6 @@ namespace Rts.Simulation
             // maps keep their existing construction order; the town itself is allowed through this guard.
             if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
                 && LargeTownNeedsFunding(faction)) return;
-            if (automaticEconomyAction && AiExpandTownNeedsFunding(faction) && kind != BuildingKind.Town
-                && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite) return;
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
             bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
@@ -537,6 +535,10 @@ namespace Rts.Simulation
             int siegeCost = siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0;
             int brickCost = brickCastle ? world.Config.Economy.BricksPerCastle
                 : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
+            // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
+            if (automaticEconomyAction && AiExpandTownNeedsFunding(faction) && kind != BuildingKind.Town
+                && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
+                && economy.Wood - woodCost < world.Config.Economy.TownWoodCost) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
@@ -1140,15 +1142,35 @@ namespace Rts.Simulation
                 {
                     var v = world.Villagers[i];
                     if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                    if (AiExpandOn && IsStoneWorkerForBuilder(v)) continue;
                     if (building.Kind == BuildingKind.Town
                         && world.Map.FindPath(world.Map.Cell(v.Position), world.Map.Center(building.WorkCell), v.FactionId).Length == 0) continue;
                     if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
+                }
+                if (best < 0)
+                {
+                    for (int i = 0; i < world.VillagerCount; i++)
+                    {
+                        var v = world.Villagers[i];
+                        if (!v.Alive || v.FactionId != building.FactionId || v.Held || v.Task == VillagerTask.ToBuild || v.Task == VillagerTask.Building) continue;
+                        if (building.Kind == BuildingKind.Town
+                            && world.Map.FindPath(world.Map.Cell(v.Position), world.Map.Center(building.WorkCell), v.FactionId).Length == 0) continue;
+                        if (best < 0 || DistanceSquared(v.Position, spot) < DistanceSquared(world.Villagers[best].Position, spot)) best = i;
+                    }
                 }
                 if (best < 0) return;
                 world.Villagers[best].HaulFrom = 0; world.Villagers[best].HaulTo = 0;
                 world.Villagers[best].Task = VillagerTask.ToBuild;
                 world.Villagers[best].BuildingId = building.Id;
             }
+        }
+
+        private bool IsStoneWorkerForBuilder(VillagerState villager)
+        {
+            if (villager.Carry > 0 && villager.CarryKind == ResourceKind.Stone) return true;
+            if ((villager.Task != VillagerTask.ToNode && villager.Task != VillagerTask.Gathering) || villager.NodeId == 0) return false;
+            return villager.NodeId <= world.Nodes.Length
+                && world.Nodes[villager.NodeId - 1].Definition.Kind == ResourceKind.Stone;
         }
 
         /// <summary>V3-17 #2: the metropolis sends two additional villagers to every construction site.</summary>

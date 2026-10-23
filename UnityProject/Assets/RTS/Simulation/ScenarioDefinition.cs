@@ -144,6 +144,7 @@ namespace Rts.Simulation
         /// <summary>AiExpand: minimum villager population before enforcing resource-worker shares.</summary>
         public int AiExpandShareMinVillagers = 20;
         public int AiExpandFoodWorkerPermille = 450, AiExpandWoodWorkerPermille = 250, AiExpandStoneWorkerPermille = 100;
+        public int AiExpandTownStoneWorkerPermille = 150, AiExpandPrimitiveFoodWorkerPermille = 400;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;
