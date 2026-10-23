@@ -56,6 +56,7 @@ namespace Rts.Simulation
         private readonly int[] aiExpandTownSkippedNoSite = new int[2];
         private readonly int[] aiExpandTownSkippedWood = new int[2];
         private readonly int[] aiExpandTownSkippedStone = new int[2];
+        private readonly long[] aiExpandTownReserveSuppressedUntil = { long.MinValue, long.MinValue };
         internal int LastCavalryObjectiveCount;
         internal long LastCavalryPathCellsVisited;
         internal long LastCavalryRouteCellsVisited;

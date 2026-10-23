@@ -56,6 +56,7 @@ namespace Rts.Core.Tests
             scenario.Economy.AiExpandAge2TownCount = 2;
             scenario.Economy.AiExpandAge3TownCount = 3;
             scenario.Economy.AiExpandDecisionIntervalTicks = 137;
+            scenario.Economy.AiExpandUnreachableWorkTimeoutTicks = 1201;
             scenario.Economy.AiExpandShareMinVillagers = 21;
             scenario.Economy.AiExpandFoodWorkerPermille = 451;
             scenario.Economy.AiExpandWoodWorkerPermille = 251;
@@ -67,6 +68,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Extensions.Any(x => x.Id == 68 && x.Version == 1), Is.True);
             Assert.That(decoded.Economy.AiExpand, Is.True);
             Assert.That(decoded.Economy.AiExpandDecisionIntervalTicks, Is.EqualTo(137));
+            Assert.That(decoded.Economy.AiExpandUnreachableWorkTimeoutTicks, Is.EqualTo(1201));
             Assert.That(decoded.Economy.AiExpandShareMinVillagers, Is.EqualTo(21));
             Assert.That(decoded.Economy.AiExpandFoodWorkerPermille, Is.EqualTo(451));
             Assert.That(decoded.Economy.AiExpandWoodWorkerPermille, Is.EqualTo(251));
@@ -88,6 +90,7 @@ namespace Rts.Core.Tests
             e.AdvanceTicks = e.Age2Ticks = 1;
             e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
             e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 0;
+            e.AiExpandFoodWorkerPermille = 450; e.AiExpandWoodWorkerPermille = 250;
             e.Towns = false;
             SetFactionOneVillagers(scenario, 40);
             var sim = new Battle(scenario);
@@ -304,6 +307,28 @@ namespace Rts.Core.Tests
                 Assert.That(ReplayBinary.Hash(left.CaptureDiagnostic().CanonicalState),
                     Is.EqualTo(ReplayBinary.Hash(right.CaptureDiagnostic().CanonicalState)), "tick " + tick);
             }
+        }
+
+        [Test]
+        public void UnreachableLargeWorkPointIsNotKeptAsTheWoodAssignment()
+        {
+            var scenario = LiveGameRules.Create(3UL, true, true, false, false);
+            scenario.Economy.AiExpandUnreachableWorkTimeoutTicks = 20;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, true));
+            gateway.SubmitEconomy(EconomyCommand.Advance(1, ++sequence, CivKind.Agrarian));
+            for (int tick = 0; tick < 15000 && !sim.Capture(1).Result.HasEnded; tick++) gateway.Step();
+            var fields = DiagnosticComparison.Fields(sim.CaptureDiagnostic()).ToDictionary(x => x.Key, x => x.Value);
+            foreach (var field in fields.Keys.Where(x => x.StartsWith("Villagers[", StringComparison.Ordinal) && x.EndsWith(".FactionId", StringComparison.Ordinal)))
+            {
+                string prefix = field.Substring(0, field.Length - ".FactionId".Length);
+                if (fields[field] == "1" && fields[prefix + ".Alive"] == "1" && fields[prefix + ".Task"] == "1")
+                    Assert.That(fields[prefix + ".NodeId"], Is.Not.EqualTo("3"), prefix + " stayed on unreachable wood node 3");
+            }
+            Assert.That(sim.CaptureLargeEconomyObservation().Factions[0].Income[1], Is.GreaterThan(200), "wood must continue after the unreachable point");
         }
 
         private static void Steps(CommandGateway gateway, Battle sim, int count)

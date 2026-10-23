@@ -328,7 +328,7 @@ namespace Rts.Simulation
             // The reserve protects the purchase of the cannon itself; do not count it twice
             // when CanPay is checking that cannon.
             heldWood = checked(heldWood + (automaticEconomyAction && kind != UnitKind.Cannon ? AgeFourAiWoodReserve(faction) : 0));
-            if (automaticEconomyAction && AiExpandTownNeedsFunding(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk
+            if (automaticEconomyAction && AiExpandTownPending(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk
                 && e.Wood - c.wood < world.Config.Economy.TownWoodCost) return false;
             return e.Food >= c.food && e.Wood - heldWood >= c.wood && availableSteel >= c.metal && e.Gems >= c.gems && e.Gold >= c.gold
                 && (kind != UnitKind.Cannon || e.SiegeEngine >= world.Config.Economy.CannonSiegeEngineCost)

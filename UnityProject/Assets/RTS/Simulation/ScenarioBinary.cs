@@ -195,7 +195,7 @@ private const int AiFactoryExtensionVersion = 1;
 private const int AiFactoryExtensionDataLength = 12 * sizeof(int);
 private const int AiExpandExtensionId = 68;
 private const int AiExpandExtensionVersion = 1;
-        private const int AiExpandExtensionDataLength = 11 * sizeof(int);
+        private const int AiExpandExtensionDataLength = 12 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -1804,6 +1804,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.AiExpand ? 1 : 0);
                 writer.Write(e.AiExpandAge1TownCount); writer.Write(e.AiExpandAge2TownCount);
                 writer.Write(e.AiExpandAge3TownCount); writer.Write(e.AiExpandDecisionIntervalTicks);
+                writer.Write(e.AiExpandUnreachableWorkTimeoutTicks);
                 writer.Write(e.AiExpandShareMinVillagers); writer.Write(e.AiExpandFoodWorkerPermille);
                 writer.Write(e.AiExpandWoodWorkerPermille); writer.Write(e.AiExpandStoneWorkerPermille);
                 writer.Write(e.AiExpandTownStoneWorkerPermille); writer.Write(e.AiExpandPrimitiveFoodWorkerPermille);
@@ -1821,11 +1822,13 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.AiExpand = enabled != 0;
                 e.AiExpandAge1TownCount = reader.ReadInt32(); e.AiExpandAge2TownCount = reader.ReadInt32();
                 e.AiExpandAge3TownCount = reader.ReadInt32(); e.AiExpandDecisionIntervalTicks = reader.ReadInt32();
+                e.AiExpandUnreachableWorkTimeoutTicks = reader.ReadInt32();
                 e.AiExpandShareMinVillagers = reader.ReadInt32(); e.AiExpandFoodWorkerPermille = reader.ReadInt32();
                 e.AiExpandWoodWorkerPermille = reader.ReadInt32(); e.AiExpandStoneWorkerPermille = reader.ReadInt32();
                 e.AiExpandTownStoneWorkerPermille = reader.ReadInt32(); e.AiExpandPrimitiveFoodWorkerPermille = reader.ReadInt32();
                 if (e.AiExpandAge1TownCount < 0 || e.AiExpandAge2TownCount < e.AiExpandAge1TownCount
                     || e.AiExpandAge3TownCount < e.AiExpandAge2TownCount || e.AiExpandDecisionIntervalTicks <= 0
+                    || e.AiExpandUnreachableWorkTimeoutTicks <= 0
                     || e.AiExpandShareMinVillagers < 0 || e.AiExpandFoodWorkerPermille < 0 || e.AiExpandFoodWorkerPermille > 1000
                      || e.AiExpandWoodWorkerPermille < 0 || e.AiExpandWoodWorkerPermille > 1000
                      || e.AiExpandStoneWorkerPermille < 0 || e.AiExpandStoneWorkerPermille > 1000

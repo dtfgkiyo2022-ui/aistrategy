@@ -120,6 +120,7 @@ namespace Rts.Simulation
                         if (HoldCaravanAtMarket(ref v)) continue;
                     }
                 }
+                if (AiExpandWorkRouteTimedOut(ref v)) continue;
                 if (v.Task == VillagerTask.Idle && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && CanAiAssign(v)) AssignWork(ref v);
                 if (AiArmyRecoveryOn && v.Task == VillagerTask.ToNode && !v.Held && !world.Economies[v.FactionId - 1].AutoOff)
                 {
@@ -354,6 +355,7 @@ namespace Rts.Simulation
             if (index < 0) return false;
             v.HaulFrom = 0; v.HaulTo = kilnId; v.HaulNodeId = 0;
             v.NodeId = world.Nodes[index].Definition.Id;
+            if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
             return true;
         }
@@ -659,6 +661,8 @@ namespace Rts.Simulation
                 var anchor = world.Nodes[knownNode].Definition.Position;
                 var probe = new VillagerState { FactionId = faction, Position = anchor, CarryKind = kind, Task = VillagerTask.ToDropOff };
                 var drop = DropOff(probe).point;
+                if (AiExpandOn && (!AiExpandWorkRouteAvailable(position, anchor, faction)
+                    || !AiExpandWorkRouteAvailable(anchor, drop, faction))) continue;
                 var distance = DistanceSquared(anchor, drop);
                 uint anchorId = world.Nodes[knownNode].Definition.Id;
                 if (bestCluster < 0 || distance < bestDropDistance || distance == bestDropDistance && anchorId < bestAnchorId)
@@ -670,11 +674,33 @@ namespace Rts.Simulation
             {
                 var node = world.Nodes[nodeIndex];
                 if (!ResourceKnownToFaction(faction, nodeIndex) || node.Remaining <= 0) continue;
+                if (AiExpandOn)
+                {
+                    if (!AiExpandWorkRouteAvailable(position, node.Definition.Position, faction)) continue;
+                }
                 var distance = DistanceSquared(position, node.Definition.Position);
                 if (best < 0 || distance < bestDistance || distance == bestDistance && node.Definition.Id < bestId)
                 { best = nodeIndex; bestDistance = distance; bestId = node.Definition.Id; }
             }
             return best;
+        }
+
+        private bool AiExpandWorkRouteAvailable(SimPoint from, SimPoint to, uint faction)
+        {
+            if (!AiExpandOn) return true;
+            if (Clear(from, to, faction)) return true;
+            return world.Map.SharedRoute(world.Map.Cell(from), to, faction).Length > 1;
+        }
+
+        private bool AiExpandWorkRouteTimedOut(ref VillagerState villager)
+        {
+            if (!AiExpandOn || villager.Task != VillagerTask.ToNode || villager.NodeId == 0 || villager.NodeId > world.Nodes.Length
+                || villager.AiExpandWorkStartTick < 0 || world.Tick - villager.AiExpandWorkStartTick < world.Config.Economy.AiExpandUnreachableWorkTimeoutTicks) return false;
+            var goal = world.Nodes[villager.NodeId - 1].Definition.Position;
+            if (AiExpandWorkRouteAvailable(villager.Position, goal, villager.FactionId)) return false;
+            villager.Task = VillagerTask.Idle; villager.NodeId = 0; villager.Route = Array.Empty<int>(); villager.RouteCursor = 0;
+            villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
+            return true;
         }
 
         private int ClusterRemaining(int cluster)
@@ -842,6 +868,7 @@ namespace Rts.Simulation
                 if (newResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + newResource]++;
             }
             v.NodeId = world.Nodes[index].Definition.Id;
+            if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }
 
@@ -919,7 +946,8 @@ namespace Rts.Simulation
                 Array.Resize(ref world.Villagers, world.Villagers.Length == 0 ? 4 : checked(world.Villagers.Length * 2));
             var position = world.Map.Center(cell);
             world.Villagers[index] = new VillagerState { Id = world.NextVillagerId, FactionId = faction, Alive = true,
-                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>(), StoneToolsUsed = stoneTools };
+                Hp = world.Config.Economy.VillagerHp, Position = position, MoveGoal = position, Route = Array.Empty<int>(),
+                StoneToolsUsed = stoneTools, AiExpandWorkStartTick = AiExpandOn ? -1 : 0 };
             world.NextVillagerId = checked(world.NextVillagerId + 1);
         }
 

@@ -275,17 +275,30 @@ namespace Rts.Simulation
             if (!AiExpandOn || faction < 1 || faction > 2) return;
             if (unknownResource) aiExpandTownSkippedUnknownResource[faction - 1]++;
             else aiExpandTownSkippedNoSite[faction - 1]++;
+            aiExpandTownReserveSuppressedUntil[faction - 1] = checked(world.Tick + world.Config.Economy.AiExpandDecisionIntervalTicks);
         }
 
         private bool AiExpandTownNeedsFunding(uint faction)
         {
-            if (!AiExpandOn || !TownsAllowed(faction) || TownCount(faction) >= TownLimitFor(faction)) return false;
+            if (!AiExpandTownPending(faction)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
+        }
+
+        /// <summary>
+        /// AiExpand: a town is wanted and not placed yet. The wood reserve for soldiers and buildings holds on this, not
+        /// on the stock, so it does not drop on the tick the town's wood and stone are complete (aiexpand4: stone 659,
+        /// wood 5 at tick 18000).
+        /// </summary>
+        private bool AiExpandTownPending(uint faction)
+        {
+            if (!AiExpandOn || !TownsAllowed(faction) || TownCount(faction) >= TownLimitFor(faction)
+                || world.Tick < aiExpandTownReserveSuppressedUntil[faction - 1]) return false;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
                     return false;
-            ref var economy = ref world.Economies[faction - 1];
-            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
+            return true;
         }
 
         private void DecideTownVillagers(uint faction)
@@ -536,7 +549,7 @@ namespace Rts.Simulation
             int brickCost = brickCastle ? world.Config.Economy.BricksPerCastle
                 : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
-            if (automaticEconomyAction && AiExpandTownNeedsFunding(faction) && kind != BuildingKind.Town
+            if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < world.Config.Economy.TownWoodCost) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
