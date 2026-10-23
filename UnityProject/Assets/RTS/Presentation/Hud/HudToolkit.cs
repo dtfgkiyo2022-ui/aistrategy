@@ -2371,7 +2371,7 @@ namespace Rts.Presentation
                 {
                     ageToast.text = TopBarDisplayText.AgeAdvanceMessage(economy.Civ, economy.Age, economy.AgeStrengths);
                     ageToast.style.display = DisplayStyle.Flex;
-                    ageToast.schedule.Execute(() => { if (ageToast != null) ageToast.style.display = DisplayStyle.None; }).StartingIn(2600);
+                    ageToast.schedule.Execute(() => { if (ageToast != null) ageToast.style.display = DisplayStyle.None; }).StartingIn(6000);
                 }
                 lastCommittedAge = economy.Age;
             }
