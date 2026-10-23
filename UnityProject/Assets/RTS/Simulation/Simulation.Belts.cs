@@ -178,7 +178,10 @@ namespace Rts.Simulation
                 case ResourceKind.Food: economy.Food = checked(economy.Food + amount); break;
                 case ResourceKind.Wood: economy.Wood = checked(economy.Wood + amount); break;
                 case ResourceKind.Ore: economy.Ore = checked(economy.Ore + amount); break;
-                case ResourceKind.Metal: economy.Metal = checked(economy.Metal + amount); break;
+                case ResourceKind.Metal:
+                    economy.Metal = checked(economy.Metal + amount);
+                    if (AiFactoryOn) economy.MetalProduced = checked(economy.MetalProduced + amount);
+                    break;
                 case ResourceKind.Stone: economy.Stone = checked(economy.Stone + amount); break;
                 case ResourceKind.Gems: economy.Gems = checked(economy.Gems + amount); break;
                 case ResourceKind.Charcoal: economy.Charcoal = checked(economy.Charcoal + amount); break;
@@ -197,6 +200,8 @@ namespace Rts.Simulation
                 case ResourceKind.Mechanism: economy.Mechanism = checked(economy.Mechanism + amount); break;
                 case ResourceKind.SiegeEngine: economy.SiegeEngine = checked(economy.SiegeEngine + amount); break;
                 case ResourceKind.EliteKit: economy.EliteKit = checked(economy.EliteKit + amount); break;
+                case ResourceKind.StoneTools: economy.StoneTools = checked(economy.StoneTools + amount); break;
+                case ResourceKind.Jerky: economy.Jerky = checked(economy.Jerky + amount); break;
                 case ResourceKind.Books: economy.Books = checked(economy.Books + amount); break;
                 case ResourceKind.Incense: economy.Incense = Math.Min(world.Config.Economy.IncenseStockLimit, checked(economy.Incense + amount)); break;
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;

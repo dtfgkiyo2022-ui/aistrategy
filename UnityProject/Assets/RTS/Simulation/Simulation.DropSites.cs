@@ -158,7 +158,14 @@ namespace Rts.Simulation
         {
             int start = OutputCell(storage);
             if (start < 0 || start >= world.Belts.Length || !AiBeltCellKnown(faction, start) || world.Belts[start].FactionId != faction) return false;
-            var seen = new bool[world.Belts.Length];
+            bool[] seen;
+            if (AiFactoryOn)
+            {
+                EnsureAiFactoryWorkspace();
+                seen = aiFactorySeenWorkspace;
+                Array.Clear(seen, 0, seen.Length);
+            }
+            else seen = new bool[world.Belts.Length];
             var queue = new int[world.Belts.Length];
             int head = 0, tail = 0;
             seen[start] = true;

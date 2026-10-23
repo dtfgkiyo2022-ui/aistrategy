@@ -32,7 +32,7 @@ namespace Rts.Simulation
                     UpgradeProcessingBuilding(faction, c.ProducerId);
                     return;
                 case EconomyCommandKind.SetRecipe:
-                    SetAssemblerRecipe(faction, c.ProducerId, c.Recipe);
+                    SetBuildingRecipe(faction, c.ProducerId, c.Recipe);
                     return;
                 case EconomyCommandKind.PlaceBelt:
                     PlaceBelts(faction, c, IndustryOn);
@@ -166,6 +166,7 @@ namespace Rts.Simulation
                         && !(CharmsAllowed(faction) && kind == BuildingKind.CharmWorkshop)
                         && !(RepairKitsAllowed(faction) && kind == BuildingKind.RepairYard)
                         && !(ToolsAllowed(faction) && kind == BuildingKind.ToolShop)
+                        && !(PrimitiveCraftOn && kind == BuildingKind.Hut)
                         && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
@@ -309,6 +310,7 @@ namespace Rts.Simulation
                             || (BricksAllowed(faction) && target.Kind == BuildingKind.BrickKiln)
                             || (PlanksAllowed(faction) && target.Kind == BuildingKind.Sawmill)
                             || (CraftTreeCommonAllowed(faction) && (target.Kind == BuildingKind.Sawmill || target.Kind == BuildingKind.Stonecutter))
+                            || (PrimitiveCraftOn && target.Kind == BuildingKind.Hut)
                             || (JoineryAllowed(faction) && target.Kind == BuildingKind.Joinery)
                             || (BooksAllowed(faction) && target.Kind == BuildingKind.Scriptorium)
                             || (IncenseAllowed(faction) && target.Kind == BuildingKind.IncenseHouse)

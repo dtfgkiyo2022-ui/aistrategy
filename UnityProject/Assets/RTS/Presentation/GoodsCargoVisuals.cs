@@ -88,6 +88,8 @@ namespace Rts.Presentation
             table[ResourceKind.SiegeEngine] = new CargoVisual(CargoShape.Crate, new Color(0.25f, 0.25f, 0.30f));
             table[ResourceKind.EliteKit] = new CargoVisual(CargoShape.Crate, new Color(0.75f, 0.55f, 0.12f));
             table[ResourceKind.Mechanism] = new CargoVisual(CargoShape.Tool, new Color(0.69f, 0.59f, 0.27f));
+            table[ResourceKind.StoneTools] = new CargoVisual(CargoShape.Tool, new Color(0.55f, 0.53f, 0.50f));
+            table[ResourceKind.Jerky] = new CargoVisual(CargoShape.Crate, new Color(0.62f, 0.32f, 0.22f));
             return table;
         }
     }

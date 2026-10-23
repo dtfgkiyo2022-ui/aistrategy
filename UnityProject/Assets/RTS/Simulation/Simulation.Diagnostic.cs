@@ -172,6 +172,16 @@ namespace Rts.Simulation
                     w.Value(n + "Frames", e.Frames); w.Value(n + "FramesProduced", e.FramesProduced); w.Value(n + "FramesConsumed", e.FramesConsumed);
                     w.Value(n + "FramesConsumedBuildings", e.FramesConsumedBuildings); w.Value(n + "FramesConsumedUpgrades", e.FramesConsumedUpgrades);
                 }
+                if (PrimitiveCraftOn)
+                {
+                    w.Value(n + "StoneTools", e.StoneTools); w.Value(n + "StoneToolsProduced", e.StoneToolsProduced);
+                    w.Value(n + "StoneToolsConsumed", e.StoneToolsConsumed); w.Value(n + "StoneToolsTrainedVillagers", e.StoneToolsTrainedVillagers);
+                    w.Value(n + "Jerky", e.Jerky); w.Value(n + "JerkyProduced", e.JerkyProduced);
+                    w.Value(n + "JerkyConsumed", e.JerkyConsumed); w.Value(n + "JerkyTrainedSoldiers", e.JerkyTrainedSoldiers);
+                    var stoneTools = e.QueueStoneTools ?? Array.Empty<bool>();
+                    w.Value(n + "QueueStoneTools.Count", (uint)stoneTools.Length);
+                    for (int q = 0; q < stoneTools.Length; q++) w.Value(n + "QueueStoneTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", stoneTools[q]);
+                }
                 if (CraftTree2On)
                 {
                     w.Value(n + "ArmsKit", e.ArmsKit); w.Value(n + "ArmsKitProduced", e.ArmsKitProduced); w.Value(n + "ArmsKitConsumed", e.ArmsKitConsumed);
@@ -184,6 +194,14 @@ namespace Rts.Simulation
                     w.Value(n + "SiegeParts", e.SiegeParts); w.Value(n + "SiegePartsProduced", e.SiegePartsProduced); w.Value(n + "SiegePartsConsumed", e.SiegePartsConsumed); w.Value(n + "SiegePartsEnhancedRams", e.SiegePartsEnhancedRams);
                     w.Value(n + "Mechanism", e.Mechanism); w.Value(n + "MechanismProduced", e.MechanismProduced); w.Value(n + "MechanismConsumed", e.MechanismConsumed);
                     w.Value(n + "MechanismUsedResearch", e.MechanismUsedResearch);
+                }
+                if (AiFactoryOn)
+                {
+                    w.Value(n + "MetalProduced", e.MetalProduced);
+                    w.Value(n + "MetalConsumed", e.MetalConsumed);
+                    w.Value(n + "AiFactorySkippedUnknownResource", e.AiFactorySkippedUnknownResource);
+                    w.Value(n + "AiFactorySkippedNoSite", e.AiFactorySkippedNoSite);
+                    w.Value(n + "AiFactorySkippedNoRoute", e.AiFactorySkippedNoRoute);
                 }
                 if (CraftTree4On)
                 {
@@ -290,6 +308,11 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (AiFactoryOn && b.Kind == BuildingKind.Barracks)
+                {
+                    w.Value(n + "AiFactoryIdleTicks", b.AiFactoryIdleTicks);
+                    w.Value(n + "AiFactoryIdleWindowStartTick", b.AiFactoryIdleWindowStartTick);
+                }
                 if (world.Config.Economy.BuildingReservations)
                 {
                     w.Value(n + "Reserved", b.Reserved);
@@ -330,6 +353,12 @@ namespace Rts.Simulation
                             var tools = b.QueueTools ?? Array.Empty<bool>();
                             w.Value(n + "QueueTools.Count", (uint)tools.Length);
                             for (int q = 0; q < tools.Length; q++) w.Value(n + "QueueTools[" + q.ToString(CultureInfo.InvariantCulture) + "]", tools[q]);
+                        }
+                        if (PrimitiveCraftOn)
+                        {
+                            var jerky = b.QueueJerky ?? Array.Empty<bool>();
+                            w.Value(n + "QueueJerky.Count", (uint)jerky.Length);
+                            for (int q = 0; q < jerky.Length; q++) w.Value(n + "QueueJerky[" + q.ToString(CultureInfo.InvariantCulture) + "]", jerky[q]);
                         }
                     }
                     if (b.Kind == BuildingKind.Bridge)
@@ -406,6 +435,7 @@ namespace Rts.Simulation
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick); w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
+                if (PrimitiveCraftOn) w.Value(n + "StoneToolsUsed", v.StoneToolsUsed);
                 w.Value(n + "BuildingId", v.BuildingId);
                 if (world.Config.Economy.Caravan)
                 {
@@ -500,6 +530,8 @@ namespace Rts.Simulation
                     if (CharmsOn) w.Value(n + "CharmWorkshopId", line.CharmWorkshopId);
                     if (RepairKitsOn) w.Value(n + "RepairYardId", line.RepairYardId);
                     if (ToolsOn) w.Value(n + "ToolShopId", line.ToolShopId);
+                    if (PrimitiveCraftOn) w.Value(n + "HutId", line.HutId);
+                    if (AiFactoryOn) w.Value(n + "DrillId", line.DrillId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);
                     if (line.RequestPending)

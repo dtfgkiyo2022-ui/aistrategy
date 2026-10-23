@@ -54,7 +54,16 @@ namespace Rts.Simulation
                 interval = Math.Max(1, checked((interval * rules.FishingGatherTimePermille + 999) / 1000));
             if (nodeId > 0 && world.Nodes[nodeId - 1].Definition.Kind == ResourceKind.Ore && AgeStrength(faction, CivKind.Mountain, 2))
                 interval = Math.Max(1, checked((interval * rules.MountainMiningTimePermille + 999) / 1000));
+            if (PrimitiveCraftOn && vHasStoneTools(faction))
+                interval = Math.Max(1, checked((interval * rules.StoneToolsGatherIntervalPermille + 999) / 1000));
             return Math.Max(1, interval);
+        }
+
+        private bool vHasStoneTools(uint faction)
+        {
+            for (int i = 0; i < world.VillagerCount; i++)
+                if (world.Villagers[i].Alive && world.Villagers[i].FactionId == faction && world.Villagers[i].StoneToolsUsed) return true;
+            return false;
         }
 
         private int CarryFor(uint faction, bool fishing = false)
@@ -432,6 +441,7 @@ namespace Rts.Simulation
             economy.Wood = checked(economy.Wood - wood);
             economy.Gold = checked(economy.Gold - gold);
             economy.Metal = checked(economy.Metal - metal);
+            if (AiFactoryOn) economy.MetalConsumed = checked(economy.MetalConsumed + metal);
             economy.Ore = checked(economy.Ore - oreForMetal);
             economy.Gems = checked(economy.Gems - gems);
             if (bookResearch)

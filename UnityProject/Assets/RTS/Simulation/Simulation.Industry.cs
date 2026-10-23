@@ -11,7 +11,7 @@ namespace Rts.Simulation
     /// </summary>
     public sealed partial class Simulation
     {
-        private bool CommonDrillOn => IndustryOn && world.Config.Economy.CommonDrill;
+        private bool CommonDrillOn => IndustryOn && (world.Config.Economy.CommonDrill || AiFactoryOn);
 
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
@@ -259,6 +259,25 @@ namespace Rts.Simulation
                         economy.FramesProduced++;
                     }
                 }
+                else if (PrimitiveCraftOn && b.Kind == BuildingKind.Hut)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Recipe == RecipeKind.StoneTools)
+                    {
+                        Fill(ref economy.Stone, ref b.Input, rules.StoneToolsStoneInput);
+                        Fill(ref economy.Wood, ref b.InputSecondary, rules.StoneToolsWoodInput);
+                        if (b.Timer == 0 && b.Input >= rules.StoneToolsStoneInput && b.InputSecondary >= rules.StoneToolsWoodInput && b.Output < rules.BufferLimit)
+                        { b.Input -= rules.StoneToolsStoneInput; b.InputSecondary -= rules.StoneToolsWoodInput; b.Timer = CraftTicksFor(b, rules.PrimitiveCraftTicks); }
+                        if (b.Timer > 0 && --b.Timer == 0) { b.Output++; economy.StoneToolsProduced++; }
+                    }
+                    else if (b.Recipe == RecipeKind.Jerky)
+                    {
+                        Fill(ref economy.Food, ref b.Input, rules.JerkyFoodInput);
+                        if (b.Timer == 0 && b.Input >= rules.JerkyFoodInput && b.Output <= rules.BufferLimit - rules.JerkyOutput)
+                        { b.Input -= rules.JerkyFoodInput; b.Timer = CraftTicksFor(b, rules.PrimitiveCraftTicks); }
+                        if (b.Timer > 0 && --b.Timer == 0) { b.Output += rules.JerkyOutput; economy.JerkyProduced += rules.JerkyOutput; }
+                    }
+                }
                 else if (AssemblerAllowed(b.FactionId) && b.Kind == BuildingKind.Assembler)
                 {
                     ref var economy = ref world.Economies[b.FactionId - 1];
@@ -500,7 +519,7 @@ namespace Rts.Simulation
                 ref var belt = ref world.Belts[port];
                 if (belt.FactionId != b.FactionId || belt.Item != 0) continue;
                 belt.Item = b.Kind == BuildingKind.Storage ? b.StorageKind : b.Kind == BuildingKind.Drill
-                    ? world.Nodes[b.NodeId - 1].Definition.Kind : OutputKind(b.Kind);
+                    ? world.Nodes[b.NodeId - 1].Definition.Kind : OutputKind(b);
                 belt.Progress = 0;
                 if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
                 else b.Output--;
@@ -521,6 +540,11 @@ namespace Rts.Simulation
                  : kind == BuildingKind.Joinery ? ResourceKind.Frames
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
+
+        private static ResourceKind OutputKind(BuildingState building)
+            => building.Kind == BuildingKind.Hut
+                ? (building.Recipe == RecipeKind.StoneTools ? ResourceKind.StoneTools : building.Recipe == RecipeKind.Jerky ? ResourceKind.Jerky : (ResourceKind)0)
+                : OutputKind(building.Kind);
 
         private int CraftTicksFor(BuildingState building, int baseTicks) => CraftTicksScaled(building, baseTicks, 1000);
 
@@ -673,10 +697,18 @@ namespace Rts.Simulation
         }
 
         private void SetAssemblerRecipe(uint faction, uint buildingId, RecipeKind recipe)
+            => SetBuildingRecipe(faction, buildingId, recipe);
+
+        private void SetBuildingRecipe(uint faction, uint buildingId, RecipeKind recipe)
         {
-            if (!AssemblerAllowed(faction) || !OwnBuilding(faction, buildingId, out int index)) return;
+            if (!OwnBuilding(faction, buildingId, out int index)) return;
             ref var building = ref world.Buildings[index];
-                if (!IsActualBuilding(building) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.EliteKit
+            if (!IsActualBuilding(building)) return;
+            if (building.Kind == BuildingKind.Hut)
+            {
+                if (!PrimitiveCraftOn || (recipe != RecipeKind.StoneTools && recipe != RecipeKind.Jerky)) return;
+            }
+            else if (!AssemblerAllowed(faction) || building.Kind != BuildingKind.Assembler || (byte)recipe > (byte)RecipeKind.EliteKit
                 || (recipe == RecipeKind.SiegeParts || recipe == RecipeKind.Mechanism) && !CraftTree3Allowed(faction)
                 || (recipe == RecipeKind.SiegeEngine || recipe == RecipeKind.EliteKit) && !CraftTree4Allowed(faction)) return;
             RefundAssemblerInputs(faction, ref building);
@@ -688,7 +720,15 @@ namespace Rts.Simulation
         private void RefundAssemblerInputs(uint faction, ref BuildingState building)
         {
             ref var economy = ref world.Economies[faction - 1];
-            if (building.Recipe == RecipeKind.Frames)
+            if (building.Kind == BuildingKind.Hut && building.Recipe == RecipeKind.StoneTools)
+            {
+                economy.Stone += building.Input; economy.Wood += building.InputSecondary;
+            }
+            else if (building.Kind == BuildingKind.Hut && building.Recipe == RecipeKind.Jerky)
+            {
+                economy.Food += building.Input;
+            }
+            else if (building.Recipe == RecipeKind.Frames)
             {
                 economy.Planks += building.Input;
                 if (building.InputSecondaryKind == ResourceKind.Bricks) economy.Bricks += building.InputSecondary;
@@ -779,6 +819,12 @@ namespace Rts.Simulation
                 if ((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && b.Kind == BuildingKind.Sawmill && item == ResourceKind.Wood && b.Input < rules.BufferLimit)
                 {
                     b.Input++; return true;
+                }
+                if (PrimitiveCraftOn && b.Kind == BuildingKind.Hut && b.Recipe != RecipeKind.None)
+                {
+                    if (b.Recipe == RecipeKind.StoneTools && item == ResourceKind.Stone && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (b.Recipe == RecipeKind.StoneTools && item == ResourceKind.Wood && b.InputSecondary < rules.BufferLimit) { b.InputSecondary++; return true; }
+                    if (b.Recipe == RecipeKind.Jerky && item == ResourceKind.Food && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 }
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None)
                 {
@@ -890,6 +936,8 @@ namespace Rts.Simulation
                     && (item == ResourceKind.Food || item == ResourceKind.Wood)) return true;
                 if ((PlanksAllowed(faction) || CraftTreeCommonAllowed(faction)) && b.Kind == BuildingKind.Sawmill
                     && item == ResourceKind.Wood) return true;
+                if (PrimitiveCraftOn && b.Kind == BuildingKind.Hut && b.Recipe != RecipeKind.None
+                    && (item == ResourceKind.Food || item == ResourceKind.Wood || item == ResourceKind.Stone)) return true;
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None
                     && item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly) return true;
                 if (CraftTree4On && b.Kind == BuildingKind.Assembler && (b.Recipe == RecipeKind.SiegeEngine || b.Recipe == RecipeKind.EliteKit)
@@ -1014,7 +1062,7 @@ namespace Rts.Simulation
             {
                 if (!InRange(v.Position, world.Map.Center(source.WorkCell), GatherReach)) return;
                 var kind = source.Kind == BuildingKind.Storage ? source.StorageKind
-                    : source.Kind == BuildingKind.Drill ? world.Nodes[source.NodeId - 1].Definition.Kind : OutputKind(source.Kind);
+                    : source.Kind == BuildingKind.Drill ? world.Nodes[source.NodeId - 1].Definition.Kind : OutputKind(source);
                 if (v.Carry > 0 && v.CarryKind != kind) { v.Task = VillagerTask.ToDropOff; return; }
                 int available = source.Kind == BuildingKind.Storage ? source.StorageCount : source.Output;
                 int take = Math.Min(available, CarryFor(v.FactionId) - v.Carry);
@@ -1194,7 +1242,8 @@ namespace Rts.Simulation
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))
                || ((PlanksOn || CraftTree1On) && destination == BuildingKind.Sawmill && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
-               || (CraftTree1On && destination == BuildingKind.Stonecutter && source == BuildingKind.Quarry && kind == ResourceKind.Stone)
+               || ((CraftTree1On || AiFactoryOn) && destination == BuildingKind.Stonecutter
+                   && (source == BuildingKind.Quarry || source == BuildingKind.Drill) && kind == ResourceKind.Stone)
                || (CraftTree1On && destination == BuildingKind.Joinery && (source == BuildingKind.Sawmill && kind == ResourceKind.Planks || source == BuildingKind.Stonecutter && kind == ResourceKind.CutStone))
                || (BricksOn && destination == BuildingKind.BrickKiln && ((source == BuildingKind.Quarry && kind == ResourceKind.Stone)
                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))

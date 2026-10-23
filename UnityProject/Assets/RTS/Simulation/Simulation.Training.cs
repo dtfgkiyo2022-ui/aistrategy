@@ -238,6 +238,7 @@ namespace Rts.Simulation
         private static bool QueuePlanksAt(BuildingState b, int i) => b.QueuePlanks != null && i >= 0 && i < b.QueuePlanks.Length && b.QueuePlanks[i];
         private static bool QueueCharmsAt(BuildingState b, int i) => b.QueueCharms != null && i >= 0 && i < b.QueueCharms.Length && b.QueueCharms[i];
         private static bool QueueToolsAt(BuildingState b, int i) => b.QueueTools != null && i >= 0 && i < b.QueueTools.Length && b.QueueTools[i];
+        private static bool QueueJerkyAt(BuildingState b, int i) => b.QueueJerky != null && i >= 0 && i < b.QueueJerky.Length && b.QueueJerky[i];
         private static bool QueueArmsAt(BuildingState b, int i) => b.QueueArmsKit != null && i >= 0 && i < b.QueueArmsKit.Length && b.QueueArmsKit[i];
         private static bool QueueFineArmsAt(BuildingState b, int i) => b.QueueFineArmsKit != null && i >= 0 && i < b.QueueFineArmsKit.Length && b.QueueFineArmsKit[i];
         private static bool QueueSiegePartsAt(BuildingState b, int i) => b.QueueSiegeParts != null && i >= 0 && i < b.QueueSiegeParts.Length && b.QueueSiegeParts[i];
@@ -245,11 +246,14 @@ namespace Rts.Simulation
         private static bool QueueSiegeEngineAt(BuildingState b, int i) => b.QueueSiegeEngine != null && i >= 0 && i < b.QueueSiegeEngine.Length && b.QueueSiegeEngine[i];
         private static bool QueueToolsAt(FactionEconomy economy, int i)
             => economy.QueueTools != null && i >= 0 && i < economy.QueueTools.Length && economy.QueueTools[i];
+        private static bool QueueStoneToolsAt(FactionEconomy economy, int i)
+            => economy.QueueStoneTools != null && i >= 0 && i < economy.QueueStoneTools.Length && economy.QueueStoneTools[i];
 
         private void EnqueueCoreVillager(uint faction)
         {
             ref var economy = ref world.Economies[faction - 1];
             bool tool = CanUseToolForVillager(faction);
+            bool stoneTool = !tool && CanUseStoneToolsForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
             if (NoNegativeStockOn && economy.Food < food) return;
@@ -257,10 +261,16 @@ namespace Rts.Simulation
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (economy.Queued == 0) economy.TrainRemaining = VillagerTrainTicksFor(faction, tool);
             economy.Queued++;
+            if (stoneTool) { economy.StoneTools--; economy.StoneToolsConsumed++; economy.StoneToolsTrainedVillagers++; }
             if (ToolsOn)
             {
                 var tools = economy.QueueTools ?? Array.Empty<bool>();
                 Array.Resize(ref tools, tools.Length + 1); tools[tools.Length - 1] = tool; economy.QueueTools = tools;
+            }
+            if (PrimitiveCraftOn)
+            {
+                var stoneTools = economy.QueueStoneTools ?? Array.Empty<bool>();
+                Array.Resize(ref stoneTools, stoneTools.Length + 1); stoneTools[stoneTools.Length - 1] = stoneTool; economy.QueueStoneTools = stoneTools;
             }
         }
 
@@ -274,10 +284,13 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Queued == 0) return;
             bool tool = QueueToolsAt(economy, economy.Queued - 1);
+            bool stoneTool = QueueStoneToolsAt(economy, economy.Queued - 1);
             economy.Queued--;
             economy.Food = checked(economy.Food + VillagerFoodCostFor(faction, tool));
             if (tool) { economy.Tools++; economy.ToolsConsumed--; economy.ToolsTrainedVillagers--; economy.ToolsSavedFood = checked(economy.ToolsSavedFood - (VillagerFoodCostFor(faction, false) - VillagerFoodCostFor(faction, true))); }
+            if (stoneTool) { economy.StoneTools++; economy.StoneToolsConsumed--; economy.StoneToolsTrainedVillagers--; }
             if (economy.QueueTools != null && economy.QueueTools.Length > 0) Array.Resize(ref economy.QueueTools, economy.QueueTools.Length - 1);
+            if (economy.QueueStoneTools != null && economy.QueueStoneTools.Length > 0) Array.Resize(ref economy.QueueStoneTools, economy.QueueStoneTools.Length - 1);
             if (economy.Queued == 0) economy.TrainRemaining = 0;
         }
         private bool UsesRations(uint faction, UnitKind kind)
@@ -340,6 +353,7 @@ namespace Rts.Simulation
             else
             {
                 e.Metal = checked(e.Metal - c.metal);
+                if (AiFactoryOn) e.MetalConsumed = checked(e.MetalConsumed + c.metal);
                 b.QueuedMetal = checked(b.QueuedMetal + c.metal);
             }
             e.Gems = checked(e.Gems - c.gems);
@@ -382,6 +396,8 @@ namespace Rts.Simulation
                 e.Charms = checked(e.Charms - 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed + 1);
                 }
+            bool jerky = PrimitiveCraftOn && kind != UnitKind.Villager && kind != UnitKind.Scout && kind != UnitKind.Monk && e.Jerky > 0;
+            if (jerky) { e.Jerky--; e.JerkyConsumed++; e.JerkyTrainedSoldiers++; }
             bool elite = CraftTree4On && kind != UnitKind.Cannon && UsesArmsKit(kind) && e.EliteKit >= 1;
             bool fineArms = CraftTree2On && !elite && UsesArmsKit(kind) && e.FineArmsKit >= 1;
             bool arms = CraftTree2On && !elite && UsesArmsKit(kind) && !fineArms && e.ArmsKit >= 1;
@@ -421,6 +437,11 @@ namespace Rts.Simulation
                 charms[charms.Length - 1] = charmed;
                 b.QueueCharms = charms;
             }
+            if (PrimitiveCraftOn)
+            {
+                var jerkyQueue = b.QueueJerky ?? Array.Empty<bool>();
+                Array.Resize(ref jerkyQueue, jerkyQueue.Length + 1); jerkyQueue[jerkyQueue.Length - 1] = jerky; b.QueueJerky = jerkyQueue;
+            }
             if (CraftTree2On)
             {
                 var armsQueue = b.QueueArmsKit ?? Array.Empty<bool>();
@@ -447,6 +468,7 @@ namespace Rts.Simulation
         {
             ref var economy = ref world.Economies[faction - 1];
             bool tool = CanUseToolForVillager(faction);
+            bool stoneTool = !tool && CanUseStoneToolsForVillager(faction);
             int food = VillagerFoodCostFor(faction, tool);
             if (ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Food, food)) return;
             if (NoNegativeStockOn && economy.Food < food) return;
@@ -454,6 +476,7 @@ namespace Rts.Simulation
             if (tool) { economy.Tools--; economy.ToolsConsumed++; economy.ToolsTrainedVillagers++; economy.ToolsSavedFood = checked(economy.ToolsSavedFood + VillagerFoodCostFor(faction, false) - food); }
             if (b.Queued == 0) b.TrainRemaining = TownVillagerTrainTicksFor(faction, tool);
             b.Queued++;
+            if (stoneTool) { economy.StoneTools--; economy.StoneToolsConsumed++; economy.StoneToolsTrainedVillagers++; }
             var kinds = b.QueueKinds ?? Array.Empty<UnitKind>();
             Array.Resize(ref kinds, kinds.Length + 1);
             kinds[kinds.Length - 1] = UnitKind.Villager;
@@ -463,6 +486,11 @@ namespace Rts.Simulation
                 var tools = b.QueueTools ?? Array.Empty<bool>();
                 Array.Resize(ref tools, tools.Length + 1); tools[tools.Length - 1] = tool; b.QueueTools = tools;
             }
+            if (PrimitiveCraftOn)
+            {
+                var stoneTools = b.QueueStoneTools ?? Array.Empty<bool>();
+                Array.Resize(ref stoneTools, stoneTools.Length + 1); stoneTools[stoneTools.Length - 1] = stoneTool; b.QueueStoneTools = stoneTools;
+            }
         }
 
         private void CancelTownVillager(uint faction, ref BuildingState b)
@@ -470,9 +498,11 @@ namespace Rts.Simulation
             if (b.Queued == 0) return;
             ref var economy = ref world.Economies[faction - 1];
             bool tool = QueueToolsAt(b, b.Queued - 1);
+            bool stoneTool = b.QueueStoneTools != null && b.QueueStoneTools.Length > b.Queued - 1 && b.QueueStoneTools[b.Queued - 1];
             b.Queued--;
             economy.Food = checked(economy.Food + VillagerFoodCostFor(faction, tool));
             if (tool) { economy.Tools++; economy.ToolsConsumed--; economy.ToolsTrainedVillagers--; economy.ToolsSavedFood = checked(economy.ToolsSavedFood - (VillagerFoodCostFor(faction, false) - VillagerFoodCostFor(faction, true))); }
+            if (stoneTool) { economy.StoneTools++; economy.StoneToolsConsumed--; economy.StoneToolsTrainedVillagers--; }
             if (b.QueueKinds != null && b.QueueKinds.Length > 0)
             {
                 var kinds = new UnitKind[b.QueueKinds.Length - 1];
@@ -480,6 +510,7 @@ namespace Rts.Simulation
                 b.QueueKinds = kinds;
             }
             if (b.QueueTools != null && b.QueueTools.Length > 0) Array.Resize(ref b.QueueTools, b.QueueTools.Length - 1);
+            if (b.QueueStoneTools != null && b.QueueStoneTools.Length > 0) Array.Resize(ref b.QueueStoneTools, b.QueueStoneTools.Length - 1);
             if (b.Queued == 0) b.TrainRemaining = 0;
         }
 
@@ -493,6 +524,7 @@ namespace Rts.Simulation
             bool rationed = QueueRationsAt(b, b.Queued - 1);
             bool planked = QueuePlanksAt(b, b.Queued - 1);
             bool charmed = QueueCharmsAt(b, b.Queued - 1);
+            bool jerky = QueueJerkyAt(b, b.Queued - 1);
             bool armed = QueueArmsAt(b, b.Queued - 1);
             bool fineArmed = QueueFineArmsAt(b, b.Queued - 1);
             bool siegeParts = QueueSiegePartsAt(b, b.Queued - 1);
@@ -505,6 +537,7 @@ namespace Rts.Simulation
             if (b.QueueRations != null && b.QueueRations.Length > 0) Array.Resize(ref b.QueueRations, b.QueueRations.Length - 1);
             if (b.QueuePlanks != null && b.QueuePlanks.Length > 0) Array.Resize(ref b.QueuePlanks, b.QueuePlanks.Length - 1);
             if (b.QueueCharms != null && b.QueueCharms.Length > 0) Array.Resize(ref b.QueueCharms, b.QueueCharms.Length - 1);
+            if (b.QueueJerky != null && b.QueueJerky.Length > 0) Array.Resize(ref b.QueueJerky, b.QueueJerky.Length - 1);
             if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0) Array.Resize(ref b.QueueArmsKit, b.QueueArmsKit.Length - 1);
             if (b.QueueFineArmsKit != null && b.QueueFineArmsKit.Length > 0) Array.Resize(ref b.QueueFineArmsKit, b.QueueFineArmsKit.Length - 1);
             if (b.QueueSiegeParts != null && b.QueueSiegeParts.Length > 0) Array.Resize(ref b.QueueSiegeParts, b.QueueSiegeParts.Length - 1);
@@ -559,6 +592,7 @@ namespace Rts.Simulation
                 e.Charms = checked(e.Charms + 1);
                 e.CharmsConsumed = checked(e.CharmsConsumed - 1);
             }
+            if (jerky) { e.Jerky++; e.JerkyConsumed--; e.JerkyTrainedSoldiers--; }
             if (fineArmed) { e.FineArmsKit++; e.FineArmsKitConsumed--; }
             else if (armed) { e.ArmsKit++; e.ArmsKitConsumed--; }
             if (elite) { e.EliteKit++; e.EliteKitConsumed--; }
@@ -594,6 +628,11 @@ namespace Rts.Simulation
                 var rest = new bool[b.QueueCharms.Length - 1];
                 Array.Copy(b.QueueCharms, 1, rest, 0, rest.Length);
                 b.QueueCharms = rest;
+            }
+            if (b.QueueJerky != null && b.QueueJerky.Length > 0)
+            {
+                var rest = new bool[b.QueueJerky.Length - 1];
+                Array.Copy(b.QueueJerky, 1, rest, 0, rest.Length); b.QueueJerky = rest;
             }
             if (b.QueueArmsKit != null && b.QueueArmsKit.Length > 0)
             {

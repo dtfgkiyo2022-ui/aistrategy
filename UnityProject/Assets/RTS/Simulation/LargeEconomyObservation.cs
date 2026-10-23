@@ -24,6 +24,14 @@ namespace Rts.Simulation
         public int TownResourceIncome;
         public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
         public int BarracksPopulationWaiting, BarracksTraining;
+        public int AiFactoryConnectedLines, AiFactoryPrimitiveConnectedLines, AiFactoryAge1ConnectedLines;
+        public int AiFactoryAge2MaterialConnectedLines, AiFactoryAge2MetalConnectedLines, AiFactoryAge3PartsConnectedLines;
+        public int AiFactoryBarracksResourceWaiting;
+        public int PlanksProduced, PlanksConsumed, CutStoneProduced, CutStoneConsumed;
+        public int StoneToolsProduced, StoneToolsConsumed, JerkyProduced, JerkyConsumed;
+        public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
+        public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
+        public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
     }
 
     public sealed partial class Simulation
@@ -96,6 +104,47 @@ namespace Rts.Simulation
                 }
                 for (int cell = 0; cell < world.Belts.Length; cell++)
                     if (world.Belts[cell].FactionId == faction) value.BeltCells++;
+                if (AiFactoryOn)
+                {
+                    ref var factoryEconomy = ref world.Economies[faction - 1];
+                    value.AiFactoryBarracksResourceWaiting = 0;
+                    for (int i = 0; i < world.BuildingCount; i++)
+                    {
+                        var barracks = world.Buildings[i];
+                        if (IsActualBuilding(barracks) && barracks.FactionId == faction && barracks.Kind == BuildingKind.Barracks
+                            && AiFactoryBarracksResourceWaiting(faction, barracks)) value.AiFactoryBarracksResourceWaiting++;
+                    }
+                    for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    {
+                        var line = world.ProcessingLines[i];
+                        if (line.FactionId != faction || !LineBeltsWhole(i)) continue;
+                        value.AiFactoryConnectedLines++;
+                        if (line.Kind == ProcessingLineKind.Planks || line.Kind == ProcessingLineKind.CutStone || line.Kind == ProcessingLineKind.PrimitiveCraft)
+                            value.AiFactoryPrimitiveConnectedLines++;
+                        else if (line.Kind == ProcessingLineKind.Frames)
+                            value.AiFactoryAge2MaterialConnectedLines++;
+                        else if (line.Kind == ProcessingLineKind.CoreMetal)
+                            value.AiFactoryAge2MetalConnectedLines++;
+                        else if (line.Kind == ProcessingLineKind.Assembler && line.AssemblerId != 0
+                            && line.AssemblerId <= world.BuildingCount && world.Buildings[line.AssemblerId - 1].Recipe == RecipeKind.SiegeParts)
+                            value.AiFactoryAge3PartsConnectedLines++;
+                    }
+                    // The age-1 counter is deliberately kept separate from primitive and later templates.
+                    value.AiFactoryAge1ConnectedLines = value.AiFactoryConnectedLines
+                        - value.AiFactoryPrimitiveConnectedLines - value.AiFactoryAge2MaterialConnectedLines
+                        - value.AiFactoryAge2MetalConnectedLines - value.AiFactoryAge3PartsConnectedLines;
+                    value.PlanksProduced = factoryEconomy.PlanksProduced; value.PlanksConsumed = factoryEconomy.PlanksConsumed;
+                    value.CutStoneProduced = factoryEconomy.CutStoneProduced; value.CutStoneConsumed = factoryEconomy.CutStoneConsumed;
+                    value.StoneToolsProduced = factoryEconomy.StoneToolsProduced; value.StoneToolsConsumed = factoryEconomy.StoneToolsConsumed;
+                    value.JerkyProduced = factoryEconomy.JerkyProduced; value.JerkyConsumed = factoryEconomy.JerkyConsumed;
+                    value.FramesProduced = factoryEconomy.FramesProduced; value.FramesConsumed = factoryEconomy.FramesConsumed;
+                    value.ArmsKitProduced = factoryEconomy.ArmsKitProduced; value.ArmsKitConsumed = factoryEconomy.ArmsKitConsumed;
+                    value.SiegePartsProduced = factoryEconomy.SiegePartsProduced; value.SiegePartsConsumed = factoryEconomy.SiegePartsConsumed;
+                    value.MetalProduced = factoryEconomy.MetalProduced; value.MetalConsumed = factoryEconomy.MetalConsumed;
+                    value.AiFactorySkippedUnknownResource = factoryEconomy.AiFactorySkippedUnknownResource;
+                    value.AiFactorySkippedNoSite = factoryEconomy.AiFactorySkippedNoSite;
+                    value.AiFactorySkippedNoRoute = factoryEconomy.AiFactorySkippedNoRoute;
+                }
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {

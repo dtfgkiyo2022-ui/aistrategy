@@ -162,6 +162,7 @@ namespace Rts.Core.Tests
             s.Economy.PlankTicks = 1;
             s.Economy.PlankWoodInput = 1;
             s.Economy.CraftTree1 = false;
+            s.Economy.PrimitiveCraft = false; s.Economy.AiFactory = false;
             s.Economy.CraftTree2 = false;
             s.Economy.CraftTree3 = false;
             int core = CellOf(s.Cores[0].Position);

@@ -372,6 +372,8 @@ namespace Rts.Simulation
         private void DecideCraftTree2(uint faction)
         {
             if (!AssemblerAllowed(faction)) return;
+            if (AiFactoryOn && world.Economies[faction - 1].Age >= 2)
+                DecideAiFactoryAge2(faction);
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.Assembler);
@@ -427,7 +429,8 @@ namespace Rts.Simulation
             if (assemblerIndex < 0) return;
             ref var assembler = ref world.Buildings[assemblerIndex];
             if (!IsActualBuilding(assembler) || !assembler.Complete) return;
-            RecipeKind wanted = PreferredCraftTree3Recipe(faction);
+            RecipeKind wanted = AiFactoryOn ? RecipeKind.SiegeParts : PreferredCraftTree3Recipe(faction);
+            if (AiFactoryOn) DecideAiFactoryAge3(faction);
             if (assembler.Recipe != wanted && assembler.Timer == 0)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
             if (economy.Mechanism < 1) return;
@@ -733,6 +736,17 @@ namespace Rts.Simulation
         private void DecideCraftTree1(uint faction)
         {
             if (!CraftTreeCommonAllowed(faction)) return;
+            if (PrimitiveCraftOn && world.Economies[faction - 1].Age == 0)
+            {
+                if (AiFactoryOn) DecideAiFactoryPrimitive(faction);
+                else DecidePrimitiveCraft(faction);
+                return;
+            }
+            if (AiFactoryOn && world.Economies[faction - 1].Age == 1)
+            {
+                DecideAiFactoryAge1(faction);
+                return;
+            }
             int houseIndex = OwnBuildingIndex(faction, BuildingKind.House);
             if (!CompleteBarracks(faction) || houseIndex < 0 || !world.Buildings[houseIndex].Complete) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -797,6 +811,61 @@ namespace Rts.Simulation
                     UpgradeProcessingBuilding(faction, buildingId);
                     break;
                 }
+        }
+
+        private void DecidePrimitiveCraft(uint faction)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int hutIndex = GetOrCreateLine(faction, ProcessingLineKind.PrimitiveCraft);
+            ref var hutLine = ref world.ProcessingLines[hutIndex];
+            if (!BuildingReady(hutLine.HutId))
+            {
+                if (!BuildingPending(hutLine.HutId) && economy.Wood >= rules.HutWoodCost)
+                {
+                    uint id = PlaceHut(faction);
+                    if (id != 0) hutLine.HutId = id;
+                }
+                return;
+            }
+            ref var hut = ref world.Buildings[hutLine.HutId - 1];
+            if (hut.Complete && hut.Recipe == RecipeKind.None)
+                SetBuildingRecipe(faction, hut.Id, OwnBuildingIndex(faction, BuildingKind.Barracks) >= 0 ? RecipeKind.Jerky : RecipeKind.StoneTools);
+            if (hut.Complete)
+            {
+                var route = BeltRoute(faction, OutputCell(hut), TakenForOtherLines(faction, hutIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(hutIndex, route); LayRoutes(faction, route); }
+            }
+            int plankIndex = GetOrCreateLine(faction, ProcessingLineKind.Planks);
+            ref var plankLine = ref world.ProcessingLines[plankIndex];
+            if (!BuildingReady(plankLine.SawmillId) && !BuildingPending(plankLine.SawmillId)
+                && economy.Wood >= rules.SawmillWoodCost + rules.CraftTreePlankWoodInput * 2)
+            {
+                uint id = PlaceCommonSawmill(faction);
+                if (id != 0) plankLine.SawmillId = id;
+            }
+            else if (BuildingReady(plankLine.SawmillId))
+            {
+                var sawmill = world.Buildings[plankLine.SawmillId - 1];
+                var route = BeltRoute(faction, OutputCell(sawmill), TakenForOtherLines(faction, plankIndex), next => FeedsOwnCore(next, faction));
+                if (route.cells != null) { SetLineBelts(plankIndex, route); LayRoutes(faction, route); }
+            }
+        }
+
+        private uint PlaceHut(uint faction)
+        {
+            int size = world.Config.Economy.HutSizeCells;
+            int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (origin < 0) return 0;
+            var core = OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    uint before = world.NextBuildingId;
+                    PlaceBuildingAt(faction, BuildingKind.Hut, origin, side, 0);
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Hut);
+                }
+            return 0;
         }
 
         private uint LineBuildingIdAfterPlacement(uint before, BuildingKind expected)
@@ -2723,7 +2792,14 @@ namespace Rts.Simulation
 
         private bool[] TakenForOtherLines(uint faction, int currentLine)
         {
-            var taken = new bool[world.Belts.Length];
+            bool[] taken;
+            if (AiFactoryOn)
+            {
+                EnsureAiFactoryWorkspace();
+                taken = aiFactoryTakenWorkspace;
+                Array.Clear(taken, 0, taken.Length);
+            }
+            else taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
                 if (i == currentLine || world.ProcessingLines[i].FactionId != faction) continue;
@@ -2744,7 +2820,14 @@ namespace Rts.Simulation
             if (LargeEconomyOn)
             {
                 int missing = 0;
-                var seen = new bool[world.Belts.Length];
+                bool[] seen;
+                if (AiFactoryOn)
+                {
+                    EnsureAiFactoryWorkspace();
+                    seen = aiFactorySeenWorkspace;
+                    Array.Clear(seen, 0, seen.Length);
+                }
+                else seen = new bool[world.Belts.Length];
                 foreach (var (route, facings) in routes)
                     for (int i = 0; i < route.Length; i++)
                     {
@@ -2802,9 +2885,19 @@ namespace Rts.Simulation
         {
             if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
-            var from = new int[cells];
+            int[] from, queue;
+            if (AiFactoryOn)
+            {
+                EnsureAiFactoryWorkspace();
+                from = aiFactoryRouteFromWorkspace;
+                queue = aiFactoryRouteQueueWorkspace;
+            }
+            else
+            {
+                from = new int[cells];
+                queue = new int[cells];
+            }
             for (int i = 0; i < cells; i++) from[i] = -2;
-            var queue = new int[cells];
             int head = 0, tail = 0;
             queue[tail++] = start; from[start] = -1;
             while (head < tail)
@@ -2838,7 +2931,7 @@ namespace Rts.Simulation
 
         private bool AiBeltCellKnown(uint faction, int cell)
         {
-            if (!LargeEconomyOn) return true;
+            if (!LargeEconomyOn && !AiFactoryOn) return true;
             var explored = world.Factions[faction - 1].ExploredCells;
             return cell >= 0 && cell < explored.Length && explored[cell];
         }

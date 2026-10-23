@@ -94,6 +94,7 @@ namespace Rts.Core.Tests
             // same as the original for the whole match (30000 ticks or the end).
             var scenario = LiveGameRules.Create(5, false, true, false, false);
             scenario.Economy.CraftTree1 = false;
+            scenario.Economy.PrimitiveCraft = false; scenario.Economy.AiFactory = false;
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Any(x => x.Id == 41), Is.False);
