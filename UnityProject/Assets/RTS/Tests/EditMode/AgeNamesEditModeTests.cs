@@ -62,7 +62,7 @@ namespace Rts.Tests.EditMode
             {
                 UiText.Japanese = true;
                 string message = TopBarDisplayText.AgeAdvanceMessage(CivKind.Metallurgy, 2);
-                Assert.That(message, Is.EqualTo("時代2に進みました：冶金の文明・鉄の時代 ― 組み合わせる。組立所・武具・2つ目の兵が使えます"));
+                Assert.That(message, Is.EqualTo("時代2に進みました：冶金の文明・鉄の時代\n組み合わせる ― 組立所・武具・2つ目の兵が使えます"));
             }
             finally { UiText.Japanese = wasJapanese; }
         }

@@ -118,6 +118,7 @@
     color: var(--hud-heading);
     font-size: var(--hud-heading-size);
     -unity-text-align: middle-center;
+    white-space: normal;
     display: none;
 }
 
