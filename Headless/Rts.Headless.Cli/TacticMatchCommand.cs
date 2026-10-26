@@ -86,6 +86,7 @@ internal static class TacticMatchCommand
         // LiveGameRules keeps both features on by default. These explicit measurement switches are command-line-only.
         if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
+        if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         // Measurement runs may intentionally extend the historical 36,000-tick verification ceiling;
         // this command does not record a replay, so raising the input guard does not change simulation state.
@@ -604,7 +605,7 @@ internal static class TacticMatchCommand
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "BeltCells", prefix + "BeltDelivered",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
@@ -643,7 +644,7 @@ internal static class TacticMatchCommand
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
+                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));

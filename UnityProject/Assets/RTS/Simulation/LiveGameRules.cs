@@ -59,6 +59,7 @@ namespace Rts.Simulation
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.BeltComponents = true;
+            e.OpenFarms = allCivilisations;
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
             e.Regions = true;

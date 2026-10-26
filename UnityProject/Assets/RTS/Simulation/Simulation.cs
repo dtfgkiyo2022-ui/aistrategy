@@ -57,6 +57,7 @@ namespace Rts.Simulation
         private readonly int[] largeDelivered = new int[12];
         private readonly int[] largeBeltIncome = new int[12];
         private readonly int[] largeBeltDelivered = new int[2];
+        private readonly int[] largeConnectedFarms = new int[2];
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
         private readonly int[,,] largeResourceUses = new int[2, LargeEconomyUseKind.Count, 2];

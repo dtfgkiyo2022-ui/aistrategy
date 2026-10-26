@@ -172,8 +172,14 @@ namespace Rts.Simulation
         /// <summary>The metal an infantry costs this faction now.</summary>
         private int InfantryMetalFor(uint faction) => MetalworkAllowed(faction) ? world.Config.Economy.InfantryMetalCost : 0;
 
-        /// <summary>Farms: the agrarian civilisation only.</summary>
-        private bool FarmingAllowed(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
+        /// <summary>Farms: the building is open to every age/civilisation only under the opt-in flag.</summary>
+        private bool FarmingAllowed(uint faction) => AgesOn
+            && (world.Economies[faction - 1].Civ == CivKind.Agrarian || OpenFarmsOn);
+
+        /// <summary>The agrarian-only part of farming, kept separate from the OpenFarms building permission.</summary>
+        private bool AgrarianFarmingAllowed(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
+
+        private bool OpenFarmsOn => AgesOn && world.Config.Economy.OpenFarms;
         private bool RationsAllowed(uint faction)
             => RationsOn && world.Economies[faction - 1].Civ == CivKind.Agrarian && world.Economies[faction - 1].Age >= 1;
 
@@ -320,6 +326,7 @@ namespace Rts.Simulation
                 }
             if (river) steps++;
             int result = System.Math.Max(rules.FarmMinTicks, rules.FarmBaseTicks - rules.FarmStepTicks * steps);
+            if (!AgrarianFarmingAllowed(faction)) return checked(result + rules.OpenFarmsOtherCivExtraTicks);
             return AgeStrength(faction, CivKind.Agrarian, 2)
                 ? System.Math.Max(1, checked((result * rules.AgrarianFarmSpeedPermille + 999) / 1000)) : result;
         }

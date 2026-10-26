@@ -119,12 +119,14 @@ namespace Rts.Simulation
             if (IncenseAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Incense", DecideIncense, faction);
             if (CharmsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Charms", DecideCharms, faction);
             if (RepairKitsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.RepairKits", DecideRepairKits, faction);
-            if (FarmingAllowed(faction))
+            if (AgrarianFarmingAllowed(faction))
             {
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.Farms", DecideFarms, faction);
                 if (RationsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Rations", DecideRations, faction);
                 return;
             }
+            if (OpenFarmsOn)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.OpenFarms", DecideFarms, faction);
             if (FishingAllowed(faction))
             {
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.FishingHarbor", DecideFishingHarbor, faction);
@@ -2960,15 +2962,22 @@ namespace Rts.Simulation
         {
             ref var economy = ref world.Economies[faction - 1];
             int farms = 0;
+            int connectedFarms = 0;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
-            int farmTarget = LargeEconomyOn
+            int farmTarget = !AgrarianFarmingAllowed(faction) && OpenFarmsOn
+                ? (economy.Age == 0 ? world.Config.Economy.OpenFarmsPrimitiveAiFarms : world.Config.Economy.OpenFarmsOtherCivAiFarms)
+                : LargeEconomyOn
                 ? Math.Min(world.Config.Economy.LargeFarmMaximum,
                     Math.Max(world.Config.Economy.LargeFarmMinimum,
                         (LivingVillagers(faction) + world.Config.Economy.LargeVillagersPerFarm - 1)
                             / world.Config.Economy.LargeVillagersPerFarm))
                 : EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
-            if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction)) return;
+            if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction))
+            {
+                largeConnectedFarms[faction - 1] = 0;
+                return;
+            }
             var taken = new bool[world.Belts.Length];
             for (int i = 0; i < world.BuildingCount; i++)
             {
@@ -2982,7 +2991,9 @@ namespace Rts.Simulation
                     whole = LayBelts(faction, route.cells, route.facings);
                 }
                 SetFarmHauler(faction, b.Id, whole ? 0 : 1);
+                if (whole) connectedFarms++;
             }
+            largeConnectedFarms[faction - 1] = connectedFarms;
         }
 
         /// <summary>Clear footprints in rings around the core; the quickest ground wins (then the ring order).</summary>

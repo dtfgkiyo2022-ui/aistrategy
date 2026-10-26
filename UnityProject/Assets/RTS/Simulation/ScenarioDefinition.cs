@@ -252,6 +252,9 @@ namespace Rts.Simulation
         /// for each food point within FarmFoodReach metres and once more with river within FarmRiverReach, never under FarmMinTicks.</summary>
         public int FarmSizeCells = 2, FarmWoodCost = 80, FarmWork = 200, FarmHp = 400;
         public int FarmBaseTicks = 60, FarmStepTicks = 10, FarmMinTicks = 20, FarmFoodReach = 16, FarmRiverReach = 8;
+        /// <summary>technical-design-v3 38.7: lets every age/civilisation build farms without changing agrarian strengths.</summary>
+        public bool OpenFarms;
+        public int OpenFarmsOtherCivExtraTicks = 20, OpenFarmsPrimitiveAiFarms = 2, OpenFarmsOtherCivAiFarms = 4;
         /// <summary>Rations: agrarian mills turn food into stock used for soldier training and quiet-time healing.</summary>
         public bool Rations;
         /// <summary>Resource fog: resources are shown and used by the automatic economy only after their cell was explored.</summary>

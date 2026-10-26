@@ -745,7 +745,7 @@ namespace Rts.Presentation
                 ModeButton(new Rect(x, y, half, 22f), Mode.Mine, UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Smelter, UiText.T("Smelter (", "精錬所（木材 ") + economy.SmelterWoodCost + UiText.T(" wood)", "）"));
             }
-            else if (economy.Civ == CivKind.Agrarian)
+            else if (economy.FarmSizeCells > 0)
             {
                 ModeButton(new Rect(x, y, half, 22f), Mode.Farm, UiText.T("Farm (", "農場（木材 ") + economy.FarmWoodCost + UiText.T(" wood)", "）"));
                 GUI.Label(new Rect(right, y, half, 22f), UiText.T("Faster by food and river", "食料の点と川の近くほど速い"));
