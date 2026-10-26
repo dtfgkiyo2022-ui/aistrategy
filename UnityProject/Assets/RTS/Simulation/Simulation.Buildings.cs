@@ -887,11 +887,14 @@ namespace Rts.Simulation
 
         private bool SiteIsClear(int origin, int coreCell, int size, int buildingClearanceCells = BuildingClearanceCells)
         {
-            foreach (int cell in Footprint(origin, size))
-            {
-                if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
-                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
-            }
+            int width = world.Config.Map.WidthCells;
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                {
+                    int cell = origin + z * width + x;
+                    if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                    if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
+                }
             return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
         }
 
@@ -910,10 +913,46 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 if (!world.Buildings[i].Alive) continue;
-                foreach (int other in Footprint(world.Buildings[i]))
-                    if (RectangleDistance(x0, z0, x1, z1, other, width) < buildingClearanceCells) return false;
+                if (RectangleDistanceToBuilding(x0, z0, x1, z1, world.Buildings[i], width, world.Config.Map.HeightCells)
+                    < buildingClearanceCells) return false;
             }
             return true;
+        }
+
+        private int RectangleDistanceToBuilding(int x0, int z0, int x1, int z1, BuildingState building, int width, int height)
+        {
+            if (building.Kind == BuildingKind.Bridge)
+            {
+                int distance = int.MaxValue;
+                if (building.BridgeCells != null)
+                    foreach (int cell in building.BridgeCells)
+                        distance = Math.Min(distance, RectangleDistance(x0, z0, x1, z1, cell, width));
+                return distance;
+            }
+            if (building.Kind == BuildingKind.Tollgate)
+            {
+                int origin = building.OriginCell;
+                if (origin < 0 || origin >= width * height) return int.MaxValue;
+                int x = origin % width, z = origin / width;
+                if (building.Facing == Facing.East && x + 1 >= width || building.Facing == Facing.West && x <= 0
+                    || building.Facing == Facing.North && z + 1 >= height || building.Facing == Facing.South && z <= 0)
+                    return int.MaxValue;
+                int delta = building.Facing == Facing.East ? 1 : building.Facing == Facing.West ? -1
+                    : building.Facing == Facing.North ? width : -width;
+                return Math.Min(RectangleDistance(x0, z0, x1, z1, origin, width),
+                    RectangleDistance(x0, z0, x1, z1, origin + delta, width));
+            }
+            int size = SizeOf(building.Kind);
+            int bx0 = building.OriginCell % width, bz0 = building.OriginCell / width;
+            return RectangleDistanceBetween(x0, z0, x1, z1, bx0, bz0, bx0 + size - 1, bz0 + size - 1);
+        }
+
+        private static int RectangleDistanceBetween(int x0, int z0, int x1, int z1,
+            int otherX0, int otherZ0, int otherX1, int otherZ1)
+        {
+            int dx = x1 < otherX0 ? otherX0 - x1 : otherX1 < x0 ? x0 - otherX1 : 0;
+            int dz = z1 < otherZ0 ? otherZ0 - z1 : otherZ1 < z0 ? z0 - otherZ1 : 0;
+            return Math.Max(dx, dz);
         }
 
         private static int RectangleDistance(int x0, int z0, int x1, int z1, int cell, int width)
@@ -1020,9 +1059,10 @@ namespace Rts.Simulation
                 Array.Clear(placementConnectivitySeen, 0, placementConnectivitySeen.Length);
                 placementConnectivityStamp = stamp = 1;
             }
-            int[] footprint = Footprint(origin, size);
             int head = 0, tail = 0, start = world.Map.Cell(OwnCore(faction).Definition.Position);
-            for (int i = 0; i < footprint.Length; i++) placementConnectivityClosed[footprint[i]] = stamp;
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                    placementConnectivityClosed[origin + z * width + x] = stamp;
             if (!world.Map.IsPassable(start) || placementConnectivityClosed[start] == stamp)
             {
                 placementConnectivityCache[key] = false;
