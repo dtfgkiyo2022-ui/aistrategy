@@ -432,7 +432,7 @@ namespace Rts.Presentation
                 Add(rows, "build:mine", UiText.T("Mine (", "採掘場（木材 ") + economy.MineWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Mine);
                 Add(rows, "build:smelter", UiText.T("Smelter (", "精錬所（木材 ") + economy.SmelterWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Smelter);
             }
-            else if (economy.Civ == CivKind.Agrarian)
+            else if (economy.FarmSizeCells > 0)
             {
                 Add(rows, "build:farm", UiText.T("Farm (", "農場（木材 ") + economy.FarmWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Farm);
                 Add(rows, "build:farm-info", UiText.T("Faster by food and river", "食料の点と川の近くほど速い"), false, "", false, true);

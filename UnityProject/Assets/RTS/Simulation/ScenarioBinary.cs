@@ -196,6 +196,9 @@ private const int AiFactoryExtensionDataLength = 12 * sizeof(int);
 private const int AiExpandExtensionId = 68;
 private const int AiExpandExtensionVersion = 1;
         private const int AiExpandExtensionDataLength = 12 * sizeof(int);
+        private const int OpenFarmsExtensionId = 69;
+        private const int OpenFarmsExtensionVersion = 1;
+        private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -287,7 +290,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(CraftTree1ExtensionId, CraftTree1ExtensionVersion, CraftTree1ExtensionDataLength)
             ,new ExtensionRegistration(PrimitiveCraftExtensionId, PrimitiveCraftExtensionVersion, PrimitiveCraftExtensionDataLength)
             ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
-            ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
+             ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
+             ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -915,8 +919,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == ResourceFogExtensionId) ReadResourceFogExtension(extension, c.Economy);
                     else if (id == CraftTree1ExtensionId) ReadCraftTree1Extension(extension, c.Economy);
                     else if (id == PrimitiveCraftExtensionId) ReadPrimitiveCraftExtension(extension, c.Economy);
-                    else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
-                    else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
+                     else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
+                     else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
+                     else if (id == OpenFarmsExtensionId) ReadOpenFarmsExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -1003,8 +1008,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 extensions.RemoveAll(extension => extension != null && extension.Id == ResourceFogExtensionId && !c.Economy.ResourceFog);
                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree1ExtensionId && !c.Economy.CraftTree1);
                 extensions.RemoveAll(extension => extension != null && extension.Id == PrimitiveCraftExtensionId && !c.Economy.PrimitiveCraft);
-                extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
-                extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
+                 extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
+                 extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
+                 extensions.RemoveAll(extension => extension != null && extension.Id == OpenFarmsExtensionId && !c.Economy.OpenFarms);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1026,7 +1032,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
-            bool hasAiExpand = false;
+             bool hasAiExpand = false, hasOpenFarms = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1034,6 +1040,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 {
                     hasAiExpand = true;
                     extensions[i] = CreateAiExpandExtension(c.Economy);
+                }
+                if (extensions[i].Id == OpenFarmsExtensionId)
+                {
+                    hasOpenFarms = true;
+                    extensions[i] = CreateOpenFarmsExtension(c.Economy);
                 }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
@@ -1050,6 +1061,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             }
             if (c.Economy.AiFactory && c.Economy.AiExpand && !hasAiExpand)
                 extensions.Add(CreateAiExpandExtension(c.Economy));
+            if (c.Economy.OpenFarms && !hasOpenFarms)
+                extensions.Add(CreateOpenFarmsExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
             bool hasAgeFour = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1836,6 +1849,36 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      || e.AiExpandPrimitiveFoodWorkerPermille < 0 || e.AiExpandPrimitiveFoodWorkerPermille > 1000)
                     throw new InvalidDataException("Invalid AI-expand parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI-expand extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateOpenFarmsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.OpenFarms ? 1 : 0);
+                writer.Write(e.OpenFarmsOtherCivExtraTicks);
+                writer.Write(e.OpenFarmsPrimitiveAiFarms);
+                writer.Write(e.OpenFarmsOtherCivAiFarms);
+                return new ScenarioExtensionData { Id = OpenFarmsExtensionId, Version = OpenFarmsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadOpenFarmsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid open-farms flag.");
+                e.OpenFarms = enabled != 0;
+                e.OpenFarmsOtherCivExtraTicks = reader.ReadInt32();
+                e.OpenFarmsPrimitiveAiFarms = reader.ReadInt32();
+                e.OpenFarmsOtherCivAiFarms = reader.ReadInt32();
+                if (e.OpenFarmsOtherCivExtraTicks <= 0 || e.OpenFarmsPrimitiveAiFarms < 0 || e.OpenFarmsOtherCivAiFarms < 0)
+                    throw new InvalidDataException("Invalid open-farms parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing open-farms extension data.");
             }
         }
 
