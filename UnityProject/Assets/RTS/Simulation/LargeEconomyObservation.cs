@@ -50,7 +50,8 @@ namespace Rts.Simulation
         public int[] WorkerRoundTripMeters = new int[6];
         public int[] Income = new int[6];
         public int[] BeltIncome = new int[6];
-        public int Builders, Haulers, IdleWorkers;
+        // Measurement-only breakdown; these fields never feed automatic decisions.
+        public int Builders, TownBuilders, FactoryBuilders, OtherBuilders, MovingVillagers, Haulers, IdleWorkers;
         public int[,] Uses = new int[LargeEconomyUseKind.Count, 2];
         public int TownResourceIncome;
         public int BarracksResourceWaiting, BarracksFoodWaiting, BarracksWoodWaiting, BarracksMetalWaiting;
@@ -236,9 +237,21 @@ namespace Rts.Simulation
                         else if (villager.Task == VillagerTask.Gathering) value.GatheringWorkers[resource]++;
                         else if (villager.Task == VillagerTask.ToDropOff) value.ToDropOffWorkers[resource]++;
                     }
-                    if (villager.Task == VillagerTask.ToBuild || villager.Task == VillagerTask.Building) value.Builders++;
+                    if (villager.Task == VillagerTask.ToBuild || villager.Task == VillagerTask.Building)
+                    {
+                        value.Builders++;
+                        if (villager.BuildingId > 0 && villager.BuildingId <= world.BuildingCount)
+                        {
+                            var building = world.Buildings[villager.BuildingId - 1];
+                            if (building.Kind == BuildingKind.Town) value.TownBuilders++;
+                            else if (AiFactoryOn && (building.Kind == BuildingKind.Hut || IsCraftProcessingBuilding(building.Kind))) value.FactoryBuilders++;
+                            else value.OtherBuilders++;
+                        }
+                        else value.OtherBuilders++;
+                    }
                     else if (villager.Task == VillagerTask.ToPickup || villager.Task == VillagerTask.ToDeliver) value.Haulers++;
                     else if (villager.Task == VillagerTask.Idle) value.IdleWorkers++;
+                    if (villager.IsMoving) value.MovingVillagers++;
                 }
                 for (int resource = 0; resource < 6; resource++)
                     value.Workers[resource] = value.ToResourceWorkers[resource] + value.GatheringWorkers[resource] + value.ToDropOffWorkers[resource];

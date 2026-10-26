@@ -2118,3 +2118,8 @@ econ8（36.5 のとおりの実装）は、種 1 で兵 20 体のまま（兵舎
 - `FreeTowns` は `EconomyRules` に保持し、シナリオ拡張 ID 70 version 1 に旗と `FreeTownsPerAge` を保存する。`LiveGameRules` では `AiExpand` が有効なときだけオンにし、旗オフ時の保存内容と判定を変えない。
 - 町の木・石の価格は `TownWoodCostFor` / `TownStoneCostFor` に集約し、旗オン時だけ 0 とする。町の作業時間は変更しない。上限は建設中を含む町数に対し、`(Age + 1) * FreeTownsPerAge` に Metropolis の既存ボーナスを加え、人間とお任せで同じ `TownLimitFor` を使う。
 - お任せの町目標も `TownLimitFor` に統一し、`AiExpandAge1TownCount` などは FreeTowns の上限判定に使わない。町の置き場・工場の型・ベルトの方針は 38.5 のままにする。
+
+#### 実装で決めたこと（freetowns2、2026-10-27）
+- お任せの町判断だけに `FreeTownsAiVillagersPerTown`（25）を使い、完成・建設中の町を n として `(n + 1) * FreeTownsAiVillagersPerTown` 人未満なら次の町を置かない。人の町の上限・建築役は変えない。
+- お任せが置く町の建築役は `min(FreeTownsAiTownBuilders, BuildersFor)`（2）人までとし、人が置く町は従来の `BuildersFor` を使う。町の周りの AiExpand 工場型は、FreeTowns が有効なとき完成町ができてから判断する。
+- 拡張欄 ID 70 version 1 は旗、`FreeTownsPerAge`、`FreeTownsAiVillagersPerTown`、`FreeTownsAiTownBuilders` の4個の little-endian int32 を保存する。追加の建築役内訳・移動中人数は LargeEconomy の観測専用列であり、判定には使わない。

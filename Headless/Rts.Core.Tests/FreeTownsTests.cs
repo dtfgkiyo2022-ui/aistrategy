@@ -59,12 +59,55 @@ namespace Rts.Core.Tests
         {
             var source = Scenario(true);
             source.Economy.FreeTownsPerAge = 1;
+            source.Economy.FreeTownsAiVillagersPerTown = 35;
+            source.Economy.FreeTownsAiTownBuilders = 1;
             var bytes = ScenarioBinary.Encode(source);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Any(x => x.Id == 70 && x.Version == 1), Is.True);
             Assert.That(decoded.Economy.FreeTowns, Is.True);
             Assert.That(decoded.Economy.FreeTownsPerAge, Is.EqualTo(1));
+            Assert.That(decoded.Economy.FreeTownsAiVillagersPerTown, Is.EqualTo(35));
+            Assert.That(decoded.Economy.FreeTownsAiTownBuilders, Is.EqualTo(1));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void AutomaticTownWaitsForVillagersAndChecksAgainAfterTheDecisionInterval()
+        {
+            var below = AutomaticTownScenario(24);
+            below.Economy.FreeTownsAiVillagersPerTown = 30;
+            var belowSim = new Battle(below);
+            Run(belowSim, 400);
+            Assert.That(belowSim.Capture(1).Economy.Buildings.Count(b => b.Kind == BuildingKind.Town), Is.EqualTo(0),
+                "villagers=" + belowSim.Capture(1).Economy.Villagers.Count(v => v.IsOwn));
+
+            var atLimit = AutomaticTownScenario(25);
+            atLimit.Economy.FreeTownsAiVillagersPerTown = 30;
+            atLimit.Economy.AutoVillagerTarget = 30;
+            atLimit.Economy.AiExpandDecisionIntervalTicks = 100;
+            var atLimitSim = new Battle(atLimit);
+            long firstTownTick = -1;
+            for (long tick = 1; tick <= 400; tick++)
+            {
+                atLimitSim.Step(tick, Array.Empty<ScheduledInput>());
+                if (tick == 99)
+                    Assert.That(atLimitSim.Capture(1).Economy.Buildings.Count(b => b.Kind == BuildingKind.Town), Is.EqualTo(0));
+                if (firstTownTick < 0 && atLimitSim.Capture(1).Economy.Buildings.Any(b => b.Kind == BuildingKind.Town)) firstTownTick = tick;
+            }
+            Assert.That(firstTownTick, Is.GreaterThanOrEqualTo(100));
+            Assert.That(firstTownTick % atLimit.Economy.AiExpandDecisionIntervalTicks, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AutomaticTownUsesConfiguredBuilderLimit()
+        {
+            var scenario = AutomaticTownScenario(25);
+            scenario.Economy.FreeTownsAiTownBuilders = 1;
+            scenario.Economy.Builders = 3;
+            var sim = new Battle(scenario);
+            Run(sim, 200);
+            var town = sim.Capture(1).Economy.Buildings.First(b => b.Kind == BuildingKind.Town);
+            Assert.That(AssignedBuilders(sim, town.Id), Is.EqualTo(1));
         }
 
         [Test]
@@ -165,6 +208,43 @@ namespace Rts.Core.Tests
                 if (added.Id != 0) return added.Id;
             }
             return 0;
+        }
+
+        private static ScenarioDefinition AutomaticTownScenario(int villagerTarget)
+        {
+            var scenario = LiveGameRules.Create(68003UL, true, true, false, false);
+            var e = scenario.Economy;
+            e.FreeTowns = true;
+            e.FreeTownsPerAge = 2;
+            e.FreeTownsAiVillagersPerTown = 25;
+            e.FreeTownsAiTownBuilders = 2;
+            e.AgeClock = false;
+            e.AgeClockUx = false;
+            e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 100000;
+            e.VillagerFoodCost = 0;
+            e.VillagerTrainTicks = 1;
+            e.LargeVillagerTrainTicks = 1;
+            e.TownWork = 10000;
+            e.AutoVillagerTarget = villagerTarget;
+            e.AutoInfantryQueue = 0;
+            e.AiExpandDecisionIntervalTicks = 100;
+            e.TownCoreDistance = 1;
+            e.TownResourceReach = 16;
+            return scenario;
+        }
+
+        private static int AssignedBuilders(Battle sim, uint buildingId)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var world = typeof(Battle).GetField("world", flags).GetValue(sim);
+            var states = (Array)world.GetType().GetField("Villagers", flags).GetValue(world);
+            int count = 0;
+            for (int i = 0; i < states.Length; i++)
+            {
+                object state = states.GetValue(i);
+                if ((uint)state.GetType().GetField("BuildingId", flags).GetValue(state) == buildingId) count++;
+            }
+            return count;
         }
 
         private static void Run(CommandGateway gateway, Battle sim, int ticks)

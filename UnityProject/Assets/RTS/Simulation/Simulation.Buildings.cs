@@ -227,6 +227,7 @@ namespace Rts.Simulation
             else if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
             if (TownCount(faction) >= TownLimitFor(faction)) return;
+            if (!FreeTownsAiVillagerThresholdReached(faction)) return;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
@@ -1149,7 +1150,10 @@ namespace Rts.Simulation
         private void AssignBuilders(ref BuildingState building)
         {
             var spot = world.Map.Center(building.WorkCell);
-            for (int n = 0; n < BuildersFor(building.FactionId); n++)
+            int builderLimit = BuildersFor(building.FactionId);
+            if (automaticEconomyAction && FreeTownsOn && building.Kind == BuildingKind.Town)
+                builderLimit = Math.Min(builderLimit, world.Config.Economy.FreeTownsAiTownBuilders);
+            for (int n = 0; n < builderLimit; n++)
             {
                 int best = -1;
                 for (int i = 0; i < world.VillagerCount; i++)

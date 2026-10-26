@@ -623,9 +623,11 @@ internal static class TacticMatchCommand
                 prefix + "CutStoneProduced", prefix + "CutStoneConsumed", prefix + "StoneToolsProduced", prefix + "StoneToolsConsumed",
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
-                prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
-                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone" });
+                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
+                 prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
+                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                 prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
+                 prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -643,7 +645,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 74; i++) cells.Add("");
+                for (int i = 0; i < 81; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -663,6 +665,8 @@ internal static class TacticMatchCommand
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                 value.AiExpandTownSkippedStone }.Select(FormatInvariant));
+            cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
+                value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));

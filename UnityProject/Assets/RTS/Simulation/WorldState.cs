@@ -573,8 +573,9 @@ namespace Rts.Simulation
                  && e.AiExpandTownStoneWorkerPermille >= 0 && e.AiExpandTownStoneWorkerPermille <= 1000
                  && e.AiExpandPrimitiveFoodWorkerPermille >= 0 && e.AiExpandPrimitiveFoodWorkerPermille <= 1000),
                  "AiExpand requires the factory, ages, industry, and valid expansion rules.");
-            Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0),
-                "FreeTowns requires ages, towns, and a positive per-age limit.");
+            Require(!e.FreeTowns || (e.Enabled && e.Ages && e.Towns && e.FreeTownsPerAge > 0
+                && e.FreeTownsAiVillagersPerTown > 0 && e.FreeTownsAiTownBuilders > 0),
+                "FreeTowns requires ages, towns, and positive automatic town rules.");
             Require(e.CivVarietyWindowPermille >= 0 && e.CivVarietyWindowPermille <= 1000,
                 "Invalid civ variety window.");
             Require(!e.CivVariety || (e.Enabled && e.Ages), "Civ variety requires ages and an economy.");
@@ -1173,6 +1174,8 @@ namespace Rts.Simulation
                   AiExpandTownStoneWorkerPermille = e.AiExpandTownStoneWorkerPermille,
                   AiExpandPrimitiveFoodWorkerPermille = e.AiExpandPrimitiveFoodWorkerPermille,
                   FreeTowns = e.FreeTowns, FreeTownsPerAge = e.FreeTownsPerAge,
+                  FreeTownsAiVillagersPerTown = e.FreeTownsAiVillagersPerTown,
+                  FreeTownsAiTownBuilders = e.FreeTownsAiTownBuilders,
                 LatePushAfterTicks = e.LatePushAfterTicks, LatePushAdvantageAfterTicks = e.LatePushAdvantageAfterTicks,
                  LatePushEnemyMultiplierPermille = e.LatePushEnemyMultiplierPermille,
                  SiegeByAge = e.SiegeByAge, SiegeAge0Permille = e.SiegeAge0Permille, SiegeAge1Permille = e.SiegeAge1Permille,

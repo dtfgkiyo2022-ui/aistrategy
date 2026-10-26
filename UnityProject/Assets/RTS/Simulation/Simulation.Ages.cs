@@ -127,6 +127,14 @@ namespace Rts.Simulation
                 + (AgeStrength(faction, CivKind.Metropolis, 3) ? world.Config.Economy.MetropolisTownLimitBonus : 0));
         }
 
+        private bool FreeTownsAiVillagerThresholdReached(uint faction)
+        {
+            if (!FreeTownsOn) return true;
+            var e = world.Config.Economy;
+            int required = checked((TownCount(faction) + 1) * e.FreeTownsAiVillagersPerTown);
+            return LivingVillagers(faction) >= required;
+        }
+
         private bool CavalryAllowed(uint faction)
             => CavalryOn && world.Economies[faction - 1].Civ == CivKind.Cavalry;
 

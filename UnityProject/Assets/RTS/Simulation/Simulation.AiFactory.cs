@@ -29,6 +29,7 @@ namespace Rts.Simulation
             if (!AiFactoryDecisionDue(faction)) return;
             // Each template is independent: an unavailable resource point or route skips only that template and
             // leaves the following template eligible on the same decision pass.
+            if (FreeTownsOn && !AiExpandHasCompletedTown(faction)) return;
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryPrimitiveCraftLine(faction);
@@ -47,9 +48,12 @@ namespace Rts.Simulation
             if (!AiFactoryDecisionDue(faction)) return;
             if (AiExpandOn)
             {
-                EnsureAiFactoryWoodLine(faction);
-                EnsureAiFactoryStoneLine(faction);
-                EnsureAiFactoryMetalLine(faction);
+                if (!FreeTownsOn || AiExpandHasCompletedTown(faction))
+                {
+                    EnsureAiFactoryWoodLine(faction);
+                    EnsureAiFactoryStoneLine(faction);
+                    EnsureAiFactoryMetalLine(faction);
+                }
             }
             switch (world.Economies[faction - 1].Civ)
             {
@@ -75,6 +79,7 @@ namespace Rts.Simulation
         private void DecideAiFactoryAge2(uint faction)
         {
             if (!AiFactoryDecisionDue(faction)) return;
+            if (FreeTownsOn && AiExpandOn && !AiExpandHasCompletedTown(faction)) return;
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryMetalLine(faction);

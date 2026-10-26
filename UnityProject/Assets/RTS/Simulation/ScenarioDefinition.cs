@@ -149,6 +149,7 @@ namespace Rts.Simulation
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 2;
+        public int FreeTownsAiVillagersPerTown = 25, FreeTownsAiTownBuilders = 2;
         public int StartFood = 200, StartWood = 150;
         /// <summary>Villagers plus soldiers plus villagers queued at the core.</summary>
         public int PopulationCap = 60;
