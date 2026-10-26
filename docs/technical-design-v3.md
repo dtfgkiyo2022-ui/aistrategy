@@ -2113,3 +2113,8 @@ econ8（36.5 のとおりの実装）は、種 1 で兵 20 体のまま（兵舎
 - 前線に置かれるのが強すぎるなら、本拠地からの距離などで制限する
 
 **測定（広い地図・お任せどうし、種1〜3、決着まで）**：`FreeTownsPerAge` 1 と 2、旗オフ。表は時代ごとの町の数・最初の町の tick・本拠地 40m 以内/外の建物・兵のピーク（兵だけ）・決着の tick・p99・最大。目安：兵のピークの合計が旗オフの 8 割以上、決着が旗オフ並み、p99 が 1.2 倍以内、1 秒を超える tick なし。テストプレイ用の製品版は、良い方の値で作る
+
+#### 実装で決めたこと（freetowns1、2026-10-27）
+- `FreeTowns` は `EconomyRules` に保持し、シナリオ拡張 ID 70 version 1 に旗と `FreeTownsPerAge` を保存する。`LiveGameRules` では `AiExpand` が有効なときだけオンにし、旗オフ時の保存内容と判定を変えない。
+- 町の木・石の価格は `TownWoodCostFor` / `TownStoneCostFor` に集約し、旗オン時だけ 0 とする。町の作業時間は変更しない。上限は建設中を含む町数に対し、`(Age + 1) * FreeTownsPerAge` に Metropolis の既存ボーナスを加え、人間とお任せで同じ `TownLimitFor` を使う。
+- お任せの町目標も `TownLimitFor` に統一し、`AiExpandAge1TownCount` などは FreeTowns の上限判定に使わない。町の置き場・工場の型・ベルトの方針は 38.5 のままにする。

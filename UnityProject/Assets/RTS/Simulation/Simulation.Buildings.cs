@@ -233,9 +233,10 @@ namespace Rts.Simulation
                     return;
             int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
             int availableStone = economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0);
-            if (availableWood < rules.TownWoodCost || availableStone < rules.TownStoneCost)
+            int townWoodCost = TownWoodCostFor(faction), townStoneCost = TownStoneCostFor(faction);
+            if (availableWood < townWoodCost || availableStone < townStoneCost)
             {
-                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < rules.TownWoodCost, availableStone < rules.TownStoneCost);
+                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < townWoodCost, availableStone < townStoneCost);
                 return;
             }
             int resourceCell = BestTownResourceCell(faction);
@@ -282,7 +283,7 @@ namespace Rts.Simulation
         {
             if (!AiExpandTownPending(faction)) return false;
             ref var economy = ref world.Economies[faction - 1];
-            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
+            return economy.Wood < TownWoodCostFor(faction) || economy.Stone < TownStoneCostFor(faction);
         }
 
         /// <summary>
@@ -551,7 +552,7 @@ namespace Rts.Simulation
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
-                && economy.Wood - woodCost < world.Config.Economy.TownWoodCost) return;
+                && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
@@ -1475,7 +1476,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineWoodCost
                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
                   : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
-            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+             : kind == BuildingKind.Town ? TownWoodCostFor(faction) : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             wood = IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
             return AgeStrength(faction, CivKind.Forestry, 4)
                 ? checked((wood * e.ForestryBuildingWoodPermille + 999) / 1000) : wood;
@@ -1540,7 +1541,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int stone = kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
-                : kind == BuildingKind.Town ? e.TownStoneCost : 0;
+             : kind == BuildingKind.Town ? TownStoneCostFor(faction) : 0;
             if (kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction))
                 return checked((stone * e.SiegePartsCastleStonePermille + 999) / 1000);
             if (kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction))

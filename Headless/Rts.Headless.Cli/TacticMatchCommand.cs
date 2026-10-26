@@ -87,6 +87,13 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
+        if (options.ContainsKey("--free-towns-off")) scenario.Economy.FreeTowns = false;
+        if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
+        {
+            int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
+            if (value < 1 || value > 16) throw new InvalidDataException("--free-towns-per-age must be between 1 and 16.");
+            scenario.Economy.FreeTownsPerAge = value;
+        }
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         // Measurement runs may intentionally extend the historical 36,000-tick verification ceiling;
         // this command does not record a replay, so raising the input guard does not change simulation state.

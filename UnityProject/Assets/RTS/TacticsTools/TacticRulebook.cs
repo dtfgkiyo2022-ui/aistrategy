@@ -187,7 +187,7 @@ namespace Rts.Tactics
             Add(rows, BuildingKind.Monastery, e.MonasteryWoodCost, 0, e.MonasteryWork); Add(rows, BuildingKind.Harbor, e.HarborWoodCost, 0, e.HarborWork);
             Add(rows, BuildingKind.MineShaft, e.MountainWoodCost, 0, e.MountainWork); Add(rows, BuildingKind.Tollgate, e.TollgateWoodCost, e.TollgateStoneCost, e.TollgateWork);
             Add(rows, BuildingKind.GrandHouse, e.GrandHouseWoodCost, 0, e.GrandHouseWork); Add(rows, BuildingKind.Shrine, e.ShrineWoodCost, e.ShrineStoneCost, e.ShrineWork);
-            Add(rows, BuildingKind.Town, e.TownWoodCost, e.TownStoneCost, e.TownWork);
+            Add(rows, BuildingKind.Town, e.FreeTowns ? 0 : e.TownWoodCost, e.FreeTowns ? 0 : e.TownStoneCost, e.TownWork);
             Add(rows, BuildingKind.Storage, e.StorageWoodCost, 0, e.StorageWork);
             Add(rows, BuildingKind.Mill, e.MillWoodCost, 0, e.MillWork);
             Add(rows, BuildingKind.BrickKiln, e.BrickKilnWoodCost, 0, e.BrickKilnWork);
