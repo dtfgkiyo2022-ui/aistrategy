@@ -201,7 +201,7 @@ private const int AiExpandExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
         private const int FreeTownsExtensionId = 70;
         private const int FreeTownsExtensionVersion = 1;
-        private const int FreeTownsExtensionDataLength = 4 * sizeof(int);
+        private const int FreeTownsExtensionDataLength = 5 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -1904,6 +1904,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.FreeTownsPerAge);
                 writer.Write(e.FreeTownsAiVillagersPerTown);
                 writer.Write(e.FreeTownsAiTownBuilders);
+                writer.Write(e.FreeTownsRouteRecheckTicks);
                 return new ScenarioExtensionData { Id = FreeTownsExtensionId, Version = FreeTownsExtensionVersion, Data = stream.ToArray() };
             }
         }
@@ -1919,7 +1920,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.FreeTownsPerAge = reader.ReadInt32();
                 e.FreeTownsAiVillagersPerTown = reader.ReadInt32();
                 e.FreeTownsAiTownBuilders = reader.ReadInt32();
-                if (e.FreeTownsPerAge <= 0 || e.FreeTownsAiVillagersPerTown <= 0 || e.FreeTownsAiTownBuilders <= 0)
+                e.FreeTownsRouteRecheckTicks = reader.ReadInt32();
+                if (e.FreeTownsPerAge <= 0 || e.FreeTownsAiVillagersPerTown <= 0 || e.FreeTownsAiTownBuilders <= 0
+                    || e.FreeTownsRouteRecheckTicks <= 0)
                     throw new InvalidDataException("Invalid free-towns parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing free-towns extension data.");
             }

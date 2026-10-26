@@ -210,6 +210,14 @@ internal static class TacticMatchCommand
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
             timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
         }
+        StreamWriter routeTrace = null;
+        if (options.TryGetValue("--route-trace-out", out var routeTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(routeTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            routeTrace = new StreamWriter(routeTracePath, false, new UTF8Encoding(false));
+            routeTrace.WriteLine("tick,faction,lineKind,calls,searchCells,searchMs");
+        }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();
         var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
@@ -271,7 +279,7 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = (timingWriter != null || economyTrace != null) && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null) && simulation.Capture(1).Tick % 1000 == 0
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -458,6 +466,11 @@ internal static class TacticMatchCommand
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
+            if (routeTrace != null && simulation.Capture(1).Tick % 1000 == 0)
+            {
+                WriteRouteTrace(routeTrace, simulation);
+                routeTrace.Flush();
+            }
             if (economyTrace != null && (largeObservation != null || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks))
             {
                 var observation = largeObservation ?? simulation.CaptureLargeEconomyObservation();
@@ -469,6 +482,7 @@ internal static class TacticMatchCommand
             pack?.RecordAfterStep(simulation);
         }
         timingWriter?.Dispose();
+        routeTrace?.Dispose();
         ageTrace?.Dispose();
         craftTrace?.Dispose();
         economyTrace?.Dispose();
@@ -675,6 +689,25 @@ internal static class TacticMatchCommand
     }
 
     private static string FormatInvariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static void WriteRouteTrace(StreamWriter writer, Battle simulation)
+    {
+        for (uint faction = 1; faction <= 2; faction++)
+            for (int rawKind = 0; rawKind <= 20; rawKind++)
+            {
+                var kind = (ProcessingLineKind)rawKind;
+                long calls = simulation.RouteDiagnosticCalls(faction, kind);
+                long cells = simulation.RouteDiagnosticSearchCells(faction, kind);
+                if (calls == 0 && cells == 0) continue;
+                string name = rawKind == 0 ? "Unknown" : kind.ToString();
+                double milliseconds = simulation.RouteDiagnosticElapsedTicks(faction, kind) * 1000.0
+                    / System.Diagnostics.Stopwatch.Frequency;
+                writer.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
+                    faction.ToString(CultureInfo.InvariantCulture), name,
+                    calls.ToString(CultureInfo.InvariantCulture), cells.ToString(CultureInfo.InvariantCulture),
+                    milliseconds.ToString("0.000", CultureInfo.InvariantCulture)));
+            }
+    }
 
     private static void WriteEconomyTrace(StreamWriter writer, ScenarioDefinition scenario, Battle simulation, LargeEconomyObservation observation)
     {

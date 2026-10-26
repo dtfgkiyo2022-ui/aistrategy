@@ -61,6 +61,7 @@ namespace Rts.Core.Tests
             source.Economy.FreeTownsPerAge = 1;
             source.Economy.FreeTownsAiVillagersPerTown = 35;
             source.Economy.FreeTownsAiTownBuilders = 1;
+            source.Economy.FreeTownsRouteRecheckTicks = 450;
             var bytes = ScenarioBinary.Encode(source);
             var decoded = ScenarioBinary.Decode(bytes);
             Assert.That(decoded.Extensions.Any(x => x.Id == 70 && x.Version == 1), Is.True);
@@ -68,6 +69,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.FreeTownsPerAge, Is.EqualTo(1));
             Assert.That(decoded.Economy.FreeTownsAiVillagersPerTown, Is.EqualTo(35));
             Assert.That(decoded.Economy.FreeTownsAiTownBuilders, Is.EqualTo(1));
+            Assert.That(decoded.Economy.FreeTownsRouteRecheckTicks, Is.EqualTo(450));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
         }
 
@@ -108,6 +110,44 @@ namespace Rts.Core.Tests
             Run(sim, 200);
             var town = sim.Capture(1).Economy.Buildings.First(b => b.Kind == BuildingKind.Town);
             Assert.That(AssignedBuilders(sim, town.Id), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void BrokenFreeTownLineIsRebuiltWithinTheRouteRecheckWindow()
+        {
+            var scenario = LiveGameRules.Create(67001UL, false, true, false, false);
+            scenario.Economy.FreeTowns = true;
+            scenario.Economy.FreeTownsPerAge = 2;
+            scenario.Economy.FreeTownsRouteRecheckTicks = 100;
+            scenario.Economy.AgeClock = false;
+            scenario.Economy.AgeClockUx = false;
+            scenario.Economy.StartFood = scenario.Economy.StartWood = scenario.Economy.StartStone = scenario.Economy.StartMetal = 100000;
+            scenario.Economy.AutoVillagerTarget = 8;
+            scenario.Economy.AutoInfantryQueue = 0;
+            scenario.Economy.HutWork = scenario.Economy.LumberCampWork = scenario.Economy.SawmillWork = 1;
+            scenario.Economy.DrillWork = scenario.Economy.StonecutterWork = 1;
+            var sim = new Battle(scenario);
+            var world = ReadWorld(sim);
+            int lineIndex = -1;
+            for (long tick = 1; tick <= 12000 && lineIndex < 0; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                for (int i = 0; i < world.ProcessingLines.Length; i++)
+                    if (world.ProcessingLines[i].FactionId == 1 && world.ProcessingLines[i].Manager == LineManager.Automatic
+                        && world.ProcessingLines[i].BeltCells.Length > 1 && WholeLine(world, i)) { lineIndex = i; break; }
+            }
+            Assert.That(lineIndex, Is.GreaterThanOrEqualTo(0), "no complete automatic line was built");
+            int damagedCell = world.ProcessingLines[lineIndex].BeltCells[0];
+            var damaged = world.Belts[damagedCell];
+            damaged.FactionId = 0; damaged.Hp = 0; world.Belts[damagedCell] = damaged;
+            long brokenTick = sim.Capture(1).Tick;
+            bool rebuilt = false;
+            for (long tick = brokenTick + 1; tick <= brokenTick + 2500; tick++)
+            {
+                sim.Step(tick, Array.Empty<ScheduledInput>());
+                if (WholeLine(world, lineIndex)) { rebuilt = true; break; }
+            }
+            Assert.That(rebuilt, Is.True, "broken line was not re-laid across the route timer window");
         }
 
         [Test]
@@ -245,6 +285,25 @@ namespace Rts.Core.Tests
                 if ((uint)state.GetType().GetField("BuildingId", flags).GetValue(state) == buildingId) count++;
             }
             return count;
+        }
+
+        private static WorldState ReadWorld(Battle sim)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            return (WorldState)typeof(Battle).GetField("world", flags).GetValue(sim);
+        }
+
+        private static bool WholeLine(WorldState world, int index)
+        {
+            var line = world.ProcessingLines[index];
+            if (line.BeltCells.Length == 0 || line.BeltCells.Length != line.BeltFacings.Length) return false;
+            for (int i = 0; i < line.BeltCells.Length; i++)
+            {
+                int cell = line.BeltCells[i];
+                if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != line.FactionId
+                    || world.Belts[cell].Facing != line.BeltFacings[i]) return false;
+            }
+            return true;
         }
 
         private static void Run(CommandGateway gateway, Battle sim, int ticks)
