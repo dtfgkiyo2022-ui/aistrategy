@@ -104,7 +104,7 @@ namespace Rts.Simulation
                 if (IsGoldWork(v) && (v.Task == VillagerTask.ToNode || v.Task == VillagerTask.Gathering) && !GoldTargetUsable(v))
                 {
                     if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
-                    else { v.Task = VillagerTask.Idle; v.NodeId = 0; v.Route = Array.Empty<int>(); v.RouteCursor = 0; }
+                    else { v.Task = VillagerTask.Idle; v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; }
                 }
                 if (IsTradeRouteTask(v.Task) && !TradeRouteActive(v)) { StopTradeRoute(ref v); continue; }
                 if (IsCaravanTask(v.Task))
@@ -112,7 +112,7 @@ namespace Rts.Simulation
                     if (!CaravanMarketValid(v)) { EndCaravanAtCore(ref v); }
                     else if (v.Task == VillagerTask.ToCaravanserai && !CaravanPairValid(v))
                     {
-                        v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                        v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                     }
                     else
                     {
@@ -280,7 +280,7 @@ namespace Rts.Simulation
                     if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
                     {
                         v.Task = VillagerTask.ToCaravanMarket;
-                        v.NodeId = 0; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                        v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                         continue;
                     }
                     if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
@@ -734,7 +734,7 @@ namespace Rts.Simulation
                 || villager.AiExpandWorkStartTick < 0 || world.Tick - villager.AiExpandWorkStartTick < world.Config.Economy.AiExpandUnreachableWorkTimeoutTicks) return false;
             var node = world.Nodes[villager.NodeId - 1];
             if (AiExpandWorkRouteAvailable(villager.Position, node.Definition.Position, villager.FactionId)) return false;
-            villager.Task = VillagerTask.Idle; villager.NodeId = 0; villager.Route = Array.Empty<int>(); villager.RouteCursor = 0;
+            villager.Task = VillagerTask.Idle; villager.NodeId = 0; ReleaseVillagerRoute(ref villager); villager.RouteCursor = 0;
             villager.RouteGoal = villager.Position; villager.AiExpandWorkStartTick = -1;
             return true;
         }
@@ -953,6 +953,7 @@ namespace Rts.Simulation
             if (v.Route.Length == 0 || !SamePoint(v.RouteGoal, goal))
             {
                 v.RouteGoal = goal;
+                ReleaseVillagerRoute(ref v);
                 v.Route = world.Map.SharedRoute(world.Map.Cell(v.Position), goal, v.FactionId);
                 v.RouteCursor = 0;
                 if (v.Route.Length > 1 && Clear(v.Position, world.Map.Center(v.Route[1]), v.FactionId)) v.RouteCursor = 1;
@@ -963,6 +964,12 @@ namespace Rts.Simulation
             var target = world.Map.Center(path[v.RouteCursor]);
             if (v.RouteCursor == path.Length - 1 && Clear(v.Position, goal, v.FactionId)) target = goal;
             return Clear(v.Position, target, v.FactionId) ? target : world.Map.Center(world.Map.Cell(v.Position));
+        }
+
+        private void ReleaseVillagerRoute(ref VillagerState v)
+        {
+            world.Map.ReleaseSharedRoute(v.Route);
+            v.Route = Array.Empty<int>();
         }
 
         private void SpawnVillager(uint faction)
