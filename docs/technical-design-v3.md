@@ -2098,6 +2098,14 @@ econ8（36.5 のとおりの実装）は、種 1 で兵 20 体のまま（兵舎
 - 農場を建てられる判定と農耕文明の強みの判定を分けた。原始を含む農耕以外の農場は、置いた時点で決める既存の間隔に `OpenFarmsOtherCivExtraTicks` を加え、最短も同じだけ遅くする。お任せは原始 2 棟、時代 1 以降 4 棟を上限に農場を判断してから、他文明の加工判断へ進む。
 - 建物選択の表示は `EconomyView` の既存の農場サイズ欄を許可の有無に合わせて 0 にし、Contracts の型・欄は変更しない。大規模経済でも農場の上限判断は同じ分岐を使う。
 
+### 38.9 序盤の立ち上がり（2026-10-27、オーナー決定）
+
+`EarlyStart` は `EconomyRules` に保持する大マップ専用の序盤設定である。Scenario 拡張 ID 73 / version 1 は little-endian int32 の 4 値（有効フラグ、初期村人数、村人あたり農場数、原始時代の農場上限）を保存する。`LiveGameRules` は大マップだけで有効化し、初期村人を各陣営 10 人にする。小マップおよび `--early-start-off` は従来どおり各陣営 3 人とする。
+
+原始時代の非農耕文明は、最初の農場を他の原始時代建物より先に建設する。農場目標は `max(OpenFarmsPrimitiveAiFarms, ceil(villagers / EarlyStartVillagersPerFarm))` を上限 6 で丸める。時代 1 以降は大マップの農場上限と `LargeVillagersPerFarm` を用いる。農場経路探索の `bool[]` は Simulation の再利用スクラッチ配列とし、配列変更前後で tick hash が一致することを必須とする。
+
+CLI の `tactic-match` には `--early-start-off` を追加した。検証では flag-off の全 tick hash、拡張 73 の round-trip、大小マップの初期人数、原始時代・時代 1 の農場目標、record/replay、および既存の OpenFarms / FreeTowns / AiExpand / AiFactory テストを確認する。測定は seed 1..3・40,000 tick・on/off を対象とし、allocation phase を有効にして結果を `earlystart/report.md` に記録する。
+
 ### 38.8 町はタダ、時代ごとに上限が増える（2026-10-27、オーナー決定）
 テストプレイ（build1024a）と相談：「コアに内政が集中し、サブコア（町）を使ってマップ全体を活用できていない」「展開がもう少し早い方が良い」。38.5 の町は時代2〜3（16000〜22000 tick）でようやく建つ。上限ではなく、町の値段（木300・石200）を原始〜時代1 で払えないのが原因。また #473 で、お任せ用の時代ごとの目標数（時代1 で 1 つ…）が人の操作の上限にも効き、人も原始では町を建てられなくなっていた（意図しない変化）。
 

@@ -203,6 +203,7 @@ namespace Rts.Simulation
         private bool AgrarianFarmingAllowed(uint faction) => AgesOn && world.Economies[faction - 1].Civ == CivKind.Agrarian;
 
         private bool OpenFarmsOn => AgesOn && world.Config.Economy.OpenFarms;
+        private bool EarlyStartOn => AgesOn && world.Config.Economy.EarlyStart;
         private bool RationsAllowed(uint faction)
             => RationsOn && world.Economies[faction - 1].Civ == CivKind.Agrarian && world.Economies[faction - 1].Age >= 1;
 

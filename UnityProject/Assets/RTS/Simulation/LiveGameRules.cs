@@ -1,4 +1,5 @@
 using System;
+using Rts.Contracts;
 
 namespace Rts.Simulation
 {
@@ -63,6 +64,10 @@ namespace Rts.Simulation
             // 38.7 is measured on the large economy like 37.8. On the small (provisional) map the primitive farms take
             // the little wood there is and the hut makes no goods by 5000 ticks.
             e.OpenFarms = allCivilisations && e.LargeEconomy;
+            // 38.9 is a large-map-only opening rule. Apply it after map generation so direct map-generator callers keep
+            // the historical three starting villagers, while the played large map gets the same deterministic placement
+            // pattern with the configured early-start count.
+            SetEarlyStart(scenario, e.LargeEconomy);
             if (e.LineRebuildDelayTicks == 0) e.LineRebuildDelayTicks = 200;
             if (e.RaidLinePriority == 0) e.RaidLinePriority = 1;
             e.Regions = true;
@@ -170,6 +175,32 @@ namespace Rts.Simulation
             scenario.Rules.FactionCap = e.LargeFactionCap;
             // LargeEconomy changes production scale and capacity only. Unit and building costs remain the same as the
             // ordinary map, so the large-map AI must improve its collection, hauling, and construction decisions.
+        }
+
+        /// <summary>Changes only the live opening roster; used by the measurement CLI's explicit off switch.</summary>
+        public static void SetEarlyStart(ScenarioDefinition scenario, bool enabled)
+        {
+            if (scenario == null) throw new ArgumentNullException(nameof(scenario));
+            var e = scenario.Economy;
+            e.EarlyStart = enabled && e.LargeEconomy;
+            if (scenario.Villagers == null || scenario.Villagers.Length == 0) return;
+            int desired = e.EarlyStart ? e.EarlyStartVillagers : 3;
+            if (desired < 3 || desired == scenario.Villagers.Length) return;
+            if (!e.EarlyStart && scenario.Villagers.Length != e.EarlyStartVillagers * 2) return;
+
+            var villagers = new VillagerDefinition[desired * 2];
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                var core = scenario.Cores[faction - 1].Position;
+                int away = faction == 1 ? -1 : 1;
+                for (int i = 0; i < desired; i++)
+                {
+                    uint id = (faction - 1) * (uint)desired + (uint)i + 1;
+                    villagers[id - 1] = new VillagerDefinition { Id = id, FactionId = faction,
+                        Position = new SimPoint(core.X + Fix64.FromInt(away * (5 + i / 5 * 2)), core.Z + Fix64.FromInt(-2 + i % 5 * 2)) };
+                }
+            }
+            scenario.Villagers = villagers;
         }
     }
 }

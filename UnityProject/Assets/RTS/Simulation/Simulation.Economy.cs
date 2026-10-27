@@ -56,6 +56,15 @@ namespace Rts.Simulation
                         else EnqueueCoreVillager(faction);
                     }
                     MeasureSubphase("AI.DecideEconomy.ResumeUnbuilt", ResumeUnbuilt, faction);
+                    if (EarlyStartOn && OpenFarmsOn && economy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
+                    {
+                        // Reserve the first primitive construction decision for the farm. This also keeps a
+                        // not-yet-affordable farm ahead of barracks, houses, and other primitive buildings.
+                        MeasureSubphase("AI.DecideEconomy.EarlyStart.Farm", DecideFarms, faction);
+                        // Only while saving the farm's wood: with the wood in hand and still no farm, there was no site,
+                        // and the rest of the economy must not wait on it.
+                        if (!HasFarm(faction) && economy.Wood < rules.FarmWoodCost) continue;
+                    }
                     MeasureSubphase("AI.DecideEconomy.DecideHouse", DecideHouse, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideDropSite", DecideDropSite, faction);
                     MeasureSubphase("AI.DecideEconomy.DecideTower", DecideTower, faction);
