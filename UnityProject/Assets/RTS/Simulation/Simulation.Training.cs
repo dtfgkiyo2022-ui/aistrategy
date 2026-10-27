@@ -405,6 +405,7 @@ namespace Rts.Simulation
                 e.Planks = checked(e.Planks - world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumed = checked(e.PlanksConsumed + world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams + world.Config.Economy.PlanksPerRam);
+                RecordCraftTracePlanks(faction, CraftTraceOther, world.Config.Economy.PlanksPerRam);
             }
             bool charmed = UsesCharms(faction, kind) && e.Charms >= 1;
                 if (charmed)
@@ -602,6 +603,7 @@ namespace Rts.Simulation
                 e.Planks = checked(e.Planks + world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumed = checked(e.PlanksConsumed - world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams - world.Config.Economy.PlanksPerRam);
+                RecordCraftTracePlanks(faction, CraftTraceOther, -world.Config.Economy.PlanksPerRam);
             }
             if (charmed)
             {

@@ -31,6 +31,7 @@ namespace Rts.Core.Tests
             e.CraftRequiredAiArmsAssemblersAge2 = 2;
             e.CraftRequiredAiArmsAssemblersAge3 = 4;
             e.CraftRequiredAiArmsAssemblersAge4 = 4;
+            e.CraftRequiredAiWoodWorkerPermille = 50;
             e.AutoVillagerTarget = 0;
             e.AutoInfantryQueue = 0;
             e.StartFood = 10000;
@@ -53,6 +54,7 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.CraftRequiredAiArmsAssemblersAge2, Is.EqualTo(2));
             Assert.That(decoded.Economy.CraftRequiredAiArmsAssemblersAge3, Is.EqualTo(4));
             Assert.That(decoded.Economy.CraftRequiredAiArmsAssemblersAge4, Is.EqualTo(4));
+            Assert.That(decoded.Economy.CraftRequiredAiWoodWorkerPermille, Is.EqualTo(50));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
             var off = Scenario(false);
@@ -139,6 +141,44 @@ namespace Rts.Core.Tests
             Assert.That(Get(cancelArgs[1], "Queued"), Is.EqualTo(0));
         }
 
+        [Test]
+        public void ArmsTargetBlocksFramesAndScholarlyButAllowsArmsAcrossCraftTimer()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 2);
+            SetEconomy(simulation, 0, "ArmsKit", 0);
+            SetEconomy(simulation, 0, "FineArmsKit", 0);
+            SetEconomy(simulation, 0, "Planks", 0);
+            var buildingType = typeof(Battle).Assembly.GetType("Rts.Simulation.BuildingState");
+            var economyType = typeof(Battle).Assembly.GetType("Rts.Simulation.FactionEconomy");
+            var advance = typeof(Battle).GetMethod("AdvanceAssembler", PrivateInstance);
+            var frames = Activator.CreateInstance(buildingType);
+            var framesEconomy = Activator.CreateInstance(economyType);
+            Set(frames, "FactionId", 1u); Set(frames, "Kind", BuildingKind.Assembler); Set(frames, "Recipe", RecipeKind.Frames);
+            Set(framesEconomy, "Planks", 1); Set(framesEconomy, "Bricks", 1);
+            advance.Invoke(simulation, new[] { frames, framesEconomy });
+            Assert.That(Get(framesEconomy, "Planks"), Is.EqualTo(1));
+
+            var scholarly = Activator.CreateInstance(buildingType);
+            var scholarlyEconomy = Activator.CreateInstance(economyType);
+            Set(scholarly, "FactionId", 1u); Set(scholarly, "Kind", BuildingKind.Assembler); Set(scholarly, "Recipe", RecipeKind.Scholarly);
+            Set(scholarlyEconomy, "Planks", 1); Set(scholarlyEconomy, "Charcoal", 1); Set(scholarlyEconomy, "Food", 2);
+            advance.Invoke(simulation, new[] { scholarly, scholarlyEconomy });
+            Assert.That(Get(scholarlyEconomy, "Planks"), Is.EqualTo(1));
+
+            SetEconomy(simulation, 0, "ArmsKit", 20);
+            var arms = Activator.CreateInstance(buildingType);
+            var armsEconomy = Activator.CreateInstance(economyType);
+            Set(arms, "FactionId", 1u); Set(arms, "Kind", BuildingKind.Assembler); Set(arms, "Recipe", RecipeKind.ArmsKit);
+            Set(armsEconomy, "Planks", 1); Set(armsEconomy, "Charcoal", 2);
+            var args = new[] { arms, armsEconomy };
+            advance.Invoke(simulation, args);
+            Assert.That(Get(args[1], "Planks"), Is.EqualTo(0));
+            Assert.That(Get(args[0], "Timer"), Is.EqualTo(80));
+            for (int i = 0; i < 80; i++) advance.Invoke(simulation, args);
+            Assert.That(Get(args[1], "ArmsKit"), Is.EqualTo(1));
+        }
+
         [Test, Explicit("CraftRequired AI の age1 assembler・ArmsKit・兵士生成を確認")]
         public void AiBuildsArmsKitsBeforeTrainingAgeTwoSoldiers()
         {
@@ -172,6 +212,36 @@ namespace Rts.Core.Tests
             Assert.That(assembler, Is.True);
             Assert.That(produced, Is.True);
             Assert.That(soldier, Is.True);
+        }
+
+        [Test, Explicit("CraftRequired AI の時代1先行製材所と時代2武具在庫を確認")]
+        public void AiPrebuildsAgeTwoSawmillsAndHasArmsAtAgeTwo()
+        {
+            var scenario = LiveGameRules.Create(71071UL, true, true, false, false);
+            scenario.Economy.CraftRequired = true;
+            scenario.Economy.AiExpand = false;
+            scenario.Economy.FreeTowns = false;
+            scenario.Economy.AutoInfantryQueue = 0;
+            scenario.Economy.StartFood = scenario.Economy.StartWood = scenario.Economy.StartStone = scenario.Economy.StartMetal = 100000;
+            scenario.Cores[0].Hp = scenario.Cores[1].Hp = 100000000;
+            var simulation = new Battle(scenario);
+            int ageOneSawmills = 0, armsAtAgeTwo = 0;
+            long ageTwoTick = 0;
+            for (long tick = 1; tick <= 16000; tick++)
+            {
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+                var economy = simulation.Capture(1).Economy;
+                int sawmills = economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Sawmill);
+                if (economy.Age < 2) ageOneSawmills = Math.Max(ageOneSawmills, sawmills);
+                else if (ageTwoTick == 0)
+                {
+                    ageTwoTick = tick;
+                    armsAtAgeTwo = economy.ArmsKit + economy.FineArmsKit;
+                }
+            }
+            Assert.That(ageTwoTick, Is.GreaterThan(0));
+            Assert.That(ageOneSawmills, Is.GreaterThanOrEqualTo(scenario.Economy.CraftRequiredAiArmsAssemblersAge2));
+            Assert.That(armsAtAgeTwo, Is.GreaterThanOrEqualTo(1));
         }
 
         [Test]

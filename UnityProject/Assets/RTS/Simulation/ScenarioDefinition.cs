@@ -350,6 +350,8 @@ namespace Rts.Simulation
         public int CraftRequiredAiArmsStockTarget = 20;
         public int CraftRequiredAiArmsAssemblersAge1 = 1, CraftRequiredAiArmsAssemblersAge2 = 2,
             CraftRequiredAiArmsAssemblersAge3 = 4, CraftRequiredAiArmsAssemblersAge4 = 4;
+        /// <summary>CraftRequired: extra wood-gatherer share added to the normal large-economy floor after age 1.</summary>
+        public int CraftRequiredAiWoodWorkerPermille = 50;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;

@@ -65,10 +65,23 @@ namespace Rts.Simulation
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
+        public int SawmillsCompleted, SawmillsActive, SawmillPlanks;
+        public int PlanksUsedWeapons, PlanksUsedConstruction, PlanksUsedScholarly, PlanksUsedBridges, PlanksUsedOther;
+        public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
     }
 
     public sealed partial class Simulation
     {
+        // CraftTrace-only counters. They are not part of WorldState, decisions, diagnostics, or replay hashes.
+        private const int CraftTraceWeapons = 0, CraftTraceConstruction = 1, CraftTraceScholarly = 2,
+            CraftTraceBridges = 3, CraftTraceOther = 4;
+        private readonly int[,] craftTracePlankUses = new int[2, 5];
+        private void RecordCraftTracePlanks(uint faction, int kind, int amount)
+        {
+            if (faction < 1 || faction > 2 || amount == 0) return;
+            craftTracePlankUses[faction - 1, kind] = checked(craftTracePlankUses[faction - 1, kind] + amount);
+        }
+
         private int ConstructionUseKind(BuildingKind kind)
         {
             if (kind == BuildingKind.House || kind == BuildingKind.GrandHouse) return LargeEconomyUseKind.House;
@@ -138,6 +151,12 @@ namespace Rts.Simulation
                     }
                     else if (b.Kind == BuildingKind.LumberCamp) value.LumberCamps++;
                     else value.OtherBuildings++;
+                    if (b.Kind == BuildingKind.Sawmill && b.Complete)
+                    {
+                        value.SawmillsCompleted++;
+                        if (b.Input > 0 || b.Timer > 0) value.SawmillsActive++;
+                        value.SawmillPlanks = checked(value.SawmillPlanks + b.Output);
+                    }
                     int machineResource = b.Kind == BuildingKind.Quarry ? 2
                         : b.Kind == BuildingKind.Drill && b.NodeId > 0 && b.NodeId <= world.Nodes.Length
                             ? LargeWorkResourceIndex(world.Nodes[b.NodeId - 1].Definition.Kind) : -1;
@@ -259,6 +278,15 @@ namespace Rts.Simulation
                     for (int resource = 0; resource < 2; resource++)
                         value.Uses[kind, resource] = largeResourceUses[faction - 1, kind, resource];
                 value.TownResourceIncome = largeTownDelivered[faction - 1];
+                value.PlanksUsedWeapons = craftTracePlankUses[faction - 1, CraftTraceWeapons];
+                value.PlanksUsedConstruction = craftTracePlankUses[faction - 1, CraftTraceConstruction];
+                value.PlanksUsedScholarly = craftTracePlankUses[faction - 1, CraftTraceScholarly];
+                value.PlanksUsedBridges = craftTracePlankUses[faction - 1, CraftTraceBridges];
+                value.PlanksUsedOther = craftTracePlankUses[faction - 1, CraftTraceOther];
+                var capturedEconomy = world.Economies[faction - 1];
+                value.ArmsProduced = checked(capturedEconomy.ArmsKitProduced + capturedEconomy.FineArmsKitProduced);
+                value.ArmsUsedBySoldiers = checked(capturedEconomy.ArmsKitConsumed + capturedEconomy.FineArmsKitConsumed);
+                value.ArmsStock = checked(capturedEconomy.ArmsKit + capturedEconomy.FineArmsKit);
                 result.Factions[faction - 1] = value;
             }
             return result;
