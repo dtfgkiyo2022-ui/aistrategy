@@ -601,7 +601,7 @@ namespace Rts.Presentation
             Add(rows, "make:villager", UiText.T("Villager (", "村人（食料 ") + economy.VillagerFoodCost + UiText.T(" food)", "）") + queue);
             var barracks = OwnBuilding(economy, BuildingKind.Barracks);
             bool barracksReady = barracks.HasValue && barracks.Value.Complete;
-            string infantry = UiText.T("Infantry (", "歩兵（食") + economy.InfantryFoodCost + UiText.T("F ", " 木") + economy.InfantryWoodCost + (economy.InfantryMetalCost > 0 ? UiText.T("W ", " 金") + economy.InfantryMetalCost + UiText.T("M)", "）") : UiText.T("W)", "）"));
+             string infantry = TrainingCostLabel(economy, UnitKind.Infantry, "Infantry", "歩兵", economy.InfantryFoodCost, economy.InfantryWoodCost, economy.InfantryMetalCost);
             Add(rows, "make:infantry", infantry, barracksReady, barracksReady ? "" : NeedBuilding(barracks.HasValue, barracksReady, UiText.T("Barracks", "兵舎")));
             if (barracksReady) Add(rows, "make:infantry-cancel", UiText.T("Undo", "取消"));
             if (!barracksReady && !economy.Ages) Add(rows, "make:infantry-info", UiText.T("Infantry: build a barracks", "歩兵：兵舎を建てると作れる"), false, "", false, true);
@@ -609,14 +609,16 @@ namespace Rts.Presentation
             if (economy.Ages)
             {
                 Add(rows, "make:scout", UiText.T("Scout (", "斥候（食料 ") + economy.ScoutFoodCost + UiText.T(" food)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
-                if (economy.Age >= 2 && economy.Civ == CivKind.Agrarian) Add(rows, "make:archer-barracks", UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
-                else if (economy.Age >= 2 && economy.Civ == CivKind.Metallurgy) Add(rows, "make:cavalry-barracks", UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）"), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
+                 if (economy.Age >= 2 && economy.Civ == CivKind.Agrarian) Add(rows, "make:archer-barracks", TrainingCostLabel(economy, UnitKind.Archer, "Archer", "弓兵", economy.ArcherFoodCost, economy.ArcherWoodCost), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
+                 else if (economy.Age >= 2 && economy.Civ == CivKind.Metallurgy) Add(rows, "make:cavalry-barracks", TrainingCostLabel(economy, UnitKind.Cavalry, "Cavalry", "騎兵", economy.CavalryFoodCost, economy.CavalryWoodCost, economy.CavalryMetalCost), barracksReady, barracksReady ? "" : UiText.T("Build a barracks first", "兵舎を先に建てる"));
                 else if (economy.Age >= 2 && economy.Civ == CivKind.Mountain) AddProducerRows(rows, economy, BuildingKind.Barracks, "make:mercenary-barracks", UiText.T("Mercenary (", "傭兵（食料 ") + economy.JewelMercenaryFood + UiText.T("F, ", "、宝石 ") + economy.JewelMercenaryGems + UiText.T(" Gems)", "）"), UnitKind.Mercenary);
-                AddProducerRows(rows, economy, BuildingKind.SiegeWorkshop, "make:ram", UiText.T("Ram (", "破城槌（食") + economy.RamFoodCost + UiText.T("F ", " 木") + economy.RamWoodCost + UiText.T("W)", "）"), UnitKind.Ram);
+                 AddProducerRows(rows, economy, BuildingKind.SiegeWorkshop, "make:ram", TrainingCostLabel(economy, UnitKind.Ram, "Ram", "破城槌", economy.RamFoodCost, economy.RamWoodCost), UnitKind.Ram);
                 bool rangeExists = OwnBuilding(economy, BuildingKind.ArcheryRange).HasValue;
                 bool stableExists = OwnBuilding(economy, BuildingKind.Stable).HasValue;
-                if (rangeExists) AddProducerRows(rows, economy, BuildingKind.ArcheryRange, "make:archer-range", UiText.T("Archer (", "弓兵（食") + economy.ArcherFoodCost + UiText.T("F ", " 木") + economy.ArcherWoodCost + UiText.T("W)", "）"), UnitKind.Archer);
-                if (stableExists) AddProducerRows(rows, economy, BuildingKind.Stable, "make:cavalry-stable", UiText.T("Cavalry (", "騎兵（食") + economy.CavalryFoodCost + UiText.T("F ", " 木") + economy.CavalryWoodCost + UiText.T("W ", " 金") + economy.CavalryMetalCost + UiText.T("M)", "）"), UnitKind.Cavalry);
+                 if (rangeExists) AddProducerRows(rows, economy, BuildingKind.ArcheryRange, "make:archer-range", TrainingCostLabel(economy, UnitKind.Archer, "Archer", "弓兵", economy.ArcherFoodCost, economy.ArcherWoodCost), UnitKind.Archer);
+                 if (stableExists) AddProducerRows(rows, economy, BuildingKind.Stable, "make:cavalry-stable", TrainingCostLabel(economy, UnitKind.Cavalry, "Cavalry", "騎兵", economy.CavalryFoodCost, economy.CavalryWoodCost, economy.CavalryMetalCost), UnitKind.Cavalry);
+                 if (economy.CraftRequiredEnabled && economy.Age >= 2 && ArmsKitStock(economy) == 0)
+                     Add(rows, "make:arms-kit-info", UiText.T("Not enough arms kits: make arms kits (1 plank + 2 charcoal) at an assembler", "武具が足りません：組立所で武具キット（板1＋木炭2）を作ってください"), false, "", false, true);
                 if (stableExists && economy.TackEnabled)
                 {
                     AddProducerRows(rows, economy, BuildingKind.Stable, "make:heavy-cavalry", UiText.T("Heavy cavalry", "重騎兵") + " (tack " + economy.HeavyCavalryTackCost + ", food " + economy.HeavyCavalryFoodCost + ")", UnitKind.HeavyCavalry);
@@ -656,6 +658,24 @@ namespace Rts.Presentation
             var producer = OwnBuilding(economy, kind);
             bool ready = producer.HasValue && producer.Value.Complete;
             Add(rows, id, label, ready, ready ? "" : NeedBuilding(producer.HasValue, ready, Name(kind)));
+        }
+
+        private static int ArmsKitStock(EconomyView economy)
+        {
+            return economy.ArmsKit + economy.FineArmsKit + (economy.CraftTree4Enabled ? economy.EliteKit : 0);
+        }
+
+        private static bool UsesArmsKitForDisplay(UnitKind unit)
+        {
+            return unit != UnitKind.Villager && unit != UnitKind.Scout && unit != UnitKind.Monk;
+        }
+
+        private static string TrainingCostLabel(EconomyView economy, UnitKind unit, string englishName, string japaneseName, int food, int wood, int metal = 0)
+        {
+            if (economy.CraftRequiredEnabled && economy.Age >= 2 && UsesArmsKitForDisplay(unit))
+                return UiText.T(englishName + " (" + food + "F 1 Arms)", japaneseName + "（食" + food + " 武具1）");
+            return UiText.T(englishName + " (" + food + "F " + wood + "W" + (metal > 0 ? " " + metal + "M" : "") + ")",
+                japaneseName + "（食" + food + " 木" + wood + (metal > 0 ? " 金" + metal : "") + "）");
         }
 
         private void AddAgeActions(List<EconomyAction> rows, EconomyView economy)

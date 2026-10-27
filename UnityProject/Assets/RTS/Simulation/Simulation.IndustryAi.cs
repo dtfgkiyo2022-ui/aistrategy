@@ -450,6 +450,11 @@ namespace Rts.Simulation
             if (!AssemblerAllowed(faction)) return;
             if (AiFactoryOn && world.Economies[faction - 1].Age >= 2)
                 DecideAiFactoryAge2(faction);
+            if (CraftRequiredOn && AiFactoryOn)
+            {
+                EnsureCraftRequiredAiCapacity(faction);
+                EnsureCraftRequiredAiMaterialCapacity(faction);
+            }
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
             int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.Assembler);
@@ -473,6 +478,7 @@ namespace Rts.Simulation
 
             if (!BuildingReady(line.AssemblerId)) return;
             ref var assembler = ref world.Buildings[line.AssemblerId - 1];
+            if (CraftRequiredOn && AiFactoryOn) AssignCraftRequiredAiRecipes(faction);
             if (assembler.Recipe == RecipeKind.None) return;
 
             // CraftTree1 makes charcoal legal for every civilisation, but the old automatic
@@ -501,6 +507,140 @@ namespace Rts.Simulation
                 CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole);
             }
             SetLineHaulers(faction, line, whole ? 0 : 1);
+        }
+
+        private int CraftRequiredAiAssemblerTarget(uint faction)
+        {
+            var rules = world.Config.Economy;
+            int age = world.Economies[faction - 1].Age;
+            return age <= 1 ? rules.CraftRequiredAiArmsAssemblersAge1
+                : age == 2 ? rules.CraftRequiredAiArmsAssemblersAge2
+                : age == 3 ? rules.CraftRequiredAiArmsAssemblersAge3 : rules.CraftRequiredAiArmsAssemblersAge4;
+        }
+
+        private void EnsureCraftRequiredAiCapacity(uint faction)
+        {
+            var rules = world.Config.Economy;
+            // AiExpand reserves the first age's processing sites for the
+            // configured barracks growth.  Once that deterministic military
+            // target is met, CraftRequired takes the next site for its age-1
+            // stock line; this keeps expansion placement stable.
+            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+                && rules.AiFactoryAge1BarracksMaxBuildings > 0
+                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings
+                )
+                return;
+            if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Wood < rules.AssemblerWoodCost) return;
+            PlaceAssembler(faction);
+        }
+
+        private void EnsureCraftRequiredAiMaterialCapacity(uint faction)
+        {
+            var rules = world.Config.Economy;
+            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+                && rules.AiFactoryAge1BarracksMaxBuildings > 0
+                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
+                return;
+            // The extra sawmills and kilns belong to no processing line, so nothing would carry their output to
+            // the core stock the assemblers draw from (craftreq1: planks stayed 0 with 2900 wood in stock).
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln
+                    || IsProcessingLineBuildingReferenced(building.Id)) continue;
+                SetSimpleHaulers(faction, building.Id, 0, 1);
+            }
+            int target = CraftRequiredAiMaterialTarget(faction);
+            ref var economy = ref world.Economies[faction - 1];
+            if (CountPlannedBuildings(faction, BuildingKind.Sawmill) < target
+                && economy.Wood >= rules.SawmillWoodCost)
+            {
+                PlaceCommonSawmill(faction);
+                return;
+            }
+            if (CountPlannedBuildings(faction, BuildingKind.CharcoalKiln) < target * 2
+                && economy.Wood >= rules.CharcoalKilnWoodCost)
+                PlaceKiln(faction);
+        }
+
+        private int CraftRequiredAiMaterialTarget(uint faction)
+        {
+            var rules = world.Config.Economy;
+            int age = world.Economies[faction - 1].Age;
+            int targetAssemblers = CraftRequiredAiAssemblerTarget(faction);
+            if (age <= 1) targetAssemblers = Math.Max(targetAssemblers, rules.CraftRequiredAiArmsAssemblersAge2);
+            int plannedArmsAssemblers = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsPlannedBuilding(building) && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit)
+                    plannedArmsAssemblers++;
+            }
+            int armsAssemblers = Math.Max(plannedArmsAssemblers, targetAssemblers);
+            int joineries = CountPlannedBuildings(faction, BuildingKind.Joinery);
+            int scholarlyAssemblers = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Scholarly)
+                    scholarlyAssemblers++;
+            }
+            int demand = checked(armsAssemblers * 15 + joineries * 15 + scholarlyAssemblers * 12);
+            return Math.Max(1, checked((demand + 19) / 20));
+        }
+
+        private bool CraftRequiredAiOtherPlankUseBlocked(uint faction, RecipeKind recipe)
+        {
+            if (!CraftRequiredOn || (recipe != RecipeKind.Frames && recipe != RecipeKind.Scholarly)) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            // Only the automatic economy waits; a player's own recipes are never held back.
+            if (economy.AutoOff) return false;
+            int inProgress = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit)
+                    inProgress++;
+            }
+            return economy.ArmsKit + economy.FineArmsKit + inProgress < world.Config.Economy.CraftRequiredAiArmsStockTarget;
+        }
+
+        private void AssignCraftRequiredAiRecipes(uint faction)
+        {
+            RecipeKind wanted = PreferredAssemblerRecipe(faction);
+            if (wanted == RecipeKind.ArmsKit)
+            {
+                int target = CraftRequiredAiAssemblerTarget(faction);
+                int assigned = 0;
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    ref var assembler = ref world.Buildings[i];
+                    if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.FactionId != faction
+                        || assembler.Kind != BuildingKind.Assembler || assembler.Timer != 0) continue;
+                    if (assembler.Recipe == RecipeKind.ArmsKit)
+                    {
+                        assigned++;
+                        continue;
+                    }
+                    if (assigned >= target) continue;
+                    SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit);
+                    assigned++;
+                }
+                return;
+            }
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                ref var building = ref world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Assembler || building.Timer != 0) continue;
+                if (building.Recipe != wanted) SetAssemblerRecipe(faction, building.Id, wanted);
+            }
         }
 
         private void DecideCraftTree3(uint faction)
@@ -726,7 +866,22 @@ namespace Rts.Simulation
         }
 
         private RecipeKind PreferredAssemblerRecipe(uint faction)
-            => PreferredCraftTree3Recipe(faction);
+        {
+            if (CraftRequiredOn)
+            {
+                var economy = world.Economies[faction - 1];
+                int inProgress = 0;
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var building = world.Buildings[i];
+                    if (IsActualBuilding(building) && building.FactionId == faction && building.Kind == BuildingKind.Assembler
+                        && building.Recipe == RecipeKind.ArmsKit) inProgress++;
+                }
+                if (economy.ArmsKit + economy.FineArmsKit + inProgress < world.Config.Economy.CraftRequiredAiArmsStockTarget)
+                    return RecipeKind.ArmsKit;
+            }
+            return PreferredCraftTree3Recipe(faction);
+        }
 
         private RecipeKind PreferredCraftTree3Recipe(uint faction)
         {

@@ -574,6 +574,7 @@ namespace Rts.Simulation
                 economy.Planks = checked(economy.Planks - planks);
                 economy.PlanksConsumed = checked(economy.PlanksConsumed + planks);
                 economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
+                RecordCraftTracePlanks(faction, CraftTraceBridges, planks);
             }
             economy.Stone = checked(economy.Stone - stoneCost);
             RecordLargeUse(faction, ResourceKind.Stone, ConstructionUseKind(kind), stoneCost);
