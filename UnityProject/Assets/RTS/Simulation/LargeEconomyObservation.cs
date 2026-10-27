@@ -39,7 +39,7 @@ namespace Rts.Simulation
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
-        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, LumberCamps, OtherBuildings;
+        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, LumberCamps, OtherBuildings;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
@@ -218,6 +218,7 @@ namespace Rts.Simulation
                 }
                 value.ConnectedFarms = largeConnectedFarms[faction - 1];
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
+                value.BeltDropped = largeBeltDropped[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];
@@ -372,6 +373,12 @@ namespace Rts.Simulation
                 int resource = LargeWorkResourceIndex(kind);
                 if (resource >= 0) largeBeltIncome[(int)(faction - 1) * 6 + resource] = checked(largeBeltIncome[(int)(faction - 1) * 6 + resource] + amount);
             }
+        }
+
+        private void RecordLargeBeltDrop(uint faction, ResourceKind kind, int amount)
+        {
+            if (LargeEconomyOn && faction >= 1 && faction <= 2 && amount > 0)
+                largeBeltDropped[faction - 1] = checked(largeBeltDropped[faction - 1] + amount);
         }
 
         private void RecordLargeUse(uint faction, ResourceKind resource, int kind, int amount)

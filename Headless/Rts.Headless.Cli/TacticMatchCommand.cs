@@ -89,6 +89,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
         if (options.ContainsKey("--free-towns-off")) scenario.Economy.FreeTowns = false;
+        if (options.ContainsKey("--belt-dropoff-off")) scenario.Economy.BeltDropOff = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -281,7 +282,8 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null) && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null)
+                && (simulation.Capture(1).Tick % 1000 == 0 || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -628,7 +630,7 @@ internal static class TacticMatchCommand
             cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered", prefix + "BeltDropped",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
                 prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
@@ -661,7 +663,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 81; i++) cells.Add("");
+                for (int i = 0; i < 82; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -669,7 +671,7 @@ internal static class TacticMatchCommand
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
+                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.BeltDropped, value.LumberCamps, value.OtherBuildings,
                 value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));

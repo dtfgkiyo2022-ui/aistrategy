@@ -64,6 +64,8 @@ namespace Rts.Simulation
             // 38.7 is measured on the large economy like 37.8. On the small (provisional) map the primitive farms take
             // the little wood there is and the hut makes no goods by 5000 ticks.
             e.OpenFarms = allCivilisations && e.LargeEconomy;
+            // 38.12 is intentionally large-map-only; small maps and explicit old scenarios retain the historical hand haul.
+            e.BeltDropOff = e.LargeEconomy;
             // 38.9 is a large-map-only opening rule. Apply it after map generation so direct map-generator callers keep
             // the historical three starting villagers, while the played large map gets the same deterministic placement
             // pattern with the configured early-start count.

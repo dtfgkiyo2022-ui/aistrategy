@@ -12,6 +12,15 @@ namespace Rts.Simulation
     {
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
         private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
+        private bool BeltDropOffOn => IndustryOn && world.Config.Economy.BeltDropOff;
+        // Indexed by ResourceKind. Each entry is built lazily and remains valid until any belt changes.
+        private bool[][] beltDropOffReachability;
+
+        private void InvalidateBeltCaches()
+        {
+            world.BeltOrder = null;
+            beltDropOffReachability = null;
+        }
 
         /// <summary>Economy step, before gathering (11.3): downstream belts first, so a full line moves without gaps.</summary>
         private void AdvanceBelts()
@@ -49,6 +58,12 @@ namespace Rts.Simulation
                 {
                     AddStock(belt.FactionId, belt.Item, 1);
                     RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
+                    belt.Item = 0;
+                    belt.Progress = 0;
+                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
+                }
+                else if (target.FactionId == 0 && BeltDropOffOn && TryFeedBeltDropOffStock(next, belt.FactionId, belt.Item))
+                {
                     belt.Item = 0;
                     belt.Progress = 0;
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
@@ -303,7 +318,7 @@ namespace Rts.Simulation
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
             }
         }
 
@@ -327,7 +342,7 @@ namespace Rts.Simulation
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
                 economy.Wood = checked(economy.Wood - rules.UndergroundBeltWoodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.UndergroundBeltWoodCost);
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
                 return;
             }
             int cell = c.Cell;
@@ -344,7 +359,7 @@ namespace Rts.Simulation
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
             economy.Wood = checked(economy.Wood - cost);
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
-            world.BeltOrder = null;
+            InvalidateBeltCaches();
         }
 
         private bool UndergroundPairIsValid(int entrance, int exit, Facing facing)
@@ -397,7 +412,7 @@ namespace Rts.Simulation
             }
             world.Belts[cell] = default;
             if (paired) world.Belts[pair] = default;
-            world.BeltOrder = null;
+            InvalidateBeltCaches();
         }
 
         private bool IsNodeCell(int cell)
@@ -421,6 +436,115 @@ namespace Rts.Simulation
         {
             foreach (var node in world.Nodes) if (world.Map.Cell(node.Definition.Position) == cell) return true;
             return false;
+        }
+
+        private bool TryFeedBeltDropOffStock(int cell, uint faction, ResourceKind item)
+        {
+            if (!BeltDropOffStockDestination(cell, faction, item)) return false;
+            AddStock(faction, item, 1);
+            RecordLargeBeltDelivery(faction, item, 1);
+            return true;
+        }
+
+        private bool BeltDropOffDestination(int cell, uint faction, ResourceKind item)
+        {
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0) return false;
+            if (BeltDropOffStockDestination(cell, faction, item)) return true;
+            return BeltCanFeedBuilding(cell, faction, item);
+        }
+
+        private bool BeltDropOffStockDestination(int cell, uint faction, ResourceKind item)
+        {
+            if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0) return false;
+            if (FeedsOwnCore(cell, faction)) return true;
+            int width = world.Config.Map.WidthCells, x = cell % width, z = cell / width;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (!IsActualBuilding(b) || !b.Complete || b.FactionId != faction) continue;
+                int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
+                if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
+                if (b.Kind == BuildingKind.Town || b.Kind == BuildingKind.DropSite) return true;
+                // A belt-dropoff storage is a receiving inventory. It is deliberately independent of the older
+                // StorageFeedsProcessing route rule; the item has already reached the storage endpoint.
+                if (b.Kind == BuildingKind.Storage) return IsRawResource(item) && StorageCanAccept(b, item);
+                return false;
+            }
+            return false;
+        }
+
+        private int FindBeltDropOffCell(VillagerState villager)
+        {
+            if (!BeltDropOffOn) return -1;
+            int resource = (int)villager.CarryKind;
+            if (resource <= 0 || resource >= 33) return -1;
+            var reachable = BeltDropOffReachable(resource, villager.FactionId);
+            int origin = world.Map.Cell(villager.Position);
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            int range = Math.Max(0, world.Config.Economy.BeltDropOffRangeCells);
+            int best = -1, bestDistance = 0;
+            int ox = origin % width, oz = origin / width;
+            for (int dz = -range; dz <= range; dz++)
+                for (int dx = -range; dx <= range; dx++)
+                {
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) > range) continue;
+                    int x = ox + dx, z = oz + dz;
+                    if (x < 0 || z < 0 || x >= width || z >= height) continue;
+                    int cell = z * width + x;
+                    var belt = world.Belts[cell];
+                    if (!reachable[cell] || belt.FactionId != villager.FactionId
+                        || belt.Component == BeltComponentKind.Inserter || belt.Component == BeltComponentKind.UndergroundExit
+                        || belt.Component == BeltComponentKind.Splitter) continue;
+                    int distance = dx * dx + dz * dz;
+                    if (best < 0 || distance < bestDistance || distance == bestDistance && cell < best)
+                    { best = cell; bestDistance = distance; }
+                }
+            return best;
+        }
+
+        private bool[] BeltDropOffReachable(int resource, uint faction)
+        {
+            if (beltDropOffReachability == null) beltDropOffReachability = new bool[33][];
+            if (beltDropOffReachability[resource] != null) return beltDropOffReachability[resource];
+            var reachable = new bool[world.Belts.Length];
+            int[] seen = new int[world.Belts.Length], queue = new int[world.Belts.Length];
+            int stamp = 0, limit = Math.Max(0, world.Config.Economy.BeltLimit);
+            for (int start = 0; start < world.Belts.Length; start++)
+            {
+                var source = world.Belts[start];
+                if (source.FactionId != faction || source.Component == BeltComponentKind.Inserter
+                    || source.Component == BeltComponentKind.UndergroundExit || source.Component == BeltComponentKind.Splitter
+                    || limit == 0) continue;
+                stamp++;
+                int head = 0, tail = 0, visited = 0;
+                seen[start] = stamp; queue[tail++] = start;
+                while (head < tail && visited < limit && !reachable[start])
+                {
+                    int cell = queue[head++]; visited++;
+                    var belt = world.Belts[cell];
+                    if (belt.Component == BeltComponentKind.Inserter) continue;
+                    int first = -1, second = -1;
+                    if (belt.Component == BeltComponentKind.Splitter)
+                    {
+                        first = BeltNext(cell, belt.Facing);
+                        second = BeltNext(cell, TurnLeft(belt.Facing));
+                    }
+                    else if (belt.Component == BeltComponentKind.UndergroundEntrance) first = belt.PairCell;
+                    else first = BeltOutputCellForItem(cell, ref belt, (ResourceKind)resource);
+                    if (Visit(first) || Visit(second)) break;
+                }
+
+                bool Visit(int next)
+                {
+                    if (next < 0 || next >= world.Belts.Length) return false;
+                    var target = world.Belts[next];
+                    if (target.FactionId == 0) return BeltDropOffDestination(next, faction, (ResourceKind)resource);
+                    if (target.FactionId != faction || target.Component == BeltComponentKind.Inserter) return false;
+                    if (seen[next] != stamp) { seen[next] = stamp; queue[tail++] = next; }
+                    return false;
+                }
+            }
+            return beltDropOffReachability[resource] = reachable;
         }
     }
 }
