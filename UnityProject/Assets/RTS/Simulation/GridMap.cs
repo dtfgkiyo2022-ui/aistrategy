@@ -23,6 +23,8 @@ namespace Rts.Simulation
         // Reverse-BFS tables are work buffers. Route answers are still invalidated with the terrain, but their arrays can
         // be reused by the next search instead of allocating a map-sized int[] after every building change.
         private readonly Stack<int[]> routeBuffers = new Stack<int[]>();
+        private readonly Dictionary<int, Stack<int[]>> sharedPathBuffers = new Dictionary<int, Stack<int[]>>();
+        private int[] sharedRouteQueue;
         // FindPath is a pure function of the immutable terrain, the start cell and the exact goal point, and the decision
         // layer asks for the same routes again and again. Callers only read the returned array. FIFO eviction bounds the
         // memory and, like the routes above, changes cost only, never a result.
@@ -32,6 +34,10 @@ namespace Rts.Simulation
         // Cell centres of the cached paths, kept and dropped together with them. Like a cached path, the array is
         // shared by every caller and must only be read.
         private readonly Dictionary<(uint Faction, int Start, long GoalX, long GoalZ), SimPoint[]> pathCenters = new Dictionary<(uint, int, long, long), SimPoint[]>();
+        private readonly Dictionary<(uint Faction, int Start, long GoalX, long GoalZ), IReadOnlyList<SimPoint>> pathCenterViews = new Dictionary<(uint, int, long, long), IReadOnlyList<SimPoint>>();
+        private static readonly int[] NoReplacements = new int[0];
+        private static readonly SimPoint[] NoPointReplacements = new SimPoint[0];
+        private readonly List<int> sharedPathScratch = new List<int>();
         public int[] SharedRoute(int start, SimPoint goal)
             => SharedRoute(start, goal, 0);
 
@@ -63,7 +69,9 @@ namespace Rts.Simulation
                 // One reverse BFS per destination, shared by all soldiers. The scenario validator bounds the grid.
                 next = routeBuffers.Count == 0 ? new int[passable.Length] : routeBuffers.Pop();
                 Array.Fill(next, -1);
-                var queue = new int[passable.Length]; int head = 0, tail = 0;
+                if (sharedRouteQueue == null || sharedRouteQueue.Length < passable.Length)
+                    sharedRouteQueue = new int[passable.Length];
+                var queue = sharedRouteQueue; int head = 0, tail = 0;
                 queue[tail++] = target; next[target] = target;
                 while (head < tail)
                 {
@@ -86,10 +94,23 @@ namespace Rts.Simulation
                 routes.Add(routeKey, next); routeOrder.Enqueue(routeKey);
             }
             if (next[start] < 0) return Array.Empty<int>();
-            var path = new List<int>();
+            sharedPathScratch.Clear();
             for (int cell = start; ; cell = next[cell])
-            { path.Add(cell); if (cell == target) break; }
-            return path.ToArray();
+            { sharedPathScratch.Add(cell); if (cell == target) break; }
+            int[] result;
+            if (!sharedPathBuffers.TryGetValue(sharedPathScratch.Count, out var available) || available.Count == 0)
+                result = new int[sharedPathScratch.Count];
+            else result = available.Pop();
+            for (int i = 0; i < sharedPathScratch.Count; i++) result[i] = sharedPathScratch[i];
+            return result;
+        }
+
+        internal void ReleaseSharedRoute(int[] path)
+        {
+            if (path == null || path.Length == 0) return;
+            if (!sharedPathBuffers.TryGetValue(path.Length, out var available))
+                sharedPathBuffers[path.Length] = available = new Stack<int[]>();
+            available.Push(path);
         }
         public GridMap(MapDefinition map)
         {
@@ -113,14 +134,14 @@ namespace Rts.Simulation
             passable[cell] = value;
             PassableVersion++;
             ClearSharedRoutes();
-            paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
+            paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
         internal void InvalidateRoutes()
         {
             PassableVersion++;
             ClearSharedRoutes();
-            paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
+            paths.Clear(); pathOrder.Clear(); pathCenters.Clear(); pathCenterViews.Clear();
         }
 
         private void ClearSharedRoutes()
@@ -150,7 +171,7 @@ namespace Rts.Simulation
                 var key = (factionId, start, goal.X.Raw, goal.Z.Raw);
                 if (paths.TryGetValue(key, out var cached)) return cached;
                 var path = FindPathCore(start, goal, factionId);
-                if (pathOrder.Count == PathCacheLimit) { var oldest = pathOrder.Dequeue(); paths.Remove(oldest); pathCenters.Remove(oldest); }
+                if (pathOrder.Count == PathCacheLimit) { var oldest = pathOrder.Dequeue(); paths.Remove(oldest); pathCenters.Remove(oldest); pathCenterViews.Remove(oldest); }
                 paths.Add(key, path); pathOrder.Enqueue(key);
                 return path;
             }
@@ -164,12 +185,107 @@ namespace Rts.Simulation
             if (pathCenters.TryGetValue(key, out var cached)) return cached;
             var centers = new SimPoint[path.Length];
             for (int i = 0; i < path.Length; i++) centers[i] = Center(path[i]);
-            if (paths.ContainsKey(key)) pathCenters[key] = centers;
+            if (paths.ContainsKey(key))
+            {
+                pathCenters[key] = centers;
+                pathCenterViews[key] = new SharedPrefixList<SimPoint>(centers, centers.Length, NoReplacements, NoPointReplacements);
+            }
+            return centers;
+        }
+
+        /// <summary>Read-only centre view for decision DTOs. It is cached with the path so ContractList can share it.</summary>
+        public IReadOnlyList<SimPoint> FindPathCenterView(int start, SimPoint goal, uint factionId)
+        {
+            var path = FindPath(start, goal, factionId);
+            var key = (factionId, start, goal.X.Raw, goal.Z.Raw);
+            if (pathCenterViews.TryGetValue(key, out var cached)) return cached;
+            var centers = new SimPoint[path.Length];
+            for (int i = 0; i < path.Length; i++) centers[i] = Center(path[i]);
+            if (paths.ContainsKey(key))
+            {
+                pathCenters[key] = centers;
+                var view = new SharedPrefixList<SimPoint>(centers, centers.Length, NoReplacements, NoPointReplacements);
+                pathCenterViews[key] = view;
+                return view;
+            }
             return centers;
         }
 
         private int[] searchG, searchParent;
         private bool[] searchClosed;
+        private struct PathHeapEntry
+        {
+            internal int F, H, Id;
+            internal PathHeapEntry(int f, int h, int id) { F = f; H = h; Id = id; }
+        }
+        private PathHeapEntry[] pathHeap;
+        private int[] pathHeapIndex;
+        private int pathHeapCount;
+        private readonly List<int> pathScratch = new List<int>();
+
+        // This is the same total ordering as SortedSet<(int f, int h, int id)>.
+        // The index table makes decrease-key remove the old tuple before the next Min,
+        // so equal f/h values still come out in id order.
+        private static bool HeapLess(PathHeapEntry a, PathHeapEntry b)
+            => a.F < b.F || a.F == b.F && (a.H < b.H || a.H == b.H && a.Id < b.Id);
+
+        private void HeapSwap(int a, int b)
+        {
+            var value = pathHeap[a]; pathHeap[a] = pathHeap[b]; pathHeap[b] = value;
+            pathHeapIndex[pathHeap[a].Id] = a;
+            pathHeapIndex[pathHeap[b].Id] = b;
+        }
+
+        private void HeapUp(int index)
+        {
+            while (index > 0)
+            {
+                int parent = (index - 1) / 2;
+                if (!HeapLess(pathHeap[index], pathHeap[parent])) break;
+                HeapSwap(index, parent); index = parent;
+            }
+        }
+
+        private void HeapDown(int index)
+        {
+            while (true)
+            {
+                int left = index * 2 + 1, right = left + 1, best = index;
+                if (left < pathHeapCount && HeapLess(pathHeap[left], pathHeap[best])) best = left;
+                if (right < pathHeapCount && HeapLess(pathHeap[right], pathHeap[best])) best = right;
+                if (best == index) return;
+                HeapSwap(index, best); index = best;
+            }
+        }
+
+        private void HeapAddOrUpdate(int f, int h, int id)
+        {
+            int index = pathHeapIndex[id];
+            if (index >= 0)
+            {
+                pathHeap[index] = new PathHeapEntry(f, h, id);
+                HeapUp(index); HeapDown(pathHeapIndex[id]);
+                return;
+            }
+            index = pathHeapCount++;
+            pathHeap[index] = new PathHeapEntry(f, h, id);
+            pathHeapIndex[id] = index;
+            HeapUp(index);
+        }
+
+        private PathHeapEntry HeapPop()
+        {
+            var result = pathHeap[0];
+            pathHeapIndex[result.Id] = -1;
+            pathHeapCount--;
+            if (pathHeapCount > 0)
+            {
+                pathHeap[0] = pathHeap[pathHeapCount];
+                pathHeapIndex[pathHeap[0].Id] = 0;
+                HeapDown(0);
+            }
+            return result;
+        }
 
         private int[] FindPathCore(int start, SimPoint goal, uint factionId)
         {
@@ -177,19 +293,23 @@ namespace Rts.Simulation
             int target = Cell(goal);
             // The three work tables are kept between searches (a search fills them again before reading), so a
             // cache miss no longer allocates three arrays the size of the map. One GridMap is stepped by one thread.
-            if (searchG == null) { searchG = new int[passable.Length]; searchParent = new int[passable.Length]; searchClosed = new bool[passable.Length]; }
+            if (searchG == null)
+            {
+                searchG = new int[passable.Length]; searchParent = new int[passable.Length]; searchClosed = new bool[passable.Length];
+                pathHeap = new PathHeapEntry[passable.Length]; pathHeapIndex = new int[passable.Length];
+            }
             var g = searchG; Array.Fill(g, int.MaxValue);
             var parent = searchParent; Array.Fill(parent, -1);
             var closed = searchClosed; Array.Clear(closed, 0, closed.Length);
-            var open = new SortedSet<(int f, int h, int id)>();
+            Array.Fill(pathHeapIndex, -1); pathHeapCount = 0;
             int heuristicCell = target >= 0 ? target : start;
-            g[start] = 0; open.Add((H(start, heuristicCell), H(start, heuristicCell), start));
+            g[start] = 0; int startH = H(start, heuristicCell); HeapAddOrUpdate(startH, startH, start);
             int best = start, expanded = 0;
             long bestDistance = Distance(Center(start), goal);
-            while (open.Count > 0 && expanded < passable.Length)
+            while (pathHeapCount > 0 && expanded < passable.Length)
             {
-                var item = open.Min; open.Remove(item);
-                int id = item.id; closed[id] = true; expanded++;
+                var item = HeapPop();
+                int id = item.Id; closed[id] = true; expanded++;
                 var distance = Distance(Center(id), goal);
                 if (distance < bestDistance || (distance == bestDistance && id < best)) { best = id; bestDistance = distance; }
                 if (id == target) { best = id; break; }
@@ -201,13 +321,13 @@ namespace Rts.Simulation
                         : side == 2 ? (z > 0 ? id - width : -1) : (x > 0 ? id - 1 : -1);
                     if (!IsPassableFor(next, factionId) || closed[next] || g[next] <= g[id] + 1) continue;
                     int h = H(next, heuristicCell);
-                    if (g[next] != int.MaxValue) open.Remove((g[next] + h, h, next));
-                    g[next] = g[id] + 1; parent[next] = id; open.Add((g[next] + h, h, next));
+                    g[next] = g[id] + 1; parent[next] = id;
+                    HeapAddOrUpdate(g[next] + h, h, next);
                 }
             }
-            var path = new List<int>();
-            for (int id = best; id >= 0; id = parent[id]) path.Add(id);
-            path.Reverse(); return path.ToArray();
+            pathScratch.Clear();
+            for (int id = best; id >= 0; id = parent[id]) pathScratch.Add(id);
+            pathScratch.Reverse(); return pathScratch.ToArray();
         }
         // Squared distance in Fix64 raw units. Both points lie on the validated map, so every coordinate
         // difference is far below 2^31 and its square below 2^62; checked arithmetic turns any excess into an error.

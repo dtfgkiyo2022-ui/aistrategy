@@ -1191,6 +1191,17 @@ namespace Rts.Simulation
         private readonly List<CommandState> unsettledViews = new List<CommandState>();
         private readonly SharedPrefixList<CommandView>[] frameCommandViews = new SharedPrefixList<CommandView>[2];
         private int viewedCommandCount;
+        private readonly List<int>[] commandReplacementIndices = { new List<int>(), new List<int>() };
+        private readonly List<CommandView>[] commandReplacementItems = { new List<CommandView>(), new List<CommandView>() };
+        // PublishFrames hands immutable copies to the contract objects. Reuse only these private builders; the arrays
+        // retained by frames are still allocated by ContractList.Copy and are never modified afterwards.
+        private readonly List<RenderUnit> frameUnitsScratch = new List<RenderUnit>(128);
+        private readonly List<VisibleEnemy> frameEnemiesScratch = new List<VisibleEnemy>(64);
+        private readonly List<EnemyContact> frameContactsScratch = new List<EnemyContact>(128);
+        private readonly List<OwnArmyView> frameArmiesScratch = new List<OwnArmyView>(32);
+        private readonly List<KnownObjective> frameObjectivesScratch = new List<KnownObjective>(16);
+        private readonly List<GameEvent> frameEventsScratch = new List<GameEvent>(16);
+        private readonly List<uint>[] coveredArmyContactsScratch = { new List<uint>(16), new List<uint>(16) };
 
         private void RefreshCommandViews()
         {
@@ -1209,8 +1220,11 @@ namespace Rts.Simulation
                 c.ViewIndex = slot;
                 unsettledViews.Add(c);
             }
-            var indices = new[] { new List<int>(), new List<int>() };
-            var items = new[] { new List<CommandView>(), new List<CommandView>() };
+            for (int side = 0; side < 2; side++)
+            {
+                commandReplacementIndices[side].Clear();
+                commandReplacementItems[side].Clear();
+            }
             foreach (var command in unsettledViews)
             {
                 int side = (int)command.Order.Target.FactionId - 1;
@@ -1218,11 +1232,16 @@ namespace Rts.Simulation
                     command.Status, command.AcceptedTick, command.ApplyTick, command.Reason, command.Order.Source);
                 // An ended command's view is final: written once into the shared array. A live one rides with the frame.
                 if (Terminal(command)) commandViews[side][command.ViewIndex] = view;
-                else { indices[side].Add(command.ViewIndex); items[side].Add(view); }
+                else
+                {
+                    commandReplacementIndices[side].Add(command.ViewIndex);
+                    commandReplacementItems[side].Add(view);
+                }
             }
             unsettledViews.RemoveAll(Terminal);
             for (int side = 0; side < 2; side++)
-                frameCommandViews[side] = new SharedPrefixList<CommandView>(commandViews[side], commandViewCounts[side], indices[side], items[side]);
+                frameCommandViews[side] = new SharedPrefixList<CommandView>(commandViews[side], commandViewCounts[side],
+                    commandReplacementIndices[side], commandReplacementItems[side]);
         }
 
         private void PublishFrames()
@@ -1232,12 +1251,14 @@ namespace Rts.Simulation
             measure?.Invoke("FramesCommands", false);
             for (uint f = 1; f <= 2; f++)
             {
+                var units = frameUnitsScratch;
+                var enemies = frameEnemiesScratch;
+                var contacts = frameContactsScratch;
+                var armies = frameArmiesScratch;
+                var objectives = frameObjectivesScratch;
+                var visibleEvents = frameEventsScratch;
+                units.Clear(); enemies.Clear(); contacts.Clear(); armies.Clear(); objectives.Clear(); visibleEvents.Clear();
                 measure?.Invoke("FramesUnits", true);
-                var units = new List<RenderUnit>();
-                var enemies = new List<VisibleEnemy>();
-                var contacts = new List<EnemyContact>();
-                var armies = new List<OwnArmyView>();
-                var objectives = new List<KnownObjective>();
                 foreach (int i in world.SoldierTraversal)
                 {
                     var s = world.Soldiers[i];
@@ -1301,7 +1322,6 @@ namespace Rts.Simulation
                 var events = world.Result.HasEnded ? new[] { new GameEvent(world.Tick, 0,
                     world.Result.IsFault ? EventKind.Fault : EventKind.MatchEnded, 3, 0, 0, default,
                     (int)world.Result.WinnerFactionId, ReasonCode.None) } : Array.Empty<GameEvent>();
-                var visibleEvents = new List<GameEvent>();
                 foreach (var e in commandEvents)
                     if ((e.AudienceMask & (1 << ((int)f - 1))) != 0)
                         // The recipient must not learn whether the other faction also saw this event.
@@ -1335,7 +1355,8 @@ namespace Rts.Simulation
                 var army = world.Armies[armyIndex];
                 if (army.Definition.FactionId == faction.Id) continue;
                 ref var memory = ref faction.ArmyContacts[armyIndex];
-                var covered = new List<uint>();
+                var covered = coveredArmyContactsScratch[faction.Id - 1];
+                covered.Clear();
                 int visible = 0;
                 SimPoint position = default;
                 foreach (uint id in army.SoldierIds)

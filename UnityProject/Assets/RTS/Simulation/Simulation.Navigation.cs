@@ -50,9 +50,10 @@ namespace Rts.Simulation
                     a.PathGoal = goal; a.HasPathGoal = true; a.PathCursor = 0;
                     foreach (uint id in a.SoldierIds)
                     {
-                        world.Soldiers[id - 1].Joining = false; world.Soldiers[id - 1].SlotWaitTimedOut = false;
-                        world.Soldiers[id - 1].SlotWaitSinceTick = 0; world.Soldiers[id - 1].SlotWaitTarget = default;
-                        world.Soldiers[id - 1].TacticalRoute = false; world.Soldiers[id - 1].LocalPath = null;
+                        ref var reset = ref world.Soldiers[id - 1];
+                        reset.Joining = false; reset.SlotWaitTimedOut = false;
+                        reset.SlotWaitSinceTick = 0; reset.SlotWaitTarget = default;
+                        reset.TacticalRoute = false; ReleaseLocalPath(ref reset);
                     }
                     int startCell = world.Map.Cell(world.Soldiers[first].Position);
                     var soldierIds = a.SoldierIds;
@@ -94,7 +95,7 @@ namespace Rts.Simulation
                         continue;
                     }
                     if (soldier.TacticalRoute)
-                    { soldier.TacticalRoute = false; soldier.Joining = false; soldier.LocalPath = null; }
+                    { soldier.TacticalRoute = false; soldier.Joining = false; ReleaseLocalPath(ref soldier); }
                     if (a.PathImpossible) { soldier.MoveGoal = soldier.Position; continue; }
                     var center = world.Map.Center(a.Path[a.PathCursor]);
                     if (!soldier.Joining && (!InRange(soldier.Position, center, Fix64.FromInt(8)) || !Clear(soldier.Position, center, a.Definition.FactionId)))
@@ -113,7 +114,7 @@ namespace Rts.Simulation
                             FollowLocalRoute(ref soldier);
                             continue;
                         }
-                        soldier.Joining = false; soldier.LocalPath = null;
+                        soldier.Joining = false; ReleaseLocalPath(ref soldier);
                     }
                     // Once a human scout was given a clear two-cell direct route, do not re-evaluate the line from the
                     // clipped position every tick.  Re-evaluation can reject the same route at a cell boundary and send
@@ -124,7 +125,7 @@ namespace Rts.Simulation
                     {
                         participants = true;
                         soldier.Joining = false;
-                        soldier.LocalPath = null;
+                        ReleaseLocalPath(ref soldier);
                         soldier.MoveGoal = goal;
                         if (!InRange(soldier.Position, goal, soldier.StepDistance)) arrived = false;
                         continue;
@@ -163,8 +164,15 @@ namespace Rts.Simulation
         private void StartLocalRoute(ref SoldierState soldier, SimPoint goal)
         {
             soldier.LocalGoal = goal; soldier.LocalCursor = 0;
+            ReleaseLocalPath(ref soldier);
             soldier.LocalPath = world.Map.SharedRoute(world.Map.Cell(soldier.Position), goal, soldier.Initial.FactionId);
             if (soldier.LocalPath.Length > 1 && Clear(soldier.Position, world.Map.Center(soldier.LocalPath[1]), soldier.Initial.FactionId)) soldier.LocalCursor = 1;
+        }
+
+        private void ReleaseLocalPath(ref SoldierState soldier)
+        {
+            world.Map.ReleaseSharedRoute(soldier.LocalPath);
+            soldier.LocalPath = null;
         }
 
         private void FollowLocalRoute(ref SoldierState soldier)

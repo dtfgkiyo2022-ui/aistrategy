@@ -8,6 +8,8 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool RegionsOn => world.Config.Economy.Regions;
+        private uint[] cellRegionsFrameSnapshot = Array.Empty<uint>();
+        private IReadOnlyList<uint> cellRegionsFrameView = Array.Empty<uint>();
 
         private void InitializeRegions()
         {
@@ -69,6 +71,11 @@ namespace Rts.Simulation
                 }
                 world.CellRegions[cell] = best;
             }
+            // The simulation table is mutable when a town is added; frames must retain the previous table unchanged.
+            // Publish one immutable snapshot per region rebuild, then share that snapshot between both faction frames.
+            cellRegionsFrameSnapshot = (uint[])world.CellRegions.Clone();
+            cellRegionsFrameView = new SharedPrefixList<uint>(cellRegionsFrameSnapshot, cellRegionsFrameSnapshot.Length,
+                Array.Empty<int>(), Array.Empty<uint>());
         }
 
         private void AddTownRegion(BuildingState town)
@@ -219,8 +226,7 @@ namespace Rts.Simulation
             return result;
         }
 
-        // FactionFrame copies the table it is given, so a second copy here only cost memory on every tick.
-        private uint[] CellRegionsForFrame() => RegionsOn ? world.CellRegions : Array.Empty<uint>();
+        private IReadOnlyList<uint> CellRegionsForFrame() => RegionsOn ? cellRegionsFrameView : Array.Empty<uint>();
 
         private bool CanAiAssign(VillagerState villager) => !HumanRegionAt(villager.FactionId, villager.Position);
     }
