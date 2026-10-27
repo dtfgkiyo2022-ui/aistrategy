@@ -532,6 +532,16 @@ namespace Rts.Simulation
                 && rules.AiFactoryAge1BarracksMaxBuildings > 0
                 && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
                 return;
+            // The extra sawmills and kilns belong to no processing line, so nothing would carry their output to
+            // the core stock the assemblers draw from (craftreq1: planks stayed 0 with 2900 wood in stock).
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln
+                    || IsProcessingLineBuildingReferenced(building.Id)) continue;
+                SetSimpleHaulers(faction, building.Id, 0, 1);
+            }
             int target = CraftRequiredAiAssemblerTarget(faction);
             ref var economy = ref world.Economies[faction - 1];
             if (CountPlannedBuildings(faction, BuildingKind.Sawmill) < target
