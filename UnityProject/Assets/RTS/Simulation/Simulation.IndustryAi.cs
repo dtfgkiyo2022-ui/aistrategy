@@ -153,6 +153,14 @@ namespace Rts.Simulation
         /// <summary>AI phase, after the barracks and infantry (13 steps 1-4).</summary>
         private void DecideIndustry(uint faction)
         {
+            ref var earlyEconomy = ref world.Economies[faction - 1];
+            if (EarlyStartOn && OpenFarmsOn && earlyEconomy.Age == 0 && !AgrarianFarmingAllowed(faction) && !HasFarm(faction))
+            {
+                // The first primitive farm has priority over every other primitive building. Once its wood is
+                // available DecideFarms places it; while it is not, returning here preserves that priority.
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.EarlyStart.Farm", DecideFarms, faction);
+                if (!HasFarm(faction) && earlyEconomy.Wood < world.Config.Economy.FarmWoodCost) return;
+            }
             if (LineBuildingCheckOn)
                 MeasureSubphase("AI.DecideEconomy.DecideIndustry.ValidateLineBuildingReferences", ValidateLineBuildingReferences, faction);
             if (BuildingReservationsOn)
@@ -1476,7 +1484,8 @@ namespace Rts.Simulation
             }
             var b = world.Buildings[quarry];
             if (!b.Complete || b.Held) return;
-            var taken = new bool[world.Belts.Length];
+            System.Array.Clear(farmRouteTaken, 0, farmRouteTaken.Length);
+            var taken = farmRouteTaken;
             var route = BeltRoute(faction, OutputCell(b), taken, next => FeedsOwnCore(next, faction));
             bool whole = false;
             if (route.cells != null)
@@ -3079,6 +3088,14 @@ namespace Rts.Simulation
 
         private const int FarmTarget = 2, FarmSearchRadiusCells = 12;
 
+        private bool HasFarm(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+                if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm)
+                    return true;
+            return false;
+        }
+
         /// <summary>
         /// V3-4 agrarian (technical-design-v3 29): up to FarmTarget farms on the quickest ground near the core, each with
         /// a belt line into the core; until a farm's line is whole, one villager carries its food by hand. A farm the
@@ -3092,7 +3109,17 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
                 if (IsActualBuilding(world.Buildings[i]) && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Farm) farms++;
             int farmTarget = !AgrarianFarmingAllowed(faction) && OpenFarmsOn
-                ? (economy.Age == 0 ? world.Config.Economy.OpenFarmsPrimitiveAiFarms : world.Config.Economy.OpenFarmsOtherCivAiFarms)
+                ? (EarlyStartOn && economy.Age == 0
+                    ? Math.Min(world.Config.Economy.EarlyStartPrimitiveFarmMax,
+                        Math.Max(world.Config.Economy.OpenFarmsPrimitiveAiFarms,
+                            (LivingVillagers(faction) + world.Config.Economy.EarlyStartVillagersPerFarm - 1)
+                                / world.Config.Economy.EarlyStartVillagersPerFarm))
+                    : EarlyStartOn && economy.Age >= 1 && LargeEconomyOn
+                    ? Math.Min(world.Config.Economy.LargeFarmMaximum,
+                        Math.Max(world.Config.Economy.OpenFarmsOtherCivAiFarms,
+                            (LivingVillagers(faction) + world.Config.Economy.LargeVillagersPerFarm - 1)
+                                / world.Config.Economy.LargeVillagersPerFarm))
+                    : (economy.Age == 0 ? world.Config.Economy.OpenFarmsPrimitiveAiFarms : world.Config.Economy.OpenFarmsOtherCivAiFarms))
                 : LargeEconomyOn
                 ? Math.Min(world.Config.Economy.LargeFarmMaximum,
                     Math.Max(world.Config.Economy.LargeFarmMinimum,
@@ -3104,7 +3131,8 @@ namespace Rts.Simulation
                 largeConnectedFarms[faction - 1] = 0;
                 return;
             }
-            var taken = new bool[world.Belts.Length];
+            System.Array.Clear(farmRouteTaken, 0, farmRouteTaken.Length);
+            var taken = farmRouteTaken;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var b = world.Buildings[i];

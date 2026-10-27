@@ -126,6 +126,7 @@
     <Compile Include="AiExpandTests.cs" />
     <Compile Include="OpenFarmsTests.cs" />
     <Compile Include="FreeTownsTests.cs" />
+    <Compile Include="EarlyStartTests.cs" />
   <Compile Include="DropSiteLimitTests.cs" />
   <Compile Include="StorageFeedsTests.cs" />
     <Compile Include="CraftTree2Tests.cs" />

@@ -58,6 +58,8 @@ namespace Rts.Simulation
         private readonly int[] largeBeltIncome = new int[12];
         private readonly int[] largeBeltDelivered = new int[2];
         private readonly int[] largeConnectedFarms = new int[2];
+        // Farm route search scratch space. It is sized once with the world and cleared between farm decisions.
+        private bool[] farmRouteTaken;
         private readonly int[] largeTownDelivered = new int[2];
         private readonly int[] largeTownVillagersProduced = new int[2];
         private readonly int[,,] largeResourceUses = new int[2, LargeEconomyUseKind.Count, 2];
@@ -132,6 +134,7 @@ namespace Rts.Simulation
             nextPositions = new SimPoint[world.Soldiers.Length];
             soldierDamage = new long[world.Soldiers.Length];
             coreDamage = new long[world.Cores.Length];
+            farmRouteTaken = new bool[world.Belts.Length];
             InitializeVisibilityCaches();
             UpdateVisibility();
             UpdateObservations();
