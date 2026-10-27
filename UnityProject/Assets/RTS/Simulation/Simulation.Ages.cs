@@ -61,9 +61,10 @@ namespace Rts.Simulation
           private bool PrimitiveCraftOn => world.Config.Economy.Enabled && world.Config.Economy.Industry && world.Config.Economy.Ages && world.Config.Economy.PrimitiveCraft;
           private bool AiFactoryOn => PrimitiveCraftOn && world.Config.Economy.AiFactory;
         private bool AiExpandOn => AiFactoryOn && world.Config.Economy.AiExpand;
-        private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
-        private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
-        private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
+         private bool CraftTree2On => CraftTree1On && world.Config.Economy.CraftTree2;
+         private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
+         private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
+         private bool CraftRequiredOn => CraftTree2On && world.Config.Economy.CraftRequired;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -184,7 +185,8 @@ namespace Rts.Simulation
             => CraftTree1On && world.Economies[faction - 1].Age >= 2;
 
         private bool AssemblerAllowed(uint faction)
-            => CraftTree2On && world.Economies[faction - 1].Age >= 2;
+            => CraftTree2On && (world.Economies[faction - 1].Age >= 2
+                || CraftRequiredOn && world.Economies[faction - 1].Age >= 1);
 
         private bool CraftTree3Allowed(uint faction)
             => CraftTree3On && world.Economies[faction - 1].Age >= 3;

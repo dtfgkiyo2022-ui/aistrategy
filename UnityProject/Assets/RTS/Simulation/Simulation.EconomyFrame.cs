@@ -90,6 +90,10 @@ namespace Rts.Simulation
             }
             var cavalryMission = CavalryMissionFor(faction);
             var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);
+            var infantryTrainingCost = CostOf(faction, UnitKind.Infantry);
+            var archerTrainingCost = CostOf(faction, UnitKind.Archer);
+            var cavalryTrainingCost = CostOf(faction, UnitKind.Cavalry);
+            var ramTrainingCost = CostOf(faction, UnitKind.Ram);
             int advanceFood = AgeClockOn ? advancePrice.food : rules.AdvanceFoodCost;
             int advanceWood = AgeClockOn ? advancePrice.wood : rules.AdvanceWoodCost;
             int age2Food = AgeClockOn && economy.Age == 1 ? advancePrice.food : rules.Age2FoodCost;
@@ -103,8 +107,8 @@ namespace Rts.Simulation
             var passableCells = PlacementPassableView();
             var riverCells = PlacementRiverView();
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
-                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), InfantryFoodFor(faction),
-                InfantryWoodFor(faction), villagers, buildings, resources,
+                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
+                infantryTrainingCost.wood, villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, advanceFood, advanceWood,
@@ -112,10 +116,10 @@ namespace Rts.Simulation
                  rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
                  economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? WoodOf(BuildingKind.Tower, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
                 rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
-                economy.Age, rules.Ages ? age2Food : 0, rules.Ages ? age2Wood : 0, rules.Ages ? rules.ArcherFood : 0, rules.Ages ? rules.ArcherWood : 0,
-                rules.Ages ? rules.CavalryFood : 0, rules.Ages ? rules.CavalryWood : 0, rules.Ages ? rules.CavalryMetal : 0,
+                 economy.Age, rules.Ages ? age2Food : 0, rules.Ages ? age2Wood : 0, rules.Ages ? archerTrainingCost.food : 0, rules.Ages ? archerTrainingCost.wood : 0,
+                 rules.Ages ? cavalryTrainingCost.food : 0, rules.Ages ? cavalryTrainingCost.wood : 0, rules.Ages ? cavalryTrainingCost.metal : 0,
                 rules.Ages ? rules.MarketWoodCost : 0, rules.Ages ? rules.WorkshopWoodCost : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
-                rules.Ages ? rules.RamFood : 0, rules.Ages ? rules.RamWood : 0,
+                 rules.Ages ? ramTrainingCost.food : 0, rules.Ages ? ramTrainingCost.wood : 0,
                 rules.Ages ? age3Food : 0, rules.Ages ? age3Wood : 0,
                 rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0,
                  rules.Ages ? WoodOf(BuildingKind.Castle, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,

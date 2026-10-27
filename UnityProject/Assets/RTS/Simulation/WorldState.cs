@@ -733,7 +733,10 @@ namespace Rts.Simulation
                 && e.FineArmsKitHpPermille >= e.ArmsKitHpPermille && e.ScholarlyPerResearch > 0
                 && e.ScholarlyCostPermille > 0 && e.ScholarlyCostPermille <= 1000
                 && e.ScholarlyTimePermille > 0 && e.ScholarlyTimePermille <= 1000), "Invalid craft-tree2 rules.");
-            Require(!e.CraftTree2 || (e.GoodsValueArmsKit > 0 && e.GoodsValueScholarly > 0 && e.GoodsValueFineArmsKit > 0), "Invalid craft-tree2 market values.");
+             Require(!e.CraftTree2 || (e.GoodsValueArmsKit > 0 && e.GoodsValueScholarly > 0 && e.GoodsValueFineArmsKit > 0), "Invalid craft-tree2 market values.");
+             Require(!e.CraftRequired || (e.CraftTree2 && e.CraftRequiredAiArmsStockTarget > 0
+                 && e.CraftRequiredAiArmsAssemblersAge1 > 0 && e.CraftRequiredAiArmsAssemblersAge2 > 0
+                 && e.CraftRequiredAiArmsAssemblersAge3 > 0 && e.CraftRequiredAiArmsAssemblersAge4 > 0), "Invalid craft-required rules.");
             Require(!e.CraftTree3 || (e.CraftTree2 && e.SiegePartsTicks > 0 && e.SiegePartsFramesInput > 0 && e.SiegePartsArmsKitInput > 0
                 && e.MechanismTicks > 0 && e.MechanismArmsKitInput > 0 && e.MechanismScholarlyInput > 0 && e.MechanismCutStoneInput > 0
                 && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000
@@ -1279,9 +1282,14 @@ namespace Rts.Simulation
                   ScholarlyFoodInput = e.ScholarlyFoodInput, ArmsKitAttack = e.ArmsKitAttack, ArmsKitHpPermille = e.ArmsKitHpPermille,
                   FineArmsKitAttack = e.FineArmsKitAttack, FineArmsKitHpPermille = e.FineArmsKitHpPermille,
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
-                  ScholarlyTimePermille = e.ScholarlyTimePermille,
-                  GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                  CraftTree3 = e.CraftTree3, SiegePartsTicks = e.SiegePartsTicks, SiegePartsFramesInput = e.SiegePartsFramesInput,
+                   ScholarlyTimePermille = e.ScholarlyTimePermille,
+                   GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
+                   CraftRequired = e.CraftRequired, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                   CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
+                   CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
+                   CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,
+                   CraftRequiredAiArmsAssemblersAge4 = e.CraftRequiredAiArmsAssemblersAge4,
+                   CraftTree3 = e.CraftTree3, SiegePartsTicks = e.SiegePartsTicks, SiegePartsFramesInput = e.SiegePartsFramesInput,
                   SiegePartsArmsKitInput = e.SiegePartsArmsKitInput, MechanismTicks = e.MechanismTicks, MechanismArmsKitInput = e.MechanismArmsKitInput,
                   MechanismScholarlyInput = e.MechanismScholarlyInput, MechanismCutStoneInput = e.MechanismCutStoneInput,
                   SiegePartsHpPermille = e.SiegePartsHpPermille, SiegePartsDamagePermille = e.SiegePartsDamagePermille,
