@@ -13,22 +13,75 @@ namespace Rts.Simulation
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
         private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
         private bool BeltDropOffOn => IndustryOn && world.Config.Economy.BeltDropOff;
-        // Indexed by ResourceKind. Each entry is built lazily and remains valid until any belt changes.
+        // Indexed by faction/resource. Each used entry is allocated once and reused after invalidation.
         private bool[][] beltDropOffReachability;
+        private bool[] beltDropOffReachabilityValid;
+        private int[] beltDropOffSeen, beltDropOffQueue;
+        private int beltDropOffSeenStamp;
+        private ulong beltDropOffDestinationSignature;
+        private bool beltDropOffDestinationSignatureSet;
+        private int[] beltProcessingDistance, beltProcessingWalk, beltProcessingOrderWorkspace;
+        private byte[] beltProcessingState;
+        private long[] beltProcessingSortKeys;
+        private int beltProcessingOrderCount;
+        private bool beltProcessingOrderValid;
 
         private void InvalidateBeltCaches()
         {
-            world.BeltOrder = null;
-            beltDropOffReachability = null;
+            beltProcessingOrderValid = false;
+            InvalidateBeltDropOffReachability();
         }
+
+        private void InvalidateBeltDropOffReachability()
+        {
+            if (beltDropOffReachabilityValid != null) Array.Clear(beltDropOffReachabilityValid, 0, beltDropOffReachabilityValid.Length);
+        }
+
+        private void RefreshBeltDropOffDestinationSignature()
+        {
+            if (!BeltDropOffOn) return;
+            unchecked
+            {
+                ulong signature = 1469598103934665603UL;
+                signature = BeltDropOffSignatureMix(signature, (uint)world.BuildingCount);
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    var building = world.Buildings[i];
+                    signature = BeltDropOffSignatureMix(signature, (uint)i);
+                    signature = BeltDropOffSignatureMix(signature, building.Id);
+                    signature = BeltDropOffSignatureMix(signature, (uint)building.Kind);
+                    signature = BeltDropOffSignatureMix(signature, building.FactionId);
+                    signature = BeltDropOffSignatureMix(signature, building.Complete ? 1U : 0U);
+                    signature = BeltDropOffSignatureMix(signature, (uint)building.OriginCell);
+                    signature = BeltDropOffSignatureMix(signature, building.Alive ? 1U : 0U);
+                    signature = BeltDropOffSignatureMix(signature, (uint)building.Recipe);
+                }
+                for (int f = 0; f < 2; f++)
+                {
+                    signature = BeltDropOffSignatureMix(signature, world.Economies[f].Age);
+                    signature = BeltDropOffSignatureMix(signature, (uint)world.Economies[f].Civ);
+                    signature = BeltDropOffSignatureMix(signature, world.Economies[f].Techs);
+                }
+                if (!beltDropOffDestinationSignatureSet || beltDropOffDestinationSignature != signature)
+                {
+                    beltDropOffDestinationSignature = signature;
+                    beltDropOffDestinationSignatureSet = true;
+                    InvalidateBeltDropOffReachability();
+                }
+            }
+        }
+
+        private static ulong BeltDropOffSignatureMix(ulong hash, ulong value)
+            => (hash ^ value) * 1099511628211UL;
 
         /// <summary>Economy step, before gathering (11.3): downstream belts first, so a full line moves without gaps.</summary>
         private void AdvanceBelts()
         {
             if (!IndustryOn) return;
-            if (world.BeltOrder == null) world.BeltOrder = BeltProcessingOrder();
-            foreach (int cell in world.BeltOrder)
+            EnsureBeltProcessingOrder();
+            for (int orderIndex = 0; orderIndex < beltProcessingOrderCount; orderIndex++)
             {
+                int cell = world.BeltOrder[orderIndex];
                 ref var belt = ref world.Belts[cell];
                 if (belt.Component == BeltComponentKind.Inserter) continue;
                 if (belt.Item == 0) continue;
@@ -117,22 +170,21 @@ namespace Rts.Simulation
         /// Belts by distance to the end of their line, then cell id (11.3). A line that runs into a loop has no end and
         /// goes last. Depends on the belts alone, so it is a cache that any change to a belt clears.
         /// </summary>
-        private int[] BeltProcessingOrder()
+        private void BeltProcessingOrder()
         {
+            EnsureBeltProcessingWorkspace();
             int cells = world.Belts.Length, count = 0;
-            var distance = new int[cells];
-            var state = new byte[cells]; // 0 unvisited, 1 on the current walk, 2 done
-            var walk = new int[cells];
+            Array.Clear(beltProcessingState, 0, beltProcessingState.Length);
             for (int start = 0; start < cells; start++)
             {
-                if (world.Belts[start].FactionId == 0 || state[start] == 2) continue;
+                if (world.Belts[start].FactionId == 0 || beltProcessingState[start] == 2) continue;
                 int length = 0, cell = start, end;
                 while (true)
                 {
-                    if (state[cell] == 1) { end = int.MaxValue; break; }                 // closed a loop
-                    if (state[cell] == 2) { end = distance[cell]; break; }               // joined a known line
-                    state[cell] = 1;
-                    walk[length++] = cell;
+                    if (beltProcessingState[cell] == 1) { end = int.MaxValue; break; }                 // closed a loop
+                    if (beltProcessingState[cell] == 2) { end = beltProcessingDistance[cell]; break; } // joined a known line
+                    beltProcessingState[cell] = 1;
+                    beltProcessingWalk[length++] = cell;
                     int next = BeltPrimaryNext(cell, world.Belts[cell]);
                     if (next < 0 || next >= cells || world.Belts[next].FactionId != world.Belts[cell].FactionId) { end = -1; break; } // this cell is the end
                     cell = next;
@@ -140,16 +192,37 @@ namespace Rts.Simulation
                 for (int i = length - 1; i >= 0; i--)
                 {
                     end = end == int.MaxValue ? int.MaxValue : end + 1;
-                    distance[walk[i]] = end;
-                    state[walk[i]] = 2;
+                    beltProcessingDistance[beltProcessingWalk[i]] = end;
+                    beltProcessingState[beltProcessingWalk[i]] = 2;
                 }
             }
             for (int i = 0; i < cells; i++) if (world.Belts[i].FactionId != 0) count++;
-            var order = new int[count];
             count = 0;
-            for (int i = 0; i < cells; i++) if (world.Belts[i].FactionId != 0) order[count++] = i;
-            Array.Sort(order, (a, b) => { int c = distance[a].CompareTo(distance[b]); return c != 0 ? c : a.CompareTo(b); });
-            return order;
+            for (int i = 0; i < cells; i++)
+                if (world.Belts[i].FactionId != 0)
+                    beltProcessingSortKeys[count++] = ((long)(uint)beltProcessingDistance[i] << 32) | (uint)i;
+            Array.Sort(beltProcessingSortKeys, 0, count);
+            for (int i = 0; i < count; i++) beltProcessingOrderWorkspace[i] = (int)(uint)beltProcessingSortKeys[i];
+            beltProcessingOrderCount = count;
+            world.BeltOrder = beltProcessingOrderWorkspace;
+        }
+
+        private void EnsureBeltProcessingOrder()
+        {
+            if (beltProcessingOrderValid) return;
+            BeltProcessingOrder();
+            beltProcessingOrderValid = true;
+        }
+
+        private void EnsureBeltProcessingWorkspace()
+        {
+            if (beltProcessingDistance != null) return;
+            int cells = world.Belts.Length;
+            beltProcessingDistance = new int[cells];
+            beltProcessingState = new byte[cells];
+            beltProcessingWalk = new int[cells];
+            beltProcessingSortKeys = new long[cells];
+            beltProcessingOrderWorkspace = new int[cells];
         }
 
         private int BeltPrimaryNext(int cell, BeltState belt)
@@ -465,9 +538,9 @@ namespace Rts.Simulation
                 int size = SizeOf(b.Kind), x0 = b.OriginCell % width, z0 = b.OriginCell / width;
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.Kind == BuildingKind.Town || b.Kind == BuildingKind.DropSite) return true;
-                // A belt-dropoff storage is a receiving inventory. It is deliberately independent of the older
-                // StorageFeedsProcessing route rule; the item has already reached the storage endpoint.
-                if (b.Kind == BuildingKind.Storage) return IsRawResource(item) && StorageCanAccept(b, item);
+                // A belt-dropoff storage deposits raw resources directly into the faction stock. Its capacity and
+                // current contents must not affect whether the belt route is reachable.
+                if (b.Kind == BuildingKind.Storage) return IsRawResource(item);
                 return false;
             }
             return false;
@@ -504,23 +577,32 @@ namespace Rts.Simulation
 
         private bool[] BeltDropOffReachable(int resource, uint faction)
         {
-            if (beltDropOffReachability == null) beltDropOffReachability = new bool[33][];
-            if (beltDropOffReachability[resource] != null) return beltDropOffReachability[resource];
-            var reachable = new bool[world.Belts.Length];
-            int[] seen = new int[world.Belts.Length], queue = new int[world.Belts.Length];
-            int stamp = 0, limit = Math.Max(0, world.Config.Economy.BeltLimit);
-            for (int start = 0; start < world.Belts.Length; start++)
+            EnsureBeltDropOffReachabilityWorkspace();
+            int index = checked((int)((faction - 1) * 33 + (uint)resource));
+            if (beltDropOffReachability[index] == null) beltDropOffReachability[index] = new bool[world.Belts.Length];
+            if (beltDropOffReachabilityValid[index]) return beltDropOffReachability[index];
+            var reachable = beltDropOffReachability[index];
+            Array.Clear(reachable, 0, reachable.Length);
+            EnsureBeltProcessingOrder();
+            int limit = Math.Max(0, world.Config.Economy.BeltLimit);
+            for (int orderIndex = 0; orderIndex < beltProcessingOrderCount; orderIndex++)
             {
+                int start = world.BeltOrder[orderIndex];
                 var source = world.Belts[start];
                 if (source.FactionId != faction || source.Component == BeltComponentKind.Inserter
                     || source.Component == BeltComponentKind.UndergroundExit || source.Component == BeltComponentKind.Splitter
                     || limit == 0) continue;
-                stamp++;
+                if (++beltDropOffSeenStamp == 0)
+                {
+                    Array.Clear(beltDropOffSeen, 0, beltDropOffSeen.Length);
+                    beltDropOffSeenStamp = 1;
+                }
+                int stamp = beltDropOffSeenStamp;
                 int head = 0, tail = 0, visited = 0;
-                seen[start] = stamp; queue[tail++] = start;
+                beltDropOffSeen[start] = stamp; beltDropOffQueue[tail++] = start;
                 while (head < tail && visited < limit && !reachable[start])
                 {
-                    int cell = queue[head++]; visited++;
+                    int cell = beltDropOffQueue[head++]; visited++;
                     var belt = world.Belts[cell];
                     if (belt.Component == BeltComponentKind.Inserter) continue;
                     int first = -1, second = -1;
@@ -538,13 +620,33 @@ namespace Rts.Simulation
                 {
                     if (next < 0 || next >= world.Belts.Length) return false;
                     var target = world.Belts[next];
-                    if (target.FactionId == 0) return BeltDropOffDestination(next, faction, (ResourceKind)resource);
+                    if (target.FactionId == 0)
+                    {
+                        if (BeltDropOffDestination(next, faction, (ResourceKind)resource))
+                        {
+                            reachable[start] = true;
+                            return true;
+                        }
+                        return false;
+                    }
                     if (target.FactionId != faction || target.Component == BeltComponentKind.Inserter) return false;
-                    if (seen[next] != stamp) { seen[next] = stamp; queue[tail++] = next; }
+                    if (beltDropOffSeen[next] != stamp) { beltDropOffSeen[next] = stamp; beltDropOffQueue[tail++] = next; }
                     return false;
                 }
             }
-            return beltDropOffReachability[resource] = reachable;
+            beltDropOffReachabilityValid[index] = true;
+            return reachable;
+        }
+
+        private void EnsureBeltDropOffReachabilityWorkspace()
+        {
+            if (beltDropOffReachability == null)
+            {
+                beltDropOffReachability = new bool[2 * 33][];
+                beltDropOffReachabilityValid = new bool[2 * 33];
+                beltDropOffSeen = new int[world.Belts.Length];
+                beltDropOffQueue = new int[world.Belts.Length];
+            }
         }
     }
 }

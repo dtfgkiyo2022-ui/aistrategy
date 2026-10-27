@@ -61,7 +61,7 @@ namespace Rts.Simulation
                 belt.SorterKind = ResourceKind.Wood;
                 belt.Progress = 0;
                 economy.Wood -= rules.InserterWoodCost;
-            InvalidateBeltCaches();
+                InvalidateBeltCaches();
                 return;
             }
         }

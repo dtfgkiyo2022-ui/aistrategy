@@ -2958,7 +2958,7 @@ namespace Rts.Simulation
                     RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
-            InvalidateBeltCaches();
+                    InvalidateBeltCaches();
                 }
             return whole;
         }
@@ -3204,7 +3204,7 @@ namespace Rts.Simulation
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                 owned++;
-            InvalidateBeltCaches();
+                InvalidateBeltCaches();
             }
             return whole;
         }

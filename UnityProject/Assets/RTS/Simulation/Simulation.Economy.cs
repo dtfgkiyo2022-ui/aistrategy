@@ -169,6 +169,7 @@ namespace Rts.Simulation
         {
             if (!EconomyOn) return;
             var rules = world.Config.Economy;
+            RefreshBeltDropOffDestinationSignature();
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBuildingReservations", AdvanceBuildingReservations);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RegrowFishing", RegrowFishing);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBelts", AdvanceBelts);
@@ -234,7 +235,7 @@ namespace Rts.Simulation
                         if (v.Carry == 0 && ProcessingKilnTarget(v) && AssignKilnWood(ref v, v.HaulTo)) continue;
                         if (v.Carry == 0 && ProcessingKilnTarget(v)) v.HaulTo = 0;
                         v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
-                        if (v.Task == VillagerTask.ToDropOff && BeltDropOffOn) v.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
+                        v.BeltWaitUntilTick = 0;
                         continue;
                     }
                     if (InRange(v.Position, node.Definition.Position, GatherReach))
@@ -251,9 +252,13 @@ namespace Rts.Simulation
                         if (v.Carry == 0 && ProcessingKilnTarget(v) && AssignKilnWood(ref v, v.HaulTo)) continue;
                         if (v.Carry == 0 && ProcessingKilnTarget(v)) v.HaulTo = 0;
                         v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.Idle;
-                        if (v.Task == VillagerTask.ToDropOff && BeltDropOffOn) v.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
+                        if (v.Task == VillagerTask.ToDropOff) v.BeltWaitUntilTick = 0;
                         continue;
                     }
+                    // While the villager is waiting for its next gathering tick, move at most one already-carried
+                    // item onto an open nearby belt. The gathering timer itself is unchanged.
+                    if (v.Carry > 0 && BeltDropOffOn && world.Tick < v.NextGatherTick)
+                        TryPlaceCarriedOnBelt(ref v);
                     if (world.Tick < v.NextGatherTick) continue;
                     node.Remaining--;
                     v.CarryKind = node.Definition.Kind;
@@ -262,12 +267,17 @@ namespace Rts.Simulation
                     if (v.Carry >= CarryFor(v.FactionId, node.Fishing) || node.Remaining == 0)
                     {
                         v.Task = VillagerTask.ToDropOff;
-                        if (BeltDropOffOn && v.Carry > 0) v.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
+                        v.BeltWaitUntilTick = 0;
                     }
                 }
                 else if (v.Task == VillagerTask.ToDropOff)
                 {
-                    if (v.Carry > 0 && BeltDropOffOn)
+                    if (BeltDropOffOn && v.Carry <= 0)
+                    {
+                        FinishDropOff(ref v);
+                        continue;
+                    }
+                    if (v.Carry > 0 && BeltDropOffOn && BeltDropOffHolds(ref v))
                     {
                         int beltCell = FindBeltDropOffCell(v);
                         if (beltCell >= 0)
@@ -279,20 +289,13 @@ namespace Rts.Simulation
                                 belt.Progress = 0;
                                 v.Carry--;
                                 RecordLargeBeltDrop(v.FactionId, v.CarryKind, 1);
-                                if (v.Carry > 0) { v.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks); continue; }
-                                v.NextGatherTick = 0;
-                            }
-                            else
-                            {
-                                if (v.NextGatherTick >= 0)
-                                {
-                                    if (v.NextGatherTick == 0) v.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
-                                    if (world.Tick < v.NextGatherTick) continue;
-                                    v.NextGatherTick = -1; // The wait expired; this load now uses the old hand-haul path.
-                                }
+                                v.BeltWaitUntilTick = 0;
+                                if (v.Carry > 0) continue;
+                                FinishDropOff(ref v);
+                                continue;
                             }
                         }
-                        else v.NextGatherTick = 0; // A destroyed or disconnected belt is noticed on this tick.
+                        continue;
                     }
                     var drop = DropOff(v);
                     if (!InRange(v.Position, drop.point, drop.reach)) continue;
@@ -313,7 +316,7 @@ namespace Rts.Simulation
                         int stored = PutIntoStorage(ref storage, v.CarryKind, v.Carry);
                         RecordLargeDelivery(v, v.CarryKind, stored);
                         v.Carry -= stored;
-                    if (v.Carry > 0) continue;
+                        if (v.Carry > 0) continue;
                     }
                     else
                     {
@@ -322,32 +325,7 @@ namespace Rts.Simulation
                         RecordLargeDelivery(v, v.CarryKind, delivered);
                         v.Carry = 0;
                     }
-                    if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
-                    {
-                        v.Task = VillagerTask.ToCaravanMarket;
-                        v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
-                        continue;
-                    }
-                    if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; continue; }
-                    if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
-                        && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
-                    {
-                        var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
-                        int fishing = FishingWorkNode(v.Position, v.FactionId);
-                        if (fishing >= 0) { SetWorkNode(ref v, fishing); continue; }
-                        var kind = WorkKindFor(v);
-                        // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
-                        if (kind != currentKind && kind != ResourceKind.Stone)
-                        {
-                            int index = NearestWorkNode(v.Position, kind, v.FactionId);
-                            if (index >= 0)
-                            {
-                                SetWorkNode(ref v, index);
-                                continue;
-                            }
-                        }
-                    }
-                    v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
+                    FinishDropOff(ref v);
                 }
                 else if (v.Task == VillagerTask.ToPickup || v.Task == VillagerTask.ToDeliver) Haul(ref v);
             }
@@ -399,16 +377,61 @@ namespace Rts.Simulation
             return true;
         }
 
-        private bool BeltDropOffHolds(ref VillagerState villager)
+        private bool TryPlaceCarriedOnBelt(ref VillagerState villager)
         {
             if (!BeltDropOffOn || villager.Carry <= 0) return false;
             int cell = FindBeltDropOffCell(villager);
-            if (cell < 0) return false;
+            if (cell < 0 || world.Belts[cell].Item != 0) return false;
+            ref var belt = ref world.Belts[cell];
+            belt.Item = villager.CarryKind;
+            belt.Progress = 0;
+            villager.Carry--;
+            RecordLargeBeltDrop(villager.FactionId, villager.CarryKind, 1);
+            return true;
+        }
+
+        private bool BeltDropOffHolds(ref VillagerState villager)
+        {
+            if (!BeltDropOffOn || villager.Carry <= 0 || villager.BeltWaitUntilTick < 0) return false;
+            int cell = FindBeltDropOffCell(villager);
+            if (cell < 0) { villager.BeltWaitUntilTick = 0; return false; }
             if (world.Belts[cell].Item == 0) return true;
-            if (villager.NextGatherTick <= 0) villager.NextGatherTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
-            if (world.Tick < villager.NextGatherTick) return true;
-            villager.NextGatherTick = -1;
+            if (villager.BeltWaitUntilTick == 0)
+                villager.BeltWaitUntilTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
+            if (world.Tick < villager.BeltWaitUntilTick) return true;
+            villager.BeltWaitUntilTick = -1;
             return false;
+        }
+
+        private void FinishDropOff(ref VillagerState v)
+        {
+            v.BeltWaitUntilTick = 0;
+            if (v.CaravanMarketId != 0 && v.CaravanseraiId != 0 && v.CaravanStage == 1)
+            {
+                v.Task = VillagerTask.ToCaravanMarket;
+                v.NodeId = 0; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                return;
+            }
+            if (v.HaulFrom != 0) { v.Task = VillagerTask.ToPickup; return; }
+            if (AgesOn && !v.Held && !world.Economies[v.FactionId - 1].AutoOff && v.NodeId != 0
+                && world.Nodes[v.NodeId - 1].Definition.Kind != ResourceKind.Stone)
+            {
+                var currentKind = world.Nodes[v.NodeId - 1].Definition.Kind;
+                int fishing = FishingWorkNode(v.Position, v.FactionId);
+                if (fishing >= 0) { SetWorkNode(ref v, fishing); return; }
+                var kind = WorkKindFor(v);
+                // Only between food and wood: who goes to stone stays with StoneWanted, as for the idle.
+                if (kind != currentKind && kind != ResourceKind.Stone)
+                {
+                    int index = NearestWorkNode(v.Position, kind, v.FactionId);
+                    if (index >= 0)
+                    {
+                        SetWorkNode(ref v, index);
+                        return;
+                    }
+                }
+            }
+            v.Task = v.NodeId != 0 && world.Nodes[v.NodeId - 1].Remaining > 0 ? VillagerTask.ToNode : VillagerTask.Idle;
         }
 
         private bool ProcessingKilnTarget(VillagerState v)
@@ -973,6 +996,7 @@ namespace Rts.Simulation
                 if (newResource >= 0) largeWorkCounts[(int)(v.FactionId - 1) * 6 + newResource]++;
             }
             v.NodeId = world.Nodes[index].Definition.Id;
+            v.BeltWaitUntilTick = 0;
             if (AiExpandOn) v.AiExpandWorkStartTick = world.Tick;
             v.Task = v.Carry > 0 ? VillagerTask.ToDropOff : VillagerTask.ToNode;
         }

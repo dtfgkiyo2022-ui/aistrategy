@@ -140,6 +140,8 @@ namespace Rts.Simulation
         internal ResourceKind CarryKind;
         internal int Carry;
         internal long NextGatherTick;
+        /// <summary>BeltDropOff: 0 is not waiting, -1 means the current load has fallen back to hand hauling.</summary>
+        internal long BeltWaitUntilTick;
         /// <summary>AiExpand: start tick of the current automatic resource assignment; -1 means none.</summary>
         internal long AiExpandWorkStartTick;
         internal bool StoneToolsUsed;

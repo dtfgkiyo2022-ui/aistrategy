@@ -162,12 +162,43 @@ namespace Rts.Core.Tests
             var fields = Fields(sim);
             Assert.That(long.Parse(fields["Economy[1].Wood"], CultureInfo.InvariantCulture), Is.GreaterThan(scenario.Economy.StartWood));
             Assert.That(fields["Villagers[1].Carry"], Is.EqualTo("0"));
-            Assert.That(new[] { ((byte)1).ToString(CultureInfo.InvariantCulture), ((byte)2).ToString(CultureInfo.InvariantCulture) },
-                Does.Contain(fields["Villagers[1].Task"]),
-                "the villager remains at the gathering point: task=" + fields["Villagers[1].Task"]
-                + " node=" + fields["Villagers[1].NodeId"] + " carry=" + fields["Villagers[1].Carry"]
-                + " wood=" + fields["Economy[1].Wood"]);
+            int remaining = int.Parse(fields["ResourceNodes[" + node.Id.ToString(CultureInfo.InvariantCulture) + "].Remaining"], CultureInfo.InvariantCulture);
+            if (remaining > 0)
+                Assert.That(new[] { ((byte)1).ToString(CultureInfo.InvariantCulture), ((byte)2).ToString(CultureInfo.InvariantCulture) },
+                    Does.Contain(fields["Villagers[1].Task"]));
+            else
+                Assert.That(fields["Villagers[1].Task"], Is.EqualTo("0"));
             Assert.That(fields["Villagers[1].NodeId"], Is.EqualTo(node.Id.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        [Test]
+        public void VillagerKeepsGatheringNearAnUnexhaustedPointAfterTheBeltLoadIsGone()
+        {
+            var scenario = Scenario(true);
+            var node = scenario.ResourceNodes.First(value => value.Kind == ResourceKind.Wood);
+            int nodeIndex = Array.FindIndex(scenario.ResourceNodes, value => value.Id == node.Id);
+            node.Amount = 100000;
+            scenario.ResourceNodes[nodeIndex] = node;
+            scenario.Villagers[0].Position = node.Position;
+            var sim = new Battle(scenario);
+            var gateway = new CommandGateway(sim);
+            ulong sequence = 0;
+            gateway.SubmitEconomy(EconomyCommand.Auto(1, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Auto(2, ++sequence, false));
+            gateway.SubmitEconomy(EconomyCommand.Assign(1, ++sequence, new[] { scenario.Villagers[0].Id },
+                EconomyTargetKind.ResourceNode, node.Id));
+            Step(sim, gateway, 600);
+            var fields = Fields(sim);
+            Assert.That(new[] { ((byte)1).ToString(CultureInfo.InvariantCulture), ((byte)2).ToString(CultureInfo.InvariantCulture) },
+                Does.Contain(fields["Villagers[1].Task"]));
+            Assert.That(fields["Villagers[1].NodeId"], Is.EqualTo(node.Id.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        [Test]
+        public void FlagOffDoesNotWriteBeltWaitStateToTheDiagnostic()
+        {
+            var fields = Fields(new Battle(Scenario(false)));
+            Assert.That(fields.Keys.Any(key => key.EndsWith(".BeltWaitUntilTick", StringComparison.Ordinal)), Is.False);
         }
 
         [Test]
