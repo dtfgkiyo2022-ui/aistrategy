@@ -161,7 +161,10 @@ namespace Rts.Simulation
         private bool FeedsOwnCore(int cell, uint faction)
         {
             var core = OwnCore(faction);
-            return core.Hp > 0 && InRange(world.Map.Center(cell), core.Definition.Position, world.Config.Rules.CoreRadius);
+            if (core.Hp <= 0) return false;
+            if (cell < 0 || cell >= world.Config.Map.WidthCells * world.Config.Map.HeightCells)
+                return InRange(world.Map.Center(cell), core.Definition.Position, world.Config.Rules.CoreRadius);
+            return CoreRadiusCells((int)world.Factions[faction - 1].CoreId - 1)[cell];
         }
 
         private bool FeedsCompletedTown(int cell, uint faction)
@@ -176,7 +179,40 @@ namespace Rts.Simulation
             return false;
         }
 
+        // Cores and resource nodes are fixed when the world is built and never move, so whether a cell is inside a core
+        // or holds a node is worked out once per map. Belt searches ask for every cell they reach, and scanning every
+        // node (and a BigInteger range test per core) each time made route searches the heaviest part of a decision.
+        private bool[][] coreRadiusCells;
+        private bool[] nodeCells;
+
         private bool InsideAnyCore(int cell)
+        {
+            if (cell < 0 || cell >= world.Config.Map.WidthCells * world.Config.Map.HeightCells) return InsideAnyCoreScan(cell);
+            for (int i = 0; i < world.Cores.Length; i++) if (CoreRadiusCells(i)[cell]) return true;
+            return false;
+        }
+
+        /// <summary>Exactly the cells whose centre is within the core radius of core <paramref name="coreIndex"/>.</summary>
+        private bool[] CoreRadiusCells(int coreIndex)
+        {
+            if (coreRadiusCells == null) coreRadiusCells = new bool[world.Cores.Length][];
+            if (coreRadiusCells[coreIndex] != null) return coreRadiusCells[coreIndex];
+            // A cell whose centre lies outside the square around the core is farther than the radius from it, so only the
+            // cells inside the square need the exact test; every other cell stays false.
+            int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
+            long size = Fix64.FromInt(world.Config.Map.CellSizeMeters).Raw, radius = world.Config.Rules.CoreRadius.Raw;
+            var position = world.Cores[coreIndex].Definition.Position;
+            var inside = new bool[width * height];
+            long x = position.X.Raw, z = position.Z.Raw;
+            int x0 = (int)Math.Max(0, (x - radius) / size - 1), x1 = (int)Math.Min(width - 1, (x + radius) / size + 1);
+            int z0 = (int)Math.Max(0, (z - radius) / size - 1), z1 = (int)Math.Min(height - 1, (z + radius) / size + 1);
+            for (int cz = z0; cz <= z1; cz++)
+                for (int cx = x0; cx <= x1; cx++)
+                    inside[cz * width + cx] = InRange(world.Map.Center(cz * width + cx), position, world.Config.Rules.CoreRadius);
+            return coreRadiusCells[coreIndex] = inside;
+        }
+
+        private bool InsideAnyCoreScan(int cell)
         {
             foreach (var core in world.Cores)
                 if (InRange(world.Map.Center(cell), core.Definition.Position, world.Config.Rules.CoreRadius)) return true;
@@ -365,6 +401,23 @@ namespace Rts.Simulation
         }
 
         private bool IsNodeCell(int cell)
+        {
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            if (cell < 0 || cell >= cells) return IsNodeCellScan(cell);
+            if (nodeCells == null)
+            {
+                var marked = new bool[cells];
+                foreach (var node in world.Nodes)
+                {
+                    int nodeCell = world.Map.Cell(node.Definition.Position);
+                    if (nodeCell >= 0 && nodeCell < cells) marked[nodeCell] = true;
+                }
+                nodeCells = marked;
+            }
+            return nodeCells[cell];
+        }
+
+        private bool IsNodeCellScan(int cell)
         {
             foreach (var node in world.Nodes) if (world.Map.Cell(node.Definition.Position) == cell) return true;
             return false;

@@ -437,7 +437,7 @@ namespace Rts.Simulation
                 if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
             }
             if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
-                && economy.Stone < world.Config.Economy.TownStoneCost
+                && economy.Stone < TownStoneCostFor(v.FactionId)
                 && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
                 return ResourceKind.Stone;
             if (AiExpandOn && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
@@ -455,11 +455,11 @@ namespace Rts.Simulation
             if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
             if (AiExpandTownNeedsFunding(v.FactionId))
             {
-                if (economy.Wood < world.Config.Economy.TownWoodCost) return ResourceKind.Wood;
-                if (economy.Stone < world.Config.Economy.TownStoneCost) return ResourceKind.Stone;
+                if (economy.Wood < TownWoodCostFor(v.FactionId)) return ResourceKind.Wood;
+                if (economy.Stone < TownStoneCostFor(v.FactionId)) return ResourceKind.Stone;
             }
             bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
-                && economy.Stone < world.Config.Economy.TownStoneCost;
+                && economy.Stone < TownStoneCostFor(v.FactionId);
             int barracksVillagers = world.Config.Economy.LargeBarracksVillagersPerBuilding;
             bool barracksNeedsWood = largeBarracksCounts[factionIndex] < Math.Min(world.Config.Economy.LargeBarracksMaxBuildings,
                 Math.Max(1, villagers / barracksVillagers)) && economy.Wood < world.Config.Economy.BarracksWoodCost;

@@ -20,6 +20,9 @@ namespace Rts.Simulation
         // Derived from immutable terrain only. FIFO eviction changes cost, never route choices.
         private readonly Dictionary<(uint Faction, int Target), int[]> routes = new Dictionary<(uint, int), int[]>();
         private readonly Queue<(uint Faction, int Target)> routeOrder = new Queue<(uint, int)>();
+        // Reverse-BFS tables are work buffers. Route answers are still invalidated with the terrain, but their arrays can
+        // be reused by the next search instead of allocating a map-sized int[] after every building change.
+        private readonly Stack<int[]> routeBuffers = new Stack<int[]>();
         // FindPath is a pure function of the immutable terrain, the start cell and the exact goal point, and the decision
         // layer asks for the same routes again and again. Callers only read the returned array. FIFO eviction bounds the
         // memory and, like the routes above, changes cost only, never a result.
@@ -58,7 +61,8 @@ namespace Rts.Simulation
             if (!routes.TryGetValue(routeKey, out var next))
             {
                 // One reverse BFS per destination, shared by all soldiers. The scenario validator bounds the grid.
-                next = new int[passable.Length]; Array.Fill(next, -1);
+                next = routeBuffers.Count == 0 ? new int[passable.Length] : routeBuffers.Pop();
+                Array.Fill(next, -1);
                 var queue = new int[passable.Length]; int head = 0, tail = 0;
                 queue[tail++] = target; next[target] = target;
                 while (head < tail)
@@ -74,7 +78,11 @@ namespace Rts.Simulation
                     if (!IsPassableFor(cell, factionId) || next[cell] >= 0) return;
                     next[cell] = parent; queue[tail++] = cell;
                 }
-                if (routeOrder.Count == 16) routes.Remove(routeOrder.Dequeue());
+                if (routeOrder.Count == 16)
+                {
+                    var evicted = routeOrder.Dequeue();
+                    if (routes.Remove(evicted, out var buffer)) routeBuffers.Push(buffer);
+                }
                 routes.Add(routeKey, next); routeOrder.Enqueue(routeKey);
             }
             if (next[start] < 0) return Array.Empty<int>();
@@ -104,14 +112,22 @@ namespace Rts.Simulation
             if (passable[cell] == value) return;
             passable[cell] = value;
             PassableVersion++;
-            routes.Clear(); routeOrder.Clear();
+            ClearSharedRoutes();
             paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
         }
         /// <summary>V3-16: the faction overlay changed (a tollgate appeared or went), so every cached route and path goes.</summary>
         internal void InvalidateRoutes()
         {
             PassableVersion++;
-            routes.Clear(); routeOrder.Clear(); paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
+            ClearSharedRoutes();
+            paths.Clear(); pathOrder.Clear(); pathCenters.Clear();
+        }
+
+        private void ClearSharedRoutes()
+        {
+            foreach (var route in routes.Values) routeBuffers.Push(route);
+            routes.Clear();
+            routeOrder.Clear();
         }
         public bool IsPassable(int cell) => cell >= 0 && cell < passable.Length && passable[cell];
         public bool IsPassableFor(int cell, uint factionId)

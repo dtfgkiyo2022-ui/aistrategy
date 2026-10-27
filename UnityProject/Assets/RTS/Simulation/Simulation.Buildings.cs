@@ -227,15 +227,17 @@ namespace Rts.Simulation
             else if (LargeEconomyOn && world.Tick % rules.LargeTownDecisionIntervalTicks != 0) return;
             ref var economy = ref world.Economies[faction - 1];
             if (TownCount(faction) >= TownLimitFor(faction)) return;
+            if (!FreeTownsAiVillagerThresholdReached(faction)) return;
             for (int i = 0; i < world.BuildingCount; i++)
                 if (world.Buildings[i].Alive && (!world.Buildings[i].Reserved || BuildingReservationsOn)
                     && world.Buildings[i].FactionId == faction && world.Buildings[i].Kind == BuildingKind.Town && !world.Buildings[i].Complete)
                     return;
             int availableWood = economy.Wood - (BuildingReservationsOn ? ReservedConstructionWood(faction) : 0);
             int availableStone = economy.Stone - (BuildingReservationsOn ? ReservedConstructionStone(faction) : 0);
-            if (availableWood < rules.TownWoodCost || availableStone < rules.TownStoneCost)
+            int townWoodCost = TownWoodCostFor(faction), townStoneCost = TownStoneCostFor(faction);
+            if (availableWood < townWoodCost || availableStone < townStoneCost)
             {
-                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < rules.TownWoodCost, availableStone < rules.TownStoneCost);
+                if (AiExpandOn) RecordAiExpandTownFundingFailure(faction, availableWood < townWoodCost, availableStone < townStoneCost);
                 return;
             }
             int resourceCell = BestTownResourceCell(faction);
@@ -282,7 +284,7 @@ namespace Rts.Simulation
         {
             if (!AiExpandTownPending(faction)) return false;
             ref var economy = ref world.Economies[faction - 1];
-            return economy.Wood < world.Config.Economy.TownWoodCost || economy.Stone < world.Config.Economy.TownStoneCost;
+            return economy.Wood < TownWoodCostFor(faction) || economy.Stone < TownStoneCostFor(faction);
         }
 
         /// <summary>
@@ -551,7 +553,7 @@ namespace Rts.Simulation
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
-                && economy.Wood - woodCost < world.Config.Economy.TownWoodCost) return;
+                && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
@@ -885,11 +887,14 @@ namespace Rts.Simulation
 
         private bool SiteIsClear(int origin, int coreCell, int size, int buildingClearanceCells = BuildingClearanceCells)
         {
-            foreach (int cell in Footprint(origin, size))
-            {
-                if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
-                if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
-            }
+            int width = world.Config.Map.WidthCells;
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                {
+                    int cell = origin + z * width + x;
+                    if (!world.Map.IsPassable(cell) || IsRiverCell(cell) || Chebyshev(cell, coreCell) < CoreClearanceCells) return false;
+                    if (world.Belts.Length != 0 && world.Belts[cell].FactionId != 0) return false; // V3-2: never on a belt
+                }
             return ClearOfNodesAndBuildings(origin, size, buildingClearanceCells);
         }
 
@@ -908,10 +913,46 @@ namespace Rts.Simulation
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 if (!world.Buildings[i].Alive) continue;
-                foreach (int other in Footprint(world.Buildings[i]))
-                    if (RectangleDistance(x0, z0, x1, z1, other, width) < buildingClearanceCells) return false;
+                if (RectangleDistanceToBuilding(x0, z0, x1, z1, world.Buildings[i], width, world.Config.Map.HeightCells)
+                    < buildingClearanceCells) return false;
             }
             return true;
+        }
+
+        private int RectangleDistanceToBuilding(int x0, int z0, int x1, int z1, BuildingState building, int width, int height)
+        {
+            if (building.Kind == BuildingKind.Bridge)
+            {
+                int distance = int.MaxValue;
+                if (building.BridgeCells != null)
+                    foreach (int cell in building.BridgeCells)
+                        distance = Math.Min(distance, RectangleDistance(x0, z0, x1, z1, cell, width));
+                return distance;
+            }
+            if (building.Kind == BuildingKind.Tollgate)
+            {
+                int origin = building.OriginCell;
+                if (origin < 0 || origin >= width * height) return int.MaxValue;
+                int x = origin % width, z = origin / width;
+                if (building.Facing == Facing.East && x + 1 >= width || building.Facing == Facing.West && x <= 0
+                    || building.Facing == Facing.North && z + 1 >= height || building.Facing == Facing.South && z <= 0)
+                    return int.MaxValue;
+                int delta = building.Facing == Facing.East ? 1 : building.Facing == Facing.West ? -1
+                    : building.Facing == Facing.North ? width : -width;
+                return Math.Min(RectangleDistance(x0, z0, x1, z1, origin, width),
+                    RectangleDistance(x0, z0, x1, z1, origin + delta, width));
+            }
+            int size = SizeOf(building.Kind);
+            int bx0 = building.OriginCell % width, bz0 = building.OriginCell / width;
+            return RectangleDistanceBetween(x0, z0, x1, z1, bx0, bz0, bx0 + size - 1, bz0 + size - 1);
+        }
+
+        private static int RectangleDistanceBetween(int x0, int z0, int x1, int z1,
+            int otherX0, int otherZ0, int otherX1, int otherZ1)
+        {
+            int dx = x1 < otherX0 ? otherX0 - x1 : otherX1 < x0 ? x0 - otherX1 : 0;
+            int dz = z1 < otherZ0 ? otherZ0 - z1 : otherZ1 < z0 ? z0 - otherZ1 : 0;
+            return Math.Max(dx, dz);
         }
 
         private static int RectangleDistance(int x0, int z0, int x1, int z1, int cell, int width)
@@ -1018,9 +1059,10 @@ namespace Rts.Simulation
                 Array.Clear(placementConnectivitySeen, 0, placementConnectivitySeen.Length);
                 placementConnectivityStamp = stamp = 1;
             }
-            int[] footprint = Footprint(origin, size);
             int head = 0, tail = 0, start = world.Map.Cell(OwnCore(faction).Definition.Position);
-            for (int i = 0; i < footprint.Length; i++) placementConnectivityClosed[footprint[i]] = stamp;
+            for (int z = 0; z < size; z++)
+                for (int x = 0; x < size; x++)
+                    placementConnectivityClosed[origin + z * width + x] = stamp;
             if (!world.Map.IsPassable(start) || placementConnectivityClosed[start] == stamp)
             {
                 placementConnectivityCache[key] = false;
@@ -1148,7 +1190,10 @@ namespace Rts.Simulation
         private void AssignBuilders(ref BuildingState building)
         {
             var spot = world.Map.Center(building.WorkCell);
-            for (int n = 0; n < BuildersFor(building.FactionId); n++)
+            int builderLimit = BuildersFor(building.FactionId);
+            if (automaticEconomyAction && FreeTownsOn && building.Kind == BuildingKind.Town)
+                builderLimit = Math.Min(builderLimit, world.Config.Economy.FreeTownsAiTownBuilders);
+            for (int n = 0; n < builderLimit; n++)
             {
                 int best = -1;
                 for (int i = 0; i < world.VillagerCount; i++)
@@ -1475,7 +1520,7 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Shrine ? e.ShrineWoodCost
                 : kind == BuildingKind.Monastery ? e.MonasteryWoodCost : kind == BuildingKind.Harbor ? e.HarborWoodCost : kind == BuildingKind.MineShaft ? e.MountainWoodCost
                   : kind == BuildingKind.Tollgate ? e.TollgateWoodCost : kind == BuildingKind.GrandHouse ? e.GrandHouseWoodCost
-            : kind == BuildingKind.Town ? e.TownWoodCost : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
+             : kind == BuildingKind.Town ? TownWoodCostFor(faction) : kind == BuildingKind.Storage ? e.StorageWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseWoodCost : kind == BuildingKind.CharmWorkshop ? e.CharmWoodCost : kind == BuildingKind.RepairYard ? e.RepairYardWoodCost : kind == BuildingKind.ToolShop ? e.ToolShopWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Bridge ? e.BridgeWoodCost : e.BarracksWoodCost;
             wood = IsMasonryDefence(faction, kind) ? MasonryDiscount(wood, e.MasonryDefenceCostPermille) : wood;
             return AgeStrength(faction, CivKind.Forestry, 4)
                 ? checked((wood * e.ForestryBuildingWoodPermille + 999) / 1000) : wood;
@@ -1540,7 +1585,7 @@ namespace Rts.Simulation
             var e = world.Config.Economy;
             int stone = kind == BuildingKind.Drill ? e.DrillStoneCost : kind == BuildingKind.Wall ? e.WallStoneCost : kind == BuildingKind.Tower ? e.TowerStoneCost
                 : kind == BuildingKind.Castle ? e.CastleStoneCost : kind == BuildingKind.Tollgate ? e.TollgateStoneCost : kind == BuildingKind.Shrine ? e.ShrineStoneCost
-                : kind == BuildingKind.Town ? e.TownStoneCost : 0;
+             : kind == BuildingKind.Town ? TownStoneCostFor(faction) : 0;
             if (kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction))
                 return checked((stone * e.SiegePartsCastleStonePermille + 999) / 1000);
             if (kind == BuildingKind.Castle && BrickCastleDiscountAvailable(faction))

@@ -435,7 +435,7 @@ namespace Rts.Simulation
             int heldWood = !byPlayer && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             heldWood = checked(heldWood + (!byPlayer ? AgeFourAiWoodReserve(faction) : 0));
             if (!byPlayer && automaticEconomyAction && AiExpandTownPending(faction)
-                && economy.Wood - wood < world.Config.Economy.TownWoodCost)
+                && economy.Wood - wood < TownWoodCostFor(faction))
                 return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             if (economy.Food < food || economy.Wood - heldWood < wood || economy.Gold < gold || economy.Metal < metal
                 || economy.Ore < oreForMetal || economy.Gems < gems) return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);

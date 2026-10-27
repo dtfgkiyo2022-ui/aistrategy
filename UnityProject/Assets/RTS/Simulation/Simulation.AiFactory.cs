@@ -29,6 +29,7 @@ namespace Rts.Simulation
             if (!AiFactoryDecisionDue(faction)) return;
             // Each template is independent: an unavailable resource point or route skips only that template and
             // leaves the following template eligible on the same decision pass.
+            if (FreeTownsOn && !AiExpandHasCompletedTown(faction)) return;
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryPrimitiveCraftLine(faction);
@@ -47,9 +48,12 @@ namespace Rts.Simulation
             if (!AiFactoryDecisionDue(faction)) return;
             if (AiExpandOn)
             {
-                EnsureAiFactoryWoodLine(faction);
-                EnsureAiFactoryStoneLine(faction);
-                EnsureAiFactoryMetalLine(faction);
+                if (!FreeTownsOn || AiExpandHasCompletedTown(faction))
+                {
+                    EnsureAiFactoryWoodLine(faction);
+                    EnsureAiFactoryStoneLine(faction);
+                    EnsureAiFactoryMetalLine(faction);
+                }
             }
             switch (world.Economies[faction - 1].Civ)
             {
@@ -75,6 +79,7 @@ namespace Rts.Simulation
         private void DecideAiFactoryAge2(uint faction)
         {
             if (!AiFactoryDecisionDue(faction)) return;
+            if (FreeTownsOn && AiExpandOn && !AiExpandHasCompletedTown(faction)) return;
             EnsureAiFactoryWoodLine(faction);
             EnsureAiFactoryStoneLine(faction);
             EnsureAiFactoryMetalLine(faction);
@@ -114,7 +119,7 @@ namespace Rts.Simulation
             var mine = world.Buildings[line.MineId - 1];
             var smelter = world.Buildings[line.SmelterId - 1];
             if (!mine.Complete || !smelter.Complete) return;
-            bool whole = LayCoreLine(faction, index, mine, smelter);
+            bool whole = LayCoreLineIfDue(faction, index, mine, smelter);
             SetLineHaulers(faction, line, whole ? 0 : HaulersForAiFactory);
             if (!whole) RecordAiFactorySkip(faction, 0, 2);
         }
@@ -192,12 +197,16 @@ namespace Rts.Simulation
             return !InRange(BuildingCenter(processor), world.Map.Center(baseCell), Fix64.FromInt(world.Config.Economy.TownResourceReach));
         }
 
-        private bool FeedsAiExpandBase(int cell, uint faction, SimPoint source)
+        /// <summary>The base an output belt ends at depends only on the processor, never on the cell being looked at, so it
+        /// is chosen once per route search instead of scanning every building for each cell the search reaches.</summary>
+        private Func<int, bool> AiExpandBaseFeed(uint faction, SimPoint source)
         {
+            if (!AiExpandOn) return next => FeedsOwnCore(next, faction);
             int baseCell = AiExpandBaseCellForSource(faction, source);
             int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
-            return baseCell == coreCell ? FeedsOwnCore(cell, faction)
-                : InRange(world.Map.Center(cell), world.Map.Center(baseCell), world.Config.Rules.CoreRadius);
+            if (baseCell == coreCell) return next => FeedsOwnCore(next, faction);
+            var baseCentre = world.Map.Center(baseCell);
+            return next => InRange(world.Map.Center(next), baseCentre, world.Config.Rules.CoreRadius);
         }
 
         private int AiExpandBaseCellForBuilding(uint faction, BuildingState building)
@@ -228,21 +237,22 @@ namespace Rts.Simulation
             var stonecutter = world.Buildings[stoneLine.StonecutterId - 1];
             var joinery = world.Buildings[line.JoineryId - 1];
             if (!sawmill.Complete || !stonecutter.Complete || !joinery.Complete) return;
-            if (!LineBeltsWhole(index))
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(index);
+            if (AiFactoryRouteDue(faction, index))
             {
                 var taken = TakenForOtherLines(faction, index);
                 var planks = BeltRoute(faction, OutputCell(sawmill), taken, next => InFootprint(joinery, next));
-                if (planks.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                if (planks.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
                 foreach (int cell in planks.cells) taken[cell] = true;
                 var stone = BeltRoute(faction, OutputCell(stonecutter), taken, next => InFootprint(joinery, next));
-                if (stone.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                if (stone.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
                 foreach (int cell in stone.cells) taken[cell] = true;
-                var core = BeltRoute(faction, OutputCell(joinery), taken, next => AiExpandOn
-                    ? FeedsAiExpandBase(next, faction, BuildingCenter(joinery)) : FeedsOwnCore(next, faction));
-                if (core.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+                var core = BeltRoute(faction, OutputCell(joinery), taken, AiExpandBaseFeed(faction, BuildingCenter(joinery)));
+                if (core.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
                 SetLineBelts(index, planks, stone, core);
                 if (!LayRoutes(faction, planks, stone, core)) RecordAiFactorySkip(faction, 0, 2);
             }
+            CompleteFreeTownsRouteRecheck(faction, index, wasWhole);
             SetSimpleHaulers(faction, sawmill.Id, joinery.Id, 1);
             SetSimpleHaulers(faction, stonecutter.Id, joinery.Id, 1);
             SetSimpleHaulers(faction, joinery.Id, 0, LineBeltsWhole(index) ? 0 : 1);
@@ -258,12 +268,13 @@ namespace Rts.Simulation
             if (!BuildingReady(line.AssemblerId)) return;
             SetAssemblerRecipe(faction, line.AssemblerId, RecipeKind.SiegeParts);
             var assembler = world.Buildings[line.AssemblerId - 1];
-            if (!assembler.Complete || LineBeltsWhole(index)) return;
-            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(assembler)) : FeedsOwnCore(next, faction));
-            if (route.cells == null) { RecordAiFactorySkip(faction, 0, 2); return; }
+            if (!assembler.Complete || !AiFactoryRouteDue(faction, index)) return;
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(index);
+            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), AiExpandBaseFeed(faction, BuildingCenter(assembler)));
+            if (route.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
             SetLineBelts(index, route);
             if (!LayRoutes(faction, route)) RecordAiFactorySkip(faction, 0, 2);
+            CompleteFreeTownsRouteRecheck(faction, index, wasWhole);
         }
 
         private void RecordAiFactorySkip(uint faction, int unknownResource, int reason)
@@ -307,7 +318,7 @@ namespace Rts.Simulation
             {
                 var camp = world.Buildings[line.LumberCampId - 1];
                 var sawmill = world.Buildings[line.SawmillId - 1];
-                if (camp.Complete && sawmill.Complete && !LineBeltsWhole(index)) LayPlanksLine(faction, index, camp, sawmill);
+                if (camp.Complete && sawmill.Complete && AiFactoryRouteDue(faction, index)) LayPlanksLine(faction, index, camp, sawmill);
                 if (LineBeltsWhole(index))
                 {
                     SetSimpleHaulers(faction, camp.Id, sawmill.Id, LineBeltsWhole(index) ? 0 : 1);
@@ -338,15 +349,15 @@ namespace Rts.Simulation
             var drill = world.Buildings[line.DrillId - 1];
             var stonecutter = world.Buildings[line.StonecutterId - 1];
             if (!drill.Complete || !stonecutter.Complete) return;
-            if (!LineBeltsWhole(index))
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(index);
+            if (AiFactoryRouteDue(faction, index))
             {
                 var taken = TakenForOtherLines(faction, index);
                 var toStonecutter = BeltRoute(faction, OutputCell(drill), taken, next => InFootprint(stonecutter, next));
                 if (toStonecutter.cells != null)
                 {
                     foreach (int cell in toStonecutter.cells) taken[cell] = true;
-                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, next => AiExpandOn
-                        ? FeedsAiExpandBase(next, faction, BuildingCenter(stonecutter)) : FeedsOwnCore(next, faction));
+                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, AiExpandBaseFeed(faction, BuildingCenter(stonecutter)));
                     if (toCore.cells != null)
                     {
                         SetLineBelts(index, toStonecutter, toCore);
@@ -354,6 +365,7 @@ namespace Rts.Simulation
                     }
                 }
             }
+            CompleteFreeTownsRouteRecheck(faction, index, wasWhole);
             if (LineBeltsWhole(index))
             {
                 SetSimpleHaulers(faction, drill.Id, stonecutter.Id, LineBeltsWhole(index) ? 0 : 1);
@@ -382,7 +394,8 @@ namespace Rts.Simulation
             ref var hut = ref world.Buildings[line.HutId - 1];
             if (!hut.Complete) return;
             if (hut.Recipe == RecipeKind.None) SetBuildingRecipe(faction, hut.Id, RecipeKind.StoneTools);
-            if (!LineBeltsWhole(index))
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(index);
+            if (AiFactoryRouteDue(faction, index))
             {
                 var route = BeltRoute(faction, OutputCell(hut), TakenForOtherLines(faction, index), next => FeedsOwnCore(next, faction));
                 if (route.cells != null)
@@ -391,6 +404,7 @@ namespace Rts.Simulation
                     LayRoutes(faction, route);
                 }
             }
+            CompleteFreeTownsRouteRecheck(faction, index, wasWhole);
             if (LineBeltsWhole(index)) SetSimpleHaulers(faction, hut.Id, 0, 1);
             else SetSimpleHaulers(faction, hut.Id, 0, 1);
         }

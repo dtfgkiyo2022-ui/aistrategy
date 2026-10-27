@@ -211,27 +211,50 @@ namespace Rts.Simulation
 
         private void MeasureSubphase(string name, Action action)
         {
-            if (measure == null) { action(); return; }
+            bool routeContext = routeDiagnosticsEnabled && IsRouteDiagnosticIndustry(name);
+            if (routeContext) routeDiagnosticIndustry = true;
+            if (measure == null)
+            {
+                try { action(); }
+                finally { if (routeContext) routeDiagnosticIndustry = false; }
+                return;
+            }
             measure(name, true);
             try { action(); }
-            finally { measure(name, false); }
+            finally { measure(name, false); if (routeContext) routeDiagnosticIndustry = false; }
         }
 
         private void MeasureSubphase(string name, Action<uint> action, uint argument)
         {
-            if (measure == null) { action(argument); return; }
+            bool routeContext = routeDiagnosticsEnabled && IsRouteDiagnosticIndustry(name);
+            if (routeContext) routeDiagnosticIndustry = true;
+            if (measure == null)
+            {
+                try { action(argument); }
+                finally { if (routeContext) routeDiagnosticIndustry = false; }
+                return;
+            }
             measure(name, true);
             try { action(argument); }
-            finally { measure(name, false); }
+            finally { measure(name, false); if (routeContext) routeDiagnosticIndustry = false; }
         }
 
         private bool MeasureSubphase(string name, Func<uint, bool> action, uint argument)
         {
-            if (measure == null) return action(argument);
+            bool routeContext = routeDiagnosticsEnabled && IsRouteDiagnosticIndustry(name);
+            if (routeContext) routeDiagnosticIndustry = true;
+            if (measure == null)
+            {
+                try { return action(argument); }
+                finally { if (routeContext) routeDiagnosticIndustry = false; }
+            }
             measure(name, true);
             try { return action(argument); }
-            finally { measure(name, false); }
+            finally { measure(name, false); if (routeContext) routeDiagnosticIndustry = false; }
         }
+
+        private static bool IsRouteDiagnosticIndustry(string name)
+            => name != null && name.IndexOf("AI.DecideEconomy.DecideIndustry.CraftTree", StringComparison.Ordinal) >= 0;
 
         private void GenerateIntents()
         {

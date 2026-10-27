@@ -57,6 +57,72 @@ namespace Rts.Simulation
         internal long BridgeSourceCellsConsidered { get; private set; }
         internal long BridgeDestinationCellsConsidered { get; private set; }
 
+        // Route diagnostics are observer-only. They are never consulted by an AI decision or included in the
+        // canonical state.
+        private readonly long[,] routeDiagnosticCalls = new long[2, 21];
+        private readonly long[,] routeDiagnosticSearchCells = new long[2, 21];
+        private readonly long[,] routeDiagnosticElapsedTicks = new long[2, 21];
+        private readonly bool routeDiagnosticsEnabled = string.Equals(
+            Environment.GetEnvironmentVariable("RTS_ROUTE_DIAGNOSTICS"), "1", StringComparison.Ordinal);
+        private bool routeDiagnosticIndustry;
+        // Supplied by the host that writes the route trace; the simulation never reads a clock itself.
+        internal Func<long> RouteDiagnosticClock;
+        private readonly long[] freeTownsRouteNextRecheckTick = { 0, 0 };
+        private readonly int[] freeTownsRouteCursor = { 0, 0 };
+
+        internal long RouteDiagnosticCalls(uint faction, ProcessingLineKind kind)
+            => routeDiagnosticCalls[(int)faction - 1, (int)kind];
+        internal long RouteDiagnosticSearchCells(uint faction, ProcessingLineKind kind)
+            => routeDiagnosticSearchCells[(int)faction - 1, (int)kind];
+        internal long RouteDiagnosticElapsedTicks(uint faction, ProcessingLineKind kind)
+            => routeDiagnosticElapsedTicks[(int)faction - 1, (int)kind];
+
+        private bool FreeTownsRouteRecheckAllowed(uint faction, int lineIndex)
+        {
+            if (!FreeTownsOn || faction < 1 || faction > 2 || lineIndex < 0 || lineIndex >= world.ProcessingLines.Length)
+                return true;
+            if (!LineBeltsWhole(lineIndex)) return true;
+            int selected = FreeTownsRouteRecheckLine(faction);
+            return selected == lineIndex;
+        }
+
+        /// <summary>
+        /// The AiFactory templates only route lines whose belts are not whole. With FreeTowns a whole line is also
+        /// rechecked in turn; without it the old rule stays exactly as it was.
+        /// </summary>
+        private bool AiFactoryRouteDue(uint faction, int lineIndex)
+            => FreeTownsOn ? FreeTownsRouteRecheckAllowed(faction, lineIndex) : !LineBeltsWhole(lineIndex);
+
+        private int FreeTownsRouteRecheckLine(uint faction)
+        {
+            if (!FreeTownsOn || faction < 1 || faction > 2 || world.Tick < freeTownsRouteNextRecheckTick[faction - 1]) return -1;
+            int count = world.ProcessingLines.Length;
+            int start = freeTownsRouteCursor[faction - 1] % Math.Max(1, count);
+            for (int offset = 0; offset < count; offset++)
+            {
+                int index = (start + offset) % count;
+                var line = world.ProcessingLines[index];
+                if (line.FactionId == faction && IsAutoLine(index) && LineBeltsWhole(index) && LineBuildingsReady(line)) return index;
+            }
+            return -1;
+        }
+
+        private void CompleteFreeTownsRouteRecheck(uint faction, int lineIndex, bool wasWhole)
+        {
+            if (!FreeTownsOn || !wasWhole || faction < 1 || faction > 2) return;
+            freeTownsRouteNextRecheckTick[faction - 1] = checked(world.Tick + Math.Max(1, world.Config.Economy.FreeTownsRouteRecheckTicks));
+            freeTownsRouteCursor[faction - 1] = lineIndex + 1;
+        }
+
+        private bool LayCoreLineIfDue(uint faction, int lineIndex, BuildingState mine, BuildingState smelter)
+        {
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(lineIndex);
+            if (wasWhole && !FreeTownsRouteRecheckAllowed(faction, lineIndex)) return true;
+            bool result = LayCoreLine(faction, lineIndex, mine, smelter);
+            CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole);
+            return result;
+        }
+
         private sealed class BridgeCandidate
         {
             internal int[] Cells;
@@ -205,7 +271,7 @@ namespace Rts.Simulation
             var coreSmelter = world.Buildings[coreLine.SmelterId - 1];
             int existingSteelIndex = LineIndex(faction, ProcessingLineKind.Steel);
             bool preserveSharedCoreRoute = IsSharedMetalLine(coreIndex, existingSteelIndex);
-            if (!preserveSharedCoreRoute && !LayCoreLine(faction, coreIndex, coreMine, coreSmelter)) SetLineHaulers(faction, coreLine, Haulers);
+             if (!preserveSharedCoreRoute && !LayCoreLineIfDue(faction, coreIndex, coreMine, coreSmelter)) SetLineHaulers(faction, coreLine, Haulers);
 
             if (!ProcessingAvailable(faction) || !LineBeltsWhole(coreIndex) || !LineBuildingsReady(coreLine)) return;
             int steelIndex = GetOrCreateLine(faction, ProcessingLineKind.Steel);
@@ -273,7 +339,7 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int lineIndex = GetOrCreateLine(faction, ProcessingLineKind.CoreMetal);
             ref var line = ref world.ProcessingLines[lineIndex];
-            if (!IsAutoLine(lineIndex)) return true;
+             if (!IsAutoLine(lineIndex)) return true;
             if (LineRebuildBlocked(lineIndex)) { StopLineHaulers(lineIndex); return true; }
             if (line.MineId != 0 && !RecoveryBuildingReady(line.MineId, BuildingKind.Mine))
             {
@@ -319,7 +385,7 @@ namespace Rts.Simulation
             }
             var mine = world.Buildings[line.MineId - 1];
             var smelter = world.Buildings[line.SmelterId - 1];
-            if (!LayCoreLine(faction, lineIndex, mine, smelter)) SetLineHaulers(faction, line, Haulers);
+             if (!LayCoreLineIfDue(faction, lineIndex, mine, smelter)) SetLineHaulers(faction, line, Haulers);
             else SetLineHaulers(faction, line, 0);
             return true;
         }
@@ -413,12 +479,18 @@ namespace Rts.Simulation
                 return;
             }
             var kiln = world.Buildings[line.KilnId - 1];
-            var route = BeltRoute(faction, OutputCell(kiln), TakenForOtherLines(faction, lineIndex), next => FeedsOwnCore(next, faction));
-            bool whole = false;
-            if (route.cells != null)
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(lineIndex);
+            bool whole = LineBeltsWhole(lineIndex);
+            if (FreeTownsRouteRecheckAllowed(faction, lineIndex))
             {
-                SetLineBelts(lineIndex, route);
-                whole = LayRoutes(faction, route);
+                var route = BeltRoute(faction, OutputCell(kiln), TakenForOtherLines(faction, lineIndex), next => FeedsOwnCore(next, faction));
+                whole = false;
+                if (route.cells != null)
+                {
+                    SetLineBelts(lineIndex, route);
+                    whole = LayRoutes(faction, route);
+                }
+                CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole);
             }
             SetLineHaulers(faction, line, whole ? 0 : 1);
         }
@@ -763,12 +835,15 @@ namespace Rts.Simulation
                     if (id != 0) plankLine.SawmillId = id;
                 }
             }
-            else if (IsAutoLine(plankIndex) && BuildingReady(plankLine.SawmillId))
+            else if (IsAutoLine(plankIndex) && BuildingReady(plankLine.SawmillId)
+                && FreeTownsRouteRecheckAllowed(faction, plankIndex))
             {
+                bool wasWhole = FreeTownsOn && LineBeltsWhole(plankIndex);
                 SetLineHaulers(faction, plankLine, 0);
                 var sawmill = world.Buildings[plankLine.SawmillId - 1];
                 var route = BeltRoute(faction, OutputCell(sawmill), TakenForOtherLines(faction, plankIndex), next => FeedsOwnCore(next, faction));
                 if (route.cells != null) { SetLineBelts(plankIndex, route); LayRoutes(faction, route); }
+                CompleteFreeTownsRouteRecheck(faction, plankIndex, wasWhole);
             }
 
             int stoneIndex = GetOrCreateLine(faction, ProcessingLineKind.CutStone);
@@ -781,12 +856,15 @@ namespace Rts.Simulation
                     if (id != 0) stoneLine.StonecutterId = id;
                 }
             }
-            else if (IsAutoLine(stoneIndex) && BuildingReady(stoneLine.StonecutterId))
+            else if (IsAutoLine(stoneIndex) && BuildingReady(stoneLine.StonecutterId)
+                && FreeTownsRouteRecheckAllowed(faction, stoneIndex))
             {
+                bool wasWhole = FreeTownsOn && LineBeltsWhole(stoneIndex);
                 SetLineHaulers(faction, stoneLine, 0);
                 var stonecutter = world.Buildings[stoneLine.StonecutterId - 1];
                 var route = BeltRoute(faction, OutputCell(stonecutter), TakenForOtherLines(faction, stoneIndex), next => FeedsOwnCore(next, faction));
                 if (route.cells != null) { SetLineBelts(stoneIndex, route); LayRoutes(faction, route); }
+                CompleteFreeTownsRouteRecheck(faction, stoneIndex, wasWhole);
             }
 
             if (!JoineryAllowed(faction)) return;
@@ -802,8 +880,13 @@ namespace Rts.Simulation
                 return;
             }
             var joinery = world.Buildings[frameLine.JoineryId - 1];
-            var frameRoute = BeltRoute(faction, OutputCell(joinery), TakenForOtherLines(faction, frameIndex), next => FeedsOwnCore(next, faction));
-            if (frameRoute.cells != null) { SetLineBelts(frameIndex, frameRoute); LayRoutes(faction, frameRoute); }
+            if (FreeTownsRouteRecheckAllowed(faction, frameIndex))
+            {
+                bool wasWhole = FreeTownsOn && LineBeltsWhole(frameIndex);
+                var frameRoute = BeltRoute(faction, OutputCell(joinery), TakenForOtherLines(faction, frameIndex), next => FeedsOwnCore(next, faction));
+                if (frameRoute.cells != null) { SetLineBelts(frameIndex, frameRoute); LayRoutes(faction, frameRoute); }
+                CompleteFreeTownsRouteRecheck(faction, frameIndex, wasWhole);
+            }
             if (economy.Frames >= rules.CraftTreeLevel2FramesCost)
                 for (uint buildingId = 1; buildingId < world.NextBuildingId; buildingId++)
                 {
@@ -2306,15 +2389,18 @@ namespace Rts.Simulation
 
         private bool LayPlanksLine(uint faction, int lineIndex, BuildingState camp, BuildingState sawmill)
         {
+            bool wasWhole = FreeTownsOn && LineBeltsWhole(lineIndex);
+            if (wasWhole && !FreeTownsRouteRecheckAllowed(faction, lineIndex)) return true;
             var taken = TakenForOtherLines(faction, lineIndex);
             var toSawmill = BeltRoute(faction, OutputCell(camp), taken, next => InFootprint(sawmill, next));
-            if (toSawmill.cells == null) return false;
+            if (toSawmill.cells == null) { CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole); return false; }
             foreach (int c in toSawmill.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(sawmill)) : FeedsOwnCore(next, faction));
-            if (toCore.cells == null) return false;
+            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, AiExpandBaseFeed(faction, BuildingCenter(sawmill)));
+            if (toCore.cells == null) { CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole); return false; }
             SetLineBelts(lineIndex, toSawmill, toCore);
-            return LayRoutes(faction, toSawmill, toCore);
+            bool result = LayRoutes(faction, toSawmill, toCore);
+            CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole);
+            return result;
         }
 
         private bool LayBricksLine(uint faction, int lineIndex, BuildingState quarry, BuildingState kiln, BuildingState brickKiln)
@@ -2609,8 +2695,7 @@ namespace Rts.Simulation
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
             foreach (int c in toSmelter.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(smelter)) : FeedsOwnCore(next, faction));
+            var toCore = BeltRoute(faction, OutputCell(smelter), taken, AiExpandBaseFeed(faction, BuildingCenter(smelter)));
             if (toCore.cells == null) return false;
             return LayRoutes(faction, toSmelter, toCore);
         }
@@ -2898,6 +2983,9 @@ namespace Rts.Simulation
 
         private (int[] cells, Facing[] facings) BeltRoute(uint faction, int start, bool[] taken, Func<int, int, bool> into)
         {
+            long routeStarted = routeDiagnosticIndustry && RouteDiagnosticClock != null ? RouteDiagnosticClock() : 0;
+            int diagnosticLineKind = routeDiagnosticIndustry ? DiagnosticLineKind(faction, start) : 0;
+            int diagnosticVisited = 0;
             if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
             int[] from, queue;
@@ -2918,6 +3006,7 @@ namespace Rts.Simulation
             while (head < tail)
             {
                 int cell = queue[head++];
+                diagnosticVisited++;
                 foreach (var side in Sides)
                 {
                     int next = BeltNext(cell, side);
@@ -2934,6 +3023,7 @@ namespace Rts.Simulation
                         for (int i = 0; i + 1 < length; i++)
                             foreach (var d in Sides) if (BeltNext(path[i], d) == path[i + 1]) { facings[i] = d; break; }
                         facings[length - 1] = side;
+                        RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
                         return (path, facings);
                     }
                     if (from[next] != -2 || taken[next] || !PortIsOpen(next, faction)) continue;
@@ -2941,7 +3031,45 @@ namespace Rts.Simulation
                     queue[tail++] = next;
                 }
             }
+            RecordRouteDiagnostic(faction, diagnosticLineKind, diagnosticVisited, routeStarted);
             return (null, null);
+        }
+
+        private int DiagnosticLineKind(uint faction, int start)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction) continue;
+                if (DiagnosticLineBuildingAt(line.MineId, start) || DiagnosticLineBuildingAt(line.SmelterId, start)
+                    || DiagnosticLineBuildingAt(line.KilnId, start) || DiagnosticLineBuildingAt(line.SteelworksId, start)
+                    || DiagnosticLineBuildingAt(line.LumberCampId, start) || DiagnosticLineBuildingAt(line.FletcherId, start)
+                    || DiagnosticLineBuildingAt(line.MillId, start) || DiagnosticLineBuildingAt(line.QuarryId, start)
+                    || DiagnosticLineBuildingAt(line.BrickKilnId, start) || DiagnosticLineBuildingAt(line.SaddleryId, start)
+                    || DiagnosticLineBuildingAt(line.SawmillId, start) || DiagnosticLineBuildingAt(line.StonecutterId, start)
+                    || DiagnosticLineBuildingAt(line.JoineryId, start) || DiagnosticLineBuildingAt(line.AssemblerId, start)
+                    || DiagnosticLineBuildingAt(line.ScriptoriumId, start) || DiagnosticLineBuildingAt(line.DryingRackId, start)
+                    || DiagnosticLineBuildingAt(line.LapidaryId, start) || DiagnosticLineBuildingAt(line.WeaverId, start)
+                    || DiagnosticLineBuildingAt(line.IncenseHouseId, start) || DiagnosticLineBuildingAt(line.CharmWorkshopId, start)
+                    || DiagnosticLineBuildingAt(line.RepairYardId, start) || DiagnosticLineBuildingAt(line.ToolShopId, start)
+                    || DiagnosticLineBuildingAt(line.HutId, start) || DiagnosticLineBuildingAt(line.DrillId, start))
+                    return (int)line.Kind;
+            }
+            return 0;
+        }
+
+        private bool DiagnosticLineBuildingAt(uint id, int start)
+            => id != 0 && id <= world.BuildingCount && OutputCell(world.Buildings[id - 1]) == start;
+
+        private void RecordRouteDiagnostic(uint faction, int lineKind, int visited, long started)
+        {
+            if (!routeDiagnosticIndustry || faction < 1 || faction > 2) return;
+            if (lineKind < 0 || lineKind >= routeDiagnosticCalls.GetLength(1)) lineKind = 0;
+            int index = (int)faction - 1;
+            routeDiagnosticCalls[index, lineKind]++;
+            routeDiagnosticSearchCells[index, lineKind] = checked(routeDiagnosticSearchCells[index, lineKind] + visited);
+            routeDiagnosticElapsedTicks[index, lineKind] = checked(routeDiagnosticElapsedTicks[index, lineKind]
+                + (RouteDiagnosticClock != null ? RouteDiagnosticClock() - started : 0));
         }
 
         private bool AiBeltCellKnown(uint faction, int cell)

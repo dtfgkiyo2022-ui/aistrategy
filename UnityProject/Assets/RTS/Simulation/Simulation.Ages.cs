@@ -95,12 +95,27 @@ namespace Rts.Simulation
         /// <summary>S-3: towns are a shared second-age expansion, independent of civilisation.</summary>
         private bool TownsOn => world.Config.Economy.Enabled && world.Config.Economy.Towns;
 
+        private bool FreeTownsOn => TownsOn && world.Config.Economy.FreeTowns;
+
+        private int TownWoodCostFor(uint faction)
+            => FreeTownsOn ? 0 : world.Config.Economy.TownWoodCost;
+
+        private int TownStoneCostFor(uint faction)
+            => FreeTownsOn ? 0 : world.Config.Economy.TownStoneCost;
+
         private bool TownsAllowed(uint faction)
-            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (AiExpandOn ? 1
+            => TownsOn && AgesOn && world.Economies[faction - 1].Age >= (FreeTownsOn ? 0 : AiExpandOn ? 1
                 : LargeEconomyOn ? world.Config.Economy.LargeTownMinAge : 2);
 
         private int TownLimitFor(uint faction)
         {
+            if (FreeTownsOn)
+            {
+                var e = world.Config.Economy;
+                int age = world.Economies[faction - 1].Age;
+                return checked((age + 1) * e.FreeTownsPerAge
+                    + (AgeStrength(faction, CivKind.Metropolis, 3) ? e.MetropolisTownLimitBonus : 0));
+            }
             if (AiExpandOn)
             {
                 var e = world.Config.Economy;
@@ -110,6 +125,14 @@ namespace Rts.Simulation
             }
             return checked(world.Config.Economy.TownMaxBuildings
                 + (AgeStrength(faction, CivKind.Metropolis, 3) ? world.Config.Economy.MetropolisTownLimitBonus : 0));
+        }
+
+        private bool FreeTownsAiVillagerThresholdReached(uint faction)
+        {
+            if (!FreeTownsOn) return true;
+            var e = world.Config.Economy;
+            int required = checked((TownCount(faction) + 1) * e.FreeTownsAiVillagersPerTown);
+            return LivingVillagers(faction) >= required;
         }
 
         private bool CavalryAllowed(uint faction)
@@ -430,7 +453,7 @@ namespace Rts.Simulation
             ref var e = ref world.Economies[faction - 1];
             var (food, wood, gold, ticks) = AdvancePrice(faction, e);
             if (automaticEconomyAction && AiExpandTownPending(faction)
-                && e.Wood - wood < world.Config.Economy.TownWoodCost) return;
+                && e.Wood - wood < TownWoodCostFor(faction)) return;
             e.Food = checked(e.Food - food);
             e.Wood = checked(e.Wood - wood);
             e.Gold = checked(e.Gold - gold);

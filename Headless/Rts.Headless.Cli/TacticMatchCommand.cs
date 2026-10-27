@@ -87,6 +87,13 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--drop-site-limit-off")) scenario.Economy.DropSiteLimit = false;
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
+        if (options.ContainsKey("--free-towns-off")) scenario.Economy.FreeTowns = false;
+        if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
+        {
+            int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
+            if (value < 1 || value > 16) throw new InvalidDataException("--free-towns-per-age must be between 1 and 16.");
+            scenario.Economy.FreeTownsPerAge = value;
+        }
         long ticks = long.Parse(Required(options, "--ticks"), CultureInfo.InvariantCulture);
         // Measurement runs may intentionally extend the historical 36,000-tick verification ceiling;
         // this command does not record a replay, so raising the input guard does not change simulation state.
@@ -203,6 +210,15 @@ internal static class TacticMatchCommand
             timingWriter = new StreamWriter(timingPath, false, new UTF8Encoding(false));
             timingWriter.WriteLine("tick,stepMs,allocBytes,gc0,gc1,gc2,westVillagers,westSoldiers,eastVillagers,eastSoldiers,westBarracks,eastBarracks,westTowns,eastTowns,westHouses,eastHouses,westResourceRemaining,eastResourceRemaining,totalUnits,westFood,westWood,westStone,westMetal,eastFood,eastWood,eastStone,eastMetal,westIdle,eastIdle,westWorking,eastWorking,movedSoldiers,visibilityChangedSoldiers,visibilityProcessedCells,bridgeSearchCalls,bridgeCandidateStartCellsInspected,bridgeCandidatesEvaluated,bridgeRouteEvaluations,bridgeDistanceMapRequests,bridgeDistanceMapsBuilt,bridgeDistanceMapCacheHits,bridgeDistanceMapCells,bridgeLegacyDistanceMapCells,bridgeBasePassableBuilds,bridgeBasePassableCellsScanned,bridgeSourceCellsConsidered,bridgeDestinationCellsConsidered,placementSiteCandidatesInspected,placementSiteClearChecks,placementConnectivityChecks,placementConnectivityCacheHits,placementConnectivityVisitedCells,phases,westLatePushAdvantageTick,eastLatePushAdvantageTick," + LargeEconomyHeader());
         }
+        StreamWriter routeTrace = null;
+        if (options.TryGetValue("--route-trace-out", out var routeTracePath))
+        {
+            string directory = Path.GetDirectoryName(Path.GetFullPath(routeTracePath));
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            routeTrace = new StreamWriter(routeTracePath, false, new UTF8Encoding(false));
+            routeTrace.WriteLine("tick,faction,lineKind,calls,searchCells,searchMs");
+            simulation.RouteDiagnosticClock = System.Diagnostics.Stopwatch.GetTimestamp;
+        }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();
         var ageTicks = new Dictionary<uint, Dictionary<int, long>>();
@@ -264,7 +280,7 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = (timingWriter != null || economyTrace != null) && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null) && simulation.Capture(1).Tick % 1000 == 0
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -451,6 +467,11 @@ internal static class TacticMatchCommand
                      LargeEconomyCsv(largeObservation)));
                 if (simulation.Capture(1).Tick % 100 == 0) timingWriter.Flush();
             }
+            if (routeTrace != null && simulation.Capture(1).Tick % 1000 == 0)
+            {
+                WriteRouteTrace(routeTrace, simulation);
+                routeTrace.Flush();
+            }
             if (economyTrace != null && (largeObservation != null || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks))
             {
                 var observation = largeObservation ?? simulation.CaptureLargeEconomyObservation();
@@ -462,6 +483,7 @@ internal static class TacticMatchCommand
             pack?.RecordAfterStep(simulation);
         }
         timingWriter?.Dispose();
+        routeTrace?.Dispose();
         ageTrace?.Dispose();
         craftTrace?.Dispose();
         economyTrace?.Dispose();
@@ -616,9 +638,11 @@ internal static class TacticMatchCommand
                 prefix + "CutStoneProduced", prefix + "CutStoneConsumed", prefix + "StoneToolsProduced", prefix + "StoneToolsConsumed",
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
-                prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
-                prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone" });
+                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
+                 prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
+                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                 prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
+                 prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -636,7 +660,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 74; i++) cells.Add("");
+                for (int i = 0; i < 81; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -656,6 +680,8 @@ internal static class TacticMatchCommand
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                 value.AiExpandTownSkippedStone }.Select(FormatInvariant));
+            cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
+                value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
             cells.AddRange(value.WorkerRoundTripTicks.Select(FormatInvariant));
             cells.AddRange(value.Income.Select(FormatInvariant));
@@ -664,6 +690,25 @@ internal static class TacticMatchCommand
     }
 
     private static string FormatInvariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static void WriteRouteTrace(StreamWriter writer, Battle simulation)
+    {
+        for (uint faction = 1; faction <= 2; faction++)
+            for (int rawKind = 0; rawKind <= 20; rawKind++)
+            {
+                var kind = (ProcessingLineKind)rawKind;
+                long calls = simulation.RouteDiagnosticCalls(faction, kind);
+                long cells = simulation.RouteDiagnosticSearchCells(faction, kind);
+                if (calls == 0 && cells == 0) continue;
+                string name = rawKind == 0 ? "Unknown" : kind.ToString();
+                double milliseconds = simulation.RouteDiagnosticElapsedTicks(faction, kind) * 1000.0
+                    / System.Diagnostics.Stopwatch.Frequency;
+                writer.WriteLine(string.Join(",", simulation.Capture(1).Tick.ToString(CultureInfo.InvariantCulture),
+                    faction.ToString(CultureInfo.InvariantCulture), name,
+                    calls.ToString(CultureInfo.InvariantCulture), cells.ToString(CultureInfo.InvariantCulture),
+                    milliseconds.ToString("0.000", CultureInfo.InvariantCulture)));
+            }
+    }
 
     private static void WriteEconomyTrace(StreamWriter writer, ScenarioDefinition scenario, Battle simulation, LargeEconomyObservation observation)
     {
