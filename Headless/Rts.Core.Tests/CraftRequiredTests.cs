@@ -78,6 +78,13 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void EconomyFrameReportsCraftRequiredFlag()
+        {
+            Assert.That(new Battle(Scenario(true)).Capture(1).Economy.CraftRequiredEnabled, Is.True);
+            Assert.That(new Battle(Scenario(false)).Capture(1).Economy.CraftRequiredEnabled, Is.False);
+        }
+
+        [Test]
         public void AgeTwoSoldierNeedsArmsKitButAgeOneAndExcludedUnitsKeepNormalCosts()
         {
             var simulation = new Battle(Scenario(true));
