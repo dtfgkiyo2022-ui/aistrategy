@@ -217,6 +217,7 @@ internal static class TacticMatchCommand
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             routeTrace = new StreamWriter(routeTracePath, false, new UTF8Encoding(false));
             routeTrace.WriteLine("tick,faction,lineKind,calls,searchCells,searchMs");
+            simulation.RouteDiagnosticClock = System.Diagnostics.Stopwatch.GetTimestamp;
         }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();

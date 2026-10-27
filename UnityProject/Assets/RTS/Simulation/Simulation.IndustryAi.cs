@@ -65,6 +65,8 @@ namespace Rts.Simulation
         private readonly bool routeDiagnosticsEnabled = string.Equals(
             Environment.GetEnvironmentVariable("RTS_ROUTE_DIAGNOSTICS"), "1", StringComparison.Ordinal);
         private bool routeDiagnosticIndustry;
+        // Supplied by the host that writes the route trace; the simulation never reads a clock itself.
+        internal Func<long> RouteDiagnosticClock;
         private readonly long[] freeTownsRouteNextRecheckTick = { 0, 0 };
         private readonly int[] freeTownsRouteCursor = { 0, 0 };
 
@@ -2981,7 +2983,7 @@ namespace Rts.Simulation
 
         private (int[] cells, Facing[] facings) BeltRoute(uint faction, int start, bool[] taken, Func<int, int, bool> into)
         {
-            long routeStarted = routeDiagnosticIndustry ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            long routeStarted = routeDiagnosticIndustry && RouteDiagnosticClock != null ? RouteDiagnosticClock() : 0;
             int diagnosticLineKind = routeDiagnosticIndustry ? DiagnosticLineKind(faction, start) : 0;
             int diagnosticVisited = 0;
             if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
@@ -3067,7 +3069,7 @@ namespace Rts.Simulation
             routeDiagnosticCalls[index, lineKind]++;
             routeDiagnosticSearchCells[index, lineKind] = checked(routeDiagnosticSearchCells[index, lineKind] + visited);
             routeDiagnosticElapsedTicks[index, lineKind] = checked(routeDiagnosticElapsedTicks[index, lineKind]
-                + System.Diagnostics.Stopwatch.GetTimestamp() - started);
+                + (RouteDiagnosticClock != null ? RouteDiagnosticClock() - started : 0));
         }
 
         private bool AiBeltCellKnown(uint faction, int cell)
