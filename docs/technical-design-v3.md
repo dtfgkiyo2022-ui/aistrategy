@@ -2156,3 +2156,9 @@ CLI の `tactic-match` には `--early-start-off` を追加した。検証では
 - 町の最大数は 1 と 2 でほぼ同じ（お任せは上限ではなく村人の数の決まりで止まる）
 - p99 は時代ごと 2 で旗オフの平均 1.23 倍。種2 の残りは軍の道探し（`AI.Routes`・`Pathfinding`、旗オンは東の兵が多い）で、町の判断の重さは旗オフとほぼ同じ
 - 測定の時点では 2 を推した（軽く、人が町を置ける自由も大きい）が、**オーナー判断で初期値は 1**（2026-10-27。町の最大数は 1 と 2 でほぼ同じで、1 でも兵が多く出る。重さは兵の数しだい）
+
+### 38.11 移動速度を2倍に（2026-10-28、オーナー決定）
+
+旗 `FastMovement` は、すべてのユニットと村人の1 tickの歩幅だけを倍率で増やす。`EconomyRules` の初期値は `FastMovementUnitSpeedPermille = 2000`、`FastMovementVillagerSpeedPermille = 2000`。LiveGameRulesでは `LargeEconomy` の広い地図だけをオンにし、拡張欄ID75/version1に旗と2つの初期値を保存する。旗オフは従来の `Fix64.FromRaw(speed.Raw / 20)` をそのまま使う。
+
+歩幅の計算は `MovementMath.StepDistance` に集約し、兵の `StepDistance` と村人の `VillagerStep`、速度研究・文明補正後の再計算を同じ関数へ通す。ベルト、飛翔体、射程、攻撃間隔、視界、建設・生産・採取時間、Contracts、Presentationは変更しない。移動先のクリップと到着判定は既存の処理を使い、歩幅が大きくても壁・建物・川を通過しない。
