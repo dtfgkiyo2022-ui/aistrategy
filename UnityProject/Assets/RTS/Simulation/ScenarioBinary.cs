@@ -205,6 +205,9 @@ private const int AiExpandExtensionVersion = 1;
         private const int EarlyStartExtensionId = 73;
         private const int EarlyStartExtensionVersion = 1;
         private const int EarlyStartExtensionDataLength = 4 * sizeof(int);
+        private const int HouseFlowExtensionId = 74;
+        private const int HouseFlowExtensionVersion = 1;
+        private const int HouseFlowExtensionDataLength = 4 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -300,6 +303,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
               ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
               ,new ExtensionRegistration(EarlyStartExtensionId, EarlyStartExtensionVersion, EarlyStartExtensionDataLength)
+            ,new ExtensionRegistration(HouseFlowExtensionId, HouseFlowExtensionVersion, HouseFlowExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -947,7 +951,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == AgeFourExtensionId) ReadAgeFourExtension(extension, c.Economy);
                     else if (id == AgeStrengthsExtensionId) ReadAgeStrengthsExtension(extension, c.Economy);
                     else if (id == CraftTree4ExtensionId) ReadCraftTree4Extension(extension, c.Economy);
-                    else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
+                      else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
+                      else if (id == HouseFlowExtensionId) ReadHouseFlowExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1043,7 +1048,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeStrengthsExtensionId && !c.Economy.AgeStrengths);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
-            bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
+                  extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
+            bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasEarlyStart = false;
             for (int i = 0; i < extensions.Count; i++)
             {
@@ -1073,6 +1079,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     hasLargeEconomy = true;
                     extensions[i] = CreateLargeEconomyExtension(c.Economy);
                 }
+                if (extensions[i].Id == HouseFlowExtensionId)
+                {
+                    hasHouseFlow = true;
+                    extensions[i] = CreateHouseFlowExtension(c.Economy);
+                }
                 if (extensions[i].Id == AcademyExtensionId) hasAcademy = true;
                 if (extensions[i].Id == FishingCivExtensionId) hasFishingCiv = true;
                 if (extensions[i].Id == AgeFourAiExtensionId)
@@ -1090,6 +1101,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  if (c.Economy.EarlyStart && !hasEarlyStart)
                      extensions.Add(CreateEarlyStartExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
+                if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
             for (int i = 0; i < extensions.Count; i++)
                 if (extensions[i] != null && extensions[i].Id == AgeFourExtensionId)
@@ -3522,6 +3534,32 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     e.LargeExploreChunkCells = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing large economy extension data.");
+            }
+        }
+        private static ScenarioExtensionData CreateHouseFlowExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.HouseFlow ? 1 : 0);
+                writer.Write(e.HouseFlowStallTicks);
+                writer.Write(e.HouseFlowMarginPerProducer);
+                writer.Write(e.HouseFlowMaxConcurrent);
+                return new ScenarioExtensionData { Id = HouseFlowExtensionId, Version = HouseFlowExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+        private static void ReadHouseFlowExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid house-flow flag.");
+                e.HouseFlow = enabled != 0;
+                e.HouseFlowStallTicks = reader.ReadInt32();
+                e.HouseFlowMarginPerProducer = reader.ReadInt32();
+                e.HouseFlowMaxConcurrent = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing house-flow extension data.");
             }
         }
         private static ScenarioExtensionData CreateAutoReturnAfterHumanExtension(EconomyRules e)

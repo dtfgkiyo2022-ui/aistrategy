@@ -88,6 +88,11 @@ namespace Rts.Simulation
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
         public bool LargeEconomy;
+        /// <summary>38.10: keeps automatic housing placements flowing on the large economy.</summary>
+        public bool HouseFlow;
+        public int HouseFlowStallTicks = 600;
+        public int HouseFlowMarginPerProducer = 8;
+        public int HouseFlowMaxConcurrent = 3;
         public int LargeVillagerTrainTicks = 40, LargeInfantryTrainTicks = 80;
         public int LargeVillagerBatch = 4, LargeInfantryBatch = 4;
         public int LargeBarracksMaxBuildings = 16, LargeArmyCapacity = 300;

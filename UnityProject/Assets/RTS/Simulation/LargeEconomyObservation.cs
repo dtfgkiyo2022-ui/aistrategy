@@ -36,6 +36,8 @@ namespace Rts.Simulation
     {
         public uint FactionId;
         public int Villagers, Soldiers;
+        public int Population, PopulationLimit, PlannedHouses;
+        public long HouseLimitStopTicks;
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
@@ -89,6 +91,9 @@ namespace Rts.Simulation
                 var value = new LargeEconomyFactionObservation { FactionId = faction };
                 value.Villagers = LivingVillagers(faction);
                 value.Soldiers = LivingSoldiers(faction);
+                value.Population = value.Villagers + value.Soldiers;
+                value.PopulationLimit = PopCapFor(faction);
+                value.HouseLimitStopTicks = houseLimitStopTicks[faction - 1];
                 var core = OwnCore(faction);
                 value.CoreHp = core.Hp;
                 foreach (int soldierIndex in world.SoldierTraversal)
@@ -114,7 +119,11 @@ namespace Rts.Simulation
                         value.TownVillagersQueued = checked(value.TownVillagersQueued + b.Queued);
                         townCenters.Add(BuildingCenter(b));
                     }
-                    else if (b.Kind == BuildingKind.House) value.Houses++;
+                    else if (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse)
+                    {
+                        if (b.Kind == BuildingKind.House) value.Houses++;
+                        if (!b.Complete) value.PlannedHouses++;
+                    }
                     else if (b.Kind == BuildingKind.Farm) value.Farms++;
                     else if (b.Kind == BuildingKind.Barracks)
                     {

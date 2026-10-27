@@ -147,6 +147,7 @@
     <Compile Include="LargeEconomyTests.cs" />
     <Compile Include="LargeEconomyEcon3Tests.cs" />
     <Compile Include="LargeEconomyEcon5Tests.cs" />
+    <Compile Include="HouseFlowTests.cs" />
     <Compile Include="EconomyScaleMeasurementTests.cs" />
     <Compile Include="EconomyPresentationToolsTests.cs" />
     <Compile Include="RegionTests.cs" />

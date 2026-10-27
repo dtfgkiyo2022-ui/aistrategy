@@ -46,6 +46,7 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
+        if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -625,12 +626,12 @@ internal static class TacticMatchCommand
         for (int faction = 1; faction <= 2; faction++)
         {
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
-            cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
+            cells.AddRange(new[] { prefix + "Population", prefix + "PopulationLimit", prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
                 prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
-                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
+                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore", prefix + "PlannedHouses", prefix + "HouseLimitStopTicks",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
                 prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining",
                 prefix + "AiFactoryConnectedLines", prefix + "AiFactoryPrimitiveConnectedLines", prefix + "AiFactoryAge1ConnectedLines",
@@ -661,16 +662,16 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 81; i++) cells.Add("");
+                for (int i = 0; i < 85; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
-            cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
+            cells.AddRange(new[] { value.Population, value.PopulationLimit, value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
                 value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
-                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
+                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore, value.PlannedHouses, checked((int)value.HouseLimitStopTicks),
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(new[] { value.AiFactoryConnectedLines, value.AiFactoryPrimitiveConnectedLines, value.AiFactoryAge1ConnectedLines,

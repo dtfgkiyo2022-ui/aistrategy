@@ -1145,6 +1145,8 @@ namespace Rts.Simulation
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy,
+                HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
+                HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
                 LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,
                 LargeVillagerBatch = e.LargeVillagerBatch, LargeInfantryBatch = e.LargeInfantryBatch,
                 LargeBarracksMaxBuildings = e.LargeBarracksMaxBuildings, LargeArmyCapacity = e.LargeArmyCapacity,
