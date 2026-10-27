@@ -192,7 +192,7 @@ namespace Rts.Simulation
                 v.HaulTo = 0;
                 v.BuildingId = marketId;
                 v.Task = VillagerTask.ToTradeMarket;
-                v.Route = System.Array.Empty<int>();
+                ReleaseVillagerRoute(ref v);
                 v.RouteCursor = 0;
                 v.RouteGoal = v.Position;
                 if (IndustryOn) v.Held = true;
@@ -224,7 +224,7 @@ namespace Rts.Simulation
         {
             ClearCaravan(ref v);
             v.Task = VillagerTask.Idle;
-            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position; v.MoveGoal = v.Position;
+            ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position; v.MoveGoal = v.Position;
         }
 
         private bool CaravanMarketValid(VillagerState v)
@@ -284,14 +284,14 @@ namespace Rts.Simulation
             {
                 v.CaravanDangerStopped = true;
                 v.CaravanSafeTicks = 0;
-                v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                 return true;
             }
             if (!v.CaravanDangerStopped) return false;
             v.CaravanSafeTicks = checked(v.CaravanSafeTicks + 1);
             if (v.CaravanSafeTicks < CaravanSafetyTicks)
             {
-                v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                 return true;
             }
             v.CaravanDangerStopped = false;
@@ -306,14 +306,14 @@ namespace Rts.Simulation
             v.CaravanSafeTicks = 0;
             // This is a voluntary retreat, not an ownership-loss stop: keep the fixed pair and return empty-handed.
             v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket;
-            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+            ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
         }
 
         private void EndCaravanAtCore(ref VillagerState v)
         {
             v.CaravanWood = 0; // The registered market was lost, so unbanked cargo is not recoverable.
             v.Task = VillagerTask.ToCaravanCore;
-            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+            ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
         }
 
         private void StartCaravanRoute(uint faction, uint caravanseraiId, IReadOnlyList<uint> villagers)
@@ -341,7 +341,7 @@ namespace Rts.Simulation
                 // A normal gathering load is delivered first. The pending caravan fields survive that delivery,
                 // while the dedicated CaravanWood slot remains empty until the host is reached.
                 if (v.Carry > 0) v.Task = VillagerTask.ToDropOff;
-                else { v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position; }
+                else { v.Task = VillagerTask.ToCaravanMarket; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position; }
                 if (IndustryOn) v.Held = true;
             }
         }
@@ -447,7 +447,7 @@ namespace Rts.Simulation
             v.BuildingId = 0;
             v.HaulFrom = 0;
             v.HaulTo = 0;
-            v.Route = System.Array.Empty<int>();
+            ReleaseVillagerRoute(ref v);
             v.RouteCursor = 0;
             v.RouteGoal = v.Position;
             v.MoveGoal = v.Position;
@@ -472,7 +472,7 @@ namespace Rts.Simulation
             }
             AddStock(v.FactionId, ResourceKind.Wood, world.Config.Economy.TradeRouteWood);
             v.Task = VillagerTask.ToTradeMarket;
-            v.Route = System.Array.Empty<int>();
+            ReleaseVillagerRoute(ref v);
             v.RouteCursor = 0;
             v.RouteGoal = v.Position;
         }
@@ -491,7 +491,7 @@ namespace Rts.Simulation
                 // never here: loading changes the task to the return leg in the same tick.
                 if (!CaravanPairValid(v))
                 {
-                    v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                    v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket; ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                     return;
                 }
                 var host = world.Buildings[v.CaravanseraiId - 1];
@@ -504,7 +504,7 @@ namespace Rts.Simulation
                         if (world.Economies[v.FactionId - 1].Age >= 2) v.CaravanGems = CaravanGemsReward;
                     }
                     v.CaravanStage = 3; v.Task = VillagerTask.ToCaravanMarket;
-                    v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+                    ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
                 }
                 return;
             }
@@ -524,7 +524,7 @@ namespace Rts.Simulation
             if (!CaravanPairValid(v)) { StopCaravan(ref v); return; }
             if (v.CaravanDangerStopped) return;
             v.CaravanStage = 2; v.Task = VillagerTask.ToCaravanserai;
-            v.Route = Array.Empty<int>(); v.RouteCursor = 0; v.RouteGoal = v.Position;
+            ReleaseVillagerRoute(ref v); v.RouteCursor = 0; v.RouteGoal = v.Position;
         }
 
         /// <summary>Automatic economy: one idle villager is assigned until two active routes exist.</summary>
@@ -550,7 +550,7 @@ namespace Rts.Simulation
                 v.HaulTo = 0;
                 v.BuildingId = marketId;
                 v.Task = VillagerTask.ToTradeMarket;
-                v.Route = System.Array.Empty<int>();
+                ReleaseVillagerRoute(ref v);
                 v.RouteCursor = 0;
                 v.RouteGoal = v.Position;
                 return;

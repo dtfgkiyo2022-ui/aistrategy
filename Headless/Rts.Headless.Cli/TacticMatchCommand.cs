@@ -45,6 +45,7 @@ internal static class TacticMatchCommand
                 // The played game's rules (LiveGameRules, all civilisations), so a tactic practises the match it will play.
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
+        if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -218,6 +219,7 @@ internal static class TacticMatchCommand
             if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
             routeTrace = new StreamWriter(routeTracePath, false, new UTF8Encoding(false));
             routeTrace.WriteLine("tick,faction,lineKind,calls,searchCells,searchMs");
+            simulation.RouteDiagnosticClock = System.Diagnostics.Stopwatch.GetTimestamp;
         }
         StreamWriter ageTrace = null;
         var priorAges = new Dictionary<uint, int>();

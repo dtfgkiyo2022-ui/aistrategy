@@ -389,7 +389,7 @@ namespace Rts.Simulation
                 if (!v.Alive || v.FactionId != faction) continue;
                 v.Task = VillagerTask.Idle;
                 v.NodeId = 0;
-                v.Route = Array.Empty<int>();
+                ReleaseVillagerRoute(ref v);
                 v.RouteCursor = 0;
                 v.RouteGoal = v.Position;
                 v.BuildingId = 0;

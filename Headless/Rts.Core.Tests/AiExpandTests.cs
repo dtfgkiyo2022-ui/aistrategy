@@ -15,6 +15,8 @@ namespace Rts.Core.Tests
         private static ScenarioDefinition Scenario(bool expand, bool large = true)
         {
             var scenario = LiveGameRules.Create(68003UL, large, true, false, false);
+            // These tests exercise expansion from the legacy three-villager opening.
+            LiveGameRules.SetEarlyStart(scenario, false);
             scenario.Map.Terrain = new byte[scenario.Map.WidthCells * scenario.Map.HeightCells];
             scenario.Map.BlockedCellIds = Array.Empty<int>();
             var e = scenario.Economy;

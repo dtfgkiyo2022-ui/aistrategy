@@ -810,6 +810,7 @@ namespace Rts.Simulation
                  && e.FarmSizeCells > 0 && e.FarmSizeCells <= 8 && e.FarmWoodCost >= 0 && e.FarmWork > 0 && e.FarmHp > 0
                  && e.FarmMinTicks > 0 && e.FarmBaseTicks >= e.FarmMinTicks && e.FarmStepTicks >= 0 && e.FarmFoodReach >= 0 && e.FarmRiverReach >= 0
                  && (!e.OpenFarms || (e.OpenFarmsOtherCivExtraTicks > 0 && e.OpenFarmsPrimitiveAiFarms >= 0 && e.OpenFarmsOtherCivAiFarms >= 0))
+                 && (!e.EarlyStart || (e.LargeEconomy && e.EarlyStartVillagers >= 3 && e.EarlyStartVillagersPerFarm > 0 && e.EarlyStartPrimitiveFarmMax > 0))
                 && (!e.Forestry || (e.Industry && e.LumberCampSizeCells > 0 && e.LumberCampSizeCells <= 8 && e.LumberCampWoodCost >= 0
                     && e.LumberCampWork > 0 && e.LumberCampHp > 0 && e.LumberCampIntervalTicks > 0
                     && e.MarketFoodFloor >= 0 && e.MarketWoodReserve >= 0 && e.MarketStoneReserve >= 0
@@ -1384,6 +1385,8 @@ namespace Rts.Simulation
                  FarmBaseTicks = e.FarmBaseTicks, FarmStepTicks = e.FarmStepTicks, FarmMinTicks = e.FarmMinTicks, FarmFoodReach = e.FarmFoodReach, FarmRiverReach = e.FarmRiverReach,
                  OpenFarms = e.OpenFarms, OpenFarmsOtherCivExtraTicks = e.OpenFarmsOtherCivExtraTicks,
                  OpenFarmsPrimitiveAiFarms = e.OpenFarmsPrimitiveAiFarms, OpenFarmsOtherCivAiFarms = e.OpenFarmsOtherCivAiFarms,
+                 EarlyStart = e.EarlyStart, EarlyStartVillagers = e.EarlyStartVillagers,
+                 EarlyStartVillagersPerFarm = e.EarlyStartVillagersPerFarm, EarlyStartPrimitiveFarmMax = e.EarlyStartPrimitiveFarmMax,
                   Forestry = e.Forestry, Masonry = e.Masonry, Caravan = e.Caravan, Cavalry = e.Cavalry, Bridge = e.Bridge, Academy = e.Academy, Cult = e.Cult, Metropolis = e.Metropolis, Sanctuary = e.Sanctuary, Towns = e.Towns,
                  EngineerCampSizeCells = e.EngineerCampSizeCells, EngineerCampWoodCost = e.EngineerCampWoodCost,
                  EngineerCampWork = e.EngineerCampWork, EngineerCampHp = e.EngineerCampHp,

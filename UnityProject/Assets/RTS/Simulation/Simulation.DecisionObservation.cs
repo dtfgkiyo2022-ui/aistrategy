@@ -13,7 +13,9 @@ namespace Rts.Simulation
         private FactionObservation ObserveForDecision(uint faction)
         {
             var frame = frames[faction - 1].Observation;
-            var raids = CavalryAllowed(faction) ? ObservedRaidTargets(faction, frame) : Array.Empty<ObservedRaidTarget>();
+            bool cavalry = CavalryAllowed(faction);
+            if (!cavalry) return decisionObservations[faction - 1] = frame;
+            var raids = ObservedRaidTargets(faction, frame);
             return decisionObservations[faction - 1] = new FactionObservation(faction, frame.Tick,
                 frame.OwnArmies, frame.VisibleEnemies, frame.Contacts, frame.Objectives, frame.EnemyFactionCap, raids);
         }

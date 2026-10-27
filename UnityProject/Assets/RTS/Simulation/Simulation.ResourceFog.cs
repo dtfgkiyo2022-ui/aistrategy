@@ -7,6 +7,8 @@ namespace Rts.Simulation
     {
         private readonly ResourceView[][] resourceViewBases = { new ResourceView[0], new ResourceView[0] };
         private readonly int[][] resourceViewNodeIndices = { new int[0], new int[0] };
+        private readonly List<int>[] resourceViewReplacedIndices = { new List<int>(), new List<int>() };
+        private readonly List<ResourceView>[] resourceViewReplacedItems = { new List<ResourceView>(), new List<ResourceView>() };
 
         /// <summary>Updates each faction's remembered amount only for resource cells visible in this observation.</summary>
         private void UpdateResourceObservations()
@@ -71,8 +73,10 @@ namespace Rts.Simulation
             }
 
             var baseViews = resourceViewBases[faction - 1];
-            var replacedIndices = new List<int>();
-            var replacedItems = new List<ResourceView>();
+            var replacedIndices = resourceViewReplacedIndices[faction - 1];
+            var replacedItems = resourceViewReplacedItems[faction - 1];
+            replacedIndices.Clear();
+            replacedItems.Clear();
             for (int i = 0; i < baseViews.Length; i++)
             {
                 var current = ResourceViewFor(resourceViewNodeIndices[faction - 1][i], memory.ResourceRemaining[resourceViewNodeIndices[faction - 1][i]]);

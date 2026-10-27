@@ -17,6 +17,12 @@ namespace Rts.Simulation
         // One state per faction: unlike the old per-army target timer this describes a shared attack.
         private readonly FactionOffenseMemory[] offenseMemory = { new FactionOffenseMemory(), new FactionOffenseMemory() };
         private const int ExplorePathFailureLimit = 3;
+        private readonly List<ContactApproachRoute> approachRoutesScratch = new List<ContactApproachRoute>();
+        private readonly HashSet<uint> visibleInfantryContactsScratch = new HashSet<uint>();
+        private readonly List<ArmyDecisionInput> armyInputsScratch = new List<ArmyDecisionInput>(16);
+        private readonly List<ObjectiveRoute> objectiveRoutesScratch = new List<ObjectiveRoute>(16);
+        private readonly List<OffenseArmyInput> ownArmyInputsScratch = new List<OffenseArmyInput>(16);
+        private readonly List<OffenseRouteInput> offenseRoutesScratch = new List<OffenseRouteInput>(16);
 
         private bool ExploreScoutingOn => world.Config.Economy.ExploreScouting;
         private bool LargeExploreOn => ExploreScoutingOn && world.Config.Economy.LargeEconomy;
@@ -182,7 +188,7 @@ namespace Rts.Simulation
                     scout.ExploreGoalChunkZ = target.ChunkZ;
                     scout.ExploreRetargetTick = checked(world.Tick + world.Config.Economy.ExploreRetargetTicks);
                     scout.TacticalRoute = false;
-                    scout.LocalPath = null;
+                    ReleaseLocalPath(ref scout);
                 }
                 if (scout.ExploreHasGoal)
                     reserved.Add(new ExploreReservedChunk(scout.ExploreGoalChunkX, scout.ExploreGoalChunkZ));
@@ -245,8 +251,10 @@ namespace Rts.Simulation
                 {
                     observation = ObserveForDecision(f);
                     // A* is invoked only for the finite visible-infantry × outpost set on this tick.
-                    var approachRoutes = new List<ContactApproachRoute>();
-                    var visibleInfantryContacts = new HashSet<uint>();
+                    var approachRoutes = approachRoutesScratch;
+                    var visibleInfantryContacts = visibleInfantryContactsScratch;
+                    approachRoutes.Clear();
+                    visibleInfantryContacts.Clear();
                     for (int i = 0; i < observation.VisibleEnemies.Count; i++)
                         if (observation.VisibleEnemies[i].Kind == (byte)UnitKind.Infantry)
                             visibleInfantryContacts.Add(observation.VisibleEnemies[i].ContactId);
@@ -254,7 +262,7 @@ namespace Rts.Simulation
                     foreach (var contact in observation.Contacts.Where(c => !c.IsArmyContact && c.IsCurrentlyVisible && visibleInfantryContacts.Contains(c.ContactId)).OrderBy(c => c.ContactId))
                     {
                         var path = world.Map.FindPath(world.Map.Cell(contact.LastPosition), post.Position, f);
-                        int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(world.Map.FindPathCenters(world.Map.Cell(contact.LastPosition), post.Position, f)) / Fix64.FromInt(1).Raw));
+                        int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), post.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(world.Map.FindPathCenterView(world.Map.Cell(contact.LastPosition), post.Position, f)) / Fix64.FromInt(1).Raw));
                         approachRoutes.Add(new ContactApproachRoute(contact.ContactId, post.Id, distance));
                     }
                     approachMemory[f - 1] = PolicyDecision.UpdateApproaches(observation, approachMemory[f - 1], approachRoutes, world.Config.Rules.OccupationThreatMemoryTicks);
@@ -277,17 +285,21 @@ namespace Rts.Simulation
                 // this is the same observation instance and focus is false, so nothing below changes for them.
                 var targets = SanctuaryTargetObservation(f, observation);
                 bool sanctuaryFocus = SanctuaryOutpostFocus(f, targets);
-                var inputs = new List<ArmyDecisionInput>();
+                var inputs = armyInputsScratch;
+                inputs.Clear();
                 foreach (var view in observation.OwnArmies.OrderBy(a => a.Id))
                 {
                     var a = world.Armies[view.Id - 1];
-                    uint first = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).DefaultIfEmpty(0U).First();
+                    uint first = 0;
+                    for (int si = 0; si < a.SoldierIds.Length; si++)
+                        if (world.Soldiers[a.SoldierIds[si] - 1].Alive) { first = a.SoldierIds[si]; break; }
                     var start = first == 0 ? world.Map.Cell(view.Position) : world.Map.Cell(world.Soldiers[first - 1].Position);
-                    var routes = new List<ObjectiveRoute>();
+                    var routes = objectiveRoutesScratch;
+                    routes.Clear();
                     foreach (var o in targets.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
                     {
                         var path = world.Map.FindPath(start, o.Position, f);
-                        var centers = world.Map.FindPathCenters(start, o.Position, f);
+                        var centers = world.Map.FindPathCenterView(start, o.Position, f);
                         int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), o.Position, Fix64.FromInt(4)) ? int.MaxValue : checked((int)(OffenseDecision.Length(centers) / Fix64.FromInt(1).Raw));
                         if (SanctuarySkipsGoal(f, sanctuaryFocus, o.Kind, o.Id)) distance = int.MaxValue;
                         routes.Add(new ObjectiveRoute(new PolicyGoal(o.Kind, o.Id, default), distance, centers));
@@ -296,7 +308,7 @@ namespace Rts.Simulation
                         foreach (var target in observation.RaidTargets.OrderBy(t => t.Kind).ThenBy(t => t.Id))
                         {
                             var path = world.Map.FindPath(start, target.Position, f);
-                            var centers = world.Map.FindPathCenters(start, target.Position, f);
+                            var centers = world.Map.FindPathCenterView(start, target.Position, f);
                             int distance = path.Length == 0 || !InRange(world.Map.Center(path[path.Length - 1]), target.Position, Fix64.FromInt(4))
                                 ? int.MaxValue : checked((int)(OffenseDecision.Length(centers) / Fix64.FromInt(1).Raw));
                             routes.Add(new ObjectiveRoute(new PolicyGoal(GoalKind.Point, target.Id, target.Position), distance,
@@ -308,12 +320,20 @@ namespace Rts.Simulation
                 var decisionPolicies = PolicyOrdersForDecision(f, policies);
                 ushort reserve = policies.Where(c => c.Order.Kind == PolicyKind.MaintainReserve).Select(c => c.Order.ReservePermille).DefaultIfEmpty(world.Config.Rules.DefaultReservePermille).First();
                 var abandoned = decisionPolicies.Where(o => o.Kind == PolicyKind.AllowAbandon && o.Target.Kind == ScopeKind.Outpost).Select(o => o.Target.Id).OrderBy(id => id).ToArray();
-                var own = inputs.Select(i => {
+                var own = ownArmyInputsScratch;
+                own.Clear();
+                for (int inputIndex = 0; inputIndex < inputs.Count; inputIndex++)
+                {
+                    var i = inputs[inputIndex];
                     var a = world.Armies[i.Army.Id - 1];
                     var live = a.SoldierIds.Where(id => world.Soldiers[id - 1].Alive).OrderBy(id => id).ToArray();
-                    return new OffenseArmyInput(i.Army.Id, live.Select(id => world.Soldiers[id - 1].Position).ToArray(), live.Length == 0 ? 0 : world.Soldiers[live[0] - 1].StepDistance.Raw,
-                        false, ReturnComplete(observation, a), a.AutoStartIds.Length, a.AutoStartIds.Count(id => !world.Soldiers[id - 1].Alive));
-                }).ToArray();
+                    var soldierPositions = new SimPoint[live.Length];
+                    for (int si = 0; si < live.Length; si++) soldierPositions[si] = world.Soldiers[live[si] - 1].Position;
+                    int lost = 0;
+                    for (int si = 0; si < a.AutoStartIds.Length; si++) if (!world.Soldiers[a.AutoStartIds[si] - 1].Alive) lost++;
+                    own.Add(new OffenseArmyInput(i.Army.Id, soldierPositions, live.Length == 0 ? 0 : world.Soldiers[live[0] - 1].StepDistance.Raw,
+                        false, ReturnComplete(observation, a), a.AutoStartIds.Length, lost));
+                }
                 var offenseRoutes = OffenseRoutes(targets, inputs);
                 ArmyDecisionMemory[] allocations;
                 measure?.Invoke("AI.Policy", true);
@@ -373,7 +393,8 @@ namespace Rts.Simulation
         // Simulation measures navigation; Decision selects the rally and evaluates all choices.
         private OffenseRouteInput[] OffenseRoutes(FactionObservation observation, IReadOnlyList<ArmyDecisionInput> inputs)
         {
-            var result = new List<OffenseRouteInput>();
+            var result = offenseRoutesScratch;
+            result.Clear();
             var home = PolicyDecision.Position(observation, PolicyDecision.Core(observation, true));
             bool sanctuaryFocus = SanctuaryOutpostFocus(observation.FactionId, observation);
             foreach (var goal in observation.Objectives.OrderBy(o => o.Kind).ThenBy(o => o.Id))
@@ -384,15 +405,18 @@ namespace Rts.Simulation
                 if (corePath.Length == 0 || !InRange(world.Map.Center(corePath[corePath.Length - 1]), goal.Position, Fix64.FromInt(4))) continue;
                 var state = offenseMemory[observation.FactionId - 1];
                 SimPoint rally;
+                var coreCenters = world.Map.FindPathCenterView(world.Map.Cell(home), goal.Position, observation.FactionId);
                 if (state.Phase != OffensivePhase.Idle && state.Goal.Kind == goal.Kind && state.Goal.Id == goal.Id) rally = state.RallyPoint;
-                else if (!OffenseDecision.TryRally(observation, corePath.Select(world.Map.Center).ToArray(), out rally)) continue;
+                else if (!OffenseDecision.TryRally(observation, coreCenters, out rally)) continue;
                 var tail = world.Map.FindPath(world.Map.Cell(rally), goal.Position, observation.FactionId);
+                var tailCenters = world.Map.FindPathCenterView(world.Map.Cell(rally), goal.Position, observation.FactionId);
                 var legs = inputs.Select(i => {
                     var path = world.Map.FindPath(world.Map.Cell(i.Army.Position), rally, observation.FactionId);
                     if (path.Length > 0 && !SamePoint(world.Map.Center(path[path.Length - 1]), rally)) path = Array.Empty<int>();
-                    return new ObjectiveRoute(new PolicyGoal(GoalKind.Point, i.Army.Id, default), path.Length == 0 ? int.MaxValue : path.Length - 1, path.Select(world.Map.Center).ToArray());
+                    var centers = world.Map.FindPathCenterView(world.Map.Cell(i.Army.Position), rally, observation.FactionId);
+                    return new ObjectiveRoute(new PolicyGoal(GoalKind.Point, i.Army.Id, default), path.Length == 0 ? int.MaxValue : path.Length - 1, centers);
                 }).ToArray();
-                result.Add(new OffenseRouteInput(policyGoal, rally, tail.Select(world.Map.Center).ToArray(), legs, OffenseDecision.Length(corePath.Select(world.Map.Center).ToArray())));
+                result.Add(new OffenseRouteInput(policyGoal, rally, tail.Length == 0 ? System.Array.Empty<SimPoint>() : tailCenters, legs, OffenseDecision.Length(coreCenters)));
             }
             return result.ToArray();
         }

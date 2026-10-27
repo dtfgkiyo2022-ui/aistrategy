@@ -1160,9 +1160,9 @@ namespace Rts.Simulation
             foreach (int i in world.SoldierTraversal)
             {
                 ref var s = ref world.Soldiers[i];
-                s.LocalPath = null; s.TacticalRoute = false; s.Joining = false;
+                ReleaseLocalPath(ref s); s.TacticalRoute = false; s.Joining = false;
             }
-            for (int i = 0; i < world.VillagerCount; i++) { world.Villagers[i].Route = Array.Empty<int>(); world.Villagers[i].RouteCursor = 0; }
+            for (int i = 0; i < world.VillagerCount; i++) { ReleaseVillagerRoute(ref world.Villagers[i]); world.Villagers[i].RouteCursor = 0; }
         }
 
         /// <summary>
