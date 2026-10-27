@@ -197,12 +197,16 @@ namespace Rts.Simulation
             return !InRange(BuildingCenter(processor), world.Map.Center(baseCell), Fix64.FromInt(world.Config.Economy.TownResourceReach));
         }
 
-        private bool FeedsAiExpandBase(int cell, uint faction, SimPoint source)
+        /// <summary>The base an output belt ends at depends only on the processor, never on the cell being looked at, so it
+        /// is chosen once per route search instead of scanning every building for each cell the search reaches.</summary>
+        private Func<int, bool> AiExpandBaseFeed(uint faction, SimPoint source)
         {
+            if (!AiExpandOn) return next => FeedsOwnCore(next, faction);
             int baseCell = AiExpandBaseCellForSource(faction, source);
             int coreCell = world.Map.Cell(OwnCore(faction).Definition.Position);
-            return baseCell == coreCell ? FeedsOwnCore(cell, faction)
-                : InRange(world.Map.Center(cell), world.Map.Center(baseCell), world.Config.Rules.CoreRadius);
+            if (baseCell == coreCell) return next => FeedsOwnCore(next, faction);
+            var baseCentre = world.Map.Center(baseCell);
+            return next => InRange(world.Map.Center(next), baseCentre, world.Config.Rules.CoreRadius);
         }
 
         private int AiExpandBaseCellForBuilding(uint faction, BuildingState building)
@@ -243,8 +247,7 @@ namespace Rts.Simulation
                 var stone = BeltRoute(faction, OutputCell(stonecutter), taken, next => InFootprint(joinery, next));
                 if (stone.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
                 foreach (int cell in stone.cells) taken[cell] = true;
-                var core = BeltRoute(faction, OutputCell(joinery), taken, next => AiExpandOn
-                    ? FeedsAiExpandBase(next, faction, BuildingCenter(joinery)) : FeedsOwnCore(next, faction));
+                var core = BeltRoute(faction, OutputCell(joinery), taken, AiExpandBaseFeed(faction, BuildingCenter(joinery)));
                 if (core.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
                 SetLineBelts(index, planks, stone, core);
                 if (!LayRoutes(faction, planks, stone, core)) RecordAiFactorySkip(faction, 0, 2);
@@ -267,8 +270,7 @@ namespace Rts.Simulation
             var assembler = world.Buildings[line.AssemblerId - 1];
             if (!assembler.Complete || !AiFactoryRouteDue(faction, index)) return;
             bool wasWhole = FreeTownsOn && LineBeltsWhole(index);
-            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(assembler)) : FeedsOwnCore(next, faction));
+            var route = BeltRoute(faction, OutputCell(assembler), TakenForOtherLines(faction, index), AiExpandBaseFeed(faction, BuildingCenter(assembler)));
             if (route.cells == null) { RecordAiFactorySkip(faction, 0, 2); CompleteFreeTownsRouteRecheck(faction, index, wasWhole); return; }
             SetLineBelts(index, route);
             if (!LayRoutes(faction, route)) RecordAiFactorySkip(faction, 0, 2);
@@ -355,8 +357,7 @@ namespace Rts.Simulation
                 if (toStonecutter.cells != null)
                 {
                     foreach (int cell in toStonecutter.cells) taken[cell] = true;
-                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, next => AiExpandOn
-                        ? FeedsAiExpandBase(next, faction, BuildingCenter(stonecutter)) : FeedsOwnCore(next, faction));
+                    var toCore = BeltRoute(faction, OutputCell(stonecutter), taken, AiExpandBaseFeed(faction, BuildingCenter(stonecutter)));
                     if (toCore.cells != null)
                     {
                         SetLineBelts(index, toStonecutter, toCore);

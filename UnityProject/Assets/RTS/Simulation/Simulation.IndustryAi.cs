@@ -2393,8 +2393,7 @@ namespace Rts.Simulation
             var toSawmill = BeltRoute(faction, OutputCell(camp), taken, next => InFootprint(sawmill, next));
             if (toSawmill.cells == null) { CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole); return false; }
             foreach (int c in toSawmill.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(sawmill)) : FeedsOwnCore(next, faction));
+            var toCore = BeltRoute(faction, OutputCell(sawmill), taken, AiExpandBaseFeed(faction, BuildingCenter(sawmill)));
             if (toCore.cells == null) { CompleteFreeTownsRouteRecheck(faction, lineIndex, wasWhole); return false; }
             SetLineBelts(lineIndex, toSawmill, toCore);
             bool result = LayRoutes(faction, toSawmill, toCore);
@@ -2694,8 +2693,7 @@ namespace Rts.Simulation
             var toSmelter = BeltRoute(faction, OutputCell(mine), taken, next => InFootprint(smelter, next));
             if (toSmelter.cells == null) return false;
             foreach (int c in toSmelter.cells) taken[c] = true;
-            var toCore = BeltRoute(faction, OutputCell(smelter), taken, next => AiExpandOn
-                ? FeedsAiExpandBase(next, faction, BuildingCenter(smelter)) : FeedsOwnCore(next, faction));
+            var toCore = BeltRoute(faction, OutputCell(smelter), taken, AiExpandBaseFeed(faction, BuildingCenter(smelter)));
             if (toCore.cells == null) return false;
             return LayRoutes(faction, toSmelter, toCore);
         }
