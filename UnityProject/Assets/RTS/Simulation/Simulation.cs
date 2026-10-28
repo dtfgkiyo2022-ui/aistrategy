@@ -69,6 +69,12 @@ namespace Rts.Simulation
         private readonly int[] aiExpandTownSkippedWood = new int[2];
         private readonly int[] aiExpandTownSkippedStone = new int[2];
         private readonly long[] aiExpandTownReserveSuppressedUntil = { long.MinValue, long.MinValue };
+        // HouseFlow placement ticks are observer-independent runtime metadata. They are reconstructed from S0 and
+        // deterministic placements, so they do not enter WorldState, hashes, or scenario saves.
+        private readonly Dictionary<uint, long> housePlacementTicks = new Dictionary<uint, long>();
+        private readonly long[] houseLimitStopTicks = new long[2];
+        private readonly int[] houseFlowProducerCounts = { 1, 1 };
+        private readonly long[] houseFlowNextMaintenanceTicks = new long[2];
         internal int LastCavalryObjectiveCount;
         internal long LastCavalryPathCellsVisited;
         internal long LastCavalryRouteCellsVisited;
@@ -126,6 +132,12 @@ namespace Rts.Simulation
             this.measure = measure;
             this.useLegacySpatialCombatIndex = useLegacySpatialCombatIndex;
             world = new WorldState(scenario);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.Alive && !building.Complete && (building.Kind == BuildingKind.House || building.Kind == BuildingKind.GrandHouse))
+                    housePlacementTicks[building.Id] = world.Tick;
+            }
             InitializeSpatialCombatIndex();
             InitializeRegions();
             world.Map.Measure = measure;
@@ -185,6 +197,7 @@ namespace Rts.Simulation
                 Phase("Commands", () => { FinishCommands(); ComposePolicies(); });
                 Phase("ObjectivesReinforcements", () =>
                     MeasureSubphase("ObjectivesReinforcements.ResolveVictory", ResolveVictory));
+                UpdateHouseFlowStopTicks();
             }
             catch (ArithmeticException)
             {

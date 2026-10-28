@@ -123,6 +123,8 @@ namespace Rts.Simulation
             e.AutoReturnAfterHuman = true;
             e.BuildingReservations = true;
             e.NoNegativeStock = true;
+            // 38.10 is deliberately enabled only by the large-map live profile.
+            e.HouseFlow = e.LargeEconomy;
             if (e.LargeEconomy)
             {
                 EnableLargeEconomy(scenario);

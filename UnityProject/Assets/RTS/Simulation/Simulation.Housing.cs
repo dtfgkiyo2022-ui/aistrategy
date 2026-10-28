@@ -15,6 +15,8 @@ namespace Rts.Simulation
         /// <summary>S-4b: the margin while EconomyScale is on.</summary>
         private const int ScaledHouseMargin = 10;
 
+        private bool HouseFlowOn => EconomyOn && world.Config.Economy.HouseFlow;
+
         /// <summary>
         /// S-4b: with ArmyGrowth the ceiling is its fixed PopulationCap (200); otherwise the ages still lift the ceiling
         /// as before, so EconomyScale never lowers the cap.
@@ -76,14 +78,44 @@ namespace Rts.Simulation
             int population = LivingVillagers(faction) + LivingSoldiers(faction) + economy.Queued + QueuedInfantry(faction) + QueuedTownVillagers(faction);
             // S-4b: several barracks and a larger villager target fill the cap faster, so the scaled economy starts the
             // next house earlier. Waiting for the villager target here froze the population at the base cap.
-            if (population + (EconomyScaleOn ? ScaledHouseMargin : HouseMargin) < cap) return;
+            int margin = EconomyScaleOn ? ScaledHouseMargin : HouseMargin;
+            int concurrentLimit = 1;
+            if (HouseFlowOn)
+            {
+                int cacheIndex = checked((int)faction - 1);
+                if (world.Tick >= houseFlowNextMaintenanceTicks[cacheIndex])
+                {
+                    int refreshedProducers = 1; // the faction core
+                    for (int i = 0; i < world.BuildingCount; i++)
+                    {
+                        var producer = world.Buildings[i];
+                        if (!IsActualBuilding(producer) || producer.FactionId != faction) continue;
+                        if (producer.Complete && (producer.Kind == BuildingKind.Town || producer.Kind == BuildingKind.Barracks)) refreshedProducers++;
+                    }
+                    houseFlowProducerCounts[cacheIndex] = refreshedProducers;
+                    CancelStalledHouses(faction);
+                    houseFlowNextMaintenanceTicks[cacheIndex] = checked(world.Tick + 20);
+                }
+                int producers = houseFlowProducerCounts[cacheIndex];
+                margin = Math.Max(margin, checked(world.Config.Economy.HouseFlowMarginPerProducer * producers));
+                concurrentLimit = Math.Min(world.Config.Economy.HouseFlowMaxConcurrent, 1 + producers / 3);
+            }
+            if (population + margin < cap) return;
             bool alreadyPlanned = false;
             MeasureSubphase("AI.DecideEconomy.DecideHouse.Existing", () =>
             {
+                int building = 0;
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     var b = world.Buildings[i];
-                    if (IsPlannedBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind)
+                    if (HouseFlowOn)
+                    {
+                        // 38.10: only real sites count, and several may be on their way at once.
+                        if (IsActualBuilding(b) && !b.Complete && b.FactionId == faction
+                            && (b.Kind == BuildingKind.House || b.Kind == BuildingKind.GrandHouse) && ++building >= concurrentLimit)
+                        { alreadyPlanned = true; return; }
+                    }
+                    else if (IsPlannedBuilding(b) && !b.Complete && b.FactionId == faction && b.Kind == kind)
                     { alreadyPlanned = true; return; } // one is on its way
                 }
             });
@@ -94,6 +126,46 @@ namespace Rts.Simulation
                 origin = FindSiteNear(faction, size, world.Map.Cell(OwnCore(faction).Definition.Position), searchRadius));
             if (origin >= 0)
                 MeasureSubphase("AI.DecideEconomy.DecideHouse.Place", () => PlaceBuildingAt(faction, kind, origin, Facing.North, 0));
+        }
+
+        private void CancelStalledHouses(uint faction)
+        {
+            var rules = world.Config.Economy;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || building.Complete || building.Progress != 0 || building.FactionId != faction
+                    || (building.Kind != BuildingKind.House && building.Kind != BuildingKind.GrandHouse)
+                    || !housePlacementTicks.TryGetValue(building.Id, out long placedTick)
+                    || world.Tick - placedTick < rules.HouseFlowStallTicks) continue;
+                CancelAutomaticHouse(i);
+            }
+        }
+
+        private void CancelAutomaticHouse(int index)
+        {
+            ref var building = ref world.Buildings[index];
+            uint faction = building.FactionId;
+            MarkLinesForBuilding(faction, building.Id);
+            if (EasyRebuildOn) RefundBuilding(faction, ref building);
+            building.Alive = false;
+            RemoveRegionCenter(building);
+            foreach (int cell in Footprint(building)) world.Map.SetPassable(cell, true);
+            housePlacementTicks.Remove(building.Id);
+            TerrainChanged();
+        }
+
+        private void UpdateHouseFlowStopTicks()
+        {
+            // Observation only (never read by the simulation), so it also counts with the flag off for comparison.
+            if (!EconomyOn || !world.Config.Economy.LargeEconomy) return;
+            for (uint faction = 1; faction <= 2; faction++)
+            {
+                int population = LivingVillagers(faction) + LivingSoldiers(faction) + world.Economies[faction - 1].Queued
+                    + QueuedInfantry(faction) + QueuedTownVillagers(faction);
+                int limit = PopCapFor(faction);
+                if (population >= limit - 2) houseLimitStopTicks[faction - 1] = checked(houseLimitStopTicks[faction - 1] + 1);
+            }
         }
     }
 }
