@@ -1325,7 +1325,7 @@ namespace Rts.Simulation
                    CraftRequiredAiPlankSawmillsAge2 = e.CraftRequiredAiPlankSawmillsAge2,
                    CraftRequiredAiPlankSawmillsAge3 = e.CraftRequiredAiPlankSawmillsAge3,
                    CraftRequiredAiScholarlyAssemblers = e.CraftRequiredAiScholarlyAssemblers,
-                   CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget,
+                   CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
                    CraftTree3 = e.CraftTree3, SiegePartsTicks = e.SiegePartsTicks, SiegePartsFramesInput = e.SiegePartsFramesInput,
                   SiegePartsArmsKitInput = e.SiegePartsArmsKitInput, MechanismTicks = e.MechanismTicks, MechanismArmsKitInput = e.MechanismArmsKitInput,
                   MechanismScholarlyInput = e.MechanismScholarlyInput, MechanismCutStoneInput = e.MechanismCutStoneInput,
