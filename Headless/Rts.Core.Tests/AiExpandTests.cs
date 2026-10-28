@@ -22,6 +22,8 @@ namespace Rts.Core.Tests
             var e = scenario.Economy;
             e.AiFactory = true; e.AiExpand = expand; e.Towns = true;
             e.FreeTowns = false;
+            // These tests assert expansion policy thresholds; keep the optional movement mode out of the fixture.
+            e.FastMovement = false;
             e.ResourceFog = false; e.ExploreScouting = false;
             e.StartFood = e.StartWood = e.StartStone = e.StartMetal = 100000;
             e.AutoVillagerTarget = 80; e.AutoInfantryQueue = 0;

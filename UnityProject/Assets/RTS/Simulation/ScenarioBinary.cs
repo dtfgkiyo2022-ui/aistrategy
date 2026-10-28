@@ -212,6 +212,9 @@ private const int AiExpandExtensionVersion = 1;
         private const int HouseFlowExtensionId = 74;
         private const int HouseFlowExtensionVersion = 1;
         private const int HouseFlowExtensionDataLength = 4 * sizeof(int);
+        private const int FastMovementExtensionId = 75;
+        private const int FastMovementExtensionVersion = 1;
+        private const int FastMovementExtensionDataLength = 3 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -309,6 +312,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
               ,new ExtensionRegistration(EarlyStartExtensionId, EarlyStartExtensionVersion, EarlyStartExtensionDataLength)
             ,new ExtensionRegistration(HouseFlowExtensionId, HouseFlowExtensionVersion, HouseFlowExtensionDataLength)
+              ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -944,6 +948,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                        else if (id == FreeTownsExtensionId) ReadFreeTownsExtension(extension, c.Economy);
                      else if (id == CraftRequiredExtensionId) ReadCraftRequiredExtension(extension, c.Economy);
                       else if (id == EarlyStartExtensionId) ReadEarlyStartExtension(extension, c.Economy);
+                      else if (id == FastMovementExtensionId) ReadFastMovementExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
@@ -1037,6 +1042,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                    extensions.RemoveAll(extension => extension != null && extension.Id == FreeTownsExtensionId && !c.Economy.FreeTowns);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftRequiredExtensionId && !c.Economy.CraftRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == EarlyStartExtensionId && !c.Economy.EarlyStart);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == FastMovementExtensionId && !c.Economy.FastMovement);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
                 extensions.RemoveAll(extension => extension != null && extension.Id == StorageFeedsProcessingExtensionId && !c.Economy.StorageFeedsProcessing);
@@ -1059,7 +1065,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasEarlyStart = false;
+               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasEarlyStart = false, hasFastMovement = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1087,6 +1093,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  {
                      hasEarlyStart = true;
                      extensions[i] = CreateEarlyStartExtension(c.Economy);
+                 }
+                 if (extensions[i].Id == FastMovementExtensionId)
+                 {
+                     hasFastMovement = true;
+                     extensions[i] = CreateFastMovementExtension(c.Economy);
                  }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
@@ -1116,6 +1127,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateCraftRequiredExtension(c.Economy));
                  if (c.Economy.EarlyStart && !hasEarlyStart)
                      extensions.Add(CreateEarlyStartExtension(c.Economy));
+                 if (c.Economy.FastMovement && !hasFastMovement)
+                     extensions.Add(CreateFastMovementExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2031,6 +2044,34 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 if (e.EarlyStartVillagers < 3 || e.EarlyStartVillagersPerFarm <= 0 || e.EarlyStartPrimitiveFarmMax <= 0)
                     throw new InvalidDataException("Invalid early-start parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing early-start extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateFastMovementExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.FastMovement ? 1 : 0);
+                writer.Write(e.FastMovementUnitSpeedPermille);
+                writer.Write(e.FastMovementVillagerSpeedPermille);
+                return new ScenarioExtensionData { Id = FastMovementExtensionId, Version = FastMovementExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadFastMovementExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid fast-movement flag.");
+                e.FastMovement = enabled != 0;
+                e.FastMovementUnitSpeedPermille = reader.ReadInt32();
+                e.FastMovementVillagerSpeedPermille = reader.ReadInt32();
+                if (e.FastMovementUnitSpeedPermille <= 0 || e.FastMovementVillagerSpeedPermille <= 0)
+                    throw new InvalidDataException("Invalid fast-movement parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing fast-movement extension data.");
             }
         }
 

@@ -93,6 +93,9 @@ namespace Rts.Simulation
         public int HouseFlowStallTicks = 600;
         public int HouseFlowMarginPerProducer = 8;
         public int HouseFlowMaxConcurrent = 3;
+        /// <summary>FastMovement: doubles movement steps without changing configured speed, combat, or presentation values.</summary>
+        public bool FastMovement;
+        public int FastMovementUnitSpeedPermille = 2000, FastMovementVillagerSpeedPermille = 2000;
         public int LargeVillagerTrainTicks = 40, LargeInfantryTrainTicks = 80;
         public int LargeVillagerBatch = 4, LargeInfantryBatch = 4;
         public int LargeBarracksMaxBuildings = 16, LargeArmyCapacity = 300;
