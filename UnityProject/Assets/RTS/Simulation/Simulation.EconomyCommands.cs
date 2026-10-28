@@ -184,8 +184,7 @@ namespace Rts.Simulation
                     if (kind == BuildingKind.Caravanserai && !CaravanAllowed(faction)) return;
                     if (kind == BuildingKind.MineShaft && MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
                     if (kind == BuildingKind.Town && TownCount(faction) >= TownLimitFor(faction)) return;
-                    bool framesAvailable = CraftTree1On && kind != BuildingKind.Wall
-                        && economy.Frames >= rules.CraftTreeFramesPerBuilding;
+                    BuildingMaterialCost placementCost = BuildingCostForPlacement(kind, faction, 0);
                     if ((byte)c.Facing > 3) return;
                     if (kind == BuildingKind.DropSite && DropSiteLimitOn && AliveDropSites(faction) >= rules.DropSiteMax) return;
                     int width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells, size = SizeOf(kind);
@@ -212,7 +211,9 @@ namespace Rts.Simulation
                          : SiteIsClear(c.Cell, world.Map.Cell(OwnCore(faction).Definition.Position), size, manualBuildingClearance);
                     if (!clear || rules.AdjacentBuildings && genericPlacement && !ManualPlacementPortsAreClear(kind, c.Cell, size, c.Facing)
                          || !KeepsMapConnected(faction, c.Cell, size)) return;
-                    if (economy.Wood < WoodOfForPlacement(kind, faction, framesAvailable) || economy.Stone < StoneOf(kind, faction))
+                    if (economy.Wood < placementCost.Wood || economy.Stone < placementCost.Stone
+                        || CraftRequiredOn && (economy.Planks < placementCost.Planks || economy.Frames < placementCost.Frames
+                            || economy.Bricks < placementCost.Bricks || economy.SiegeParts < placementCost.SiegeParts))
                     {
                         if (BuildingReservationsOn) CreateBuildingReservation(faction, kind, c.Cell,
                             kind == BuildingKind.Barracks ? Facing.North : c.Facing, node, null, -1,

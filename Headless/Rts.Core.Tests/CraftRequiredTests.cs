@@ -32,6 +32,15 @@ namespace Rts.Core.Tests
             e.CraftRequiredAiArmsAssemblersAge3 = 4;
             e.CraftRequiredAiArmsAssemblersAge4 = 4;
             e.CraftRequiredAiWoodWorkerPermille = 50;
+            e.CraftRequiredBuildingPlankPermille = 300;
+            e.CraftRequiredResearchScholarlyAge2 = 2;
+            e.CraftRequiredResearchScholarlyAge3 = 4;
+            e.CraftRequiredResearchScholarlyAge4 = 6;
+            e.CraftRequiredAiPlankSawmillsAge1 = 1;
+            e.CraftRequiredAiPlankSawmillsAge2 = 2;
+            e.CraftRequiredAiPlankSawmillsAge3 = 3;
+            e.CraftRequiredAiScholarlyAssemblers = 1;
+            e.CraftRequiredAiFramesStockTarget = 10;
             e.AutoVillagerTarget = 0;
             e.AutoInfantryQueue = 0;
             e.StartFood = 10000;
@@ -55,6 +64,15 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.CraftRequiredAiArmsAssemblersAge3, Is.EqualTo(4));
             Assert.That(decoded.Economy.CraftRequiredAiArmsAssemblersAge4, Is.EqualTo(4));
             Assert.That(decoded.Economy.CraftRequiredAiWoodWorkerPermille, Is.EqualTo(50));
+            Assert.That(decoded.Economy.CraftRequiredBuildingPlankPermille, Is.EqualTo(300));
+            Assert.That(decoded.Economy.CraftRequiredResearchScholarlyAge2, Is.EqualTo(2));
+            Assert.That(decoded.Economy.CraftRequiredResearchScholarlyAge3, Is.EqualTo(4));
+            Assert.That(decoded.Economy.CraftRequiredResearchScholarlyAge4, Is.EqualTo(6));
+            Assert.That(decoded.Economy.CraftRequiredAiPlankSawmillsAge1, Is.EqualTo(1));
+            Assert.That(decoded.Economy.CraftRequiredAiPlankSawmillsAge2, Is.EqualTo(2));
+            Assert.That(decoded.Economy.CraftRequiredAiPlankSawmillsAge3, Is.EqualTo(3));
+            Assert.That(decoded.Economy.CraftRequiredAiScholarlyAssemblers, Is.EqualTo(1));
+            Assert.That(decoded.Economy.CraftRequiredAiFramesStockTarget, Is.EqualTo(10));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
 
             var off = Scenario(false);
@@ -186,6 +204,123 @@ namespace Rts.Core.Tests
             Assert.That(Get(args[1], "ArmsKit"), Is.EqualTo(1));
         }
 
+        [Test]
+        public void BuildingsUsePlanksAfterAllExistingDiscountsAndKeepExcludedBuildingsWoodOnly()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 2);
+            SetEconomy(simulation, 0, "Frames", 0);
+            var costMethod = typeof(Battle).GetMethod("BuildingCostForPlacement", PrivateInstance);
+            var cost = costMethod.Invoke(simulation, new object[] { BuildingKind.Scriptorium, 1u, 0 });
+            Assert.That(Get(cost, "Wood"), Is.EqualTo(56));
+            Assert.That(Get(cost, "Planks"), Is.EqualTo(24));
+            var sawmillCost = costMethod.Invoke(simulation, new object[] { BuildingKind.Sawmill, 1u, 0 });
+            Assert.That(Get(sawmillCost, "Wood"), Is.EqualTo(80));
+            Assert.That(Get(sawmillCost, "Planks"), Is.EqualTo(0));
+
+            SetEconomy(simulation, 0, "Age", 3);
+            var joineryCost = costMethod.Invoke(simulation, new object[] { BuildingKind.Joinery, 1u, 0 });
+            Assert.That(Get(joineryCost, "Planks"), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void PlaceBeltsConsumesOnePlankOnOddCellsOfOneCommand()
+        {
+            var cells = FindBeltCells(new Battle(Scenario(true)), 3);
+            var facings = new[] { Facing.North, Facing.North, Facing.North };
+            var command = EconomyCommand.PlaceBelt(1, 1, cells, facings);
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 1);
+            SetEconomy(simulation, 0, "Wood", 0);
+            SetEconomy(simulation, 0, "Planks", 2);
+            Invoke(simulation, "PlaceBelts", 1u, command, true);
+            Assert.That(CountBelts(simulation, 1), Is.EqualTo(3));
+            Assert.That(GetEconomy(simulation, 0, "Planks"), Is.EqualTo(0));
+
+            var limited = new Battle(Scenario(true));
+            SetEconomy(limited, 0, "Age", 1);
+            SetEconomy(limited, 0, "Wood", 0);
+            SetEconomy(limited, 0, "Planks", 1);
+            Invoke(limited, "PlaceBelts", 1u, command, true);
+            Assert.That(CountBelts(limited, 1), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RemovingPlankPaidBeltRefundsNoWood()
+        {
+            var cells = FindBeltCells(new Battle(Scenario(true)), 1);
+            var simulation = new Battle(Scenario(true));
+            SetConfig(simulation, "EasyRebuild", true);
+            SetEconomy(simulation, 0, "Age", 1);
+            SetEconomy(simulation, 0, "Wood", 0);
+            SetEconomy(simulation, 0, "Planks", 1);
+            Invoke(simulation, "PlaceBelts", 1u, EconomyCommand.PlaceBelt(1, 1, cells, new[] { Facing.North }), true);
+            Assert.That(CountBelts(simulation, 1), Is.EqualTo(1));
+            Invoke(simulation, "RemoveBelt", 1u, cells[0]);
+            Assert.That(CountBelts(simulation, 1), Is.EqualTo(0));
+            Assert.That(GetEconomy(simulation, 0, "Wood"), Is.EqualTo(0));
+            Assert.That(GetEconomy(simulation, 0, "Planks"), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void MechanismResearchStillPaysRequiredScholarly()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.CraftTree3 = true;
+            var simulation = new Battle(scenario);
+            SetEconomy(simulation, 0, "Age", 3);
+            SetEconomy(simulation, 0, "Civ", CivKind.Agrarian);
+            SetEconomy(simulation, 0, "Food", 10000); SetEconomy(simulation, 0, "Wood", 10000);
+            SetEconomy(simulation, 0, "Mechanism", 1);
+            SetEconomy(simulation, 0, "Scholarly", 3);
+            Assert.That((bool)Invoke(simulation, "StartResearch", 1u, NewBuilding(BuildingKind.Blacksmith, true), TechKind.Masonry, true), Is.False);
+            SetEconomy(simulation, 0, "Scholarly", 4);
+            Assert.That((bool)Invoke(simulation, "StartResearch", 1u, NewBuilding(BuildingKind.Blacksmith, true), TechKind.Masonry, true), Is.True);
+            Assert.That(GetEconomy(simulation, 0, "Scholarly"), Is.EqualTo(0));
+            Assert.That(GetEconomy(simulation, 0, "Mechanism"), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ResearchUsesRequiredScholarlyOrAcademyBooksOneForOne()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 2);
+            SetEconomy(simulation, 0, "Civ", CivKind.Agrarian);
+            SetEconomy(simulation, 0, "Food", 10000); SetEconomy(simulation, 0, "Wood", 10000);
+            var smith = NewBuilding(BuildingKind.Blacksmith, true);
+            SetEconomy(simulation, 0, "Scholarly", 1);
+            Assert.That((bool)Invoke(simulation, "StartResearch", 1u, smith, TechKind.Weapons, true), Is.False);
+            SetEconomy(simulation, 0, "Scholarly", 2);
+            smith = NewBuilding(BuildingKind.Blacksmith, true);
+            Assert.That((bool)Invoke(simulation, "StartResearch", 1u, smith, TechKind.Weapons, true), Is.True);
+            Assert.That(GetEconomy(simulation, 0, "Scholarly"), Is.EqualTo(0));
+
+            var books = new Battle(Scenario(true));
+            SetConfig(books, "Books", true);
+            SetEconomy(books, 0, "Age", 2); SetEconomy(books, 0, "Civ", CivKind.Academy);
+            SetEconomy(books, 0, "Food", 10000); SetEconomy(books, 0, "Wood", 10000); SetEconomy(books, 0, "Books", 2);
+            Assert.That((bool)Invoke(books, "StartResearch", 1u, NewBuilding(BuildingKind.Blacksmith, true), TechKind.Weapons, true), Is.True);
+            Assert.That(GetEconomy(books, 0, "Books"), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void AdvanceNeedsCraftMaterialsButClockCompletionDoesNot()
+        {
+            var simulation = new Battle(Scenario(true));
+            SetEconomy(simulation, 0, "Age", 1); SetEconomy(simulation, 0, "Civ", CivKind.Agrarian);
+            SetEconomy(simulation, 0, "Food", 10000); SetEconomy(simulation, 0, "Wood", 10000);
+            SetEconomy(simulation, 0, "Planks", 19); SetEconomy(simulation, 0, "CutStone", 20);
+            Assert.That((bool)Invoke(simulation, "CanAdvance", 1u, CivKind.Agrarian), Is.False);
+            SetEconomy(simulation, 0, "Planks", 20);
+            Assert.That((bool)Invoke(simulation, "CanAdvance", 1u, CivKind.Agrarian), Is.True);
+
+            var clock = Scenario(true);
+            clock.Economy.AgeClock = true; clock.Economy.AgeClockTicks1 = 1; clock.Economy.AgeClockTicks2 = 2;
+            var clockSimulation = new Battle(clock);
+            clockSimulation.Step(1, Array.Empty<ScheduledInput>());
+            Assert.That(GetEconomy(clockSimulation, 0, "Age"), Is.GreaterThanOrEqualTo(1));
+        }
+
         [Test, Explicit("CraftRequired AI の age1 assembler・ArmsKit・兵士生成を確認")]
         public void AiBuildsArmsKitsBeforeTrainingAgeTwoSoldiers()
         {
@@ -313,5 +448,38 @@ namespace Rts.Core.Tests
 
         private static object GetObject(object value, string name)
             => value.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(value);
+
+        private static object NewBuilding(BuildingKind kind, bool complete)
+        {
+            var type = typeof(Battle).Assembly.GetType("Rts.Simulation.BuildingState");
+            var value = Activator.CreateInstance(type);
+            Set(value, "Kind", kind); Set(value, "Complete", complete); Set(value, "FactionId", 1u);
+            return value;
+        }
+
+        private static object Invoke(Battle simulation, string method, params object[] args)
+            => typeof(Battle).GetMethod(method, PrivateInstance).Invoke(simulation, args);
+
+        private static int CountBelts(Battle simulation, uint faction)
+        {
+            var belts = (Array)GetWorld(simulation).GetType().GetField("Belts", PrivateInstance).GetValue(GetWorld(simulation));
+            return belts.Cast<object>().Count(value => Get(value, "FactionId") == (int)faction);
+        }
+
+        private static List<int> FindBeltCells(Battle simulation, int count)
+        {
+            var world = GetWorld(simulation);
+            var map = world.GetType().GetField("Map", PrivateInstance).GetValue(world);
+            var passable = map.GetType().GetMethod("IsPassable", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var inside = typeof(Battle).GetMethod("InsideAnyCore", PrivateInstance);
+            var nodes = typeof(Battle).GetMethod("IsNodeCell", PrivateInstance);
+            var result = new List<int>();
+            var belts = (Array)world.GetType().GetField("Belts", PrivateInstance).GetValue(world);
+            for (int cell = 0; cell < belts.Length && result.Count < count; cell++)
+                if ((bool)passable.Invoke(map, new object[] { cell })
+                    && !(bool)inside.Invoke(simulation, new object[] { cell })
+                    && !(bool)nodes.Invoke(simulation, new object[] { cell })) result.Add(cell);
+            return result;
+        }
     }
 }

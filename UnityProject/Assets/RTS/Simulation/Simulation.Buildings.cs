@@ -19,6 +19,19 @@ namespace Rts.Simulation
         // contract field, so enabling bridges does not alter the old scenario bytes.
         private const int MaxActiveBridges = 3;
 
+        private readonly struct BuildingMaterialCost
+        {
+            internal readonly int Wood, Stone, Planks, Bricks, SiegeParts, Frames;
+            internal readonly bool FramesUsed, PlankBridge;
+
+            internal BuildingMaterialCost(int wood, int stone, int planks, int bricks, int siegeParts, int frames,
+                bool framesUsed, bool plankBridge)
+            {
+                Wood = wood; Stone = stone; Planks = planks; Bricks = bricks; SiegeParts = siegeParts; Frames = frames;
+                FramesUsed = framesUsed; PlankBridge = plankBridge;
+            }
+        }
+
         private static bool IsActualBuilding(BuildingState building) => building.Alive && !building.Reserved;
 
         private bool IsPlannedBuilding(BuildingState building)
@@ -538,23 +551,14 @@ namespace Rts.Simulation
             if (automaticEconomyAction && LargeEconomyOn && kind != BuildingKind.Town && StoneOf(kind, faction) > 0
                 && LargeTownNeedsFunding(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
-            bool plankBridge = kind == BuildingKind.Bridge && bridgeCells != null && PlankBridgeAvailable(faction, bridgeCells.Length);
-            bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
-            int woodCost = plankBridge ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000) : WoodOfForPlacement(kind, faction, framesUsed);
-            int stoneCost = StoneOf(kind, faction);
-            bool siegeCastle = kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction);
-            bool brickCastle = kind == BuildingKind.Castle && !siegeCastle && BrickCastleDiscountAvailable(faction);
-            bool brickDefence = BrickDefenceAvailable(faction, kind);
-            int frameCost = framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0;
-            int plankCost = plankBridge ? checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells.Length) : 0;
-            int siegeCost = siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0;
-            int brickCost = brickCastle ? world.Config.Economy.BricksPerCastle
-                : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
+            BuildingMaterialCost materialCost = BuildingCostForPlacement(kind, faction, bridgeCells == null ? 0 : bridgeCells.Length);
+            int woodCost = materialCost.Wood, stoneCost = materialCost.Stone, plankCost = materialCost.Planks;
+            int frameCost = materialCost.Frames, siegeCost = materialCost.SiegeParts, brickCost = materialCost.Bricks;
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
-            if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, woodCost, stoneCost)) return;
+            if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
                 || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
             // A smelter is allowed through so an age-three infantry metal reserve can be replenished.
@@ -562,34 +566,42 @@ namespace Rts.Simulation
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
             economy.Wood = checked(economy.Wood - woodCost);
             RecordLargeUse(faction, ResourceKind.Wood, ConstructionUseKind(kind), woodCost);
-            if (framesUsed)
+            if (materialCost.FramesUsed)
             {
                 economy.Frames = checked(economy.Frames - world.Config.Economy.CraftTreeFramesPerBuilding);
                 economy.FramesConsumed = checked(economy.FramesConsumed + world.Config.Economy.CraftTreeFramesPerBuilding);
                 economy.FramesConsumedBuildings = checked(economy.FramesConsumedBuildings + world.Config.Economy.CraftTreeFramesPerBuilding);
             }
-            if (plankBridge)
+            if (materialCost.Planks > 0)
             {
                 int planks = plankCost;
                 economy.Planks = checked(economy.Planks - planks);
                 economy.PlanksConsumed = checked(economy.PlanksConsumed + planks);
-                economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
-                RecordCraftTracePlanks(faction, CraftTraceBridges, planks);
+                if (materialCost.PlankBridge)
+                {
+                    economy.PlanksConsumedBridges = checked(economy.PlanksConsumedBridges + planks);
+                    RecordCraftTracePlanks(faction, CraftTraceBridges, planks);
+                }
+                else
+                {
+                    RecordCraftTracePlanks(faction, CraftTraceConstruction, planks);
+                }
             }
             economy.Stone = checked(economy.Stone - stoneCost);
             RecordLargeUse(faction, ResourceKind.Stone, ConstructionUseKind(kind), stoneCost);
-            if (siegeCastle)
+            if (siegeCost > 0)
             {
                 economy.SiegeParts = checked(economy.SiegeParts - world.Config.Economy.SiegePartsPerCastle);
                 economy.SiegePartsConsumed = checked(economy.SiegePartsConsumed + world.Config.Economy.SiegePartsPerCastle);
             }
-            if (brickCastle)
+            if (kind == BuildingKind.Castle && brickCost == world.Config.Economy.BricksPerCastle)
             {
                 economy.Bricks = checked(economy.Bricks - world.Config.Economy.BricksPerCastle);
                 economy.BricksConsumed = checked(economy.BricksConsumed + world.Config.Economy.BricksPerCastle);
                 economy.BricksConsumedCastles = checked(economy.BricksConsumedCastles + world.Config.Economy.BricksPerCastle);
             }
-            if (brickDefence)
+            if (kind == BuildingKind.Wall && brickCost == world.Config.Economy.BricksPerWall
+                || kind == BuildingKind.Tower && brickCost == world.Config.Economy.BricksPerTower)
             {
                 int cost = brickCost;
                 economy.Bricks = checked(economy.Bricks - cost);
@@ -617,8 +629,8 @@ namespace Rts.Simulation
             world.Buildings[index] = new BuildingState { Id = buildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = kind == BuildingKind.Bridge ? (int[])bridgeCells.Clone() : null,
                 WorkCell = workCell,
-                Alive = true, Hp = brickDefence ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
-                BrickUpgraded = brickDefence, Level = 1, FramesUsed = framesUsed, Facing = facing, NodeId = nodeId,
+                Alive = true, Hp = brickCost > 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower) ? BrickHpOf(kind, faction, origin) : HpOf(kind, faction, origin),
+                BrickUpgraded = brickCost > 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower), Level = 1, FramesUsed = materialCost.FramesUsed, Facing = facing, NodeId = nodeId,
                 ConstructionWood = woodCost, ConstructionStone = stoneCost,
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
                 ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost };
@@ -1533,6 +1545,41 @@ namespace Rts.Simulation
             if (CraftTree1On && framesUsed && kind != BuildingKind.Wall)
                 return checked((wood * world.Config.Economy.CraftTreeFrameWoodPermille + 999) / 1000);
             return wood;
+        }
+
+        private bool CraftRequiredBuildingUsesPlanks(uint faction, BuildingKind kind)
+        {
+            if (!CraftRequiredOn || world.Economies[faction - 1].Age < 2) return false;
+            return kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.Barracks
+                && kind != BuildingKind.DropSite && kind != BuildingKind.Town && kind != BuildingKind.Sawmill
+                && kind != BuildingKind.LumberCamp && kind != BuildingKind.Wall && kind != BuildingKind.Bridge
+                && kind != BuildingKind.Joinery && kind != BuildingKind.Stonecutter && kind != BuildingKind.Quarry;
+        }
+
+        /// <summary>Single source for the material price used by placement, reservations, AI affordability and refunds.</summary>
+        private BuildingMaterialCost BuildingCostForPlacement(BuildingKind kind, uint faction, int bridgeCells)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            bool plankBridge = kind == BuildingKind.Bridge && bridgeCells > 0 && PlankBridgeAvailable(faction, bridgeCells);
+            bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge
+                && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
+            int wood = plankBridge
+                ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000)
+                : WoodOfForPlacement(kind, faction, framesUsed);
+            int planks = plankBridge ? checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells) : 0;
+            if (!plankBridge && CraftRequiredBuildingUsesPlanks(faction, kind))
+            {
+                planks = checked((wood * world.Config.Economy.CraftRequiredBuildingPlankPermille + 999) / 1000);
+                wood = checked(wood - planks);
+            }
+            bool siegeCastle = kind == BuildingKind.Castle && SiegePartsCastleAvailable(faction);
+            bool brickCastle = kind == BuildingKind.Castle && !siegeCastle && BrickCastleDiscountAvailable(faction);
+            bool brickDefence = BrickDefenceAvailable(faction, kind);
+            int bricks = brickCastle ? world.Config.Economy.BricksPerCastle
+                : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
+            return new BuildingMaterialCost(wood, StoneOf(kind, faction), planks, bricks,
+                siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0,
+                framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0, framesUsed, plankBridge);
         }
 
         private bool IsCraftProcessingBuilding(BuildingKind kind)
