@@ -103,6 +103,42 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void EconomyFrameCraftCostsAreZeroWhenOffAndMatchPlacementRulesWhenOn()
+        {
+            var off = new Battle(Scenario(false)).Capture(1).Economy;
+            Assert.That(off.BeltPlankCostPerTwoCells, Is.EqualTo(0));
+            Assert.That(off.FastBeltPlankCost, Is.EqualTo(0));
+            Assert.That(off.SplitterPlankCost, Is.EqualTo(0));
+            Assert.That(off.SorterPlankCost, Is.EqualTo(0));
+            Assert.That(off.UndergroundBeltPlankCost, Is.EqualTo(0));
+            Assert.That(off.ResearchScholarlyCost, Is.EqualTo(0));
+            Assert.That(off.AdvancePlanks, Is.EqualTo(0));
+            Assert.That(off.AdvanceCutStone, Is.EqualTo(0));
+            Assert.That(off.AdvanceFrames, Is.EqualTo(0));
+            Assert.That(off.AdvanceScholarly, Is.EqualTo(0));
+            Assert.That(off.AdvanceSiegeParts, Is.EqualTo(0));
+            Assert.That(off.AdvanceMechanism, Is.EqualTo(0));
+
+            var onSimulation = new Battle(Scenario(true));
+            SetEconomy(onSimulation, 0, "Age", 2);
+            Assert.That(GetEconomy(onSimulation, 0, "Age"), Is.EqualTo(2));
+            onSimulation.Step(1, Array.Empty<ScheduledInput>());
+            var on = onSimulation.Capture(1).Economy;
+            Assert.That(on.CraftRequiredEnabled, Is.True);
+            Assert.That(on.Age, Is.EqualTo(2));
+            Assert.That(on.BeltPlankCostPerTwoCells, Is.EqualTo(1));
+            Assert.That(on.FastBeltPlankCost, Is.EqualTo(1));
+            Assert.That(on.SplitterPlankCost, Is.EqualTo(3));
+            Assert.That(on.SorterPlankCost, Is.EqualTo(4));
+            Assert.That(on.UndergroundBeltPlankCost, Is.EqualTo(2));
+            Assert.That(on.ResearchScholarlyCost, Is.EqualTo(2));
+            Assert.That(on.AdvanceFrames, Is.EqualTo(20));
+            Assert.That(on.AdvanceScholarly, Is.EqualTo(10));
+            Assert.That(on.BuildingPlankCosts[(int)BuildingKind.Scriptorium], Is.EqualTo(24));
+            Assert.That(on.BuildingPlankCosts[(int)BuildingKind.House], Is.EqualTo(0));
+        }
+
+        [Test]
         public void AgeTwoSoldierNeedsArmsKitButAgeOneAndExcludedUnitsKeepNormalCosts()
         {
             var simulation = new Battle(Scenario(true));
