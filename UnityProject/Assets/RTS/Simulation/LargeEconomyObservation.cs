@@ -42,6 +42,7 @@ namespace Rts.Simulation
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
         public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, LumberCamps, OtherBuildings;
+        public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
         public int[] Workers = new int[6];
@@ -250,6 +251,8 @@ namespace Rts.Simulation
                 value.ConnectedFarms = largeConnectedFarms[faction - 1];
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
                 value.BeltDropped = largeBeltDropped[faction - 1];
+                value.BeltDropOffAiSentClusters = CountBeltDropOffAiClusters(faction);
+                value.BeltDropOffAiLines = largeBeltDropOffAiLines[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
                 {
                     value.Income[resource] = largeDelivered[(int)(faction - 1) * 6 + resource];

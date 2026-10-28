@@ -196,6 +196,11 @@ namespace Rts.Simulation
         /// <summary>LargeEconomy: villagers may put gathered items on a nearby connected belt.</summary>
         public bool BeltDropOff;
         public int BeltDropOffRangeCells = 2, BeltDropOffWaitTicks = 40;
+        /// <summary>LargeEconomy: automatic economy may lay a short belt from a busy resource cluster to a stock receiver.</summary>
+        public bool BeltDropOffAi;
+        public int BeltDropOffAiMinGatherers = 4, BeltDropOffAiMaxRouteCells = 30;
+        public int BeltDropOffAiMaxLinesAge0 = 2, BeltDropOffAiMaxLinesAge1 = 4,
+            BeltDropOffAiMaxLinesAge2 = 6, BeltDropOffAiMaxLinesAge3 = 8;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;

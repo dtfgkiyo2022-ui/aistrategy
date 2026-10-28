@@ -3159,7 +3159,7 @@ namespace Rts.Simulation
         private bool[] TakenForOtherLines(uint faction, int currentLine)
         {
             bool[] taken;
-            if (AiFactoryOn)
+            if (AiFactoryOn || BeltDropOffAiOn)
             {
                 EnsureAiFactoryWorkspace();
                 taken = aiFactoryTakenWorkspace;
@@ -3188,7 +3188,7 @@ namespace Rts.Simulation
             {
                 int missing = 0, missingPlanks = 0, plankCells = 0;
                 bool[] seen;
-                if (AiFactoryOn)
+                if (AiFactoryOn || BeltDropOffAiOn)
                 {
                     EnsureAiFactoryWorkspace();
                     seen = aiFactorySeenWorkspace;
@@ -3268,7 +3268,7 @@ namespace Rts.Simulation
             if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) return (null, null);
             int cells = world.Belts.Length;
             int[] from, queue;
-            if (AiFactoryOn)
+            if (AiFactoryOn || BeltDropOffAiOn)
             {
                 EnsureAiFactoryWorkspace();
                 from = aiFactoryRouteFromWorkspace;
