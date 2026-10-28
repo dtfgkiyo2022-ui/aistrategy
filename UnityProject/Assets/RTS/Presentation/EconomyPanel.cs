@@ -554,7 +554,7 @@ namespace Rts.Presentation
                 stock += (i == 0 ? "" : "  ") + "   " + resource.Label + " " + TopBarDisplayText.FormatCount(resource.Value);
             }
             string people = "  |  " + TopBarDisplayText.Population(economy.Population, economy.PopulationCap, CountIdle(economy));
-            var line = new GUIContent(age + stock + people);
+            var line = new GUIContent(age + stock + people + CraftFlowDisplayText.Production(economy));
             var rect = new Rect(bar.x + 8f, bar.y + 3f, bar.width - 16f, 22f);
             // One line as before. Only when it would run past the bar is the text set smaller, by the measured ratio.
             var normal = GUI.skin.label;

@@ -51,6 +51,10 @@ namespace Rts.Simulation
                         caravanReason = CaravanStopReason.OutpostLost;
                     else caravanReason = CaravanStopReason.Normal;
                 }
+                int craftProduced = 0, craftStarved = 0, craftBlocked = 0, craftFullRate = 0;
+                IReadOnlyList<CraftFlowInputView> craftInputs = Array.Empty<CraftFlowInputView>();
+                if (own && CraftFlowOn && IsCraftProcessingBuilding(b.Kind))
+                    CraftFlowData(b, out craftProduced, out craftStarved, out craftBlocked, out craftInputs, out craftFullRate);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
                     own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
@@ -63,7 +67,9 @@ namespace Rts.Simulation
                     own && b.Kind == BuildingKind.Caravanserai ? b.CaravanWoodReward : 0, caravanReason,
                     CraftTree1On && IsCraftProcessingBuilding(b.Kind) ? b.Level : 1,
                      own && (CraftTree2On || PrimitiveCraftOn) ? b.InputTertiary : 0, own && (CraftTree2On || PrimitiveCraftOn) ? b.Recipe : RecipeKind.None,
-                    b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0));
+                     b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0,
+                     producedPerMinute: craftProduced, inputsPerMinute: craftInputs, starvedTicksLastMinute: craftStarved,
+                     blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -415,7 +421,8 @@ namespace Rts.Simulation
                      researchScholarlyCost: CraftRequiredResearchScholarlyCost(faction),
                      advancePlanks: advanceCraft.planks, advanceCutStone: advanceCraft.cutStone,
                      advanceFrames: advanceCraft.frames, advanceScholarly: advanceCraft.scholarly,
-                     advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism);
+                     advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism,
+                     craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction));
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

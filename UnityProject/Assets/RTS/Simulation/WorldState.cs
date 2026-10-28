@@ -751,7 +751,8 @@ namespace Rts.Simulation
                 && e.CraftRequiredResearchScholarlyAge2 > 0 && e.CraftRequiredResearchScholarlyAge3 > 0
                 && e.CraftRequiredResearchScholarlyAge4 > 0 && e.CraftRequiredAiPlankSawmillsAge1 > 0
                 && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
-                && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0), "Invalid craft-required rules.");
+                 && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0), "Invalid craft-required rules.");
+            Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
             Require(!e.CraftTree3 || (e.CraftTree2 && e.SiegePartsTicks > 0 && e.SiegePartsFramesInput > 0 && e.SiegePartsArmsKitInput > 0
                 && e.MechanismTicks > 0 && e.MechanismArmsKitInput > 0 && e.MechanismScholarlyInput > 0 && e.MechanismCutStoneInput > 0
                 && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000
@@ -1309,7 +1310,7 @@ namespace Rts.Simulation
                   ScholarlyPerResearch = e.ScholarlyPerResearch, ScholarlyCostPermille = e.ScholarlyCostPermille,
                    ScholarlyTimePermille = e.ScholarlyTimePermille,
                    GoodsValueArmsKit = e.GoodsValueArmsKit, GoodsValueScholarly = e.GoodsValueScholarly, GoodsValueFineArmsKit = e.GoodsValueFineArmsKit,
-                   CraftRequired = e.CraftRequired, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
+                    CraftRequired = e.CraftRequired, CraftFlow = e.CraftFlow, CraftRequiredAiArmsStockTarget = e.CraftRequiredAiArmsStockTarget,
                    CraftRequiredAiArmsAssemblersAge1 = e.CraftRequiredAiArmsAssemblersAge1,
                    CraftRequiredAiArmsAssemblersAge2 = e.CraftRequiredAiArmsAssemblersAge2,
                    CraftRequiredAiArmsAssemblersAge3 = e.CraftRequiredAiArmsAssemblersAge3,
