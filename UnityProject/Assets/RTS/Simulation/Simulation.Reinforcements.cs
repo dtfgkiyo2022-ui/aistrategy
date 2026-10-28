@@ -130,7 +130,7 @@ namespace Rts.Simulation
                 Initial = new SoldierDefinition { Id = world.NextSoldierId, FactionId = faction, ArmyId = army,
                     Kind = unit, Alive = true, Hp = parameters.Hp, Position = position },
                 Alive = true, Hp = parameters.Hp, Position = position, MoveGoal = position,
-                Parameters = parameters, StepDistance = Fix64.FromRaw(parameters.Speed.Raw / 20)
+                Parameters = parameters, StepDistance = MovementMath.StepDistance(parameters.Speed, world.Config.Economy)
             };
             ref var members = ref world.Armies[army - 1].SoldierIds;
             Array.Resize(ref members, members.Length + 1);

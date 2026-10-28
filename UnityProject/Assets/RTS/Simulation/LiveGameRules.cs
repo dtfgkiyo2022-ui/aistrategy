@@ -57,6 +57,8 @@ namespace Rts.Simulation
             e.AiFactory = allCivilisations && e.PrimitiveCraft && e.LargeEconomy;
             e.AiExpand = e.AiFactory;
             e.FreeTowns = e.AiExpand;
+            // fastmove1: only the large played map opts into the movement step multiplier.
+            e.FastMovement = e.LargeEconomy;
             e.CraftTree2 = allCivilisations && e.CraftTree1;
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
@@ -123,6 +125,8 @@ namespace Rts.Simulation
             e.AutoReturnAfterHuman = true;
             e.BuildingReservations = true;
             e.NoNegativeStock = true;
+            // 38.10 is deliberately enabled only by the large-map live profile.
+            e.HouseFlow = e.LargeEconomy;
             if (e.LargeEconomy)
             {
                 EnableLargeEconomy(scenario);

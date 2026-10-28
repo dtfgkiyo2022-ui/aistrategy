@@ -623,6 +623,8 @@ namespace Rts.Simulation
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
                 ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost };
             if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
+            if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
+                housePlacementTicks[buildingId] = world.Tick;
             if (nodeId != 0) ReleaseNode(nodeId);
             if (kind == BuildingKind.Farm) world.Buildings[index].Interval = FarmInterval(faction, origin);
             else if (kind == BuildingKind.LumberCamp) world.Buildings[index].Interval = world.Config.Economy.LumberCampIntervalTicks;
@@ -1263,6 +1265,7 @@ namespace Rts.Simulation
                 if (b.Progress < WorkOf(b)) continue;
                 b.Progress = WorkOf(b);
                 b.Complete = true;
+                housePlacementTicks.Remove(b.Id);
                 if (b.Kind == BuildingKind.Bridge)
                 {
                     foreach (int cell in Footprint(b)) world.Map.SetPassable(cell, true);
