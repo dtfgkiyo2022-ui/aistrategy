@@ -131,7 +131,7 @@ namespace Rts.Simulation
                 cannon.Class = unit;
                 cannon.Parameters.Hp = r.CannonHp; cannon.Parameters.Damage = r.CannonDamage; cannon.Parameters.AttackIntervalTicks = r.CannonInterval;
                 cannon.Parameters.Range = r.CannonRange; cannon.Parameters.Speed = r.CannonSpeed; cannon.Parameters.Vision = r.CannonVision;
-                cannon.StepDistance = Fix64.FromRaw(r.CannonSpeed.Raw / 20);
+                cannon.StepDistance = MovementMath.StepDistance(r.CannonSpeed, r);
                 cannon.Hp = r.CannonHp; cannon.Initial.Hp = r.CannonHp;
                 return;
             }
@@ -142,7 +142,7 @@ namespace Rts.Simulation
                 ram.Class = unit;
                 ram.Parameters.Hp = r.RamHp; ram.Parameters.Damage = r.RamDamage; ram.Parameters.AttackIntervalTicks = r.RamInterval;
                 ram.Parameters.Range = r.RamRange; ram.Parameters.Speed = r.RamSpeed; ram.Parameters.Vision = r.RamVision;
-                ram.StepDistance = Fix64.FromRaw(ram.Parameters.Speed.Raw / 20);
+                ram.StepDistance = MovementMath.StepDistance(ram.Parameters.Speed, r);
                 ram.Hp = r.RamHp; ram.Initial.Hp = r.RamHp;
                 return;
             }
@@ -166,7 +166,7 @@ namespace Rts.Simulation
                 heavy.Parameters.AttackIntervalTicks = r.HeavyInfantryAttackIntervalTicks;
                 heavy.Parameters.Range = r.HeavyInfantryRange; heavy.Parameters.Speed = r.HeavyInfantrySpeed;
                 heavy.Parameters.Vision = r.HeavyInfantryVision;
-                heavy.StepDistance = Fix64.FromRaw(heavy.Parameters.Speed.Raw / 20);
+                heavy.StepDistance = MovementMath.StepDistance(heavy.Parameters.Speed, r);
                 heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
                 return;
             }
@@ -179,7 +179,7 @@ namespace Rts.Simulation
                 skirmisher.Parameters.AttackIntervalTicks = r.SkirmishArcherAttackIntervalTicks;
                 skirmisher.Parameters.Range = r.SkirmishArcherRange; skirmisher.Parameters.Speed = r.SkirmishArcherSpeed;
                 skirmisher.Parameters.Vision = r.SkirmishArcherVision;
-                skirmisher.StepDistance = Fix64.FromRaw(skirmisher.Parameters.Speed.Raw / 20);
+                skirmisher.StepDistance = MovementMath.StepDistance(skirmisher.Parameters.Speed, r);
                 skirmisher.Hp = skirmisher.Parameters.Hp; skirmisher.Initial.Hp = skirmisher.Parameters.Hp;
                 return;
             }
@@ -192,7 +192,7 @@ namespace Rts.Simulation
                 light.Parameters.AttackIntervalTicks = r.LightCavalryInterval;
                 light.Parameters.Range = r.LightCavalryRange; light.Parameters.Speed = r.LightCavalrySpeed;
                 light.Parameters.Vision = r.LightCavalryVision;
-                light.StepDistance = Fix64.FromRaw(light.Parameters.Speed.Raw / 20);
+                light.StepDistance = MovementMath.StepDistance(light.Parameters.Speed, r);
                 light.Hp = light.Parameters.Hp; light.Initial.Hp = light.Parameters.Hp;
                 return;
             }
@@ -209,7 +209,7 @@ namespace Rts.Simulation
                     heavy.Parameters.Speed = Fix64.FromRaw(checked(heavy.Parameters.Speed.Raw * r.CavalrySpeedPermille / 1000));
                 if (AgeStrength(heavy.Initial.FactionId, CivKind.Cavalry, 4))
                     ScaleSoldierHp(ref heavy, r.CavalryHeavyHpPermille);
-                heavy.StepDistance = Fix64.FromRaw(heavy.Parameters.Speed.Raw / 20);
+                heavy.StepDistance = MovementMath.StepDistance(heavy.Parameters.Speed, r);
                 heavy.Hp = heavy.Parameters.Hp; heavy.Initial.Hp = heavy.Parameters.Hp;
                 return;
             }
@@ -228,7 +228,7 @@ namespace Rts.Simulation
             if (archer && AgeStrength(s.Initial.FactionId, CivKind.Forestry, 3))
                 s.Parameters.Range = Fix64.FromRaw(checked(s.Parameters.Range.Raw + Fix64.FromInt(e.ForestryArcherRangeBonus).Raw));
             s.Parameters.Vision = archer ? e.ArcherVision : e.CavalryVision;
-            s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
+            s.StepDistance = MovementMath.StepDistance(s.Parameters.Speed, e);
             s.Hp = s.Parameters.Hp;
             s.Initial.Hp = s.Parameters.Hp;
         }

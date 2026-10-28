@@ -557,7 +557,7 @@ namespace Rts.Simulation
                 if (s.Class == UnitKind.LightCavalry || s.Class == UnitKind.Cavalry)
                 {
                     s.Parameters.Speed = Fix64.FromRaw(checked(s.Parameters.Speed.Raw + rules.CavalryDrillSpeed.Raw));
-                    s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
+                    s.StepDistance = MovementMath.StepDistance(s.Parameters.Speed, rules);
                 }
             }
             else if (tech == TechKind.TotalWar)

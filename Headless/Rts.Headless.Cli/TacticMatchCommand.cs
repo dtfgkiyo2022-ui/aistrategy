@@ -46,6 +46,7 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
+        if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
