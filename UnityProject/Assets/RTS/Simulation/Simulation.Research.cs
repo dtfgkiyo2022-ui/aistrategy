@@ -460,13 +460,13 @@ namespace Rts.Simulation
             {
                 economy.Books = checked(economy.Books - bookResearchCost);
                 economy.BooksConsumed = checked(economy.BooksConsumed + bookResearchCost);
-                economy.BooksUsedResearch = checked(economy.BooksUsedResearch + bookResearchCost);
+                economy.BooksUsedResearch++;
             }
             if (scholarlyResearch || requiredScholarlyOnly)
             {
                 economy.Scholarly = checked(economy.Scholarly - scholarlyResearchCost);
                 economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + scholarlyResearchCost);
-                economy.ScholarlyUsedResearch = checked(economy.ScholarlyUsedResearch + scholarlyResearchCost);
+                economy.ScholarlyUsedResearch++;
             }
             if (mechanismResearch)
             {
