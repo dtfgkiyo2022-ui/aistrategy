@@ -366,6 +366,16 @@ namespace Rts.Simulation
             CraftRequiredAiArmsAssemblersAge3 = 4, CraftRequiredAiArmsAssemblersAge4 = 4;
         /// <summary>CraftRequired: extra wood-gatherer share added to the normal large-economy floor after age 1.</summary>
         public int CraftRequiredAiWoodWorkerPermille = 50;
+        /// <summary>CraftRequired: buildings from age two pay this share of their effective wood price in planks.</summary>
+        public int CraftRequiredBuildingPlankPermille = 300;
+        /// <summary>CraftRequired: scholarly stock required by researches in ages two through four.</summary>
+        public int CraftRequiredResearchScholarlyAge2 = 2, CraftRequiredResearchScholarlyAge3 = 4,
+            CraftRequiredResearchScholarlyAge4 = 6;
+        /// <summary>CraftRequired: additional common sawmills for the building and belt plank demand.</summary>
+        public int CraftRequiredAiPlankSawmillsAge1 = 1, CraftRequiredAiPlankSawmillsAge2 = 2,
+            CraftRequiredAiPlankSawmillsAge3 = 3;
+        /// <summary>CraftRequired: assemblers reserved for scholarly stock and the frames stock target.</summary>
+        public int CraftRequiredAiScholarlyAssemblers = 1, CraftRequiredAiFramesStockTarget = 10;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;

@@ -378,19 +378,29 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
+            int placedInCommand = 0;
+            bool craftRequiredBelts = CraftRequiredOn && world.Economies[faction - 1].Age >= 1;
             for (int i = 0; i < c.Cells.Count; i++)
             {
                 int cell = c.Cells[i];
                 var facing = c.Facings[i];
-                int cost = fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
-                if (owned >= rules.BeltLimit || economy.Wood < cost) return;
+                int woodCost = craftRequiredBelts ? 0 : fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
+                int plankCost = craftRequiredBelts ? fast ? 1 : placedInCommand % 2 == 0 ? 1 : 0 : 0;
+                if (owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
-                economy.Wood = checked(economy.Wood - cost);
-                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
+                economy.Wood = checked(economy.Wood - woodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
+                if (plankCost > 0)
+                {
+                    economy.Planks = checked(economy.Planks - plankCost);
+                    economy.PlanksConsumed = checked(economy.PlanksConsumed + plankCost);
+                    RecordCraftTracePlanks(faction, CraftTraceOther, plankCost);
+                }
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast };
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
+                placedInCommand++;
                 InvalidateBeltCaches();
             }
         }
@@ -408,13 +418,22 @@ namespace Rts.Simulation
             if (c.Cells.Count == 2)
             {
                 int entrance = c.Cells[0], exit = c.Cells[1];
-                if (owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing) || economy.Wood < rules.UndergroundBeltWoodCost) return;
+                int woodCost = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
+                int undergroundPlankCost = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
+                if (owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing)
+                    || economy.Wood < woodCost || economy.Planks < undergroundPlankCost) return;
                 world.Belts[entrance] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundEntrance, PairCell = exit };
                 world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
-                economy.Wood = checked(economy.Wood - rules.UndergroundBeltWoodCost);
-                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.UndergroundBeltWoodCost);
+                economy.Wood = checked(economy.Wood - woodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
+                if (undergroundPlankCost > 0)
+                {
+                    economy.Planks = checked(economy.Planks - undergroundPlankCost);
+                    economy.PlanksConsumed = checked(economy.PlanksConsumed + undergroundPlankCost);
+                    RecordCraftTracePlanks(faction, CraftTraceOther, undergroundPlankCost);
+                }
                 InvalidateBeltCaches();
                 return;
             }
@@ -427,11 +446,21 @@ namespace Rts.Simulation
             if (component == BeltComponentKind.Inserter && !rules.Inserters) return;
             int cost = component == BeltComponentKind.Inserter ? rules.InserterWoodCost
                 : component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
-            if (economy.Wood < cost) return;
+            bool craftRequiredComponent = CraftRequiredOn && economy.Age >= 1
+                && component != BeltComponentKind.Inserter;
+            int plankCost = craftRequiredComponent ? (cost + 1) / 2 : 0;
+            if (economy.Wood < (craftRequiredComponent ? 0 : cost) || economy.Planks < plankCost) return;
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
-            economy.Wood = checked(economy.Wood - cost);
-            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, cost);
+            int woodPaid = craftRequiredComponent ? 0 : cost;
+            economy.Wood = checked(economy.Wood - woodPaid);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodPaid);
+            if (plankCost > 0)
+            {
+                economy.Planks = checked(economy.Planks - plankCost);
+                economy.PlanksConsumed = checked(economy.PlanksConsumed + plankCost);
+                RecordCraftTracePlanks(faction, CraftTraceOther, plankCost);
+            }
             InvalidateBeltCaches();
         }
 
@@ -477,10 +506,20 @@ namespace Rts.Simulation
             if (world.Config.Economy.EasyRebuild)
             {
                 if (belt.Item != 0) AddStock(faction, belt.Item, 1);
-                AddStock(faction, ResourceKind.Wood, paired ? world.Config.Economy.UndergroundBeltWoodCost
+                bool craftRequiredBelts = CraftRequiredOn && world.Economies[faction - 1].Age >= 1;
+                int refundWood = paired ? world.Config.Economy.UndergroundBeltWoodCost
                     : belt.Component == BeltComponentKind.Splitter ? world.Config.Economy.SplitterWoodCost
                     : belt.Component == BeltComponentKind.Sorter ? world.Config.Economy.SorterWoodCost
-                    : belt.Fast ? world.Config.Economy.FastBeltWoodCost : world.Config.Economy.BeltWoodCost);
+                    : belt.Fast ? world.Config.Economy.FastBeltWoodCost : world.Config.Economy.BeltWoodCost;
+                // A plain belt paid in planks is not refunded; the inserter still pays and refunds wood.
+                if (!craftRequiredBelts || belt.Component == BeltComponentKind.Inserter)
+                    AddStock(faction, ResourceKind.Wood, refundWood);
+                if (craftRequiredBelts && (paired || belt.Fast || belt.Component == BeltComponentKind.Splitter || belt.Component == BeltComponentKind.Sorter))
+                {
+                    int refundPlanks = paired ? (world.Config.Economy.UndergroundBeltWoodCost + 1) / 2
+                        : belt.Fast ? 1 : (belt.Component == BeltComponentKind.Splitter ? (world.Config.Economy.SplitterWoodCost + 1) / 2 : (world.Config.Economy.SorterWoodCost + 1) / 2);
+                    AddStock(faction, ResourceKind.Planks, refundPlanks);
+                }
                 if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, 1);
             }
             world.Belts[cell] = default;

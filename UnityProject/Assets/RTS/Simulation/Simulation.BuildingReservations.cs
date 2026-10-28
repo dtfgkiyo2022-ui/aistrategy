@@ -63,27 +63,35 @@ namespace Rts.Simulation
             int index = HeadReservationIndex(faction);
             if (index < 0) return 0;
             var reservation = world.Buildings[index];
-            bool framesAvailable = CraftTree1On && reservation.Kind != BuildingKind.Wall
-                && world.Economies[faction - 1].Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
-            return WoodOfForPlacement(reservation.Kind, faction, framesAvailable);
+            return BuildingCostForPlacement(reservation.Kind, faction, reservation.BridgeCells == null ? 0 : reservation.BridgeCells.Length).Wood;
         }
 
         private int ReservedConstructionStone(uint faction)
         {
             int index = HeadReservationIndex(faction);
-            return index < 0 ? 0 : StoneOf(world.Buildings[index].Kind, faction);
+            return index < 0 ? 0 : BuildingCostForPlacement(world.Buildings[index].Kind, faction,
+                world.Buildings[index].BridgeCells == null ? 0 : world.Buildings[index].BridgeCells.Length).Stone;
         }
 
-        private bool CanPayAutomaticConstruction(uint faction, int wood, int stone)
+        private int ReservedConstructionPlanks(uint faction)
+        {
+            int index = HeadReservationIndex(faction);
+            return index < 0 ? 0 : BuildingCostForPlacement(world.Buildings[index].Kind, faction,
+                world.Buildings[index].BridgeCells == null ? 0 : world.Buildings[index].BridgeCells.Length).Planks;
+        }
+
+        private bool CanPayAutomaticConstruction(uint faction, BuildingMaterialCost cost)
         {
             var economy = world.Economies[faction - 1];
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             int heldStone = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionStone(faction) : 0;
+            int heldPlanks = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
             heldWood = checked(heldWood + (automaticEconomyAction ? AgeFourAiWoodReserve(faction) : 0));
             if (automaticEconomyAction && BuildingReservationsOn
-                && (economy.Wood - heldWood < wood || economy.Stone - heldStone < stone)) return false;
-            if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < wood) return false;
-            return !NoNegativeStockOn || (economy.Wood >= wood && economy.Stone >= stone);
+                && (economy.Wood - heldWood < cost.Wood || economy.Stone - heldStone < cost.Stone
+                    || economy.Planks - heldPlanks < cost.Planks)) return false;
+            if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < cost.Wood) return false;
+            return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks);
         }
 
         private void CreateBuildingReservation(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId,
@@ -125,10 +133,11 @@ namespace Rts.Simulation
                     CancelBuildingReservation(index, faction);
                     continue;
                 }
-                bool framesAvailable = CraftTree1On && reservation.Kind != BuildingKind.Wall
-                    && world.Economies[faction - 1].Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
-                if (world.Economies[faction - 1].Wood < WoodOfForPlacement(reservation.Kind, faction, framesAvailable)
-                    || world.Economies[faction - 1].Stone < StoneOf(reservation.Kind, faction)) continue;
+                var reservationCost = BuildingCostForPlacement(reservation.Kind, faction,
+                    reservation.BridgeCells == null ? 0 : reservation.BridgeCells.Length);
+                if (world.Economies[faction - 1].Wood < reservationCost.Wood
+                    || world.Economies[faction - 1].Stone < reservationCost.Stone
+                    || world.Economies[faction - 1].Planks < reservationCost.Planks) continue;
                 BuildingKind kind = reservation.Kind;
                 int origin = reservation.OriginCell;
                 Facing facing = reservation.Facing;
