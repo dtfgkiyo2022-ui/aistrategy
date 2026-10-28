@@ -127,6 +127,46 @@ namespace Rts.Simulation
                         b.Output++;
                     }
                 }
+                else if (CraftDepthOn && b.Kind == BuildingKind.Metalworks)
+                {
+                    // Like an assembler: belts may fill the input, the rest comes from the stock, and the
+                    // fittings go straight to the stock. The stock cap is a start condition only.
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Timer == 0 && economy.Fittings < rules.CraftDepthAiStockCap)
+                    {
+                        int before = b.Input;
+                        Fill(ref economy.Metal, ref b.Input, rules.CraftDepthFittingsMetalInput);
+                        economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
+                        if (b.Input >= rules.CraftDepthFittingsMetalInput)
+                        {
+                            b.Input -= rules.CraftDepthFittingsMetalInput;
+                            b.Timer = CraftTicksFor(b, rules.CraftDepthFittingsTicks);
+                        }
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        economy.Fittings = checked(economy.Fittings + rules.CraftDepthFittingsOutput);
+                        economy.FittingsProduced += rules.CraftDepthFittingsOutput;
+                    }
+                }
+                else if (CraftDepthOn && b.Kind == BuildingKind.RopeHut)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    if (b.Timer == 0 && economy.Rope < rules.CraftDepthAiStockCap)
+                    {
+                        FillRaw(b.FactionId, ResourceKind.Wood, ref economy.Wood, ref b.Input, rules.CraftDepthRopeWoodInput);
+                        if (b.Input >= rules.CraftDepthRopeWoodInput)
+                        {
+                            b.Input -= rules.CraftDepthRopeWoodInput;
+                            b.Timer = CraftTicksFor(b, rules.CraftDepthRopeTicks);
+                        }
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        economy.Rope = checked(economy.Rope + rules.CraftDepthRopeOutput);
+                        economy.RopeProduced += rules.CraftDepthRopeOutput;
+                    }
+                }
                 else if (ForestryOn && b.Kind == BuildingKind.Fletcher)
                 {
                     // Wood and food are consumed together.  Food may arrive from the core stock,
@@ -548,6 +588,8 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
                  : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
                  : kind == BuildingKind.Joinery ? ResourceKind.Frames
+                 : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
+                 : kind == BuildingKind.RopeHut ? ResourceKind.Rope
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
@@ -594,6 +636,7 @@ namespace Rts.Simulation
                     }
                     else if (building.Recipe == RecipeKind.ArmsKit)
                     {
+                        RecordCraftTraceArms(building.FactionId, building.InputSecondaryKind == ResourceKind.Fittings);
                         if (building.InputSecondaryKind == ResourceKind.Steel) { economy.FineArmsKit++; economy.FineArmsKitProduced++; }
                         else { economy.ArmsKit++; economy.ArmsKitProduced++; }
                         RecordCraftTracePlanks(building.FactionId, CraftTraceWeapons,
@@ -630,9 +673,12 @@ namespace Rts.Simulation
                     Fill(ref economy.Bricks, ref building.InputSecondary, stoneInput);
                     building.InputSecondaryKind = ResourceKind.Bricks;
                 }
-                if (building.Input < plankInput || building.InputSecondary < stoneInput) return;
+                int ropeInput = CraftDepthOn ? rules.CraftDepthFramesRopeInput : 0;
+                if (CraftDepthOn) Fill(ref economy.Rope, ref building.InputTertiary, ropeInput);
+                if (building.Input < plankInput || building.InputSecondary < stoneInput || building.InputTertiary < ropeInput) return;
                 if (building.InputSecondaryKind == ResourceKind.Bricks) economy.BricksConsumed = checked(economy.BricksConsumed + stoneInput);
                 else economy.CutStoneConsumed = checked(economy.CutStoneConsumed + stoneInput);
+                if (ropeInput > 0) { economy.RopeConsumed = checked(economy.RopeConsumed + ropeInput); RecordCraftTraceResourceUse(building.FactionId, ResourceKind.Rope, CraftTraceUseConstruction, ropeInput); }
                 building.Timer = CraftTicksFor(building, rules.CraftTreeJoineryTicks);
                 return;
             }
@@ -641,11 +687,22 @@ namespace Rts.Simulation
                 int plankInput = CraftInputFor(building, rules.ArmsKitPlankInput);
                 Fill(ref economy.Planks, ref building.Input, plankInput);
                 if (building.InputSecondaryKind == 0)
-                    building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel : ResourceKind.Charcoal;
+                    building.InputSecondaryKind = economy.Steel >= rules.ArmsKitSteelInput ? ResourceKind.Steel
+                        : CraftDepthOn && economy.Fittings > 0 ? ResourceKind.Fittings : ResourceKind.Charcoal;
                 if (building.InputSecondaryKind == ResourceKind.Steel) Fill(ref economy.Steel, ref building.InputSecondary, CraftInputFor(building, rules.ArmsKitSteelInput));
+                else if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings)
+                {
+                    Fill(ref economy.Fittings, ref building.InputSecondary, 1);
+                    Fill(ref economy.Charcoal, ref building.InputTertiary, 1);
+                    if (building.Input < plankInput || building.InputSecondary < 1 || building.InputTertiary < 1) return;
+                    economy.FittingsConsumed = checked(economy.FittingsConsumed + 1);
+                    RecordCraftTraceResourceUse(building.FactionId, ResourceKind.Fittings, CraftTraceUseWeapons, 1);
+                    building.Timer = CraftTicksFor(building, rules.CraftDepthArmsFittingsTicks);
+                    return;
+                }
                 else Fill(ref economy.Charcoal, ref building.InputSecondary, CraftInputFor(building, rules.ArmsKitCharcoalInput));
                 if (building.Input < CraftInputFor(building, rules.ArmsKitPlankInput) || building.InputSecondary < CraftInputFor(building, building.InputSecondaryKind == ResourceKind.Steel ? rules.ArmsKitSteelInput : rules.ArmsKitCharcoalInput)) return;
-                building.Timer = CraftTicksFor(building, rules.ArmsKitTicks);
+                building.Timer = CraftTicksFor(building, CraftDepthOn && economy.Age >= 2 ? rules.CraftDepthArmsFallbackTicks : rules.ArmsKitTicks);
                 return;
             }
             if (building.Recipe == RecipeKind.Scholarly)
@@ -661,6 +718,24 @@ namespace Rts.Simulation
             if (building.Recipe == RecipeKind.SiegeParts)
             {
                 if (economy.SiegeParts >= rules.SiegePartsStockLimit) return;
+                if (CraftDepthOn)
+                {
+                    int depthFrames = CraftInputFor(building, rules.SiegePartsFramesInput), fittings = rules.CraftDepthSiegePartsFittingsInput;
+                    int rope = rules.CraftDepthSiegePartsRopeInput;
+                    Fill(ref economy.Frames, ref building.Input, depthFrames);
+                    Fill(ref economy.Fittings, ref building.InputSecondary, fittings);
+                    Fill(ref economy.Rope, ref building.InputTertiary, rope);
+                    building.InputSecondaryKind = ResourceKind.Fittings;
+                    if (building.Input < depthFrames || building.InputSecondary < fittings || building.InputTertiary < rope) return;
+                    economy.FramesConsumed = checked(economy.FramesConsumed + depthFrames);
+                    economy.FittingsConsumed = checked(economy.FittingsConsumed + fittings);
+                    economy.RopeConsumed = checked(economy.RopeConsumed + rope);
+                    RecordCraftTraceResourceUse(building.FactionId, ResourceKind.Fittings, CraftTraceUseSiegeParts, fittings);
+                    RecordCraftTraceResourceUse(building.FactionId, ResourceKind.Rope, CraftTraceUseSiegeParts, rope);
+                    building.Timer = CraftTicksScaled(building, rules.CraftDepthSiegePartsTicks,
+                        AgeStrength(building.FactionId, CivKind.Metallurgy, 4) ? rules.MetallurgySiegePartsTimePermille : 1000);
+                    return;
+                }
                 int frames = CraftInputFor(building, rules.SiegePartsFramesInput), arms = CraftInputFor(building, rules.SiegePartsArmsKitInput);
                 Fill(ref economy.Frames, ref building.Input, frames);
                 Fill(ref economy.ArmsKit, ref building.InputSecondary, arms);
@@ -674,6 +749,21 @@ namespace Rts.Simulation
             }
             if (building.Recipe == RecipeKind.Mechanism)
             {
+                if (CraftDepthOn)
+                {
+                    int fittings = rules.CraftDepthMechanismFittingsInput, depthScholarly = CraftInputFor(building, rules.MechanismScholarlyInput), depthStone = CraftInputFor(building, rules.MechanismCutStoneInput);
+                    Fill(ref economy.Fittings, ref building.Input, fittings);
+                    Fill(ref economy.Scholarly, ref building.InputSecondary, depthScholarly);
+                    Fill(ref economy.CutStone, ref building.InputTertiary, depthStone);
+                    building.InputSecondaryKind = ResourceKind.Scholarly;
+                    if (building.Input < fittings || building.InputSecondary < depthScholarly || building.InputTertiary < depthStone) return;
+                    economy.FittingsConsumed = checked(economy.FittingsConsumed + fittings);
+                    RecordCraftTraceResourceUse(building.FactionId, ResourceKind.Fittings, CraftTraceUseMechanism, fittings);
+                    economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + depthScholarly);
+                    economy.CutStoneConsumed = checked(economy.CutStoneConsumed + depthStone);
+                    building.Timer = CraftTicksFor(building, rules.MechanismTicks);
+                    return;
+                }
                 int arms = CraftInputFor(building, rules.MechanismArmsKitInput), scholarly = CraftInputFor(building, rules.MechanismScholarlyInput), stone = CraftInputFor(building, rules.MechanismCutStoneInput);
                 Fill(ref economy.ArmsKit, ref building.Input, arms);
                 Fill(ref economy.Scholarly, ref building.InputSecondary, scholarly);
@@ -764,11 +854,14 @@ namespace Rts.Simulation
                 economy.Planks += building.Input;
                 if (building.InputSecondaryKind == ResourceKind.Bricks) economy.Bricks += building.InputSecondary;
                 else economy.CutStone += building.InputSecondary;
+                if (CraftDepthOn) economy.Rope += building.InputTertiary;
             }
             else if (building.Recipe == RecipeKind.ArmsKit)
             {
                 if (building.InputSecondaryKind == ResourceKind.Steel) economy.Steel += building.InputSecondary;
+                else if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings) economy.Fittings += building.InputSecondary;
                 else economy.Charcoal += building.InputSecondary;
+                if (CraftDepthOn && building.InputSecondaryKind == ResourceKind.Fittings) economy.Charcoal += building.InputTertiary;
                 economy.Planks += building.Input;
             }
             else if (building.Recipe == RecipeKind.Scholarly)
@@ -777,11 +870,15 @@ namespace Rts.Simulation
             }
             else if (building.Recipe == RecipeKind.SiegeParts)
             {
-                economy.Frames += building.Input; economy.ArmsKit += building.InputSecondary;
+                economy.Frames += building.Input;
+                if (CraftDepthOn) { economy.Fittings += building.InputSecondary; economy.Rope += building.InputTertiary; }
+                else economy.ArmsKit += building.InputSecondary;
             }
             else if (building.Recipe == RecipeKind.Mechanism)
             {
-                economy.ArmsKit += building.Input; economy.Scholarly += building.InputSecondary; economy.CutStone += building.InputTertiary;
+                if (CraftDepthOn) economy.Fittings += building.Input;
+                else economy.ArmsKit += building.Input;
+                economy.Scholarly += building.InputSecondary; economy.CutStone += building.InputTertiary;
             }
             else if (building.Recipe == RecipeKind.SiegeEngine)
             {
@@ -827,6 +924,8 @@ namespace Rts.Simulation
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.FactionId != faction || !b.Complete || BuildingPaused(b)) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
@@ -860,8 +959,15 @@ namespace Rts.Simulation
                 if (CraftTree2On && b.Kind == BuildingKind.Assembler && b.Recipe != RecipeKind.None)
                 {
                     if (item == ResourceKind.Planks && (b.Recipe == RecipeKind.Frames || b.Recipe == RecipeKind.ArmsKit || b.Recipe == RecipeKind.Scholarly) && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (CraftDepthOn && b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Fittings && b.InputSecondaryKind == 0 && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.Fittings; b.InputSecondary++; return true; }
+                    if (CraftDepthOn && b.Recipe == RecipeKind.Frames && item == ResourceKind.Rope && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
                     if (b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.Frames && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (CraftDepthOn && b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.Fittings && b.InputSecondary < rules.BufferLimit)
+                    { b.InputSecondaryKind = ResourceKind.Fittings; b.InputSecondary++; return true; }
+                    if (CraftDepthOn && b.Recipe == RecipeKind.SiegeParts && item == ResourceKind.Rope && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
                     if (b.Recipe == RecipeKind.Mechanism && item == ResourceKind.ArmsKit && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                    if (CraftDepthOn && b.Recipe == RecipeKind.Mechanism && item == ResourceKind.Fittings && b.Input < rules.BufferLimit) { b.Input++; return true; }
                     if (item == ResourceKind.Food && b.Recipe == RecipeKind.Scholarly && b.InputTertiary < rules.BufferLimit) { b.InputTertiary++; return true; }
                     if (b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Steel && b.InputSecondary < rules.BufferLimit) { b.InputSecondaryKind = ResourceKind.Steel; b.InputSecondary++; return true; }
                     if ((b.Recipe == RecipeKind.ArmsKit && item == ResourceKind.Charcoal || b.Recipe == RecipeKind.Scholarly && item == ResourceKind.Charcoal)
@@ -957,6 +1063,8 @@ namespace Rts.Simulation
                 if (x < x0 || x >= x0 + size || z < z0 || z >= z0 + size) continue;
                 if (b.FactionId != faction || !b.Complete) return false;
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore) return true;
+                if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal) return true;
+                if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood) return true;
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood) return true;
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks
                     && (item == ResourceKind.Metal || item == ResourceKind.Charcoal)) return true;
@@ -1124,6 +1232,14 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (CraftDepthOn && target.Kind == BuildingKind.Metalworks && kind == ResourceKind.Metal)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
+            if (CraftDepthOn && target.Kind == BuildingKind.RopeHut && kind == ResourceKind.Wood)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (ProcessingOn && target.Kind == BuildingKind.Steelworks)
             {
                 if (kind == ResourceKind.Metal)
@@ -1266,9 +1382,11 @@ namespace Rts.Simulation
         private bool CanHaulTo(BuildingKind source, BuildingKind destination, ResourceKind kind)
             => (world.Config.Economy.BeltComponents && destination == BuildingKind.Storage
                 && kind != 0)
-               || (ProcessingOn && destination == BuildingKind.Steelworks
-               && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
-                   || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+                || (ProcessingOn && destination == BuildingKind.Steelworks
+                && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
+                    || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
+                || (CraftDepthOn && destination == BuildingKind.Metalworks && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
+                || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))

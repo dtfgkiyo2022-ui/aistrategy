@@ -63,7 +63,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
-public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19, PrimitiveCraft = 20 }
+ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19, PrimitiveCraft = 20, Fittings = 21, Rope = 22 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -1053,6 +1053,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int JerkyHpPermille { get; }
         public bool AiFactoryEnabled { get; }
         public bool CraftRequiredEnabled { get; }
+        public bool CraftDepthEnabled { get; }
+        public int Fittings { get; }
+        public int Rope { get; }
         public int AiFactoryPrimitiveLineCount { get; }
         public int AiFactoryAge1LineCount { get; }
         public int AiFactoryAge2LineCount { get; }
@@ -1198,7 +1201,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
                int aiFactoryBarracksIdlePermille = 0, int aiFactoryPrimitiveBarracksMaxBuildings = 0,
                int aiFactoryAge1BarracksMaxBuildings = 0, int aiFactoryAge2BarracksMaxBuildings = 0,
                 int aiFactoryAge3BarracksMaxBuildings = 0, int aiFactoryAge4BarracksMaxBuildings = 0,
-                bool craftRequiredEnabled = false)
+                bool craftRequiredEnabled = false, bool craftDepthEnabled = false, int fittings = 0, int rope = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1313,6 +1316,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             AiFactoryAge2BarracksMaxBuildings = aiFactoryAge2BarracksMaxBuildings; AiFactoryAge3BarracksMaxBuildings = aiFactoryAge3BarracksMaxBuildings;
              AiFactoryAge4BarracksMaxBuildings = aiFactoryAge4BarracksMaxBuildings;
              CraftRequiredEnabled = craftRequiredEnabled;
+             CraftDepthEnabled = craftDepthEnabled; Fittings = fittings; Rope = rope;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

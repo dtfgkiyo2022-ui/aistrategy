@@ -400,7 +400,8 @@ namespace Rts.Simulation
                     aiFactoryAge2BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge2BarracksMaxBuildings : 0,
                     aiFactoryAge3BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge3BarracksMaxBuildings : 0,
                      aiFactoryAge4BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0,
-                     craftRequiredEnabled: CraftRequiredOn);
+                     craftRequiredEnabled: CraftRequiredOn, craftDepthEnabled: CraftDepthOn,
+                     fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0);
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)

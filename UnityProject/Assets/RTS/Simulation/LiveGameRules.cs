@@ -61,6 +61,7 @@ namespace Rts.Simulation
             e.CraftTree3 = allCivilisations && e.CraftTree2;
             e.CraftTree4 = allCivilisations && e.CraftTree3 && e.AgeFour;
             e.CraftRequired = allCivilisations && e.LargeEconomy && e.CraftTree2;
+            e.CraftDepth = allCivilisations && e.LargeEconomy && e.CraftRequired;
             e.BeltComponents = true;
             // 38.7 is measured on the large economy like 37.8. On the small (provisional) map the primitive farms take
             // the little wood there is and the hut makes no goods by 5000 ticks.

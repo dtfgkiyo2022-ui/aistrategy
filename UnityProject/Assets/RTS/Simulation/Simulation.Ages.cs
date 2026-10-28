@@ -65,6 +65,7 @@ namespace Rts.Simulation
          private bool CraftTree3On => CraftTree2On && world.Config.Economy.CraftTree3;
          private bool CraftTree4On => CraftTree3On && AgeFourOn && world.Config.Economy.CraftTree4;
          private bool CraftRequiredOn => CraftTree2On && world.Config.Economy.CraftRequired;
+         private bool CraftDepthOn => CraftRequiredOn && world.Config.Economy.CraftDepth;
 
         private bool MasonryOn => AgesOn && world.Config.Economy.Masonry;
 
@@ -141,6 +142,11 @@ namespace Rts.Simulation
 
         /// <summary>Mines and smelters: on an ages map only in the metallurgy civilisation.</summary>
         private bool MetalworkAllowed(uint faction) => !AgesOn || world.Economies[faction - 1].Civ == CivKind.Metallurgy;
+
+        /// <summary>CraftDepth: from age one every civilisation may mine and smelt for fittings. Unit prices keep
+        /// <see cref="MetalworkAllowed"/>, so infantry still needs no metal outside metallurgy.</summary>
+        private bool MetalBuildingsAllowed(uint faction)
+            => MetalworkAllowed(faction) || CraftDepthOn && world.Economies[faction - 1].Age >= 1;
 
         private bool ProcessingAvailable(uint faction)
             => ProcessingOn && AgesOn && world.Economies[faction - 1].Civ == CivKind.Metallurgy && world.Economies[faction - 1].Age >= 2;

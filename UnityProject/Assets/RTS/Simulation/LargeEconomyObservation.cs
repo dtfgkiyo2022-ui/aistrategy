@@ -63,11 +63,14 @@ namespace Rts.Simulation
         public int StoneToolsProduced, StoneToolsConsumed, JerkyProduced, JerkyConsumed;
         public int FramesProduced, FramesConsumed, ArmsKitProduced, ArmsKitConsumed;
         public int SiegePartsProduced, SiegePartsConsumed, MetalProduced, MetalConsumed;
+        public int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
+        public int[] FittingsUse = new int[6], RopeUse = new int[6];
         public int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         public int AiExpandTownSkippedUnknownResource, AiExpandTownSkippedNoSite, AiExpandTownSkippedWood, AiExpandTownSkippedStone;
         public int SawmillsCompleted, SawmillsActive, SawmillPlanks;
         public int PlanksUsedWeapons, PlanksUsedConstruction, PlanksUsedScholarly, PlanksUsedBridges, PlanksUsedOther;
         public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
+        public int ArmsWithFittings, ArmsWithoutFittings;
     }
 
     public sealed partial class Simulation
@@ -76,10 +79,30 @@ namespace Rts.Simulation
         private const int CraftTraceWeapons = 0, CraftTraceConstruction = 1, CraftTraceScholarly = 2,
             CraftTraceBridges = 3, CraftTraceOther = 4;
         private readonly int[,] craftTracePlankUses = new int[2, 5];
+        private readonly int[] craftTraceArmsWithFittings = new int[2];
+        private readonly int[] craftTraceArmsWithoutFittings = new int[2];
+        private readonly int[,] craftTraceFittingsUse = new int[2, 6];
+        private readonly int[,] craftTraceRopeUse = new int[2, 6];
+        private const int CraftTraceUseWeapons = 0, CraftTraceUseConstruction = 1, CraftTraceUseSiegeParts = 2,
+            CraftTraceUseMechanism = 3, CraftTraceUseCost = 4, CraftTraceUseBridge = 5;
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
             if (faction < 1 || faction > 2 || amount == 0) return;
             craftTracePlankUses[faction - 1, kind] = checked(craftTracePlankUses[faction - 1, kind] + amount);
+        }
+
+        private void RecordCraftTraceArms(uint faction, bool withFittings)
+        {
+            if (!CraftDepthOn || faction < 1 || faction > 2) return;
+            if (withFittings) craftTraceArmsWithFittings[faction - 1]++;
+            else craftTraceArmsWithoutFittings[faction - 1]++;
+        }
+
+        private void RecordCraftTraceResourceUse(uint faction, ResourceKind resource, int category, int amount)
+        {
+            if (!CraftDepthOn || faction < 1 || faction > 2 || amount <= 0 || category < 0 || category >= 6) return;
+            if (resource == ResourceKind.Fittings) craftTraceFittingsUse[faction - 1, category] = checked(craftTraceFittingsUse[faction - 1, category] + amount);
+            else if (resource == ResourceKind.Rope) craftTraceRopeUse[faction - 1, category] = checked(craftTraceRopeUse[faction - 1, category] + amount);
         }
 
         private int ConstructionUseKind(BuildingKind kind)
@@ -224,6 +247,15 @@ namespace Rts.Simulation
                     value.ArmsKitProduced = factoryEconomy.ArmsKitProduced; value.ArmsKitConsumed = factoryEconomy.ArmsKitConsumed;
                     value.SiegePartsProduced = factoryEconomy.SiegePartsProduced; value.SiegePartsConsumed = factoryEconomy.SiegePartsConsumed;
                     value.MetalProduced = factoryEconomy.MetalProduced; value.MetalConsumed = factoryEconomy.MetalConsumed;
+                    value.FittingsProduced = factoryEconomy.FittingsProduced; value.FittingsConsumed = factoryEconomy.FittingsConsumed;
+                    value.RopeProduced = factoryEconomy.RopeProduced; value.RopeConsumed = factoryEconomy.RopeConsumed;
+                    value.ArmsWithFittings = craftTraceArmsWithFittings[faction - 1];
+                    value.ArmsWithoutFittings = craftTraceArmsWithoutFittings[faction - 1];
+                    for (int category = 0; category < 6; category++)
+                    {
+                        value.FittingsUse[category] = craftTraceFittingsUse[faction - 1, category];
+                        value.RopeUse[category] = craftTraceRopeUse[faction - 1, category];
+                    }
                     value.AiFactorySkippedUnknownResource = factoryEconomy.AiFactorySkippedUnknownResource;
                     value.AiFactorySkippedNoSite = factoryEconomy.AiFactorySkippedNoSite;
                     value.AiFactorySkippedNoRoute = factoryEconomy.AiFactorySkippedNoRoute;

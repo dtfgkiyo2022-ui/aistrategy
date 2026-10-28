@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Rts.Contracts;
 using Rts.Decision;
@@ -171,6 +172,7 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree2", DecideCraftTree2, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
+            MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftDepth", DecideCraftDepth, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.AgeFourAi", DecideAgeFourAiIndustry, faction);
             if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
@@ -241,7 +243,7 @@ namespace Rts.Simulation
                 return;
             }
             if (ToolsAllowed(faction)) MeasureSubphase("AI.DecideEconomy.DecideIndustry.Tools", DecideTools, faction);
-            if (!IndustryOn || !MetalworkAllowed(faction)) return;
+            if (!IndustryOn || !MetalBuildingsAllowed(faction)) return;
             // ProcessingChain is an opt-in extension. Keep the V3-2/V3-5 core-line decision path byte-for-byte
             // equivalent on every map that does not carry the new flag.
             if (!ProcessingOn)
@@ -250,6 +252,71 @@ namespace Rts.Simulation
                 return;
             }
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.Metalwork", DecideMetalwork, faction);
+        }
+
+        private void DecideCraftDepth(uint faction)
+        {
+            if (!CraftDepthOn) return;
+            ref var economy = ref world.Economies[faction - 1];
+            // Metalworks open in age one, after the barracks, so the fittings are in stock when age two needs them.
+            if (economy.Age < 1 || !CompleteBarracks(faction)) return;
+            var rules = world.Config.Economy;
+            int assemblers = CountPlannedBuildings(faction, BuildingKind.Assembler);
+            int targetMetalworks = Math.Max(1, (assemblers + 1) / 2);
+            int metalworks = CountPlannedBuildings(faction, BuildingKind.Metalworks);
+            if (metalworks < targetMetalworks && economy.Wood >= rules.CraftDepthMetalworksWoodCost)
+            {
+                if (FindCraftDepthMetalSmelter(faction) == 0)
+                {
+                    DecideMetalwork(faction);
+                    return;
+                }
+                uint id = PlaceMetalworks(faction);
+                if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
+                return;
+            }
+            int targetRopeHuts = economy.Age < 2 ? 0 : economy.Age == 2 ? rules.CraftDepthAiRopeHutsAge2 : rules.CraftDepthAiRopeHutsAge3;
+            if (CountPlannedBuildings(faction, BuildingKind.RopeHut) < targetRopeHuts && economy.Wood >= rules.CraftDepthRopeHutWoodCost)
+            {
+                uint id = PlaceRopeHut(faction);
+                if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Rope, id);
+                return;
+            }
+            // A CraftDepth metal line is shared by the ordinary metal stock and the new metalworks.
+            // If ore is not known or no legal site exists, DecideMetalwork simply leaves the fallback recipe usable.
+            if (economy.Age >= 1) DecideMetalwork(faction);
+        }
+
+        private void StartCraftDepthLine(uint faction, ProcessingLineKind kind, uint buildingId)
+        {
+            int index = GetOrCreateLine(faction, kind);
+            ref var line = ref world.ProcessingLines[index];
+            if (kind == ProcessingLineKind.Fittings) line.MetalworksId = buildingId;
+            else line.RopeHutId = buildingId;
+            line.RequestPending = true;
+            line.RequestedCell = world.Buildings[buildingId - 1].OriginCell;
+        }
+
+        private uint FindCraftDepthMetalSmelter(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !IsAutoLine(i)
+                    || !BuildingReady(line.SmelterId)) continue;
+                return line.SmelterId;
+            }
+            return 0;
+        }
+
+        private uint FindCraftDepthLumberCamp(uint faction)
+        {
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var b = world.Buildings[i];
+                if (IsActualBuilding(b) && b.Complete && b.FactionId == faction && b.Kind == BuildingKind.LumberCamp) return b.Id;
+            }
+            return 0;
         }
 
         private void DecideMetalwork(uint faction)
@@ -1250,6 +1317,40 @@ namespace Rts.Simulation
                     uint before = world.NextBuildingId;
                     PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
                     return LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
+                }
+            return 0;
+        }
+
+        private uint PlaceMetalworks(uint faction, int preferredBaseCell = -1)
+        {
+            int size = world.Config.Economy.CraftDepthMetalworksSizeCells;
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    uint before = world.NextBuildingId;
+                    PlaceBuildingAt(faction, BuildingKind.Metalworks, origin, side, 0);
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.Metalworks);
+                }
+            return 0;
+        }
+
+        private uint PlaceRopeHut(uint faction, int preferredBaseCell = -1)
+        {
+            int size = world.Config.Economy.CraftDepthRopeHutSizeCells;
+            int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
+            int origin = FindProcessingSite(faction, centre, size);
+            if (origin < 0) return 0;
+            var core = AiExpandOn && preferredBaseCell >= 0 ? world.Map.Center(preferredBaseCell) : OwnCore(faction).Definition.Position;
+            foreach (var side in SidesToward(FootprintCenter(origin, size), core))
+                if (PortIsOpen(OutputCell(origin, size, side), faction))
+                {
+                    uint before = world.NextBuildingId;
+                    PlaceBuildingAt(faction, BuildingKind.RopeHut, origin, side, 0);
+                    return LineBuildingIdAfterPlacement(before, BuildingKind.RopeHut);
                 }
             return 0;
         }

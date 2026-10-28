@@ -206,7 +206,10 @@ private const int AiExpandExtensionVersion = 1;
          private const int CraftRequiredExtensionVersion = 1;
          private const int CraftRequiredExtensionDataLength = 16 * sizeof(int);
          private const int CraftRequiredExtensionV1DataLength = 6 * sizeof(int);
-         private const int CraftRequiredExtensionV2DataLength = 7 * sizeof(int);
+        private const int CraftRequiredExtensionV2DataLength = 7 * sizeof(int);
+        private const int CraftDepthExtensionId = 72;
+        private const int CraftDepthExtensionVersion = 1;
+        private const int CraftDepthExtensionDataLength = 23 * sizeof(int);
         private const int EarlyStartExtensionId = 73;
         private const int EarlyStartExtensionVersion = 1;
         private const int EarlyStartExtensionDataLength = 4 * sizeof(int);
@@ -305,6 +308,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
                ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
              ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
+             ,new ExtensionRegistration(CraftDepthExtensionId, CraftDepthExtensionVersion, CraftDepthExtensionDataLength)
               ,new ExtensionRegistration(EarlyStartExtensionId, EarlyStartExtensionVersion, EarlyStartExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
@@ -939,7 +943,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
                       else if (id == OpenFarmsExtensionId) ReadOpenFarmsExtension(extension, c.Economy);
                        else if (id == FreeTownsExtensionId) ReadFreeTownsExtension(extension, c.Economy);
-                     else if (id == CraftRequiredExtensionId) ReadCraftRequiredExtension(extension, c.Economy);
+                      else if (id == CraftRequiredExtensionId) ReadCraftRequiredExtension(extension, c.Economy);
+                      else if (id == CraftDepthExtensionId) ReadCraftDepthExtension(extension, c.Economy);
                       else if (id == EarlyStartExtensionId) ReadEarlyStartExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
@@ -1032,6 +1037,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == OpenFarmsExtensionId && !c.Economy.OpenFarms);
                    extensions.RemoveAll(extension => extension != null && extension.Id == FreeTownsExtensionId && !c.Economy.FreeTowns);
                  extensions.RemoveAll(extension => extension != null && extension.Id == CraftRequiredExtensionId && !c.Economy.CraftRequired);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftDepthExtensionId && !c.Economy.CraftDepth);
                   extensions.RemoveAll(extension => extension != null && extension.Id == EarlyStartExtensionId && !c.Economy.EarlyStart);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
                 extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltsExtensionId && !c.Economy.AiBelts);
@@ -1054,7 +1060,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
-               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasEarlyStart = false;
+               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasEarlyStart = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1077,6 +1083,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  {
                      hasCraftRequired = true;
                      extensions[i] = CreateCraftRequiredExtension(c.Economy);
+                 }
+                 if (extensions[i].Id == CraftDepthExtensionId)
+                 {
+                     hasCraftDepth = true;
+                     extensions[i] = CreateCraftDepthExtension(c.Economy);
                  }
                  if (extensions[i].Id == EarlyStartExtensionId)
                  {
@@ -1104,6 +1115,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateFreeTownsExtension(c.Economy));
                  if (c.Economy.CraftRequired && !hasCraftRequired)
                      extensions.Add(CreateCraftRequiredExtension(c.Economy));
+                 if (c.Economy.CraftDepth && !hasCraftDepth)
+                     extensions.Add(CreateCraftDepthExtension(c.Economy));
                  if (c.Economy.EarlyStart && !hasEarlyStart)
                      extensions.Add(CreateEarlyStartExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
@@ -2011,6 +2024,44 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     e.CraftRequiredAiFramesStockTarget = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-required extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftDepthExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftDepth ? 1 : 0);
+                writer.Write(e.CraftDepthFittingsTicks); writer.Write(e.CraftDepthFittingsMetalInput); writer.Write(e.CraftDepthFittingsOutput);
+                writer.Write(e.CraftDepthRopeTicks); writer.Write(e.CraftDepthRopeWoodInput); writer.Write(e.CraftDepthRopeOutput);
+                writer.Write(e.CraftDepthMetalworksSizeCells); writer.Write(e.CraftDepthMetalworksWoodCost); writer.Write(e.CraftDepthMetalworksWork); writer.Write(e.CraftDepthMetalworksHp);
+                writer.Write(e.CraftDepthRopeHutSizeCells); writer.Write(e.CraftDepthRopeHutWoodCost); writer.Write(e.CraftDepthRopeHutWork); writer.Write(e.CraftDepthRopeHutHp);
+                writer.Write(e.CraftDepthAiFittingsStockTarget); writer.Write(e.CraftDepthAiRopeStockTarget); writer.Write(e.CraftDepthAiStockCap);
+                writer.Write(e.CraftDepthFramesRopeInput);
+                writer.Write(e.CraftDepthSiegePartsFittingsInput); writer.Write(e.CraftDepthSiegePartsRopeInput); writer.Write(e.CraftDepthSiegePartsTicks);
+                writer.Write(e.CraftDepthMechanismFittingsInput);
+                return new ScenarioExtensionData { Id = CraftDepthExtensionId, Version = CraftDepthExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftDepthExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-depth flag.");
+                e.CraftDepth = enabled != 0;
+                e.CraftDepthFittingsTicks = reader.ReadInt32(); e.CraftDepthFittingsMetalInput = reader.ReadInt32(); e.CraftDepthFittingsOutput = reader.ReadInt32();
+                e.CraftDepthRopeTicks = reader.ReadInt32(); e.CraftDepthRopeWoodInput = reader.ReadInt32(); e.CraftDepthRopeOutput = reader.ReadInt32();
+                e.CraftDepthMetalworksSizeCells = reader.ReadInt32(); e.CraftDepthMetalworksWoodCost = reader.ReadInt32(); e.CraftDepthMetalworksWork = reader.ReadInt32(); e.CraftDepthMetalworksHp = reader.ReadInt32();
+                e.CraftDepthRopeHutSizeCells = reader.ReadInt32(); e.CraftDepthRopeHutWoodCost = reader.ReadInt32(); e.CraftDepthRopeHutWork = reader.ReadInt32(); e.CraftDepthRopeHutHp = reader.ReadInt32();
+                e.CraftDepthAiFittingsStockTarget = reader.ReadInt32(); e.CraftDepthAiRopeStockTarget = reader.ReadInt32(); e.CraftDepthAiStockCap = reader.ReadInt32();
+                e.CraftDepthFramesRopeInput = reader.ReadInt32();
+                e.CraftDepthSiegePartsFittingsInput = reader.ReadInt32(); e.CraftDepthSiegePartsRopeInput = reader.ReadInt32(); e.CraftDepthSiegePartsTicks = reader.ReadInt32();
+                e.CraftDepthMechanismFittingsInput = reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-depth extension data.");
             }
         }
 
