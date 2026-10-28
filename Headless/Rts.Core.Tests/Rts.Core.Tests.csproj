@@ -135,6 +135,7 @@
     <Compile Include="CraftRequiredTests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="CraftTree4Tests.cs" />
+    <Compile Include="CraftFlowTests.cs" />
     <Compile Include="AgeFourAiTests.cs" />
     <Compile Include="MetropolisTests.cs" />
     <Compile Include="SanctuaryTests.cs" />
@@ -239,6 +240,7 @@
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/MatchTimeline.cs" Link="Presentation/MatchTimeline.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/EconomyFlowMetrics.cs" Link="Presentation/EconomyFlowMetrics.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/CraftVisualRules.cs" Link="Presentation/CraftVisualRules.cs" />
+    <Compile Include="../../UnityProject/Assets/RTS/Presentation/CraftFlowDisplayText.cs" Link="Presentation/CraftFlowDisplayText.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/BlueprintTools.cs" Link="Presentation/BlueprintTools.cs" />
     <Compile Include="StrategistUiRulesTests.cs" />
     <Compile Include="../../UnityProject/Assets/RTS/Presentation/FineJudgementOption.cs" Link="Presentation/FineJudgementOption.cs" />

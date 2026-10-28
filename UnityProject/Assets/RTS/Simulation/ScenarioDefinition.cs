@@ -385,6 +385,8 @@ namespace Rts.Simulation
         public int CraftRequiredAiScholarlyStockResearches = 2;
         /// <summary>CraftRequired: at this many assemblers, one line is reserved for scholarly goods.</summary>
         public int CraftRequiredAiScholarlyMinAssemblers = 2;
+        /// <summary>Technical-design-v3 38.4: observer-only one-minute processing-flow statistics.</summary>
+        public bool CraftFlow;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;

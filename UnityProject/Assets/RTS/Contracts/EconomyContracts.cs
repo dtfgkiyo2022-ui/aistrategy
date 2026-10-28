@@ -449,6 +449,12 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public Fix64 CaravanDistance { get; }
         public int CaravanWoodReward { get; }
         public CaravanStopReason CaravanStopReason { get; }
+        /// <summary>CraftFlow: the completed output and consumed inputs in the previous minute.</summary>
+        public int ProducedPerMinute { get; }
+        public IReadOnlyList<CraftFlowInputView> InputsPerMinute { get; }
+        public int StarvedTicksLastMinute { get; }
+        public int BlockedTicksLastMinute { get; }
+        public int FullRatePerMinute { get; }
 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining)
@@ -501,9 +507,11 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public BuildingView(uint id, uint factionId, BuildingKind kind, SimPoint center, int sizeMeters, int hp, int maxHp,
             bool complete, int progress, int work, int queued, long trainRemaining, Facing facing, int input, int output, bool playerHeld,
             TechKind researching, long researchRemaining, int inputSecondary, int queuedBowGear,
-            uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
-            int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
-            bool reserved = false, int reservationOrder = 0)
+             uint caravanMarketId, uint caravanOutpostId, Fix64 caravanDistance, int caravanWoodReward, CaravanStopReason caravanStopReason,
+             int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
+             bool reserved = false, int reservationOrder = 0,
+             int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
+             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -513,9 +521,31 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             CaravanWoodReward = caravanWoodReward; CaravanStopReason = caravanStopReason;
             Level = level;
             Reserved = reserved; ReservationOrder = reservationOrder;
+            ProducedPerMinute = producedPerMinute; InputsPerMinute = ContractList.Copy(inputsPerMinute ?? Array.Empty<CraftFlowInputView>());
+            StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
+            FullRatePerMinute = fullRatePerMinute;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
+    }
+
+    public readonly struct CraftFlowInputView
+    {
+        public ResourceKind Kind { get; }
+        public int CountPerMinute { get; }
+
+        public CraftFlowInputView(ResourceKind kind, int countPerMinute)
+        { Kind = kind; CountPerMinute = countPerMinute; }
+    }
+
+    public readonly struct ProductionStatView
+    {
+        public ResourceKind Kind { get; }
+        public int ProducedPerMinute { get; }
+        public int ConsumedPerMinute { get; }
+
+        public ProductionStatView(ResourceKind kind, int producedPerMinute, int consumedPerMinute)
+        { Kind = kind; ProducedPerMinute = producedPerMinute; ConsumedPerMinute = consumedPerMinute; }
     }
 
     /// <summary>A resource point with something left. V3-1 shows every point to both sides (technical-design-v3 5.4).</summary>
@@ -1079,6 +1109,9 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int AdvanceScholarly { get; }
         public int AdvanceSiegeParts { get; }
         public int AdvanceMechanism { get; }
+        /// <summary>CraftFlow: previous-minute observer data. Empty and false when the flag is off.</summary>
+        public bool CraftFlowEnabled { get; }
+        public IReadOnlyList<ProductionStatView> ProductionStatistics { get; }
 
         public EconomyView(int food, int wood, int population, int populationCap, int villagerQueued, long villagerTrainRemaining,
             bool autoEconomy, int buildingSizeCells, int barracksWoodCost, int villagerFoodCost, int infantryFoodCost, int infantryWoodCost,
@@ -1218,7 +1251,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
                 int beltPlankCostPerTwoCells = 0, int fastBeltPlankCost = 0, int splitterPlankCost = 0,
                 int sorterPlankCost = 0, int undergroundBeltPlankCost = 0, int researchScholarlyCost = 0,
                 int advancePlanks = 0, int advanceCutStone = 0, int advanceFrames = 0, int advanceScholarly = 0,
-                int advanceSiegeParts = 0, int advanceMechanism = 0)
+                int advanceSiegeParts = 0, int advanceMechanism = 0,
+                bool craftFlowEnabled = false, IReadOnlyList<ProductionStatView> productionStatistics = null)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1340,6 +1374,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
              UndergroundBeltPlankCost = undergroundBeltPlankCost; ResearchScholarlyCost = researchScholarlyCost;
              AdvancePlanks = advancePlanks; AdvanceCutStone = advanceCutStone; AdvanceFrames = advanceFrames;
              AdvanceScholarly = advanceScholarly; AdvanceSiegeParts = advanceSiegeParts; AdvanceMechanism = advanceMechanism;
+             CraftFlowEnabled = craftFlowEnabled;
+             ProductionStatistics = ContractList.Copy(productionStatistics ?? Array.Empty<ProductionStatView>());
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;
