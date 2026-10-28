@@ -720,6 +720,7 @@ namespace Rts.Simulation
             largeClusterNodes = new int[clusterCount][];
             largeClusterKinds = new ResourceKind[clusterCount];
             largeClusterAnchors = new int[clusterCount];
+            largeClusterGatherers = new int[clusterCount];
             for (int cluster = 0; cluster < clusterCount; cluster++) largeClusterNodes[cluster] = new int[sizes[cluster]];
             Array.Clear(sizes, 0, sizes.Length);
             for (int i = 0; i < count; i++)
