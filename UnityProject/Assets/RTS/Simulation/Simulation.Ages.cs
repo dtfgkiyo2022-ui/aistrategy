@@ -379,7 +379,19 @@ namespace Rts.Simulation
             if (e.AdvanceRemaining != 0 || e.Queued != 0) return false;
             var (food, wood, gold, _) = AdvancePrice(faction, e);
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
-            return e.Food >= food && e.Wood - heldWood >= wood && e.Gold >= gold;
+            var craft = CraftRequiredAdvanceMaterials(e);
+            return e.Food >= food && e.Wood - heldWood >= wood && e.Gold >= gold
+                && e.Planks >= craft.planks && e.CutStone >= craft.cutStone && e.Frames >= craft.frames
+                && e.Scholarly >= craft.scholarly && e.SiegeParts >= craft.siegeParts && e.Mechanism >= craft.mechanism;
+        }
+
+        private (int planks, int cutStone, int frames, int scholarly, int siegeParts, int mechanism) CraftRequiredAdvanceMaterials(FactionEconomy economy)
+        {
+            if (!CraftRequiredOn) return (0, 0, 0, 0, 0, 0);
+            if (economy.Age == 1) return (20, 20, 0, 0, 0, 0);
+            if (economy.Age == 2) return (0, 0, 20, 10, 0, 0);
+            if (economy.Age == 3) return (0, 0, 0, 0, 10, 10);
+            return (0, 0, 0, 0, 0, 0);
         }
 
         private (int food, int wood, int gold, int ticks) BaseAdvancePrice(uint faction, FactionEconomy e)
@@ -460,6 +472,22 @@ namespace Rts.Simulation
             e.Food = checked(e.Food - food);
             e.Wood = checked(e.Wood - wood);
             e.Gold = checked(e.Gold - gold);
+            if (CraftRequiredOn)
+            {
+                var craft = CraftRequiredAdvanceMaterials(e);
+                e.Planks = checked(e.Planks - craft.planks);
+                e.CutStone = checked(e.CutStone - craft.cutStone);
+                e.Frames = checked(e.Frames - craft.frames);
+                e.Scholarly = checked(e.Scholarly - craft.scholarly);
+                e.SiegeParts = checked(e.SiegeParts - craft.siegeParts);
+                e.Mechanism = checked(e.Mechanism - craft.mechanism);
+                e.PlanksConsumed = checked(e.PlanksConsumed + craft.planks);
+                e.CutStoneConsumed = checked(e.CutStoneConsumed + craft.cutStone);
+                e.FramesConsumed = checked(e.FramesConsumed + craft.frames);
+                e.ScholarlyConsumed = checked(e.ScholarlyConsumed + craft.scholarly);
+                e.SiegePartsConsumed = checked(e.SiegePartsConsumed + craft.siegeParts);
+                e.MechanismConsumed = checked(e.MechanismConsumed + craft.mechanism);
+            }
             e.AdvancingTo = civ;
             e.AdvanceRemaining = ticks;
             e.ReservedCiv = CivKind.Primitive;

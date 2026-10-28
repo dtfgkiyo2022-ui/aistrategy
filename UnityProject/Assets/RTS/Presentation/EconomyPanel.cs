@@ -753,13 +753,13 @@ namespace Rts.Presentation
             else GUI.Label(new Rect(x, y, w, 22f), UiText.T("Mines and farms come with a civilisation", "採掘場・農場は文明に進んでから"));
             y += 26f;
             ModeButton(new Rect(x, y, half, 22f), Mode.Belt, mode == Mode.Belt ? UiText.T("Drag on the ground", "地面をドラッグ")
-                : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）"));
+                : UiText.T("Belt (", "ベルト（木材 ") + economy.BeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, false));
             if (economy.BeltComponents)
             {
-                ModeButton(new Rect(right, y, half, 22f), Mode.FastBelt, UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）"));
+                ModeButton(new Rect(right, y, half, 22f), Mode.FastBelt, UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, true));
                 y += 26f;
-                ModeButton(new Rect(x, y, half, 22f), Mode.Splitter, UiText.T("Splitter", "分岐"));
-                ModeButton(new Rect(right, y, half, 22f), Mode.Sorter, UiText.T("Sorter: ", "仕分け：") + SorterKindName(sorterKind));
+                ModeButton(new Rect(x, y, half, 22f), Mode.Splitter, UiText.T("Splitter", "分岐") + CraftMaterial(economy.SplitterPlankCost));
+                ModeButton(new Rect(right, y, half, 22f), Mode.Sorter, UiText.T("Sorter: ", "仕分け：") + SorterKindName(sorterKind) + CraftMaterial(economy.SorterPlankCost));
                 y += 26f;
                 if (economy.Inserters)
                 {
@@ -768,7 +768,7 @@ namespace Rts.Presentation
                         + " / " + SorterKindName(sorterKind));
                     y += 26f;
                 }
-                ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト"));
+                ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
                 y += 26f;
                 GUI.Label(new Rect(x, y, w, 22f), UiText.StorageDescription());
@@ -998,6 +998,7 @@ namespace Rts.Presentation
                 int wood = economy.Age == 1 ? economy.Age2WoodCost : economy.Age == 2 ? economy.Age3WoodCost : economy.Age4WoodCost;
                 int gold = economy.NextAgeGoldCost;
                 string price = UiText.T(" (", "（食") + food + UiText.T("F ", " 木") + wood
+                    + CraftAdvanceMaterials(economy)
                     + (gold > 0 ? UiText.T("W ", " 金") + gold + UiText.T("G)", "）") : UiText.T("W)", "）"))
                     + AgeClockLabel(economy, food, wood);
                 // Only a guide: the simulation decides. The button is shut, with the reason, while advancing cannot start.
@@ -1158,7 +1159,8 @@ namespace Rts.Presentation
                 string cost = index < economy.TechFoodCosts.Count
                     ? UiText.T(" F", " 食") + economy.TechFoodCosts[index] + UiText.T(" W", " 木") + economy.TechWoodCosts[index]
                         + (index < economy.TechMetalCosts.Count && economy.TechMetalCosts[index] > 0 ? UiText.T(" M", " 金") + economy.TechMetalCosts[index] : "")
-                        + (index < economy.TechGemsCosts.Count && economy.TechGemsCosts[index] > 0 ? UiText.T(" G", " 宝") + economy.TechGemsCosts[index] : "") : "";
+                        + (index < economy.TechGemsCosts.Count && economy.TechGemsCosts[index] > 0 ? UiText.T(" G", " 宝") + economy.TechGemsCosts[index] : "")
+                        + CraftScholarly(economy.ResearchScholarlyCost) : "";
                 GUI.enabled = b.Complete && b.Researching == 0 && !done;
                 var r = new Rect(i % 2 == 0 ? x : right, y + (i / 2) * 26f, half, 22f);
                 if (GUI.Button(r, (done ? UiText.T("Done: ", "済：") : "") + TechName(t) + (done ? "" : cost)))
@@ -1193,6 +1195,11 @@ namespace Rts.Presentation
 
         private void ModeButton(Rect r, Mode target, string label)
         {
+            var economy = Economy();
+            if (economy != null && target != Mode.Belt && target != Mode.FastBelt && target != Mode.Splitter
+                && target != Mode.Sorter && target != Mode.Underground && target != Mode.Inserter
+                && target != Mode.Wall && target != Mode.None)
+                label += CraftBuildingCost(economy, KindOf(target));
             if (ReservationLabel(target)) label += UiText.T(" [reserve]", "【予約可】");
             bool on = GUI.Toggle(r, mode == target, mode == target && target != Mode.Belt && target != Mode.Wall ? UiText.T("Click ground (Esc cancels)", "地面をクリック（Escで取消）") : label, GUI.skin.button);
             if (on && mode != target) SetMode(target);
@@ -1205,7 +1212,48 @@ namespace Rts.Presentation
             if (economy == null || !economy.BuildingReservations || target == Mode.Belt || target == Mode.FastBelt
                 || target == Mode.Wall || target == Mode.None || target == Mode.RemoveBelt || target == Mode.RemoveArea) return false;
             var kind = KindOf(target);
-            return economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind);
+            int index = (int)kind;
+            int planks = index < economy.BuildingPlankCosts.Count ? economy.BuildingPlankCosts[index] : 0;
+            int frames = index < economy.BuildingFrameCosts.Count ? economy.BuildingFrameCosts[index] : 0;
+            return economy.Wood < WoodOf(kind) || economy.Stone < StoneOf(kind)
+                || economy.Planks < planks || economy.Frames < frames;
+        }
+
+        private static string CraftMaterial(int amount)
+        {
+            return amount <= 0 ? "" : UiText.T(" + Planks " + amount, "、板 " + amount);
+        }
+
+        private static string CraftScholarly(int amount)
+        {
+            return amount <= 0 ? "" : UiText.T(" + Scholarly " + amount, "、学術品 " + amount);
+        }
+
+        private static string CraftBeltCost(EconomyView economy, bool fast)
+        {
+            int amount = fast ? economy.FastBeltPlankCost : economy.BeltPlankCostPerTwoCells;
+            return amount <= 0 ? "" : UiText.T(" + Planks " + amount + (fast ? "/cell" : "/2 cells"), "、板 " + amount + (fast ? "／マス" : "／2マス"));
+        }
+
+        private static string CraftBuildingCost(EconomyView economy, BuildingKind kind)
+        {
+            int index = (int)kind;
+            int planks = index < economy.BuildingPlankCosts.Count ? economy.BuildingPlankCosts[index] : 0;
+            int frames = index < economy.BuildingFrameCosts.Count ? economy.BuildingFrameCosts[index] : 0;
+            string result = CraftMaterial(planks);
+            if (frames > 0) result += UiText.T(" + Frames " + frames, "、建材 " + frames);
+            return result;
+        }
+
+        private static string CraftAdvanceMaterials(EconomyView economy)
+        {
+            string result = CraftMaterial(economy.AdvancePlanks);
+            if (economy.AdvanceCutStone > 0) result += UiText.T(" + Cut stone " + economy.AdvanceCutStone, "、切石 " + economy.AdvanceCutStone);
+            if (economy.AdvanceFrames > 0) result += UiText.T(" + Frames " + economy.AdvanceFrames, "、建材 " + economy.AdvanceFrames);
+            if (economy.AdvanceScholarly > 0) result += UiText.T(" + Scholarly " + economy.AdvanceScholarly, "、学術品 " + economy.AdvanceScholarly);
+            if (economy.AdvanceSiegeParts > 0) result += UiText.T(" + Siege parts " + economy.AdvanceSiegeParts, "、攻城部品 " + economy.AdvanceSiegeParts);
+            if (economy.AdvanceMechanism > 0) result += UiText.T(" + Mechanism " + economy.AdvanceMechanism, "、精密部品 " + economy.AdvanceMechanism);
+            return result;
         }
 
         private void DrawNotes(Rect rect)

@@ -388,9 +388,17 @@ namespace Rts.Simulation
             // Books belong to the Academy civilisation, not to one particular research building.  Keep the
             // effect at the common start point so both the player's EconomyCommand.Research route and the
             // autonomous route receive the same deterministic discount/shortening at a blacksmith or academy.
-            bool bookResearch = BooksAllowed(faction) && economy.Books >= world.Config.Economy.BooksPerResearch;
+            int requiredScholarly = CraftRequiredResearchScholarlyCost(faction);
+            int bookResearchCost = requiredScholarly > 0 ? requiredScholarly : world.Config.Economy.BooksPerResearch;
+            bool bookResearch = BooksAllowed(faction) && economy.Books >= bookResearchCost;
             bool mechanismResearch = CraftTree3On && economy.Age >= 3 && IsThirdAgeResearch(tech) && economy.Mechanism >= 1;
-            bool scholarlyResearch = CraftTree2On && !bookResearch && !mechanismResearch && economy.Scholarly >= world.Config.Economy.ScholarlyPerResearch;
+            int scholarlyResearchCost = requiredScholarly > 0 ? requiredScholarly : world.Config.Economy.ScholarlyPerResearch;
+            bool scholarlyResearch = CraftTree2On && !bookResearch && !mechanismResearch && economy.Scholarly >= scholarlyResearchCost;
+            // A mechanism research still pays the required scholarly goods, without their discount on top.
+            bool requiredScholarlyOnly = requiredScholarly > 0 && mechanismResearch && !bookResearch
+                && economy.Scholarly >= scholarlyResearchCost;
+            if (requiredScholarly > 0 && !bookResearch && !scholarlyResearch && !requiredScholarlyOnly)
+                return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);
@@ -450,14 +458,14 @@ namespace Rts.Simulation
             economy.Gems = checked(economy.Gems - gems);
             if (bookResearch)
             {
-                economy.Books = checked(economy.Books - world.Config.Economy.BooksPerResearch);
-                economy.BooksConsumed = checked(economy.BooksConsumed + world.Config.Economy.BooksPerResearch);
+                economy.Books = checked(economy.Books - bookResearchCost);
+                economy.BooksConsumed = checked(economy.BooksConsumed + bookResearchCost);
                 economy.BooksUsedResearch++;
             }
-            if (scholarlyResearch)
+            if (scholarlyResearch || requiredScholarlyOnly)
             {
-                economy.Scholarly = checked(economy.Scholarly - world.Config.Economy.ScholarlyPerResearch);
-                economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + world.Config.Economy.ScholarlyPerResearch);
+                economy.Scholarly = checked(economy.Scholarly - scholarlyResearchCost);
+                economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + scholarlyResearchCost);
                 economy.ScholarlyUsedResearch++;
             }
             if (mechanismResearch)
@@ -822,6 +830,15 @@ namespace Rts.Simulation
                 || tech == BridgeTech.SiegeDeployment || tech == MountainTech.MountainFort || tech == FishingTech.DriedFish
                 || tech == CultTech.MartyrBlessing || tech == TollgateTech.GateNetwork || tech == MetropolisTech.CitizenMilitia
                 || tech == SanctuaryTech.HolyRelic;
+
+        private int CraftRequiredResearchScholarlyCost(uint faction)
+        {
+            if (!CraftRequiredOn) return 0;
+            int age = world.Economies[faction - 1].Age;
+            return age == 2 ? world.Config.Economy.CraftRequiredResearchScholarlyAge2
+                : age == 3 ? world.Config.Economy.CraftRequiredResearchScholarlyAge3
+                : age >= 4 ? world.Config.Economy.CraftRequiredResearchScholarlyAge4 : 0;
+        }
 
         private bool AcademyOffenseReady(uint faction)
         {

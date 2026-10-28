@@ -591,12 +591,17 @@ namespace Rts.Simulation
                     scholarlyAssemblers++;
             }
             int demand = checked(armsAssemblers * 15 + joineries * 15 + scholarlyAssemblers * 12);
-            return Math.Max(1, checked((demand + 19) / 20));
+            int baseTarget = Math.Max(1, checked((demand + 19) / 20));
+            int extra = age <= 1 ? rules.CraftRequiredAiPlankSawmillsAge1
+                : age == 2 ? rules.CraftRequiredAiPlankSawmillsAge2 : rules.CraftRequiredAiPlankSawmillsAge3;
+            return checked(baseTarget + extra);
         }
 
         private bool CraftRequiredAiOtherPlankUseBlocked(uint faction, RecipeKind recipe)
         {
             if (!CraftRequiredOn || (recipe != RecipeKind.Frames && recipe != RecipeKind.Scholarly)) return false;
+            if (recipe == RecipeKind.Scholarly && CraftRequiredAiNeedsScholarly(faction)) return false;
+            if (recipe == RecipeKind.Frames && CraftRequiredAiNeedsFrames(faction)) return false;
             ref var economy = ref world.Economies[faction - 1];
             // Only the automatic economy waits; a player's own recipes are never held back.
             if (economy.AutoOff) return false;
@@ -611,13 +616,57 @@ namespace Rts.Simulation
             return economy.ArmsKit + economy.FineArmsKit + inProgress < world.Config.Economy.CraftRequiredAiArmsStockTarget;
         }
 
+        private bool CraftRequiredAiNeedsFrames(uint faction)
+        {
+            if (!CraftRequiredOn) return false;
+            var economy = world.Economies[faction - 1];
+            if (economy.Age < 2) return false;
+            if (economy.Age == 2)
+            {
+                if (!AgeClockOn) return false;
+                long due = AgeClockTickForAge(2);
+                long interval = AgeClockIntervalForAge(2);
+                if (due - world.Tick > interval / 3) return false;
+            }
+            int inProgress = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction
+                    && building.Kind == BuildingKind.Joinery && building.Recipe == RecipeKind.Frames) inProgress++;
+            }
+            return economy.Frames + inProgress < world.Config.Economy.CraftRequiredAiFramesStockTarget;
+        }
+
+        private bool CraftRequiredAiNeedsScholarly(uint faction)
+        {
+            int required = CraftRequiredResearchScholarlyCost(faction);
+            if (required <= 0) return false;
+            ref var economy = ref world.Economies[faction - 1];
+            int armsTarget = world.Config.Economy.CraftRequiredAiArmsStockTarget;
+            if (economy.ArmsKit + economy.FineArmsKit < Math.Max(1, armsTarget / 2)) return false;
+            if (economy.Scholarly >= required || BooksAllowed(faction) && economy.Books >= required) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || building.Researching != 0) continue;
+                for (int t = 1; t <= 19; t++)
+                {
+                    var tech = (TechKind)t;
+                    if (ResearchBuildingAccepts(faction, building.Kind, tech) && TechOpen(faction, tech) && !BeingResearched(faction, tech)) return true;
+                }
+            }
+            return false;
+        }
+
         private void AssignCraftRequiredAiRecipes(uint faction)
         {
             RecipeKind wanted = PreferredAssemblerRecipe(faction);
-            if (wanted == RecipeKind.ArmsKit)
+            if (wanted == RecipeKind.ArmsKit || wanted == RecipeKind.Scholarly)
             {
-                int target = CraftRequiredAiAssemblerTarget(faction);
-                int assigned = 0;
+                int armsTarget = CraftRequiredAiAssemblerTarget(faction);
+                int scholarlyTarget = CraftRequiredAiNeedsScholarly(faction) ? world.Config.Economy.CraftRequiredAiScholarlyAssemblers : 0;
+                int assignedArms = 0, assignedScholarly = 0;
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
                     ref var assembler = ref world.Buildings[i];
@@ -625,12 +674,24 @@ namespace Rts.Simulation
                         || assembler.Kind != BuildingKind.Assembler || assembler.Timer != 0) continue;
                     if (assembler.Recipe == RecipeKind.ArmsKit)
                     {
-                        assigned++;
+                        assignedArms++;
                         continue;
                     }
-                    if (assigned >= target) continue;
-                    SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit);
-                    assigned++;
+                    if (assembler.Recipe == RecipeKind.Scholarly) assignedScholarly++;
+                }
+                for (int i = 0; i < world.BuildingCount; i++)
+                {
+                    ref var assembler = ref world.Buildings[i];
+                    if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.FactionId != faction
+                        || assembler.Kind != BuildingKind.Assembler || assembler.Timer != 0) continue;
+                    if (assignedArms < armsTarget && assembler.Recipe != RecipeKind.ArmsKit)
+                    {
+                        SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit); assignedArms++; continue;
+                    }
+                    if (assignedScholarly < scholarlyTarget && assembler.Recipe != RecipeKind.Scholarly)
+                    {
+                        SetAssemblerRecipe(faction, assembler.Id, RecipeKind.Scholarly); assignedScholarly++;
+                    }
                 }
                 return;
             }
@@ -879,6 +940,7 @@ namespace Rts.Simulation
                 }
                 if (economy.ArmsKit + economy.FineArmsKit + inProgress < world.Config.Economy.CraftRequiredAiArmsStockTarget)
                     return RecipeKind.ArmsKit;
+                if (CraftRequiredAiNeedsScholarly(faction)) return RecipeKind.Scholarly;
             }
             return PreferredCraftTree3Recipe(faction);
         }
@@ -3013,11 +3075,16 @@ namespace Rts.Simulation
             params (int[] cells, Facing[] facings)[] routes)
         {
             ref var economy = ref world.Economies[faction - 1];
-            int owned = 0, added = 0, wood = 0;
+            int owned = 0, added = 0, wood = 0, planks = 0, plankCells = 0;
+            bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
             var seen = new bool[world.Belts.Length];
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             var splitBelt = world.Belts[splitter];
-            if (splitBelt.FactionId == 0 || splitBelt.Component == BeltComponentKind.None) wood = checked(wood + world.Config.Economy.SplitterWoodCost);
+            if (splitBelt.FactionId == 0 || splitBelt.Component == BeltComponentKind.None)
+            {
+                if (craftRequiredBelts) planks = checked(planks + (world.Config.Economy.SplitterWoodCost + 1) / 2);
+                else wood = checked(wood + world.Config.Economy.SplitterWoodCost);
+            }
             else if (splitBelt.FactionId != faction || splitBelt.Held || splitBelt.Component != BeltComponentKind.Splitter || splitBelt.Facing != facing) return false;
             foreach (var route in routes)
                 for (int i = 0; i < route.cells.Length; i++)
@@ -3032,9 +3099,12 @@ namespace Rts.Simulation
                         continue;
                     }
                     if (belt.FactionId != 0) return false;
-                    added++; wood = checked(wood + world.Config.Economy.BeltWoodCost);
+                    added++;
+                    if (craftRequiredBelts) { if (plankCells++ % 2 == 0) planks++; }
+                    else wood = checked(wood + world.Config.Economy.BeltWoodCost);
                 }
-            return owned + added <= world.Config.Economy.BeltLimit && economy.Wood - AgeFourAiWoodReserve(faction) >= wood;
+            return owned + added <= world.Config.Economy.BeltLimit
+                && economy.Wood - AgeFourAiWoodReserve(faction) >= wood && economy.Planks >= planks;
         }
 
         private bool LayAutomaticSplitter(uint faction, int cell, Facing facing)
@@ -3044,9 +3114,13 @@ namespace Rts.Simulation
                 return !belt.Held && belt.Facing == facing;
             if (!SplitterPlacementAllowed(faction, cell)) return false;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Wood < world.Config.Economy.SplitterWoodCost) return false;
-            economy.Wood = checked(economy.Wood - world.Config.Economy.SplitterWoodCost);
-            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, world.Config.Economy.SplitterWoodCost);
+            bool craftRequired = CraftRequiredOn && economy.Age >= 1;
+            int woodCost = craftRequired ? 0 : world.Config.Economy.SplitterWoodCost;
+            int plankCost = craftRequired ? (world.Config.Economy.SplitterWoodCost + 1) / 2 : 0;
+            if (economy.Wood < woodCost || economy.Planks < plankCost) return false;
+            economy.Wood = checked(economy.Wood - woodCost);
+            RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
+            if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
             belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
             belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
             InvalidateBeltCaches();
@@ -3080,9 +3154,10 @@ namespace Rts.Simulation
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             int reservedWood = AgeFourAiWoodReserve(faction);
+            bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
             if (LargeEconomyOn)
             {
-                int missing = 0;
+                int missing = 0, missingPlanks = 0, plankCells = 0;
                 bool[] seen;
                 if (AiFactoryOn || BeltDropOffAiOn)
                 {
@@ -3097,22 +3172,33 @@ namespace Rts.Simulation
                         int cell = route[i];
                         if (cell < 0 || cell >= world.Belts.Length || seen[cell]) continue;
                         seen[cell] = true;
-                        if (world.Belts[cell].FactionId == 0) missing++;
+                        if (world.Belts[cell].FactionId == 0)
+                        {
+                            missing++;
+                            if (craftRequiredBelts && plankCells++ % 2 == 0) missingPlanks++;
+                        }
                     }
-                if (owned + missing > rules.BeltLimit || economy.Wood - reservedWood < missing * rules.BeltWoodCost) return false;
+                if (owned + missing > rules.BeltLimit
+                    || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost)
+                    || economy.Planks < missingPlanks) return false;
             }
             bool whole = true;
+            int placedInRoutes = 0;
             foreach (var (route, facings) in routes)
                 for (int i = 0; i < route.Length; i++)
                 {
                     ref var belt = ref world.Belts[route[i]];
                     if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
                     whole = false;
-                    if (owned >= rules.BeltLimit || economy.Wood - reservedWood < rules.BeltWoodCost) continue;
-                    economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
-                    RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
+                    int plankCost = craftRequiredBelts && placedInRoutes % 2 == 0 ? 1 : 0;
+                    int woodCost = craftRequiredBelts ? 0 : rules.BeltWoodCost;
+                    if (owned >= rules.BeltLimit || economy.Wood - reservedWood < woodCost || economy.Planks < plankCost) continue;
+                    economy.Wood = checked(economy.Wood - woodCost);
+                    RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
+                    if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
+                    placedInRoutes++;
                     InvalidateBeltCaches();
                 }
             return whole;
@@ -3349,16 +3435,22 @@ namespace Rts.Simulation
             int owned = 0;
             for (int i = 0; i < world.Belts.Length; i++) if (world.Belts[i].FactionId == faction) owned++;
             bool whole = true;
+            bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
+            int placedInRoute = 0;
             for (int i = 0; i < route.Length; i++)
             {
                 ref var belt = ref world.Belts[route[i]];
                 if (belt.FactionId == faction) { if (belt.Facing != facings[i]) whole = false; continue; }
                 whole = false;
-                if (owned >= rules.BeltLimit || economy.Wood < rules.BeltWoodCost) continue;
-                economy.Wood = checked(economy.Wood - rules.BeltWoodCost);
-                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
+                int plankCost = craftRequiredBelts && placedInRoute % 2 == 0 ? 1 : 0;
+                int woodCost = craftRequiredBelts ? 0 : rules.BeltWoodCost;
+                if (owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) continue;
+                economy.Wood = checked(economy.Wood - woodCost);
+                RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
+                if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                 owned++;
+                placedInRoute++;
                 InvalidateBeltCaches();
             }
             return whole;

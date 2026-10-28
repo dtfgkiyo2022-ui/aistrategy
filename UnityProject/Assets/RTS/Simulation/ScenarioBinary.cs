@@ -204,8 +204,9 @@ private const int AiExpandExtensionVersion = 1;
          private const int FreeTownsExtensionDataLength = 5 * sizeof(int);
          private const int CraftRequiredExtensionId = 71;
          private const int CraftRequiredExtensionVersion = 1;
-         private const int CraftRequiredExtensionDataLength = 7 * sizeof(int);
+         private const int CraftRequiredExtensionDataLength = 16 * sizeof(int);
          private const int CraftRequiredExtensionV1DataLength = 6 * sizeof(int);
+         private const int CraftRequiredExtensionV2DataLength = 7 * sizeof(int);
         private const int EarlyStartExtensionId = 73;
         private const int EarlyStartExtensionVersion = 1;
         private const int EarlyStartExtensionDataLength = 4 * sizeof(int);
@@ -897,7 +898,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
                        && dataLength == LargeEconomyExtensionV6DataLength;
                  bool oldCraftRequired = id == CraftRequiredExtensionId && featureVersion == CraftRequiredExtensionVersion
-                    && dataLength == CraftRequiredExtensionV1DataLength;
+                    && (dataLength == CraftRequiredExtensionV1DataLength || dataLength == CraftRequiredExtensionV2DataLength);
                 bool oldBeltDropOff = id == BeltDropOffExtensionId && featureVersion == BeltDropOffExtensionV1
                     && dataLength == BeltDropOffExtensionV1DataLength;
                   bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired || oldBeltDropOff;
@@ -2014,6 +2015,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 writer.Write(e.CraftRequiredAiArmsAssemblersAge3);
                 writer.Write(e.CraftRequiredAiArmsAssemblersAge4);
                 writer.Write(e.CraftRequiredAiWoodWorkerPermille);
+                writer.Write(e.CraftRequiredBuildingPlankPermille);
+                writer.Write(e.CraftRequiredResearchScholarlyAge2);
+                writer.Write(e.CraftRequiredResearchScholarlyAge3);
+                writer.Write(e.CraftRequiredResearchScholarlyAge4);
+                writer.Write(e.CraftRequiredAiPlankSawmillsAge1);
+                writer.Write(e.CraftRequiredAiPlankSawmillsAge2);
+                writer.Write(e.CraftRequiredAiPlankSawmillsAge3);
+                writer.Write(e.CraftRequiredAiScholarlyAssemblers);
+                writer.Write(e.CraftRequiredAiFramesStockTarget);
                 return new ScenarioExtensionData { Id = CraftRequiredExtensionId,
                     Version = CraftRequiredExtensionVersion, Data = stream.ToArray() };
             }
@@ -2033,6 +2043,18 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                 e.CraftRequiredAiArmsAssemblersAge3 = reader.ReadInt32();
                 e.CraftRequiredAiArmsAssemblersAge4 = reader.ReadInt32();
                 e.CraftRequiredAiWoodWorkerPermille = stream.Position == stream.Length ? 50 : reader.ReadInt32();
+                if (stream.Position != stream.Length)
+                {
+                    e.CraftRequiredBuildingPlankPermille = reader.ReadInt32();
+                    e.CraftRequiredResearchScholarlyAge2 = reader.ReadInt32();
+                    e.CraftRequiredResearchScholarlyAge3 = reader.ReadInt32();
+                    e.CraftRequiredResearchScholarlyAge4 = reader.ReadInt32();
+                    e.CraftRequiredAiPlankSawmillsAge1 = reader.ReadInt32();
+                    e.CraftRequiredAiPlankSawmillsAge2 = reader.ReadInt32();
+                    e.CraftRequiredAiPlankSawmillsAge3 = reader.ReadInt32();
+                    e.CraftRequiredAiScholarlyAssemblers = reader.ReadInt32();
+                    e.CraftRequiredAiFramesStockTarget = reader.ReadInt32();
+                }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-required extension data.");
             }
         }
