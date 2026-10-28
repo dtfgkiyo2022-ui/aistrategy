@@ -112,23 +112,30 @@ namespace Rts.Simulation
                 : 0;
             var passableCells = PlacementPassableView();
             var riverCells = PlacementRiverView();
+            var craftBuildingCosts = CraftRequiredBuildingDisplayCosts(faction);
+            bool craftRequiredBelts = CraftRequiredOn && economy.Age >= 1;
+            int fastBeltPlanks = craftRequiredBelts ? 1 : 0;
+            int splitterPlanks = craftRequiredBelts ? (rules.SplitterWoodCost + 1) / 2 : 0;
+            int sorterPlanks = craftRequiredBelts ? (rules.SorterWoodCost + 1) / 2 : 0;
+            int undergroundPlanks = craftRequiredBelts ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
+            var advanceCraft = CraftRequiredAdvanceMaterials(economy);
             return new EconomyView(economy.Food, economy.Wood, population, PopCapFor(faction), economy.Queued, economy.TrainRemaining,
-                !economy.AutoOff, rules.BarracksSizeCells, rules.BarracksWoodCost, VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
+                !economy.AutoOff, rules.BarracksSizeCells, BuildingWoodDisplayCost(faction, BuildingKind.Barracks, rules.BarracksWoodCost), VillagerFoodCostFor(faction, CanUseToolForVillager(faction)), infantryTrainingCost.food,
                 infantryTrainingCost.wood, villagers, buildings, resources,
                 rules.Industry, economy.Ore, economy.Metal, rules.BeltWoodCost, rules.BeltTicksPerCell, belts,
                 InfantryMetalFor(faction), rules.MineWoodCost, rules.SmelterWoodCost, rules.MineSizeCells, rules.SmelterSizeCells, economy.CoreHeld, economy.Policy,
                 rules.Ages, economy.Civ, economy.AdvancingTo, economy.AdvanceRemaining, advanceFood, advanceWood,
                  FarmingAllowed(faction) ? rules.FarmWoodCost : 0, FarmingAllowed(faction) ? rules.FarmSizeCells : 0,
                  rules.Ages ? rules.ScoutFoodCost : 0, rules.Ages ? rules.HouseWoodCost : 0, rules.Ages ? rules.DropSiteWoodCost : 0,
-                 economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? WoodOf(BuildingKind.Tower, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
-                rules.Ages ? rules.BlacksmithWoodCost : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
+                 economy.Stone, rules.Ages ? StoneOf(BuildingKind.Wall, faction) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Tower, WoodOf(BuildingKind.Tower, faction)) : 0, rules.Ages ? StoneOf(BuildingKind.Tower, faction) : 0,
+                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Blacksmith, rules.BlacksmithWoodCost) : 0, economy.Techs, rules.Ages ? rules.TechFood : null, rules.Ages ? rules.TechWood : null, rules.Ages ? rules.TechMetal : null,
                  economy.Age, rules.Ages ? age2Food : 0, rules.Ages ? age2Wood : 0, rules.Ages ? archerTrainingCost.food : 0, rules.Ages ? archerTrainingCost.wood : 0,
                  rules.Ages ? cavalryTrainingCost.food : 0, rules.Ages ? cavalryTrainingCost.wood : 0, rules.Ages ? cavalryTrainingCost.metal : 0,
-                rules.Ages ? rules.MarketWoodCost : 0, rules.Ages ? rules.WorkshopWoodCost : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
+                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Market, rules.MarketWoodCost) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.SiegeWorkshop, rules.WorkshopWoodCost) : 0, rules.Ages ? rules.TradeLot : 0, rules.Ages ? rules.TradeReturn : 0,
                  rules.Ages ? ramTrainingCost.food : 0, rules.Ages ? ramTrainingCost.wood : 0,
                 rules.Ages ? age3Food : 0, rules.Ages ? age3Wood : 0,
-                rules.Ages ? rules.RangeWoodCost : 0, rules.Ages ? rules.StableWoodCost : 0,
-                 rules.Ages ? WoodOf(BuildingKind.Castle, faction) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,
+                rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.ArcheryRange, rules.RangeWoodCost) : 0, rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Stable, rules.StableWoodCost) : 0,
+                 rules.Ages ? BuildingWoodDisplayCost(faction, BuildingKind.Castle, WoodOf(BuildingKind.Castle, faction)) : 0, rules.Ages ? StoneOf(BuildingKind.Castle, faction) : 0,
                 rules.Ages ? economy.Gems : 0, rules.Ages ? rules.GemsTradeReturn : 0, rules.Ages ? rules.TechGems : null, rules.Ages ? rules.GemArmorHp : 0,
                 rules.Ages ? rules.MercenaryGems : 0, rules.Ages ? rules.MercenaryTicks : 0,
                 rules.MonksEnabled, rules.MonksEnabled ? rules.MonkFoodCost : 0, rules.MonksEnabled ? rules.MonkGoldCost : 0,
@@ -406,8 +413,49 @@ namespace Rts.Simulation
                     aiFactoryAge2BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge2BarracksMaxBuildings : 0,
                     aiFactoryAge3BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge3BarracksMaxBuildings : 0,
                      aiFactoryAge4BarracksMaxBuildings: AiFactoryOn ? rules.AiFactoryAge4BarracksMaxBuildings : 0,
-                      craftRequiredEnabled: CraftRequiredOn, craftFlowEnabled: CraftFlowOn,
-                      productionStatistics: CraftFlowStatistics(faction));
+                     craftRequiredEnabled: CraftRequiredOn,
+                     buildingPlankCosts: craftBuildingCosts.planks, buildingFrameCosts: craftBuildingCosts.frames,
+                     beltPlankCostPerTwoCells: craftRequiredBelts ? 1 : 0, fastBeltPlankCost: fastBeltPlanks,
+                     splitterPlankCost: splitterPlanks, sorterPlankCost: sorterPlanks,
+                     undergroundBeltPlankCost: undergroundPlanks,
+                     researchScholarlyCost: CraftRequiredResearchScholarlyCost(faction),
+                     advancePlanks: advanceCraft.planks, advanceCutStone: advanceCraft.cutStone,
+                     advanceFrames: advanceCraft.frames, advanceScholarly: advanceCraft.scholarly,
+                     advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism,
+                     craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction));
+        }
+
+        // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.
+        private static readonly int BuildingKindCount = MaxBuildingKind() + 1;
+
+        private static int MaxBuildingKind()
+        {
+            int max = 0;
+            foreach (BuildingKind kind in Enum.GetValues(typeof(BuildingKind))) max = Math.Max(max, (int)kind);
+            return max;
+        }
+
+        private (IReadOnlyList<int> planks, IReadOnlyList<int> frames) CraftRequiredBuildingDisplayCosts(uint faction)
+        {
+            int count = BuildingKindCount;
+            var planks = new int[count];
+            var frames = new int[count];
+            if (!CraftRequiredOn) return (planks, frames);
+            for (int value = 1; value < count; value++)
+            {
+                var kind = (BuildingKind)value;
+                if (kind == BuildingKind.Bridge) continue;
+                var cost = BuildingCostForPlacement(kind, faction, 0);
+                planks[value] = cost.Planks;
+                frames[value] = cost.Frames;
+            }
+            return (planks, frames);
+        }
+
+        private int BuildingWoodDisplayCost(uint faction, BuildingKind kind, int fallback)
+        {
+            if (!CraftRequiredOn) return fallback;
+            return BuildingCostForPlacement(kind, faction, 0).Wood;
         }
 
         // The placement ghost reads the map from the frame. Building it per frame cost two whole-map arrays (and two copies)
