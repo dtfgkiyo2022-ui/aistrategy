@@ -130,6 +130,7 @@
   <Compile Include="DropSiteLimitTests.cs" />
   <Compile Include="StorageFeedsTests.cs" />
     <Compile Include="CraftTree2Tests.cs" />
+    <Compile Include="CraftRequiredTests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="CraftTree4Tests.cs" />
     <Compile Include="AgeFourAiTests.cs" />

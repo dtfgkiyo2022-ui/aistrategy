@@ -1052,6 +1052,7 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
         public int StoneToolsGatherIntervalPermille { get; }
         public int JerkyHpPermille { get; }
         public bool AiFactoryEnabled { get; }
+        public bool CraftRequiredEnabled { get; }
         public int AiFactoryPrimitiveLineCount { get; }
         public int AiFactoryAge1LineCount { get; }
         public int AiFactoryAge2LineCount { get; }
@@ -1196,7 +1197,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
                int aiFactoryAge2LineCount = 0, int aiFactoryAge3LineCount = 0, int aiFactoryBarracksIdleWindowTicks = 0,
                int aiFactoryBarracksIdlePermille = 0, int aiFactoryPrimitiveBarracksMaxBuildings = 0,
                int aiFactoryAge1BarracksMaxBuildings = 0, int aiFactoryAge2BarracksMaxBuildings = 0,
-               int aiFactoryAge3BarracksMaxBuildings = 0, int aiFactoryAge4BarracksMaxBuildings = 0)
+                int aiFactoryAge3BarracksMaxBuildings = 0, int aiFactoryAge4BarracksMaxBuildings = 0,
+                bool craftRequiredEnabled = false)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1309,7 +1311,8 @@ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, 
             AiFactoryBarracksIdleWindowTicks = aiFactoryBarracksIdleWindowTicks; AiFactoryBarracksIdlePermille = aiFactoryBarracksIdlePermille;
             AiFactoryPrimitiveBarracksMaxBuildings = aiFactoryPrimitiveBarracksMaxBuildings; AiFactoryAge1BarracksMaxBuildings = aiFactoryAge1BarracksMaxBuildings;
             AiFactoryAge2BarracksMaxBuildings = aiFactoryAge2BarracksMaxBuildings; AiFactoryAge3BarracksMaxBuildings = aiFactoryAge3BarracksMaxBuildings;
-            AiFactoryAge4BarracksMaxBuildings = aiFactoryAge4BarracksMaxBuildings;
+             AiFactoryAge4BarracksMaxBuildings = aiFactoryAge4BarracksMaxBuildings;
+             CraftRequiredEnabled = craftRequiredEnabled;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

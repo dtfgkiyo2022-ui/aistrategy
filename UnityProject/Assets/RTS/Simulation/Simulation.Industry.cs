@@ -259,6 +259,7 @@ namespace Rts.Simulation
                     {
                         b.Output++;
                         economy.FramesProduced++;
+                        RecordCraftTracePlanks(b.FactionId, CraftTraceConstruction, joineryPlanks);
                     }
                 }
                 else if (PrimitiveCraftOn && b.Kind == BuildingKind.Hut)
@@ -585,13 +586,25 @@ namespace Rts.Simulation
             {
                 if (--building.Timer == 0)
                 {
-                    if (building.Recipe == RecipeKind.Frames) { economy.Frames++; economy.FramesProduced++; }
+                    if (building.Recipe == RecipeKind.Frames)
+                    {
+                        economy.Frames++; economy.FramesProduced++;
+                        RecordCraftTracePlanks(building.FactionId, CraftTraceConstruction,
+                            CraftInputFor(building, world.Config.Economy.CraftTreeJoineryPlankInput));
+                    }
                     else if (building.Recipe == RecipeKind.ArmsKit)
                     {
                         if (building.InputSecondaryKind == ResourceKind.Steel) { economy.FineArmsKit++; economy.FineArmsKitProduced++; }
                         else { economy.ArmsKit++; economy.ArmsKitProduced++; }
+                        RecordCraftTracePlanks(building.FactionId, CraftTraceWeapons,
+                            CraftInputFor(building, world.Config.Economy.ArmsKitPlankInput));
                     }
-                    else if (building.Recipe == RecipeKind.Scholarly) { economy.Scholarly++; economy.ScholarlyProduced++; }
+                    else if (building.Recipe == RecipeKind.Scholarly)
+                    {
+                        economy.Scholarly++; economy.ScholarlyProduced++;
+                        RecordCraftTracePlanks(building.FactionId, CraftTraceScholarly,
+                            CraftInputFor(building, world.Config.Economy.ScholarlyPlankInput));
+                    }
                     else if (building.Recipe == RecipeKind.SiegeParts) { economy.SiegeParts++; economy.SiegePartsProduced++; }
                     else if (building.Recipe == RecipeKind.Mechanism) { economy.Mechanism++; economy.MechanismProduced++; }
                     else if (building.Recipe == RecipeKind.SiegeEngine) { economy.SiegeEngine++; economy.SiegeEngineProduced++; }
@@ -601,6 +614,7 @@ namespace Rts.Simulation
                 return;
             }
             var rules = world.Config.Economy;
+            if (CraftRequiredAiOtherPlankUseBlocked(building.FactionId, building.Recipe)) return;
             if (building.Recipe == RecipeKind.Frames)
             {
                 int plankInput = CraftInputFor(building, rules.CraftTreeJoineryPlankInput);

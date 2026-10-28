@@ -353,6 +353,13 @@ namespace Rts.Simulation
         public int ArmsKitAttack = 2, ArmsKitHpPermille = 1100, FineArmsKitAttack = 3, FineArmsKitHpPermille = 1150;
         public int ScholarlyPerResearch = 1, ScholarlyCostPermille = 600, ScholarlyTimePermille = 700;
         public int GoodsValueArmsKit = 6, GoodsValueScholarly = 8, GoodsValueFineArmsKit = 14;
+        /// <summary>CraftRequired (technical-design-v3 38.2): age-two soldiers require one arms kit.</summary>
+        public bool CraftRequired;
+        public int CraftRequiredAiArmsStockTarget = 20;
+        public int CraftRequiredAiArmsAssemblersAge1 = 1, CraftRequiredAiArmsAssemblersAge2 = 2,
+            CraftRequiredAiArmsAssemblersAge3 = 4, CraftRequiredAiArmsAssemblersAge4 = 4;
+        /// <summary>CraftRequired: extra wood-gatherer share added to the normal large-economy floor after age 1.</summary>
+        public int CraftRequiredAiWoodWorkerPermille = 50;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;
