@@ -65,6 +65,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree2-off")) scenario.Economy.CraftTree2 = false;
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
+        if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
         {
@@ -236,6 +237,7 @@ internal static class TacticMatchCommand
             ageTrace.WriteLine("tick,faction,age");
         }
         LargeEconomyObservation largeObservation = null;
+        long[] craftTraceArmsZeroAge2Ticks = { 0, 0 };
         for (long i = 0; i < ticks && !simulation.Capture(1).Result.HasEnded; i++)
         {
             long tick = simulation.Capture(1).Tick;
@@ -264,6 +266,12 @@ internal static class TacticMatchCommand
             {
                 int soldiers = simulation.Capture(faction).Observation.OwnArmies.Sum(a => a.AliveCount);
                 if (soldiers > peakSoldiers[faction - 1]) peakSoldiers[faction - 1] = soldiers;
+                if (craftTrace != null)
+                {
+                    var economy = simulation.Capture(faction).Economy;
+                    if (economy != null && economy.Age >= 2 && economy.ArmsKit + economy.FineArmsKit == 0)
+                        craftTraceArmsZeroAge2Ticks[faction - 1]++;
+                }
             }
             for (uint faction = 1; faction <= 2; faction++)
             {
@@ -282,7 +290,7 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null) && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null) && simulation.Capture(1).Tick % 1000 == 0
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -388,6 +396,20 @@ internal static class TacticMatchCommand
                     {
                         @event = "sample", tick = simulation.Capture(faction).Tick, faction,
                         age = economy.Age, food = economy.Food, wood = economy.Wood, planks = economy.Planks,
+                        planksProduced = largeObservation.Factions[faction - 1].PlanksProduced,
+                        planksUsedWeapons = largeObservation.Factions[faction - 1].PlanksUsedWeapons,
+                        planksUsedConstruction = largeObservation.Factions[faction - 1].PlanksUsedConstruction,
+                        planksUsedScholarly = largeObservation.Factions[faction - 1].PlanksUsedScholarly,
+                        planksUsedBridges = largeObservation.Factions[faction - 1].PlanksUsedBridges,
+                        planksUsedOther = largeObservation.Factions[faction - 1].PlanksUsedOther,
+                        sawmillsCompleted = largeObservation.Factions[faction - 1].SawmillsCompleted,
+                        sawmillsActive = largeObservation.Factions[faction - 1].SawmillsActive,
+                        sawmillPlanks = largeObservation.Factions[faction - 1].SawmillPlanks,
+                        haulers = largeObservation.Factions[faction - 1].Haulers,
+                        armsStock = largeObservation.Factions[faction - 1].ArmsStock,
+                        armsProduced = largeObservation.Factions[faction - 1].ArmsProduced,
+                        armsUsedBySoldiers = largeObservation.Factions[faction - 1].ArmsUsedBySoldiers,
+                        armsZeroAge2Ticks = craftTraceArmsZeroAge2Ticks[faction - 1],
                         planksInAssemblers, foodInAssemblers, assemblers
                     }));
                 }

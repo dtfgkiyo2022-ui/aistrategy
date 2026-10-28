@@ -14,21 +14,21 @@ namespace Rts.Simulation
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind)
         {
             var e = world.Config.Economy;
-            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, e.ScoutWoodCost, 0, 0, 0, e.ScoutTrainTicks);
-            if (kind == UnitKind.Archer) return (e.ArcherFood, e.ArcherWood, 0, 0, 0, e.ArcherTicks);
-            if (kind == UnitKind.Cavalry) return (e.CavalryFood, e.CavalryWood, e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
-            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, e.LightCavalryWood, 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
-            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, 0, 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
-            if (kind == UnitKind.Ram) return (e.RamFood, e.RamWood, 0, 0, 0, RamTicksFor(faction));
-            if (kind == UnitKind.Cannon) return (e.CannonFoodCost, e.CannonWoodCost, 0, 0, 0, e.RamTicks);
+            if (kind == UnitKind.Scout) return (e.ScoutFoodCost, TrainWoodCostFor(faction, kind, e.ScoutWoodCost), 0, 0, 0, e.ScoutTrainTicks);
+            if (kind == UnitKind.Archer) return (e.ArcherFood, TrainWoodCostFor(faction, kind, e.ArcherWood), 0, 0, 0, e.ArcherTicks);
+            if (kind == UnitKind.Cavalry) return (e.CavalryFood, TrainWoodCostFor(faction, kind, e.CavalryWood), e.CavalryMetal, 0, 0, CavalryTrainTicks(faction, e.CavalryTicks));
+            if (kind == UnitKind.LightCavalry) return (e.LightCavalryFood, TrainWoodCostFor(faction, kind, e.LightCavalryWood), 0, 0, 0, CavalryTrainTicks(faction, e.LightCavalryTicks));
+            if (kind == UnitKind.HeavyCavalry) return (e.HeavyCavalryFoodCost, TrainWoodCostFor(faction, kind, 0), 0, 0, 0, CavalryTrainTicks(faction, e.HeavyCavalryTrainTicks));
+            if (kind == UnitKind.Ram) return (e.RamFood, TrainWoodCostFor(faction, kind, e.RamWood), 0, 0, 0, RamTicksFor(faction));
+            if (kind == UnitKind.Cannon) return (e.CannonFoodCost, TrainWoodCostFor(faction, kind, e.CannonWoodCost), 0, 0, 0, e.RamTicks);
             if (kind == UnitKind.Mercenary) return (0, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? e.MountainMercenaryGems : e.MercenaryGems, 0, e.MercenaryTicks);
             if (kind == UnitKind.Monk)
                 return e.GoldEnabled ? (e.MonkFoodCost, 0, 0, 0, e.MonkGoldCost, e.MonkTrainTicks)
                     : (e.MonkFoodCost, 0, e.MonkGoldCost, 0, 0, e.MonkTrainTicks);
             // V3-6: heavy infantry pays steel in the metal slot (CanPay, Enqueue and the queue book it as steel).
-            if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, e.HeavyInfantryWoodCost, e.HeavyInfantrySteelCost, 0, 0, e.HeavyInfantryTrainTicks);
+            if (kind == UnitKind.HeavyInfantry) return (e.HeavyInfantryFoodCost, TrainWoodCostFor(faction, kind, e.HeavyInfantryWoodCost), e.HeavyInfantrySteelCost, 0, 0, e.HeavyInfantryTrainTicks);
             if (kind == UnitKind.SkirmishArcher) return (e.SkirmishArcherFoodCost, 0, e.SkirmishArcherBowGearCost, 0, 0, e.SkirmishArcherTrainTicks);
-            return (InfantryFoodFor(faction), InfantryWoodFor(faction), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
+            return (InfantryFoodFor(faction), TrainWoodCostFor(faction, kind, InfantryWoodFor(faction)), InfantryMetalFor(faction), 0, 0, InfantryTicksFor(faction));
         }
 
         private (int food, int wood, int metal, int gems, int gold, int ticks) CostOf(uint faction, UnitKind kind, BuildingKind producer)
@@ -37,12 +37,12 @@ namespace Rts.Simulation
                 && world.Economies[faction - 1].Age >= 2)
             {
                 var mountain = world.Config.Economy;
-                return (mountain.JewelMercenaryFood, 0, 0, AgeStrength(faction, CivKind.Mountain, 3) ? mountain.MountainMercenaryGems : mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
+                return (mountain.JewelMercenaryFood, TrainWoodCostFor(faction, kind, 0), 0, AgeStrength(faction, CivKind.Mountain, 3) ? mountain.MountainMercenaryGems : mountain.JewelMercenaryGems, 0, mountain.MercenaryTicks);
             }
             if (producer == BuildingKind.Monastery && kind == UnitKind.Monk && CultAllowed(faction))
             {
                 var e = world.Config.Economy;
-                return (e.MonasteryMonkFoodCost, e.MonasteryMonkWoodCost, 0, 0, 0, e.MonkTrainTicks);
+                return (e.MonasteryMonkFoodCost, TrainWoodCostFor(faction, kind, e.MonasteryMonkWoodCost), 0, 0, 0, e.MonkTrainTicks);
             }
             return CostOf(faction, kind);
         }
@@ -301,6 +301,18 @@ namespace Rts.Simulation
             => CharmsAllowed(faction) && kind != UnitKind.Villager && kind != UnitKind.Monk;
         private bool UsesArmsKit(UnitKind kind)
             => kind != UnitKind.Villager && kind != UnitKind.Scout && kind != UnitKind.Monk;
+        private bool TrainNeedsArms(uint faction, UnitKind kind)
+            => CraftRequiredOn && world.Economies[faction - 1].Age >= 2 && UsesArmsKit(kind);
+        private int TrainWoodCostFor(uint faction, UnitKind kind, int normalWoodCost)
+            => TrainNeedsArms(faction, kind) ? 0 : normalWoodCost;
+        private bool HasTrainingArms(uint faction, UnitKind kind)
+        {
+            if (!TrainNeedsArms(faction, kind)) return true;
+            var e = world.Economies[faction - 1];
+            return (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
+                || (CraftTree2On && e.FineArmsKit >= 1)
+                || (CraftTree2On && e.ArmsKit >= 1);
+        }
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {
             return TrainTicksFor(faction, kind, ticks, rationed, false);
@@ -323,6 +335,7 @@ namespace Rts.Simulation
             if (kind == UnitKind.Monk && !world.Config.Economy.MonksEnabled) return false;
             var e = world.Economies[faction - 1];
             var c = CostOf(faction, kind, producer);
+            if (!HasTrainingArms(faction, kind)) return false;
             int availableSteel = kind == UnitKind.HeavyInfantry ? e.Steel : kind == UnitKind.SkirmishArcher ? e.BowGear : e.Metal;
             int heldWood = automaticEconomyAction && BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
             // The reserve protects the purchase of the cannon itself; do not count it twice
@@ -392,6 +405,7 @@ namespace Rts.Simulation
                 e.Planks = checked(e.Planks - world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumed = checked(e.PlanksConsumed + world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams + world.Config.Economy.PlanksPerRam);
+                RecordCraftTracePlanks(faction, CraftTraceOther, world.Config.Economy.PlanksPerRam);
             }
             bool charmed = UsesCharms(faction, kind) && e.Charms >= 1;
                 if (charmed)
@@ -589,6 +603,7 @@ namespace Rts.Simulation
                 e.Planks = checked(e.Planks + world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumed = checked(e.PlanksConsumed - world.Config.Economy.PlanksPerRam);
                 e.PlanksConsumedRams = checked(e.PlanksConsumedRams - world.Config.Economy.PlanksPerRam);
+                RecordCraftTracePlanks(faction, CraftTraceOther, -world.Config.Economy.PlanksPerRam);
             }
             if (charmed)
             {

@@ -199,9 +199,13 @@ private const int AiExpandExtensionVersion = 1;
         private const int OpenFarmsExtensionId = 69;
         private const int OpenFarmsExtensionVersion = 1;
         private const int OpenFarmsExtensionDataLength = 4 * sizeof(int);
-        private const int FreeTownsExtensionId = 70;
-        private const int FreeTownsExtensionVersion = 1;
-        private const int FreeTownsExtensionDataLength = 5 * sizeof(int);
+         private const int FreeTownsExtensionId = 70;
+         private const int FreeTownsExtensionVersion = 1;
+         private const int FreeTownsExtensionDataLength = 5 * sizeof(int);
+         private const int CraftRequiredExtensionId = 71;
+         private const int CraftRequiredExtensionVersion = 1;
+         private const int CraftRequiredExtensionDataLength = 7 * sizeof(int);
+         private const int CraftRequiredExtensionV1DataLength = 6 * sizeof(int);
         private const int EarlyStartExtensionId = 73;
         private const int EarlyStartExtensionVersion = 1;
         private const int EarlyStartExtensionDataLength = 4 * sizeof(int);
@@ -301,7 +305,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
             ,new ExtensionRegistration(AiFactoryExtensionId, AiFactoryExtensionVersion, AiFactoryExtensionDataLength)
              ,new ExtensionRegistration(AiExpandExtensionId, AiExpandExtensionVersion, AiExpandExtensionDataLength)
               ,new ExtensionRegistration(OpenFarmsExtensionId, OpenFarmsExtensionVersion, OpenFarmsExtensionDataLength)
-              ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
+               ,new ExtensionRegistration(FreeTownsExtensionId, FreeTownsExtensionVersion, FreeTownsExtensionDataLength)
+             ,new ExtensionRegistration(CraftRequiredExtensionId, CraftRequiredExtensionVersion, CraftRequiredExtensionDataLength)
               ,new ExtensionRegistration(EarlyStartExtensionId, EarlyStartExtensionVersion, EarlyStartExtensionDataLength)
               ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
@@ -876,9 +881,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      && dataLength == LargeEconomyExtensionV4DataLength;
                  bool oldLargeEconomyV5 = id == LargeEconomyExtensionId && featureVersion == 5
                      && dataLength == LargeEconomyExtensionV5DataLength;
-                  bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
+                 bool oldLargeEconomyV6 = id == LargeEconomyExtensionId && featureVersion == 6
                        && dataLength == LargeEconomyExtensionV6DataLength;
-                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6;
+                 bool oldCraftRequired = id == CraftRequiredExtensionId && featureVersion == CraftRequiredExtensionVersion
+                    && dataLength == CraftRequiredExtensionV1DataLength;
+                  bool old = oldCult || oldMountain || oldFishing || oldTollgate || oldMetropolis || oldSanctuary || oldBricks || oldTack || oldCraftTree3 || oldExploreScouting || oldLargeEconomy || oldLargeEconomyV2 || oldLargeEconomyV3 || oldLargeEconomyV4 || oldLargeEconomyV5 || oldLargeEconomyV6 || oldCraftRequired;
                 if ((!old && featureVersion != registration.Version)
                     || (!old && dataLength != registration.DataLength) || dataLength < 0
                     || dataLength > sectionEnd - r.BaseStream.Position)
@@ -934,7 +941,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      else if (id == AiFactoryExtensionId) ReadAiFactoryExtension(extension, c.Economy);
                      else if (id == AiExpandExtensionId) ReadAiExpandExtension(extension, c.Economy);
                       else if (id == OpenFarmsExtensionId) ReadOpenFarmsExtension(extension, c.Economy);
-                      else if (id == FreeTownsExtensionId) ReadFreeTownsExtension(extension, c.Economy);
+                       else if (id == FreeTownsExtensionId) ReadFreeTownsExtension(extension, c.Economy);
+                     else if (id == CraftRequiredExtensionId) ReadCraftRequiredExtension(extension, c.Economy);
                       else if (id == EarlyStartExtensionId) ReadEarlyStartExtension(extension, c.Economy);
                       else if (id == FastMovementExtensionId) ReadFastMovementExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
@@ -1026,7 +1034,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                  extensions.RemoveAll(extension => extension != null && extension.Id == AiFactoryExtensionId && !(c.Economy.PrimitiveCraft && c.Economy.AiFactory));
                  extensions.RemoveAll(extension => extension != null && extension.Id == AiExpandExtensionId && !(c.Economy.AiFactory && c.Economy.AiExpand));
                   extensions.RemoveAll(extension => extension != null && extension.Id == OpenFarmsExtensionId && !c.Economy.OpenFarms);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == FreeTownsExtensionId && !c.Economy.FreeTowns);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == FreeTownsExtensionId && !c.Economy.FreeTowns);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == CraftRequiredExtensionId && !c.Economy.CraftRequired);
                   extensions.RemoveAll(extension => extension != null && extension.Id == EarlyStartExtensionId && !c.Economy.EarlyStart);
                   extensions.RemoveAll(extension => extension != null && extension.Id == FastMovementExtensionId && !c.Economy.FastMovement);
                 extensions.RemoveAll(extension => extension != null && extension.Id == DropSiteLimitExtensionId && !c.Economy.DropSiteLimit);
@@ -1050,7 +1059,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false;
-              bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasEarlyStart = false, hasFastMovement = false;
+               bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasEarlyStart = false, hasFastMovement = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1064,10 +1073,15 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     hasOpenFarms = true;
                      extensions[i] = CreateOpenFarmsExtension(c.Economy);
                  }
-                 if (extensions[i].Id == FreeTownsExtensionId)
+                  if (extensions[i].Id == FreeTownsExtensionId)
                  {
                      hasFreeTowns = true;
-                     extensions[i] = CreateFreeTownsExtension(c.Economy);
+                      extensions[i] = CreateFreeTownsExtension(c.Economy);
+                  }
+                 if (extensions[i].Id == CraftRequiredExtensionId)
+                 {
+                     hasCraftRequired = true;
+                     extensions[i] = CreateCraftRequiredExtension(c.Economy);
                  }
                  if (extensions[i].Id == EarlyStartExtensionId)
                  {
@@ -1098,6 +1112,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateOpenFarmsExtension(c.Economy));
                  if (c.Economy.FreeTowns && !hasFreeTowns)
                      extensions.Add(CreateFreeTownsExtension(c.Economy));
+                 if (c.Economy.CraftRequired && !hasCraftRequired)
+                     extensions.Add(CreateCraftRequiredExtension(c.Economy));
                  if (c.Economy.EarlyStart && !hasEarlyStart)
                      extensions.Add(CreateEarlyStartExtension(c.Economy));
                  if (c.Economy.FastMovement && !hasFastMovement)
@@ -1951,6 +1967,41 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     || e.FreeTownsRouteRecheckTicks <= 0)
                     throw new InvalidDataException("Invalid free-towns parameters.");
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing free-towns extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateCraftRequiredExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.CraftRequired ? 1 : 0);
+                writer.Write(e.CraftRequiredAiArmsStockTarget);
+                writer.Write(e.CraftRequiredAiArmsAssemblersAge1);
+                writer.Write(e.CraftRequiredAiArmsAssemblersAge2);
+                writer.Write(e.CraftRequiredAiArmsAssemblersAge3);
+                writer.Write(e.CraftRequiredAiArmsAssemblersAge4);
+                writer.Write(e.CraftRequiredAiWoodWorkerPermille);
+                return new ScenarioExtensionData { Id = CraftRequiredExtensionId,
+                    Version = CraftRequiredExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadCraftRequiredExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid craft-required flag.");
+                e.CraftRequired = enabled != 0;
+                e.CraftRequiredAiArmsStockTarget = reader.ReadInt32();
+                e.CraftRequiredAiArmsAssemblersAge1 = reader.ReadInt32();
+                e.CraftRequiredAiArmsAssemblersAge2 = reader.ReadInt32();
+                e.CraftRequiredAiArmsAssemblersAge3 = reader.ReadInt32();
+                e.CraftRequiredAiArmsAssemblersAge4 = reader.ReadInt32();
+                e.CraftRequiredAiWoodWorkerPermille = stream.Position == stream.Length ? 50 : reader.ReadInt32();
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing craft-required extension data.");
             }
         }
 
