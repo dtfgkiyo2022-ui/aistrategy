@@ -580,7 +580,7 @@ namespace Rts.Simulation
                     && (soldier.Initial.Kind == UnitKind.Cavalry || soldier.Initial.Kind == UnitKind.LightCavalry || soldier.Initial.Kind == UnitKind.HeavyCavalry))
                 {
                     soldier.Parameters.Speed = Fix64.FromRaw(checked(soldier.Parameters.Speed.Raw * rules.CavalrySpeedPermille / 1000));
-                    soldier.StepDistance = Fix64.FromRaw(soldier.Parameters.Speed.Raw / 20);
+                    soldier.StepDistance = MovementMath.StepDistance(soldier.Parameters.Speed, rules);
                 }
             }
         }

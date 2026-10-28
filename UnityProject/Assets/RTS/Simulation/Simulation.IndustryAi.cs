@@ -3123,7 +3123,7 @@ namespace Rts.Simulation
             if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
             belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
             belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
-            world.BeltOrder = null;
+            InvalidateBeltCaches();
             return true;
         }
 
@@ -3199,7 +3199,7 @@ namespace Rts.Simulation
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
                     placedInRoutes++;
-                    world.BeltOrder = null;
+                    InvalidateBeltCaches();
                 }
             return whole;
         }
@@ -3451,7 +3451,7 @@ namespace Rts.Simulation
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                 owned++;
                 placedInRoute++;
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
             }
             return whole;
         }
