@@ -535,6 +535,9 @@ namespace Rts.Simulation
             if (AiExpandOn && villagers >= world.Config.Economy.AiExpandShareMinVillagers)
             {
                 if (food * 1000 < villagers * world.Config.Economy.AiExpandFoodWorkerPermille) return ResourceKind.Food;
+                if (CraftRequiredOn && economy.Age >= 2
+                    && wood * 1000 < villagers * (world.Config.Economy.AiExpandWoodWorkerPermille
+                        + world.Config.Economy.CraftRequiredAiWoodWorkerPermille)) return ResourceKind.Wood;
                 if (wood * 1000 < villagers * world.Config.Economy.AiExpandWoodWorkerPermille) return ResourceKind.Wood;
                 if (economy.Age >= 1 && stone * 1000 < villagers * world.Config.Economy.AiExpandStoneWorkerPermille) return ResourceKind.Stone;
             }

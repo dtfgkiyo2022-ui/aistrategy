@@ -154,7 +154,7 @@ namespace Rts.Presentation
 
         public static bool ShowArmsKit(EconomyView economy)
         {
-            return economy != null && economy.CraftTree2Enabled && economy.ArmsKit > 0;
+            return economy != null && ((economy.CraftTree2Enabled && economy.ArmsKit > 0) || economy.CraftRequiredEnabled);
         }
 
         public static bool ShowScholarly(EconomyView economy)
