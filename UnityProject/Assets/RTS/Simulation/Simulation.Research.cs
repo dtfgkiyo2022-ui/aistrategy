@@ -398,7 +398,11 @@ namespace Rts.Simulation
             bool requiredScholarlyOnly = requiredScholarly > 0 && mechanismResearch && !bookResearch
                 && economy.Scholarly >= scholarlyResearchCost;
             if (requiredScholarly > 0 && !bookResearch && !scholarlyResearch && !requiredScholarlyOnly)
+            {
+                if (!byPlayer && automaticEconomyAction && CraftRequiredOn && faction >= 1 && faction <= 2)
+                    craftRequiredAiResearchScholarlyBlocked[faction - 1] = checked(craftRequiredAiResearchScholarlyBlocked[faction - 1] + 1);
                 return FailAgeFourAiResearch(faction, tech, AgeFourAiResearchFailureResource);
+            }
             if (bookResearch)
             {
                 food = BookDiscount(food, world.Config.Economy.BookResearchCostPermille);

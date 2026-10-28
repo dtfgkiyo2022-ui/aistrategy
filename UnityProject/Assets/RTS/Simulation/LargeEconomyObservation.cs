@@ -71,6 +71,7 @@ namespace Rts.Simulation
         public int SawmillsCompleted, SawmillsActive, SawmillPlanks;
         public int PlanksUsedWeapons, PlanksUsedConstruction, PlanksUsedScholarly, PlanksUsedBridges, PlanksUsedOther;
         public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
+        public int ScholarlyProduced, ScholarlyConsumed, ScholarlyStock, ResearchScholarlyBlocked;
     }
 
     public sealed partial class Simulation
@@ -79,6 +80,8 @@ namespace Rts.Simulation
         private const int CraftTraceWeapons = 0, CraftTraceConstruction = 1, CraftTraceScholarly = 2,
             CraftTraceBridges = 3, CraftTraceOther = 4;
         private readonly int[,] craftTracePlankUses = new int[2, 5];
+        // Observation-only; unlike FactionEconomy this must not enter canonical state or replay hashes.
+        private readonly int[] craftRequiredAiResearchScholarlyBlocked = new int[2];
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
             if (faction < 1 || faction > 2 || amount == 0) return;
@@ -300,6 +303,10 @@ namespace Rts.Simulation
                 value.ArmsProduced = checked(capturedEconomy.ArmsKitProduced + capturedEconomy.FineArmsKitProduced);
                 value.ArmsUsedBySoldiers = checked(capturedEconomy.ArmsKitConsumed + capturedEconomy.FineArmsKitConsumed);
                 value.ArmsStock = checked(capturedEconomy.ArmsKit + capturedEconomy.FineArmsKit);
+                value.ScholarlyProduced = capturedEconomy.ScholarlyProduced;
+                value.ScholarlyConsumed = capturedEconomy.ScholarlyConsumed;
+                value.ScholarlyStock = capturedEconomy.Scholarly;
+                value.ResearchScholarlyBlocked = craftRequiredAiResearchScholarlyBlocked[faction - 1];
                 result.Factions[faction - 1] = value;
             }
             return result;

@@ -643,13 +643,23 @@ namespace Rts.Simulation
             int required = CraftRequiredResearchScholarlyCost(faction);
             if (required <= 0) return false;
             ref var economy = ref world.Economies[faction - 1];
-            int armsTarget = world.Config.Economy.CraftRequiredAiArmsStockTarget;
-            if (economy.ArmsKit + economy.FineArmsKit < Math.Max(1, armsTarget / 2)) return false;
-            if (economy.Scholarly >= required || BooksAllowed(faction) && economy.Books >= required) return false;
+            var rules = world.Config.Economy;
+            if (CraftRequiredAiAssemblerCount(faction) < rules.CraftRequiredAiScholarlyMinAssemblers
+                && economy.ArmsKit + economy.FineArmsKit < Math.Max(1, rules.CraftRequiredAiArmsStockTarget / 2)) return false;
+            int inProgress = 0;
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
-                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction || building.Researching != 0) continue;
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.Scholarly && building.Timer > 0)
+                    inProgress++;
+            }
+            int stock = checked(economy.Scholarly + inProgress + (BooksAllowed(faction) ? economy.Books : 0));
+            if (stock >= checked(required * rules.CraftRequiredAiScholarlyStockResearches)) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction) continue;
                 for (int t = 1; t <= 19; t++)
                 {
                     var tech = (TechKind)t;
@@ -659,13 +669,29 @@ namespace Rts.Simulation
             return false;
         }
 
+        private int CraftRequiredAiAssemblerCount(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsActualBuilding(building) && building.Complete && building.FactionId == faction && building.Kind == BuildingKind.Assembler)
+                    count++;
+            }
+            return count;
+        }
+
         private void AssignCraftRequiredAiRecipes(uint faction)
         {
             RecipeKind wanted = PreferredAssemblerRecipe(faction);
             if (wanted == RecipeKind.ArmsKit || wanted == RecipeKind.Scholarly)
             {
+                bool needsScholarly = CraftRequiredAiNeedsScholarly(faction);
+                int scholarlyTarget = needsScholarly && CraftRequiredAiAssemblerCount(faction) >= world.Config.Economy.CraftRequiredAiScholarlyMinAssemblers
+                    ? world.Config.Economy.CraftRequiredAiScholarlyAssemblers : 0;
                 int armsTarget = CraftRequiredAiAssemblerTarget(faction);
-                int scholarlyTarget = CraftRequiredAiNeedsScholarly(faction) ? world.Config.Economy.CraftRequiredAiScholarlyAssemblers : 0;
+                if (scholarlyTarget > 0)
+                    armsTarget = Math.Min(armsTarget, Math.Max(0, CraftRequiredAiAssemblerCount(faction) - scholarlyTarget));
                 int assignedArms = 0, assignedScholarly = 0;
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
@@ -931,6 +957,8 @@ namespace Rts.Simulation
             if (CraftRequiredOn)
             {
                 var economy = world.Economies[faction - 1];
+                bool needsScholarly = CraftRequiredAiNeedsScholarly(faction)
+                    && CraftRequiredAiAssemblerCount(faction) >= world.Config.Economy.CraftRequiredAiScholarlyMinAssemblers;
                 int inProgress = 0;
                 for (int i = 0; i < world.BuildingCount; i++)
                 {
@@ -938,6 +966,7 @@ namespace Rts.Simulation
                     if (IsActualBuilding(building) && building.FactionId == faction && building.Kind == BuildingKind.Assembler
                         && building.Recipe == RecipeKind.ArmsKit) inProgress++;
                 }
+                if (needsScholarly) return RecipeKind.Scholarly;
                 if (economy.ArmsKit + economy.FineArmsKit + inProgress < world.Config.Economy.CraftRequiredAiArmsStockTarget)
                     return RecipeKind.ArmsKit;
                 if (CraftRequiredAiNeedsScholarly(faction)) return RecipeKind.Scholarly;
