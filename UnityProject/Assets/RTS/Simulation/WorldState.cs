@@ -140,6 +140,8 @@ namespace Rts.Simulation
         internal ResourceKind CarryKind;
         internal int Carry;
         internal long NextGatherTick;
+        /// <summary>BeltDropOff: 0 is not waiting, -1 means the current load has fallen back to hand hauling.</summary>
+        internal long BeltWaitUntilTick;
         /// <summary>AiExpand: start tick of the current automatic resource assignment; -1 means none.</summary>
         internal long AiExpandWorkStartTick;
         internal bool StoneToolsUsed;
@@ -424,7 +426,7 @@ namespace Rts.Simulation
                 var d = Config.Soldiers[i];
                 var p = Array.Find(Config.UnitParameters, value => value.Kind == d.Kind);
                 Soldiers[i] = new SoldierState { Initial = d, Position = d.Position, MoveGoal = d.Position,
-                    Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = Fix64.FromRaw(p.Speed.Raw / 20) };
+                    Alive = d.Alive, Hp = d.Hp, Parameters = p, StepDistance = MovementMath.StepDistance(p.Speed, Config.Economy) };
             }
             var soldiers = new System.Collections.Generic.List<int>();
             for (int f = 0; f < 2; f++)
@@ -482,7 +484,7 @@ namespace Rts.Simulation
         for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
-            VillagerStep = Fix64.FromRaw(e.VillagerSpeed.Raw / 20);
+            VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
             if (e.Industry)
             {
                 Belts = new BeltState[checked(Config.Map.WidthCells * Config.Map.HeightCells)];
@@ -562,6 +564,9 @@ namespace Rts.Simulation
                     Speed = e.CannonSpeed, Vision = e.CannonVision, Range = e.CannonRange, Damage = e.CannonDamage, AttackIntervalTicks = e.CannonInterval };
             }
             Require(!e.EconomyScale || e.Enabled, "Economy scale requires an enabled economy.");
+            Require(!e.FastMovement || (e.Enabled && e.FastMovementUnitSpeedPermille > 0
+                && e.FastMovementVillagerSpeedPermille > 0),
+                "Fast movement requires a large enabled economy and positive speed permilles.");
             Require(!e.AiArmyRecovery || (e.Enabled && e.Ages), "AI army recovery requires ages and an economy.");
             Require(!e.LineBuildingCheck || (e.Enabled && e.Industry), "Line building checks require industry and an economy.");
             Require(!e.AiExpand || (e.Enabled && e.Ages && e.Industry
@@ -1164,6 +1169,10 @@ namespace Rts.Simulation
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
                 ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy,
+                HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
+                HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
+                FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,
+                FastMovementVillagerSpeedPermille = e.FastMovementVillagerSpeedPermille,
                 LargeVillagerTrainTicks = e.LargeVillagerTrainTicks, LargeInfantryTrainTicks = e.LargeInfantryTrainTicks,
                 LargeVillagerBatch = e.LargeVillagerBatch, LargeInfantryBatch = e.LargeInfantryBatch,
                 LargeBarracksMaxBuildings = e.LargeBarracksMaxBuildings, LargeArmyCapacity = e.LargeArmyCapacity,
@@ -1216,6 +1225,7 @@ namespace Rts.Simulation
                  BeltComponents = e.BeltComponents, SplitterWoodCost = e.SplitterWoodCost, SorterWoodCost = e.SorterWoodCost,
                  UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
                  FastBeltWoodCost = e.FastBeltWoodCost, FastBeltTicksPerCell = e.FastBeltTicksPerCell, FastBeltAge = e.FastBeltAge,
+                 BeltDropOff = e.BeltDropOff, BeltDropOffRangeCells = e.BeltDropOffRangeCells, BeltDropOffWaitTicks = e.BeltDropOffWaitTicks,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,

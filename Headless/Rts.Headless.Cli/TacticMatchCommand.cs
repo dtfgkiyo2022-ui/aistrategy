@@ -46,6 +46,8 @@ internal static class TacticMatchCommand
                 ? LiveGameRules.Create(ulong.Parse(seedText, CultureInfo.InvariantCulture), mapSize == "large", true, false, false)
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
+        if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
+        if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
         int armyScale = ParseScale(options, "--army-scale", commonScale);
@@ -91,6 +93,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--ai-belts-off")) scenario.Economy.AiBelts = false;
         if (options.ContainsKey("--open-farms-off")) scenario.Economy.OpenFarms = false;
         if (options.ContainsKey("--free-towns-off")) scenario.Economy.FreeTowns = false;
+        if (options.ContainsKey("--belt-dropoff-off")) scenario.Economy.BeltDropOff = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -290,7 +293,8 @@ internal static class TacticMatchCommand
                 if (latePushAdvantageTicks[faction] < 0
                     && Battle.LatePushAdvantageCondition(simulation.Capture(faction).Observation, scenario.Economy))
                     latePushAdvantageTicks[faction] = simulation.Capture(faction).Tick;
-            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null) && simulation.Capture(1).Tick % 1000 == 0
+            largeObservation = (timingWriter != null || economyTrace != null || routeTrace != null || craftTrace != null)
+                && (simulation.Capture(1).Tick % 1000 == 0 || simulation.Capture(1).Result.HasEnded || simulation.Capture(1).Tick == ticks)
                 ? simulation.CaptureLargeEconomyObservation() : null;
             if (exploreTrace != null)
             {
@@ -661,12 +665,12 @@ internal static class TacticMatchCommand
         for (int faction = 1; faction <= 2; faction++)
         {
             string prefix = faction == 1 ? "westLarge" : "eastLarge";
-            cells.AddRange(new[] { prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
+            cells.AddRange(new[] { prefix + "Population", prefix + "PopulationLimit", prefix + "PlannedTowns", prefix + "TownsBuilding", prefix + "CompletedTowns",
                 prefix + "TownVillagersQueued", prefix + "TownVillagersProduced", prefix + "TownResourceIncome",
                 prefix + "TownConnectedLines", prefix + "CoreNearBuildings40m", prefix + "CoreFarBuildings40m",
-                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered",
+                prefix + "Houses", prefix + "Barracks", prefix + "DropSites", prefix + "Farms", prefix + "ConnectedFarms", prefix + "BeltCells", prefix + "BeltDelivered", prefix + "BeltDropped",
                 prefix + "LumberCamps", prefix + "OtherBuildings",
-                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore",
+                prefix + "MinimumDropSiteDistanceMeters", prefix + "CoreHp", prefix + "EnemySoldiersAtCore", prefix + "PlannedHouses", prefix + "HouseLimitStopTicks",
                 prefix + "BarracksResourceWaiting", prefix + "BarracksFoodWaiting", prefix + "BarracksWoodWaiting", prefix + "BarracksMetalWaiting",
                 prefix + "BarracksPopulationWaiting", prefix + "BarracksTraining",
                 prefix + "AiFactoryConnectedLines", prefix + "AiFactoryPrimitiveConnectedLines", prefix + "AiFactoryAge1ConnectedLines",
@@ -698,16 +702,16 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 85; i++) cells.Add("");
+                for (int i = 0; i < 90; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
-            cells.AddRange(new[] { value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
+            cells.AddRange(new[] { value.Population, value.PopulationLimit, value.PlannedTowns, value.TownsBuilding, value.CompletedTowns, value.TownVillagersQueued,
                 value.TownVillagersProduced, value.TownResourceIncome }.Select(FormatInvariant));
             cells.Add(string.Join("|", value.TownConnectedLines.Select(FormatInvariant)));
             cells.AddRange(new[] { value.CoreNearBuildings, value.CoreFarBuildings, value.Houses, value.Barracks, value.DropSites,
-                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.LumberCamps, value.OtherBuildings,
-                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore,
+                value.Farms, value.ConnectedFarms, value.BeltCells, value.BeltDelivered, value.BeltDropped, value.LumberCamps, value.OtherBuildings,
+                value.MinimumDropSiteDistanceMeters, value.CoreHp, value.EnemySoldiersAtCore, value.PlannedHouses, checked((int)value.HouseLimitStopTicks),
                 value.BarracksResourceWaiting, value.BarracksFoodWaiting, value.BarracksWoodWaiting, value.BarracksMetalWaiting,
                 value.BarracksPopulationWaiting, value.BarracksTraining }.Select(FormatInvariant));
             cells.AddRange(new[] { value.AiFactoryConnectedLines, value.AiFactoryPrimitiveConnectedLines, value.AiFactoryAge1ConnectedLines,

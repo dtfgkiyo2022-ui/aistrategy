@@ -51,10 +51,13 @@ namespace Rts.Core.Tests
             var world = typeof(Battle).GetField("world", Flags).GetValue(sim);
             observedWorld = world;
             var map = world.GetType().GetField("Map", Flags).GetValue(world);
-            var clear = typeof(Battle).GetMethod("Clear", Flags);
+            var clear = typeof(Battle).GetMethod("Clear", Flags, null,
+                new[] { typeof(SimPoint), typeof(SimPoint) }, null);
             var center = map.GetType().GetMethod("Center", new[] { typeof(int) });
             var cellOf = map.GetType().GetMethod("Cell", new[] { typeof(SimPoint) });
             var passable = map.GetType().GetMethod("IsPassable", new[] { typeof(int) });
+            var clipMove = map.GetType().GetMethod("ClipMove", Flags, null,
+                new[] { typeof(SimPoint), typeof(SimPoint) }, null);
             var moveTowards = typeof(FixMath).GetMethod("MoveTowards", BindingFlags.Static | BindingFlags.Public);
             var armyGoal = typeof(Battle).GetMethod("ArmyGoal", Flags);
             var previousReturning = false;
@@ -110,11 +113,11 @@ namespace Rts.Core.Tests
                         if (cursor == path.Length - 1) target = (bool)clear.Invoke(sim, new object[] { position, goal }) ? goal : c;
                         slot = $"({M(target.X.Raw):0.000},{M(target.Z.Raw):0.000})";
                     }
-                    var clipped = world.GetType().GetField("Map", Flags).GetValue(world).GetType().GetMethod("ClipMove", Flags).Invoke(map, new object[] { position, moveGoal });
+                    var clipped = clipMove.Invoke(map, new object[] { position, moveGoal });
                     var clippedPoint = (SimPoint)clipped;
                     var stepDistance = (Fix64)st.GetField("StepDistance", Flags).GetValue(soldier);
                     var intendedStep = (SimPoint)moveTowards.Invoke(null, new object[] { position, moveGoal, stepDistance });
-                    var actualStep = (SimPoint)world.GetType().GetField("Map", Flags).GetValue(world).GetType().GetMethod("ClipMove", Flags).Invoke(map, new object[] { position, intendedStep });
+                    var actualStep = (SimPoint)clipMove.Invoke(map, new object[] { position, intendedStep });
                     report.AppendLine($"  soldier {id} pos ({M(position.X.Raw):0.000},{M(position.Z.Raw):0.000}) raw ({position.X.Raw},{position.Z.Raw}) cell {(int)cellOf.Invoke(map, new object[] { position })} move ({M(moveGoal.X.Raw):0.000},{M(moveGoal.Z.Raw):0.000}) step {M(stepDistance.Raw):0.000} intended ({M(intendedStep.X.Raw):0.000},{M(intendedStep.Z.Raw):0.000}) actual ({M(actualStep.X.Raw):0.000},{M(actualStep.Z.Raw):0.000}) clipped ({M(clippedPoint.X.Raw):0.000},{M(clippedPoint.Z.Raw):0.000}) slot {slot} moving {st.GetField("IsMoving", Flags).GetValue(soldier)} joining {st.GetField("Joining", Flags).GetValue(soldier)} tactical {st.GetField("TacticalRoute", Flags).GetValue(soldier)} local {st.GetField("LocalCursor", Flags).GetValue(soldier)}/{local?.Length ?? 0} localGoal ({M(localGoal.X.Raw):0.000},{M(localGoal.Z.Raw):0.000})");
                 }
             }

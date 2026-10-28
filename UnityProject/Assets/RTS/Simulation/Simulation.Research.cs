@@ -460,13 +460,13 @@ namespace Rts.Simulation
             {
                 economy.Books = checked(economy.Books - bookResearchCost);
                 economy.BooksConsumed = checked(economy.BooksConsumed + bookResearchCost);
-                economy.BooksUsedResearch = checked(economy.BooksUsedResearch + bookResearchCost);
+                economy.BooksUsedResearch++;
             }
             if (scholarlyResearch || requiredScholarlyOnly)
             {
                 economy.Scholarly = checked(economy.Scholarly - scholarlyResearchCost);
                 economy.ScholarlyConsumed = checked(economy.ScholarlyConsumed + scholarlyResearchCost);
-                economy.ScholarlyUsedResearch = checked(economy.ScholarlyUsedResearch + scholarlyResearchCost);
+                economy.ScholarlyUsedResearch++;
             }
             if (mechanismResearch)
             {
@@ -565,7 +565,7 @@ namespace Rts.Simulation
                 if (s.Class == UnitKind.LightCavalry || s.Class == UnitKind.Cavalry)
                 {
                     s.Parameters.Speed = Fix64.FromRaw(checked(s.Parameters.Speed.Raw + rules.CavalryDrillSpeed.Raw));
-                    s.StepDistance = Fix64.FromRaw(s.Parameters.Speed.Raw / 20);
+                    s.StepDistance = MovementMath.StepDistance(s.Parameters.Speed, rules);
                 }
             }
             else if (tech == TechKind.TotalWar)

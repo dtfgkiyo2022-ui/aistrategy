@@ -66,7 +66,7 @@ namespace Rts.Simulation
                 {
                     economy.Fittings--; economy.FittingsConsumed++;
                 }
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
                 return;
             }
         }
