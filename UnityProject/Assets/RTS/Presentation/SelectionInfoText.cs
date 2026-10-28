@@ -153,6 +153,15 @@ namespace Rts.Presentation
             }
         }
 
+        /// <summary>Existing description plus the optional CraftFlow observer lines.</summary>
+        public static string BuildingDescription(BuildingView building, EconomyView economy)
+        {
+            string description = BuildingDescription(building.Kind);
+            if (economy == null || !economy.CraftFlowEnabled) return description;
+            string flow = CraftFlowDisplayText.BuildingLines(building);
+            return flow.Length == 0 ? description : description + "\n" + flow;
+        }
+
         public static string UnitStrength(UnitKind kind)
         {
             switch (kind)
