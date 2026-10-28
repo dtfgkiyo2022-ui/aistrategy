@@ -148,6 +148,8 @@ namespace Rts.Core.Tests
             e.AiFactoryPrimitiveLineCount = e.AiFactoryAge1LineCount = e.AiFactoryAge2LineCount = e.AiFactoryAge3LineCount = 0;
             e.AiFactoryPrimitiveBarracksMaxBuildings = e.AiFactoryAge1BarracksMaxBuildings = 0;
             e.AiExpandFoodWorkerPermille = 450; e.AiExpandWoodWorkerPermille = 250;
+            // This test checks the expansion worker-share floors; belt drop-off transport is unrelated to that threshold.
+            e.BeltDropOff = false;
             e.Towns = false;
             SetFactionOneVillagers(scenario, 40);
             var sim = new Battle(scenario);
@@ -159,6 +161,7 @@ namespace Rts.Core.Tests
             Steps(gateway, sim, 4000);
 
             var observation = sim.CaptureLargeEconomyObservation().Factions[0];
+            TestContext.Progress.WriteLine("VillagerShareFloors: BeltDropped=" + observation.BeltDropped + ", foodWorkers=" + observation.Workers[0] + ", woodWorkers=" + observation.Workers[1] + ", stoneWorkers=" + observation.Workers[2]);
             Assert.That(observation.Villagers, Is.EqualTo(40));
             Assert.That(observation.Workers[0], Is.GreaterThanOrEqualTo(15));
             Assert.That(observation.Workers[1], Is.GreaterThanOrEqualTo(10));

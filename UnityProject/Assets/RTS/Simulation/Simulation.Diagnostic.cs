@@ -435,6 +435,7 @@ namespace Rts.Simulation
                 w.Point(n + "Position", v.Position); w.Point(n + "MoveGoal", v.MoveGoal); w.Value(n + "IsMoving", v.IsMoving);
                 w.Value(n + "Task", (byte)v.Task); w.Value(n + "NodeId", v.NodeId); w.Value(n + "CarryKind", (byte)v.CarryKind); w.Value(n + "Carry", v.Carry);
                 w.Value(n + "NextGatherTick", v.NextGatherTick);
+                if (BeltDropOffOn && v.BeltWaitUntilTick != 0) w.Value(n + "BeltWaitUntilTick", v.BeltWaitUntilTick);
                 if (AiExpandOn) w.Value(n + "AiExpandWorkStartTick", v.AiExpandWorkStartTick);
                 w.Point(n + "RouteGoal", v.RouteGoal); w.Value(n + "RouteCursor", v.RouteCursor);
                 if (PrimitiveCraftOn) w.Value(n + "StoneToolsUsed", v.StoneToolsUsed);

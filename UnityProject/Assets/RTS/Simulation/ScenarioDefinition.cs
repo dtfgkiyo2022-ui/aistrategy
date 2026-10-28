@@ -193,6 +193,9 @@ namespace Rts.Simulation
         public bool BeltComponents;
         public int SplitterWoodCost = 5, SorterWoodCost = 7, UndergroundBeltWoodCost = 3, UndergroundBeltMaxLength = 4;
         public int FastBeltWoodCost = 2, FastBeltTicksPerCell = 4, FastBeltAge = 2;
+        /// <summary>LargeEconomy: villagers may put gathered items on a nearby connected belt.</summary>
+        public bool BeltDropOff;
+        public int BeltDropOffRangeCells = 2, BeltDropOffWaitTicks = 40;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;

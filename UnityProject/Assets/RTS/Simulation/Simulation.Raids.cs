@@ -203,7 +203,7 @@ namespace Rts.Simulation
                 uint faction = world.Belts[cell].FactionId;
                 DelayLineAfterRaid(faction, cell);
                 world.Belts[cell] = default;
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
             }
         }
 

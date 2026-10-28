@@ -3049,7 +3049,7 @@ namespace Rts.Simulation
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, world.Config.Economy.SplitterWoodCost);
             belt.FactionId = faction; belt.Facing = facing; belt.Hp = world.Config.Economy.BeltHp;
             belt.Held = false; belt.Component = BeltComponentKind.Splitter; belt.SorterKind = 0; belt.PairCell = 0; belt.SplitterRightNext = false;
-            world.BeltOrder = null;
+            InvalidateBeltCaches();
             return true;
         }
 
@@ -3113,7 +3113,7 @@ namespace Rts.Simulation
                     RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                     belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                     owned++;
-                    world.BeltOrder = null;
+                    InvalidateBeltCaches();
                 }
             return whole;
         }
@@ -3359,7 +3359,7 @@ namespace Rts.Simulation
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, rules.BeltWoodCost);
                 belt = new BeltState { FactionId = faction, Facing = facings[i], Hp = rules.BeltHp };
                 owned++;
-                world.BeltOrder = null;
+                InvalidateBeltCaches();
             }
             return whole;
         }
