@@ -667,8 +667,9 @@ internal static class TacticMatchCommand
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                  prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
-                 prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
+                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                  prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
+                  prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
                 cells.Add(prefix + resource + "Workers");
@@ -687,7 +688,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 86; i++) cells.Add("");
+                for (int i = 0; i < 90; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -706,7 +707,8 @@ internal static class TacticMatchCommand
                 value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
-                value.AiExpandTownSkippedStone }.Select(FormatInvariant));
+                 value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
+                 value.ResearchScholarlyBlocked }.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
                 value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));
@@ -760,7 +762,9 @@ internal static class TacticMatchCommand
                 woodMachinesActive = f.WoodMachinesActive, stoneMachinesActive = f.StoneMachinesActive,
                 woodMachineOutputFull = f.WoodMachineOutputFull, stoneMachineOutputFull = f.StoneMachineOutputFull,
                 towns = f.CompletedTowns, townsBuilding = f.TownsBuilding, factoryLines = f.AiFactoryConnectedLines,
-                aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
+                 aiExpandSkippedWood = f.AiExpandTownSkippedWood, aiExpandSkippedStone = f.AiExpandTownSkippedStone,
+                 scholarlyProduced = f.ScholarlyProduced, scholarlyConsumed = f.ScholarlyConsumed,
+                 scholarlyStock = f.ScholarlyStock, researchScholarlyBlocked = f.ResearchScholarlyBlocked,
                 uses = Enumerable.Range(0, LargeEconomyUseKind.Count).Select(kind => new
                 {
                     kind = LargeEconomyUseKind.Names[kind], wood = f.Uses[kind, 0], stone = f.Uses[kind, 1]

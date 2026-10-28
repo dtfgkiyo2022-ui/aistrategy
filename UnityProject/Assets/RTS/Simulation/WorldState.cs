@@ -745,9 +745,10 @@ namespace Rts.Simulation
                 && e.CraftRequiredAiWoodWorkerPermille >= 0 && e.CraftRequiredAiWoodWorkerPermille <= 1000
                 && e.CraftRequiredBuildingPlankPermille >= 0 && e.CraftRequiredBuildingPlankPermille <= 1000
                 && e.CraftRequiredResearchScholarlyAge2 > 0 && e.CraftRequiredResearchScholarlyAge3 > 0
-                && e.CraftRequiredResearchScholarlyAge4 > 0 && e.CraftRequiredAiPlankSawmillsAge1 > 0
-                && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
-                && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0), "Invalid craft-required rules.");
+                 && e.CraftRequiredResearchScholarlyAge4 > 0 && e.CraftRequiredAiPlankSawmillsAge1 > 0
+                 && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
+                 && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
+                 && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
             Require(!e.CraftTree3 || (e.CraftTree2 && e.SiegePartsTicks > 0 && e.SiegePartsFramesInput > 0 && e.SiegePartsArmsKitInput > 0
                 && e.MechanismTicks > 0 && e.MechanismArmsKitInput > 0 && e.MechanismScholarlyInput > 0 && e.MechanismCutStoneInput > 0
                 && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000

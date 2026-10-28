@@ -376,6 +376,10 @@ namespace Rts.Simulation
             CraftRequiredAiPlankSawmillsAge3 = 3;
         /// <summary>CraftRequired: assemblers reserved for scholarly stock and the frames stock target.</summary>
         public int CraftRequiredAiScholarlyAssemblers = 1, CraftRequiredAiFramesStockTarget = 10;
+        /// <summary>CraftRequired: automatic scholarly stock is kept ahead of this many researches.</summary>
+        public int CraftRequiredAiScholarlyStockResearches = 2;
+        /// <summary>CraftRequired: at this many assemblers, one line is reserved for scholarly goods.</summary>
+        public int CraftRequiredAiScholarlyMinAssemblers = 2;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;
