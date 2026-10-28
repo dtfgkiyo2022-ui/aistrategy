@@ -692,6 +692,10 @@ namespace Rts.Simulation
                 && e.ExploreAutoUntilTick >= 0, "Invalid exploration rules.");
             Require(!e.DropSiteLimit || (e.Enabled && e.Ages && e.DropSiteMax > 0), "Invalid drop-site-limit rules.");
             Require(!e.AiBelts || (e.Enabled && e.Industry && e.Ages && e.AiBeltWoodReserve >= 0), "Invalid AI-belt rules.");
+            Require(!e.BeltDropOffAi || (e.Enabled && e.LargeEconomy && e.BeltDropOff && e.Industry && e.Ages
+                && e.BeltDropOffAiMinGatherers >= 0 && e.BeltDropOffAiMaxRouteCells >= 0
+                && e.BeltDropOffAiMaxLinesAge0 >= 0 && e.BeltDropOffAiMaxLinesAge1 >= 0
+                && e.BeltDropOffAiMaxLinesAge2 >= 0 && e.BeltDropOffAiMaxLinesAge3 >= 0), "Invalid belt-dropoff AI rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1216,6 +1220,10 @@ namespace Rts.Simulation
                  UndergroundBeltWoodCost = e.UndergroundBeltWoodCost, UndergroundBeltMaxLength = e.UndergroundBeltMaxLength,
                  FastBeltWoodCost = e.FastBeltWoodCost, FastBeltTicksPerCell = e.FastBeltTicksPerCell, FastBeltAge = e.FastBeltAge,
                  BeltDropOff = e.BeltDropOff, BeltDropOffRangeCells = e.BeltDropOffRangeCells, BeltDropOffWaitTicks = e.BeltDropOffWaitTicks,
+                 BeltDropOffAi = e.BeltDropOffAi, BeltDropOffAiMinGatherers = e.BeltDropOffAiMinGatherers,
+                 BeltDropOffAiMaxRouteCells = e.BeltDropOffAiMaxRouteCells, BeltDropOffAiMaxLinesAge0 = e.BeltDropOffAiMaxLinesAge0,
+                 BeltDropOffAiMaxLinesAge1 = e.BeltDropOffAiMaxLinesAge1, BeltDropOffAiMaxLinesAge2 = e.BeltDropOffAiMaxLinesAge2,
+                 BeltDropOffAiMaxLinesAge3 = e.BeltDropOffAiMaxLinesAge3,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,
