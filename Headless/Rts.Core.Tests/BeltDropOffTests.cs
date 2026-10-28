@@ -177,6 +177,7 @@ namespace Rts.Core.Tests
             var bytes = ScenarioBinary.Encode(scenario);
             var decoded = ScenarioBinary.Decode(bytes);
             var extension = decoded.Extensions.Single(value => value.Id == 76);
+            // Without the belt AI the first version is written, as before the AI existed.
             Assert.That(extension.Version, Is.EqualTo(1));
             Assert.That(decoded.Economy.BeltDropOff, Is.True);
             Assert.That(decoded.Economy.BeltDropOffRangeCells, Is.EqualTo(3));
