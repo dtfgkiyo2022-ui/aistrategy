@@ -132,7 +132,8 @@
   <Compile Include="DropSiteLimitTests.cs" />
   <Compile Include="StorageFeedsTests.cs" />
     <Compile Include="CraftTree2Tests.cs" />
-    <Compile Include="CraftRequiredTests.cs" />
+<Compile Include="CraftRequiredTests.cs" />
+<Compile Include="ArmsScaleTests.cs" />
     <Compile Include="CraftDepthTests.cs" />
     <Compile Include="CraftTree3Tests.cs" />
     <Compile Include="CraftTree4Tests.cs" />

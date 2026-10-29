@@ -754,6 +754,14 @@ namespace Rts.Simulation
                  && e.CraftRequiredAiPlankSawmillsAge2 > 0 && e.CraftRequiredAiPlankSawmillsAge3 > 0
                  && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
                  && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
+            Require(!e.ArmsScale || (e.CraftRequired && e.ArmsScaleDecisionIntervalTicks > 0
+                && e.ArmsScaleArmsStockLow >= 0 && e.ArmsScaleFoodReserve >= 0 && e.ArmsScaleWoodReserve >= 0
+                && e.ArmsScaleMaxArmsAssemblersAge2 > 0 && e.ArmsScaleMaxArmsAssemblersAge3 >= e.ArmsScaleMaxArmsAssemblersAge2
+                && e.ArmsScaleMaxArmsAssemblersAge4 >= e.ArmsScaleMaxArmsAssemblersAge3
+                && e.ArmsScalePlankLow >= 0 && e.ArmsScaleExtraSawmillsAge2 > 0
+                && e.ArmsScaleExtraSawmillsAge3 >= e.ArmsScaleExtraSawmillsAge2
+                && e.ArmsScaleExtraSawmillsAge4 >= e.ArmsScaleExtraSawmillsAge3),
+                "ArmsScale requires CraftRequired and valid scaling rules.");
             Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
             Require(!e.CraftDepth || (e.CraftRequired && e.CraftDepthFittingsTicks > 0 && e.CraftDepthFittingsMetalInput > 0
                 && e.CraftDepthFittingsOutput > 0 && e.CraftDepthRopeTicks > 0 && e.CraftDepthRopeWoodInput > 0
@@ -1335,7 +1343,13 @@ namespace Rts.Simulation
                    CraftRequiredAiPlankSawmillsAge2 = e.CraftRequiredAiPlankSawmillsAge2,
                    CraftRequiredAiPlankSawmillsAge3 = e.CraftRequiredAiPlankSawmillsAge3,
                    CraftRequiredAiScholarlyAssemblers = e.CraftRequiredAiScholarlyAssemblers,
-                   CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
+                    CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
+                    ArmsScale = e.ArmsScale, ArmsScaleDecisionIntervalTicks = e.ArmsScaleDecisionIntervalTicks,
+                    ArmsScaleArmsStockLow = e.ArmsScaleArmsStockLow, ArmsScaleFoodReserve = e.ArmsScaleFoodReserve,
+                    ArmsScaleWoodReserve = e.ArmsScaleWoodReserve, ArmsScaleMaxArmsAssemblersAge2 = e.ArmsScaleMaxArmsAssemblersAge2,
+                    ArmsScaleMaxArmsAssemblersAge3 = e.ArmsScaleMaxArmsAssemblersAge3, ArmsScaleMaxArmsAssemblersAge4 = e.ArmsScaleMaxArmsAssemblersAge4,
+                    ArmsScalePlankLow = e.ArmsScalePlankLow, ArmsScaleExtraSawmillsAge2 = e.ArmsScaleExtraSawmillsAge2,
+                    ArmsScaleExtraSawmillsAge3 = e.ArmsScaleExtraSawmillsAge3, ArmsScaleExtraSawmillsAge4 = e.ArmsScaleExtraSawmillsAge4,
                    CraftDepth = e.CraftDepth, CraftDepthFittingsTicks = e.CraftDepthFittingsTicks,
                    CraftDepthFittingsMetalInput = e.CraftDepthFittingsMetalInput, CraftDepthFittingsOutput = e.CraftDepthFittingsOutput,
                    CraftDepthRopeTicks = e.CraftDepthRopeTicks, CraftDepthRopeWoodInput = e.CraftDepthRopeWoodInput,

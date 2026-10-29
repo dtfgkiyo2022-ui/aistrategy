@@ -75,6 +75,7 @@ namespace Rts.Simulation
         public int ArmsProduced, ArmsUsedBySoldiers, ArmsStock;
         public int ArmsWithFittings, ArmsWithoutFittings;
         public int ScholarlyProduced, ScholarlyConsumed, ScholarlyStock, ResearchScholarlyBlocked;
+        public int ArmsScaleAssemblersAdded, ArmsScaleSawmillsAdded, TrainingArmsUnavailable;
     }
 
     public sealed partial class Simulation
@@ -91,6 +92,24 @@ namespace Rts.Simulation
             CraftTraceUseMechanism = 3, CraftTraceUseCost = 4, CraftTraceUseBridge = 5;
         // Observation-only; unlike FactionEconomy this must not enter canonical state or replay hashes.
         private readonly int[] craftRequiredAiResearchScholarlyBlocked = new int[2];
+        private readonly int[] armsScaleAssemblersAdded = new int[2];
+        private readonly int[] armsScaleSawmillsAdded = new int[2];
+        private readonly int[] trainingArmsUnavailable = new int[2];
+        private void RecordArmsScaleAssembler(uint faction)
+        {
+            if (!ArmsScaleOn || faction < 1 || faction > 2) return;
+            armsScaleAssemblersAdded[faction - 1] = checked(armsScaleAssemblersAdded[faction - 1] + 1);
+        }
+        private void RecordArmsScaleSawmill(uint faction)
+        {
+            if (!ArmsScaleOn || faction < 1 || faction > 2) return;
+            armsScaleSawmillsAdded[faction - 1] = checked(armsScaleSawmillsAdded[faction - 1] + 1);
+        }
+        private void RecordTrainingArmsUnavailable(uint faction)
+        {
+            if (faction < 1 || faction > 2) return;
+            trainingArmsUnavailable[faction - 1] = checked(trainingArmsUnavailable[faction - 1] + 1);
+        }
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
             if (faction < 1 || faction > 2 || amount == 0) return;
@@ -339,6 +358,9 @@ namespace Rts.Simulation
                 value.ScholarlyConsumed = capturedEconomy.ScholarlyConsumed;
                 value.ScholarlyStock = capturedEconomy.Scholarly;
                 value.ResearchScholarlyBlocked = craftRequiredAiResearchScholarlyBlocked[faction - 1];
+                value.ArmsScaleAssemblersAdded = armsScaleAssemblersAdded[faction - 1];
+                value.ArmsScaleSawmillsAdded = armsScaleSawmillsAdded[faction - 1];
+                value.TrainingArmsUnavailable = trainingArmsUnavailable[faction - 1];
                 result.Factions[faction - 1] = value;
             }
             return result;

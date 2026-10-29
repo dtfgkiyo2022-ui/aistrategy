@@ -521,6 +521,8 @@ namespace Rts.Simulation
             {
                 EnsureCraftRequiredAiCapacity(faction);
                 EnsureCraftRequiredAiMaterialCapacity(faction);
+                if (ArmsScaleOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
+                    EnsureArmsScaleCapacity(faction);
             }
             ref var economy = ref world.Economies[faction - 1];
             var rules = world.Config.Economy;
@@ -601,6 +603,64 @@ namespace Rts.Simulation
             ref var economy = ref world.Economies[faction - 1];
             if (economy.Wood < rules.AssemblerWoodCost) return;
             PlaceAssembler(faction);
+        }
+
+        private void EnsureArmsScaleCapacity(uint faction)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            if (economy.Age < 2 || economy.ArmsKit + economy.FineArmsKit > rules.ArmsScaleArmsStockLow
+                || economy.Food < rules.ArmsScaleFoodReserve) return;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
+                    && IsPlannedBuilding(building) && !building.Complete) return;
+            }
+            if (EnsureArmsScaleSawmill(faction)) return;
+            int max = economy.Age == 2 ? rules.ArmsScaleMaxArmsAssemblersAge2
+                : economy.Age == 3 ? rules.ArmsScaleMaxArmsAssemblersAge3 : rules.ArmsScaleMaxArmsAssemblersAge4;
+            if (CountPlannedArmsAssemblers(faction) >= max) return;
+            var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
+            int heldPlanks = BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0;
+            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return;
+            if (economy.Planks - heldPlanks < cost.Planks && !BuildingReservationsOn) return;
+            uint id = PlaceAssembler(faction, -1, true, true);
+            if (id != 0 && id <= world.BuildingCount)
+                world.Buildings[id - 1].Recipe = RecipeKind.ArmsKit;
+        }
+
+        private bool EnsureArmsScaleSawmill(uint faction)
+        {
+            var rules = world.Config.Economy;
+            ref var economy = ref world.Economies[faction - 1];
+            int extra = economy.Age == 2 ? rules.ArmsScaleExtraSawmillsAge2
+                : economy.Age == 3 ? rules.ArmsScaleExtraSawmillsAge3 : rules.ArmsScaleExtraSawmillsAge4;
+            int target = checked(CraftRequiredAiMaterialTarget(faction) + extra);
+            if (economy.Planks - (BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0) >= rules.ArmsScalePlankLow
+                || CountPlannedBuildings(faction, BuildingKind.Sawmill) >= target) return false;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId == faction && building.Kind == BuildingKind.Sawmill
+                    && IsPlannedBuilding(building) && !building.Complete) return false;
+            }
+            var cost = BuildingCostForPlacement(BuildingKind.Sawmill, faction, 0);
+            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return false;
+            uint id = PlaceCommonSawmill(faction, true);
+            return id != 0;
+        }
+
+        private bool ArmsScaleCanPayExceptPlanks(uint faction, BuildingMaterialCost cost, int woodReserve)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            int heldWood = BuildingReservationsOn ? ReservedConstructionWood(faction) : 0;
+            int heldStone = BuildingReservationsOn ? ReservedConstructionStone(faction) : 0;
+            return economy.Wood - heldWood >= woodReserve + cost.Wood
+                && economy.Stone - heldStone >= cost.Stone
+                && economy.Frames >= cost.Frames && economy.Bricks >= cost.Bricks
+                && economy.SiegeParts >= cost.SiegeParts && economy.Fittings >= cost.Fittings
+                && economy.Rope >= cost.Rope;
         }
 
         private void EnsureCraftRequiredAiMaterialCapacity(uint faction)
@@ -748,6 +808,36 @@ namespace Rts.Simulation
             return count;
         }
 
+        private int CountPlannedArmsAssemblers(uint faction)
+        {
+            int count = 0;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (IsPlannedBuilding(building) && building.FactionId == faction
+                    && building.Kind == BuildingKind.Assembler && building.Recipe == RecipeKind.ArmsKit)
+                    count++;
+            }
+            return count;
+        }
+
+        private bool IsArmsScaleExtraAssembler(uint faction, uint buildingId)
+        {
+            if (!ArmsScaleOn) return false;
+            int total = 0, greater = 0;
+            int target = CraftRequiredAiAssemblerTarget(faction);
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Assembler) continue;
+                total++;
+                if (building.Id > buildingId) greater++;
+            }
+            int extra = Math.Max(0, total - target);
+            return extra > 0 && greater < extra;
+        }
+
         private void AssignCraftRequiredAiRecipes(uint faction)
         {
             RecipeKind wanted = PreferredAssemblerRecipe(faction);
@@ -777,6 +867,10 @@ namespace Rts.Simulation
                     ref var assembler = ref world.Buildings[i];
                     if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.FactionId != faction
                         || assembler.Kind != BuildingKind.Assembler || assembler.Timer != 0) continue;
+                    if (IsArmsScaleExtraAssembler(faction, assembler.Id) && assembler.Recipe != RecipeKind.ArmsKit)
+                    {
+                        SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit); assignedArms++; continue;
+                    }
                     if (assignedArms < armsTarget && assembler.Recipe != RecipeKind.ArmsKit)
                     {
                         SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit); assignedArms++; continue;
@@ -828,7 +922,7 @@ namespace Rts.Simulation
             ref var assembler = ref world.Buildings[assemblerIndex];
             if (!IsActualBuilding(assembler) || !assembler.Complete || assembler.Timer != 0) return;
             RecipeKind wanted = PreferredCraftTree4Recipe(faction);
-            if (wanted != RecipeKind.None && assembler.Recipe != wanted)
+            if (wanted != RecipeKind.None && !(ArmsScaleOn && IsArmsScaleExtraAssembler(faction, assembler.Id)) && assembler.Recipe != wanted)
                 SetAssemblerRecipe(faction, assembler.Id, wanted);
         }
 
@@ -910,6 +1004,12 @@ namespace Rts.Simulation
                 ref var assembler = ref world.Buildings[i];
                 if (!IsActualBuilding(assembler) || assembler.FactionId != faction || assembler.Kind != BuildingKind.Assembler
                     || !assembler.Complete) continue;
+                if (ArmsScaleOn && IsArmsScaleExtraAssembler(faction, assembler.Id))
+                {
+                    if (assembler.Timer == 0 && assembler.Recipe != RecipeKind.ArmsKit)
+                        SetAssemblerRecipe(faction, assembler.Id, RecipeKind.ArmsKit);
+                    continue;
+                }
                 if (assembler.Timer != 0)
                 {
                     selected[(int)assembler.Recipe]++;
@@ -922,8 +1022,8 @@ namespace Rts.Simulation
                     continue;
                 }
                 RecipeKind wanted = PreferredAgeFourAiRecipe(faction, economy, selected);
-                if (wanted != RecipeKind.None && assembler.Recipe != wanted)
-                    SetAssemblerRecipe(faction, assembler.Id, wanted);
+            if (wanted != RecipeKind.None && !(ArmsScaleOn && IsArmsScaleExtraAssembler(faction, assembler.Id)) && assembler.Recipe != wanted)
+                SetAssemblerRecipe(faction, assembler.Id, wanted);
                 selected[(int)wanted]++;
             }
         }
@@ -1024,6 +1124,9 @@ namespace Rts.Simulation
             if (CraftRequiredOn)
             {
                 var economy = world.Economies[faction - 1];
+                int firstAssembler = OwnBuildingIndex(faction, BuildingKind.Assembler);
+                if (ArmsScaleOn && firstAssembler >= 0 && IsArmsScaleExtraAssembler(faction, world.Buildings[firstAssembler].Id))
+                    return RecipeKind.ArmsKit;
                 bool needsScholarly = CraftRequiredAiNeedsScholarly(faction)
                     && CraftRequiredAiAssemblerCount(faction) >= world.Config.Economy.CraftRequiredAiScholarlyMinAssemblers;
                 int inProgress = 0;
@@ -1283,7 +1386,7 @@ namespace Rts.Simulation
             return building.Id == id && building.Alive && building.Kind == expected ? id : 0;
         }
 
-        private uint PlaceCommonSawmill(uint faction)
+        private uint PlaceCommonSawmill(uint faction, bool armsScale = false)
         {
             int size = world.Config.Economy.SawmillSizeCells;
             int origin = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
@@ -1293,8 +1396,26 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     uint before = world.NextBuildingId;
+                    if (armsScale && BuildingReservationsOn)
+                    {
+                        var cost = BuildingCostForPlacement(BuildingKind.Sawmill, faction, 0);
+                        int heldPlanks = ReservedConstructionPlanks(faction);
+                        ref var economy = ref world.Economies[faction - 1];
+                        if (economy.Planks - heldPlanks < cost.Planks && ArmsScaleCanPayExceptPlanks(faction, cost, world.Config.Economy.ArmsScaleWoodReserve))
+                        {
+                            CreateBuildingReservation(faction, BuildingKind.Sawmill, origin, side, 0);
+                            if (world.NextBuildingId != before)
+                            {
+                                uint reservationId = world.NextBuildingId - 1;
+                                RecordArmsScaleSawmill(faction);
+                                return reservationId;
+                            }
+                        }
+                    }
                     PlaceBuildingAt(faction, BuildingKind.Sawmill, origin, side, 0);
-                    return LineBuildingIdAfterPlacement(before, BuildingKind.Sawmill);
+                    uint id = armsScale && world.NextBuildingId == before ? 0 : LineBuildingIdAfterPlacement(before, BuildingKind.Sawmill);
+                    if (id != 0 && armsScale) RecordArmsScaleSawmill(faction);
+                    return id;
                 }
             return 0;
         }
@@ -1333,7 +1454,7 @@ namespace Rts.Simulation
             return 0;
         }
 
-        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1)
+        private uint PlaceAssembler(uint faction, int preferredBaseCell = -1, bool armsScale = false, bool allowReservation = false)
         {
             int size = world.Config.Economy.AssemblerSizeCells;
             int centre = AiExpandOn && preferredBaseCell >= 0 ? preferredBaseCell : world.Map.Cell(OwnCore(faction).Definition.Position);
@@ -1344,8 +1465,27 @@ namespace Rts.Simulation
                 if (PortIsOpen(OutputCell(origin, size, side), faction))
                 {
                     uint before = world.NextBuildingId;
+                    if (armsScale && allowReservation && BuildingReservationsOn)
+                    {
+                        var cost = BuildingCostForPlacement(BuildingKind.Assembler, faction, 0);
+                        int heldPlanks = ReservedConstructionPlanks(faction);
+                        ref var economy = ref world.Economies[faction - 1];
+                        if (economy.Planks - heldPlanks < cost.Planks && ArmsScaleCanPayExceptPlanks(faction, cost, world.Config.Economy.ArmsScaleWoodReserve))
+                        {
+                            CreateBuildingReservation(faction, BuildingKind.Assembler, origin, side, 0);
+                            if (world.NextBuildingId != before)
+                            {
+                                uint reservationId = world.NextBuildingId - 1;
+                                world.Buildings[reservationId - 1].Recipe = RecipeKind.ArmsKit;
+                                RecordArmsScaleAssembler(faction);
+                                return reservationId;
+                            }
+                        }
+                    }
                     PlaceBuildingAt(faction, BuildingKind.Assembler, origin, side, 0);
-                    return LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
+                    uint id = armsScale && world.NextBuildingId == before ? 0 : LineBuildingIdAfterPlacement(before, BuildingKind.Assembler);
+                    if (id != 0 && armsScale) RecordArmsScaleAssembler(faction);
+                    return id;
                 }
             return 0;
         }
