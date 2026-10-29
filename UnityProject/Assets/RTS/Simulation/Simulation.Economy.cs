@@ -520,16 +520,16 @@ namespace Rts.Simulation
             int villagers = largeVillagerCounts[factionIndex];
             if (AiExpandOn && villagers >= 5 && economy.Age == 0
                 && food * 1000 < villagers * world.Config.Economy.AiExpandPrimitiveFoodWorkerPermille)
-                return ResourceKind.Food;
+                return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 0);
             if (PrimitiveCraftOn && economy.Age == 0)
             {
-                if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return ResourceKind.Wood;
-                if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return ResourceKind.Stone;
+                if (wood == 0 || economy.Wood < world.Config.Economy.HutWoodCost + world.Config.Economy.SawmillWoodCost) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 7);
+                if (stone == 0 || economy.Stone < world.Config.Economy.StoneToolsStoneInput) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 7);
             }
             if (AiExpandOn && economy.Age >= 1 && AiExpandTownNeedsFunding(v.FactionId)
                 && economy.Stone < TownStoneCostFor(v.FactionId)
                 && stone * 1000 < villagers * world.Config.Economy.AiExpandTownStoneWorkerPermille)
-                return ResourceKind.Stone;
+                return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 2);
             bool foodHigh = false, woodHigh = false, stoneHigh = false;
             int foodShare = world.Config.Economy.AiExpandFoodWorkerPermille;
             int woodShare = world.Config.Economy.AiExpandWoodWorkerPermille;
@@ -560,11 +560,11 @@ namespace Rts.Simulation
             int townVillagerThreshold = world.Config.Economy.LargeTownVillagersPerTown;
             // A town is ahead of optional construction, but not ahead of the food floor that keeps the
             // large-economy villager line alive.
-            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 1);
             if (AiExpandTownNeedsFunding(v.FactionId))
             {
-                if (economy.Wood < TownWoodCostFor(v.FactionId)) return ResourceKind.Wood;
-                if (economy.Stone < TownStoneCostFor(v.FactionId)) return ResourceKind.Stone;
+                if (economy.Wood < TownWoodCostFor(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 2);
+                if (economy.Stone < TownStoneCostFor(v.FactionId)) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 2);
             }
             bool townNeedsStone = largeTownCounts[factionIndex] < desiredTowns
                 && economy.Stone < TownStoneCostFor(v.FactionId);
@@ -574,30 +574,36 @@ namespace Rts.Simulation
             // Keep the next ordinary-cost building payable before balancing the long-run food line. Food has priority
             // when the next villager batch is not covered; the reserve is a scheduling threshold only, and the
             // authoritative prices remain in EconomyRules' ordinary fields.
-            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return ResourceKind.Food;
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 8) return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 1);
             // A remote stone cluster is intentionally far away. Start that line once a small food floor is staffed;
             // waiting for the global food buffer to be full leaves no worker able to fund the first town.
             int stoneTarget = villagers < townVillagerThreshold
                 ? Math.Max(1, world.Config.Economy.LargeTownStoneGatherers / 3)
                 : world.Config.Economy.LargeTownStoneGatherers;
-            if (townNeedsStone && food >= stoneTarget * 2 && stone < stoneTarget) return ResourceKind.Stone;
+            if (townNeedsStone && food >= stoneTarget * 2 && stone < stoneTarget) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 2);
             // After the 300-villager line is filled, the next useful income is the infantry line. Keep a bounded
             // reserve for several ordinary-cost batches and name the missing input explicitly, including ore for
             // metal. This is a scheduling choice only; unit prices and training work remain unchanged.
             if (villagers >= AutoVillagerTargetFor(v.FactionId))
             {
                 var infantryInput = LargeInfantryInputKindFor(v.FactionId);
-                if (infantryInput != 0) return infantryInput;
+                if (infantryInput != 0) return LargeWorkKindReturn(v.FactionId, infantryInput, 3);
             }
-            if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return ResourceKind.Wood;
-            if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return ResourceKind.Food;
+            if (economy.Wood < world.Config.Economy.LargeConstructionReserveWood || barracksNeedsWood) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 7);
+            if (economy.Food < world.Config.Economy.VillagerFoodCost * 4) return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 1);
             if (StockAwareGatherOn)
             {
-                if (foodHigh && !woodHigh) return ResourceKind.Wood;
-                if (woodHigh && !foodHigh) return ResourceKind.Food;
-                if (foodHigh && woodHigh && economy.Age >= 1 && !stoneHigh) return ResourceKind.Stone;
+                if (foodHigh && !woodHigh) return LargeWorkKindReturn(v.FactionId, ResourceKind.Wood, 4);
+                if (woodHigh && !foodHigh) return LargeWorkKindReturn(v.FactionId, ResourceKind.Food, 4);
+                if (foodHigh && woodHigh && economy.Age >= 1 && !stoneHigh) return LargeWorkKindReturn(v.FactionId, ResourceKind.Stone, 4);
             }
-            return EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood);
+            return LargeWorkKindReturn(v.FactionId, EconomyDecision.KindToGather(food, wood, world.Config.Economy.LargeFoodPerWood), 5);
+        }
+
+        private ResourceKind LargeWorkKindReturn(uint faction, ResourceKind kind, int line)
+        {
+            RecordLargeWorkKindReturn(faction, kind, line);
+            return kind;
         }
 
         private int StockAwareSharePermille(int stock, int low, int share)
@@ -650,25 +656,28 @@ namespace Rts.Simulation
 
         private bool TryStockAwareSwitchAfterDropOff(ref VillagerState v)
         {
-            if (!StockAwareGatherOn || v.Held || world.Economies[v.FactionId - 1].AutoOff || v.NodeId == 0
-                || v.NodeId > world.Nodes.Length) return false;
+            if (!StockAwareGatherOn) return false;
+            RecordStockAwareSwitchCall(v.FactionId, 0);
+            if (v.Held || world.Economies[v.FactionId - 1].AutoOff || v.NodeId == 0
+                || v.NodeId > world.Nodes.Length) { RecordStockAwareSwitchCall(v.FactionId, 1); return false; }
             ResourceKind current = world.Nodes[v.NodeId - 1].Definition.Kind;
             var economy = world.Economies[v.FactionId - 1];
             bool high = current == ResourceKind.Food && economy.Food >= world.Config.Economy.GatherFoodHigh
                 || current == ResourceKind.Wood && economy.Wood >= world.Config.Economy.GatherWoodHigh
                 || current == ResourceKind.Stone && economy.Stone >= world.Config.Economy.GatherStoneHigh;
-            if (!high) return false;
+            if (!high) { RecordStockAwareSwitchCall(v.FactionId, 2); return false; }
             ResourceKind target = StockAwareSwitchTargetFor(v.FactionId, economy);
-            if (target == 0 || target == current) return false;
+            if (target == 0) { RecordStockAwareSwitchCall(v.FactionId, 3); return false; }
+            if (target == current) { RecordStockAwareSwitchCall(v.FactionId, 4); return false; }
             ref var state = ref world.Economies[v.FactionId - 1];
             if (world.Tick - state.StockAwareSwitchIntervalStartTick >= world.Config.Economy.GatherSwitchIntervalTicks)
             {
                 state.StockAwareSwitchIntervalStartTick = world.Tick;
                 state.StockAwareSwitchesInInterval = 0;
             }
-            if (state.StockAwareSwitchesInInterval >= world.Config.Economy.GatherSwitchPerInterval) return false;
+            if (state.StockAwareSwitchesInInterval >= world.Config.Economy.GatherSwitchPerInterval) { RecordStockAwareSwitchCall(v.FactionId, 5); return false; }
             int index = NearestWorkNode(v.Position, target, v.FactionId);
-            if (index < 0) return false;
+            if (index < 0) { RecordStockAwareSwitchCall(v.FactionId, 6); return false; }
             SetWorkNode(ref v, index);
             state.StockAwareSwitchesInInterval = checked(state.StockAwareSwitchesInInterval + 1);
             RecordStockAwareSwitch(v.FactionId);
