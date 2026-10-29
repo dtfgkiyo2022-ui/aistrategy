@@ -156,6 +156,30 @@ namespace Rts.Contracts
     public enum BeltSpeed : byte { Normal = 0, Fast = 1, VeryFast = 2 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
+    /// <summary>Why the automatic economy placed a building or belt. Zero means no reason (human/authored).</summary>
+    public enum AiReason : byte
+    {
+        None = 0,
+        PopulationCap = 1,
+        FoodIncome = 2,
+        BarracksTarget = 3,
+        FarResource = 4,
+        TownExpand = 5,
+        MaterialFor = 6,
+        MetalLine = 7,
+        MaterialForAssemblers = 8,
+        AssemblerRecipe = 9,
+        ResourceBelt = 10,
+        ProcessingBelt = 11,
+        ReservationWait = 12,
+        Unspecified = 13,
+        Stopped = 14,
+        Defense = 15,
+        NewUnitKind = 16,
+        Research = 17,
+        RiverCrossing = 18
+    }
+
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
         ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19, Caravanserai = 20,
         EngineerCamp = 21, Bridge = 22, Academy = 23, Monastery = 24, Harbor = 25, MineShaft = 26, Tollgate = 27, GrandHouse = 28, Shrine = 29, Town = 30,

@@ -66,7 +66,7 @@ namespace Rts.Simulation
             if (!TollgateSiteIsClear(faction, cells) || !KeepsMapConnected(faction, cells)) return;
             if (world.Economies[faction - 1].Wood < rules.TollgateWoodCost || world.Economies[faction - 1].Stone < rules.TollgateStoneCost) return;
             PlaceBuildingAt(faction, BuildingKind.Tollgate, command.Cell, command.Facing, 0);
-            world.Buildings[world.BuildingCount - 1].Held = true;
+            world.Buildings[world.BuildingCount - 1].Held = !(AiReasonsOn && automaticEconomyAction);
         }
 
         private int ActiveTollgateCount(uint faction)
@@ -201,6 +201,7 @@ namespace Rts.Simulation
                 }
             }
             if (chosen == null) return;
+            SetAiReason(AiReason.TownExpand, world.Economies[faction - 1].Age);
             PlaceBuildingAt(faction, BuildingKind.Tollgate, chosen[0], chosenFacing, 0);
             world.Buildings[world.BuildingCount - 1].Held = false;
         }

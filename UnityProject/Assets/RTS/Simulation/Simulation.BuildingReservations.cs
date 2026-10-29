@@ -100,6 +100,7 @@ namespace Rts.Simulation
             uint caravanOutpost = 0, uint caravanMarket = 0, Fix64 caravanDistance = default(Fix64), int caravanReward = 0,
             uint sanctuaryOutpost = 0)
         {
+            var aiReason = TakeAiReason(automaticEconomyAction);
             if (!BuildingReservationsOn || ReservationCount(faction) >= world.Config.Economy.ReservationLimit) return;
             int index = world.BuildingCount;
             if (index == world.Buildings.Length) System.Array.Resize(ref world.Buildings, index == 0 ? 4 : checked(index * 2));
@@ -112,10 +113,18 @@ namespace Rts.Simulation
                 Id = world.NextBuildingId, FactionId = faction, Kind = kind, OriginCell = origin,
                 BridgeCells = bridgeCells == null ? null : (int[])bridgeCells.Clone(),
                 WorkCell = requestedWorkCell >= 0 ? requestedWorkCell : workCell, Alive = true, Complete = false, Reserved = true, Hp = 0,
-                Progress = 0, Facing = facing, NodeId = nodeId, Held = IndustryOn,
+                Progress = 0, Facing = facing, NodeId = nodeId,
+                // In the reasons-enabled path this is an AI reservation, not a player-held building.
+                // Keep the legacy value when the flag is off so the old simulation is bit-for-bit unchanged.
+                Held = AiReasonsOn && automaticEconomyAction ? false : IndustryOn,
                 CaravanOutpostId = caravanOutpost, CaravanMarketId = caravanMarket, CaravanDistance = caravanDistance,
                 CaravanWoodReward = caravanReward, SanctuaryOutpostId = sanctuaryOutpost
             };
+            if (AiReasonsOn && automaticEconomyAction)
+            {
+                world.Buildings[index].AiReason = aiReason.reason;
+                world.Buildings[index].AiReasonValue = aiReason.value;
+            }
             world.NextBuildingId = checked(world.NextBuildingId + 1);
         }
 
@@ -144,6 +153,8 @@ namespace Rts.Simulation
                 Facing facing = reservation.Facing;
                 uint node = reservation.NodeId;
                 RecipeKind recipe = reservation.Recipe;
+                AiReason reservationReason = reservation.AiReason;
+                int reservationReasonValue = reservation.AiReasonValue;
                 uint caravanOutpost = reservation.CaravanOutpostId, caravanMarket = reservation.CaravanMarketId;
                 Fix64 caravanDistance = reservation.CaravanDistance;
                 int caravanReward = reservation.CaravanWoodReward;
@@ -152,11 +163,16 @@ namespace Rts.Simulation
                 // after PlaceBuildingAt closes the footprint, just as a direct placement does.
                 PlaceBuildingAt(faction, kind, origin, facing, node, reservation.BridgeCells, -1, index);
                 ref var started = ref world.Buildings[index];
-                started.Held = IndustryOn;
+                started.Held = AiReasonsOn && reservationReason != AiReason.None ? false : IndustryOn;
                 if (ArmsScaleOn) started.Recipe = recipe;
                 started.CaravanOutpostId = caravanOutpost; started.CaravanMarketId = caravanMarket;
                 started.CaravanDistance = caravanDistance; started.CaravanWoodReward = caravanReward;
                 started.SanctuaryOutpostId = sanctuaryOutpost;
+                if (AiReasonsOn && reservationReason != AiReason.None)
+                {
+                    started.AiReason = reservationReason;
+                    started.AiReasonValue = reservationReasonValue;
+                }
             }
         }
 

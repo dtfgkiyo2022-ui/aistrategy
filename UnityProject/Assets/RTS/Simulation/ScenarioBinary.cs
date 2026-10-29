@@ -239,6 +239,9 @@ private const int AiExpandExtensionVersion = 1;
          private const int BeltCraftExtensionVersion = 2;
          private const int BeltCraftExtensionV1DataLength = 20 * sizeof(int);
          private const int BeltCraftExtensionDataLength = 36 * sizeof(int);
+        private const int AiReasonsExtensionId = 83;
+        private const int AiReasonsExtensionVersion = 1;
+        private const int AiReasonsExtensionDataLength = sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -343,6 +346,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
              ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+            ,new ExtensionRegistration(AiReasonsExtensionId, AiReasonsExtensionVersion, AiReasonsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -995,6 +999,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == ArmsScaleExtensionId) ReadArmsScaleExtension(extension, c.Economy);
                     else if (id == DropSiteLimitExtensionId) ReadDropSiteLimitExtension(extension, c.Economy);
                     else if (id == AiBeltsExtensionId) ReadAiBeltsExtension(extension, c.Economy);
+                    else if (id == AiReasonsExtensionId) ReadAiReasonsExtension(extension, c.Economy);
                      else if (id == CraftTree2ExtensionId) ReadCraftTree2Extension(extension, c.Economy);
                     else if (id == CraftTree3ExtensionId) ReadCraftTree3Extension(extension, c.Economy);
                     else if (id == DirectPathMovementExtensionId) ReadDirectPathMovementExtension(extension, c.Economy);
@@ -1115,7 +1120,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                 extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == AiReasonsExtensionId && !c.Economy.AiReasons);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
             for (int i = 0; i < extensions.Count; i++)
@@ -1697,7 +1703,36 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     { hasAiFactory = true; extensions[i] = CreateAiFactoryExtension(c.Economy); }
                 if (c.Economy.PrimitiveCraft && c.Economy.AiFactory && !hasAiFactory)
                     extensions.Add(CreateAiFactoryExtension(c.Economy));
-                return extensions.ToArray();
+            bool hasAiReasons = false;
+            for (int i = 0; i < extensions.Count; i++)
+                if (extensions[i] != null && extensions[i].Id == AiReasonsExtensionId)
+                {
+                    hasAiReasons = true;
+                    extensions[i] = CreateAiReasonsExtension(c.Economy);
+                }
+            if (c.Economy.AiReasons && !hasAiReasons) extensions.Add(CreateAiReasonsExtension(c.Economy));
+            return extensions.ToArray();
+        }
+
+        private static ScenarioExtensionData CreateAiReasonsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiReasons ? 1 : 0);
+                return new ScenarioExtensionData { Id = AiReasonsExtensionId, Version = AiReasonsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiReasonsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1 || stream.Position != stream.Length) throw new InvalidDataException("Invalid AI reasons extension.");
+                e.AiReasons = enabled != 0;
+            }
         }
 
         private static ScenarioExtensionData CreateDirectPathMovementExtension(EconomyRules e)

@@ -89,6 +89,8 @@ namespace Rts.Simulation
         public bool EconomyScale;
         /// <summary>LargeEconomy: the large-map economy profile for up to 300 villagers and 1000 soldiers.</summary>
         public bool LargeEconomy;
+        /// <summary>38.20: records automatic placement reasons without affecting decisions.</summary>
+        public bool AiReasons;
         /// <summary>38.10: keeps automatic housing placements flowing on the large economy.</summary>
         public bool HouseFlow;
         public int HouseFlowStallTicks = 600;

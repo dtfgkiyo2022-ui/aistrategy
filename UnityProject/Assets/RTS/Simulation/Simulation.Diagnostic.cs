@@ -314,6 +314,7 @@ namespace Rts.Simulation
                 w.Value(n + "Id", b.Id); w.Value(n + "FactionId", b.FactionId); w.Value(n + "Kind", (byte)b.Kind);
                 w.Value(n + "OriginCell", b.OriginCell); w.Value(n + "WorkCell", b.WorkCell); w.Value(n + "Alive", b.Alive); w.Value(n + "Complete", b.Complete);
                 w.Value(n + "Hp", b.Hp); w.Value(n + "Progress", b.Progress); w.Value(n + "Queued", b.Queued); w.Value(n + "TrainRemaining", b.TrainRemaining);
+                if (AiReasonsOn) { w.Value(n + "AiReason", (byte)b.AiReason); w.Value(n + "AiReasonValue", b.AiReasonValue); }
                 if (AiFactoryOn && b.Kind == BuildingKind.Barracks)
                 {
                     w.Value(n + "AiFactoryIdleTicks", b.AiFactoryIdleTicks);
@@ -510,6 +511,7 @@ namespace Rts.Simulation
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
                 if (world.Config.Economy.BeltStack) w.Value(n + "StackCount", b.StackCount);
+                if (AiReasonsOn) { w.Value(n + "AiReason", (byte)b.AiReason); w.Value(n + "AiReasonValue", b.AiReasonValue); }
                 if (world.Config.Economy.BeltComponents)
                 {
                     w.Value(n + "Component", (byte)b.Component); w.Value(n + "SorterKind", (byte)b.SorterKind);
