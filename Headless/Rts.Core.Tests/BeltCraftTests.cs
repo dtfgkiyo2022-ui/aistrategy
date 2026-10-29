@@ -84,6 +84,28 @@ namespace Rts.Core.Tests
             throw new InvalidOperationException("no free square");
         }
 
+        private static int FindPassableRun(ScenarioDefinition scenario, int length)
+        {
+            var blocked = new HashSet<int>(scenario.Map.BlockedCellIds);
+            foreach (var node in scenario.ResourceNodes) blocked.Add(CellOf(scenario, node.Position));
+            int width = scenario.Map.WidthCells, height = scenario.Map.HeightCells;
+            int core = CellOf(scenario, scenario.Cores[0].Position), coreX = core % width, coreZ = core / width;
+            for (int z = 4; z < height - 4; z++)
+                for (int x = 4; x + length <= width - 4; x++)
+                {
+                    if (Math.Max(Math.Abs(x - coreX), Math.Abs(z - coreZ)) < 8) continue;
+                    bool free = true;
+                    for (int dx = 0; dx < length && free; dx++)
+                    {
+                        int cell = z * width + x + dx;
+                        if (blocked.Contains(cell) || scenario.Map.Terrain.Length == width * height && scenario.Map.Terrain[cell] != (byte)TerrainKind.Plain)
+                            free = false;
+                    }
+                    if (free) return z * width + x;
+                }
+            throw new InvalidOperationException("no passable run");
+        }
+
         private static (Battle simulation, CommandGateway gateway) AgeOne(ScenarioDefinition scenario)
         {
             var simulation = new Battle(scenario);
@@ -157,6 +179,15 @@ namespace Rts.Core.Tests
             var merger = EconomyCommand.PlaceMerger(1, 3, 10, Facing.East, BeltPriority.Right);
             Assert.That(merger.IsMerger, Is.True);
             Assert.That(merger.BeltPriority, Is.EqualTo(BeltPriority.Right));
+            var filter = EconomyCommand.PlaceFilterInserter(1, 4, 10, Facing.East, ResourceKind.Ore);
+            Assert.That(filter.IsInserter, Is.True);
+            Assert.That(filter.InserterComponent, Is.EqualTo(BeltComponentKind.FilterInserter));
+            Assert.That(filter.SorterKind, Is.EqualTo(ResourceKind.Ore));
+            var longInserter = EconomyCommand.PlaceLongInserter(1, 5, 10, Facing.East);
+            Assert.That(longInserter.InserterComponent, Is.EqualTo(BeltComponentKind.LongInserter));
+            var catapult = EconomyCommand.PlaceCatapult(1, 6, 10, 20, Facing.East, Facing.West);
+            Assert.That(catapult.IsCatapult, Is.True);
+            Assert.That(catapult.Cells, Is.EqualTo(new[] { 10, 20 }));
         }
 
         [Test]
@@ -175,7 +206,22 @@ namespace Rts.Core.Tests
             Assert.That(decoded.Economy.GearTicks, Is.EqualTo(40));
             Assert.That(decoded.Economy.MergerGears, Is.EqualTo(2));
             Assert.That(decoded.Economy.VeryFastBeltSteel, Is.EqualTo(1));
+            Assert.That(decoded.Economy.FilterInserterGears, Is.EqualTo(3));
+            Assert.That(decoded.Economy.CatapultRangeCells, Is.EqualTo(30));
             Assert.That(ScenarioBinary.Encode(decoded), Is.EqualTo(bytes));
+        }
+
+        [Test]
+        public void Extension80V2RoundTripsBeltCraftBFields()
+        {
+            var source = Scenario(true);
+            source.Economy.FilterInserterGears = 9;
+            source.Economy.CatapultBuffer = 31;
+            var decoded = ScenarioBinary.Decode(ScenarioBinary.Encode(source));
+            var extension = decoded.Extensions.Single(value => value.Id == 80);
+            Assert.That(extension.Version, Is.EqualTo(2));
+            Assert.That(decoded.Economy.FilterInserterGears, Is.EqualTo(9));
+            Assert.That(decoded.Economy.CatapultBuffer, Is.EqualTo(31));
         }
 
         [Test]
@@ -187,6 +233,57 @@ namespace Rts.Core.Tests
             Assert.That(on.Gears, Is.EqualTo(0));
             Assert.That(off.BeltCraftEnabled, Is.False);
             Assert.That(off.Gears, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void FilterAndLongInsertersUseTheirNewReachAndSelector()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.Inserters = true;
+            scenario.Economy.BeltTicksPerCell = 1;
+            scenario.Economy.InserterIntervalTicks = 1;
+            scenario.Economy.BeltStack = true;
+            int run = FindPassableRun(scenario, 10);
+            int filter = run + 3, longInserter = run + 7;
+            scenario.Belts = new[]
+            {
+                new BeltDefinition { Cell = filter - 1, FactionId = 1, Facing = Facing.East, Item = ResourceKind.Ore },
+                new BeltDefinition { Cell = filter, FactionId = 1, Facing = Facing.East, Component = BeltComponentKind.FilterInserter, SorterKind = ResourceKind.Metal },
+                new BeltDefinition { Cell = filter + 1, FactionId = 1, Facing = Facing.East },
+                new BeltDefinition { Cell = longInserter - 2, FactionId = 1, Facing = Facing.East, Item = ResourceKind.Metal },
+                new BeltDefinition { Cell = longInserter, FactionId = 1, Facing = Facing.East, Component = BeltComponentKind.LongInserter },
+                new BeltDefinition { Cell = longInserter + 2, FactionId = 1, Facing = Facing.East }
+            };
+            var simulation = new Battle(scenario);
+            simulation.Step(1, Array.Empty<ScheduledInput>());
+            var belts = simulation.Capture(1).Economy.Belts.ToDictionary(b => b.Cell);
+            Assert.That(belts[filter - 1].Item, Is.EqualTo(ResourceKind.Ore), "filter rejects the non-selected item");
+            Assert.That(belts[longInserter + 2].Item, Is.EqualTo(ResourceKind.Metal), "long inserter reaches two cells");
+        }
+
+        [Test]
+        public void CatapultDeliversAfterTimeoutAndRemovingReceiverRemovesPair()
+        {
+            var scenario = Scenario(true);
+            scenario.Economy.BeltTicksPerCell = 1;
+            int run = FindPassableRun(scenario, 8);
+            int launcher = run + 2, receiver = run + 5;
+            scenario.Belts = new[]
+            {
+                new BeltDefinition { Cell = launcher - 1, FactionId = 1, Facing = Facing.East, Item = ResourceKind.Ore },
+                new BeltDefinition { Cell = launcher, FactionId = 1, Facing = Facing.East, Component = BeltComponentKind.Catapult, PairCell = receiver },
+                new BeltDefinition { Cell = receiver, FactionId = 1, Facing = Facing.East, Component = BeltComponentKind.CatapultReceiver, PairCell = launcher },
+                new BeltDefinition { Cell = receiver + 1, FactionId = 1, Facing = Facing.East }
+            };
+            var simulation = new Battle(scenario);
+            var gateway = new CommandGateway(simulation);
+            for (long tick = 1; tick <= scenario.Economy.CatapultMaxWaitTicks + scenario.Economy.CatapultFlightTicks + 5; tick++)
+                gateway.Step();
+            var belts = simulation.Capture(1).Economy.Belts.ToDictionary(b => b.Cell);
+            Assert.That(belts[receiver + 1].Item, Is.EqualTo(ResourceKind.Ore));
+            gateway.SubmitEconomy(EconomyCommand.RemoveBelt(1, 1, receiver));
+            gateway.Step();
+            Assert.That(simulation.Capture(1).Economy.Belts.Any(b => b.Cell == launcher || b.Cell == receiver), Is.False);
         }
 
         [Test]

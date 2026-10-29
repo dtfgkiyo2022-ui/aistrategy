@@ -216,6 +216,11 @@ namespace Rts.Simulation
         public int MergerGears = 2, MergerPlanks = 2, VeryFastBeltGears = 2, VeryFastBeltSteel = 1;
         public int VeryFastBeltTicksPerCell = 2, VeryFastBeltMinAge = 3;
         public int BeltCraftAiGearsStockTarget = 0;
+        public int FilterInserterGears = 3, LongInserterGears = 4;
+        public int CatapultGears = 20, CatapultPlanks = 20, CatapultFittings = 10, CatapultRope = 10, CatapultSteel = 10;
+        public int CatapultReceiverGears = 5, CatapultReceiverPlanks = 10;
+        public int CatapultMinAge = 2, CatapultRangeCells = 30, CatapultLoad = 12, CatapultMaxWaitTicks = 40,
+            CatapultIntervalTicks = 20, CatapultFlightTicks = 30, CatapultBuffer = 24;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
