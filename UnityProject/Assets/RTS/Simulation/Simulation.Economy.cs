@@ -282,13 +282,8 @@ namespace Rts.Simulation
                         int beltCell = FindBeltDropOffCell(v);
                         if (beltCell >= 0)
                         {
-                            ref var belt = ref world.Belts[beltCell];
-                            if (belt.Item == 0)
+                            if (TryPlaceCarriedOnBelt(ref v))
                             {
-                                belt.Item = v.CarryKind;
-                                belt.Progress = 0;
-                                v.Carry--;
-                                RecordLargeBeltDrop(v.FactionId, v.CarryKind, 1);
                                 v.BeltWaitUntilTick = 0;
                                 if (v.Carry > 0) continue;
                                 FinishDropOff(ref v);
@@ -370,9 +365,8 @@ namespace Rts.Simulation
             if (!BeltDropOffOn) return false;
             villager.CarryKind = kind;
             int cell = FindBeltDropOffCell(villager);
-            if (cell < 0 || world.Belts[cell].Item != 0) return false;
-            world.Belts[cell].Item = kind;
-            world.Belts[cell].Progress = 0;
+            if (cell < 0 || !BeltCanReceiveLoad(world.Belts[cell], kind)) return false;
+            PutOnBelt(ref world.Belts[cell], kind, 1);
             RecordLargeBeltDrop(villager.FactionId, kind, 1);
             return true;
         }
@@ -381,10 +375,9 @@ namespace Rts.Simulation
         {
             if (!BeltDropOffOn || villager.Carry <= 0) return false;
             int cell = FindBeltDropOffCell(villager);
-            if (cell < 0 || world.Belts[cell].Item != 0) return false;
+            if (cell < 0 || !BeltCanReceiveLoad(world.Belts[cell], villager.CarryKind)) return false;
             ref var belt = ref world.Belts[cell];
-            belt.Item = villager.CarryKind;
-            belt.Progress = 0;
+            PutOnBelt(ref belt, villager.CarryKind, 1);
             villager.Carry--;
             RecordLargeBeltDrop(villager.FactionId, villager.CarryKind, 1);
             return true;
@@ -395,9 +388,12 @@ namespace Rts.Simulation
             if (!BeltDropOffOn || villager.Carry <= 0 || villager.BeltWaitUntilTick < 0) return false;
             int cell = FindBeltDropOffCell(villager);
             if (cell < 0) { villager.BeltWaitUntilTick = 0; return false; }
-            if (world.Belts[cell].Item == 0) return true;
+            if (BeltCanReceiveLoad(world.Belts[cell], villager.CarryKind)) return true;
             if (villager.BeltWaitUntilTick == 0)
+            {
+                RecordLargeBeltWait(villager.FactionId);
                 villager.BeltWaitUntilTick = checked(world.Tick + world.Config.Economy.BeltDropOffWaitTicks);
+            }
             if (world.Tick < villager.BeltWaitUntilTick) return true;
             villager.BeltWaitUntilTick = -1;
             return false;

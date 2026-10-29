@@ -391,9 +391,10 @@ namespace Rts.Simulation
         private int BeltDropOffAiMaxLinesForAge(int age)
         {
             var rules = world.Config.Economy;
-            return age <= 0 ? rules.BeltDropOffAiMaxLinesAge0
-                : age == 1 ? rules.BeltDropOffAiMaxLinesAge1
-                : age == 2 ? rules.BeltDropOffAiMaxLinesAge2 : rules.BeltDropOffAiMaxLinesAge3;
+            return age <= 0 ? (rules.BeltStack ? rules.BeltStackAiMaxLinesAge0 : rules.BeltDropOffAiMaxLinesAge0)
+                : age == 1 ? (rules.BeltStack ? rules.BeltStackAiMaxLinesAge1 : rules.BeltDropOffAiMaxLinesAge1)
+                : age == 2 ? (rules.BeltStack ? rules.BeltStackAiMaxLinesAge2 : rules.BeltDropOffAiMaxLinesAge2)
+                : (rules.BeltStack ? rules.BeltStackAiMaxLinesAge3 : rules.BeltDropOffAiMaxLinesAge3);
         }
 
         private bool BeltDropOffAiResourceAllowed(ResourceKind kind)
@@ -494,7 +495,8 @@ namespace Rts.Simulation
                 if (!PortIsOpen(start, faction) || !AiBeltCellKnown(faction, start) || taken[start]) continue;
                 var route = BeltRoute(faction, start, taken, (from, next) =>
                     BeltDropOffStockDestination(next, faction, largeClusterKinds[bestCluster]));
-                if (route.cells == null || route.cells.Length > rules.BeltDropOffAiMaxRouteCells) continue;
+                int maxRouteCells = rules.BeltStack ? rules.BeltStackAiMaxRouteCells : rules.BeltDropOffAiMaxRouteCells;
+                if (route.cells == null || route.cells.Length > maxRouteCells) continue;
                 if (route.cells.Length < bestRouteLength)
                 { bestRoute = route; bestRouteLength = route.cells.Length; }
             }

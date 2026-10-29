@@ -262,6 +262,8 @@ namespace Rts.Simulation
         internal int Hp;
         /// <summary>0 when empty. At most one item per cell.</summary>
         internal ResourceKind Item;
+        /// <summary>38.15: number of items in the cell. It is 0/1 when BeltStack is off.</summary>
+        internal byte StackCount;
         /// <summary>Ticks since the item entered this cell.</summary>
         internal int Progress;
         /// <summary>V3-3 (19): laid by the player; the automatic line routes around it.</summary>
@@ -490,6 +492,7 @@ namespace Rts.Simulation
                 Belts = new BeltState[checked(Config.Map.WidthCells * Config.Map.HeightCells)];
                 foreach (var b in Config.Belts)
                     Belts[b.Cell] = new BeltState { FactionId = b.FactionId, Facing = b.Facing, Hp = e.BeltHp, Item = b.Item,
+                        StackCount = b.Item == 0 ? (byte)0 : (byte)1,
                         Component = e.BeltComponents ? b.Component : BeltComponentKind.None,
                         SorterKind = e.BeltComponents ? b.SorterKind : (ResourceKind)0,
                         PairCell = e.BeltComponents && b.Component != BeltComponentKind.None ? b.PairCell : -1,
@@ -697,6 +700,10 @@ namespace Rts.Simulation
                 && e.BeltDropOffAiMinGatherers >= 0 && e.BeltDropOffAiMaxRouteCells >= 0
                 && e.BeltDropOffAiMaxLinesAge0 >= 0 && e.BeltDropOffAiMaxLinesAge1 >= 0
                 && e.BeltDropOffAiMaxLinesAge2 >= 0 && e.BeltDropOffAiMaxLinesAge3 >= 0), "Invalid belt-dropoff AI rules.");
+            Require(!e.BeltStack || (e.Enabled && e.Industry && e.BeltStackSize >= 1 && e.BeltStackSize <= 16
+                && e.BeltStackAiMaxLinesAge0 >= 0 && e.BeltStackAiMaxLinesAge1 >= 0
+                && e.BeltStackAiMaxLinesAge2 >= 0 && e.BeltStackAiMaxLinesAge3 >= 0
+                && e.BeltStackAiMaxRouteCells >= 0), "Invalid belt-stack rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1075,7 +1082,7 @@ namespace Rts.Simulation
                         || (e.TradeGoods && b.Item == ResourceKind.TradeGoods) || (e.Incense && b.Item == ResourceKind.Incense) || (e.Charms && b.Item == ResourceKind.Charms) || (e.Tools && b.Item == ResourceKind.Tools)
                         || (e.PrimitiveCraft && (b.Item == ResourceKind.StoneTools || b.Item == ResourceKind.Jerky)))
                     && villagerGrid.IsPassable(b.Cell) && !nodeCells.Contains(b.Cell), "Invalid belt.");
-                Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
+                if (!e.BeltStack) Require(++beltCounts[b.FactionId - 1] <= e.BeltLimit, "Too many belts.");
             }
             // Definitions may arrive in any enumeration order; IDs are explicit and contiguous.
             Array.Sort(c.Factions, (a, b) => a.Id.CompareTo(b.Id));
@@ -1244,6 +1251,10 @@ namespace Rts.Simulation
                  BeltDropOffAiMaxRouteCells = e.BeltDropOffAiMaxRouteCells, BeltDropOffAiMaxLinesAge0 = e.BeltDropOffAiMaxLinesAge0,
                  BeltDropOffAiMaxLinesAge1 = e.BeltDropOffAiMaxLinesAge1, BeltDropOffAiMaxLinesAge2 = e.BeltDropOffAiMaxLinesAge2,
                  BeltDropOffAiMaxLinesAge3 = e.BeltDropOffAiMaxLinesAge3,
+                 BeltStack = e.BeltStack, BeltStackSize = e.BeltStackSize,
+                 BeltStackAiMaxLinesAge0 = e.BeltStackAiMaxLinesAge0, BeltStackAiMaxLinesAge1 = e.BeltStackAiMaxLinesAge1,
+                 BeltStackAiMaxLinesAge2 = e.BeltStackAiMaxLinesAge2, BeltStackAiMaxLinesAge3 = e.BeltStackAiMaxLinesAge3,
+                 BeltStackAiMaxRouteCells = e.BeltStackAiMaxRouteCells,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,

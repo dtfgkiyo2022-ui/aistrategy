@@ -157,10 +157,9 @@ namespace Rts.Simulation
             if (front >= 0 && front < world.Belts.Length)
             {
                 ref var belt = ref world.Belts[front];
-                if (belt.FactionId == faction && belt.Component != BeltComponentKind.Inserter && belt.Item == 0)
+                if (belt.FactionId == faction && BeltCanReceiveLoad(belt, item))
                 {
-                    belt.Item = item;
-                    belt.Progress = 0;
+                    PutOnBelt(ref belt, item, 1);
                     return true;
                 }
             }
@@ -191,8 +190,7 @@ namespace Rts.Simulation
         {
             if (sourceKind == InserterSourceKind.Belt)
             {
-                world.Belts[sourceId].Item = 0;
-                world.Belts[sourceId].Progress = 0;
+                TakeFromBelt(ref world.Belts[sourceId], 1);
                 return;
             }
             if (sourceKind == InserterSourceKind.Core)

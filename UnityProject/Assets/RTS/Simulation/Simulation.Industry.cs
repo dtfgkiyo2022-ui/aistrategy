@@ -570,10 +570,10 @@ namespace Rts.Simulation
                 int port = OutputCell(b);
                 if (port < 0) continue;
                 ref var belt = ref world.Belts[port];
-                if (belt.FactionId != b.FactionId || belt.Item != 0) continue;
-                belt.Item = b.Kind == BuildingKind.Storage ? b.StorageKind : b.Kind == BuildingKind.Drill
+                ResourceKind outputKind = b.Kind == BuildingKind.Storage ? b.StorageKind : b.Kind == BuildingKind.Drill
                     ? world.Nodes[b.NodeId - 1].Definition.Kind : OutputKind(b);
-                belt.Progress = 0;
+                if (belt.FactionId != b.FactionId || !BeltCanReceiveLoad(belt, outputKind)) continue;
+                PutOnBelt(ref belt, outputKind, 1);
                 if (b.Kind == BuildingKind.Storage) { b.StorageCount--; b.Input = b.StorageCount; b.Output = b.StorageCount; if (b.StorageCount == 0) b.StorageKind = 0; }
                 else b.Output--;
             }

@@ -503,6 +503,7 @@ namespace Rts.Simulation
                 string n = "Belts[" + cell.ToString(CultureInfo.InvariantCulture) + "].";
                 w.Value(n + "FactionId", b.FactionId); w.Value(n + "Facing", (byte)b.Facing); w.Value(n + "Hp", b.Hp);
                 w.Value(n + "Item", (byte)b.Item); w.Value(n + "Progress", b.Progress); w.Value(n + "Held", b.Held);
+                if (world.Config.Economy.BeltStack) w.Value(n + "StackCount", b.StackCount);
                 if (world.Config.Economy.BeltComponents)
                 {
                     w.Value(n + "Component", (byte)b.Component); w.Value(n + "SorterKind", (byte)b.SorterKind);

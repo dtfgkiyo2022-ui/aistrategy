@@ -92,7 +92,8 @@ namespace Rts.Simulation
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held,
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
-                    own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal));
+                    own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
+                    own && BeltStackOn ? BeltItemCount(b) : 1));
             }
             var cavalryMission = CavalryMissionFor(faction);
             var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);

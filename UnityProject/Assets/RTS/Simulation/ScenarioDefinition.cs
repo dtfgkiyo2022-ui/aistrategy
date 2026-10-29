@@ -201,6 +201,12 @@ namespace Rts.Simulation
         public int BeltDropOffAiMinGatherers = 4, BeltDropOffAiMaxRouteCells = 30;
         public int BeltDropOffAiMaxLinesAge0 = 2, BeltDropOffAiMaxLinesAge1 = 4,
             BeltDropOffAiMaxLinesAge2 = 6, BeltDropOffAiMaxLinesAge3 = 8;
+        /// <summary>38.15: allows a belt cell to carry a small stack of one resource kind.</summary>
+        public bool BeltStack;
+        public int BeltStackSize = 4;
+        public int BeltStackAiMaxLinesAge0 = 3, BeltStackAiMaxLinesAge1 = 6,
+            BeltStackAiMaxLinesAge2 = 10, BeltStackAiMaxLinesAge3 = 14;
+        public int BeltStackAiMaxRouteCells = 60;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;
