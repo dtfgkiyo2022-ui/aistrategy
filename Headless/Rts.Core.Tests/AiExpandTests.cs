@@ -310,6 +310,8 @@ namespace Rts.Core.Tests
             // This legacy expansion-only fixture predates CraftRequired's age-up material costs.
             // Keep it focused on town targets; CraftRequiredTests covers the new advance gate.
             scenario.Economy.CraftRequired = false;
+            // BeltCraft requires CraftRequired.
+            scenario.Economy.BeltCraft = false;
             scenario.Economy.ArmsScale = false;
             scenario.Economy.CraftDepth = false;
             var e = scenario.Economy;

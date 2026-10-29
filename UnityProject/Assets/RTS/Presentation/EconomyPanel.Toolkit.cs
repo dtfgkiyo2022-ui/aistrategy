@@ -202,7 +202,7 @@ namespace Rts.Presentation
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter;
                 case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
-                case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
+                case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "merger": return Mode.Merger; case "build:merger": return Mode.Merger; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
                 case "blacksmith": return Mode.Blacksmith; default: return Mode.None;
@@ -319,6 +319,11 @@ namespace Rts.Presentation
                     Add(rows, "build:rope-hut", UiText.T("Rope hut (60 wood)", "縄工房（木材60）"), true, "", mode == Mode.RopeHut);
                 Add(rows, "line:Fittings", UiText.T("Ask for fittings line", "金具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Fittings);
                 Add(rows, "line:Rope", UiText.T("Ask for rope line", "ロープラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Rope);
+            }
+            if (economy.BeltCraftEnabled && economy.Age >= 1)
+            {
+                Add(rows, "build:gear-workshop", UiText.T("Gear workshop (80 wood)", "歯車工房（木材80）"), true, "", mode == Mode.GearWorkshop);
+                Add(rows, "line:Gears", UiText.T("Ask for gears line", "歯車ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Gears);
             }
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
@@ -452,6 +457,8 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, true), true, "", mode == Mode.FastBelt);
                 Add(rows, "build:splitter", UiText.T("Splitter", "分岐") + CraftMaterial(economy.SplitterPlankCost), true, "", mode == Mode.Splitter);
+                if (economy.BeltCraftEnabled)
+                    Add(rows, "build:merger", UiText.T("Merger", "合流") + CraftMaterial(0), true, "", mode == Mode.Merger);
                 Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石") + CraftMaterial(economy.SorterPlankCost), true, "", mode == Mode.Sorter);
                 Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
@@ -556,6 +563,7 @@ namespace Rts.Presentation
                 case "build:joinery": kind = BuildingKind.Joinery; return true;
                 case "build:metalworks": kind = BuildingKind.Metalworks; return true;
                 case "build:rope-hut": kind = BuildingKind.RopeHut; return true;
+                case "build:gear-workshop": kind = BuildingKind.GearWorkshop; return true;
                 case "build:scriptorium": kind = BuildingKind.Scriptorium; return true;
                 case "build:drying-rack": kind = BuildingKind.DryingRack; return true;
                 case "build:lapidary": kind = BuildingKind.Lapidary; return true;

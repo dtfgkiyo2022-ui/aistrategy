@@ -54,7 +54,9 @@ namespace Rts.Contracts
         /// <summary>AgeClockUx: pays the current discounted age price and completes the advance immediately.</summary>
         AdvanceNow = 27,
         /// <summary>EasyRebuild: moves an own completed building without changing its production state.</summary>
-        MoveBuilding = 28
+        MoveBuilding = 28,
+        /// <summary>38.16: changes a belt splitter or merger's priority.</summary>
+        SetBeltPriority = 29
     }
 
     /// <summary>V3-6: who owns the next edit of an automatic processing line.</summary>
@@ -63,7 +65,7 @@ namespace Rts.Contracts
     public enum EconomyTargetKind : byte { None = 0, ResourceNode = 1, Building = 2, Region = 3 }
 
     /// <summary>Public names for the processing lines that can be requested by a person, staff officer, or tactic.</summary>
- public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19, PrimitiveCraft = 20, Fittings = 21, Rope = 22 }
+ public enum ProcessingLineKind : byte { CoreMetal = 1, Steel = 2, CoreWood = 3, BowGear = 4, Rations = 5, Bricks = 6, Tack = 7, Planks = 8, Books = 9, Preserves = 10, Jewels = 11, TradeGoods = 12, Incense = 13, Charms = 14, RepairKits = 15, Tools = 16, CutStone = 17, Frames = 18, Assembler = 19, PrimitiveCraft = 20, Fittings = 21, Rope = 22, Gears = 23 }
 
     /// <summary>
     /// One direct economy operation from a player (or a script). Unlike a policy it is not interpreted and has no reply
@@ -94,10 +96,16 @@ namespace Rts.Contracts
         public ResourceKind SorterKind => (ResourceKind)(TargetId & 0x7fffffffU);
         /// <summary>V3-34.3: true for an inserter placement using the shared component command.</summary>
         public bool IsInserter => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x80000000U) != 0;
+        /// <summary>38.16: true for the merger placement variant of the shared component command.</summary>
+        public bool IsMerger => Kind == EconomyCommandKind.PlaceBeltComponent && (TargetId & 0x40000000U) != 0;
         /// <summary>SetAutoEconomy: the new state.</summary>
         public bool Enabled { get; }
         /// <summary>V3-20: true on a fast-belt placement command.</summary>
         public bool FastBelt => Enabled && (Kind == EconomyCommandKind.PlaceBelt || Kind == EconomyCommandKind.PlaceBeltComponent);
+        /// <summary>38.16: the explicitly selected priority of a splitter/merger command.</summary>
+        public BeltPriority BeltPriority => (BeltPriority)(TargetId & 0x3U);
+        /// <summary>38.16: true when the otherwise-compatible belt command requests the top speed.</summary>
+        public bool VeryFastBelt => Kind == EconomyCommandKind.PlaceBelt && TargetId == (uint)BeltSpeed.VeryFast;
         /// <summary>S-5: the region targeted by SetRegionControl or a regional economy policy.</summary>
         public uint RegionId => TargetId;
         /// <summary>S-5: the requested owner of RegionId.</summary>
@@ -246,8 +254,8 @@ namespace Rts.Contracts
 
         /// <summary>V3-20: places a normal or fast belt run.</summary>
         public static EconomyCommand PlaceBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings, BeltSpeed speed)
-            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None, 0,
-                speed == BeltSpeed.Fast, cells, facings);
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBelt, 0, 0, 0, 0, null, EconomyTargetKind.None,
+                speed == BeltSpeed.VeryFast ? (uint)BeltSpeed.VeryFast : 0, speed == BeltSpeed.Fast, cells, facings);
 
         public static EconomyCommand PlaceFastBelt(uint faction, ulong sequence, IReadOnlyList<int> cells, IReadOnlyList<Facing> facings)
             => PlaceBelt(faction, sequence, cells, facings, BeltSpeed.Fast);
@@ -255,6 +263,14 @@ namespace Rts.Contracts
         public static EconomyCommand PlaceSplitter(uint faction, ulong sequence, int cell, Facing facing)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
                 EconomyTargetKind.None, 0, false, null, null, facing);
+
+        public static EconomyCommand PlaceMerger(uint faction, ulong sequence, int cell, Facing facing, BeltPriority priority)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, 0x40000000U | (uint)priority, false, null, null, facing);
+
+        public static EconomyCommand SetBeltPriority(uint faction, ulong sequence, int cell, BeltPriority priority)
+            => new EconomyCommand(faction, sequence, EconomyCommandKind.SetBeltPriority, 0, cell, 0, 0, null,
+                EconomyTargetKind.None, (uint)priority, false);
 
         public static EconomyCommand PlaceSorter(uint faction, ulong sequence, int cell, Facing facing, ResourceKind kind)
             => new EconomyCommand(faction, sequence, EconomyCommandKind.PlaceBeltComponent, 0, cell, 0, 0, null,
@@ -605,11 +621,13 @@ namespace Rts.Contracts
         }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
-            BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1)
+            BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1,
+            BeltPriority priority = BeltPriority.None)
         {
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
-            Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count;
+            Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count; Priority = priority;
         }
+        public BeltPriority Priority { get; }
     }
 
     /// <summary>V3-6: the display-facing management state of one automatic processing line.</summary>
@@ -1087,6 +1105,8 @@ namespace Rts.Contracts
         public bool CraftDepthEnabled { get; }
         public int Fittings { get; }
         public int Rope { get; }
+        public bool BeltCraftEnabled { get; }
+        public int Gears { get; }
         public int AiFactoryPrimitiveLineCount { get; }
         public int AiFactoryAge1LineCount { get; }
         public int AiFactoryAge2LineCount { get; }
@@ -1257,7 +1277,8 @@ namespace Rts.Contracts
                 int advancePlanks = 0, int advanceCutStone = 0, int advanceFrames = 0, int advanceScholarly = 0,
                 int advanceSiegeParts = 0, int advanceMechanism = 0,
                 bool craftFlowEnabled = false, IReadOnlyList<ProductionStatView> productionStatistics = null,
-                bool craftDepthEnabled = false, int fittings = 0, int rope = 0)
+                bool craftDepthEnabled = false, int fittings = 0, int rope = 0,
+                bool beltCraftEnabled = false, int gears = 0)
         {
             ReservedCiv = reservedCiv; NextAgeGoldCost = nextAgeGoldCost; NextAgeClockTick = nextAgeClockTick; CivChoiceDeadlineTick = civChoiceDeadlineTick; AgeClockUx = ageClockUx;
             AutoAssaultOff = autoAssaultOff;
@@ -1381,7 +1402,8 @@ namespace Rts.Contracts
              AdvanceScholarly = advanceScholarly; AdvanceSiegeParts = advanceSiegeParts; AdvanceMechanism = advanceMechanism;
              CraftFlowEnabled = craftFlowEnabled;
              ProductionStatistics = ContractList.Copy(productionStatistics ?? Array.Empty<ProductionStatView>());
-             CraftDepthEnabled = craftDepthEnabled; Fittings = fittings; Rope = rope;
+            CraftDepthEnabled = craftDepthEnabled; Fittings = fittings; Rope = rope;
+            BeltCraftEnabled = beltCraftEnabled; Gears = gears;
             TotalWarFoodCost = totalWarFoodCost; TotalWarWoodCost = totalWarWoodCost; TotalWarMetalCost = totalWarMetalCost; TotalWarTicks = totalWarTicks;
             GrandWorkshopFoodCost = grandWorkshopFoodCost; GrandWorkshopWoodCost = grandWorkshopWoodCost;
             GrandWorkshopMetalCost = grandWorkshopMetalCost; GrandWorkshopTicks = grandWorkshopTicks;

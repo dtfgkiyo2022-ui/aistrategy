@@ -92,6 +92,7 @@ namespace Rts.Presentation
             table[ResourceKind.Jerky] = new CargoVisual(CargoShape.Crate, new Color(0.62f, 0.32f, 0.22f));
             table[ResourceKind.Fittings] = new CargoVisual(CargoShape.Ingot, new Color(0.42f, 0.45f, 0.50f));
             table[ResourceKind.Rope] = new CargoVisual(CargoShape.Sack, new Color(0.72f, 0.60f, 0.38f));
+            table[ResourceKind.Gears] = new CargoVisual(CargoShape.Ingot, new Color(0.30f, 0.34f, 0.40f));
             return table;
         }
     }

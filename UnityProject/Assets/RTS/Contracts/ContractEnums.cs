@@ -68,7 +68,7 @@ namespace Rts.Contracts
 
     /// <summary>Ver.3 resources (technical-design-v3 2.3). Ore and Metal are V3-2 (12.1); Metal is made, never found.</summary>
     /// <remarks>Gold (7) is the V3-5 resource B; Charcoal and Steel are V3-6.</remarks>
-    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28, SiegeEngine = 29, EliteKit = 30, StoneTools = 31, Jerky = 32, Fittings = 33, Rope = 34 }
+    public enum ResourceKind : byte { Food = 1, Wood = 2, Ore = 3, Metal = 4, Stone = 5, Gems = 6, Gold = 7, Charcoal = 8, Steel = 9, BowGear = 10, Rations = 11, Bricks = 12, Tack = 13, Planks = 14, Books = 15, Preserves = 16, TradeGoods = 17, Incense = 18, Charms = 19, RepairKits = 20, Tools = 21, CutStone = 22, Frames = 23, ArmsKit = 24, Scholarly = 25, FineArmsKit = 26, SiegeParts = 27, Mechanism = 28, SiegeEngine = 29, EliteKit = 30, StoneTools = 31, Jerky = 32, Fittings = 33, Rope = 34, Gears = 35 }
 
     /// <summary>
     /// V3-4 civilisation (technical-design-v3 26-27). Everyone starts Primitive and picks one of the two when advancing.
@@ -147,16 +147,19 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>V3-20 belt cell variants. None is the original straight belt.</summary>
-    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4, Inserter = 5 }
+    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4, Inserter = 5, Merger = 6 }
+
+    /// <summary>38.16: the side chosen first by a splitter or merger.</summary>
+    public enum BeltPriority : byte { None = 0, Left = 1, Right = 2 }
 
     /// <summary>V3-20 belt speed. Normal is the existing BeltTicksPerCell rule.</summary>
-    public enum BeltSpeed : byte { Normal = 0, Fast = 1 }
+    public enum BeltSpeed : byte { Normal = 0, Fast = 1, VeryFast = 2 }
 
     /// <summary>Ver.3 buildings (technical-design-v3 3.3, 12.2). The core is not a building. Mine and Smelter are V3-2.</summary>
     public enum BuildingKind : byte { Barracks = 1, Mine = 2, Smelter = 3, Farm = 4, House = 5, DropSite = 6, Wall = 7, Tower = 8, Blacksmith = 9, Market = 10, SiegeWorkshop = 11,
         ArcheryRange = 12, Stable = 13, Castle = 14, CharcoalKiln = 15, Steelworks = 16, LumberCamp = 17, Fletcher = 18, Quarry = 19, Caravanserai = 20,
         EngineerCamp = 21, Bridge = 22, Academy = 23, Monastery = 24, Harbor = 25, MineShaft = 26, Tollgate = 27, GrandHouse = 28, Shrine = 29, Town = 30,
-        Storage = 31, Mill = 32, BrickKiln = 33, Saddlery = 34, Sawmill = 35, Scriptorium = 36, DryingRack = 37, Lapidary = 38, Weaver = 39, IncenseHouse = 40, CharmWorkshop = 41, RepairYard = 42, ToolShop = 43, Stonecutter = 44, Joinery = 45, Assembler = 46, Drill = 47, Hut = 48, Metalworks = 49, RopeHut = 50 }
+        Storage = 31, Mill = 32, BrickKiln = 33, Saddlery = 34, Sawmill = 35, Scriptorium = 36, DryingRack = 37, Lapidary = 38, Weaver = 39, IncenseHouse = 40, CharmWorkshop = 41, RepairYard = 42, ToolShop = 43, Stonecutter = 44, Joinery = 45, Assembler = 46, Drill = 47, Hut = 48, Metalworks = 49, RopeHut = 50, GearWorkshop = 51 }
 
     /// <summary>CraftTree2 recipes. Values are compact so later stages can append recipes without gaps.</summary>
     public enum RecipeKind : byte { None = 0, Frames = 1, ArmsKit = 2, Scholarly = 3, SiegeParts = 4, Mechanism = 5, SiegeEngine = 6, EliteKit = 7, StoneTools = 8, Jerky = 9 }

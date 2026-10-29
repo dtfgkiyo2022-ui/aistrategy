@@ -12,6 +12,34 @@ namespace Rts.Simulation
     public sealed partial class Simulation
     {
         private bool CommonDrillOn => IndustryOn && (world.Config.Economy.CommonDrill || AiFactoryOn);
+        // A faction has at most one automatic gear workshop. Resolve the line owner once, then refresh it when
+        // StartBeltCraftLine binds a workshop. The previous implementation scanned every processing line for every
+        // gear workshop on every economy tick.
+        private readonly uint[] beltCraftAiWorkshopIds = new uint[2];
+        private readonly bool[] beltCraftAiWorkshopIdsKnown = new bool[2];
+
+        private bool IsBeltCraftAiWorkshop(uint faction, uint buildingId)
+        {
+            if (!BeltCraftOn || faction < 1 || faction > 2) return false;
+            int index = (int)faction - 1;
+            if (!beltCraftAiWorkshopIdsKnown[index])
+            {
+                uint found = 0;
+                for (int lineIndex = 0; lineIndex < world.ProcessingLines.Length; lineIndex++)
+                {
+                    var line = world.ProcessingLines[lineIndex];
+                    if (line.FactionId == faction && line.Kind == ProcessingLineKind.Gears
+                        && line.GearWorkshopId != 0 && IsAutoLine(lineIndex))
+                    {
+                        found = line.GearWorkshopId;
+                        break;
+                    }
+                }
+                beltCraftAiWorkshopIds[index] = found;
+                beltCraftAiWorkshopIdsKnown[index] = true;
+            }
+            return beltCraftAiWorkshopIds[index] == buildingId;
+        }
 
         /// <summary>Economy step, right after the belts: dig, smelt, then hand outputs to the belts.</summary>
         private void AdvanceIndustry()
@@ -167,6 +195,27 @@ namespace Rts.Simulation
                     {
                         economy.Rope = checked(economy.Rope + rules.CraftDepthRopeOutput);
                         economy.RopeProduced += rules.CraftDepthRopeOutput;
+                    }
+                }
+                else if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop)
+                {
+                    ref var economy = ref world.Economies[b.FactionId - 1];
+                    bool aiGearStockCap = IsBeltCraftAiWorkshop(b.FactionId, b.Id);
+                    if (b.Timer == 0 && (!aiGearStockCap || economy.Gears < rules.BeltCraftAiGearsStockTarget))
+                    {
+                        int before = b.Input;
+                        Fill(ref economy.Metal, ref b.Input, rules.GearMetalInput);
+                        economy.MetalConsumed = checked(economy.MetalConsumed + b.Input - before);
+                        if (b.Input >= rules.GearMetalInput)
+                        {
+                            b.Input -= rules.GearMetalInput;
+                            b.Timer = CraftTicksFor(b, rules.GearTicks);
+                        }
+                    }
+                    if (b.Timer > 0 && --b.Timer == 0)
+                    {
+                        economy.Gears = checked(economy.Gears + rules.GearsPerBatch);
+                        economy.GearsProduced = checked(economy.GearsProduced + rules.GearsPerBatch);
                     }
                 }
                 else if (ForestryOn && b.Kind == BuildingKind.Fletcher)
@@ -592,8 +641,9 @@ namespace Rts.Simulation
                 : kind == BuildingKind.Weaver ? ResourceKind.TradeGoods
                  : kind == BuildingKind.Stonecutter ? ResourceKind.CutStone
                  : kind == BuildingKind.Joinery ? ResourceKind.Frames
-                 : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
-                 : kind == BuildingKind.RopeHut ? ResourceKind.Rope
+                : kind == BuildingKind.Metalworks ? ResourceKind.Fittings
+                : kind == BuildingKind.RopeHut ? ResourceKind.Rope
+                 : kind == BuildingKind.GearWorkshop ? ResourceKind.Gears
                  : kind == BuildingKind.Assembler ? (ResourceKind)0
                  : kind == BuildingKind.IncenseHouse ? ResourceKind.Incense : kind == BuildingKind.CharmWorkshop ? ResourceKind.Charms : kind == BuildingKind.RepairYard ? ResourceKind.RepairKits : kind == BuildingKind.ToolShop ? ResourceKind.Tools : ResourceKind.Metal;
 
@@ -930,6 +980,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
+                if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop && item == ResourceKind.Metal && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood && b.Input < rules.BufferLimit) { b.Input++; return true; }
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks)
                 {
@@ -1069,6 +1120,7 @@ namespace Rts.Simulation
                 if (b.Kind == BuildingKind.Smelter && item == ResourceKind.Ore) return true;
                 if (CraftDepthOn && b.Kind == BuildingKind.Metalworks && item == ResourceKind.Metal) return true;
                 if (CraftDepthOn && b.Kind == BuildingKind.RopeHut && item == ResourceKind.Wood) return true;
+                if (BeltCraftOn && b.Kind == BuildingKind.GearWorkshop && item == ResourceKind.Metal) return true;
                 if (CharcoalKilnAllowed(faction) && b.Kind == BuildingKind.CharcoalKiln && item == ResourceKind.Wood) return true;
                 if (ProcessingOn && b.Kind == BuildingKind.Steelworks
                     && (item == ResourceKind.Metal || item == ResourceKind.Charcoal)) return true;
@@ -1244,6 +1296,10 @@ namespace Rts.Simulation
             {
                 int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
             }
+            if (BeltCraftOn && target.Kind == BuildingKind.GearWorkshop && kind == ResourceKind.Metal)
+            {
+                int put = Math.Min(amount, rules.BufferLimit - target.Input); target.Input += put; return put;
+            }
             if (ProcessingOn && target.Kind == BuildingKind.Steelworks)
             {
                 if (kind == ResourceKind.Metal)
@@ -1390,7 +1446,8 @@ namespace Rts.Simulation
                 && ((source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                     || (source == BuildingKind.CharcoalKiln && kind == ResourceKind.Charcoal)))
                 || (CraftDepthOn && destination == BuildingKind.Metalworks && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
-                || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || (CraftDepthOn && destination == BuildingKind.RopeHut && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
+               || (BeltCraftOn && destination == BuildingKind.GearWorkshop && source == BuildingKind.Smelter && kind == ResourceKind.Metal)
                || (ForestryOn && destination == BuildingKind.Fletcher && source == BuildingKind.LumberCamp && kind == ResourceKind.Wood)
                || (RationsOn && destination == BuildingKind.Mill && source == BuildingKind.Farm && kind == ResourceKind.Food)
                || (TackOn && destination == BuildingKind.Saddlery && (kind == ResourceKind.Food || kind == ResourceKind.Wood))

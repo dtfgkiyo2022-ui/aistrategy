@@ -209,6 +209,12 @@ namespace Rts.Simulation
                     w.Value(n + "EliteKit", e.EliteKit); w.Value(n + "EliteKitProduced", e.EliteKitProduced); w.Value(n + "EliteKitConsumed", e.EliteKitConsumed);
                     w.Value(n + "CannonProduced", e.CannonProduced);
                 }
+                if (BeltCraftOn)
+                {
+                    w.Value(n + "Gears", e.Gears);
+                    w.Value(n + "GearsProduced", e.GearsProduced);
+                    w.Value(n + "GearsConsumed", e.GearsConsumed);
+                }
                 if (BooksOn)
                 {
                     w.Value(n + "Books", e.Books); w.Value(n + "BooksProduced", e.BooksProduced);
@@ -508,9 +514,13 @@ namespace Rts.Simulation
                 {
                     w.Value(n + "Component", (byte)b.Component); w.Value(n + "SorterKind", (byte)b.SorterKind);
                     w.Value(n + "PairCell", b.PairCell); w.Value(n + "SplitterRightNext", b.SplitterRightNext); w.Value(n + "Fast", b.Fast);
+                    if (BeltCraftOn)
+                    {
+                        w.Value(n + "VeryFast", b.VeryFast); w.Value(n + "Priority", (byte)b.Priority);
+                    }
                 }
             }
-            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
+            if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || BeltCraftOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);
                 w.Value("ProcessingLines.Count", (uint)world.ProcessingLines.Length);
@@ -535,6 +545,7 @@ namespace Rts.Simulation
                     if (RepairKitsOn) w.Value(n + "RepairYardId", line.RepairYardId);
                     if (ToolsOn) w.Value(n + "ToolShopId", line.ToolShopId);
                     if (PrimitiveCraftOn) w.Value(n + "HutId", line.HutId);
+                    if (BeltCraftOn) w.Value(n + "GearWorkshopId", line.GearWorkshopId);
                     if (AiFactoryOn) w.Value(n + "DrillId", line.DrillId);
                     if (world.Config.Economy.LineRebuildDelayTicks > 0)
                         w.Value(n + "RebuildAvailableTick", line.RebuildAvailableTick);

@@ -51,6 +51,7 @@ namespace Rts.Simulation
         public ResourceKind SorterKind;
         public int PairCell;
         public BeltSpeed Speed;
+        public BeltPriority Priority;
     }
 
     public struct VillagerDefinition
@@ -207,6 +208,14 @@ namespace Rts.Simulation
         public int BeltStackAiMaxLinesAge0 = 3, BeltStackAiMaxLinesAge1 = 6,
             BeltStackAiMaxLinesAge2 = 10, BeltStackAiMaxLinesAge3 = 14;
         public int BeltStackAiMaxRouteCells = 60;
+        /// <summary>38.16: gear costs and merger/very-fast belt rules. False preserves the BeltStack state exactly.</summary>
+        public bool BeltCraft;
+        public int GearWorkshopSizeCells = 2, GearWorkshopWoodCost = 80, GearWorkshopWork = 250, GearWorkshopHp = 500;
+        public int GearMetalInput = 1, GearsPerBatch = 2, GearTicks = 40;
+        public int FastBeltGears = 1, SplitterGears = 2, SorterGears = 3, UndergroundBeltGears = 4, InserterGears = 2;
+        public int MergerGears = 2, MergerPlanks = 2, VeryFastBeltGears = 2, VeryFastBeltSteel = 1;
+        public int VeryFastBeltTicksPerCell = 2, VeryFastBeltMinAge = 3;
+        public int BeltCraftAiGearsStockTarget = 0;
         public int StorageSizeCells = 2, StorageWoodCost = 120, StorageWork = 300, StorageHp = 700, StorageCapacity = 100;
         /// <summary>Mine (12.2): footprint, wood, work, HP, and ticks per ore taken from the point under it.</summary>
         public int MineSizeCells = 2, MineWoodCost = 60, MineWork = 200, MineHp = 400, MineIntervalTicks = 20;

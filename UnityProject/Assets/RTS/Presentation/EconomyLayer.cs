@@ -1299,6 +1299,7 @@ namespace Rts.Presentation
                 case BuildingKind.Hut: return UiText.T("Hut", "作業小屋");
                 case BuildingKind.Metalworks: return UiText.T("Metalworks", "金属加工場");
                 case BuildingKind.RopeHut: return UiText.T("Rope hut", "縄工房");
+                case BuildingKind.GearWorkshop: return UiText.T("Gear workshop", "歯車工房");
                 default: return kind.ToString();
             }
         }
@@ -1314,7 +1315,7 @@ namespace Rts.Presentation
             foreach (var b in economy.Belts)
             {
                 beltSeen.Add(b.Cell);
-                int ticks = b.Speed == BeltSpeed.Fast && economy.FastBeltTicksPerCell > 0 ? economy.FastBeltTicksPerCell : Mathf.Max(1, economy.BeltTicksPerCell);
+                int ticks = b.Speed == BeltSpeed.VeryFast && economy.BeltCraftEnabled ? 2 : b.Speed == BeltSpeed.Fast && economy.FastBeltTicksPerCell > 0 ? economy.FastBeltTicksPerCell : Mathf.Max(1, economy.BeltTicksPerCell);
                 if (b.FactionId == ownFaction && !beltOwnCells.Contains(NextCell(b.Cell, b.Facing))) beltEndCells.Add(b.Cell);
                 var centre = CellCenter(b.Cell);
                 var dir = Direction(b.Facing);

@@ -70,6 +70,7 @@ namespace Rts.Presentation
                 case TopBarResourceVisibility.ResourceKind.Wood: return ResourceKind.Wood;
                 case TopBarResourceVisibility.ResourceKind.Ore: return ResourceKind.Ore;
                 case TopBarResourceVisibility.ResourceKind.Metal: return ResourceKind.Metal;
+                case TopBarResourceVisibility.ResourceKind.Gears: return ResourceKind.Gears;
                 case TopBarResourceVisibility.ResourceKind.Stone: return ResourceKind.Stone;
                 case TopBarResourceVisibility.ResourceKind.Gems: return ResourceKind.Gems;
                 case TopBarResourceVisibility.ResourceKind.Gold: return ResourceKind.Gold;

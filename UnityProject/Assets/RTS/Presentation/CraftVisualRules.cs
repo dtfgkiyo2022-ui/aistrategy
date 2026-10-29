@@ -55,7 +55,7 @@ namespace Rts.Presentation
                 || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse
                 || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop
                 || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Hut
-                || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut;
+                || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop;
         }
 
         public static ResourceKind MissingInputKind(BuildingKind kind)
@@ -114,6 +114,7 @@ namespace Rts.Presentation
                 case BuildingKind.Hut: recipe = new CraftRecipe(ResourceKind.Stone, ResourceKind.Wood, ResourceKind.StoneTools); return true;
                 case BuildingKind.Metalworks: recipe = new CraftRecipe(ResourceKind.Metal, 0, ResourceKind.Fittings); return true;
                 case BuildingKind.RopeHut: recipe = new CraftRecipe(ResourceKind.Wood, 0, ResourceKind.Rope); return true;
+                case BuildingKind.GearWorkshop: recipe = new CraftRecipe(ResourceKind.Metal, 0, ResourceKind.Gears); return true;
                 default: recipe = default(CraftRecipe); return false;
             }
         }

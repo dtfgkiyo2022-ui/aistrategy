@@ -40,8 +40,11 @@ namespace Rts.Simulation
                 case EconomyCommandKind.PlaceBeltComponent:
                     PlaceBeltComponent(faction, c, IndustryOn);
                     return;
+                case EconomyCommandKind.SetBeltPriority:
+                    SetBeltPriority(faction, c.Cell, c.BeltPriority);
+                    return;
                 case EconomyCommandKind.ReturnLineToAuto:
-                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn) ReturnLineToAuto(faction, c.LineId);
+                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || BeltCraftOn) ReturnLineToAuto(faction, c.LineId);
                     return;
                 case EconomyCommandKind.RequestLine:
                     RequestProcessingLine(faction, c);
@@ -169,6 +172,7 @@ namespace Rts.Simulation
                         && !(PrimitiveCraftOn && kind == BuildingKind.Hut)
                         && !(CraftDepthOn && world.Economies[faction - 1].Age >= 1 && kind == BuildingKind.Metalworks)
                         && !(CraftDepthOn && PrimitiveCraftOn && kind == BuildingKind.RopeHut)
+                        && !(BeltCraftOn && world.Economies[faction - 1].Age >= 1 && kind == BuildingKind.GearWorkshop)
                         && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
@@ -215,7 +219,8 @@ namespace Rts.Simulation
                          || !KeepsMapConnected(faction, c.Cell, size)) return;
                     if (economy.Wood < placementCost.Wood || economy.Stone < placementCost.Stone
                         || CraftRequiredOn && (economy.Planks < placementCost.Planks || economy.Frames < placementCost.Frames
-                            || economy.Bricks < placementCost.Bricks || economy.SiegeParts < placementCost.SiegeParts))
+                            || economy.Bricks < placementCost.Bricks || economy.SiegeParts < placementCost.SiegeParts
+                            || economy.Fittings < placementCost.Fittings || economy.Rope < placementCost.Rope))
                     {
                         if (BuildingReservationsOn) CreateBuildingReservation(faction, kind, c.Cell,
                             kind == BuildingKind.Barracks ? Facing.North : c.Facing, node, null, -1,

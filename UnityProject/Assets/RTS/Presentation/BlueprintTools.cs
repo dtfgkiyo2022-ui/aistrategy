@@ -42,11 +42,12 @@ namespace Rts.Presentation
         public ResourceKind SorterKind;
         public int PairCell;
         public BeltSpeed Speed;
+        public BeltPriority Priority;
 
         public BlueprintBelt(int x, int z, Facing facing) : this(x, z, facing, BeltComponentKind.None, 0, -1, BeltSpeed.Normal) { }
 
-        public BlueprintBelt(int x, int z, Facing facing, BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed)
-        { X = x; Z = z; Facing = facing; Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; }
+        public BlueprintBelt(int x, int z, Facing facing, BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, BeltPriority priority = BeltPriority.None)
+        { X = x; Z = z; Facing = facing; Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Priority = priority; }
     }
 
     /// <summary>Versioned blueprint data and geometry. File access stays in the Unity presentation layer.</summary>
@@ -75,7 +76,8 @@ namespace Rts.Presentation
                 var b = blueprint.Belts[i];
                 json.Append("{\"x\":").Append(b.X).Append(",\"z\":").Append(b.Z).Append(",\"facing\":").Append((int)b.Facing)
                     .Append(",\"component\":").Append((int)b.Component).Append(",\"sorterKind\":").Append((int)b.SorterKind)
-                    .Append(",\"pairCell\":").Append(b.PairCell).Append(",\"speed\":").Append((int)b.Speed).Append('}');
+                    .Append(",\"pairCell\":").Append(b.PairCell).Append(",\"speed\":").Append((int)b.Speed)
+                    .Append(",\"priority\":").Append((int)b.Priority).Append('}');
             }
             return json.Append("]}").ToString();
         }
@@ -100,7 +102,7 @@ namespace Rts.Presentation
             foreach (Match match in Objects(json, "belts"))
                 result.Belts.Add(new BlueprintBelt(Number(match.Value, "x", 0), Number(match.Value, "z", 0), (Facing)Number(match.Value, "facing", 0),
                     (BeltComponentKind)Number(match.Value, "component", 0), (ResourceKind)Number(match.Value, "sorterKind", 0),
-                    Number(match.Value, "pairCell", -1), (BeltSpeed)Number(match.Value, "speed", 0)));
+                    Number(match.Value, "pairCell", -1), (BeltSpeed)Number(match.Value, "speed", 0), (BeltPriority)Number(match.Value, "priority", 0)));
             if (sourceVersion < 3)
                 for (int i = 0; i < result.Belts.Count; i++)
                     if (result.Belts[i].Component == BeltComponentKind.Inserter)
@@ -130,7 +132,7 @@ namespace Rts.Presentation
                     int pairX = b.PairCell < 0 ? -1 : b.PairCell % oldWidth;
                     int pairZ = b.PairCell < 0 ? -1 : b.PairCell / oldWidth;
                     int pair = b.PairCell < 0 ? -1 : (oldHeight - 1 - pairZ) + pairX * oldHeight;
-                    result.Belts[i] = new BlueprintBelt(oldHeight - 1 - b.Z, b.X, Turn(b.Facing), b.Component, b.SorterKind, pair, b.Speed);
+                    result.Belts[i] = new BlueprintBelt(oldHeight - 1 - b.Z, b.X, Turn(b.Facing), b.Component, b.SorterKind, pair, b.Speed, b.Priority);
                 }
                 result.Width = oldHeight;
                 result.Height = oldWidth;

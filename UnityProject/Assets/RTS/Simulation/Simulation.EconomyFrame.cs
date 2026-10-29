@@ -92,8 +92,9 @@ namespace Rts.Simulation
                 if (!own && !world.Factions[faction - 1].VisibleCells[cell]) continue;
                 belts.Add(new BeltView(cell, b.FactionId, b.Facing, own ? b.Item : 0, own ? b.Progress : 0, own && b.Held,
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
-                    own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
-                    own && BeltStackOn ? BeltItemCount(b) : 1));
+                    own && b.VeryFast ? BeltSpeed.VeryFast : own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
+                    own && BeltStackOn ? BeltItemCount(b) : 1,
+                    own && BeltCraftOn ? b.Priority : BeltPriority.None));
             }
             var cavalryMission = CavalryMissionFor(faction);
             var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);
@@ -425,7 +426,8 @@ namespace Rts.Simulation
                      advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism,
                      craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction),
                      craftDepthEnabled: CraftDepthOn,
-                     fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0);
+                     fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0,
+                     beltCraftEnabled: BeltCraftOn, gears: BeltCraftOn ? economy.Gears : 0);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.
