@@ -1577,15 +1577,16 @@ namespace Rts.Presentation
             if (camera == null) return;
             int shown = 0;
             float maxDistance = CargoIconDistance * CargoIconDistance;
-            foreach (var item in items)
+            foreach (var cellItems in items)
+            foreach (var item in cellItems.Value)
             {
-                var icon = item.Value.transform.Find("CargoIcon");
+                var icon = item.transform.Find("CargoIcon");
                 if (icon == null) continue;
-                bool visible = shown < MaxCargoIcons && (detailModeEnabled || (camera.transform.position - item.Value.transform.position).sqrMagnitude <= maxDistance);
+                bool visible = shown < MaxCargoIcons && (detailModeEnabled || (camera.transform.position - item.transform.position).sqrMagnitude <= maxDistance);
                 icon.gameObject.SetActive(visible && icon.GetComponent<Renderer>().sharedMaterial != null);
                 if (!visible) continue;
                 shown++;
-                icon.position = item.Value.transform.position + Vector3.up * 0.48f;
+                icon.position = item.transform.position + Vector3.up * 0.48f;
                 icon.rotation = Quaternion.LookRotation(camera.transform.position - icon.position, Vector3.up);
             }
         }

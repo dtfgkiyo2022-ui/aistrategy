@@ -714,7 +714,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 104; i++) cells.Add("");
+                for (int i = 0; i < 113; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
