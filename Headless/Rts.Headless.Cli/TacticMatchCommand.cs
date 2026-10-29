@@ -98,7 +98,12 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--belt-dropoff-off")) { scenario.Economy.BeltDropOff = false; scenario.Economy.BeltDropOffAi = false; }
         if (options.ContainsKey("--belt-dropoff-ai-off")) scenario.Economy.BeltDropOffAi = false;
         if (options.ContainsKey("--belt-stack-off")) scenario.Economy.BeltStack = false;
-        if (options.ContainsKey("--belt-craft-off")) scenario.Economy.BeltCraft = false;
+        if (options.ContainsKey("--belt-craft-off"))
+        {
+            scenario.Economy.BeltCraft = false;
+            scenario.Economy.AiBeltParts = false;
+        }
+         if (options.ContainsKey("--ai-belt-parts-off")) scenario.Economy.AiBeltParts = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);

@@ -210,6 +210,9 @@ namespace Rts.Simulation
         public int BeltStackAiMaxRouteCells = 60;
         /// <summary>38.16: gear costs and merger/very-fast belt rules. False preserves the BeltStack state exactly.</summary>
         public bool BeltCraft;
+        /// <summary>38.19.5: the automatic economy may use belt parts while laying its own lines.</summary>
+        public bool AiBeltParts;
+        public int AiBeltClusterTries = 3, AiBeltClusterRetryTicks = 3000, AiMergeMaxCells = 12;
         public int GearWorkshopSizeCells = 2, GearWorkshopWoodCost = 80, GearWorkshopWork = 250, GearWorkshopHp = 500;
         public int GearMetalInput = 1, GearsPerBatch = 2, GearTicks = 40;
         public int FastBeltGears = 1, SplitterGears = 2, SorterGears = 3, UndergroundBeltGears = 4, InserterGears = 2;

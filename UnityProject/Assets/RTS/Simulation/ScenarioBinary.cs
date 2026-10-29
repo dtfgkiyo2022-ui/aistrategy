@@ -238,7 +238,10 @@ private const int AiExpandExtensionVersion = 1;
          private const int BeltCraftExtensionV1 = 1;
          private const int BeltCraftExtensionVersion = 2;
          private const int BeltCraftExtensionV1DataLength = 20 * sizeof(int);
-         private const int BeltCraftExtensionDataLength = 36 * sizeof(int);
+          private const int BeltCraftExtensionDataLength = 36 * sizeof(int);
+         private const int AiBeltPartsExtensionId = 85;
+         private const int AiBeltPartsExtensionVersion = 1;
+         private const int AiBeltPartsExtensionDataLength = 4 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -342,7 +345,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
              ,new ExtensionRegistration(ArmsScaleExtensionId, ArmsScaleExtensionVersion, ArmsScaleExtensionDataLength)
             ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
-             ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+              ,new ExtensionRegistration(BeltCraftExtensionId, BeltCraftExtensionVersion, BeltCraftExtensionDataLength)
+             ,new ExtensionRegistration(AiBeltPartsExtensionId, AiBeltPartsExtensionVersion, AiBeltPartsExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -1011,7 +1015,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
                       else if (id == HouseFlowExtensionId) ReadHouseFlowExtension(extension, c.Economy);
                       else if (id == BeltStackExtensionId) ReadBeltStackExtension(extension, c.Economy);
-                      else if (id == BeltCraftExtensionId) ReadBeltCraftExtension(extension, c.Economy);
+                       else if (id == BeltCraftExtensionId) ReadBeltCraftExtension(extension, c.Economy);
+                       else if (id == AiBeltPartsExtensionId) ReadAiBeltPartsExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1115,9 +1120,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
-                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == BeltCraftExtensionId && !c.Economy.BeltCraft);
+                   extensions.RemoveAll(extension => extension != null && extension.Id == AiBeltPartsExtensionId && !c.Economy.AiBeltParts);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-            bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false;
+             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasArmsScale = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false, hasBeltCraft = false, hasAiBeltParts = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1181,7 +1187,12 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasBeltCraft = true;
                       extensions[i] = CreateBeltCraftExtension(c.Economy);
                   }
-                if (extensions[i].Id == LargeEconomyExtensionId)
+                   if (extensions[i].Id == AiBeltPartsExtensionId)
+                   {
+                       hasAiBeltParts = true;
+                       extensions[i] = CreateAiBeltPartsExtension(c.Economy);
+                   }
+                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
                     extensions[i] = CreateLargeEconomyExtension(c.Economy);
@@ -1221,8 +1232,10 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                      extensions.Add(CreateArmsScaleExtension(c.Economy));
                   if (c.Economy.BeltStack && !hasBeltStack)
                       extensions.Add(CreateBeltStackExtension(c.Economy));
-                  if (c.Economy.BeltCraft && !hasBeltCraft)
-                      extensions.Add(CreateBeltCraftExtension(c.Economy));
+                   if (c.Economy.BeltCraft && !hasBeltCraft)
+                       extensions.Add(CreateBeltCraftExtension(c.Economy));
+                   if (c.Economy.AiBeltParts && !hasAiBeltParts)
+                       extensions.Add(CreateAiBeltPartsExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2411,6 +2424,36 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     e.CatapultMaxWaitTicks = reader.ReadInt32(); e.CatapultIntervalTicks = reader.ReadInt32(); e.CatapultFlightTicks = reader.ReadInt32(); e.CatapultBuffer = reader.ReadInt32();
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-craft extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateAiBeltPartsExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.AiBeltParts ? 1 : 0);
+                writer.Write(e.AiBeltClusterTries);
+                writer.Write(e.AiBeltClusterRetryTicks);
+                writer.Write(e.AiMergeMaxCells);
+                return new ScenarioExtensionData { Id = AiBeltPartsExtensionId, Version = AiBeltPartsExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadAiBeltPartsExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid AI belt-parts flag.");
+                e.AiBeltParts = enabled != 0;
+                e.AiBeltClusterTries = reader.ReadInt32();
+                e.AiBeltClusterRetryTicks = reader.ReadInt32();
+                e.AiMergeMaxCells = reader.ReadInt32();
+                if (e.AiBeltClusterTries <= 0 || e.AiBeltClusterRetryTicks <= 0 || e.AiMergeMaxCells <= 0)
+                    throw new InvalidDataException("Invalid AI belt-parts parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing AI belt-parts extension data.");
             }
         }
 

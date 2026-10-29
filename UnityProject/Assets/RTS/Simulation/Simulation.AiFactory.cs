@@ -9,6 +9,7 @@ namespace Rts.Simulation
     {
         private bool[] aiFactoryTakenWorkspace, aiFactorySeenWorkspace;
         private int[] aiFactoryRouteFromWorkspace, aiFactoryRouteQueueWorkspace;
+        private int[] aiMergeSeenWorkspace, aiMergeQueueWorkspace, aiMergeDepthWorkspace;
         private readonly long[] aiFactoryNextDecisionTick = { 0, 0 };
         private const int AiFactoryDecisionIntervalTicks = 100;
 
@@ -21,6 +22,16 @@ namespace Rts.Simulation
                 aiFactorySeenWorkspace = new bool[cells];
                 aiFactoryRouteFromWorkspace = new int[cells];
                 aiFactoryRouteQueueWorkspace = new int[cells];
+            }
+        }
+
+        private void EnsureAiMergeWorkspace(int cells)
+        {
+            if (aiMergeSeenWorkspace == null || aiMergeSeenWorkspace.Length < cells)
+            {
+                aiMergeSeenWorkspace = new int[cells];
+                aiMergeQueueWorkspace = new int[cells];
+                aiMergeDepthWorkspace = new int[cells];
             }
         }
 
