@@ -148,6 +148,8 @@ namespace Rts.Presentation
                 case BuildingKind.Joinery: return UiText.T("Planks + cut stone → frames.", "板2＋切石1 → 建材1。建物を建てるとき建材1で木材0.7倍・建てる手間0.7倍。");
                 case BuildingKind.Assembler: return UiText.T("Makes the chosen recipe: frames, arms kits, scholarly goods (age 2), siege parts or mechanisms (age 3), siege engines or elite kits (age 4).", "選んだレシピを作る：建材・武具・学術品（時代2）、攻城部品・精密部品（時代3）、攻城兵器・精鋭装備（時代4）。");
                 case BuildingKind.Hut: return UiText.T("Primitive workshop. Stone + wood → stone tools (a villager trained with one gathers faster); food → jerky (a soldier trained with one has +10% HP).", "原始の作業小屋。石1＋木1 → 石器（村人の訓練で使うと採集が速くなる）、食料3 → 干し肉2（兵の訓練で使うと最大HP +10%）。");
+                case BuildingKind.Metalworks: return UiText.T("Metal → fittings. Fittings go into siege parts and mechanisms.", "金属1 → 金具2。金具は攻城部品・精密部品の材料。");
+                case BuildingKind.RopeHut: return UiText.T("Wood → rope. Rope goes into frames and siege parts.", "木材1 → 縄2。縄は建材・攻城部品の材料。");
                 case BuildingKind.Drill: return UiText.T("Digs the wood, stone, ore or gold point under it without villagers and sends it out of its exit.", "足元の資源の点（木・石・鉱石・金）を村人なしで掘り、出口からベルトへ出す。");
                 default: return "";
             }
