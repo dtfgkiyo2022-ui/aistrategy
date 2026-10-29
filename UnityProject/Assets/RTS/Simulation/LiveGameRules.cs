@@ -56,6 +56,7 @@ namespace Rts.Simulation
             // templates take the little wood there is, and the sides field neither their second unit nor primitive goods.
             e.AiFactory = allCivilisations && e.PrimitiveCraft && e.LargeEconomy;
             e.AiExpand = e.AiFactory;
+            e.StockAwareGather = e.AiExpand;
             e.FreeTowns = e.AiExpand;
             // fastmove1: only the large played map opts into the movement step multiplier.
             e.FastMovement = e.LargeEconomy;

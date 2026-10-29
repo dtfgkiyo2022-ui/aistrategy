@@ -99,6 +99,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--belt-dropoff-ai-off")) scenario.Economy.BeltDropOffAi = false;
         if (options.ContainsKey("--belt-stack-off")) scenario.Economy.BeltStack = false;
         if (options.ContainsKey("--belt-craft-off")) scenario.Economy.BeltCraft = false;
+        if (options.ContainsKey("--stock-aware-gather-off")) scenario.Economy.StockAwareGather = false;
         if (options.TryGetValue("--free-towns-per-age", out var freeTownsPerAgeText))
         {
             int value = int.Parse(freeTownsPerAgeText, CultureInfo.InvariantCulture);
@@ -690,7 +691,7 @@ internal static class TacticMatchCommand
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
                 prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "GearsProduced", prefix + "GearsConsumed", prefix + "GearShortageFailedPlacements", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
-                  prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
+                 prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone", prefix + "StockAwareSwitchedVillagers", prefix + "FoodHighFarmSkipped",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
@@ -715,7 +716,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 117; i++) cells.Add("");
+                for (int i = 0; i < 119; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -741,7 +742,7 @@ internal static class TacticMatchCommand
                 value.GearsProduced, value.GearsConsumed, value.GearShortageFailedPlacements,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
-                 value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
+                   value.AiExpandTownSkippedStone, value.StockAwareSwitchedVillagers, value.FoodHighFarmSkipped, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
                  value.ResearchScholarlyBlocked }.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
                 value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));

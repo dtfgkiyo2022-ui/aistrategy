@@ -78,6 +78,7 @@ namespace Rts.Simulation
         public int ArmsWithFittings, ArmsWithoutFittings;
         public int ScholarlyProduced, ScholarlyConsumed, ScholarlyStock, ResearchScholarlyBlocked;
         public int ArmsScaleAssemblersAdded, ArmsScaleSawmillsAdded, TrainingArmsUnavailable;
+        public int StockAwareSwitchedVillagers, FoodHighFarmSkipped;
     }
 
     public sealed partial class Simulation
@@ -97,6 +98,8 @@ namespace Rts.Simulation
         private readonly int[] armsScaleAssemblersAdded = new int[2];
         private readonly int[] armsScaleSawmillsAdded = new int[2];
         private readonly int[] trainingArmsUnavailable = new int[2];
+        private readonly int[] stockAwareSwitchedVillagers = new int[2];
+        private readonly int[] foodHighFarmSkipped = new int[2];
         private readonly int[] gearShortageFailedPlacements = new int[2];
         private void RecordArmsScaleAssembler(uint faction)
         {
@@ -112,6 +115,16 @@ namespace Rts.Simulation
         {
             if (faction < 1 || faction > 2) return;
             trainingArmsUnavailable[faction - 1] = checked(trainingArmsUnavailable[faction - 1] + 1);
+        }
+        private void RecordStockAwareSwitch(uint faction)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            stockAwareSwitchedVillagers[faction - 1] = checked(stockAwareSwitchedVillagers[faction - 1] + 1);
+        }
+        private void RecordFoodHighFarmSkipped(uint faction)
+        {
+            if (!StockAwareGatherOn || faction < 1 || faction > 2) return;
+            foodHighFarmSkipped[faction - 1] = checked(foodHighFarmSkipped[faction - 1] + 1);
         }
         private void RecordCraftTracePlanks(uint faction, int kind, int amount)
         {
@@ -373,6 +386,8 @@ namespace Rts.Simulation
                 value.ArmsScaleAssemblersAdded = armsScaleAssemblersAdded[faction - 1];
                 value.ArmsScaleSawmillsAdded = armsScaleSawmillsAdded[faction - 1];
                 value.TrainingArmsUnavailable = trainingArmsUnavailable[faction - 1];
+                value.StockAwareSwitchedVillagers = stockAwareSwitchedVillagers[faction - 1];
+                value.FoodHighFarmSkipped = foodHighFarmSkipped[faction - 1];
                 result.Factions[faction - 1] = value;
             }
             return result;

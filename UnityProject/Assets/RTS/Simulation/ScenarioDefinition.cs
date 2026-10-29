@@ -155,6 +155,12 @@ namespace Rts.Simulation
         public int AiExpandShareMinVillagers = 20;
         public int AiExpandFoodWorkerPermille = 300, AiExpandWoodWorkerPermille = 350, AiExpandStoneWorkerPermille = 100;
         public int AiExpandTownStoneWorkerPermille = 150, AiExpandPrimitiveFoodWorkerPermille = 400;
+        /// <summary>38.21: automatic large-economy gathering allocation follows stock thresholds.</summary>
+        public bool StockAwareGather;
+        public int GatherFoodHigh = 3000, GatherWoodHigh = 3000, GatherStoneHigh = 2000;
+        public int GatherFoodLow = 400, GatherWoodLow = 400, GatherStoneLow = 200;
+        public int GatherLowSharePermille = 1500;
+        public int GatherSwitchPerInterval = 10, GatherSwitchIntervalTicks = 200;
         /// <summary>Technical-design-v3 38.8: makes towns free and raises their limit by age.</summary>
         public bool FreeTowns;
         public int FreeTownsPerAge = 1;

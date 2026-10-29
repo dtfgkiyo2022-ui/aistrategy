@@ -3696,7 +3696,9 @@ namespace Rts.Simulation
                         (LivingVillagers(faction) + world.Config.Economy.LargeVillagersPerFarm - 1)
                             / world.Config.Economy.LargeVillagersPerFarm))
                 : EconomyDecision.FoodSourceTarget(EconomyScaleOn, FarmTarget) + (EarlyArmsOn ? 1 : 0);
-            if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction))
+            if (StockAwareGatherOn && farms < farmTarget && economy.Food >= world.Config.Economy.GatherFoodHigh)
+                RecordFoodHighFarmSkipped(faction);
+            else if (farms < farmTarget && economy.Wood >= world.Config.Economy.FarmWoodCost && PlaceFarm(faction))
             {
                 largeConnectedFarms[faction - 1] = 0;
                 return;

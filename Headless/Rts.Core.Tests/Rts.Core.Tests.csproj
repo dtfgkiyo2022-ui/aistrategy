@@ -259,5 +259,6 @@
     <Compile Include="../../UnityProject/Assets/RTS/Tests/EditMode/Perf6DecisionTests.cs" Link="Tests/Perf6DecisionTests.cs" />
     <Compile Include="AllocationTests.cs" />
     <Compile Include="BeltDropOffAiTests.cs" />
+    <Compile Include="StockAwareGatherTests.cs" />
   </ItemGroup>
 </Project>
