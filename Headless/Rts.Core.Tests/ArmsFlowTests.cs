@@ -201,6 +201,7 @@ namespace Rts.Core.Tests
             SetEconomy(simulation, 0, "Planks", 100000);
             SetEconomy(simulation, 0, "Frames", 100000);
             SetEconomy(simulation, 0, "Bricks", 100000);
+            SetEconomy(simulation, 0, "SiegeParts", 100000);
             SetEconomy(simulation, 0, "Fittings", 100000);
             SetEconomy(simulation, 0, "Rope", 100000);
             AddCompletedBarracks(simulation, 4);
@@ -210,6 +211,23 @@ namespace Rts.Core.Tests
             Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Sawmill), Is.LessThanOrEqualTo(3 + 4));
             Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.CharcoalKiln), Is.LessThanOrEqualTo(3));
             Assert.That(economy.Buildings.Count(b => b.FactionId == 1 && b.Kind == BuildingKind.Metalworks), Is.LessThanOrEqualTo(1));
+        }
+
+        [Test]
+        public void BarracksRatioAddsTheNextChainBeforeAiExpandTargetIsFull()
+        {
+            var simulation = new Battle(Scenario(true));
+            RevealAllCells(simulation, 0);
+            AddCompletedBarracks(simulation, 1);
+            object firstSnapshot = Invoke(simulation, "CaptureArmsFlowCapacity", 1u);
+            int firstTarget = ArmsFlowTarget(simulation, firstSnapshot, 0);
+
+            AddCompletedBarracks(simulation, 1);
+            object secondSnapshot = Invoke(simulation, "CaptureArmsFlowCapacity", 1u);
+            int secondTarget = ArmsFlowTarget(simulation, secondSnapshot, 0);
+
+            Assert.That(firstTarget, Is.EqualTo(1));
+            Assert.That(secondTarget, Is.EqualTo(2));
         }
 
         [Test]
@@ -342,6 +360,13 @@ namespace Rts.Core.Tests
                 building.GetType().GetField("Complete", Private).SetValue(building, true);
                 buildings.SetValue(building, (int)id - 1);
             }
+        }
+
+        private static int ArmsFlowTarget(Battle simulation, object snapshot, byte kind)
+        {
+            var method = typeof(Battle).GetMethod("ArmsFlowTarget", Private);
+            var kindType = method.GetParameters()[1].ParameterType;
+            return (int)method.Invoke(simulation, new[] { (object)1u, Enum.ToObject(kindType, kind), snapshot });
         }
 
         private static void SetEconomy(Battle simulation, int index, string name, object value)

@@ -535,10 +535,8 @@ namespace Rts.Simulation
             if (CraftRequiredOn && AiFactoryOn)
             {
                 EnsureCraftRequiredAiCapacity(faction);
-                if (!ArmsFlowOn || (AiExpandOn && (!CompleteBarracks(faction)
-                    || !ArmsFlowBarracksTargetReached(faction))))
+                if (!ArmsFlowOn)
                     EnsureCraftRequiredAiMaterialCapacity(faction);
-                else MaintainArmsFlowMaterialBuildings(faction);
                 if (ArmsScaleOn && !ArmsFlowOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
                     EnsureArmsScaleCapacity(faction);
             }
@@ -556,7 +554,6 @@ namespace Rts.Simulation
             }
             else
             {
-                if (AiExpandOn && world.Economies[faction - 1].Age <= 1 && !CompleteBarracks(faction)) return;
                 if (economy.Wood < rules.AssemblerWoodCost) return;
                 uint id = PlaceAssembler(faction);
                 if (id == 0) return;
@@ -609,11 +606,9 @@ namespace Rts.Simulation
         private void EnsureCraftRequiredAiCapacity(uint faction)
         {
             var rules = world.Config.Economy;
-            // AiExpand reserves the first age's processing sites for the
-            // configured barracks growth.  Once that deterministic military
-            // target is met, CraftRequired takes the next site for its age-1
-            // stock line; this keeps expansion placement stable.
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1 && !CompleteBarracks(faction))
+            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
+                && rules.AiFactoryAge1BarracksMaxBuildings > 0
+                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
                 return;
             if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -633,7 +628,7 @@ namespace Rts.Simulation
                 if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
                     && IsPlannedBuilding(building) && !building.Complete) return;
             }
-            EnsureArmsScaleSawmill(faction);
+            if (EnsureArmsScaleSawmill(faction)) return;
             int max = economy.Age == 2 ? rules.ArmsScaleMaxArmsAssemblersAge2
                 : economy.Age == 3 ? rules.ArmsScaleMaxArmsAssemblersAge3 : rules.ArmsScaleMaxArmsAssemblersAge4;
             if (CountPlannedArmsAssemblers(faction) >= max) return;
@@ -665,66 +660,63 @@ namespace Rts.Simulation
 
         private void MaintainArmsFlowMaterialBuildings(uint faction)
         {
-            if ((AiExpandOn && (!CompleteBarracks(faction) || !ArmsFlowBarracksTargetReached(faction)))
-                || !ArmsFlowWorkerFloorsSatisfied(faction)) return;
+            var referencedBuildings = CollectProcessingLineBuildingIds(faction);
             for (int i = 0; i < world.BuildingCount; i++)
             {
                 var building = world.Buildings[i];
                 if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
                     || building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln
-                    || IsProcessingLineBuildingReferenced(building.Id)) continue;
+                    || referencedBuildings.Contains(building.Id)) continue;
                 if (building.Kind == BuildingKind.CharcoalKiln) SetKilnWoodHaulers(faction, building.Id, 1);
                 SetSimpleHaulers(faction, building.Id, 0, 1);
             }
         }
 
-        private bool ArmsFlowWorkerFloorsSatisfied(uint faction)
+        private HashSet<uint> CollectProcessingLineBuildingIds(uint faction)
         {
-            if (!AiExpandOn || world.Economies[faction - 1].Age < 1) return true;
-            int villagers = 0, food = 0, wood = 0, stone = 0;
-            for (int i = 0; i < world.VillagerCount; i++)
+            var referenced = new HashSet<uint>();
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
             {
-                var villager = world.Villagers[i];
-                if (!villager.Alive || villager.FactionId != faction || villager.Held) continue;
-                villagers++;
-                if (villager.NodeId == 0 || villager.NodeId > world.Nodes.Length) continue;
-                var kind = world.Nodes[villager.NodeId - 1].Definition.Kind;
-                if (villager.Task != VillagerTask.ToNode && villager.Task != VillagerTask.Gathering
-                    && villager.Task != VillagerTask.ToDropOff) continue;
-                if (kind == ResourceKind.Food) food++;
-                else if (kind == ResourceKind.Wood) wood++;
-                else if (kind == ResourceKind.Stone) stone++;
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction) continue;
+                AddProcessingLineBuilding(referenced, line.MineId);
+                AddProcessingLineBuilding(referenced, line.SmelterId);
+                AddProcessingLineBuilding(referenced, line.KilnId);
+                AddProcessingLineBuilding(referenced, line.SteelworksId);
+                AddProcessingLineBuilding(referenced, line.LumberCampId);
+                AddProcessingLineBuilding(referenced, line.FletcherId);
+                AddProcessingLineBuilding(referenced, line.MillId);
+                AddProcessingLineBuilding(referenced, line.QuarryId);
+                AddProcessingLineBuilding(referenced, line.BrickKilnId);
+                AddProcessingLineBuilding(referenced, line.SaddleryId);
+                AddProcessingLineBuilding(referenced, line.SawmillId);
+                AddProcessingLineBuilding(referenced, line.StonecutterId);
+                AddProcessingLineBuilding(referenced, line.JoineryId);
+                AddProcessingLineBuilding(referenced, line.AssemblerId);
+                AddProcessingLineBuilding(referenced, line.ScriptoriumId);
+                AddProcessingLineBuilding(referenced, line.DryingRackId);
+                AddProcessingLineBuilding(referenced, line.LapidaryId);
+                AddProcessingLineBuilding(referenced, line.WeaverId);
+                AddProcessingLineBuilding(referenced, line.IncenseHouseId);
+                AddProcessingLineBuilding(referenced, line.CharmWorkshopId);
+                AddProcessingLineBuilding(referenced, line.RepairYardId);
+                AddProcessingLineBuilding(referenced, line.ToolShopId);
+                AddProcessingLineBuilding(referenced, line.HutId);
+                AddProcessingLineBuilding(referenced, line.DrillId);
+                AddProcessingLineBuilding(referenced, line.MetalworksId);
+                AddProcessingLineBuilding(referenced, line.RopeHutId);
             }
-            var rules = world.Config.Economy;
-            return food >= CeilPermille(villagers, rules.AiExpandFoodWorkerPermille)
-                && wood >= CeilPermille(villagers, rules.AiExpandWoodWorkerPermille)
-                && stone >= CeilPermille(villagers, rules.AiExpandStoneWorkerPermille);
+            return referenced;
         }
 
-        private bool ArmsFlowBarracksTargetReached(uint faction)
+        private static void AddProcessingLineBuilding(HashSet<uint> referenced, uint buildingId)
         {
-            if (!AiExpandOn) return true;
-            ref var economy = ref world.Economies[faction - 1];
-            var rules = world.Config.Economy;
-            int target = economy.Age <= 0 ? rules.AiFactoryPrimitiveBarracksMaxBuildings
-                : economy.Age == 1 ? rules.AiFactoryAge1BarracksMaxBuildings
-                : economy.Age == 2 ? rules.AiFactoryAge2BarracksMaxBuildings
-                : economy.Age == 3 ? rules.AiFactoryAge3BarracksMaxBuildings
-                : rules.AiFactoryAge4BarracksMaxBuildings;
-            return CountPlannedBuildings(faction, BuildingKind.Barracks) >= target;
+            if (buildingId != 0) referenced.Add(buildingId);
         }
 
         private void EnsureArmsFlowCapacity(uint faction)
         {
             if (!ArmsFlowOn) return;
-            if (AiExpandOn && (world.Tick > 0 && !AiExpandHasCompletedTown(faction)
-                || !ArmsFlowBarracksTargetReached(faction))) return;
-            ref var economy = ref world.Economies[faction - 1];
-            var rules = world.Config.Economy;
-            if (economy.Age <= 1
-                && rules.AiFactoryAge1BarracksMaxBuildings > 0
-                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
-                return;
             var snapshot = CaptureArmsFlowCapacity(faction);
             var targets = new int[5];
             var current = new[] { snapshot.Assemblers, snapshot.Sawmills, snapshot.Kilns, snapshot.MetalLines, snapshot.Metalworks };
