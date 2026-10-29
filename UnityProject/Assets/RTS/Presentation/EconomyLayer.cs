@@ -1360,10 +1360,13 @@ namespace Rts.Presentation
                     items.Add(b.Cell, itemList);
                 }
                 int count = Mathf.Clamp(b.Count, 1, 16);
+                bool sameKind = itemKinds.TryGetValue(b.Cell, out var shownKind) && shownKind == b.Item;
                 while (itemList.Count < count)
                 {
                     var item = new GameObject("Item " + b.Cell + " " + itemList.Count);
                     item.transform.SetParent(transform, false);
+                    // A stack that grows keeps its kind, so the new item is dressed here, not below.
+                    if (sameKind) BuildCargoVisual(item, b.Item);
                     itemList.Add(item);
                 }
                 while (itemList.Count > count)
