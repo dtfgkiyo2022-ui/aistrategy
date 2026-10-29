@@ -67,8 +67,9 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
-        if (options.ContainsKey("--arms-scale-off")) scenario.Economy.ArmsScale = false;
-        if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
+        if (options.ContainsKey("--arms-scale-off")) { scenario.Economy.ArmsScale = false; scenario.Economy.ArmsFlow = false; }
+        if (options.ContainsKey("--arms-flow-off")) scenario.Economy.ArmsFlow = false;
+        if (options.ContainsKey("--craft-depth-off")) { scenario.Economy.CraftDepth = false; scenario.Economy.ArmsFlow = false; }
         if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
@@ -691,6 +692,10 @@ internal static class TacticMatchCommand
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
                   prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
+                prefix + "ArmsFlowMetalLines", prefix + "ArmsFlowMetalLinesAdded", prefix + "ArmsFlowMetalworksAdded", prefix + "ArmsFlowSawmillsStopped",
+                  prefix + "ArmsFlowMetalLineWoodShortage", prefix + "ArmsFlowMetalLineUnknownOre", prefix + "ArmsFlowMetalLineNoSite", prefix + "ArmsFlowMetalworksTotal", prefix + "ArmsFlowAdditionalMetalProduced",
+                  prefix + "ArmsFlowAssemblersTarget", prefix + "ArmsFlowAssemblers", prefix + "ArmsFlowSawmillsTarget", prefix + "ArmsFlowSawmills",
+                  prefix + "ArmsFlowKilnsTarget", prefix + "ArmsFlowKilns", prefix + "ArmsFlowMetalLinesTarget", prefix + "ArmsFlowMetalworksTarget",
                   prefix + "Builders", prefix + "TownBuilders", prefix + "FactoryBuilders", prefix + "OtherBuilders",
                  prefix + "MovingVillagers", prefix + "Haulers", prefix + "IdleWorkers" });
             foreach (string resource in new[] { "Food", "Wood", "Stone", "Ore", "Gold", "Metal" })
@@ -714,7 +719,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 113; i++) cells.Add("");
+                for (int i = 0; i < 130; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -740,7 +745,12 @@ internal static class TacticMatchCommand
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                  value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
-                 value.ResearchScholarlyBlocked }.Select(FormatInvariant));
+                 value.ResearchScholarlyBlocked, value.ArmsFlowMetalLines, value.ArmsFlowMetalLinesAdded,
+                value.ArmsFlowMetalworksAdded, value.ArmsFlowSawmillsStopped,
+                value.ArmsFlowMetalLineWoodShortage, value.ArmsFlowMetalLineUnknownOre,
+                  value.ArmsFlowMetalLineNoSite, value.ArmsFlowMetalworksTotal, value.ArmsFlowAdditionalMetalProduced,
+                  value.ArmsFlowAssemblersTarget, value.ArmsFlowAssemblers, value.ArmsFlowSawmillsTarget, value.ArmsFlowSawmills,
+                  value.ArmsFlowKilnsTarget, value.ArmsFlowKilns, value.ArmsFlowMetalLinesTarget, value.ArmsFlowMetalworksTarget }.Select(FormatInvariant));
             cells.AddRange(new[] { value.Builders, value.TownBuilders, value.FactoryBuilders, value.OtherBuilders,
                 value.MovingVillagers, value.Haulers, value.IdleWorkers }.Select(FormatInvariant));
             cells.AddRange(value.Workers.Select(FormatInvariant));

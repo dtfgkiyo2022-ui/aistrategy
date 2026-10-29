@@ -136,6 +136,15 @@ namespace Rts.Simulation
             internal int[] Distances;
             internal int VisitedCells;
         }
+
+        private enum ArmsFlowCapacityKind : byte { Assembler, Sawmill, Kiln, MetalLine, Metalworks }
+
+        private struct ArmsFlowCapacitySnapshot
+        {
+            internal int Barracks, Assemblers, Sawmills, Kilns, MetalLines, Metalworks;
+            internal bool AssemblerUnderConstruction, SawmillUnderConstruction, KilnUnderConstruction,
+                MetalworksUnderConstruction, MetalLineUnderConstruction;
+        }
         // A requested-region value cannot legally be uint.MaxValue. It is used only after a shared steel route
         // was tried and rejected, so the same line falls back to the dedicated mine/smelter path deterministically.
         private const uint SharedMetalFallbackMarker = uint.MaxValue;
@@ -173,6 +182,8 @@ namespace Rts.Simulation
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree3", DecideCraftTree3, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftTree4", DecideCraftTree4, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.CraftDepth", DecideCraftDepth, faction);
+            if (ArmsFlowOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
+                MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmsFlow", DecideArmsFlow, faction);
             MeasureSubphase("AI.DecideEconomy.DecideIndustry.AgeFourAi", DecideAgeFourAiIndustry, faction);
             if (MeasureSubphase("AI.DecideEconomy.DecideIndustry.ArmyRecovery", TryDecideArmyRecoveryMetalLine, faction)) return;
             if (EarlyArmsOn && world.Economies[faction - 1].Age >= 1 && EarlyFoodFarmNeeded(faction))
@@ -262,9 +273,9 @@ namespace Rts.Simulation
             if (economy.Age < 1 || !CompleteBarracks(faction)) return;
             var rules = world.Config.Economy;
             int assemblers = CountPlannedBuildings(faction, BuildingKind.Assembler);
-            int targetMetalworks = Math.Max(1, (assemblers + 1) / 2);
+            int targetMetalworks = Math.Max(1, Math.Max((assemblers + 1) / 2, (assemblers + 3) / 4));
             int metalworks = CountPlannedBuildings(faction, BuildingKind.Metalworks);
-            if (metalworks < targetMetalworks && economy.Wood >= rules.CraftDepthMetalworksWoodCost)
+            if (!ArmsFlowOn && metalworks < targetMetalworks && economy.Wood >= rules.CraftDepthMetalworksWoodCost)
             {
                 if (FindCraftDepthMetalSmelter(faction) == 0)
                 {
@@ -272,7 +283,11 @@ namespace Rts.Simulation
                     return;
                 }
                 uint id = PlaceMetalworks(faction);
-                if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
+                if (id != 0)
+                {
+                    if (ArmsFlowOn) RecordArmsFlowMetalworks(faction);
+                    StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
+                }
                 return;
             }
             int targetRopeHuts = economy.Age < 2 ? 0 : economy.Age == 2 ? rules.CraftDepthAiRopeHutsAge2 : rules.CraftDepthAiRopeHutsAge3;
@@ -454,7 +469,7 @@ namespace Rts.Simulation
                     return true;
                 }
                 if (economy.Wood < world.Config.Economy.SmelterWoodCost) return true;
-                uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
+                 uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1]);
                 if (id != 0) { SetLineBuilding(lineIndex, BuildingKind.Smelter, id); SetRecoveryWorkCell(faction, id); }
                 return true;
             }
@@ -520,8 +535,11 @@ namespace Rts.Simulation
             if (CraftRequiredOn && AiFactoryOn)
             {
                 EnsureCraftRequiredAiCapacity(faction);
-                EnsureCraftRequiredAiMaterialCapacity(faction);
-                if (ArmsScaleOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
+                if (!ArmsFlowOn || (AiExpandOn && (!CompleteBarracks(faction)
+                    || !ArmsFlowBarracksTargetReached(faction))))
+                    EnsureCraftRequiredAiMaterialCapacity(faction);
+                else MaintainArmsFlowMaterialBuildings(faction);
+                if (ArmsScaleOn && !ArmsFlowOn && world.Tick % world.Config.Economy.ArmsScaleDecisionIntervalTicks == 0)
                     EnsureArmsScaleCapacity(faction);
             }
             ref var economy = ref world.Economies[faction - 1];
@@ -538,6 +556,7 @@ namespace Rts.Simulation
             }
             else
             {
+                if (AiExpandOn && world.Economies[faction - 1].Age <= 1 && !CompleteBarracks(faction)) return;
                 if (economy.Wood < rules.AssemblerWoodCost) return;
                 uint id = PlaceAssembler(faction);
                 if (id == 0) return;
@@ -594,10 +613,7 @@ namespace Rts.Simulation
             // configured barracks growth.  Once that deterministic military
             // target is met, CraftRequired takes the next site for its age-1
             // stock line; this keeps expansion placement stable.
-            if (AiExpandOn && world.Economies[faction - 1].Age <= 1
-                && rules.AiFactoryAge1BarracksMaxBuildings > 0
-                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings
-                )
+            if (AiExpandOn && world.Economies[faction - 1].Age <= 1 && !CompleteBarracks(faction))
                 return;
             if (CountPlannedBuildings(faction, BuildingKind.Assembler) >= CraftRequiredAiAssemblerTarget(faction)) return;
             ref var economy = ref world.Economies[faction - 1];
@@ -617,7 +633,7 @@ namespace Rts.Simulation
                 if (building.FactionId == faction && building.Kind == BuildingKind.Assembler
                     && IsPlannedBuilding(building) && !building.Complete) return;
             }
-            if (EnsureArmsScaleSawmill(faction)) return;
+            EnsureArmsScaleSawmill(faction);
             int max = economy.Age == 2 ? rules.ArmsScaleMaxArmsAssemblersAge2
                 : economy.Age == 3 ? rules.ArmsScaleMaxArmsAssemblersAge3 : rules.ArmsScaleMaxArmsAssemblersAge4;
             if (CountPlannedArmsAssemblers(faction) >= max) return;
@@ -628,6 +644,276 @@ namespace Rts.Simulation
             uint id = PlaceAssembler(faction, -1, true, true);
             if (id != 0 && id <= world.BuildingCount)
                 world.Buildings[id - 1].Recipe = RecipeKind.ArmsKit;
+        }
+
+        private void MaintainArmsFlowMetalLines(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !line.ArmsFlow || !IsAutoLine(i)) continue;
+                EnsureArmsFlowMetalLine(faction, i);
+            }
+        }
+
+        private void DecideArmsFlow(uint faction)
+        {
+            EnsureArmsFlowCapacity(faction);
+            MaintainArmsFlowMaterialBuildings(faction);
+            MaintainArmsFlowMetalLines(faction);
+        }
+
+        private void MaintainArmsFlowMaterialBuildings(uint faction)
+        {
+            if ((AiExpandOn && (!CompleteBarracks(faction) || !ArmsFlowBarracksTargetReached(faction)))
+                || !ArmsFlowWorkerFloorsSatisfied(faction)) return;
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (!IsActualBuilding(building) || !building.Complete || building.FactionId != faction
+                    || building.Kind != BuildingKind.Sawmill && building.Kind != BuildingKind.CharcoalKiln
+                    || IsProcessingLineBuildingReferenced(building.Id)) continue;
+                if (building.Kind == BuildingKind.CharcoalKiln) SetKilnWoodHaulers(faction, building.Id, 1);
+                SetSimpleHaulers(faction, building.Id, 0, 1);
+            }
+        }
+
+        private bool ArmsFlowWorkerFloorsSatisfied(uint faction)
+        {
+            if (!AiExpandOn || world.Economies[faction - 1].Age < 1) return true;
+            int villagers = 0, food = 0, wood = 0, stone = 0;
+            for (int i = 0; i < world.VillagerCount; i++)
+            {
+                var villager = world.Villagers[i];
+                if (!villager.Alive || villager.FactionId != faction || villager.Held) continue;
+                villagers++;
+                if (villager.NodeId == 0 || villager.NodeId > world.Nodes.Length) continue;
+                var kind = world.Nodes[villager.NodeId - 1].Definition.Kind;
+                if (villager.Task != VillagerTask.ToNode && villager.Task != VillagerTask.Gathering
+                    && villager.Task != VillagerTask.ToDropOff) continue;
+                if (kind == ResourceKind.Food) food++;
+                else if (kind == ResourceKind.Wood) wood++;
+                else if (kind == ResourceKind.Stone) stone++;
+            }
+            var rules = world.Config.Economy;
+            return food >= CeilPermille(villagers, rules.AiExpandFoodWorkerPermille)
+                && wood >= CeilPermille(villagers, rules.AiExpandWoodWorkerPermille)
+                && stone >= CeilPermille(villagers, rules.AiExpandStoneWorkerPermille);
+        }
+
+        private bool ArmsFlowBarracksTargetReached(uint faction)
+        {
+            if (!AiExpandOn) return true;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int target = economy.Age <= 0 ? rules.AiFactoryPrimitiveBarracksMaxBuildings
+                : economy.Age == 1 ? rules.AiFactoryAge1BarracksMaxBuildings
+                : economy.Age == 2 ? rules.AiFactoryAge2BarracksMaxBuildings
+                : economy.Age == 3 ? rules.AiFactoryAge3BarracksMaxBuildings
+                : rules.AiFactoryAge4BarracksMaxBuildings;
+            return CountPlannedBuildings(faction, BuildingKind.Barracks) >= target;
+        }
+
+        private void EnsureArmsFlowCapacity(uint faction)
+        {
+            if (!ArmsFlowOn) return;
+            if (AiExpandOn && (world.Tick > 0 && !AiExpandHasCompletedTown(faction)
+                || !ArmsFlowBarracksTargetReached(faction))) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (economy.Age <= 1
+                && rules.AiFactoryAge1BarracksMaxBuildings > 0
+                && CountPlannedBuildings(faction, BuildingKind.Barracks) < rules.AiFactoryAge1BarracksMaxBuildings)
+                return;
+            var snapshot = CaptureArmsFlowCapacity(faction);
+            var targets = new int[5];
+            var current = new[] { snapshot.Assemblers, snapshot.Sawmills, snapshot.Kilns, snapshot.MetalLines, snapshot.Metalworks };
+            var underConstruction = new[] { snapshot.AssemblerUnderConstruction, snapshot.SawmillUnderConstruction,
+                snapshot.KilnUnderConstruction, snapshot.MetalLineUnderConstruction, snapshot.MetalworksUnderConstruction };
+            for (int i = 0; i < targets.Length; i++)
+                targets[i] = ArmsFlowTarget(faction, (ArmsFlowCapacityKind)i, snapshot);
+
+            var order = new[] { 0, 1, 2, 3, 4 };
+            Array.Sort(order, (left, right) =>
+            {
+                bool leftMissing = targets[left] > current[left], rightMissing = targets[right] > current[right];
+                if (leftMissing != rightMissing) return leftMissing ? -1 : 1;
+                if (!leftMissing) return left.CompareTo(right);
+                long leftCross = (long)current[left] * targets[right], rightCross = (long)current[right] * targets[left];
+                int result = leftCross.CompareTo(rightCross);
+                return result != 0 ? result : left.CompareTo(right);
+            });
+            for (int i = 0; i < order.Length; i++)
+            {
+                int kind = order[i];
+                if (targets[kind] <= current[kind] || underConstruction[kind]) continue;
+                if (TryAddArmsFlowCapacity(faction, (ArmsFlowCapacityKind)kind))
+                    current[kind]++;
+            }
+        }
+
+        private static int CeilPermille(int value, int permille)
+            => value <= 0 || permille <= 0 ? 0 : checked((value * permille + 999) / 1000);
+
+        private ArmsFlowCapacitySnapshot CaptureArmsFlowCapacity(uint faction)
+        {
+            var result = new ArmsFlowCapacitySnapshot();
+            for (int i = 0; i < world.BuildingCount; i++)
+            {
+                var building = world.Buildings[i];
+                if (building.FactionId != faction || !IsPlannedBuilding(building)) continue;
+                bool complete = IsActualBuilding(building) && building.Complete;
+                if (building.Kind == BuildingKind.Barracks)
+                {
+                    if (complete) result.Barracks++;
+                }
+                else if (building.Kind == BuildingKind.Assembler)
+                {
+                    result.Assemblers++; if (!complete) result.AssemblerUnderConstruction = true;
+                }
+                else if (building.Kind == BuildingKind.Sawmill)
+                {
+                    result.Sawmills++; if (!complete) result.SawmillUnderConstruction = true;
+                }
+                else if (building.Kind == BuildingKind.CharcoalKiln)
+                {
+                    result.Kilns++; if (!complete) result.KilnUnderConstruction = true;
+                }
+                else if (building.Kind == BuildingKind.Metalworks)
+                {
+                    result.Metalworks++; if (!complete) result.MetalworksUnderConstruction = true;
+                }
+            }
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || !IsAutoLine(i)) continue;
+                result.MetalLines++;
+                if (!BuildingReady(line.MineId) || !BuildingReady(line.SmelterId)) result.MetalLineUnderConstruction = true;
+            }
+            return result;
+        }
+
+        private int ArmsFlowTarget(uint faction, ArmsFlowCapacityKind kind, ArmsFlowCapacitySnapshot snapshot)
+        {
+            var rules = world.Config.Economy;
+            if (kind == ArmsFlowCapacityKind.Assembler) return snapshot.Barracks;
+            if (kind == ArmsFlowCapacityKind.Sawmill)
+                return checked(CeilPermille(snapshot.Barracks, rules.ArmsFlowSawmillsPerBarracksPermille)
+                    + CraftRequiredAiMaterialTarget(faction));
+            if (kind == ArmsFlowCapacityKind.Kiln)
+                return CeilPermille(snapshot.Barracks, rules.ArmsFlowKilnsPerBarracksPermille);
+            if (kind == ArmsFlowCapacityKind.MetalLine)
+            {
+                if (world.Economies[faction - 1].Age < 2) return 0;
+                int maximum = world.Economies[faction - 1].Age == 2 ? rules.ArmsFlowMaxMetalLinesAge2
+                    : world.Economies[faction - 1].Age == 3 ? rules.ArmsFlowMaxMetalLinesAge3 : rules.ArmsFlowMaxMetalLinesAge4;
+                return Math.Min(maximum, CeilPermille(snapshot.Barracks, rules.ArmsFlowMetalLinesPerBarracksPermille));
+            }
+            return CeilPermille(snapshot.Barracks, rules.ArmsFlowMetalworksPerBarracksPermille);
+        }
+
+        private bool TryAddArmsFlowCapacity(uint faction, ArmsFlowCapacityKind kind)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            if (kind == ArmsFlowCapacityKind.MetalLine)
+            {
+                if (economy.Wood < rules.MineWoodCost)
+                {
+                    RecordArmsFlowMetalLineWoodShortage(faction);
+                    return false;
+                }
+                if (!HasAvailableKnownArmsFlowOre(faction))
+                {
+                    RecordArmsFlowMetalLineUnknownOre(faction);
+                    return false;
+                }
+                int index = CreateArmsFlowMetalLine(faction);
+                EnsureArmsFlowMetalLine(faction, index);
+                return true;
+            }
+            BuildingKind buildingKind = kind == ArmsFlowCapacityKind.Assembler ? BuildingKind.Assembler
+                : kind == ArmsFlowCapacityKind.Sawmill ? BuildingKind.Sawmill
+                : kind == ArmsFlowCapacityKind.Kiln ? BuildingKind.CharcoalKiln : BuildingKind.Metalworks;
+            var cost = BuildingCostForPlacement(buildingKind, faction, 0);
+            if (!ArmsScaleCanPayExceptPlanks(faction, cost, rules.ArmsScaleWoodReserve)) return false;
+            if (economy.Planks - (BuildingReservationsOn ? ReservedConstructionPlanks(faction) : 0) < cost.Planks
+                && !BuildingReservationsOn) return false;
+            uint id = buildingKind == BuildingKind.Assembler ? PlaceAssembler(faction, -1, true, true)
+                : buildingKind == BuildingKind.Sawmill ? PlaceCommonSawmill(faction, true)
+                : buildingKind == BuildingKind.CharcoalKiln ? PlaceKiln(faction) : PlaceMetalworks(faction);
+            if (id == 0) return false;
+            if (buildingKind == BuildingKind.Assembler)
+            {
+                world.Buildings[id - 1].Recipe = RecipeKind.ArmsKit;
+            }
+            else if (buildingKind == BuildingKind.Metalworks)
+            {
+                RecordArmsFlowMetalworks(faction);
+                StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
+            }
+            return true;
+        }
+
+        private bool HasArmsFlowMetalLineUnderConstruction(uint faction)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId == faction && line.Kind == ProcessingLineKind.CoreMetal
+                    && line.ArmsFlow && IsAutoLine(i)
+                    && (!BuildingReady(line.MineId) || !BuildingReady(line.SmelterId))) return true;
+            }
+            return false;
+        }
+
+        private bool HasAvailableKnownArmsFlowOre(uint faction)
+        {
+            for (int i = 0; i < world.Nodes.Length; i++)
+            {
+                var node = world.Nodes[i];
+                if (ResourceKnownToFaction(faction, i) && node.Definition.Kind == ResourceKind.Ore
+                    && node.Remaining > 0 && !OreNodeUsedByMetalLine(faction, node.Definition.Id)) return true;
+            }
+            return false;
+        }
+
+        private void EnsureArmsFlowMetalLine(uint faction, int index)
+        {
+            ref var economy = ref world.Economies[faction - 1];
+            ref var line = ref world.ProcessingLines[index];
+            if (LineRebuildBlocked(index)) { StopLineHaulers(index); return; }
+            if (!BuildingReady(line.MineId))
+            {
+                if (BuildingPending(line.MineId)) return;
+                if (economy.Wood < world.Config.Economy.MineWoodCost)
+                {
+                    RecordArmsFlowMetalLineWoodShortage(faction);
+                    return;
+                }
+                uint id = PlaceMine(faction, -1, true);
+                if (id != 0) SetLineBuilding(index, BuildingKind.Mine, id);
+                else RecordArmsFlowMetalLineNoSite(faction);
+                return;
+            }
+            if (!BuildingReady(line.SmelterId))
+            {
+                if (BuildingPending(line.SmelterId)) return;
+                if (economy.Wood < world.Config.Economy.SmelterWoodCost)
+                {
+                    RecordArmsFlowMetalLineWoodShortage(faction);
+                    return;
+                }
+                 uint id = PlaceSmelter(faction, world.Buildings[line.MineId - 1], true);
+                if (id != 0) SetLineBuilding(index, BuildingKind.Smelter, id);
+                else RecordArmsFlowMetalLineNoSite(faction);
+                return;
+            }
+            var mine = world.Buildings[line.MineId - 1];
+            var smelter = world.Buildings[line.SmelterId - 1];
+            bool whole = LayCoreLineIfDue(faction, index, mine, smelter);
+            SetLineHaulers(faction, line, whole ? 0 : Haulers);
         }
 
         private bool EnsureArmsScaleSawmill(uint faction)
@@ -3018,7 +3304,7 @@ namespace Rts.Simulation
         }
 
         /// <summary>Ore points by distance to the core, then id; on each, the four footprints and the sides toward the core first.</summary>
-        private uint PlaceMine(uint faction, int preferredCell = -1)
+        private uint PlaceMine(uint faction, int preferredCell = -1, bool avoidExistingMetalLineOre = false)
         {
             var core = preferredCell >= 0 ? world.Map.Center(preferredCell) : OwnCore(faction).Definition.Position;
             int size = world.Config.Economy.MineSizeCells, width = world.Config.Map.WidthCells, height = world.Config.Map.HeightCells;
@@ -3032,7 +3318,8 @@ namespace Rts.Simulation
             foreach (int n in order)
             {
                 var node = world.Nodes[n];
-                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0) continue;
+                if (!ResourceKnownToFaction(faction, n) || node.Definition.Kind != ResourceKind.Ore || node.Remaining <= 0
+                    || avoidExistingMetalLineOre && OreNodeUsedByMetalLine(faction, node.Definition.Id)) continue;
                 int cell = world.Map.Cell(node.Definition.Position), nx = cell % width, nz = cell / width;
                 for (int dz = 0; dz < size; dz++)
                     for (int dx = 0; dx < size; dx++)
@@ -3053,8 +3340,21 @@ namespace Rts.Simulation
             return 0;
         }
 
+        private bool OreNodeUsedByMetalLine(uint faction, uint nodeId)
+        {
+            for (int i = 0; i < world.ProcessingLines.Length; i++)
+            {
+                var line = world.ProcessingLines[i];
+                if (line.FactionId != faction || line.Kind != ProcessingLineKind.CoreMetal || line.MineId == 0
+                    || line.MineId > world.BuildingCount) continue;
+                var mine = world.Buildings[line.MineId - 1];
+                if (mine.NodeId == nodeId) return true;
+            }
+            return false;
+        }
+
         /// <summary>Rings around the point halfway from the mine to the core, like the barracks search.</summary>
-        private uint PlaceSmelter(uint faction, BuildingState mine)
+        private uint PlaceSmelter(uint faction, BuildingState mine, bool allowArmsFlowCoreFallback = false)
         {
             var core = OwnCore(faction).Definition.Position;
             var from = FootprintCenter(mine.OriginCell, SizeOf(mine.Kind));
@@ -3083,6 +3383,16 @@ namespace Rts.Simulation
                             return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
                         }
                     }
+            if (!allowArmsFlowCoreFallback) return 0;
+            int fallback = FindProcessingSite(faction, world.Map.Cell(OwnCore(faction).Definition.Position), size);
+            if (fallback < 0) return 0;
+            foreach (var side in SidesToward(FootprintCenter(fallback, size), core))
+            {
+                if (!PortIsOpen(OutputCell(fallback, size, side), faction)) continue;
+                uint before = world.NextBuildingId;
+                PlaceBuildingAt(faction, BuildingKind.Smelter, fallback, side, 0);
+                return LineBuildingIdAfterPlacement(before, BuildingKind.Smelter);
+            }
             return 0;
         }
 
@@ -3758,7 +4068,8 @@ namespace Rts.Simulation
         /// New carriers are the nearest to the mine among those gathering or idle (distance, then id); with none wanted,
         /// every carrier of this line stops.
         /// </summary>
-        private void SetHaulers(uint faction, uint mine, uint smelter, int wanted, bool recovery = false)
+        private void SetHaulers(uint faction, uint mine, uint smelter, int wanted, bool recovery = false,
+            bool armsFlowLine = false)
         {
             int fromMine = 0, fromSmelter = 0;
             for (int i = 0; i < world.VillagerCount; i++)
@@ -3792,6 +4103,7 @@ namespace Rts.Simulation
                 chosen.NodeId = 0;
                 bool toMine = fromMine < wantMine;
                 chosen.HaulFrom = toMine ? mine : smelter;
+                chosen.HaulTo = toMine && armsFlowLine ? smelter : 0;
                 chosen.Task = VillagerTask.ToPickup;
                 if (toMine) fromMine++; else fromSmelter++;
             }
