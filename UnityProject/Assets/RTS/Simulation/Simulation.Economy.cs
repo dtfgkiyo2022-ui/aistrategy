@@ -175,6 +175,7 @@ namespace Rts.Simulation
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceBelts", AdvanceBelts);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceIndustry", AdvanceIndustry);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceInserters", AdvanceInserters);
+            MeasureSubphase("ObjectivesReinforcements.EconomyStep.AdvanceCatapults", AdvanceCatapults);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyBrickUpgrades", ApplyBrickUpgrades);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.RepairMasonryCoresWithBricks", RepairMasonryCoresWithBricks);
             MeasureSubphase("ObjectivesReinforcements.EconomyStep.ApplyRationsHealing", ApplyRationsHealing);

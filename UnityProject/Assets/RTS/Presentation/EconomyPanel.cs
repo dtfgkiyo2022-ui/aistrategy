@@ -37,7 +37,7 @@ namespace Rts.Presentation
             if (heightMeters >= CellMeters) MapHeightCells = heightMeters / CellMeters;
         }
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -97,6 +97,7 @@ namespace Rts.Presentation
             dragStart = -1;
             if (layer == null) return;
             layer.SetCoreClearanceVisible(next != Mode.None);
+            layer.ShowCatapultRange(-1, 0, false);
             layer.ShowGhost(false, Vector3.zero, 0f, false);
             layer.ShowBeltPreview(null, false);
         }
@@ -128,6 +129,10 @@ namespace Rts.Presentation
                     if (dragStart < 0) { dragStart = cell; Note(UiText.T("Click the underground exit.", "地下ベルトの出口をクリックしてください。")); return true; }
                     port.SubmitEconomy(EconomyCommand.PlaceUnderground(faction, ++sequence, dragStart, cell, facing));
                     Note(UiText.T("Underground belt requested.", "地下ベルトを依頼しました。")); SetMode(Mode.None); return true;
+                case Mode.Catapult:
+                    if (dragStart < 0) { dragStart = cell; layer.ShowCatapultRange(cell, Economy() == null ? 0 : Economy().CatapultRangeCells, true); Note(UiText.T("Click the receiver.", "受け台をクリックしてください。")); return true; }
+                    port.SubmitEconomy(EconomyCommand.PlaceCatapult(faction, ++sequence, dragStart, cell, facing, facing));
+                    Note(UiText.T("Catapult pair requested.", "投石機と受け台を依頼しました。")); SetMode(Mode.None); return true;
                 case Mode.RemoveBelt:
                     port.SubmitEconomy(EconomyCommand.RemoveBelt(faction, ++sequence, cell));
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
@@ -166,6 +171,8 @@ namespace Rts.Presentation
             if (mode == Mode.Merger) { port.SubmitEconomy(EconomyCommand.PlaceMerger(faction, ++sequence, cell, facing, BeltPriority.None)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.Inserter) { port.SubmitEconomy(EconomyCommand.PlaceInserter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.FilterInserter) { port.SubmitEconomy(EconomyCommand.PlaceFilterInserter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.LongInserter) { port.SubmitEconomy(EconomyCommand.PlaceLongInserter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
@@ -427,7 +434,7 @@ namespace Rts.Presentation
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
-            if ((mode == Mode.Sorter || mode == Mode.Inserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
+            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
@@ -774,10 +781,25 @@ namespace Rts.Presentation
                         UiText.T("Inserter (wood ", "投入機（木材 ") + economy.InserterWoodCost + UiText.T(")", "）")
                         + " / " + SorterKindName(sorterKind));
                     y += 26f;
+                    if (economy.BeltCraftEnabled)
+                    {
+                        ModeButton(new Rect(x, y, half, 22f), Mode.FilterInserter,
+                            UiText.T("Filter inserter (", "選択投入機（歯車 ") + economy.FilterInserterGears + UiText.T(")", "）") + " / " + SorterKindName(sorterKind));
+                        ModeButton(new Rect(right, y, half, 22f), Mode.LongInserter,
+                            UiText.T("Long inserter (", "長い投入機（歯車 ") + economy.LongInserterGears + UiText.T(")", "）"));
+                        y += 26f;
+                    }
                 }
                 ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
                 y += 26f;
+                if (economy.BeltCraftEnabled && economy.Age >= economy.CatapultMinAge)
+                {
+                    ModeButton(new Rect(x, y, w, 22f), Mode.Catapult,
+                        UiText.T("Catapult / receiver (", "投石機・受け台（歯車 ") + economy.CatapultGears + UiText.T(", planks ", "、板 ") + economy.CatapultPlanks
+                        + UiText.T(", range ", "、範囲 ") + economy.CatapultRangeCells + UiText.T(")", "）"));
+                    y += 26f;
+                }
                 GUI.Label(new Rect(x, y, w, 22f), UiText.StorageDescription());
                 y += 26f;
             }

@@ -275,6 +275,28 @@ namespace Rts.Simulation
         internal BeltPriority Priority;
     }
 
+    internal struct CatapultShotState
+    {
+        internal bool Active;
+        internal ResourceKind Item;
+        internal int Count;
+        internal int RemainingTicks;
+    }
+
+    /// <summary>One small deterministic queue per catapult pair; never a whole-map flight array.</summary>
+    internal struct CatapultState
+    {
+        internal bool Active;
+        internal uint FactionId;
+        internal int LauncherCell, ReceiverCell;
+        internal ResourceKind BufferKind;
+        internal int BufferedCount;
+        internal long FirstLoadTick, LastThrowTick;
+        internal int ReceiverCount;
+        internal ResourceKind ReceiverKind;
+        internal CatapultShotState[] Shots;
+    }
+
     /// <summary>V3-6: one automatic processing chain. The belt arrays are the canonical route chosen for this line.</summary>
     internal struct ProcessingLineState
     {
@@ -397,6 +419,7 @@ namespace Rts.Simulation
         internal uint NextProcessingLineId = 1;
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
+        internal CatapultState[] Catapults = Array.Empty<CatapultState>();
         /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>
         internal int[] BeltOrder;
         internal MatchResult Result;
@@ -501,6 +524,15 @@ namespace Rts.Simulation
                         Fast = e.BeltComponents && b.Speed == BeltSpeed.Fast,
                         VeryFast = e.BeltCraft && b.Speed == BeltSpeed.VeryFast,
                         Priority = e.BeltCraft ? b.Priority : BeltPriority.None };
+                if (e.BeltCraft)
+                {
+                    var catapults = new System.Collections.Generic.List<CatapultState>();
+                    foreach (var b in Config.Belts)
+                        if (b.Component == BeltComponentKind.Catapult)
+                            catapults.Add(new CatapultState { Active = true, FactionId = b.FactionId, LauncherCell = b.Cell, ReceiverCell = b.PairCell,
+                                FirstLoadTick = -1, LastThrowTick = -e.CatapultIntervalTicks, Shots = new CatapultShotState[4] });
+                    Catapults = catapults.ToArray();
+                }
             }
         }
 
@@ -644,16 +676,19 @@ namespace Rts.Simulation
                     && e.StorageHp > 0 && e.StorageCapacity > 0, "Invalid belt-component rules.");
                 foreach (var b in c.Belts)
                 {
-                    Require((byte)b.Component <= (byte)(e.BeltCraft ? BeltComponentKind.Merger : BeltComponentKind.Inserter)
+                    Require((byte)b.Component <= (byte)(e.BeltCraft ? BeltComponentKind.CatapultReceiver : BeltComponentKind.Inserter)
                         && (byte)b.Speed <= (byte)(e.BeltCraft ? BeltSpeed.VeryFast : BeltSpeed.Fast),
                         "Invalid belt component.");
                     Require(b.Component != BeltComponentKind.Merger || e.BeltCraft, "Mergers are disabled.");
-                    Require(b.Component != BeltComponentKind.Inserter || e.Inserters, "Inserters are disabled.");
+                    Require((b.Component != BeltComponentKind.Inserter && b.Component != BeltComponentKind.FilterInserter && b.Component != BeltComponentKind.LongInserter) || e.Inserters, "Inserters are disabled.");
+                    Require((b.Component != BeltComponentKind.Merger && b.Component != BeltComponentKind.FilterInserter && b.Component != BeltComponentKind.LongInserter
+                        && b.Component != BeltComponentKind.Catapult && b.Component != BeltComponentKind.CatapultReceiver) || e.BeltCraft, "Belt-craft components are disabled.");
                     if (b.Component == BeltComponentKind.Sorter)
                         Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : (e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear)), "A sorter needs a resource kind.");
-                    if (b.Component == BeltComponentKind.Inserter)
+                    if (b.Component == BeltComponentKind.Inserter || b.Component == BeltComponentKind.FilterInserter)
                         Require(b.SorterKind == 0 || (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : ResourceKind.Mechanism), "An inserter needs a valid selector.");
-                    if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
+                    if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit
+                        || b.Component == BeltComponentKind.Catapult || b.Component == BeltComponentKind.CatapultReceiver)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
                             "An underground belt needs an in-map pair.");
@@ -665,7 +700,11 @@ namespace Rts.Simulation
                                     && other.PairCell == b.Cell
                                     && (b.Component == BeltComponentKind.UndergroundEntrance
                                         ? other.Component == BeltComponentKind.UndergroundExit
-                                        : other.Component == BeltComponentKind.UndergroundEntrance);
+                                        : b.Component == BeltComponentKind.UndergroundExit
+                                            ? other.Component == BeltComponentKind.UndergroundEntrance
+                                            : b.Component == BeltComponentKind.Catapult
+                                                ? other.Component == BeltComponentKind.CatapultReceiver
+                                                : other.Component == BeltComponentKind.Catapult);
                                 break;
                             }
                         Require(paired, "An underground belt needs a reciprocal pair.");
@@ -715,9 +754,12 @@ namespace Rts.Simulation
                 && e.GearWorkshopWork > 0 && e.GearWorkshopHp > 0 && e.GearMetalInput > 0
                 && e.GearMetalInput <= e.BufferLimit && e.GearsPerBatch > 0 && e.GearTicks > 0
                 && e.FastBeltGears > 0 && e.SplitterGears > 0 && e.SorterGears > 0 && e.UndergroundBeltGears > 0
-                && e.InserterGears > 0 && e.MergerGears > 0 && e.MergerPlanks >= 0 && e.VeryFastBeltGears > 0
-                && e.VeryFastBeltSteel > 0 && e.VeryFastBeltTicksPerCell > 0 && e.VeryFastBeltMinAge > 0
-                && e.BeltCraftAiGearsStockTarget >= 0), "Invalid belt-craft rules.");
+                 && e.InserterGears > 0 && e.MergerGears > 0 && e.MergerPlanks >= 0 && e.VeryFastBeltGears > 0
+                 && e.VeryFastBeltSteel > 0 && e.VeryFastBeltTicksPerCell > 0 && e.VeryFastBeltMinAge > 0
+                 && e.BeltCraftAiGearsStockTarget >= 0 && e.FilterInserterGears > 0 && e.LongInserterGears > 0
+                 && e.CatapultGears > 0 && e.CatapultPlanks >= 0 && e.CatapultFittings >= 0 && e.CatapultRope >= 0 && e.CatapultSteel > 0
+                 && e.CatapultReceiverGears > 0 && e.CatapultReceiverPlanks >= 0 && e.CatapultMinAge > 0 && e.CatapultRangeCells > 0
+                 && e.CatapultLoad > 0 && e.CatapultMaxWaitTicks > 0 && e.CatapultIntervalTicks > 0 && e.CatapultFlightTicks > 0 && e.CatapultBuffer >= e.CatapultLoad), "Invalid belt-craft rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1275,8 +1317,14 @@ namespace Rts.Simulation
                  SplitterGears = e.SplitterGears, SorterGears = e.SorterGears, UndergroundBeltGears = e.UndergroundBeltGears,
                  InserterGears = e.InserterGears, MergerGears = e.MergerGears, MergerPlanks = e.MergerPlanks,
                  VeryFastBeltGears = e.VeryFastBeltGears, VeryFastBeltSteel = e.VeryFastBeltSteel,
-                 VeryFastBeltTicksPerCell = e.VeryFastBeltTicksPerCell, VeryFastBeltMinAge = e.VeryFastBeltMinAge,
-                 BeltCraftAiGearsStockTarget = e.BeltCraftAiGearsStockTarget,
+                  VeryFastBeltTicksPerCell = e.VeryFastBeltTicksPerCell, VeryFastBeltMinAge = e.VeryFastBeltMinAge,
+                  BeltCraftAiGearsStockTarget = e.BeltCraftAiGearsStockTarget,
+                  FilterInserterGears = e.FilterInserterGears, LongInserterGears = e.LongInserterGears,
+                  CatapultGears = e.CatapultGears, CatapultPlanks = e.CatapultPlanks, CatapultFittings = e.CatapultFittings,
+                  CatapultRope = e.CatapultRope, CatapultSteel = e.CatapultSteel, CatapultReceiverGears = e.CatapultReceiverGears,
+                  CatapultReceiverPlanks = e.CatapultReceiverPlanks, CatapultMinAge = e.CatapultMinAge, CatapultRangeCells = e.CatapultRangeCells,
+                  CatapultLoad = e.CatapultLoad, CatapultMaxWaitTicks = e.CatapultMaxWaitTicks, CatapultIntervalTicks = e.CatapultIntervalTicks,
+                  CatapultFlightTicks = e.CatapultFlightTicks, CatapultBuffer = e.CatapultBuffer,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,

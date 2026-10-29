@@ -147,7 +147,7 @@ namespace Rts.Contracts
     public enum Facing : byte { North = 0, East = 1, South = 2, West = 3 }
 
     /// <summary>V3-20 belt cell variants. None is the original straight belt.</summary>
-    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4, Inserter = 5, Merger = 6 }
+    public enum BeltComponentKind : byte { None = 0, Splitter = 1, Sorter = 2, UndergroundEntrance = 3, UndergroundExit = 4, Inserter = 5, Merger = 6, FilterInserter = 7, LongInserter = 8, Catapult = 9, CatapultReceiver = 10 }
 
     /// <summary>38.16: the side chosen first by a splitter or merger.</summary>
     public enum BeltPriority : byte { None = 0, Left = 1, Right = 2 }

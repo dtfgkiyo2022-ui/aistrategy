@@ -186,6 +186,12 @@ t%20=0 で、次の順に1つずつ判断して、内政の操作を提案する
 - `EconomyCommand { Faction, Sequence, Kind, … }`。Kind は V3-1 では次の4つ
   - `PlaceBuilding(BuildingKind, 足跡の左下セル)`
   - `Train(BuildingId or CoreId, UnitKind)`
+### 38.16 実装で決めたこと（beltcraftB）
+
+- 拡張欄 80 は新しい16欄が初期値のとき version 1・20 int32 のまま書き、変更時だけ version 2・36 int32 とした。version 1 は新欄を既定値で復元する。
+- 長い投入機と選択投入機は既存の投入機処理を共用し、前後の探索距離だけを1/2マスに分けた。投石機は投石機ごとに4スロットの飛翔待ち行列を持ち、地図全体の飛翔配列は作らない。
+- 投石機の受け台は前方のベルト、在庫へ直接入る建物、加工建物の順に出力する。受け台側の撤去も投石機側へ正規化して組全体を消し、内部バッファと飛翔荷は破棄する。
+- UI は配置道具、価格、選択種、Chebyshev 射程枠、`CatapultShotView` の弧表示だけを追加し、お任せ配置は追加しない。
   - `CancelTrain(BuildingId or CoreId, 列の位置)`：コストは返す
   - `AssignVillagers(村人ID の一覧, 対象)`：対象は資源か建設中の建物
 - ゲートウェイが受け付け順を決め、`InputKind.Economy` として記録する（LogIndex の規則は Ver.1 と同じ）。**方針の命令と違い、翻訳・AIの遅延を通さない**（定型命令で遅延0を選んだときと同じく、次のtickに適用）
