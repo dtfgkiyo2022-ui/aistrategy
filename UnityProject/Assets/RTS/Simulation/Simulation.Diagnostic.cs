@@ -522,6 +522,24 @@ namespace Rts.Simulation
                     }
                 }
             }
+            if (BeltCraftOn && world.Catapults.Length > 0)
+            {
+                w.Value("Catapults.Count", (uint)world.Catapults.Length);
+                for (int i = 0; i < world.Catapults.Length; i++)
+                {
+                    var c = world.Catapults[i]; string n = "Catapults[" + i.ToString(CultureInfo.InvariantCulture) + "].";
+                    w.Value(n + "Active", c.Active); w.Value(n + "FactionId", c.FactionId); w.Value(n + "LauncherCell", c.LauncherCell);
+                    w.Value(n + "ReceiverCell", c.ReceiverCell); w.Value(n + "BufferKind", (byte)c.BufferKind); w.Value(n + "BufferedCount", c.BufferedCount);
+                    w.Value(n + "FirstLoadTick", c.FirstLoadTick); w.Value(n + "LastThrowTick", c.LastThrowTick);
+                    w.Value(n + "ReceiverKind", (byte)c.ReceiverKind); w.Value(n + "ReceiverCount", c.ReceiverCount);
+                    w.Value(n + "Shots.Count", (uint)c.Shots.Length);
+                    for (int j = 0; j < c.Shots.Length; j++)
+                    {
+                        var shot = c.Shots[j]; string sn = n + "Shots[" + j.ToString(CultureInfo.InvariantCulture) + "].";
+                        w.Value(sn + "Active", shot.Active); w.Value(sn + "Item", (byte)shot.Item); w.Value(sn + "Count", shot.Count); w.Value(sn + "RemainingTicks", shot.RemainingTicks);
+                    }
+                }
+            }
             if (world.Config.Economy.ProcessingChain || BricksOn || TackOn || PlanksOn || CraftTree1On || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || CharmsOn || RepairKitsOn || BeltCraftOn || world.Config.Economy.Forestry && world.Economies[0].Age >= 2)
             {
                 w.Value("ProcessingLines.NextId", world.NextProcessingLineId);

@@ -22,11 +22,11 @@ namespace Rts.Simulation
         private int BeltCapacity => BeltStackOn ? world.Config.Economy.BeltStackSize : 1;
 
         private bool BeltCanReceiveLoad(BeltState belt, ResourceKind item)
-            => belt.FactionId != 0 && belt.Component != BeltComponentKind.Inserter
+            => belt.FactionId != 0 && !IsSpecialComponent(belt.Component)
                 && (belt.Item == 0 || BeltStackOn && belt.Item == item && BeltItemCount(belt) < BeltCapacity);
 
         private bool BeltCanWaitForLoad(BeltState belt, ResourceKind item)
-            => belt.FactionId != 0 && belt.Component != BeltComponentKind.Inserter
+            => belt.FactionId != 0 && !IsSpecialComponent(belt.Component)
                 && (!BeltStackOn || belt.Item == 0 || belt.Item == item);
 
         private void PutOnBelt(ref BeltState belt, ResourceKind item, int amount)
@@ -125,7 +125,7 @@ namespace Rts.Simulation
             {
                 int cell = world.BeltOrder[orderIndex];
                 ref var belt = ref world.Belts[cell];
-                if (belt.Component == BeltComponentKind.Inserter) continue;
+                if (IsSpecialComponent(belt.Component)) continue;
                 if (belt.Item == 0 || BeltItemCount(belt) == 0) continue;
                 int ticksPerCell = BeltTicksFor(belt);
                 if (belt.Progress < ticksPerCell) belt.Progress++;
@@ -196,7 +196,7 @@ namespace Rts.Simulation
         {
             if (!world.Config.Economy.BeltComponents || belt.Component == BeltComponentKind.None)
                 return BeltNext(cell, belt.Facing);
-            if (belt.Component == BeltComponentKind.Inserter) return -1;
+            if (IsSpecialComponent(belt.Component)) return -1;
             if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
             if (belt.Component == BeltComponentKind.Merger) return BeltNext(cell, belt.Facing);
             Facing direction = belt.Facing;
@@ -244,7 +244,7 @@ namespace Rts.Simulation
 
         private bool BeltCanReceive(int cell, uint faction, ResourceKind item = 0)
             => cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == faction
-                && world.Belts[cell].Component != BeltComponentKind.Inserter
+                && !IsSpecialComponent(world.Belts[cell].Component)
                 && (world.Belts[cell].Item == 0 || BeltStackOn && item != 0
                     && world.Belts[cell].Item == item && BeltItemCount(world.Belts[cell]) < BeltCapacity);
 
@@ -316,9 +316,15 @@ namespace Rts.Simulation
         private int BeltPrimaryNext(int cell, BeltState belt)
         {
             if (belt.Component == BeltComponentKind.UndergroundEntrance) return belt.PairCell;
-            if (belt.Component == BeltComponentKind.Inserter) return -1;
+            if (IsSpecialComponent(belt.Component)) return -1;
             return BeltNext(cell, belt.Facing);
         }
+
+        private static bool IsInserterComponent(BeltComponentKind component)
+            => component == BeltComponentKind.Inserter || component == BeltComponentKind.FilterInserter || component == BeltComponentKind.LongInserter;
+
+        private static bool IsSpecialComponent(BeltComponentKind component)
+            => IsInserterComponent(component) || component == BeltComponentKind.Catapult || component == BeltComponentKind.CatapultReceiver;
 
         /// <summary>The cell a belt on <paramref name="cell"/> hands to, or -1 off the map.</summary>
         private int BeltNext(int cell, Facing facing)
@@ -524,6 +530,11 @@ namespace Rts.Simulation
             var rules = world.Config.Economy;
             if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
+            if (c.IsCatapult)
+            {
+                PlaceCatapult(faction, c, held);
+                return;
+            }
             if (!c.IsMerger && c.SorterKind != 0 && (byte)c.SorterKind > (byte)(ToolsOn ? ResourceKind.Tools : CharmsOn ? ResourceKind.Charms : IncenseOn ? ResourceKind.Incense : TradeGoodsOn ? ResourceKind.TradeGoods : PreservesOn ? ResourceKind.Preserves : BooksOn ? ResourceKind.Books : PlanksOn ? ResourceKind.Planks : TackOn ? ResourceKind.Tack : RationsOn ? ResourceKind.Rations : ResourceKind.BowGear)) return;
             ref var economy = ref world.Economies[faction - 1];
             int owned = 0;
@@ -565,16 +576,20 @@ namespace Rts.Simulation
             if (!BeltStackOn && owned >= rules.BeltLimit) return;
             if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
-            BeltComponentKind component = c.IsMerger ? BeltComponentKind.Merger : c.IsInserter ? BeltComponentKind.Inserter
+            BeltComponentKind component = c.IsMerger ? BeltComponentKind.Merger : c.IsInserter ? c.InserterComponent
                 : c.SorterKind == 0 ? BeltComponentKind.Splitter : BeltComponentKind.Sorter;
-            if (component == BeltComponentKind.Inserter && !rules.Inserters) return;
+            if (IsInserterComponent(component) && !rules.Inserters) return;
             if (component == BeltComponentKind.Merger && !BeltCraftOn) return;
-            int cost = component == BeltComponentKind.Inserter ? rules.InserterWoodCost
+            if ((component == BeltComponentKind.FilterInserter || component == BeltComponentKind.LongInserter) && !BeltCraftOn) return;
+            if (component == BeltComponentKind.FilterInserter && c.SorterKind == 0) return;
+            int cost = IsInserterComponent(component) ? rules.InserterWoodCost
                 : component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
-            bool craftDepthInserter = CraftDepthOn && economy.Age >= 2 && component == BeltComponentKind.Inserter;
+            bool craftDepthInserter = CraftDepthOn && economy.Age >= 2 && IsInserterComponent(component);
             bool craftRequiredComponent = CraftRequiredOn && economy.Age >= 1
-                && component != BeltComponentKind.Inserter;
+                && !IsInserterComponent(component);
             int gearCost = BeltCraftOn ? component == BeltComponentKind.Merger ? rules.MergerGears
+                : component == BeltComponentKind.FilterInserter ? rules.FilterInserterGears
+                : component == BeltComponentKind.LongInserter ? rules.LongInserterGears
                 : component == BeltComponentKind.Inserter ? rules.InserterGears
                 : component == BeltComponentKind.Splitter ? rules.SplitterGears : rules.SorterGears : 0;
             int plankCost = component == BeltComponentKind.Merger ? rules.MergerPlanks : craftRequiredComponent ? (cost + 1) / 2 : 0;
@@ -585,7 +600,7 @@ namespace Rts.Simulation
                 return;
             }
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
-                Component = component, SorterKind = c.SorterKind, Priority = c.BeltPriority, SplitterRightNext = false };
+                Component = component, SorterKind = IsInserterComponent(component) ? c.SorterKind : c.SorterKind, Priority = c.BeltPriority, SplitterRightNext = false };
             if (AiReasonsOn && automaticEconomyAction && !held)
             {
                 world.Belts[cell].AiReason = aiReason.reason;
@@ -618,6 +633,78 @@ namespace Rts.Simulation
             belt.Priority = priority;
         }
 
+        private void PlaceCatapult(uint faction, EconomyCommand c, bool held)
+        {
+            if (!BeltCraftOn || c.Cells == null || c.Cells.Count != 2 || c.Facings == null || c.Facings.Count != 2
+                || world.Economies[faction - 1].Age < world.Config.Economy.CatapultMinAge) return;
+            int launcher = c.Cells[0], receiver = c.Cells[1];
+            if (!CatapultPairIsValid(launcher, receiver)) return;
+            ref var economy = ref world.Economies[faction - 1];
+            var rules = world.Config.Economy;
+            int steel = CraftDepthOn ? 0 : rules.CatapultSteel;
+            if (economy.Gears < rules.CatapultGears + rules.CatapultReceiverGears
+                || economy.Planks < rules.CatapultPlanks + rules.CatapultReceiverPlanks
+                || economy.Fittings < (CraftDepthOn ? rules.CatapultFittings : 0)
+                || economy.Rope < (CraftDepthOn ? rules.CatapultRope : 0) || economy.Steel < steel) return;
+            world.Belts[launcher] = new BeltState { FactionId = faction, Facing = c.Facings[0], Hp = rules.BeltHp, Held = held,
+                Component = BeltComponentKind.Catapult, PairCell = receiver };
+            world.Belts[receiver] = new BeltState { FactionId = faction, Facing = c.Facings[1], Hp = rules.BeltHp, Held = held,
+                Component = BeltComponentKind.CatapultReceiver, PairCell = launcher };
+            economy.Gears = checked(economy.Gears - rules.CatapultGears - rules.CatapultReceiverGears);
+            economy.GearsConsumed = checked(economy.GearsConsumed + rules.CatapultGears + rules.CatapultReceiverGears);
+            economy.Planks = checked(economy.Planks - rules.CatapultPlanks - rules.CatapultReceiverPlanks);
+            economy.PlanksConsumed = checked(economy.PlanksConsumed + rules.CatapultPlanks + rules.CatapultReceiverPlanks);
+            RecordCraftTracePlanks(faction, CraftTraceOther, rules.CatapultPlanks + rules.CatapultReceiverPlanks);
+            if (CraftDepthOn)
+            {
+                economy.Fittings = checked(economy.Fittings - rules.CatapultFittings);
+                economy.Rope = checked(economy.Rope - rules.CatapultRope);
+                economy.FittingsConsumed = checked(economy.FittingsConsumed + rules.CatapultFittings);
+                economy.RopeConsumed = checked(economy.RopeConsumed + rules.CatapultRope);
+            }
+            else economy.Steel = checked(economy.Steel - steel);
+            AddCatapultState(faction, launcher, receiver);
+            InvalidateBeltCaches();
+        }
+
+        private bool CatapultPairIsValid(int launcher, int receiver)
+        {
+            int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
+            if (launcher < 0 || receiver < 0 || launcher >= cells || receiver >= cells || launcher == receiver
+                || world.Belts[launcher].FactionId != 0 || world.Belts[receiver].FactionId != 0
+                || !world.Map.IsPassable(launcher) || !world.Map.IsPassable(receiver)
+                || IsReservedBuildingCell(launcher) || IsReservedBuildingCell(receiver)
+                || IsRiverCell(launcher) || IsRiverCell(receiver) || IsNodeCell(launcher) || IsNodeCell(receiver)
+                || InsideAnyCore(launcher) || InsideAnyCore(receiver)) return false;
+            int width = world.Config.Map.WidthCells;
+            int dx = Math.Abs(receiver % width - launcher % width), dz = Math.Abs(receiver / width - launcher / width);
+            return Math.Max(dx, dz) <= world.Config.Economy.CatapultRangeCells;
+        }
+
+        private void AddCatapultState(uint faction, int launcher, int receiver)
+        {
+            var states = world.Catapults;
+            for (int i = 0; i < states.Length; i++) if (!states[i].Active)
+            {
+                states[i] = NewCatapultState(faction, launcher, receiver); return;
+            }
+            var expanded = new CatapultState[states.Length + 1];
+            System.Array.Copy(states, expanded, states.Length);
+            expanded[states.Length] = NewCatapultState(faction, launcher, receiver);
+            world.Catapults = expanded;
+        }
+
+        private CatapultState NewCatapultState(uint faction, int launcher, int receiver)
+            => new CatapultState { Active = true, FactionId = faction, LauncherCell = launcher, ReceiverCell = receiver,
+                FirstLoadTick = -1, LastThrowTick = -world.Config.Economy.CatapultIntervalTicks, Shots = new CatapultShotState[4] };
+
+        private void RemoveCatapultState(int launcher, int receiver)
+        {
+            for (int i = 0; i < world.Catapults.Length; i++)
+                if (world.Catapults[i].Active && world.Catapults[i].LauncherCell == launcher && world.Catapults[i].ReceiverCell == receiver)
+                { var state = world.Catapults[i]; state.Active = false; state.BufferedCount = 0; state.ReceiverCount = 0; state.BufferKind = 0; state.ReceiverKind = 0; state.Shots = new CatapultShotState[4]; world.Catapults[i] = state; return; }
+        }
+
         private bool UndergroundPairIsValid(int entrance, int exit, Facing facing)
         {
             int cells = world.Config.Map.WidthCells * world.Config.Map.HeightCells;
@@ -643,6 +730,32 @@ namespace Rts.Simulation
             if (!IndustryOn || cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != faction) return;
             var belt = world.Belts[cell];
             int pair = belt.PairCell;
+            if (belt.Component == BeltComponentKind.CatapultReceiver && pair >= 0 && pair < world.Belts.Length
+                && world.Belts[pair].FactionId == faction && world.Belts[pair].Component == BeltComponentKind.Catapult
+                && world.Belts[pair].PairCell == cell)
+            {
+                int receiver = cell;
+                cell = pair;
+                pair = receiver;
+                belt = world.Belts[cell];
+            }
+            bool catapult = belt.Component == BeltComponentKind.Catapult && pair >= 0 && pair < world.Belts.Length
+                && world.Belts[pair].FactionId == faction && world.Belts[pair].Component == BeltComponentKind.CatapultReceiver
+                && world.Belts[pair].PairCell == cell;
+            if (catapult)
+            {
+                MarkLinesForBelt(faction, cell); MarkLinesForBelt(faction, pair);
+                RemoveCatapultState(cell, pair);
+                if (world.Config.Economy.EasyRebuild)
+                {
+                    var r = world.Config.Economy;
+                    AddStock(faction, ResourceKind.Gears, r.CatapultGears + r.CatapultReceiverGears);
+                    AddStock(faction, ResourceKind.Planks, r.CatapultPlanks + r.CatapultReceiverPlanks);
+                    if (CraftDepthOn) { AddStock(faction, ResourceKind.Fittings, r.CatapultFittings); AddStock(faction, ResourceKind.Rope, r.CatapultRope); }
+                    else AddStock(faction, ResourceKind.Steel, r.CatapultSteel);
+                }
+                world.Belts[cell] = default; world.Belts[pair] = default; InvalidateBeltCaches(); return;
+            }
             // Removing both ends of an underground pair is part of EasyRebuild; without it one end stays, as before.
             bool paired = world.Config.Economy.EasyRebuild && pair >= 0 && pair < world.Belts.Length && world.Belts[pair].FactionId == faction
                 && world.Belts[pair].PairCell == cell
@@ -667,7 +780,7 @@ namespace Rts.Simulation
                     : belt.Component == BeltComponentKind.Sorter ? world.Config.Economy.SorterWoodCost
                     : belt.Fast ? world.Config.Economy.FastBeltWoodCost : world.Config.Economy.BeltWoodCost;
                 // A plain belt paid in planks is not refunded; the inserter still pays and refunds wood.
-                if (!craftRequiredBelts || belt.Component == BeltComponentKind.Inserter)
+                if (!craftRequiredBelts || IsInserterComponent(belt.Component))
                     AddStock(faction, ResourceKind.Wood, refundWood);
                 if (craftRequiredBelts && (paired || belt.Fast || belt.Component == BeltComponentKind.Splitter || belt.Component == BeltComponentKind.Sorter || belt.Component == BeltComponentKind.Merger))
                 {
@@ -684,7 +797,9 @@ namespace Rts.Simulation
                         : belt.Component == BeltComponentKind.Merger ? world.Config.Economy.MergerGears
                         : belt.Component == BeltComponentKind.Splitter ? world.Config.Economy.SplitterGears
                         : belt.Component == BeltComponentKind.Sorter ? world.Config.Economy.SorterGears
-                        : belt.Component == BeltComponentKind.Inserter ? world.Config.Economy.InserterGears : 0;
+                        : belt.Component == BeltComponentKind.Inserter ? world.Config.Economy.InserterGears
+                        : belt.Component == BeltComponentKind.FilterInserter ? world.Config.Economy.FilterInserterGears
+                        : belt.Component == BeltComponentKind.LongInserter ? world.Config.Economy.LongInserterGears : 0;
                     if (gearRefund > 0) AddStock(faction, ResourceKind.Gears, gearRefund);
                     if (belt.VeryFast) AddStock(faction, ResourceKind.Steel, world.Config.Economy.VeryFastBeltSteel);
                 }
@@ -774,7 +889,7 @@ namespace Rts.Simulation
                     var belt = world.Belts[cell];
                     if (!reachable[cell] || !BeltCanWaitForLoad(belt, villager.CarryKind)
                         || belt.FactionId != villager.FactionId
-                        || belt.Component == BeltComponentKind.Inserter || belt.Component == BeltComponentKind.UndergroundExit
+                        || IsSpecialComponent(belt.Component) || belt.Component == BeltComponentKind.UndergroundExit
                         || belt.Component == BeltComponentKind.Splitter) continue;
                     int distance = dx * dx + dz * dz;
                     if (best < 0 || distance < bestDistance || distance == bestDistance && cell < best)
@@ -797,7 +912,7 @@ namespace Rts.Simulation
             {
                 int start = world.BeltOrder[orderIndex];
                 var source = world.Belts[start];
-                if (source.FactionId != faction || source.Component == BeltComponentKind.Inserter
+                if (source.FactionId != faction || IsSpecialComponent(source.Component)
                     || source.Component == BeltComponentKind.UndergroundExit || source.Component == BeltComponentKind.Splitter
                     || limit == 0) continue;
                 if (++beltDropOffSeenStamp == 0)
@@ -812,7 +927,7 @@ namespace Rts.Simulation
                 {
                     int cell = beltDropOffQueue[head++]; visited++;
                     var belt = world.Belts[cell];
-                    if (belt.Component == BeltComponentKind.Inserter) continue;
+                    if (IsSpecialComponent(belt.Component)) continue;
                     int first = -1, second = -1;
                     if (belt.Component == BeltComponentKind.Splitter)
                     {
@@ -837,7 +952,7 @@ namespace Rts.Simulation
                         }
                         return false;
                     }
-                    if (target.FactionId != faction || target.Component == BeltComponentKind.Inserter) return false;
+                    if (target.FactionId != faction || IsSpecialComponent(target.Component)) return false;
                     if (beltDropOffSeen[next] != stamp) { beltDropOffSeen[next] = stamp; beltDropOffQueue[tail++] = next; }
                     return false;
                 }

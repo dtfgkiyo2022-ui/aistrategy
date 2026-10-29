@@ -15,11 +15,17 @@ namespace Rts.Simulation
             int interval = world.Config.Economy.InserterIntervalTicks;
             for (int cell = 0; cell < world.Belts.Length; cell++)
             {
-                if (world.Belts[cell].FactionId == 0 || world.Belts[cell].Component != BeltComponentKind.Inserter) continue;
+                if (world.Belts[cell].FactionId == 0 || !IsInserterComponent(world.Belts[cell].Component)) continue;
                 if (++world.Belts[cell].Progress < interval) continue;
 
+                int reach = world.Belts[cell].Component == BeltComponentKind.LongInserter ? 2 : 1;
                 int rear = BeltPrevious(cell, world.Belts[cell].Facing);
                 int front = BeltNext(cell, world.Belts[cell].Facing);
+                if (reach == 2)
+                {
+                    rear = rear < 0 ? -1 : BeltPrevious(rear, world.Belts[cell].Facing);
+                    front = front < 0 ? -1 : BeltNext(front, world.Belts[cell].Facing);
+                }
                 if (rear < 0 || front < 0) continue;
                 uint faction = world.Belts[cell].FactionId;
                 ResourceKind selector = world.Belts[cell].SorterKind;
@@ -133,7 +139,7 @@ namespace Rts.Simulation
             if (rear >= 0 && rear < world.Belts.Length)
             {
                 var belt = world.Belts[rear];
-                if (belt.FactionId == faction && belt.Component != BeltComponentKind.Inserter && belt.Item != 0
+                if (belt.FactionId == faction && !IsInserterComponent(belt.Component) && belt.Item != 0
                     && SelectorMatches(selector, belt.Item))
                 {
                     sourceKind = InserterSourceKind.Belt;
