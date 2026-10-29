@@ -2445,22 +2445,32 @@ AI線数と送信済み集まり数は観測専用で timing CSV に追加し、
 
 **順番**：Codex の枠が空いたら最初に作る（ほかの作業を待たない）。以後、お任せの判断を足す依頼には、必ず理由の番号と文を足すことを入れる
 
-### 38.21 AI の「なぜそれを置いたか」表示（aireasons1 実装記録、2026-10-30）
+#### 実装で決めたこと（aireasons2、2026-10-30）
 
-AI が自動配置した建物・ベルトのセルに、判断理由の種別 `AiReason` と補助値 `AiReasonValue` を記録し、選択時の説明と任意のマーカーに利用する。人間が配置したセルは理由を `None` とする。理由は意思決定の入力には使わず、表示専用の診断情報として扱う。
+- 理由は建物の種類から決めない。お任せの判断の各所が置く直前に `SetAiReason(理由, 値)` を呼び、`PlaceBuildingAt`・建物の予約・ベルト敷き（`LayRoutes` など）・部品の配置が入口で一度だけ受け取って空に戻す（置けなかったときも空に戻す）。受け渡しの欄は `WorldState` の外に置き、置いた建物・ベルトの `AiReason`・`AiReasonValue` だけが正規状態に入る
+- 理由が入らないまま置かれたお任せの物は `Unspecified`。種1〜3でどれも 0（建物・ベルトとも）。人が置いた物は `None`
+- 旗 `AiReasons`（拡張欄 83 version 1、int32 の 0/1）。広い地図の設定（`LiveGameRules`）では既定でオン
+- 予約の扱いを直した：お任せが作った予約（ArmsScale の板待ちなど）は、これまで `Held`（人の物）として建ち、その線が手動の扱いになっていた。旗オンでは、お任せの予約・お任せが命令の形で置いた物を `Held` にしない。種1〜3で兵のピーク・決着の tick は旗オフと同じだった
+- 理由と値（文は `UiText`、日本語 25 字以内）
 
-- `EconomyRules.AiReasons` は大規模経済では既定オン。オフ時は理由フィールド、拡張 83、表示行、マーカーを無効化し、既存の判断経路を通さない。
-- ScenarioBinary 拡張 ID 83 は version 1、little-endian の int32 (`0`/`1`) である。未知の拡張と同じく不正値は拒否する。
-- `BuildingView` と `BeltView` の末尾に後方互換の任意引数として `AiReason` / `AiReasonValue` を追加した。`PlayerHeld` は `own && b.Held` とし、理由付き AI 予約の実体化時だけ `Held=false` を維持する。
-- 理由の値は `PopulationCap`、`FoodIncome`、`BarracksTarget`、`FarResource`、`TownExpand`、`MaterialFor`、`MetalLine`、`MaterialForAssemblers`、`AssemblerRecipe`、`ResourceBelt`、`ProcessingBelt`、`ReservationWait`、`Unspecified`、`Stopped`。値は不足数・在庫・距離・目標数・資源種別・ライン種別・レシピなど、理由ごとに定義した補助値に限定する。
-- UI は `お任せ：〈理由〉` と `止まっている：〈理由〉` の短文を使い、`UiText` の日本語ラベルは 25 文字以内とする。選択説明は理由を 1 行追加し、ポリシー操作から表示モードを切り替える。
-- 理由付き状態は `WorldState`、コピー・検証、リプレイのシリアライズを通る。建物・ベルトの削除、移動、地下ペア変更、合流・投げ渡し時は対象セルの理由も更新または消去する。
-- 検証は拡張 83 の往復、オフ時の理由ゼロ、AI 自動配置の非ゼロ、人間配置のゼロ、EditMode の日本語ラベル長を対象とする。比較リプレイは従来の 40,000 tick 手順で確認する。
+| 理由 | 値 | 文の例 |
+|---|---|---|
+| PopulationCap | あと何人で上限か | 人口上限まであと N |
+| FoodIncome | 食料の在庫 | 食料を増やす（在庫 N） |
+| BarracksTarget | 兵舎の目標の棟数 | 兵舎を N 棟まで増やす |
+| FarResource | 核から採り場までの道のりのマス数 | 採り場が遠い（N マス） |
+| TownExpand | 時代 | 拠点を広げる（時代 N） |
+| MaterialFor | その建物が作る物の ResourceKind | 〇〇を作るため |
+| MetalLine | 何本目の金属の線か | 金属の線 N 本目 |
+| MaterialForAssemblers | 組立所の数 | 組立所 N 棟分の材料 |
+| AssemblerRecipe | RecipeKind | 〇〇を作る組立所 |
+| ResourceBelt | ResourceKind | 〇〇の採り場から |
+| ProcessingBelt | ProcessingLineKind | 〇〇の線 |
+| ReservationWait | 待っている物の ResourceKind | 〇〇がそろったら建てる |
+| Defense | 塔の上限（城は 0） | 守りを固める（N 基まで） |
+| NewUnitKind | 0 | 新しい兵種を出す（射撃場・厩舎・攻城工房・工兵の野営地） |
+| Research | 0 | 研究のため（鍛冶屋） |
+| RiverCrossing | 橋のマス数 | 川を渡る（N マス） |
 
-#### 38.20 実装決定
-
-- 理由は建物の種類から推測しない。各 AI 判断箇所で `SetAiReason(reason, value)` を呼び、`PlaceBuildingAt`、建物予約、ベルト配置が `TakeAiReason` で一度だけ消費する。成功・失敗を問わず配置入口で保留値をリセットする。
-- 自動配置で理由が未設定のときは `Unspecified` として記録し、測定・テストで件数を数える。人の配置は `None` とする。部品の理由は今回実装しない。
-- `Stopped` は状態へ保存しない。選択説明と停止説明を作る時点の在庫・投入条件・ライン状態から計算する。
-- `EconomyFrame` は表示のために `WorldState` を変更しない。`AiReasons` オフでは理由と拡張 83 の値を正規状態へ書かず、判断ロジックも変更しない。
-- `UiText` の日本語文は 25 字以内とし、`AiReasonValue` の enum 値は `ResourceKind`、`ProcessingLineKind`、`RecipeKind` の定義域をそのまま使う。
+- 表示：建物を選ぶと説明に「お任せ：〈理由〉」の1行が出る。内政の欄の「お任せの理由：表示」で、理由のある建物の名札に「●」が付く。止まっている理由は、今ある「状態：」の行（材料待ち・出力詰まり・在庫満杯）をそのまま使う（状態は書き換えない）
+- まだ無いもの：ベルトを選ぶ画面が無いので、ベルトの理由は記録だけで画面には出ない。お任せがまだ置かない部品（合流機など）の理由は 38.19 で足す
