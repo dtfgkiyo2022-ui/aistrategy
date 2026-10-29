@@ -70,7 +70,7 @@ namespace Rts.Presentation
         private float villagerInterpolationSeconds;
         private GameObject ghost;
         private readonly Dictionary<int, GameObject> belts = new Dictionary<int, GameObject>();
-        private readonly Dictionary<int, GameObject> items = new Dictionary<int, GameObject>();
+        private readonly Dictionary<int, List<GameObject>> items = new Dictionary<int, List<GameObject>>();
         private readonly Dictionary<int, ResourceKind> itemKinds = new Dictionary<int, ResourceKind>();
         private readonly Dictionary<uint, GameObject> buildingStatusBubbles = new Dictionary<uint, GameObject>();
         private readonly Dictionary<uint, GameObject> buildingActivityPuffs = new Dictionary<uint, GameObject>();
@@ -364,7 +364,7 @@ namespace Rts.Presentation
             foreach (var go in carryBoxes.Values) Destroy(go);
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
-            foreach (var go in items.Values) Destroy(go);
+            foreach (var list in items.Values) foreach (var go in list) Destroy(go);
             foreach (var go in buildingStatusBubbles.Values) Destroy(go);
             foreach (var go in buildingActivityPuffs.Values) Destroy(go);
             foreach (var go in buildingDetailOverlays.Values) Destroy(go);
@@ -1354,28 +1354,52 @@ namespace Rts.Presentation
                 plate.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 if (b.Item == 0) continue;
                 beltCarrying.Add(b.Cell);
-                if (!items.TryGetValue(b.Cell, out var item))
+                if (!items.TryGetValue(b.Cell, out var itemList))
                 {
-                    item = new GameObject("Item " + b.Cell);
+                    itemList = new List<GameObject>();
+                    items.Add(b.Cell, itemList);
+                }
+                int count = Mathf.Clamp(b.Count, 1, 16);
+                while (itemList.Count < count)
+                {
+                    var item = new GameObject("Item " + b.Cell + " " + itemList.Count);
                     item.transform.SetParent(transform, false);
-                    items.Add(b.Cell, item);
+                    itemList.Add(item);
+                }
+                while (itemList.Count > count)
+                {
+                    int last = itemList.Count - 1;
+                    Destroy(itemList[last]);
+                    itemList.RemoveAt(last);
                 }
                 if (!itemKinds.TryGetValue(b.Cell, out var oldKind) || oldKind != b.Item)
                 {
-                    BuildCargoVisual(item, b.Item);
+                    foreach (var item in itemList) BuildCargoVisual(item, b.Item);
                     itemKinds[b.Cell] = b.Item;
                 }
                 // From the edge it came in at to the edge it leaves by, as its ticks on this cell run.
                 float along = Mathf.Clamp01((float)b.Progress / ticks) - 0.5f;
-                item.transform.position = new Vector3(centre.x, 0.5f, centre.z) + dir * (along * CellMeters);
-                item.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+                Vector3 side = new Vector3(-dir.z, 0f, dir.x);
+                for (int i = 0; i < itemList.Count; i++)
+                {
+                    var item = itemList[i];
+                    float lateral = (i - (itemList.Count - 1) * 0.5f) * 0.22f;
+                    item.transform.position = new Vector3(centre.x, 0.5f, centre.z)
+                        + dir * (along * CellMeters) + side * lateral;
+                    item.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+                }
             }
             beltGone.Clear();
             foreach (var cell in belts.Keys) if (!beltSeen.Contains(cell)) beltGone.Add(cell);
             foreach (var cell in beltGone) { Destroy(belts[cell]); belts.Remove(cell); beltComponents.Remove(cell); }
             beltGone.Clear();
             foreach (var cell in items.Keys) if (!beltCarrying.Contains(cell)) beltGone.Add(cell);
-            foreach (var cell in beltGone) { Destroy(items[cell]); items.Remove(cell); itemKinds.Remove(cell); }
+            foreach (var cell in beltGone)
+            {
+                foreach (var item in items[cell]) Destroy(item);
+                items.Remove(cell);
+                itemKinds.Remove(cell);
+            }
             BeltVisualMaterials.Tick(Time.time);
             if (view.LatestFrame.Tick != lastMetricTick)
             {

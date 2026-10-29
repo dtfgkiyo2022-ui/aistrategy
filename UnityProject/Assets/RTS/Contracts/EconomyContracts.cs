@@ -592,6 +592,7 @@ namespace Rts.Contracts
         public ResourceKind SorterKind { get; }
         public int PairCell { get; }
         public BeltSpeed Speed { get; }
+        public int Count { get; }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress)
             : this(cell, factionId, facing, item, progress, false)
@@ -604,10 +605,10 @@ namespace Rts.Contracts
         }
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
-            BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed)
+            BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1)
         {
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
-            Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed;
+            Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count;
         }
     }
 

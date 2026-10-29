@@ -13,6 +13,47 @@ namespace Rts.Simulation
         private bool IndustryOn => world.Config.Economy.Enabled && world.Config.Economy.Industry;
         private bool ProcessingOn => IndustryOn && world.Config.Economy.ProcessingChain;
         private bool BeltDropOffOn => IndustryOn && world.Config.Economy.BeltDropOff;
+        private bool BeltStackOn => IndustryOn && world.Config.Economy.BeltStack;
+
+        private int BeltItemCount(BeltState belt)
+        => belt.Item == 0 ? 0 : BeltStackOn ? Math.Max(1, (int)belt.StackCount) : 1;
+
+        private int BeltCapacity => BeltStackOn ? world.Config.Economy.BeltStackSize : 1;
+
+        private bool BeltCanReceiveLoad(BeltState belt, ResourceKind item)
+            => belt.FactionId != 0 && belt.Component != BeltComponentKind.Inserter
+                && (belt.Item == 0 || BeltStackOn && belt.Item == item && BeltItemCount(belt) < BeltCapacity);
+
+        private bool BeltCanWaitForLoad(BeltState belt, ResourceKind item)
+            => belt.FactionId != 0 && belt.Component != BeltComponentKind.Inserter
+                && (!BeltStackOn || belt.Item == 0 || belt.Item == item);
+
+        private void PutOnBelt(ref BeltState belt, ResourceKind item, int amount)
+        {
+            if (amount <= 0) return;
+            if (belt.Item == 0)
+            {
+                belt.Item = item;
+                belt.StackCount = (byte)Math.Min(BeltCapacity, amount);
+                belt.Progress = 0;
+            }
+            else
+            {
+                belt.StackCount = (byte)Math.Min(BeltCapacity, BeltItemCount(belt) + amount);
+            }
+        }
+
+        private void TakeFromBelt(ref BeltState belt, int amount)
+        {
+            if (amount <= 0 || belt.Item == 0) return;
+            if (!BeltStackOn || BeltItemCount(belt) <= amount)
+            {
+                belt.Item = 0; belt.StackCount = 0; belt.Progress = 0;
+                return;
+            }
+            belt.StackCount = (byte)(BeltItemCount(belt) - amount);
+            belt.Progress = 0;
+        }
         // Indexed by faction/resource. Each used entry is allocated once and reused after invalidation.
         private bool[][] beltDropOffReachability;
         private bool[] beltDropOffReachabilityValid;
@@ -84,7 +125,7 @@ namespace Rts.Simulation
                 int cell = world.BeltOrder[orderIndex];
                 ref var belt = ref world.Belts[cell];
                 if (belt.Component == BeltComponentKind.Inserter) continue;
-                if (belt.Item == 0) continue;
+                if (belt.Item == 0 || BeltItemCount(belt) == 0) continue;
                 int ticksPerCell = BeltTicksFor(belt);
                 if (belt.Progress < ticksPerCell) belt.Progress++;
                 if (belt.Progress < ticksPerCell) continue;
@@ -96,37 +137,43 @@ namespace Rts.Simulation
                     if (next >= world.Belts.Length || world.Belts[next].FactionId != belt.FactionId) continue;
                 }
                 ref var target = ref world.Belts[next];
+                ResourceKind item = belt.Item;
+                int amount = BeltItemCount(belt);
                 if (target.FactionId == belt.FactionId)
                 {
-                    if (target.Component == BeltComponentKind.Inserter) continue;
-                    if (target.Item != 0) continue; // jammed until the cell ahead moves
-                    target.Item = belt.Item;
-                    target.Progress = 0;
-                    belt.Item = 0;
-                    belt.Progress = 0;
-                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
+                    if (!BeltCanReceiveLoad(target, item)) continue;
+                    int moved = target.Item == 0 ? Math.Min(amount, BeltCapacity) : Math.Min(amount, BeltCapacity - BeltItemCount(target));
+                    if (moved <= 0) continue;
+                    PutOnBelt(ref target, item, moved);
+                    TakeFromBelt(ref belt, moved);
+                    if (belt.Item == 0 && belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 else if (target.FactionId == 0 && (FeedsOwnCore(next, belt.FactionId)
                     || AiExpandOn && FeedsCompletedTown(next, belt.FactionId)))
                 {
-                    AddStock(belt.FactionId, belt.Item, 1);
-                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
-                    belt.Item = 0;
-                    belt.Progress = 0;
+                    AddStock(belt.FactionId, item, amount);
+                    RecordLargeBeltDelivery(belt.FactionId, item, amount);
+                    TakeFromBelt(ref belt, amount);
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
-                else if (target.FactionId == 0 && BeltDropOffOn && TryFeedBeltDropOffStock(next, belt.FactionId, belt.Item))
+                else if (target.FactionId == 0 && BeltDropOffOn && BeltDropOffStockDestination(next, belt.FactionId, item))
                 {
-                    belt.Item = 0;
-                    belt.Progress = 0;
+                    AddStock(belt.FactionId, item, amount);
+                    RecordLargeBeltDelivery(belt.FactionId, item, amount);
+                    TakeFromBelt(ref belt, amount);
                     if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
-                else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, belt.Item))
+                else if (target.FactionId == 0 && TryFeedBuilding(next, belt.FactionId, item))
                 {
-                    RecordLargeBeltDelivery(belt.FactionId, belt.Item, 1);
-                    belt.Item = 0;
-                    belt.Progress = 0;
-                    if (belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
+                    int accepted = 1;
+                    if (BeltStackOn)
+                    {
+                        accepted = 0;
+                        while (accepted < amount && TryFeedBuilding(next, belt.FactionId, item)) accepted++;
+                    }
+                    RecordLargeBeltDelivery(belt.FactionId, item, accepted);
+                    TakeFromBelt(ref belt, accepted);
+                    if (belt.Item == 0 && belt.Component == BeltComponentKind.Splitter) belt.SplitterRightNext = !belt.SplitterRightNext;
                 }
                 // Anything else - bare ground, an enemy belt, a building that does not take it - holds the item where it is.
             }
@@ -150,18 +197,20 @@ namespace Rts.Simulation
                 // The forward exit is the first choice; the left exit is the deterministic fallback.
                 if (belt.SplitterRightNext) direction = TurnLeft(belt.Facing);
                 int preferred = BeltNext(cell, direction);
-                if (BeltCanReceive(preferred, belt.FactionId)) return preferred;
+                if (BeltCanReceive(preferred, belt.FactionId, belt.Item)) return preferred;
                 int alternate = BeltNext(cell, direction == belt.Facing ? TurnLeft(belt.Facing) : belt.Facing);
-                return BeltCanReceive(alternate, belt.FactionId) ? alternate : preferred;
+                return BeltCanReceive(alternate, belt.FactionId, belt.Item) ? alternate : preferred;
             }
             if (belt.Component == BeltComponentKind.Sorter && belt.Item == belt.SorterKind)
                 direction = TurnLeft(belt.Facing);
             return BeltNext(cell, direction);
         }
 
-        private bool BeltCanReceive(int cell, uint faction)
+        private bool BeltCanReceive(int cell, uint faction, ResourceKind item = 0)
             => cell >= 0 && cell < world.Belts.Length && world.Belts[cell].FactionId == faction
-                && world.Belts[cell].Component != BeltComponentKind.Inserter && world.Belts[cell].Item == 0;
+                && world.Belts[cell].Component != BeltComponentKind.Inserter
+                && (world.Belts[cell].Item == 0 || BeltStackOn && item != 0
+                    && world.Belts[cell].Item == item && BeltItemCount(world.Belts[cell]) < BeltCapacity);
 
         private static Facing TurnLeft(Facing facing)
             => (Facing)(((int)facing + 3) % 4);
@@ -388,7 +437,7 @@ namespace Rts.Simulation
                 var facing = c.Facings[i];
                 int woodCost = craftRequiredBelts ? 0 : fast ? rules.FastBeltWoodCost : rules.BeltWoodCost;
                 int plankCost = craftRequiredBelts ? fast ? 1 : placedInCommand % 2 == 0 ? 1 : 0 : 0;
-                if (owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) return;
+                if (!BeltStackOn && owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) return;
                 if (cell < 0 || cell >= world.Belts.Length || (byte)facing > 3 || world.Belts[cell].FactionId != 0
                     || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell) || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) continue;
                 economy.Wood = checked(economy.Wood - woodCost);
@@ -422,7 +471,7 @@ namespace Rts.Simulation
                 int entrance = c.Cells[0], exit = c.Cells[1];
                 int woodCost = CraftRequiredOn && economy.Age >= 1 ? 0 : rules.UndergroundBeltWoodCost;
                 int undergroundPlankCost = CraftRequiredOn && economy.Age >= 1 ? (rules.UndergroundBeltWoodCost + 1) / 2 : 0;
-                if (owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing)
+                if (!BeltStackOn && owned + 2 > rules.BeltLimit || !UndergroundPairIsValid(entrance, exit, c.Facing)
                     || economy.Wood < woodCost || economy.Planks < undergroundPlankCost) return;
                 world.Belts[entrance] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundEntrance, PairCell = exit };
@@ -440,7 +489,7 @@ namespace Rts.Simulation
                 return;
             }
             int cell = c.Cell;
-            if (owned >= rules.BeltLimit) return;
+            if (!BeltStackOn && owned >= rules.BeltLimit) return;
             if (cell < 0 || cell >= world.Belts.Length || world.Belts[cell].FactionId != 0 || !world.Map.IsPassable(cell) || IsReservedBuildingCell(cell)
                 || IsRiverCell(cell) || IsNodeCell(cell) || InsideAnyCore(cell)) return;
             BeltComponentKind component = c.IsInserter ? BeltComponentKind.Inserter
@@ -514,7 +563,7 @@ namespace Rts.Simulation
             if (paired) MarkLinesForBelt(faction, pair);
             if (world.Config.Economy.EasyRebuild)
             {
-                if (belt.Item != 0) AddStock(faction, belt.Item, 1);
+                if (belt.Item != 0) AddStock(faction, belt.Item, BeltItemCount(belt));
                 bool craftRequiredBelts = CraftRequiredOn && world.Economies[faction - 1].Age >= 1;
                 int refundWood = paired ? world.Config.Economy.UndergroundBeltWoodCost
                     : belt.Component == BeltComponentKind.Splitter ? world.Config.Economy.SplitterWoodCost
@@ -529,7 +578,7 @@ namespace Rts.Simulation
                         : belt.Fast ? 1 : (belt.Component == BeltComponentKind.Splitter ? (world.Config.Economy.SplitterWoodCost + 1) / 2 : (world.Config.Economy.SorterWoodCost + 1) / 2);
                     AddStock(faction, ResourceKind.Planks, refundPlanks);
                 }
-                if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, 1);
+                if (paired && world.Belts[pair].Item != 0) AddStock(faction, world.Belts[pair].Item, BeltItemCount(world.Belts[pair]));
             }
             world.Belts[cell] = default;
             if (paired) world.Belts[pair] = default;
@@ -613,7 +662,8 @@ namespace Rts.Simulation
                     if (x < 0 || z < 0 || x >= width || z >= height) continue;
                     int cell = z * width + x;
                     var belt = world.Belts[cell];
-                    if (!reachable[cell] || belt.FactionId != villager.FactionId
+                    if (!reachable[cell] || !BeltCanWaitForLoad(belt, villager.CarryKind)
+                        || belt.FactionId != villager.FactionId
                         || belt.Component == BeltComponentKind.Inserter || belt.Component == BeltComponentKind.UndergroundExit
                         || belt.Component == BeltComponentKind.Splitter) continue;
                     int distance = dx * dx + dz * dz;
@@ -632,7 +682,7 @@ namespace Rts.Simulation
             var reachable = beltDropOffReachability[index];
             Array.Clear(reachable, 0, reachable.Length);
             EnsureBeltProcessingOrder();
-            int limit = Math.Max(0, world.Config.Economy.BeltLimit);
+            int limit = BeltStackOn ? world.Belts.Length : Math.Max(0, world.Config.Economy.BeltLimit);
             for (int orderIndex = 0; orderIndex < beltProcessingOrderCount; orderIndex++)
             {
                 int start = world.BeltOrder[orderIndex];

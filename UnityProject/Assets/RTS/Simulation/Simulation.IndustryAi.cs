@@ -3233,7 +3233,7 @@ namespace Rts.Simulation
                     if (craftRequiredBelts) { if (plankCells++ % 2 == 0) planks++; }
                     else wood = checked(wood + world.Config.Economy.BeltWoodCost);
                 }
-            return owned + added <= world.Config.Economy.BeltLimit
+            return (world.Config.Economy.BeltStack || owned + added <= world.Config.Economy.BeltLimit)
                 && economy.Wood - AgeFourAiWoodReserve(faction) >= wood && economy.Planks >= planks;
         }
 
@@ -3308,7 +3308,7 @@ namespace Rts.Simulation
                             if (craftRequiredBelts && plankCells++ % 2 == 0) missingPlanks++;
                         }
                     }
-                if (owned + missing > rules.BeltLimit
+                if (!rules.BeltStack && owned + missing > rules.BeltLimit
                     || economy.Wood - reservedWood < (craftRequiredBelts ? 0 : missing * rules.BeltWoodCost)
                     || economy.Planks < missingPlanks) return false;
             }
@@ -3322,7 +3322,7 @@ namespace Rts.Simulation
                     whole = false;
                     int plankCost = craftRequiredBelts && placedInRoutes % 2 == 0 ? 1 : 0;
                     int woodCost = craftRequiredBelts ? 0 : rules.BeltWoodCost;
-                    if (owned >= rules.BeltLimit || economy.Wood - reservedWood < woodCost || economy.Planks < plankCost) continue;
+                    if (!rules.BeltStack && owned >= rules.BeltLimit || economy.Wood - reservedWood < woodCost || economy.Planks < plankCost) continue;
                     economy.Wood = checked(economy.Wood - woodCost);
                     RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                     if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }
@@ -3574,7 +3574,7 @@ namespace Rts.Simulation
                 whole = false;
                 int plankCost = craftRequiredBelts && placedInRoute % 2 == 0 ? 1 : 0;
                 int woodCost = craftRequiredBelts ? 0 : rules.BeltWoodCost;
-                if (owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) continue;
+                if (!rules.BeltStack && owned >= rules.BeltLimit || economy.Wood < woodCost || economy.Planks < plankCost) continue;
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                 if (plankCost > 0) { economy.Planks -= plankCost; economy.PlanksConsumed += plankCost; RecordCraftTracePlanks(faction, CraftTraceOther, plankCost); }

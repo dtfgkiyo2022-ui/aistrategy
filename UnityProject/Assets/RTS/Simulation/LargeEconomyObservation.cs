@@ -41,7 +41,8 @@ namespace Rts.Simulation
         public int PlannedTowns, TownsBuilding, CompletedTowns, TownVillagersQueued, TownVillagersProduced;
         public int[] TownConnectedLines = Array.Empty<int>();
         public int CoreNearBuildings, CoreFarBuildings;
-        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, LumberCamps, OtherBuildings;
+        public int Houses, Barracks, DropSites, Farms, ConnectedFarms, BeltCells, BeltDelivered, BeltDropped, BeltWaits, LumberCamps, OtherBuildings;
+        public int[] BeltDroppedByResource = new int[6];
         public int BeltDropOffAiSentClusters, BeltDropOffAiLines;
         public int WoodMachines, StoneMachines, WoodMachinesActive, StoneMachinesActive, WoodMachineOutputFull, StoneMachineOutputFull;
         public int MinimumDropSiteDistanceMeters, CoreHp, EnemySoldiersAtCore;
@@ -283,6 +284,9 @@ namespace Rts.Simulation
                 value.ConnectedFarms = largeConnectedFarms[faction - 1];
                 value.BeltDelivered = largeBeltDelivered[faction - 1];
                 value.BeltDropped = largeBeltDropped[faction - 1];
+                value.BeltWaits = largeBeltWaits[faction - 1];
+                for (int resource = 0; resource < 6; resource++)
+                    value.BeltDroppedByResource[resource] = largeBeltDroppedByResource[(int)(faction - 1) * 6 + resource];
                 value.BeltDropOffAiSentClusters = CountBeltDropOffAiClusters(faction);
                 value.BeltDropOffAiLines = largeBeltDropOffAiLines[faction - 1];
                 for (int resource = 0; resource < 6; resource++)
@@ -457,7 +461,18 @@ namespace Rts.Simulation
         private void RecordLargeBeltDrop(uint faction, ResourceKind kind, int amount)
         {
             if (LargeEconomyOn && faction >= 1 && faction <= 2 && amount > 0)
+            {
                 largeBeltDropped[faction - 1] = checked(largeBeltDropped[faction - 1] + amount);
+                int resource = LargeWorkResourceIndex(kind);
+                if (resource >= 0) largeBeltDroppedByResource[(int)(faction - 1) * 6 + resource] =
+                    checked(largeBeltDroppedByResource[(int)(faction - 1) * 6 + resource] + amount);
+            }
+        }
+
+        private void RecordLargeBeltWait(uint faction)
+        {
+            if (LargeEconomyOn && faction >= 1 && faction <= 2)
+                largeBeltWaits[faction - 1] = checked(largeBeltWaits[faction - 1] + 1);
         }
 
         private void RecordLargeUse(uint faction, ResourceKind resource, int kind, int amount)

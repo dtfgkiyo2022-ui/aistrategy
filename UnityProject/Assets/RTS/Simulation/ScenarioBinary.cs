@@ -228,6 +228,9 @@ private const int AiExpandExtensionVersion = 1;
          private const int CraftFlowExtensionId = 77;
          private const int CraftFlowExtensionVersion = 1;
          private const int CraftFlowExtensionDataLength = sizeof(int);
+        private const int BeltStackExtensionId = 79;
+        private const int BeltStackExtensionVersion = 1;
+        private const int BeltStackExtensionDataLength = 7 * sizeof(int);
 private const int DropSiteLimitExtensionId = 38;
 private const int DropSiteLimitExtensionVersion = 1;
 private const int DropSiteLimitExtensionDataLength = 2 * sizeof(int);
@@ -329,6 +332,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
               ,new ExtensionRegistration(FastMovementExtensionId, FastMovementExtensionVersion, FastMovementExtensionDataLength)
                ,new ExtensionRegistration(BeltDropOffExtensionId, BeltDropOffExtensionVersion, BeltDropOffExtensionDataLength)
              ,new ExtensionRegistration(CraftFlowExtensionId, CraftFlowExtensionVersion, CraftFlowExtensionDataLength)
+            ,new ExtensionRegistration(BeltStackExtensionId, BeltStackExtensionVersion, BeltStackExtensionDataLength)
             ,new ExtensionRegistration(DropSiteLimitExtensionId, DropSiteLimitExtensionVersion, DropSiteLimitExtensionDataLength)
             ,new ExtensionRegistration(AiBeltsExtensionId, AiBeltsExtensionVersion, AiBeltsExtensionDataLength)
             ,new ExtensionRegistration(CraftTree2ExtensionId, CraftTree2ExtensionVersion, CraftTree2ExtensionDataLength)
@@ -991,6 +995,7 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                     else if (id == CraftTree4ExtensionId) ReadCraftTree4Extension(extension, c.Economy);
                       else if (id == AgeFourAiExtensionId) ReadAgeFourAiExtension(extension, c.Economy);
                       else if (id == HouseFlowExtensionId) ReadHouseFlowExtension(extension, c.Economy);
+                      else if (id == BeltStackExtensionId) ReadBeltStackExtension(extension, c.Economy);
                       extensions.Add(extension);
             }
             if (r.BaseStream.Position != sectionEnd) throw new InvalidDataException("Scenario extension length mismatch.");
@@ -1092,8 +1097,9 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                   extensions.RemoveAll(extension => extension != null && extension.Id == CraftTree4ExtensionId && !(c.Economy.CraftTree1 && c.Economy.CraftTree2 && c.Economy.CraftTree3 && c.Economy.AgeFour && c.Economy.CraftTree4));
                   extensions.RemoveAll(extension => extension != null && extension.Id == AgeFourAiExtensionId && !(c.Economy.AgeFour && c.Economy.AgeFourAi));
                   extensions.RemoveAll(extension => extension != null && extension.Id == HouseFlowExtensionId && !c.Economy.HouseFlow);
+                  extensions.RemoveAll(extension => extension != null && extension.Id == BeltStackExtensionId && !c.Economy.BeltStack);
             bool hasLargeEconomy = false, hasAcademy = false, hasFishingCiv = false, hasAgeFourAi = false, hasHouseFlow = false;
-             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false;
+             bool hasAiExpand = false, hasOpenFarms = false, hasFreeTowns = false, hasCraftRequired = false, hasCraftDepth = false, hasEarlyStart = false, hasFastMovement = false, hasBeltDropOff = false, hasCraftFlow = false, hasBeltStack = false;
             for (int i = 0; i < extensions.Count; i++)
             {
                 if (extensions[i] == null) continue;
@@ -1142,6 +1148,11 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       hasCraftFlow = true;
                       extensions[i] = CreateCraftFlowExtension(c.Economy);
                   }
+                  if (extensions[i].Id == BeltStackExtensionId)
+                  {
+                      hasBeltStack = true;
+                      extensions[i] = CreateBeltStackExtension(c.Economy);
+                  }
                 if (extensions[i].Id == LargeEconomyExtensionId)
                 {
                     hasLargeEconomy = true;
@@ -1178,6 +1189,8 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                       extensions.Add(CreateBeltDropOffExtension(c.Economy));
                   if (c.Economy.CraftFlow && !hasCraftFlow)
                       extensions.Add(CreateCraftFlowExtension(c.Economy));
+                  if (c.Economy.BeltStack && !hasBeltStack)
+                      extensions.Add(CreateBeltStackExtension(c.Economy));
                 if (c.Economy.LargeEconomy && !hasLargeEconomy) extensions.Add(CreateLargeEconomyExtension(c.Economy));
                 if (c.Economy.HouseFlow && !hasHouseFlow) extensions.Add(CreateHouseFlowExtension(c.Economy));
             bool hasAgeFour = false;
@@ -2239,6 +2252,39 @@ private const int CraftTree3ExtensionV1DataLength = 18 * sizeof(int);
                         throw new InvalidDataException("Invalid belt-dropoff AI parameters.");
                 }
                 if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-dropoff extension data.");
+            }
+        }
+
+        private static ScenarioExtensionData CreateBeltStackExtension(EconomyRules e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                writer.Write(e.BeltStack ? 1 : 0);
+                writer.Write(e.BeltStackSize);
+                writer.Write(e.BeltStackAiMaxLinesAge0); writer.Write(e.BeltStackAiMaxLinesAge1);
+                writer.Write(e.BeltStackAiMaxLinesAge2); writer.Write(e.BeltStackAiMaxLinesAge3);
+                writer.Write(e.BeltStackAiMaxRouteCells);
+                return new ScenarioExtensionData { Id = BeltStackExtensionId, Version = BeltStackExtensionVersion, Data = stream.ToArray() };
+            }
+        }
+
+        private static void ReadBeltStackExtension(ScenarioExtensionData extension, EconomyRules e)
+        {
+            using (var stream = new MemoryStream(extension.Data, false))
+            using (var reader = new BinaryReader(stream))
+            {
+                int enabled = reader.ReadInt32();
+                if (enabled < 0 || enabled > 1) throw new InvalidDataException("Invalid belt-stack flag.");
+                e.BeltStack = enabled != 0;
+                e.BeltStackSize = reader.ReadInt32();
+                e.BeltStackAiMaxLinesAge0 = reader.ReadInt32(); e.BeltStackAiMaxLinesAge1 = reader.ReadInt32();
+                e.BeltStackAiMaxLinesAge2 = reader.ReadInt32(); e.BeltStackAiMaxLinesAge3 = reader.ReadInt32();
+                e.BeltStackAiMaxRouteCells = reader.ReadInt32();
+                if (e.BeltStackSize < 1 || e.BeltStackSize > 16 || e.BeltStackAiMaxLinesAge0 < 0
+                    || e.BeltStackAiMaxLinesAge1 < 0 || e.BeltStackAiMaxLinesAge2 < 0 || e.BeltStackAiMaxLinesAge3 < 0
+                    || e.BeltStackAiMaxRouteCells < 0) throw new InvalidDataException("Invalid belt-stack parameters.");
+                if (stream.Position != stream.Length) throw new InvalidDataException("Trailing belt-stack extension data.");
             }
         }
 
