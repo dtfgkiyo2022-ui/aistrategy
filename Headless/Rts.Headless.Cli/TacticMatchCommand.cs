@@ -47,6 +47,7 @@ internal static class TacticMatchCommand
                 : MapGenerator.Generate(ulong.Parse(seedText, CultureInfo.InvariantCulture), true);
         if (options.ContainsKey("--early-start-off")) LiveGameRules.SetEarlyStart(scenario, false);
         if (options.ContainsKey("--house-flow-off")) scenario.Economy.HouseFlow = false;
+        if (options.ContainsKey("--ai-reasons-off")) scenario.Economy.AiReasons = false;
         if (options.ContainsKey("--fast-movement-off")) scenario.Economy.FastMovement = false;
         int commonScale = ParseScale(options, "--scale", 1);
         int villagerScale = ParseScale(options, "--villager-scale", commonScale);
@@ -631,6 +632,22 @@ internal static class TacticMatchCommand
                 + " eliteKitConsumed=" + economy.EliteKitConsumed.ToString(CultureInfo.InvariantCulture)
                 + " cannonProduced=" + economy.CannonProduced.ToString(CultureInfo.InvariantCulture)
                 + " peakSoldiers=" + peakSoldiers[faction - 1].ToString(CultureInfo.InvariantCulture));
+            var ownBuildings = economy.Buildings.Where(b => b.FactionId == faction).ToArray();
+            var ownBelts = economy.Belts.Where(b => b.FactionId == faction).ToArray();
+            var reasonCounts = ownBuildings.Select(b => b.AiReason)
+                .Concat(ownBelts.Select(b => b.AiReason))
+                .Where(reason => reason != AiReason.None)
+                .GroupBy(reason => reason)
+                .OrderBy(group => group.Key)
+                .Select(group => group.Key + ":" + group.Count().ToString(CultureInfo.InvariantCulture));
+            Console.WriteLine("ai-reasons: faction=" + faction.ToString(CultureInfo.InvariantCulture)
+                + " buildingNonZero=" + ownBuildings.Count(b => b.AiReason != AiReason.None).ToString(CultureInfo.InvariantCulture)
+                + " buildingZero=" + ownBuildings.Count(b => b.AiReason == AiReason.None).ToString(CultureInfo.InvariantCulture)
+                + " buildingUnspecified=" + ownBuildings.Count(b => b.AiReason == AiReason.Unspecified).ToString(CultureInfo.InvariantCulture)
+                + " beltNonZero=" + ownBelts.Count(b => b.AiReason != AiReason.None).ToString(CultureInfo.InvariantCulture)
+                + " beltZero=" + ownBelts.Count(b => b.AiReason == AiReason.None).ToString(CultureInfo.InvariantCulture)
+                + " beltUnspecified=" + ownBelts.Count(b => b.AiReason == AiReason.Unspecified).ToString(CultureInfo.InvariantCulture)
+                + " by=" + string.Join("|", reasonCounts));
         }
         return result.IsFault ? 4 : 0;
     }

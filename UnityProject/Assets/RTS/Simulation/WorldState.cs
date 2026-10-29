@@ -232,6 +232,9 @@ namespace Rts.Simulation
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
         internal bool Held;
+        /// <summary>38.20: display-only automatic placement explanation.</summary>
+        internal AiReason AiReason;
+        internal int AiReasonValue;
         /// <summary>V3-9 #1: fixed at placement; never reselected when another market or Outpost appears.</summary>
         internal uint CaravanOutpostId, CaravanMarketId;
         internal Fix64 CaravanDistance;
@@ -273,6 +276,9 @@ namespace Rts.Simulation
         internal int PairCell;
         internal bool SplitterRightNext, Fast, VeryFast;
         internal BeltPriority Priority;
+        /// <summary>38.20: display-only automatic placement explanation.</summary>
+        internal AiReason AiReason;
+        internal int AiReasonValue;
     }
 
     /// <summary>V3-6: one automatic processing chain. The belt arrays are the canonical route chosen for this line.</summary>
@@ -1203,7 +1209,7 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
                 FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,

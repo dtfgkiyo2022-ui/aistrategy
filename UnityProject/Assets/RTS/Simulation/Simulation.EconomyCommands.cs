@@ -35,10 +35,10 @@ namespace Rts.Simulation
                     SetBuildingRecipe(faction, c.ProducerId, c.Recipe);
                     return;
                 case EconomyCommandKind.PlaceBelt:
-                    PlaceBelts(faction, c, IndustryOn);
+                    PlaceBelts(faction, c, AiReasonsOn && automaticEconomyAction ? false : IndustryOn);
                     return;
                 case EconomyCommandKind.PlaceBeltComponent:
-                    PlaceBeltComponent(faction, c, IndustryOn);
+                    PlaceBeltComponent(faction, c, AiReasonsOn && automaticEconomyAction ? false : IndustryOn);
                     return;
                 case EconomyCommandKind.SetBeltPriority:
                     SetBeltPriority(faction, c.Cell, c.BeltPriority);
@@ -238,7 +238,7 @@ namespace Rts.Simulation
                     }
                     if (kind == BuildingKind.Shrine)
                         world.Buildings[world.BuildingCount - 1].SanctuaryOutpostId = sanctuaryOutpost;
-                    world.Buildings[world.BuildingCount - 1].Held = IndustryOn; // V3-3: the player's building
+                    world.Buildings[world.BuildingCount - 1].Held = AiReasonsOn && automaticEconomyAction ? false : IndustryOn; // V3-3: the player's building
                     return;
                 }
                 case EconomyCommandKind.Train:

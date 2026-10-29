@@ -2444,3 +2444,23 @@ AI線数と送信済み集まり数は観測専用で timing CSV に追加し、
 **5. テスト**：旗オフで変わらない（毎 tick のハッシュ）。お任せが置いた建物・ベルトに、0 でない理由が入っている（種1〜3、全種類の建物のうち理由が 0 のものが無い）。人が置いた物は 0。理由の文が全部の番号にある（表示側の EditMode テスト）
 
 **順番**：Codex の枠が空いたら最初に作る（ほかの作業を待たない）。以後、お任せの判断を足す依頼には、必ず理由の番号と文を足すことを入れる
+
+### 38.21 AI の「なぜそれを置いたか」表示（aireasons1 実装記録、2026-10-30）
+
+AI が自動配置した建物・ベルトのセルに、判断理由の種別 `AiReason` と補助値 `AiReasonValue` を記録し、選択時の説明と任意のマーカーに利用する。人間が配置したセルは理由を `None` とする。理由は意思決定の入力には使わず、表示専用の診断情報として扱う。
+
+- `EconomyRules.AiReasons` は大規模経済では既定オン。オフ時は理由フィールド、拡張 83、表示行、マーカーを無効化し、既存の判断経路を通さない。
+- ScenarioBinary 拡張 ID 83 は version 1、little-endian の int32 (`0`/`1`) である。未知の拡張と同じく不正値は拒否する。
+- `BuildingView` と `BeltView` の末尾に後方互換の任意引数として `AiReason` / `AiReasonValue` を追加した。`PlayerHeld` は `own && b.Held` とし、理由付き AI 予約の実体化時だけ `Held=false` を維持する。
+- 理由の値は `PopulationCap`、`FoodIncome`、`BarracksTarget`、`FarResource`、`TownExpand`、`MaterialFor`、`MetalLine`、`MaterialForAssemblers`、`AssemblerRecipe`、`ResourceBelt`、`ProcessingBelt`、`ReservationWait`、`Unspecified`、`Stopped`。値は不足数・在庫・距離・目標数・資源種別・ライン種別・レシピなど、理由ごとに定義した補助値に限定する。
+- UI は `お任せ：〈理由〉` と `止まっている：〈理由〉` の短文を使い、`UiText` の日本語ラベルは 25 文字以内とする。選択説明は理由を 1 行追加し、ポリシー操作から表示モードを切り替える。
+- 理由付き状態は `WorldState`、コピー・検証、リプレイのシリアライズを通る。建物・ベルトの削除、移動、地下ペア変更、合流・投げ渡し時は対象セルの理由も更新または消去する。
+- 検証は拡張 83 の往復、オフ時の理由ゼロ、AI 自動配置の非ゼロ、人間配置のゼロ、EditMode の日本語ラベル長を対象とする。比較リプレイは従来の 40,000 tick 手順で確認する。
+
+#### 38.20 実装決定
+
+- 理由は建物の種類から推測しない。各 AI 判断箇所で `SetAiReason(reason, value)` を呼び、`PlaceBuildingAt`、建物予約、ベルト配置が `TakeAiReason` で一度だけ消費する。成功・失敗を問わず配置入口で保留値をリセットする。
+- 自動配置で理由が未設定のときは `Unspecified` として記録し、測定・テストで件数を数える。人の配置は `None` とする。部品の理由は今回実装しない。
+- `Stopped` は状態へ保存しない。選択説明と停止説明を作る時点の在庫・投入条件・ライン状態から計算する。
+- `EconomyFrame` は表示のために `WorldState` を変更しない。`AiReasons` オフでは理由と拡張 83 の値を正規状態へ書かず、判断ロジックも変更しない。
+- `UiText` の日本語文は 25 字以内とし、`AiReasonValue` の enum 値は `ResourceKind`、`ProcessingLineKind`、`RecipeKind` の定義域をそのまま使う。

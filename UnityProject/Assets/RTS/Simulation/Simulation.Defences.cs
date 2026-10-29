@@ -127,7 +127,11 @@ namespace Rts.Simulation
             var e = world.Economies[faction - 1];
             if (e.Wood < WoodOf(BuildingKind.Castle, faction) || e.Stone < StoneOf(BuildingKind.Castle, faction)) return;
             int origin = FindSite(faction, rules.CastleSizeCells);
-            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Castle, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.Defense, 0);
+                PlaceBuildingAt(faction, BuildingKind.Castle, origin, Facing.North, 0);
+            }
         }
 
         /// <summary>V3-9 #2: the caravan civilisation hires one mercenary once its third-age castle has Gems.</summary>
@@ -359,7 +363,11 @@ namespace Rts.Simulation
                 towerLimit = checked(towerLimit + rules.BrickExtraTowers);
             if (towers >= towerLimit) return;
             int origin = FindSite(faction, rules.TowerSizeCells);
-            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Tower, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.Defense, towerLimit);
+                PlaceBuildingAt(faction, BuildingKind.Tower, origin, Facing.North, 0);
+            }
         }
 
         private bool LargeTownNeedsFunding(uint faction)

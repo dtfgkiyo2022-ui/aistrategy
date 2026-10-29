@@ -527,7 +527,8 @@ namespace Rts.Contracts
              int level = 1, int inputTertiary = 0, RecipeKind recipe = RecipeKind.None,
              bool reserved = false, int reservationOrder = 0,
              int producedPerMinute = 0, IReadOnlyList<CraftFlowInputView> inputsPerMinute = null,
-             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0)
+             int starvedTicksLastMinute = 0, int blockedTicksLastMinute = 0, int fullRatePerMinute = 0,
+             AiReason aiReason = AiReason.None, int aiReasonValue = 0)
         {
             Researching = researching; ResearchRemaining = researchRemaining;
             PlayerHeld = playerHeld;
@@ -540,9 +541,12 @@ namespace Rts.Contracts
             ProducedPerMinute = producedPerMinute; InputsPerMinute = ContractList.Copy(inputsPerMinute ?? Array.Empty<CraftFlowInputView>());
             StarvedTicksLastMinute = starvedTicksLastMinute; BlockedTicksLastMinute = blockedTicksLastMinute;
             FullRatePerMinute = fullRatePerMinute;
+            AiReason = aiReason; AiReasonValue = aiReasonValue;
             Id = id; FactionId = factionId; Kind = kind; Center = center; SizeMeters = sizeMeters; Hp = hp; MaxHp = maxHp;
             Complete = complete; Progress = progress; Work = work; Queued = queued; TrainRemaining = trainRemaining;
         }
+        public AiReason AiReason { get; }
+        public int AiReasonValue { get; }
     }
 
     public readonly struct CraftFlowInputView
@@ -622,12 +626,15 @@ namespace Rts.Contracts
 
         public BeltView(int cell, uint factionId, Facing facing, ResourceKind item, int progress, bool playerHeld,
             BeltComponentKind component, ResourceKind sorterKind, int pairCell, BeltSpeed speed, int count = 1,
-            BeltPriority priority = BeltPriority.None)
+            BeltPriority priority = BeltPriority.None, AiReason aiReason = AiReason.None, int aiReasonValue = 0)
         {
             Cell = cell; FactionId = factionId; Facing = facing; Item = item; Progress = progress; PlayerHeld = playerHeld;
             Component = component; SorterKind = sorterKind; PairCell = pairCell; Speed = speed; Count = count < 1 ? 1 : count; Priority = priority;
+            AiReason = aiReason; AiReasonValue = aiReasonValue;
         }
         public BeltPriority Priority { get; }
+        public AiReason AiReason { get; }
+        public int AiReasonValue { get; }
     }
 
     /// <summary>V3-6: the display-facing management state of one automatic processing line.</summary>

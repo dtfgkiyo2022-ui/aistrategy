@@ -111,6 +111,7 @@ namespace Rts.Presentation
         private static readonly Color HeldColor = new Color(1f, 1f, 1f);
         private static readonly Color HeldBeltColor = new Color(0.42f, 0.42f, 0.5f);
         private readonly Dictionary<uint, GameObject> buildingFlags = new Dictionary<uint, GameObject>();
+        private readonly Dictionary<uint, AiReason> buildingReasons = new Dictionary<uint, AiReason>();
         private static readonly Color OwnVillagerColor = new Color(0.55f, 0.8f, 1f);
         private static readonly Color EnemyVillagerColor = new Color(1f, 0.6f, 0.25f);
         private static readonly Color WestColor = new Color(0.25f, 0.4f, 0.9f);
@@ -120,6 +121,7 @@ namespace Rts.Presentation
         private const float CargoIconDistance = 18f;
         private uint selectedBuildingId;
         private bool detailModeEnabled;
+        private bool aiReasonMode;
         private readonly List<GameObject> coreClearanceEdges = new List<GameObject>();
         private bool coreClearanceVisible;
         private long lastLineTraversalTick = long.MinValue;
@@ -132,10 +134,12 @@ namespace Rts.Presentation
         public IReadOnlyList<uint> SelectedVillagers { get { return selectedVillagers; } }
         public bool HasVillagerSelection { get { return selectedVillagers.Count > 0; } }
         public bool DetailModeEnabled { get { return detailModeEnabled; } }
+        public bool AiReasonModeEnabled { get { return aiReasonMode; } }
         public EconomyFlowMetrics FlowMetrics { get { return flowMetrics; } }
         public uint SelectedBuildingId { get { return selectedBuildingId; } }
 
         public void ToggleDetailMode() { detailModeEnabled = CraftDisplayMode.Toggle(detailModeEnabled); }
+        public void ToggleAiReasonMode() { aiReasonMode = CraftDisplayMode.Toggle(aiReasonMode); }
 
         public void SelectBuilding(uint id)
         {
@@ -361,6 +365,7 @@ namespace Rts.Presentation
             ports.Clear();
             foreach (var go in buildingFlags.Values) Destroy(go);
             buildingFlags.Clear();
+            buildingReasons.Clear();
             foreach (var go in carryBoxes.Values) Destroy(go);
             carryBoxes.Clear();
             foreach (var go in belts.Values) Destroy(go);
@@ -385,7 +390,7 @@ namespace Rts.Presentation
             belts.Clear(); items.Clear(); itemKinds.Clear(); beltComponents.Clear(); beltSeen.Clear(); beltCarrying.Clear(); beltOwnCells.Clear(); beltEndCells.Clear(); beltGone.Clear();
             buildingStatusBubbles.Clear(); buildingActivityPuffs.Clear(); flowMetrics.Clear(); lastMetricTick = long.MinValue;
             buildingDetailOverlays.Clear(); buildingLineHighlights.Clear(); highlightedBuildingIds.Clear(); highlightedBeltCells.Clear();
-            selectedBuildingId = 0; detailModeEnabled = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
+            selectedBuildingId = 0; detailModeEnabled = false; aiReasonMode = false; lastLineTraversalTick = long.MinValue; lastLineTraversalBuilding = 0;
             coreClearanceVisible = false;
             coreClearanceEdges.Clear();
         }
@@ -882,6 +887,7 @@ namespace Rts.Presentation
                     SyncBuildingFire(b.Id, b.Reserved || !b.Complete ? b.MaxHp : b.Hp, b.MaxHp, new Vector3(p.x, height, p.z));
                 buildingFxStates[b.Id] = new BuildingFxState { Position = new Vector3(p.x, 0f, p.z), Height = height, Hp = b.Hp, MaxHp = b.MaxHp };
                 buildingTags[b.Id] = new KeyValuePair<BuildingKind, Vector3>(b.Kind, new Vector3(p.x, height + 0.4f, p.z));
+                if (b.AiReason == AiReason.None) buildingReasons.Remove(b.Id); else buildingReasons[b.Id] = b.AiReason;
                 if (b.Reserved) buildingReservationOrders[b.Id] = b.ReservationOrder;
                 else buildingReservationOrders.Remove(b.Id);
                 SyncBuildingState(b, economy, own, new Vector3(p.x, height, p.z));
@@ -1237,6 +1243,7 @@ namespace Rts.Presentation
                 // A map label is drawn after the HUD panels, so one under a panel would sit on top of it (10-08).
                 if (UiHitAreas.Shared.ContainsGui(new Vector2(screen.x, Screen.height - screen.y))) continue;
                 string label = BuildingName(tag.Key);
+                if (aiReasonMode && buildingReasons.ContainsKey(tagPair.Key)) label = "● " + label;
                 int order;
                 if (buildingReservationOrders.TryGetValue(tagPair.Key, out order))
                     label += order == 1 ? "【予約・次】" : "【予約" + order + "】";

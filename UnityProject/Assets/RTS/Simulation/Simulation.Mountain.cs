@@ -17,7 +17,11 @@ namespace Rts.Simulation
             if (!MountainAllowed(faction) || MountainShaftCount(faction) >= MountainMaxBuildingsFor(faction)) return;
             if (world.Economies[faction - 1].Wood < rules.MountainWoodCost) return;
             int origin = FindMountainShaftSite(faction);
-            if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.MineShaft, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Ore);
+                PlaceBuildingAt(faction, BuildingKind.MineShaft, origin, Facing.North, 0);
+            }
         }
 
         private int MountainMaxBuildingsFor(uint faction)

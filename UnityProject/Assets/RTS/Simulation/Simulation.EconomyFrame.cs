@@ -57,7 +57,8 @@ namespace Rts.Simulation
                     CraftFlowData(b, out craftProduced, out craftStarved, out craftBlocked, out craftInputs, out craftFullRate);
                 buildings.Add(new BuildingView(b.Id, b.FactionId, b.Kind, BuildingCenter(b), size * world.Config.Map.CellSizeMeters,
                     own ? b.Hp : 0, own ? MaxHpOf(b) : 0, b.Complete, own ? b.Progress : 0, WorkOf(b),
-                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0, own && b.Held,
+                    own ? b.Queued : 0, own ? b.TrainRemaining : 0, b.Facing, own ? b.Input : 0, own ? b.Output : 0,
+                    own && b.Held,
                     own ? b.Researching : 0, own && b.Researching != 0 ? b.TrainRemaining : 0,
                     own && (ProcessingOn || ForestryOn || BricksOn || TackOn || BooksOn || PreservesOn || JewelsOn || TradeGoodsOn || IncenseOn || RepairKitsOn || ToolsOn) ? b.InputSecondary : 0,
                     own && ForestryOn && economy.Age >= 2 ? b.QueuedBowGear : 0,
@@ -69,7 +70,9 @@ namespace Rts.Simulation
                      own && (CraftTree2On || PrimitiveCraftOn) ? b.InputTertiary : 0, own && (CraftTree2On || PrimitiveCraftOn) ? b.Recipe : RecipeKind.None,
                      b.Reserved, b.Reserved ? ReservationOrderFor(b) : 0,
                      producedPerMinute: craftProduced, inputsPerMinute: craftInputs, starvedTicksLastMinute: craftStarved,
-                     blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate));
+                     blockedTicksLastMinute: craftBlocked, fullRatePerMinute: craftFullRate,
+                     aiReason: own && AiReasonsOn ? b.AiReason : AiReason.None,
+                     aiReasonValue: own && AiReasonsOn ? b.AiReasonValue : 0));
             }
             IReadOnlyList<ResourceView> resources;
             if (ResourceFogOn)
@@ -94,7 +97,9 @@ namespace Rts.Simulation
                     own ? b.Component : BeltComponentKind.None, own ? b.SorterKind : (ResourceKind)0, own ? b.PairCell : -1,
                     own && b.VeryFast ? BeltSpeed.VeryFast : own && b.Fast ? BeltSpeed.Fast : BeltSpeed.Normal,
                     own && BeltStackOn ? BeltItemCount(b) : 1,
-                    own && BeltCraftOn ? b.Priority : BeltPriority.None));
+                    own && BeltCraftOn ? b.Priority : BeltPriority.None,
+                    own && AiReasonsOn ? b.AiReason : AiReason.None,
+                    own && AiReasonsOn ? b.AiReasonValue : 0));
             }
             var cavalryMission = CavalryMissionFor(faction);
             var advancePrice = AgesOn ? AdvancePrice(faction, economy) : (food: 0, wood: 0, gold: 0, ticks: 0);

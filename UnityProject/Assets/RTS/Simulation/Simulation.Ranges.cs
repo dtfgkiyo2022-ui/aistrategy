@@ -41,7 +41,11 @@ namespace Rts.Simulation
             {
                 if (world.Economies[faction - 1].Wood < WoodOf(kind, faction)) return;
                 int origin = FindSite(faction, SizeOf(kind));
-                if (origin >= 0) PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.NewUnitKind, 0);
+                PlaceBuildingAt(faction, kind, origin, Facing.North, 0);
+            }
                 return;
             }
             ref var b = ref world.Buildings[index];
@@ -64,7 +68,11 @@ namespace Rts.Simulation
             {
                 if (world.Economies[faction - 1].Wood < rules.StableWoodCost) return;
                 int origin = FindSite(faction, rules.StableSizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Stable, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.NewUnitKind, 0);
+                PlaceBuildingAt(faction, BuildingKind.Stable, origin, Facing.North, 0);
+            }
                 return;
             }
             ref var stable = ref world.Buildings[index];

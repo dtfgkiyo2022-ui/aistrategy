@@ -463,6 +463,7 @@ namespace Rts.Simulation
         /// </summary>
         private void PlaceBelts(uint faction, EconomyCommand c, bool held)
         {
+            var aiReason = TakeAiReason(automaticEconomyAction && !held);
             if (!IndustryOn) return;
             var rules = world.Config.Economy;
             bool veryFast = BeltCraftOn && c.VeryFastBelt;
@@ -504,6 +505,11 @@ namespace Rts.Simulation
                 }
                 if (steelCost > 0) economy.Steel = checked(economy.Steel - steelCost);
                 world.Belts[cell] = new BeltState { FactionId = faction, Facing = facing, Hp = rules.BeltHp, Held = held, Fast = fast, VeryFast = veryFast };
+                if (AiReasonsOn && automaticEconomyAction && !held)
+                {
+                    world.Belts[cell].AiReason = aiReason.reason == AiReason.Unspecified ? AiReason.ResourceBelt : aiReason.reason;
+                    world.Belts[cell].AiReasonValue = aiReason.reason == AiReason.Unspecified ? (int)c.Cells.Count : aiReason.value;
+                }
                 if (held) MarkLinesForBelt(faction, cell);
                 owned++;
                 placedInCommand++;
@@ -514,6 +520,7 @@ namespace Rts.Simulation
         /// <summary>V3-20 placement. Components are one-cell belt endpoints; underground pairs are placed atomically.</summary>
         private void PlaceBeltComponent(uint faction, EconomyCommand c, bool held)
         {
+            var aiReason = TakeAiReason(automaticEconomyAction && !held);
             var rules = world.Config.Economy;
             if (!rules.BeltComponents || !IndustryOn || (byte)c.Facing > 3) return;
             if (c.Cells.Count != 0 && c.Cells.Count != 2) return;
@@ -537,6 +544,11 @@ namespace Rts.Simulation
                     Component = BeltComponentKind.UndergroundEntrance, PairCell = exit };
                 world.Belts[exit] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                     Component = BeltComponentKind.UndergroundExit, PairCell = entrance };
+                if (AiReasonsOn && automaticEconomyAction && !held)
+                {
+                    world.Belts[entrance].AiReason = world.Belts[exit].AiReason = aiReason.reason;
+                    world.Belts[entrance].AiReasonValue = world.Belts[exit].AiReasonValue = Math.Max(1, Math.Abs(exit - entrance));
+                }
                 economy.Wood = checked(economy.Wood - woodCost);
                 RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodCost);
                 if (undergroundPlankCost > 0)
@@ -574,6 +586,11 @@ namespace Rts.Simulation
             }
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, Priority = c.BeltPriority, SplitterRightNext = false };
+            if (AiReasonsOn && automaticEconomyAction && !held)
+            {
+                world.Belts[cell].AiReason = aiReason.reason;
+                world.Belts[cell].AiReasonValue = aiReason.value;
+            }
             int woodPaid = woodToPay;
             economy.Wood = checked(economy.Wood - woodPaid);
             if (craftDepthInserter)
