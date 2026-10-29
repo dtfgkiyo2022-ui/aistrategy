@@ -422,7 +422,9 @@ namespace Rts.Simulation
                      advancePlanks: advanceCraft.planks, advanceCutStone: advanceCraft.cutStone,
                      advanceFrames: advanceCraft.frames, advanceScholarly: advanceCraft.scholarly,
                      advanceSiegeParts: advanceCraft.siegeParts, advanceMechanism: advanceCraft.mechanism,
-                     craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction));
+                     craftFlowEnabled: CraftFlowOn, productionStatistics: CraftFlowStatistics(faction),
+                     craftDepthEnabled: CraftDepthOn,
+                     fittings: CraftDepthOn ? economy.Fittings : 0, rope: CraftDepthOn ? economy.Rope : 0);
         }
 
         // Sized from the enum so building kinds added later (e.g. CraftDepth) are not cut off.

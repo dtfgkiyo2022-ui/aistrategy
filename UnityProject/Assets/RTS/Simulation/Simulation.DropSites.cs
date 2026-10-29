@@ -680,7 +680,7 @@ namespace Rts.Simulation
             => CommonDrillOn && (kind == ResourceKind.Wood || kind == ResourceKind.Stone || kind == ResourceKind.Ore || kind == ResourceKind.Gold) ? BuildingKind.Drill
                 : kind == ResourceKind.Wood && ForestryAllowed(faction) ? BuildingKind.LumberCamp
                 : kind == ResourceKind.Stone && MasonryAllowed(faction) ? BuildingKind.Quarry
-                : kind == ResourceKind.Ore && MetalworkAllowed(faction) ? BuildingKind.Mine
+                : kind == ResourceKind.Ore && MetalBuildingsAllowed(faction) ? BuildingKind.Mine
                 : BuildingKind.Storage;
 
         private int RawReceiverWoodCost(BuildingKind kind)

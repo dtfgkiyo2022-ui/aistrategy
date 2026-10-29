@@ -242,7 +242,7 @@ namespace Rts.Simulation
         internal ResourceKind StorageKind;
         internal int StorageCount;
         /// <summary>EasyRebuild: the exact placement materials paid for this building.</summary>
-        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames;
+        internal int ConstructionWood, ConstructionStone, ConstructionPlanks, ConstructionBricks, ConstructionSiegeParts, ConstructionFrames, ConstructionFittings, ConstructionRope;
         /// <summary>EasyRebuild: the last tick covered by the post-move pause.</summary>
         internal long MovePauseUntilTick;
     }
@@ -283,7 +283,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId, MetalworksId, RopeHutId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -292,7 +292,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -315,6 +315,7 @@ namespace Rts.Simulation
         internal int JerkyProduced, JerkyConsumed, JerkyTrainedSoldiers;
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
+        internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
@@ -480,7 +481,7 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0,
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
@@ -754,6 +755,15 @@ namespace Rts.Simulation
                  && e.CraftRequiredAiScholarlyAssemblers > 0 && e.CraftRequiredAiFramesStockTarget > 0
                  && e.CraftRequiredAiScholarlyStockResearches > 0 && e.CraftRequiredAiScholarlyMinAssemblers > 0), "Invalid craft-required rules.");
             Require(!e.CraftFlow || (e.Enabled && e.Industry), "Craft flow requires an enabled industry.");
+            Require(!e.CraftDepth || (e.CraftRequired && e.CraftDepthFittingsTicks > 0 && e.CraftDepthFittingsMetalInput > 0
+                && e.CraftDepthFittingsOutput > 0 && e.CraftDepthRopeTicks > 0 && e.CraftDepthRopeWoodInput > 0
+                && e.CraftDepthRopeOutput > 0 && e.CraftDepthMetalworksSizeCells > 0 && e.CraftDepthMetalworksWoodCost > 0
+                && e.CraftDepthMetalworksWork > 0 && e.CraftDepthMetalworksHp > 0 && e.CraftDepthRopeHutSizeCells > 0
+                && e.CraftDepthRopeHutWoodCost > 0 && e.CraftDepthRopeHutWork > 0 && e.CraftDepthRopeHutHp > 0
+                && e.CraftDepthAiFittingsStockTarget > 0 && e.CraftDepthAiRopeStockTarget > 0
+                && e.CraftDepthAiStockCap >= e.CraftDepthAiFittingsStockTarget && e.CraftDepthAiStockCap >= e.CraftDepthAiRopeStockTarget
+                && e.CraftDepthFramesRopeInput > 0 && e.CraftDepthSiegePartsFittingsInput > 0 && e.CraftDepthSiegePartsRopeInput > 0
+                && e.CraftDepthSiegePartsTicks > 0 && e.CraftDepthMechanismFittingsInput > 0), "Invalid craft-depth rules.");
             Require(!e.CraftTree3 || (e.CraftTree2 && e.SiegePartsTicks > 0 && e.SiegePartsFramesInput > 0 && e.SiegePartsArmsKitInput > 0
                 && e.MechanismTicks > 0 && e.MechanismArmsKitInput > 0 && e.MechanismScholarlyInput > 0 && e.MechanismCutStoneInput > 0
                 && e.SiegePartsHpPermille > 0 && e.SiegePartsDamagePermille > 0 && e.SiegePartsPerCastle > 0 && e.SiegePartsCastleStonePermille > 0 && e.SiegePartsCastleStonePermille <= 1000
@@ -1326,6 +1336,20 @@ namespace Rts.Simulation
                    CraftRequiredAiPlankSawmillsAge3 = e.CraftRequiredAiPlankSawmillsAge3,
                    CraftRequiredAiScholarlyAssemblers = e.CraftRequiredAiScholarlyAssemblers,
                    CraftRequiredAiFramesStockTarget = e.CraftRequiredAiFramesStockTarget, CraftRequiredAiScholarlyStockResearches = e.CraftRequiredAiScholarlyStockResearches, CraftRequiredAiScholarlyMinAssemblers = e.CraftRequiredAiScholarlyMinAssemblers,
+                   CraftDepth = e.CraftDepth, CraftDepthFittingsTicks = e.CraftDepthFittingsTicks,
+                   CraftDepthFittingsMetalInput = e.CraftDepthFittingsMetalInput, CraftDepthFittingsOutput = e.CraftDepthFittingsOutput,
+                   CraftDepthRopeTicks = e.CraftDepthRopeTicks, CraftDepthRopeWoodInput = e.CraftDepthRopeWoodInput,
+                   CraftDepthRopeOutput = e.CraftDepthRopeOutput, CraftDepthMetalworksSizeCells = e.CraftDepthMetalworksSizeCells,
+                   CraftDepthMetalworksWoodCost = e.CraftDepthMetalworksWoodCost, CraftDepthMetalworksWork = e.CraftDepthMetalworksWork,
+                   CraftDepthMetalworksHp = e.CraftDepthMetalworksHp, CraftDepthRopeHutSizeCells = e.CraftDepthRopeHutSizeCells,
+                   CraftDepthRopeHutWoodCost = e.CraftDepthRopeHutWoodCost, CraftDepthRopeHutWork = e.CraftDepthRopeHutWork,
+                   CraftDepthRopeHutHp = e.CraftDepthRopeHutHp, CraftDepthAiFittingsStockTarget = e.CraftDepthAiFittingsStockTarget,
+            CraftDepthAiRopeStockTarget = e.CraftDepthAiRopeStockTarget, CraftDepthAiStockCap = e.CraftDepthAiStockCap,
+            CraftDepthAiRopeHutsAge2 = e.CraftDepthAiRopeHutsAge2, CraftDepthAiRopeHutsAge3 = e.CraftDepthAiRopeHutsAge3,
+            CraftDepthArmsFallbackTicks = e.CraftDepthArmsFallbackTicks, CraftDepthArmsFittingsTicks = e.CraftDepthArmsFittingsTicks,
+            CraftDepthFramesRopeInput = e.CraftDepthFramesRopeInput, CraftDepthSiegePartsFittingsInput = e.CraftDepthSiegePartsFittingsInput,
+            CraftDepthSiegePartsRopeInput = e.CraftDepthSiegePartsRopeInput, CraftDepthSiegePartsTicks = e.CraftDepthSiegePartsTicks,
+            CraftDepthMechanismFittingsInput = e.CraftDepthMechanismFittingsInput,
                    CraftTree3 = e.CraftTree3, SiegePartsTicks = e.SiegePartsTicks, SiegePartsFramesInput = e.SiegePartsFramesInput,
                   SiegePartsArmsKitInput = e.SiegePartsArmsKitInput, MechanismTicks = e.MechanismTicks, MechanismArmsKitInput = e.MechanismArmsKitInput,
                   MechanismScholarlyInput = e.MechanismScholarlyInput, MechanismCutStoneInput = e.MechanismCutStoneInput,

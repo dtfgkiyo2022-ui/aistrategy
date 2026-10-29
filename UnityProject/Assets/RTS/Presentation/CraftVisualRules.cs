@@ -54,7 +54,8 @@ namespace Rts.Presentation
                 || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium || kind == BuildingKind.DryingRack
                 || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver || kind == BuildingKind.IncenseHouse
                 || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard || kind == BuildingKind.ToolShop
-                || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Hut;
+                || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Hut
+                || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut;
         }
 
         public static ResourceKind MissingInputKind(BuildingKind kind)
@@ -62,7 +63,8 @@ namespace Rts.Presentation
             switch (kind)
             {
                 case BuildingKind.Smelter: return ResourceKind.Ore;
-                case BuildingKind.Steelworks: return ResourceKind.Metal;
+                case BuildingKind.Steelworks:
+                case BuildingKind.Metalworks: return ResourceKind.Metal;
                 case BuildingKind.Fletcher: return ResourceKind.Wood;
                 case BuildingKind.Mill:
                 case BuildingKind.DryingRack:
@@ -110,6 +112,8 @@ namespace Rts.Presentation
                 case BuildingKind.Stonecutter: recipe = new CraftRecipe(ResourceKind.Stone, 0, ResourceKind.CutStone); return true;
                 case BuildingKind.Joinery: recipe = new CraftRecipe(ResourceKind.Planks, ResourceKind.CutStone, ResourceKind.Frames); return true;
                 case BuildingKind.Hut: recipe = new CraftRecipe(ResourceKind.Stone, ResourceKind.Wood, ResourceKind.StoneTools); return true;
+                case BuildingKind.Metalworks: recipe = new CraftRecipe(ResourceKind.Metal, 0, ResourceKind.Fittings); return true;
+                case BuildingKind.RopeHut: recipe = new CraftRecipe(ResourceKind.Wood, 0, ResourceKind.Rope); return true;
                 default: recipe = default(CraftRecipe); return false;
             }
         }

@@ -56,11 +56,16 @@ namespace Rts.Simulation
                 int rear = BeltPrevious(cell, belt.Facing), front = BeltNext(cell, belt.Facing);
                 if (rear < 0 || front < 0 || !FeedsOwnCore(rear, faction)) continue;
                 if (!BeltCanReceive(front, faction) && !CanFeedSawmill(front, faction)) continue;
+                if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn && economy.Fittings < 1) continue;
 
                 belt.Component = BeltComponentKind.Inserter;
                 belt.SorterKind = ResourceKind.Wood;
                 belt.Progress = 0;
                 economy.Wood -= rules.InserterWoodCost;
+                if (world.Economies[faction - 1].Age >= 2 && CraftDepthOn)
+                {
+                    economy.Fittings--; economy.FittingsConsumed++;
+                }
                 InvalidateBeltCaches();
                 return;
             }
@@ -245,6 +250,8 @@ namespace Rts.Simulation
                 case ResourceKind.Charms: economy.Charms -= amount; break;
                 case ResourceKind.RepairKits: economy.RepairKits -= amount; break;
                 case ResourceKind.Tools: economy.Tools -= amount; break;
+                case ResourceKind.Fittings: economy.Fittings -= amount; economy.FittingsConsumed = checked(economy.FittingsConsumed + amount); RecordCraftTraceResourceUse(faction, ResourceKind.Fittings, CraftTraceUseCost, amount); break;
+                case ResourceKind.Rope: economy.Rope -= amount; economy.RopeConsumed = checked(economy.RopeConsumed + amount); RecordCraftTraceResourceUse(faction, ResourceKind.Rope, CraftTraceUseCost, amount); break;
                 case ResourceKind.CutStone: economy.CutStone -= amount; break;
                 case ResourceKind.Frames: economy.Frames -= amount; break;
                 case ResourceKind.ArmsKit: economy.ArmsKit -= amount; break;

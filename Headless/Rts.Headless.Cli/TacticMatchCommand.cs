@@ -67,6 +67,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
+        if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
         if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
         if (options.ContainsKey("--age-four-off"))
@@ -385,6 +386,10 @@ internal static class TacticMatchCommand
                 {
                     var economy = simulation.Capture(faction).Economy;
                     if (economy == null) continue;
+                    int Metalworks = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Metalworks);
+                    int RopeHuts = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.RopeHut);
+                    int Smelters = economy.Buildings.Count(b => b.FactionId == faction && b.Kind == BuildingKind.Smelter);
+                    int researchCount = CountBits(economy.Techs);
                     var assemblers = economy.Buildings.Where(b => b.FactionId == faction && b.Kind == BuildingKind.Assembler)
                         .OrderBy(b => b.Id)
                         .Select(b => new
@@ -415,6 +420,15 @@ internal static class TacticMatchCommand
                         armsStock = largeObservation.Factions[faction - 1].ArmsStock,
                         armsProduced = largeObservation.Factions[faction - 1].ArmsProduced,
                         armsUsedBySoldiers = largeObservation.Factions[faction - 1].ArmsUsedBySoldiers,
+                        fittings = economy.Fittings, fittingsProduced = largeObservation.Factions[faction - 1].FittingsProduced,
+                        fittingsConsumed = largeObservation.Factions[faction - 1].FittingsConsumed,
+                        rope = economy.Rope, ropeProduced = largeObservation.Factions[faction - 1].RopeProduced,
+                        ropeConsumed = largeObservation.Factions[faction - 1].RopeConsumed,
+                        armsWithFittings = largeObservation.Factions[faction - 1].ArmsWithFittings,
+                        armsWithoutFittings = largeObservation.Factions[faction - 1].ArmsWithoutFittings,
+                        fittingsUse = largeObservation.Factions[faction - 1].FittingsUse,
+                        ropeUse = largeObservation.Factions[faction - 1].RopeUse,
+                        metalworks = Metalworks, ropeHuts = RopeHuts, smelters = Smelters, researchCount,
                         armsZeroAge2Ticks = craftTraceArmsZeroAge2Ticks[faction - 1],
                         planksInAssemblers, foodInAssemblers, assemblers
                     }));
@@ -668,7 +682,8 @@ internal static class TacticMatchCommand
                 prefix + "CutStoneProduced", prefix + "CutStoneConsumed", prefix + "StoneToolsProduced", prefix + "StoneToolsConsumed",
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
                 prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
-                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "AiFactorySkippedUnknownResource",
+                prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
+                prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
                   prefix + "AiExpandTownSkippedNoSite", prefix + "AiExpandTownSkippedWood", prefix + "AiExpandTownSkippedStone",
                   prefix + "ScholarlyProduced", prefix + "ScholarlyConsumed", prefix + "ScholarlyStock", prefix + "ResearchScholarlyBlocked",
@@ -695,7 +710,7 @@ internal static class TacticMatchCommand
         {
             if (observation == null)
             {
-                for (int i = 0; i < 92; i++) cells.Add("");
+                for (int i = 0; i < 96; i++) cells.Add("");
                 continue;
             }
             var value = observation.Factions[faction];
@@ -713,6 +728,7 @@ internal static class TacticMatchCommand
                 value.AiFactoryBarracksResourceWaiting, value.PlanksProduced, value.PlanksConsumed, value.CutStoneProduced, value.CutStoneConsumed,
                 value.StoneToolsProduced, value.StoneToolsConsumed, value.JerkyProduced, value.JerkyConsumed, value.FramesProduced, value.FramesConsumed,
                 value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
+                value.FittingsProduced, value.FittingsConsumed, value.RopeProduced, value.RopeConsumed,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,
                  value.AiExpandTownSkippedStone, value.ScholarlyProduced, value.ScholarlyConsumed, value.ScholarlyStock,
@@ -727,6 +743,13 @@ internal static class TacticMatchCommand
     }
 
     private static string FormatInvariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static int CountBits(ulong value)
+    {
+        int count = 0;
+        while (value != 0) { value &= value - 1; count++; }
+        return count;
+    }
 
     private static void WriteRouteTrace(StreamWriter writer, Battle simulation)
     {

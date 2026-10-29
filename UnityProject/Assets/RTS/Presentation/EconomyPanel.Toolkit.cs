@@ -311,6 +311,15 @@ namespace Rts.Presentation
                 Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
                 Add(rows, "line:Planks", UiText.T("Ask for planks line", "板材ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Planks);
             }
+            if (economy.CraftDepthEnabled)
+            {
+                if (economy.Age >= 1)
+                    Add(rows, "build:metalworks", UiText.T("Metalworks (100 wood)", "金属加工場（木材100）"), true, "", mode == Mode.Metalworks);
+                if (economy.Age >= 2)
+                    Add(rows, "build:rope-hut", UiText.T("Rope hut (60 wood)", "縄工房（木材60）"), true, "", mode == Mode.RopeHut);
+                Add(rows, "line:Fittings", UiText.T("Ask for fittings line", "金具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Fittings);
+                Add(rows, "line:Rope", UiText.T("Ask for rope line", "ロープラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Rope);
+            }
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
                 Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
@@ -545,6 +554,8 @@ namespace Rts.Presentation
                 case "build:hut": kind = BuildingKind.Hut; return true;
                 case "build:stonecutter": kind = BuildingKind.Stonecutter; return true;
                 case "build:joinery": kind = BuildingKind.Joinery; return true;
+                case "build:metalworks": kind = BuildingKind.Metalworks; return true;
+                case "build:rope-hut": kind = BuildingKind.RopeHut; return true;
                 case "build:scriptorium": kind = BuildingKind.Scriptorium; return true;
                 case "build:drying-rack": kind = BuildingKind.DryingRack; return true;
                 case "build:lapidary": kind = BuildingKind.Lapidary; return true;

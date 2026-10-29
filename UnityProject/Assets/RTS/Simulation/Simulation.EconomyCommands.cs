@@ -139,7 +139,7 @@ namespace Rts.Simulation
                         TryPlaceTollgate(faction, c);
                         return;
                     }
-                    if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalworkAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
+                    if (kind != BuildingKind.Barracks && !(CommonDrillOn && kind == BuildingKind.Drill) && !(IndustryOn && MetalBuildingsAllowed(faction) && (kind == BuildingKind.Mine || kind == BuildingKind.Smelter))
                         && !(IndustryOn && ForestryAllowed(faction) && kind == BuildingKind.LumberCamp)
                         && !(IndustryOn && MasonryAllowed(faction) && kind == BuildingKind.Quarry)
                         && !(MountainAllowed(faction) && kind == BuildingKind.MineShaft)
@@ -167,6 +167,8 @@ namespace Rts.Simulation
                         && !(RepairKitsAllowed(faction) && kind == BuildingKind.RepairYard)
                         && !(ToolsAllowed(faction) && kind == BuildingKind.ToolShop)
                         && !(PrimitiveCraftOn && kind == BuildingKind.Hut)
+                        && !(CraftDepthOn && world.Economies[faction - 1].Age >= 1 && kind == BuildingKind.Metalworks)
+                        && !(CraftDepthOn && PrimitiveCraftOn && kind == BuildingKind.RopeHut)
                         && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
@@ -316,6 +318,7 @@ namespace Rts.Simulation
                             || (BooksAllowed(faction) && target.Kind == BuildingKind.Scriptorium)
                             || (IncenseAllowed(faction) && target.Kind == BuildingKind.IncenseHouse)
                             || (CharmsAllowed(faction) && target.Kind == BuildingKind.CharmWorkshop)
+                            || (CraftDepthOn && (target.Kind == BuildingKind.Metalworks || target.Kind == BuildingKind.RopeHut))
                             || (world.Config.Economy.BeltComponents && target.Kind == BuildingKind.Storage));
                         if (target.Complete && !haul) return;
                     }

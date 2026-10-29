@@ -1297,6 +1297,8 @@ namespace Rts.Presentation
                 case BuildingKind.Joinery: return UiText.T("Joinery", "木工所");
                 case BuildingKind.Assembler: return UiText.T("Assembler", "組立所");
                 case BuildingKind.Hut: return UiText.T("Hut", "作業小屋");
+                case BuildingKind.Metalworks: return UiText.T("Metalworks", "金属加工場");
+                case BuildingKind.RopeHut: return UiText.T("Rope hut", "縄工房");
                 default: return kind.ToString();
             }
         }

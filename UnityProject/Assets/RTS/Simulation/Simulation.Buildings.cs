@@ -21,14 +21,14 @@ namespace Rts.Simulation
 
         private readonly struct BuildingMaterialCost
         {
-            internal readonly int Wood, Stone, Planks, Bricks, SiegeParts, Frames;
-            internal readonly bool FramesUsed, PlankBridge;
+            internal readonly int Wood, Stone, Planks, Bricks, SiegeParts, Frames, Fittings, Rope;
+            internal readonly bool FramesUsed, PlankBridge, RopeBridge;
 
-            internal BuildingMaterialCost(int wood, int stone, int planks, int bricks, int siegeParts, int frames,
-                bool framesUsed, bool plankBridge)
+            internal BuildingMaterialCost(int wood, int stone, int planks, int bricks, int siegeParts, int frames, int fittings, int rope,
+                bool framesUsed, bool plankBridge, bool ropeBridge)
             {
-                Wood = wood; Stone = stone; Planks = planks; Bricks = bricks; SiegeParts = siegeParts; Frames = frames;
-                FramesUsed = framesUsed; PlankBridge = plankBridge;
+                Wood = wood; Stone = stone; Planks = planks; Bricks = bricks; SiegeParts = siegeParts; Frames = frames; Fittings = fittings; Rope = rope;
+                FramesUsed = framesUsed; PlankBridge = plankBridge; RopeBridge = ropeBridge;
             }
         }
 
@@ -554,13 +554,15 @@ namespace Rts.Simulation
             BuildingMaterialCost materialCost = BuildingCostForPlacement(kind, faction, bridgeCells == null ? 0 : bridgeCells.Length);
             int woodCost = materialCost.Wood, stoneCost = materialCost.Stone, plankCost = materialCost.Planks;
             int frameCost = materialCost.Frames, siegeCost = materialCost.SiegeParts, brickCost = materialCost.Bricks;
+            int fittingsCost = materialCost.Fittings, ropeCost = materialCost.Rope;
             // Houses, farms and drop sites keep the villager line and the gathering going while the town is funded.
             if (automaticEconomyAction && AiExpandTownPending(faction) && kind != BuildingKind.Town
                 && kind != BuildingKind.House && kind != BuildingKind.Farm && kind != BuildingKind.DropSite
                 && economy.Wood - woodCost < TownWoodCostFor(faction)) return;
             if (automaticEconomyAction && !CanPayAutomaticConstruction(faction, materialCost)) return;
             if (NoNegativeStockOn && (economy.Wood < woodCost || economy.Stone < stoneCost
-                || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost)) return;
+                || economy.Frames < frameCost || economy.Planks < plankCost || economy.Bricks < brickCost || economy.SiegeParts < siegeCost
+                || economy.Fittings < fittingsCost || economy.Rope < ropeCost)) return;
             // A smelter is allowed through so an age-three infantry metal reserve can be replenished.
             if (automaticEconomyAction && kind != BuildingKind.Smelter
                 && ArmyRecoveryWouldConsumeReserve(faction, ResourceKind.Wood, woodCost)) return;
@@ -587,12 +589,30 @@ namespace Rts.Simulation
                     RecordCraftTracePlanks(faction, CraftTraceConstruction, planks);
                 }
             }
+            if (materialCost.Rope > 0)
+            {
+                economy.Rope = checked(economy.Rope - materialCost.Rope);
+                economy.RopeConsumed = checked(economy.RopeConsumed + materialCost.Rope);
+                RecordCraftTraceResourceUse(faction, ResourceKind.Rope, materialCost.RopeBridge ? CraftTraceUseBridge : CraftTraceUseCost, materialCost.Rope);
+                if (materialCost.RopeBridge) RecordCraftTracePlanks(faction, CraftTraceBridges, materialCost.Rope);
+            }
             economy.Stone = checked(economy.Stone - stoneCost);
             RecordLargeUse(faction, ResourceKind.Stone, ConstructionUseKind(kind), stoneCost);
             if (siegeCost > 0)
             {
                 economy.SiegeParts = checked(economy.SiegeParts - world.Config.Economy.SiegePartsPerCastle);
                 economy.SiegePartsConsumed = checked(economy.SiegePartsConsumed + world.Config.Economy.SiegePartsPerCastle);
+            }
+            if (fittingsCost > 0)
+            {
+                economy.Fittings = checked(economy.Fittings - fittingsCost);
+                economy.FittingsConsumed = checked(economy.FittingsConsumed + fittingsCost);
+                RecordCraftTraceResourceUse(faction, ResourceKind.Fittings, CraftTraceUseCost, fittingsCost);
+            }
+            if (ropeCost > 0)
+            {
+                economy.Rope = checked(economy.Rope - ropeCost);
+                economy.RopeConsumed = checked(economy.RopeConsumed + ropeCost);
             }
             if (kind == BuildingKind.Castle && brickCost == world.Config.Economy.BricksPerCastle)
             {
@@ -633,7 +653,7 @@ namespace Rts.Simulation
                 BrickUpgraded = brickCost > 0 && (kind == BuildingKind.Wall || kind == BuildingKind.Tower), Level = 1, FramesUsed = materialCost.FramesUsed, Facing = facing, NodeId = nodeId,
                 ConstructionWood = woodCost, ConstructionStone = stoneCost,
                 ConstructionPlanks = plankCost, ConstructionBricks = brickCost,
-                ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost };
+                ConstructionSiegeParts = siegeCost, ConstructionFrames = frameCost, ConstructionFittings = fittingsCost, ConstructionRope = ropeCost };
             if (existingIndex < 0) world.NextBuildingId = checked(world.NextBuildingId + 1);
             if (HouseFlowOn && automaticEconomyAction && (kind == BuildingKind.House || kind == BuildingKind.GrandHouse))
                 housePlacementTicks[buildingId] = world.Tick;
@@ -658,6 +678,8 @@ namespace Rts.Simulation
             AddStock(faction, ResourceKind.Bricks, Refund(building.ConstructionBricks));
             AddStock(faction, ResourceKind.SiegeParts, Refund(building.ConstructionSiegeParts));
             AddStock(faction, ResourceKind.Frames, Refund(building.ConstructionFrames));
+            AddStock(faction, ResourceKind.Fittings, Refund(building.ConstructionFittings));
+            AddStock(faction, ResourceKind.Rope, Refund(building.ConstructionRope));
             RefundBuildingContents(ref building);
         }
 
@@ -682,6 +704,8 @@ namespace Rts.Simulation
                 : building.Kind == BuildingKind.Sawmill ? ResourceKind.Wood
                 : building.Kind == BuildingKind.Stonecutter ? ResourceKind.Stone
                 : building.Kind == BuildingKind.Joinery ? ResourceKind.Planks
+                : building.Kind == BuildingKind.Metalworks ? ResourceKind.Metal
+                : building.Kind == BuildingKind.RopeHut ? ResourceKind.Wood
                 : building.Kind == BuildingKind.IncenseHouse ? ResourceKind.Wood
                 : building.Kind == BuildingKind.CharmWorkshop ? ResourceKind.Wood
                 : building.Kind == BuildingKind.RepairYard ? ResourceKind.Wood
@@ -1434,7 +1458,7 @@ namespace Rts.Simulation
         private int SizeOf(BuildingKind kind)
         {
             var e = world.Config.Economy;
-            return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
+            return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksSizeCells : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.LumberCamp ? e.LumberCampSizeCells : kind == BuildingKind.Quarry ? e.QuarrySizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnSizeCells
                 : kind == BuildingKind.Steelworks ? e.SteelworksSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells
                 : kind == BuildingKind.Fletcher ? e.FletcherSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells
                 : kind == BuildingKind.House ? e.HouseSizeCells : kind == BuildingKind.DropSite ? e.DropSiteSizeCells
@@ -1458,7 +1482,7 @@ namespace Rts.Simulation
         private int HpOf(BuildingKind kind, uint faction, int origin = -1)
         {
             var e = world.Config.Economy;
-            int hp = kind == BuildingKind.Hut ? e.HutHp : kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Drill ? e.DrillHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
+            int hp = kind == BuildingKind.Hut ? e.HutHp : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksHp : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutHp : kind == BuildingKind.Mine ? e.MineHp : kind == BuildingKind.Drill ? e.DrillHp : kind == BuildingKind.LumberCamp ? e.LumberCampHp : kind == BuildingKind.Quarry ? e.QuarryHp : kind == BuildingKind.Smelter ? e.SmelterHp : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnHp
                 : kind == BuildingKind.Steelworks ? e.SteelworksHp : kind == BuildingKind.Farm ? e.FarmHp
                 : kind == BuildingKind.Fletcher ? e.FletcherHp : kind == BuildingKind.Mill ? e.MillHp : kind == BuildingKind.BrickKiln ? e.BrickKilnHp : kind == BuildingKind.Saddlery ? e.SaddleryHp : kind == BuildingKind.Sawmill ? e.SawmillHp : kind == BuildingKind.Scriptorium ? e.ScriptoriumHp : kind == BuildingKind.DryingRack ? e.DryingRackHp : kind == BuildingKind.Lapidary ? e.LapidaryHp
                 : kind == BuildingKind.House ? e.HouseHp : kind == BuildingKind.DropSite ? e.DropSiteHp
@@ -1492,7 +1516,7 @@ namespace Rts.Simulation
         private int WorkOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            int work = kind == BuildingKind.Hut ? e.HutWork : kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Drill ? e.DrillWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
+            int work = kind == BuildingKind.Hut ? e.HutWork : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksWork : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutWork : kind == BuildingKind.Mine ? e.MineWork : kind == BuildingKind.Drill ? e.DrillWork : kind == BuildingKind.LumberCamp ? e.LumberCampWork : kind == BuildingKind.Quarry ? e.QuarryWork : kind == BuildingKind.Smelter ? e.SmelterWork : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWork
                 : kind == BuildingKind.Steelworks ? e.SteelworksWork : kind == BuildingKind.Farm ? e.FarmWork
                 : kind == BuildingKind.Fletcher ? e.FletcherWork : kind == BuildingKind.Mill ? e.MillWork : kind == BuildingKind.BrickKiln ? e.BrickKilnWork : kind == BuildingKind.Saddlery ? e.SaddleryWork : kind == BuildingKind.Sawmill ? e.SawmillWork : kind == BuildingKind.Scriptorium ? e.ScriptoriumWork : kind == BuildingKind.DryingRack ? e.DryingRackWork : kind == BuildingKind.Lapidary ? e.LapidaryWork
                 : kind == BuildingKind.House ? e.HouseWork : kind == BuildingKind.DropSite ? e.DropSiteWork
@@ -1524,7 +1548,7 @@ namespace Rts.Simulation
         private int WoodOf(BuildingKind kind, uint faction)
         {
             var e = world.Config.Economy;
-            int wood = kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
+            int wood = kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Metalworks ? e.CraftDepthMetalworksWoodCost : kind == BuildingKind.RopeHut ? e.CraftDepthRopeHutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.LumberCamp ? e.LumberCampWoodCost : kind == BuildingKind.Quarry ? e.QuarryWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.CharcoalKiln ? e.CharcoalKilnWoodCost
                 : kind == BuildingKind.Steelworks ? e.SteelworksWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost
                 : kind == BuildingKind.Fletcher ? e.FletcherWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost
                 : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
@@ -1564,13 +1588,15 @@ namespace Rts.Simulation
         {
             ref var economy = ref world.Economies[faction - 1];
             bool plankBridge = kind == BuildingKind.Bridge && bridgeCells > 0 && PlankBridgeAvailable(faction, bridgeCells);
-            bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge
+            bool ropeBridge = kind == BuildingKind.Bridge && bridgeCells > 0 && !plankBridge && RopeBridgeAvailable(faction, bridgeCells);
+            bool framesUsed = CraftTree1On && kind != BuildingKind.Wall && !plankBridge && !ropeBridge
                 && economy.Frames >= world.Config.Economy.CraftTreeFramesPerBuilding;
-            int wood = plankBridge
+            int wood = plankBridge || ropeBridge
                 ? checked(WoodOf(kind, faction) * world.Config.Economy.PlankBridgeWoodPermille / 1000)
                 : WoodOfForPlacement(kind, faction, framesUsed);
             int planks = plankBridge ? checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells) : 0;
-            if (!plankBridge && CraftRequiredBuildingUsesPlanks(faction, kind))
+            int rope = ropeBridge ? checked(world.Config.Economy.PlanksPerBridgeCell * bridgeCells) : 0;
+            if (!plankBridge && !ropeBridge && CraftRequiredBuildingUsesPlanks(faction, kind))
             {
                 planks = checked((wood * world.Config.Economy.CraftRequiredBuildingPlankPermille + 999) / 1000);
                 wood = checked(wood - planks);
@@ -1580,9 +1606,11 @@ namespace Rts.Simulation
             bool brickDefence = BrickDefenceAvailable(faction, kind);
             int bricks = brickCastle ? world.Config.Economy.BricksPerCastle
                 : brickDefence ? (kind == BuildingKind.Wall ? world.Config.Economy.BricksPerWall : world.Config.Economy.BricksPerTower) : 0;
+            int fittings = CraftDepthOn && world.Economies[faction - 1].Age >= 2
+                ? kind == BuildingKind.Drill ? 4 : kind == BuildingKind.Assembler ? 5 : 0 : 0;
             return new BuildingMaterialCost(wood, StoneOf(kind, faction), planks, bricks,
                 siegeCastle ? world.Config.Economy.SiegePartsPerCastle : 0,
-                framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0, framesUsed, plankBridge);
+                framesUsed ? world.Config.Economy.CraftTreeFramesPerBuilding : 0, fittings, rope, framesUsed, plankBridge, ropeBridge);
         }
 
         private bool IsCraftProcessingBuilding(BuildingKind kind)
@@ -1591,7 +1619,7 @@ namespace Rts.Simulation
                 || kind == BuildingKind.Saddlery || kind == BuildingKind.Sawmill || kind == BuildingKind.Scriptorium
                 || kind == BuildingKind.DryingRack || kind == BuildingKind.Lapidary || kind == BuildingKind.Weaver
                 || kind == BuildingKind.IncenseHouse || kind == BuildingKind.CharmWorkshop || kind == BuildingKind.RepairYard
-                || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Assembler || kind == BuildingKind.Hut;
+                || kind == BuildingKind.ToolShop || kind == BuildingKind.Stonecutter || kind == BuildingKind.Joinery || kind == BuildingKind.Assembler || kind == BuildingKind.Hut || kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut;
 
         private void UpgradeProcessingBuilding(uint faction, uint buildingId)
         {
@@ -1619,6 +1647,10 @@ namespace Rts.Simulation
 
         private bool PlankBridgeAvailable(uint faction, int cells)
             => PlanksAllowed(faction) && cells > 0 && world.Economies[faction - 1].Planks >= checked(world.Config.Economy.PlanksPerBridgeCell * cells);
+
+        private bool RopeBridgeAvailable(uint faction, int cells)
+            => CraftDepthOn && BridgeOn && cells > 0 && world.Economies[faction - 1].Planks < checked(world.Config.Economy.PlanksPerBridgeCell * cells)
+                && world.Economies[faction - 1].Rope >= checked(world.Config.Economy.PlanksPerBridgeCell * cells);
 
         private int BridgeWoodCostFor(uint faction, int cells)
             => PlankBridgeAvailable(faction, cells)

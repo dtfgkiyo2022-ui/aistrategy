@@ -91,7 +91,8 @@ namespace Rts.Simulation
                 && (economy.Wood - heldWood < cost.Wood || economy.Stone - heldStone < cost.Stone
                     || economy.Planks - heldPlanks < cost.Planks)) return false;
             if (automaticEconomyAction && AgeFourAiOn && economy.Wood - heldWood < cost.Wood) return false;
-            return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks);
+            return !NoNegativeStockOn || (economy.Wood >= cost.Wood && economy.Stone >= cost.Stone && economy.Planks >= cost.Planks
+                && economy.Fittings >= cost.Fittings && economy.Rope >= cost.Rope);
         }
 
         private void CreateBuildingReservation(uint faction, BuildingKind kind, int origin, Facing facing, uint nodeId,

@@ -387,6 +387,18 @@ namespace Rts.Simulation
         public int CraftRequiredAiScholarlyMinAssemblers = 2;
         /// <summary>Technical-design-v3 38.4: observer-only one-minute processing-flow statistics.</summary>
         public bool CraftFlow;
+        /// <summary>CraftDepth: optional fittings and rope sub-chain. It is deliberately separate from CraftRequired so the old recipe path remains bit-for-bit identical when disabled.</summary>
+        public bool CraftDepth;
+        public int CraftDepthFittingsTicks = 40, CraftDepthFittingsMetalInput = 1, CraftDepthFittingsOutput = 2;
+        public int CraftDepthRopeTicks = 30, CraftDepthRopeWoodInput = 1, CraftDepthRopeOutput = 2;
+        public int CraftDepthMetalworksSizeCells = 2, CraftDepthMetalworksWoodCost = 100, CraftDepthMetalworksWork = 250, CraftDepthMetalworksHp = 500;
+        public int CraftDepthRopeHutSizeCells = 2, CraftDepthRopeHutWoodCost = 60, CraftDepthRopeHutWork = 250, CraftDepthRopeHutHp = 500;
+        public int CraftDepthAiFittingsStockTarget = 20, CraftDepthAiRopeStockTarget = 20, CraftDepthAiStockCap = 60;
+        public int CraftDepthAiRopeHutsAge2 = 1, CraftDepthAiRopeHutsAge3 = 2;
+        public int CraftDepthArmsFallbackTicks = 160, CraftDepthArmsFittingsTicks = 80;
+        public int CraftDepthFramesRopeInput = 1;
+        public int CraftDepthSiegePartsFittingsInput = 2, CraftDepthSiegePartsRopeInput = 1, CraftDepthSiegePartsTicks = 120;
+        public int CraftDepthMechanismFittingsInput = 2;
         /// <summary>CraftTree3: siege parts, mechanisms, level-three processing, and third-age research.</summary>
         public bool CraftTree3;
         public int SiegePartsTicks = 120, SiegePartsFramesInput = 1, SiegePartsArmsKitInput = 1;

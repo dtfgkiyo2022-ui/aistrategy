@@ -344,6 +344,8 @@ namespace Rts.Simulation
                 case ResourceKind.Charms: economy.Charms = Math.Min(world.Config.Economy.CharmStockLimit, checked(economy.Charms + amount)); break;
                 case ResourceKind.RepairKits: economy.RepairKits = Math.Min(world.Config.Economy.RepairKitStockLimit, checked(economy.RepairKits + amount)); break;
                 case ResourceKind.Tools: economy.Tools = Math.Min(world.Config.Economy.ToolStockLimit, checked(economy.Tools + amount)); break;
+                case ResourceKind.Fittings: economy.Fittings = checked(economy.Fittings + amount); break;
+                case ResourceKind.Rope: economy.Rope = checked(economy.Rope + amount); break;
                 case ResourceKind.Preserves:
                 int preserveValue = AgeStrength(faction, CivKind.Fishing, 3) ? world.Config.Economy.FishingPreserveFoodValue : world.Config.Economy.PreserveFoodValue;
                 economy.Food = checked(economy.Food + amount * preserveValue);
@@ -446,14 +448,21 @@ namespace Rts.Simulation
             if (component == BeltComponentKind.Inserter && !rules.Inserters) return;
             int cost = component == BeltComponentKind.Inserter ? rules.InserterWoodCost
                 : component == BeltComponentKind.Splitter ? rules.SplitterWoodCost : rules.SorterWoodCost;
+            bool craftDepthInserter = CraftDepthOn && economy.Age >= 2 && component == BeltComponentKind.Inserter;
             bool craftRequiredComponent = CraftRequiredOn && economy.Age >= 1
                 && component != BeltComponentKind.Inserter;
             int plankCost = craftRequiredComponent ? (cost + 1) / 2 : 0;
-            if (economy.Wood < (craftRequiredComponent ? 0 : cost) || economy.Planks < plankCost) return;
+            if (economy.Wood < (craftRequiredComponent ? 0 : cost) || economy.Planks < plankCost || economy.Fittings < (craftDepthInserter ? 1 : 0)) return;
             world.Belts[cell] = new BeltState { FactionId = faction, Facing = c.Facing, Hp = rules.BeltHp, Held = held,
                 Component = component, SorterKind = c.SorterKind, SplitterRightNext = false };
             int woodPaid = craftRequiredComponent ? 0 : cost;
             economy.Wood = checked(economy.Wood - woodPaid);
+            if (craftDepthInserter)
+            {
+                economy.Fittings--;
+                economy.FittingsConsumed = checked(economy.FittingsConsumed + 1);
+                RecordCraftTraceResourceUse(faction, ResourceKind.Fittings, CraftTraceUseCost, 1);
+            }
             RecordLargeUse(faction, ResourceKind.Wood, LargeEconomyUseKind.Belt, woodPaid);
             if (plankCost > 0)
             {
