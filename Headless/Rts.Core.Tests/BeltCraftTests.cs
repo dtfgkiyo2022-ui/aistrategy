@@ -324,9 +324,26 @@ namespace Rts.Core.Tests
         }
 
         [Test]
+        public void AiDoesNotBuildGearWorkshopWithoutAGearStockTarget()
+        {
+            // The automatic economy places no gear-costing parts yet, so by default it must not spend metal on gears.
+            var scenario = LiveGameRules.Create(101UL, true, true, false, false);
+            Assert.That(scenario.Economy.BeltCraftAiGearsStockTarget, Is.EqualTo(0));
+            scenario.VerificationTickLimit = 8000;
+            var simulation = new Battle(scenario);
+            for (long tick = 1; tick <= 8000 && !simulation.Capture(1).Result.HasEnded; tick++)
+                simulation.Step(tick, Array.Empty<ScheduledInput>());
+            var economy = simulation.Capture(1).Economy;
+            Assert.That(economy.Buildings.Any(building => building.Kind == BuildingKind.GearWorkshop), Is.False);
+            Assert.That(simulation.CaptureLargeEconomyObservation().Factions[0].GearsProduced, Is.EqualTo(0));
+            Assert.That(CountBelts(simulation), Is.GreaterThan(0));
+        }
+
+        [Test]
         public void AiBuildsGearWorkshopKeepsStockAndContinuesBelts()
         {
             var scenario = LiveGameRules.Create(101UL, true, true, false, false);
+            scenario.Economy.BeltCraftAiGearsStockTarget = 20;
             scenario.VerificationTickLimit = 8000;
             var simulation = new Battle(scenario);
             for (long tick = 1; tick <= 8000 && !simulation.Capture(1).Result.HasEnded; tick++)

@@ -717,7 +717,7 @@ namespace Rts.Simulation
                 && e.FastBeltGears > 0 && e.SplitterGears > 0 && e.SorterGears > 0 && e.UndergroundBeltGears > 0
                 && e.InserterGears > 0 && e.MergerGears > 0 && e.MergerPlanks >= 0 && e.VeryFastBeltGears > 0
                 && e.VeryFastBeltSteel > 0 && e.VeryFastBeltTicksPerCell > 0 && e.VeryFastBeltMinAge > 0
-                && e.BeltCraftAiGearsStockTarget > 0), "Invalid belt-craft rules.");
+                && e.BeltCraftAiGearsStockTarget >= 0), "Invalid belt-craft rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit

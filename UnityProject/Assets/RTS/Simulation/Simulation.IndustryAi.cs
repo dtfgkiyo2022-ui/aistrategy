@@ -276,7 +276,7 @@ namespace Rts.Simulation
                 if (id != 0) StartCraftDepthLine(faction, ProcessingLineKind.Fittings, id);
                 return;
             }
-            if (BeltCraftOn && CountPlannedBuildings(faction, BuildingKind.GearWorkshop) < 1
+            if (BeltCraftOn && rules.BeltCraftAiGearsStockTarget > 0 && CountPlannedBuildings(faction, BuildingKind.GearWorkshop) < 1
                 && economy.Wood >= rules.GearWorkshopWoodCost)
             {
                 if (FindCraftDepthMetalSmelter(faction) == 0)
@@ -304,7 +304,7 @@ namespace Rts.Simulation
         {
             if (!BeltCraftOn) return;
             ref var economy = ref world.Economies[faction - 1];
-            if (economy.Age < 1 || !CompleteBarracks(faction)
+            if (economy.Age < 1 || world.Config.Economy.BeltCraftAiGearsStockTarget <= 0 || !CompleteBarracks(faction)
                 || CountPlannedBuildings(faction, BuildingKind.GearWorkshop) >= 1
                 || economy.Wood < world.Config.Economy.GearWorkshopWoodCost) return;
             if (FindCraftDepthMetalSmelter(faction) == 0)
