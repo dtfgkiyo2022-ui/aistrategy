@@ -309,9 +309,11 @@ namespace Rts.Simulation
         {
             if (!TrainNeedsArms(faction, kind)) return true;
             var e = world.Economies[faction - 1];
-            return (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
+            bool available = (CraftTree4On && kind != UnitKind.Cannon && e.EliteKit >= 1)
                 || (CraftTree2On && e.FineArmsKit >= 1)
                 || (CraftTree2On && e.ArmsKit >= 1);
+            if (!available) RecordTrainingArmsUnavailable(faction);
+            return available;
         }
         private int TrainTicksFor(uint faction, UnitKind kind, int ticks, bool rationed)
         {

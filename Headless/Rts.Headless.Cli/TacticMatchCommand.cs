@@ -67,6 +67,7 @@ internal static class TacticMatchCommand
         if (options.ContainsKey("--craft-tree3-off")) scenario.Economy.CraftTree3 = false;
         if (options.ContainsKey("--craft-tree4-off")) scenario.Economy.CraftTree4 = false;
         if (options.ContainsKey("--craft-required-off")) scenario.Economy.CraftRequired = false;
+        if (options.ContainsKey("--arms-scale-off")) scenario.Economy.ArmsScale = false;
         if (options.ContainsKey("--craft-depth-off")) scenario.Economy.CraftDepth = false;
         if (options.ContainsKey("--craft-flow-off")) scenario.Economy.CraftFlow = false;
         if (options.ContainsKey("--age-clock-ux-off")) scenario.Economy.AgeClockUx = false;
@@ -683,7 +684,8 @@ internal static class TacticMatchCommand
                 prefix + "AiFactoryBarracksResourceWaiting", prefix + "PlanksProduced", prefix + "PlanksConsumed",
                 prefix + "CutStoneProduced", prefix + "CutStoneConsumed", prefix + "StoneToolsProduced", prefix + "StoneToolsConsumed",
                 prefix + "JerkyProduced", prefix + "JerkyConsumed", prefix + "FramesProduced", prefix + "FramesConsumed",
-                prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
+                prefix + "ArmsKitProduced", prefix + "ArmsKitConsumed", prefix + "ArmsScaleAssemblersAdded", prefix + "ArmsScaleSawmillsAdded", prefix + "SawmillsCompleted",
+                prefix + "PlanksUsedWeapons", prefix + "PlanksUsedConstruction", prefix + "PlanksUsedScholarly", prefix + "PlanksUsedBridges", prefix + "PlanksUsedOther", prefix + "TrainingArmsUnavailable", prefix + "SiegePartsProduced", prefix + "SiegePartsConsumed",
                 prefix + "MetalProduced", prefix + "MetalConsumed", prefix + "FittingsProduced", prefix + "FittingsConsumed",
                 prefix + "RopeProduced", prefix + "RopeConsumed", prefix + "AiFactorySkippedUnknownResource",
                  prefix + "AiFactorySkippedNoSite", prefix + "AiFactorySkippedNoRoute", prefix + "AiExpandTownSkippedUnknownResource",
@@ -730,7 +732,10 @@ internal static class TacticMatchCommand
                 value.AiFactoryAge2MaterialConnectedLines, value.AiFactoryAge2MetalConnectedLines, value.AiFactoryAge3PartsConnectedLines,
                 value.AiFactoryBarracksResourceWaiting, value.PlanksProduced, value.PlanksConsumed, value.CutStoneProduced, value.CutStoneConsumed,
                 value.StoneToolsProduced, value.StoneToolsConsumed, value.JerkyProduced, value.JerkyConsumed, value.FramesProduced, value.FramesConsumed,
-                value.ArmsKitProduced, value.ArmsKitConsumed, value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
+                value.ArmsKitProduced, value.ArmsKitConsumed, value.ArmsScaleAssemblersAdded, value.ArmsScaleSawmillsAdded,
+                value.SawmillsCompleted, value.PlanksUsedWeapons, value.PlanksUsedConstruction, value.PlanksUsedScholarly,
+                value.PlanksUsedBridges, value.PlanksUsedOther, value.TrainingArmsUnavailable,
+                value.SiegePartsProduced, value.SiegePartsConsumed, value.MetalProduced, value.MetalConsumed,
                 value.FittingsProduced, value.FittingsConsumed, value.RopeProduced, value.RopeConsumed,
                 value.AiFactorySkippedUnknownResource, value.AiFactorySkippedNoSite, value.AiFactorySkippedNoRoute,
                 value.AiExpandTownSkippedUnknownResource, value.AiExpandTownSkippedNoSite, value.AiExpandTownSkippedWood,

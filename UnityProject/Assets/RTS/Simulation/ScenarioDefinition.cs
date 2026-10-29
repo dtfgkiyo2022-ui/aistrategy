@@ -391,6 +391,12 @@ namespace Rts.Simulation
         public int CraftRequiredAiScholarlyStockResearches = 2;
         /// <summary>CraftRequired: at this many assemblers, one line is reserved for scholarly goods.</summary>
         public int CraftRequiredAiScholarlyMinAssemblers = 2;
+        /// <summary>Technical-design-v3 38.14: automatic arms capacity scaling.</summary>
+        public bool ArmsScale;
+        public int ArmsScaleDecisionIntervalTicks = 600, ArmsScaleArmsStockLow = 2, ArmsScaleFoodReserve = 1500,
+            ArmsScaleWoodReserve = 1000, ArmsScaleMaxArmsAssemblersAge2 = 6, ArmsScaleMaxArmsAssemblersAge3 = 10,
+            ArmsScaleMaxArmsAssemblersAge4 = 12, ArmsScalePlankLow = 40,
+            ArmsScaleExtraSawmillsAge2 = 4, ArmsScaleExtraSawmillsAge3 = 6, ArmsScaleExtraSawmillsAge4 = 8;
         /// <summary>Technical-design-v3 38.4: observer-only one-minute processing-flow statistics.</summary>
         public bool CraftFlow;
         /// <summary>CraftDepth: optional fittings and rope sub-chain. It is deliberately separate from CraftRequired so the old recipe path remains bit-for-bit identical when disabled.</summary>
