@@ -232,6 +232,9 @@ namespace Rts.Simulation
         internal uint NodeId;
         /// <summary>V3-3 (19): placed or operated by the player; the automatic economy leaves it alone.</summary>
         internal bool Held;
+        /// <summary>38.20: display-only automatic placement explanation.</summary>
+        internal AiReason AiReason;
+        internal int AiReasonValue;
         /// <summary>V3-9 #1: fixed at placement; never reselected when another market or Outpost appears.</summary>
         internal uint CaravanOutpostId, CaravanMarketId;
         internal Fix64 CaravanDistance;
@@ -271,7 +274,33 @@ namespace Rts.Simulation
         internal BeltComponentKind Component;
         internal ResourceKind SorterKind;
         internal int PairCell;
-        internal bool SplitterRightNext, Fast;
+        internal bool SplitterRightNext, Fast, VeryFast;
+        internal BeltPriority Priority;
+        /// <summary>38.20: display-only automatic placement explanation.</summary>
+        internal AiReason AiReason;
+        internal int AiReasonValue;
+    }
+
+    internal struct CatapultShotState
+    {
+        internal bool Active;
+        internal ResourceKind Item;
+        internal int Count;
+        internal int RemainingTicks;
+    }
+
+    /// <summary>One small deterministic queue per catapult pair; never a whole-map flight array.</summary>
+    internal struct CatapultState
+    {
+        internal bool Active;
+        internal uint FactionId;
+        internal int LauncherCell, ReceiverCell;
+        internal ResourceKind BufferKind;
+        internal int BufferedCount;
+        internal long FirstLoadTick, LastThrowTick;
+        internal int ReceiverCount;
+        internal ResourceKind ReceiverKind;
+        internal CatapultShotState[] Shots;
     }
 
     /// <summary>V3-6: one automatic processing chain. The belt arrays are the canonical route chosen for this line.</summary>
@@ -287,7 +316,7 @@ namespace Rts.Simulation
         internal long RebuildAvailableTick;
         internal int RequestedCell;
         internal uint RequestedRegionId;
-        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId, MetalworksId, RopeHutId;
+        internal uint MineId, SmelterId, KilnId, SteelworksId, LumberCampId, FletcherId, MillId, QuarryId, BrickKilnId, SaddleryId, SawmillId, ScriptoriumId, DryingRackId, LapidaryId, WeaverId, IncenseHouseId, CharmWorkshopId, RepairYardId, ToolShopId, StonecutterId, JoineryId, AssemblerId, HutId, DrillId, MetalworksId, RopeHutId, GearWorkshopId;
         internal int[] BeltCells;
         internal Facing[] BeltFacings;
     }
@@ -296,7 +325,7 @@ namespace Rts.Simulation
     {
         internal int Food, Wood;
         /// <summary>V3-2 stock; always 0 without industry. Stone, Gems and Gold (V3-5) only with ages; Charcoal and Steel (V3-6) only with the processing chain.</summary>
-        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope;
+        internal int Ore, Metal, Stone, Gems, Gold, Charcoal, Steel, BowGear, Rations, Bricks, Tack, Planks, Books, Incense, Charms, RepairKits, Tools, CutStone, Frames, ArmsKit, Scholarly, FineArmsKit, SiegeParts, Mechanism, SiegeEngine, EliteKit, StoneTools, Jerky, Fittings, Rope, Gears;
         /// <summary>Rations-on diagnostics: production, consumption, rationed soldier training, and healed HP.</summary>
         internal int RationsProduced, RationsConsumed, RationsTrainedSoldiers, RationsHealedHp;
         internal int BricksProduced, BricksConsumed, BricksUpgradedWalls, BricksUpgradedTowers, BricksCoreRepairHp;
@@ -320,6 +349,7 @@ namespace Rts.Simulation
         /// <summary>AiFactory measurement counters. They are only observed when AiFactory is enabled.</summary>
         internal int MetalProduced, MetalConsumed;
         internal int FittingsProduced, FittingsConsumed, RopeProduced, RopeConsumed;
+        internal int GearsProduced, GearsConsumed;
         internal int AiFactorySkippedUnknownResource, AiFactorySkippedNoSite, AiFactorySkippedNoRoute;
         /// <summary>Goods-market diagnostics, indexed by ResourceKind. Allocated only when the feature is enabled.</summary>
         internal int[] GoodsSoldCounts, GoodsSoldUnits, GoodsReceivedFood, GoodsReceivedWood;
@@ -397,6 +427,7 @@ namespace Rts.Simulation
         internal uint NextProcessingLineId = 1;
         /// <summary>V3-2: one slot per map cell, empty without industry. Walked in cell order, so no id is needed.</summary>
         internal BeltState[] Belts = Array.Empty<BeltState>();
+        internal CatapultState[] Catapults = Array.Empty<CatapultState>();
         /// <summary>Processing order of the belts (11.3). A cache: rebuilt from Belts alone, never hashed.</summary>
         internal int[] BeltOrder;
         internal MatchResult Result;
@@ -485,7 +516,7 @@ namespace Rts.Simulation
             NextVillagerId = checked((uint)Villagers.Length + 1);
             Economies = new FactionEconomy[2];
             bool goodsMarket = e.GoodsMarket && e.Enabled && e.Industry && e.Ages;
-        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0,
+        for (int f = 0; f < 2; f++) Economies[f] = new FactionEconomy { Food = e.StartFood, Wood = e.StartWood, Stone = e.Ages ? e.StartStone : 0, Metal = e.Ages ? e.StartMetal : 0, Gems = 0, Gold = 0, Charcoal = 0, Steel = 0, BowGear = 0, Rations = 0, Bricks = 0, Tack = 0, Planks = 0, Books = 0, Incense = 0, Charms = 0, RepairKits = 0, Tools = 0, CutStone = 0, Frames = 0, ArmsKit = 0, Scholarly = 0, FineArmsKit = 0, SiegeParts = 0, Mechanism = 0, SiegeEngine = 0, EliteKit = 0, Fittings = 0, Rope = 0, Gears = 0,
                 GoodsSoldCounts = goodsMarket ? new int[31] : null, GoodsSoldUnits = goodsMarket ? new int[31] : null,
                 GoodsReceivedFood = goodsMarket ? new int[31] : null, GoodsReceivedWood = goodsMarket ? new int[31] : null };
             VillagerStep = MovementMath.StepDistance(e.VillagerSpeed, e, villager: true);
@@ -498,7 +529,18 @@ namespace Rts.Simulation
                         Component = e.BeltComponents ? b.Component : BeltComponentKind.None,
                         SorterKind = e.BeltComponents ? b.SorterKind : (ResourceKind)0,
                         PairCell = e.BeltComponents && b.Component != BeltComponentKind.None ? b.PairCell : -1,
-                        Fast = e.BeltComponents && b.Speed == BeltSpeed.Fast };
+                        Fast = e.BeltComponents && b.Speed == BeltSpeed.Fast,
+                        VeryFast = e.BeltCraft && b.Speed == BeltSpeed.VeryFast,
+                        Priority = e.BeltCraft ? b.Priority : BeltPriority.None };
+                if (e.BeltCraft)
+                {
+                    var catapults = new System.Collections.Generic.List<CatapultState>();
+                    foreach (var b in Config.Belts)
+                        if (b.Component == BeltComponentKind.Catapult)
+                            catapults.Add(new CatapultState { Active = true, FactionId = b.FactionId, LauncherCell = b.Cell, ReceiverCell = b.PairCell,
+                                FirstLoadTick = -1, LastThrowTick = -e.CatapultIntervalTicks, Shots = new CatapultShotState[4] });
+                    Catapults = catapults.ToArray();
+                }
             }
         }
 
@@ -642,14 +684,19 @@ namespace Rts.Simulation
                     && e.StorageHp > 0 && e.StorageCapacity > 0, "Invalid belt-component rules.");
                 foreach (var b in c.Belts)
                 {
-                    Require((byte)b.Component <= (byte)BeltComponentKind.Inserter && (byte)b.Speed <= (byte)BeltSpeed.Fast,
+                    Require((byte)b.Component <= (byte)(e.BeltCraft ? BeltComponentKind.CatapultReceiver : BeltComponentKind.Inserter)
+                        && (byte)b.Speed <= (byte)(e.BeltCraft ? BeltSpeed.VeryFast : BeltSpeed.Fast),
                         "Invalid belt component.");
-                    Require(b.Component != BeltComponentKind.Inserter || e.Inserters, "Inserters are disabled.");
+                    Require(b.Component != BeltComponentKind.Merger || e.BeltCraft, "Mergers are disabled.");
+                    Require((b.Component != BeltComponentKind.Inserter && b.Component != BeltComponentKind.FilterInserter && b.Component != BeltComponentKind.LongInserter) || e.Inserters, "Inserters are disabled.");
+                    Require((b.Component != BeltComponentKind.Merger && b.Component != BeltComponentKind.FilterInserter && b.Component != BeltComponentKind.LongInserter
+                        && b.Component != BeltComponentKind.Catapult && b.Component != BeltComponentKind.CatapultReceiver) || e.BeltCraft, "Belt-craft components are disabled.");
                     if (b.Component == BeltComponentKind.Sorter)
                         Require((byte)b.SorterKind > 0 && (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : (e.Tools ? ResourceKind.Tools : e.Charms ? ResourceKind.Charms : e.Incense ? ResourceKind.Incense : e.Rations ? ResourceKind.Rations : ResourceKind.BowGear)), "A sorter needs a resource kind.");
-                    if (b.Component == BeltComponentKind.Inserter)
+                    if (b.Component == BeltComponentKind.Inserter || b.Component == BeltComponentKind.FilterInserter)
                         Require(b.SorterKind == 0 || (byte)b.SorterKind <= (byte)(e.PrimitiveCraft ? ResourceKind.Jerky : ResourceKind.Mechanism), "An inserter needs a valid selector.");
-                    if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit)
+                    if (b.Component == BeltComponentKind.UndergroundEntrance || b.Component == BeltComponentKind.UndergroundExit
+                        || b.Component == BeltComponentKind.Catapult || b.Component == BeltComponentKind.CatapultReceiver)
                     {
                         Require(b.PairCell >= 0 && b.PairCell < c.Map.WidthCells * c.Map.HeightCells && b.PairCell != b.Cell,
                             "An underground belt needs an in-map pair.");
@@ -661,7 +708,11 @@ namespace Rts.Simulation
                                     && other.PairCell == b.Cell
                                     && (b.Component == BeltComponentKind.UndergroundEntrance
                                         ? other.Component == BeltComponentKind.UndergroundExit
-                                        : other.Component == BeltComponentKind.UndergroundEntrance);
+                                        : b.Component == BeltComponentKind.UndergroundExit
+                                            ? other.Component == BeltComponentKind.UndergroundEntrance
+                                            : b.Component == BeltComponentKind.Catapult
+                                                ? other.Component == BeltComponentKind.CatapultReceiver
+                                                : other.Component == BeltComponentKind.Catapult);
                                 break;
                             }
                         Require(paired, "An underground belt needs a reciprocal pair.");
@@ -706,6 +757,17 @@ namespace Rts.Simulation
                 && e.BeltStackAiMaxLinesAge0 >= 0 && e.BeltStackAiMaxLinesAge1 >= 0
                 && e.BeltStackAiMaxLinesAge2 >= 0 && e.BeltStackAiMaxLinesAge3 >= 0
                 && e.BeltStackAiMaxRouteCells >= 0), "Invalid belt-stack rules.");
+            Require(!e.BeltCraft || (e.BeltStack && e.CraftRequired && e.Enabled && e.Industry
+                && e.GearWorkshopSizeCells > 0 && e.GearWorkshopSizeCells <= 8 && e.GearWorkshopWoodCost >= 0
+                && e.GearWorkshopWork > 0 && e.GearWorkshopHp > 0 && e.GearMetalInput > 0
+                && e.GearMetalInput <= e.BufferLimit && e.GearsPerBatch > 0 && e.GearTicks > 0
+                && e.FastBeltGears > 0 && e.SplitterGears > 0 && e.SorterGears > 0 && e.UndergroundBeltGears > 0
+                 && e.InserterGears > 0 && e.MergerGears > 0 && e.MergerPlanks >= 0 && e.VeryFastBeltGears > 0
+                 && e.VeryFastBeltSteel > 0 && e.VeryFastBeltTicksPerCell > 0 && e.VeryFastBeltMinAge > 0
+                 && e.BeltCraftAiGearsStockTarget >= 0 && e.FilterInserterGears > 0 && e.LongInserterGears > 0
+                 && e.CatapultGears > 0 && e.CatapultPlanks >= 0 && e.CatapultFittings >= 0 && e.CatapultRope >= 0 && e.CatapultSteel > 0
+                 && e.CatapultReceiverGears > 0 && e.CatapultReceiverPlanks >= 0 && e.CatapultMinAge > 0 && e.CatapultRangeCells > 0
+                 && e.CatapultLoad > 0 && e.CatapultMaxWaitTicks > 0 && e.CatapultIntervalTicks > 0 && e.CatapultFlightTicks > 0 && e.CatapultBuffer >= e.CatapultLoad), "Invalid belt-craft rules.");
             Require(!e.Bricks || (e.Enabled && e.Industry && e.Ages && e.BrickKilnSizeCells > 0 && e.BrickKilnSizeCells <= 8
                 && e.BrickKilnWoodCost >= 0 && e.BrickKilnWork > 0 && e.BrickKilnHp > 0 && e.BrickTicks > 0
                 && e.BrickStoneInput > 0 && e.BrickCharcoalInput > 0 && e.BrickStoneInput <= e.BufferLimit
@@ -1199,7 +1261,7 @@ namespace Rts.Simulation
             return new EconomyRules { Enabled = e.Enabled, MeasurementScale = e.MeasurementScale, BuildingReservations = e.BuildingReservations, NoNegativeStock = e.NoNegativeStock,
                 ReservationLimit = e.ReservationLimit, ReservationCheckTicks = e.ReservationCheckTicks,
                 StartFood = e.StartFood, StartWood = e.StartWood,
-                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy,
+                ArmyGrowth = e.ArmyGrowth, EconomyScale = e.EconomyScale, LargeEconomy = e.LargeEconomy, AiReasons = e.AiReasons,
                 HouseFlow = e.HouseFlow, HouseFlowStallTicks = e.HouseFlowStallTicks,
                 HouseFlowMarginPerProducer = e.HouseFlowMarginPerProducer, HouseFlowMaxConcurrent = e.HouseFlowMaxConcurrent,
                 FastMovement = e.FastMovement, FastMovementUnitSpeedPermille = e.FastMovementUnitSpeedPermille,
@@ -1265,6 +1327,20 @@ namespace Rts.Simulation
                  BeltStackAiMaxLinesAge0 = e.BeltStackAiMaxLinesAge0, BeltStackAiMaxLinesAge1 = e.BeltStackAiMaxLinesAge1,
                  BeltStackAiMaxLinesAge2 = e.BeltStackAiMaxLinesAge2, BeltStackAiMaxLinesAge3 = e.BeltStackAiMaxLinesAge3,
                  BeltStackAiMaxRouteCells = e.BeltStackAiMaxRouteCells,
+                 BeltCraft = e.BeltCraft, GearWorkshopSizeCells = e.GearWorkshopSizeCells, GearWorkshopWoodCost = e.GearWorkshopWoodCost,
+                 GearWorkshopWork = e.GearWorkshopWork, GearWorkshopHp = e.GearWorkshopHp, GearMetalInput = e.GearMetalInput,
+                 GearsPerBatch = e.GearsPerBatch, GearTicks = e.GearTicks, FastBeltGears = e.FastBeltGears,
+                 SplitterGears = e.SplitterGears, SorterGears = e.SorterGears, UndergroundBeltGears = e.UndergroundBeltGears,
+                 InserterGears = e.InserterGears, MergerGears = e.MergerGears, MergerPlanks = e.MergerPlanks,
+                 VeryFastBeltGears = e.VeryFastBeltGears, VeryFastBeltSteel = e.VeryFastBeltSteel,
+                  VeryFastBeltTicksPerCell = e.VeryFastBeltTicksPerCell, VeryFastBeltMinAge = e.VeryFastBeltMinAge,
+                  BeltCraftAiGearsStockTarget = e.BeltCraftAiGearsStockTarget,
+                  FilterInserterGears = e.FilterInserterGears, LongInserterGears = e.LongInserterGears,
+                  CatapultGears = e.CatapultGears, CatapultPlanks = e.CatapultPlanks, CatapultFittings = e.CatapultFittings,
+                  CatapultRope = e.CatapultRope, CatapultSteel = e.CatapultSteel, CatapultReceiverGears = e.CatapultReceiverGears,
+                  CatapultReceiverPlanks = e.CatapultReceiverPlanks, CatapultMinAge = e.CatapultMinAge, CatapultRangeCells = e.CatapultRangeCells,
+                  CatapultLoad = e.CatapultLoad, CatapultMaxWaitTicks = e.CatapultMaxWaitTicks, CatapultIntervalTicks = e.CatapultIntervalTicks,
+                  CatapultFlightTicks = e.CatapultFlightTicks, CatapultBuffer = e.CatapultBuffer,
                  StorageSizeCells = e.StorageSizeCells, StorageWoodCost = e.StorageWoodCost, StorageWork = e.StorageWork,
                  StorageHp = e.StorageHp, StorageCapacity = e.StorageCapacity,
                  MineSizeCells = e.MineSizeCells, MineWoodCost = e.MineWoodCost, MineWork = e.MineWork, MineHp = e.MineHp, MineIntervalTicks = e.MineIntervalTicks,

@@ -35,13 +35,16 @@ namespace Rts.Simulation
                     SetBuildingRecipe(faction, c.ProducerId, c.Recipe);
                     return;
                 case EconomyCommandKind.PlaceBelt:
-                    PlaceBelts(faction, c, IndustryOn);
+                    PlaceBelts(faction, c, AiReasonsOn && automaticEconomyAction ? false : IndustryOn);
                     return;
                 case EconomyCommandKind.PlaceBeltComponent:
-                    PlaceBeltComponent(faction, c, IndustryOn);
+                    PlaceBeltComponent(faction, c, AiReasonsOn && automaticEconomyAction ? false : IndustryOn);
+                    return;
+                case EconomyCommandKind.SetBeltPriority:
+                    SetBeltPriority(faction, c.Cell, c.BeltPriority);
                     return;
                 case EconomyCommandKind.ReturnLineToAuto:
-                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn) ReturnLineToAuto(faction, c.LineId);
+                    if (ProcessingOn || ForestryOn || IncenseOn || CharmsOn || RepairKitsOn || ToolsOn || BeltCraftOn) ReturnLineToAuto(faction, c.LineId);
                     return;
                 case EconomyCommandKind.RequestLine:
                     RequestProcessingLine(faction, c);
@@ -169,6 +172,7 @@ namespace Rts.Simulation
                         && !(PrimitiveCraftOn && kind == BuildingKind.Hut)
                         && !(CraftDepthOn && world.Economies[faction - 1].Age >= 1 && kind == BuildingKind.Metalworks)
                         && !(CraftDepthOn && PrimitiveCraftOn && kind == BuildingKind.RopeHut)
+                        && !(BeltCraftOn && world.Economies[faction - 1].Age >= 1 && kind == BuildingKind.GearWorkshop)
                         && !(AssemblerAllowed(faction) && kind == BuildingKind.Assembler)
                         && !(kind == BuildingKind.Farm && FarmingAllowed(faction)) && !((kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower) && AgesOn)
                         && !((kind == BuildingKind.Blacksmith || kind == BuildingKind.Market) && AgesOn && world.Economies[faction - 1].Civ != CivKind.Primitive)
@@ -215,7 +219,8 @@ namespace Rts.Simulation
                          || !KeepsMapConnected(faction, c.Cell, size)) return;
                     if (economy.Wood < placementCost.Wood || economy.Stone < placementCost.Stone
                         || CraftRequiredOn && (economy.Planks < placementCost.Planks || economy.Frames < placementCost.Frames
-                            || economy.Bricks < placementCost.Bricks || economy.SiegeParts < placementCost.SiegeParts))
+                            || economy.Bricks < placementCost.Bricks || economy.SiegeParts < placementCost.SiegeParts
+                            || economy.Fittings < placementCost.Fittings || economy.Rope < placementCost.Rope))
                     {
                         if (BuildingReservationsOn) CreateBuildingReservation(faction, kind, c.Cell,
                             kind == BuildingKind.Barracks ? Facing.North : c.Facing, node, null, -1,
@@ -233,7 +238,7 @@ namespace Rts.Simulation
                     }
                     if (kind == BuildingKind.Shrine)
                         world.Buildings[world.BuildingCount - 1].SanctuaryOutpostId = sanctuaryOutpost;
-                    world.Buildings[world.BuildingCount - 1].Held = IndustryOn; // V3-3: the player's building
+                    world.Buildings[world.BuildingCount - 1].Held = AiReasonsOn && automaticEconomyAction ? false : IndustryOn; // V3-3: the player's building
                     return;
                 }
                 case EconomyCommandKind.Train:

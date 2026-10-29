@@ -939,6 +939,8 @@ namespace Rts.Presentation
         {
             var lines = new List<string>();
             lines.Add(SelectionInfoText.BuildingDescription(building.Kind));
+            string aiReason = SelectionInfoText.AiReasonDescription(building);
+            if (aiReason.Length > 0) lines.Add(aiReason);
             if (building.Reserved) lines.Add(SelectionInfoText.BuildingReservationStatus(building, economy));
 
             CraftRecipe recipe;

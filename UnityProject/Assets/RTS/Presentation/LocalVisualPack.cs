@@ -291,6 +291,7 @@ namespace Rts.Presentation
             { BuildingKind.Hut, new BuildingSpec("Workshop.FBX", 1.7f, 0.75f, new Color(0.58f, 0.42f, 0.24f, 1f)) },
             { BuildingKind.Metalworks, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.46f, 0.46f, 0.52f, 1f)) },
             { BuildingKind.RopeHut, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.70f, 0.60f, 0.40f, 1f)) },
+            { BuildingKind.GearWorkshop, new BuildingSpec("Workshop.FBX", 2.2f, 0.9f, new Color(0.32f, 0.36f, 0.42f, 1f)) },
             { BuildingKind.Academy, new BuildingSpec("Library.FBX", 3.0f) },
             { BuildingKind.Scriptorium, new BuildingSpec("MageTower.FBX", 3.0f) },
             // Market is already the caravanserai model; Tower_A is not used by BuildingTable and is a compact stand-in for the rack.

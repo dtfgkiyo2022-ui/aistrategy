@@ -12,6 +12,7 @@ namespace Rts.Presentation
             Wood,
             Ore,
             Metal,
+            Gears,
             Stone,
             Gems,
             Gold,
@@ -89,6 +90,11 @@ namespace Rts.Presentation
         public static bool ShowSteel(EconomyView economy)
         {
             return economy != null && (economy.Civ == CivKind.Metallurgy || economy.Steel > 0);
+        }
+
+        public static bool ShowGears(EconomyView economy)
+        {
+            return economy != null && economy.BeltCraftEnabled;
         }
 
         public static bool ShowBowGear(EconomyView economy)
@@ -189,6 +195,8 @@ namespace Rts.Presentation
                 target.Add(new ResourceEntry(ResourceKind.Ore, UiText.T("Ore", "鉱石"), economy.Ore));
                 target.Add(new ResourceEntry(ResourceKind.Metal, UiText.T("Metal", "金属"), economy.Metal));
             }
+            if (ShowGears(economy))
+                target.Add(new ResourceEntry(ResourceKind.Gears, UiText.T("Gears", "歯車"), economy.Gears));
             if (economy.Ages)
                 target.Add(new ResourceEntry(ResourceKind.Stone, UiText.T("Stone", "石"), economy.Stone));
             if (ShowGems(economy))

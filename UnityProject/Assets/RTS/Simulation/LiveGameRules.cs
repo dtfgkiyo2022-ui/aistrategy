@@ -77,6 +77,7 @@ namespace Rts.Simulation
             // 38.13 is only the automatic side of BeltDropOff, and is intentionally large-map-only as well.
             e.BeltDropOffAi = e.LargeEconomy && e.BeltDropOff;
             e.BeltStack = e.LargeEconomy;
+            e.BeltCraft = e.BeltStack && e.CraftRequired;
             // 38.9 is a large-map-only opening rule. Apply it after map generation so direct map-generator callers keep
             // the historical three starting villagers, while the played large map gets the same deterministic placement
             // pattern with the configured early-start count.
@@ -149,6 +150,7 @@ namespace Rts.Simulation
         {
             var e = scenario.Economy;
             e.LargeEconomy = true;
+            e.AiReasons = e.LargeEconomy;
             e.VillagerTrainTicks = e.LargeVillagerTrainTicks;
             e.InfantryTrainTicks = e.LargeInfantryTrainTicks;
             e.AutoVillagerTarget = 300;

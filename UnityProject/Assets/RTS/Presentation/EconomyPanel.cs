@@ -37,7 +37,7 @@ namespace Rts.Presentation
             if (heightMeters >= CellMeters) MapHeightCells = heightMeters / CellMeters;
         }
 
-        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Inserter, Underground, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
+        private enum Mode { None, Barracks, Mine, Drill, Smelter, Farm, Mill, BrickKiln, Saddlery, Sawmill, Stonecutter, Joinery, Assembler, Metalworks, RopeHut, GearWorkshop, Hut, Scriptorium, DryingRack, Lapidary, Weaver, IncenseHouse, CharmWorkshop, RepairYard, ToolShop, House, DropSite, Tower, Wall, Blacksmith, Market, SiegeWorkshop, ArcheryRange, Stable, Castle, Belt, FastBelt, Splitter, Sorter, Merger, Inserter, FilterInserter, LongInserter, Underground, Catapult, Storage, MoveBuilding, RemoveBelt, RemoveArea, BlueprintSave, BlueprintPaste, RequestLine }
 
         private IEconomyPort port;
         private BattlefieldView view;
@@ -97,6 +97,7 @@ namespace Rts.Presentation
             dragStart = -1;
             if (layer == null) return;
             layer.SetCoreClearanceVisible(next != Mode.None);
+            layer.ShowCatapultRange(-1, 0, false);
             layer.ShowGhost(false, Vector3.zero, 0f, false);
             layer.ShowBeltPreview(null, false);
         }
@@ -128,6 +129,10 @@ namespace Rts.Presentation
                     if (dragStart < 0) { dragStart = cell; Note(UiText.T("Click the underground exit.", "地下ベルトの出口をクリックしてください。")); return true; }
                     port.SubmitEconomy(EconomyCommand.PlaceUnderground(faction, ++sequence, dragStart, cell, facing));
                     Note(UiText.T("Underground belt requested.", "地下ベルトを依頼しました。")); SetMode(Mode.None); return true;
+                case Mode.Catapult:
+                    if (dragStart < 0) { dragStart = cell; layer.ShowCatapultRange(cell, Economy() == null ? 0 : Economy().CatapultRangeCells, true); Note(UiText.T("Click the receiver.", "受け台をクリックしてください。")); return true; }
+                    port.SubmitEconomy(EconomyCommand.PlaceCatapult(faction, ++sequence, dragStart, cell, facing, facing));
+                    Note(UiText.T("Catapult pair requested.", "投石機と受け台を依頼しました。")); SetMode(Mode.None); return true;
                 case Mode.RemoveBelt:
                     port.SubmitEconomy(EconomyCommand.RemoveBelt(faction, ++sequence, cell));
                     Note(UiText.T("Belt removal requested.", "ベルトを外すよう依頼しました。"));
@@ -163,8 +168,11 @@ namespace Rts.Presentation
             var kind = KindOf(mode);
             if (mode == Mode.MoveBuilding && TrySelectedBuilding(out BuildingView selectedBuilding)) kind = selectedBuilding.Kind;
             if (mode == Mode.Splitter) { port.SubmitEconomy(EconomyCommand.PlaceSplitter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
+            if (mode == Mode.Merger) { port.SubmitEconomy(EconomyCommand.PlaceMerger(faction, ++sequence, cell, facing, BeltPriority.None)); SetMode(Mode.None); return true; }
             if (mode == Mode.Sorter) { port.SubmitEconomy(EconomyCommand.PlaceSorter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
             if (mode == Mode.Inserter) { port.SubmitEconomy(EconomyCommand.PlaceInserter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.FilterInserter) { port.SubmitEconomy(EconomyCommand.PlaceFilterInserter(faction, ++sequence, cell, facing, sorterKind)); SetMode(Mode.None); return true; }
+            if (mode == Mode.LongInserter) { port.SubmitEconomy(EconomyCommand.PlaceLongInserter(faction, ++sequence, cell, facing)); SetMode(Mode.None); return true; }
             if (mode == Mode.FastBelt) return true;
             if (!Footprint(cell, SizeOf(kind), out int origin, out _)) { GameAudio.Ui(SoundCue.PlacementRejected); Note(UiText.T("Too close to the edge of the map.", "マップの端に近すぎます。")); return true; }
             port.SubmitEconomy(EconomyCommand.Place(faction, ++sequence, kind, origin, facing));
@@ -200,7 +208,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 3;
-            return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells : kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut ? 2
+            return kind == BuildingKind.Hut ? e.HutSizeCells : kind == BuildingKind.Mine ? e.MineSizeCells : kind == BuildingKind.Drill ? e.DrillSizeCells : kind == BuildingKind.Smelter ? e.SmelterSizeCells : kind == BuildingKind.Farm ? e.FarmSizeCells : kind == BuildingKind.Mill ? e.MillSizeCells : kind == BuildingKind.BrickKiln ? e.BrickKilnSizeCells : kind == BuildingKind.Saddlery ? e.SaddlerySizeCells : kind == BuildingKind.Sawmill ? e.SawmillSizeCells : kind == BuildingKind.Stonecutter ? e.StonecutterSizeCells : kind == BuildingKind.Joinery ? e.JoinerySizeCells : kind == BuildingKind.Assembler ? e.AssemblerSizeCells : kind == BuildingKind.Metalworks || kind == BuildingKind.RopeHut || kind == BuildingKind.GearWorkshop ? 2
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumSizeCells : kind == BuildingKind.DryingRack ? e.DryingRackSizeCells : kind == BuildingKind.Lapidary ? e.LapidarySizeCells : kind == BuildingKind.Weaver ? e.WeaverSizeCells : kind == BuildingKind.IncenseHouse ? e.IncenseHouseSizeCells : kind == BuildingKind.CharmWorkshop ? e.CharmWorkshopSizeCells : kind == BuildingKind.RepairYard ? e.RepairYardSizeCells : kind == BuildingKind.ToolShop ? e.ToolShopSizeCells : kind == BuildingKind.House || kind == BuildingKind.DropSite || kind == BuildingKind.Tower || kind == BuildingKind.Storage ? 2
                 : kind == BuildingKind.Castle ? 4 : e.BuildingSizeCells;
         }
@@ -209,7 +217,7 @@ namespace Rts.Presentation
         {
             var e = Economy();
             if (e == null) return 0;
-            return kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Metalworks ? 100 : kind == BuildingKind.RopeHut ? 60
+            return kind == BuildingKind.Hut ? e.HutWoodCost : kind == BuildingKind.Mine ? e.MineWoodCost : kind == BuildingKind.Drill ? e.DrillWoodCost : kind == BuildingKind.Smelter ? e.SmelterWoodCost : kind == BuildingKind.Farm ? e.FarmWoodCost : kind == BuildingKind.Mill ? e.MillWoodCost : kind == BuildingKind.BrickKiln ? e.BrickKilnWoodCost : kind == BuildingKind.Saddlery ? e.SaddleryWoodCost : kind == BuildingKind.Sawmill ? e.SawmillWoodCost : kind == BuildingKind.Stonecutter ? e.StonecutterWoodCost : kind == BuildingKind.Joinery ? e.JoineryWoodCost : kind == BuildingKind.Assembler ? e.AssemblerWoodCost : kind == BuildingKind.Metalworks ? 100 : kind == BuildingKind.RopeHut ? 60 : kind == BuildingKind.GearWorkshop ? 80
                 : kind == BuildingKind.Scriptorium ? e.ScriptoriumWoodCost : kind == BuildingKind.DryingRack ? e.DryingRackWoodCost : kind == BuildingKind.Lapidary ? e.LapidaryWoodCost : kind == BuildingKind.Weaver ? e.WeaverWoodCost : kind == BuildingKind.IncenseHouse ? e.IncenseHouseWoodCost : kind == BuildingKind.House ? e.HouseWoodCost : kind == BuildingKind.DropSite ? e.DropSiteWoodCost
                 : kind == BuildingKind.Blacksmith ? e.BlacksmithWoodCost
                 : kind == BuildingKind.Market ? e.MarketWoodCost : kind == BuildingKind.SiegeWorkshop ? e.WorkshopWoodCost
@@ -242,6 +250,7 @@ namespace Rts.Presentation
             if (kind == BuildingKind.ToolShop) return UiText.T("Tool shop", "工具工房");
             if (kind == BuildingKind.Metalworks) return UiText.T("Metalworks", "金属加工場");
             if (kind == BuildingKind.RopeHut) return UiText.T("Rope hut", "縄工房");
+            if (kind == BuildingKind.GearWorkshop) return UiText.T("Gear workshop", "歯車工房");
             return NameLegacy(kind);
         }
 
@@ -263,6 +272,7 @@ namespace Rts.Presentation
             if (m == Mode.Assembler) return BuildingKind.Assembler;
             if (m == Mode.Metalworks) return BuildingKind.Metalworks;
             if (m == Mode.RopeHut) return BuildingKind.RopeHut;
+            if (m == Mode.GearWorkshop) return BuildingKind.GearWorkshop;
             if (m == Mode.BrickKiln) return BuildingKind.BrickKiln;
             if (m == Mode.Saddlery) return BuildingKind.Saddlery;
             if (m == Mode.Sawmill) return BuildingKind.Sawmill;
@@ -424,7 +434,7 @@ namespace Rts.Presentation
                 if (mode == Mode.BlueprintPaste && activeBlueprint != null) activeBlueprint = BlueprintTools.Rotate(activeBlueprint, 1);
                 else facing = (Facing)(((int)facing + 1) % 4);
             }
-            if ((mode == Mode.Sorter || mode == Mode.Inserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
+            if ((mode == Mode.Sorter || mode == Mode.Inserter || mode == Mode.FilterInserter) && Input.GetKeyDown(KeyCode.T)) sorterKind = NextSorterKind(sorterKind);
             var economy = Economy();
             if (economy == null) return;
             bool onMap = GroundCell(camera, Input.mousePosition, out int cell);
@@ -771,10 +781,25 @@ namespace Rts.Presentation
                         UiText.T("Inserter (wood ", "投入機（木材 ") + economy.InserterWoodCost + UiText.T(")", "）")
                         + " / " + SorterKindName(sorterKind));
                     y += 26f;
+                    if (economy.BeltCraftEnabled)
+                    {
+                        ModeButton(new Rect(x, y, half, 22f), Mode.FilterInserter,
+                            UiText.T("Filter inserter (", "選択投入機（歯車 ") + economy.FilterInserterGears + UiText.T(")", "）") + " / " + SorterKindName(sorterKind));
+                        ModeButton(new Rect(right, y, half, 22f), Mode.LongInserter,
+                            UiText.T("Long inserter (", "長い投入機（歯車 ") + economy.LongInserterGears + UiText.T(")", "）"));
+                        y += 26f;
+                    }
                 }
                 ModeButton(new Rect(x, y, half, 22f), Mode.Underground, UiText.T("Underground", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost));
                 ModeButton(new Rect(right, y, half, 22f), Mode.Storage, UiText.T("Storage", "倉庫"));
                 y += 26f;
+                if (economy.BeltCraftEnabled && economy.Age >= economy.CatapultMinAge)
+                {
+                    ModeButton(new Rect(x, y, w, 22f), Mode.Catapult,
+                        UiText.T("Catapult / receiver (", "投石機・受け台（歯車 ") + economy.CatapultGears + UiText.T(", planks ", "、板 ") + economy.CatapultPlanks
+                        + UiText.T(", range ", "、範囲 ") + economy.CatapultRangeCells + UiText.T(")", "）"));
+                    y += 26f;
+                }
                 GUI.Label(new Rect(x, y, w, 22f), UiText.StorageDescription());
                 y += 26f;
             }

@@ -98,7 +98,7 @@ namespace Rts.Presentation
             {
                 uint buildingId;
                 if (uint.TryParse(actionId.Substring(8), out buildingId))
-                    Send(EconomyCommand.UpgradeBuilding(faction, ++sequence, buildingId), UiText.T("Upgrade requested", "譁ｰ繝ｬ繝吶Ν繧貞ｾ晞ｼ縺励∪縺励◆"));
+                    Send(EconomyCommand.UpgradeBuilding(faction, ++sequence, buildingId), UiText.T("Upgrade requested", "段を上げるよう頼みました"));
                 return;
             }
             if (actionId.StartsWith("recipe:", StringComparison.Ordinal))
@@ -107,7 +107,7 @@ namespace Rts.Presentation
                 uint assemblerId;
                 RecipeKind recipe;
                 if (parts.Length == 2 && uint.TryParse(parts[0], out assemblerId) && Enum.TryParse(parts[1], true, out recipe))
-                    Send(EconomyCommand.SetRecipe(faction, ++sequence, assemblerId, recipe), UiText.T("Assembler recipe requested", "邱上せ繝ｳ繝悶Ν縺ｮ繝ｬ繧ｷ繝斐・繧貞ｾ晞ｼ縺励∪縺励◆"));
+                    Send(EconomyCommand.SetRecipe(faction, ++sequence, assemblerId, recipe), UiText.T("Assembler recipe requested", "組立所のレシピを切り替えるよう頼みました"));
                 return;
             }
             if (actionId.StartsWith("build:", StringComparison.Ordinal))
@@ -183,6 +183,7 @@ namespace Rts.Presentation
                 return;
             }
             if (actionId == "policy:auto") { Send(EconomyCommand.Auto(faction, ++sequence, !economy.AutoEconomy), economy.AutoEconomy ? UiText.T("Auto economy off: villagers wait for you", "お任せ内政を切りました：村人は指示を待ちます") : UiText.T("Auto economy on", "お任せ内政を入れました")); return; }
+            if (actionId == "policy:ai-reasons") { if (layer != null) layer.ToggleAiReasonMode(); return; }
             if (actionId.StartsWith("policy:set:", StringComparison.Ordinal)) { Send(EconomyCommand.SetPolicy(faction, ++sequence, (EconomyPolicy)ParseInt(actionId.Substring(11))), UiText.T("Economy policy changed", "内政の方針を変更しました")); return; }
             if (actionId == "policy:return") { Send(EconomyCommand.ReturnToAuto(faction, ++sequence), UiText.T("Everything you held goes back to the auto economy", "触った物をすべてお任せの内政に戻しました")); }
         }
@@ -202,7 +203,7 @@ namespace Rts.Presentation
                 case "siege": return Mode.SiegeWorkshop; case "range": return Mode.ArcheryRange; case "stable": return Mode.Stable;
                 case "castle": return Mode.Castle; case "mine": return Mode.Mine; case "drill": return Mode.Drill; case "smelter": return Mode.Smelter;
                 case "farm": return Mode.Farm; case "mill": return Mode.Mill; case "brick-kiln": return Mode.BrickKiln; case "saddlery": return Mode.Saddlery; case "sawmill": return Mode.Sawmill; case "stonecutter": return Mode.Stonecutter; case "joinery": return Mode.Joinery; case "assembler": return Mode.Assembler; case "scriptorium": return Mode.Scriptorium; case "drying-rack": return Mode.DryingRack; case "lapidary": return Mode.Lapidary; case "weaver": return Mode.Weaver; case "charm-workshop": return Mode.CharmWorkshop; case "repair-yard": return Mode.RepairYard; case "tool-shop": return Mode.ToolShop; case "belt": return Mode.Belt; case "fast-belt": return Mode.FastBelt;
-                case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
+                case "splitter": return Mode.Splitter; case "sorter": return Mode.Sorter; case "merger": return Mode.Merger; case "build:merger": return Mode.Merger; case "underground": return Mode.Underground; case "storage": return Mode.Storage;
                 case "remove-belt": return Mode.RemoveBelt;
                 case "remove-area": return Mode.RemoveArea;
                 case "blacksmith": return Mode.Blacksmith; default: return Mode.None;
@@ -320,6 +321,11 @@ namespace Rts.Presentation
                 Add(rows, "line:Fittings", UiText.T("Ask for fittings line", "金具ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Fittings);
                 Add(rows, "line:Rope", UiText.T("Ask for rope line", "ロープラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Rope);
             }
+            if (economy.BeltCraftEnabled && economy.Age >= 1)
+            {
+                Add(rows, "build:gear-workshop", UiText.T("Gear workshop (80 wood)", "歯車工房（木材80）"), true, "", mode == Mode.GearWorkshop);
+                Add(rows, "line:Gears", UiText.T("Ask for gears line", "歯車ラインを頼む"), true, "", mode == Mode.RequestLine && requestedLine == ProcessingLineKind.Gears);
+            }
             if (economy.CraftTree1Enabled && economy.Age >= 1)
             {
                 Add(rows, "build:sawmill", UiText.T("Sawmill (", "製材所（木材 ") + economy.SawmillWoodCost + UiText.T(" wood)", "）"), true, "", mode == Mode.Sawmill);
@@ -367,20 +373,20 @@ namespace Rts.Presentation
                 {
                     var assembler = economy.Buildings[i];
                     if (assembler.FactionId != faction || assembler.Kind != BuildingKind.Assembler || !assembler.Complete) continue;
-                    Add(rows, "recipe:" + assembler.Id + ":Frames", UiText.T("Assembler " + assembler.Id + ": Frames (plank 1 + cut stone/brick 1, 80t)", "Assembler " + assembler.Id + ": Frames（板1＋切石/煉瓦1、80t）"), true, "", assembler.Recipe == RecipeKind.Frames);
+                    Add(rows, "recipe:" + assembler.Id + ":Frames", UiText.T("Assembler " + assembler.Id + ": Frames (plank 1 + cut stone/brick 1, 80t)", "組立所 " + assembler.Id + "：建材（板1＋切石/煉瓦1、80t）"), true, "", assembler.Recipe == RecipeKind.Frames);
                     bool armsMaterial = economy.Planks >= economy.ArmsKitPlankInput && (economy.Charcoal >= economy.ArmsKitCharcoalInput || economy.Steel >= economy.ArmsKitSteelInput);
-                    Add(rows, "recipe:" + assembler.Id + ":ArmsKit", UiText.T("Assembler " + assembler.Id + ": Arms kit (plank 1 + charcoal 2 or steel 1, " + economy.ArmsKitTicks + "t)", "Assembler " + assembler.Id + ": 武具キット（板1＋木炭2または鋼1、" + economy.ArmsKitTicks + "t）"), true, armsMaterial ? "" : UiText.T("Missing planks and charcoal/steel", "板材と木炭/鋼が不足"), assembler.Recipe == RecipeKind.ArmsKit);
+                    Add(rows, "recipe:" + assembler.Id + ":ArmsKit", UiText.T("Assembler " + assembler.Id + ": Arms kit (plank 1 + charcoal 2 or steel 1, " + economy.ArmsKitTicks + "t)", "組立所 " + assembler.Id + "：武具キット（板1＋木炭2または鋼1、" + economy.ArmsKitTicks + "t）"), true, armsMaterial ? "" : UiText.T("Missing planks and charcoal/steel", "板材と木炭/鋼が不足"), assembler.Recipe == RecipeKind.ArmsKit);
                     bool scholarlyMaterial = economy.Planks >= economy.ScholarlyPlankInput && economy.Charcoal >= economy.ScholarlyCharcoalInput && economy.Food >= economy.ScholarlyFoodInput;
-                    Add(rows, "recipe:" + assembler.Id + ":Scholarly", UiText.T("Assembler " + assembler.Id + ": Scholarly (plank 1 + charcoal 1 + food 2, " + economy.ScholarlyTicks + "t)", "Assembler " + assembler.Id + ": 学術資材（板1＋木炭1＋食料2、" + economy.ScholarlyTicks + "t）"), true, scholarlyMaterial ? "" : UiText.T("Missing planks, charcoal, or food", "板材・木炭・食料が不足"), assembler.Recipe == RecipeKind.Scholarly);
+                    Add(rows, "recipe:" + assembler.Id + ":Scholarly", UiText.T("Assembler " + assembler.Id + ": Scholarly (plank 1 + charcoal 1 + food 2, " + economy.ScholarlyTicks + "t)", "組立所 " + assembler.Id + "：学術資材（板1＋木炭1＋食料2、" + economy.ScholarlyTicks + "t）"), true, scholarlyMaterial ? "" : UiText.T("Missing planks, charcoal, or food", "板材・木炭・食料が不足"), assembler.Recipe == RecipeKind.Scholarly);
                     if (economy.CraftTree4Enabled)
                     {
-                        Add(rows, "recipe:" + assembler.Id + ":SiegeEngine", UiText.T("Assembler " + assembler.Id + ": Siege engine (siege parts 2 + mechanism 1, " + economy.SiegeEngineTicks + "t)", "Assembler " + assembler.Id + ": 攻城機関（攻城部品2＋精密部品1、" + economy.SiegeEngineTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeEngine);
-                        Add(rows, "recipe:" + assembler.Id + ":EliteKit", UiText.T("Assembler " + assembler.Id + ": Elite kit (arms kit 2 + mechanism 1 + metal 5, " + economy.EliteKitTicks + "t)", "Assembler " + assembler.Id + ": 精鋭キット（武具キット2＋精密部品1＋金属5、" + economy.EliteKitTicks + "t）"), true, "", assembler.Recipe == RecipeKind.EliteKit);
+                        Add(rows, "recipe:" + assembler.Id + ":SiegeEngine", UiText.T("Assembler " + assembler.Id + ": Siege engine (siege parts 2 + mechanism 1, " + economy.SiegeEngineTicks + "t)", "組立所 " + assembler.Id + "：攻城機関（攻城部品2＋精密部品1、" + economy.SiegeEngineTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeEngine);
+                        Add(rows, "recipe:" + assembler.Id + ":EliteKit", UiText.T("Assembler " + assembler.Id + ": Elite kit (arms kit 2 + mechanism 1 + metal 5, " + economy.EliteKitTicks + "t)", "組立所 " + assembler.Id + "：精鋭キット（武具キット2＋精密部品1＋金属5、" + economy.EliteKitTicks + "t）"), true, "", assembler.Recipe == RecipeKind.EliteKit);
                     }
                     if (economy.CraftTree3Enabled)
                     {
-                        Add(rows, "recipe:" + assembler.Id + ":SiegeParts", UiText.T("Assembler " + assembler.Id + ": Siege parts (frames 1 + arms kit 1, " + economy.SiegePartsTicks + "t)", "Assembler " + assembler.Id + ": 攻城部品（建材1＋武具1、" + economy.SiegePartsTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeParts);
-                        Add(rows, "recipe:" + assembler.Id + ":Mechanism", UiText.T("Assembler " + assembler.Id + ": Mechanism (arms kit 1 + scholarly 1 + cut stone 1, " + economy.MechanismTicks + "t)", "Assembler " + assembler.Id + ": 精密部品（武具1＋学術品1＋切石1、" + economy.MechanismTicks + "t）"), true, "", assembler.Recipe == RecipeKind.Mechanism);
+                        Add(rows, "recipe:" + assembler.Id + ":SiegeParts", UiText.T("Assembler " + assembler.Id + ": Siege parts (frames 1 + arms kit 1, " + economy.SiegePartsTicks + "t)", "組立所 " + assembler.Id + "：攻城部品（建材1＋武具1、" + economy.SiegePartsTicks + "t）"), true, "", assembler.Recipe == RecipeKind.SiegeParts);
+                        Add(rows, "recipe:" + assembler.Id + ":Mechanism", UiText.T("Assembler " + assembler.Id + ": Mechanism (arms kit 1 + scholarly 1 + cut stone 1, " + economy.MechanismTicks + "t)", "組立所 " + assembler.Id + "：精密部品（武具1＋学術品1＋切石1、" + economy.MechanismTicks + "t）"), true, "", assembler.Recipe == RecipeKind.Mechanism);
                     }
                 }
             }
@@ -452,6 +458,8 @@ namespace Rts.Presentation
             {
                 Add(rows, "build:fast-belt", UiText.T("Fast belt (", "速いベルト（木材 ") + economy.FastBeltWoodCost + UiText.T("/cell)", "／マス）") + CraftBeltCost(economy, true), true, "", mode == Mode.FastBelt);
                 Add(rows, "build:splitter", UiText.T("Splitter", "分岐") + CraftMaterial(economy.SplitterPlankCost), true, "", mode == Mode.Splitter);
+                if (economy.BeltCraftEnabled)
+                    Add(rows, "build:merger", UiText.T("Merger", "合流") + CraftMaterial(0), true, "", mode == Mode.Merger);
                 Add(rows, "build:sorter", UiText.T("Sorter: ore", "仕分け：鉱石") + CraftMaterial(economy.SorterPlankCost), true, "", mode == Mode.Sorter);
                 Add(rows, "build:underground", UiText.T("Underground belt", "地下ベルト") + CraftMaterial(economy.UndergroundBeltPlankCost), true, "", mode == Mode.Underground);
                 Add(rows, "build:storage", UiText.T("Storage", "倉庫"), true, "", mode == Mode.Storage);
@@ -556,6 +564,7 @@ namespace Rts.Presentation
                 case "build:joinery": kind = BuildingKind.Joinery; return true;
                 case "build:metalworks": kind = BuildingKind.Metalworks; return true;
                 case "build:rope-hut": kind = BuildingKind.RopeHut; return true;
+                case "build:gear-workshop": kind = BuildingKind.GearWorkshop; return true;
                 case "build:scriptorium": kind = BuildingKind.Scriptorium; return true;
                 case "build:drying-rack": kind = BuildingKind.DryingRack; return true;
                 case "build:lapidary": kind = BuildingKind.Lapidary; return true;
@@ -789,6 +798,7 @@ namespace Rts.Presentation
         private void AddPolicyActions(List<EconomyAction> rows, EconomyView economy)
         {
             Add(rows, "policy:auto", economy.AutoEconomy ? UiText.T("Auto economy: on", "お任せ内政：入") : UiText.T("Auto economy: off", "お任せ内政：切"), true, "", false);
+            Add(rows, "policy:ai-reasons", UiText.AiReasonToggle(layer != null && layer.AiReasonModeEnabled), true, "", layer != null && layer.AiReasonModeEnabled);
             if (economy.CorePlayerHeld) Add(rows, "policy:core", UiText.T("Core: trained by hand", "コア：手動で村人を作っている"), false, "", false, true);
             if (!economy.Industry) return;
             Add(rows, "policy:set:" + (int)EconomyPolicy.Balanced, UiText.T("Balanced", "均衡"), true, "", economy.Policy == EconomyPolicy.Balanced);

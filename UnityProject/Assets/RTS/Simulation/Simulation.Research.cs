@@ -631,7 +631,11 @@ namespace Rts.Simulation
             {
                 if (OwnBuildingIndex(faction, BuildingKind.Barracks) < 0 || world.Economies[faction - 1].Wood < rules.BlacksmithWoodCost) return;
                 int origin = FindSite(faction, rules.BlacksmithSizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Blacksmith, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.Research, 0);
+                PlaceBuildingAt(faction, BuildingKind.Blacksmith, origin, Facing.North, 0);
+            }
                 return;
             }
             ref var b = ref world.Buildings[smith];
@@ -751,7 +755,11 @@ namespace Rts.Simulation
             {
                 if (world.Economies[faction - 1].Wood < rules.AcademyWoodCost) return false;
                 int origin = FindSite(faction, rules.AcademySizeCells);
-                if (origin >= 0) PlaceBuildingAt(faction, BuildingKind.Academy, origin, Facing.North, 0);
+            if (origin >= 0)
+            {
+                SetAiReason(AiReason.MaterialFor, (int)ResourceKind.Scholarly);
+                PlaceBuildingAt(faction, BuildingKind.Academy, origin, Facing.North, 0);
+            }
                 return true;
             }
             ref var building = ref world.Buildings[academy];

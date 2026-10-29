@@ -33,11 +33,12 @@ namespace Rts.Presentation
         {
             float normal = Mathf.Repeat(time * 0.18f, 1f);
             float fast = Mathf.Repeat(time * 0.34f, 1f);
+            float veryFast = Mathf.Repeat(time * 0.70f, 1f);
             foreach (var material in Cache)
             {
-                bool isFast = material.Key / 2 == (int)BeltSpeed.Fast;
+                int speed = material.Key / 2;
                 // The chevrons point along +v (the belt's facing); a falling v offset carries them forward.
-                material.Value.mainTextureOffset = new Vector2(0f, 1f - (isFast ? fast : normal));
+                material.Value.mainTextureOffset = new Vector2(0f, 1f - (speed == (int)BeltSpeed.VeryFast ? veryFast : speed == (int)BeltSpeed.Fast ? fast : normal));
             }
         }
     }
